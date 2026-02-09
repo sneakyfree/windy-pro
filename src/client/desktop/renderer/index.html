@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:*; media-src 'self' mediastream:;">
   <title>Windy Pro</title>
   <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
   <div id="app" class="window">
     <!-- Draggable Title Bar -->
@@ -21,13 +24,18 @@
         <button class="title-btn close" id="closeBtn" title="Close">×</button>
       </div>
     </div>
-    
+
     <!-- State Indicator (The Green Strobe) -->
     <div class="state-indicator" id="stateIndicator">
       <div class="state-glow" id="stateGlow"></div>
       <div class="state-label" id="stateLabel">Ready</div>
     </div>
-    
+
+    <!-- Audio Level Meter -->
+    <div class="audio-meter-container" id="audioMeterContainer" style="display: none;">
+      <div class="audio-meter-bar" id="audioMeterBar"></div>
+    </div>
+
     <!-- Transcript Display -->
     <div class="transcript-container" id="transcriptContainer">
       <div class="transcript-scroll" id="transcriptScroll">
@@ -37,7 +45,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Control Bar -->
     <div class="control-bar">
       <button class="control-btn primary" id="recordBtn" title="Start/Stop Recording">
@@ -54,14 +62,17 @@
         <span class="icon">📝</span>
       </button>
     </div>
-    
+
     <!-- Connection Status -->
     <div class="status-bar" id="statusBar">
       <span class="status-dot" id="connectionDot"></span>
       <span class="status-text" id="connectionText">Connecting...</span>
     </div>
   </div>
-  
+
+  <script src="vault.js"></script>
+  <script src="settings.js"></script>
   <script src="app.js"></script>
 </body>
+
 </html>

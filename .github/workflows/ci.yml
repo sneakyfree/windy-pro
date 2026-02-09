@@ -1,0 +1,76 @@
+name: Windy Pro CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Python Tests ──
+  test-backend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+      
+      - name: Run tests
+        run: python -m pytest tests/ -v --tb=short
+  
+  # ── Electron Build ──
+  build-electron:
+    needs: test-backend
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Build
+        run: npm run build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windy-pro-${{ matrix.os }}
+          path: dist/
+  
+  # ── Cloud Docker ──
+  build-docker:
+    needs: test-backend
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build Docker image
+        run: docker build -t windy-pro:${{ github.sha }} .
+      
+      - name: Tag for release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          docker tag windy-pro:${{ github.sha }} windy-pro:latest
+          docker tag windy-pro:${{ github.sha }} windy-pro:${{ github.ref_name }}

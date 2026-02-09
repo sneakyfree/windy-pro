@@ -21,6 +21,8 @@ except ImportError:
     websockets = None
 
 from .transcriber import StreamingTranscriber, TranscriberConfig, TranscriptionState
+from .vault import PromptVault
+from .vibe import VibeProcessor
 
 
 class WindyServer:
@@ -39,6 +41,9 @@ class WindyServer:
         self.transcriber: StreamingTranscriber = None
         self.clients: Set[WebSocketServerProtocol] = set()
         self._server = None
+        self.vault = PromptVault()
+        self._current_session_id: int = None
+        self.vibe = VibeProcessor()
         
     async def _broadcast(self, message: dict):
         """Send message to all connected clients."""
@@ -61,6 +66,21 @@ class WindyServer:
     
     def _on_transcript(self, segment):
         """Handle new transcript segments."""
+        # Apply vibe processing if enabled
+        if self.vibe.enabled and not segment.is_partial:
+            segment.text = self.vibe.process(segment.text)
+        
+        # Save to vault
+        if self._current_session_id and not segment.is_partial:
+            self.vault.save_segment(
+                session_id=self._current_session_id,
+                text=segment.text,
+                start_time=segment.start_time,
+                end_time=segment.end_time,
+                confidence=segment.confidence,
+                is_partial=segment.is_partial
+            )
+        
         asyncio.create_task(self._broadcast({
             "type": "transcript",
             "text": segment.text,
@@ -110,19 +130,22 @@ class WindyServer:
         action = cmd.get("action")
         
         if action == "start":
-            # Start a new transcription session
             if self.transcriber:
                 self.transcriber.start_session()
+                self._current_session_id = self.vault.create_session()
                 await websocket.send(json.dumps({
                     "type": "ack",
                     "action": "start",
-                    "success": True
+                    "success": True,
+                    "session_id": self._current_session_id
                 }))
         
         elif action == "stop":
-            # Stop the current session
             if self.transcriber:
                 transcript = self.transcriber.stop_session()
+                if self._current_session_id:
+                    self.vault.end_session(self._current_session_id)
+                    self._current_session_id = None
                 await websocket.send(json.dumps({
                     "type": "ack",
                     "action": "stop",
@@ -131,9 +154,7 @@ class WindyServer:
                 }))
         
         elif action == "config":
-            # Update configuration
             config_data = cmd.get("config", {})
-            # Could restart transcriber with new config here
             await websocket.send(json.dumps({
                 "type": "ack",
                 "action": "config",
@@ -144,6 +165,50 @@ class WindyServer:
             await websocket.send(json.dumps({
                 "type": "pong",
                 "timestamp": cmd.get("timestamp")
+            }))
+        
+        # ═══ Vault Commands ═══
+        elif action == "vault_list":
+            limit = cmd.get("limit", 50)
+            offset = cmd.get("offset", 0)
+            sessions = self.vault.get_sessions(limit, offset)
+            await websocket.send(json.dumps({
+                "type": "vault_list",
+                "sessions": sessions
+            }))
+        
+        elif action == "vault_get":
+            session_id = cmd.get("session_id")
+            session = self.vault.get_session(session_id) if session_id else None
+            await websocket.send(json.dumps({
+                "type": "vault_get",
+                "session": session
+            }))
+        
+        elif action == "vault_search":
+            query = cmd.get("query", "")
+            results = self.vault.search(query)
+            await websocket.send(json.dumps({
+                "type": "vault_search",
+                "results": results
+            }))
+        
+        elif action == "vault_export":
+            session_id = cmd.get("session_id")
+            fmt = cmd.get("format", "txt")
+            text = self.vault.export_session(session_id, fmt) if session_id else ""
+            await websocket.send(json.dumps({
+                "type": "vault_export",
+                "text": text,
+                "format": fmt
+            }))
+        
+        elif action == "vault_delete":
+            session_id = cmd.get("session_id")
+            success = self.vault.delete_session(session_id) if session_id else False
+            await websocket.send(json.dumps({
+                "type": "vault_delete",
+                "success": success
             }))
         
         else:

@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # FastAPI Cloud Transcription API
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - WINDY_API_KEY=${WINDY_API_KEY:-dev-key-change-me}
+      - DATABASE_URL=postgresql://windy:windy_secret@postgres:5432/windy_pro
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - model_cache:/root/.cache/huggingface
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+  # PostgreSQL for cloud vault storage
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: windy_pro
+      POSTGRES_USER: windy
+      POSTGRES_PASSWORD: windy_secret
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U windy" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis for rate limiting and session cache
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:
+  model_cache:

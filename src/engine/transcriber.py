@@ -66,7 +66,7 @@ class TranscriberConfig:
     vad_enabled: bool = True
     vad_threshold: float = 0.5
     temp_file_path: Optional[str] = None  # For crash recovery
-    chunk_length_s: float = 5.0  # Audio chunk length for processing
+    chunk_length_s: float = 2.0  # Audio chunk length for processing (reduced from 5.0 for lower latency)
     beam_size: int = 5
 
 

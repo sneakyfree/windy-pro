@@ -10,12 +10,12 @@ contextBridge.exposeInMainWorld('windyAPI', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (settings) => ipcRenderer.send('update-settings', settings),
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),
-  
+
   // Recording control
   onToggleRecording: (callback) => {
     ipcRenderer.on('toggle-recording', (event, isRecording) => callback(isRecording));
   },
-  
+
   // Transcript paste
   onRequestTranscript: (callback) => {
     ipcRenderer.on('request-transcript', () => callback());
@@ -23,12 +23,12 @@ contextBridge.exposeInMainWorld('windyAPI', {
   sendTranscriptForPaste: (transcript) => {
     ipcRenderer.send('transcript-for-paste', transcript);
   },
-  
+
   // State changes
   onStateChange: (callback) => {
     ipcRenderer.on('state-change', (event, state) => callback(state));
   },
-  
+
   // Navigation
   onOpenSettings: (callback) => {
     ipcRenderer.on('open-settings', () => callback());
@@ -36,7 +36,13 @@ contextBridge.exposeInMainWorld('windyAPI', {
   onOpenVault: (callback) => {
     ipcRenderer.on('open-vault', () => callback());
   },
-  
+
+  // Injection
+  checkInjectionPermissions: () => ipcRenderer.invoke('check-injection-permissions'),
+  onInjectionError: (callback) => {
+    ipcRenderer.on('injection-error', (event, message) => callback(message));
+  },
+
   // Platform info
   platform: process.platform
 });

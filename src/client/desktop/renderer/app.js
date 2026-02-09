@@ -18,7 +18,13 @@ class WindyApp {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 10;
     this.reconnectDelay = 1000;
-    
+
+    // Audio capture state (B2.6)
+    this.mediaStream = null;
+    this.audioContext = null;
+    this.audioProcessor = null;
+    this.audioSource = null;
+
     // DOM Elements
     this.stateIndicator = document.getElementById('stateIndicator');
     this.stateGlow = document.getElementById('stateGlow');
@@ -34,44 +40,47 @@ class WindyApp {
     this.closeBtn = document.getElementById('closeBtn');
     this.minimizeBtn = document.getElementById('minimizeBtn');
     this.settingsBtn = document.getElementById('settingsBtn');
-    
+    this.audioMeterContainer = document.getElementById('audioMeterContainer');
+    this.audioMeterBar = document.getElementById('audioMeterBar');
+
     // Initialize
     this.init();
   }
-  
+
   async init() {
+    this.settingsPanel = new SettingsPanel(this);
+    this.vaultPanel = new VaultPanel(this);
     this.bindEvents();
     this.bindIPCEvents();
     await this.connect();
   }
-  
+
   /**
    * Bind DOM events
    */
   bindEvents() {
     // Record button
     this.recordBtn.addEventListener('click', () => this.toggleRecording());
-    
+
     // Clear button
     this.clearBtn.addEventListener('click', () => this.clearTranscript());
-    
+
     // Copy button
     this.copyBtn.addEventListener('click', () => this.copyTranscript());
-    
+
     // Paste button
     this.pasteBtn.addEventListener('click', () => this.pasteTranscript());
-    
+
     // Window controls
     this.closeBtn.addEventListener('click', () => window.close());
     this.minimizeBtn.addEventListener('click', () => {
       // Electron will handle minimize
     });
     this.settingsBtn.addEventListener('click', () => {
-      // Open settings panel
-      console.log('Settings clicked');
+      this.settingsPanel.toggle();
     });
   }
-  
+
   /**
    * Bind IPC events from main process
    */
@@ -85,59 +94,59 @@ class WindyApp {
         this.stopRecording();
       }
     });
-    
+
     // Request transcript for paste
     window.windyAPI.onRequestTranscript(() => {
       const text = this.getFullTranscript();
       window.windyAPI.sendTranscriptForPaste(text);
     });
-    
+
     // State change from main process
     window.windyAPI.onStateChange((state) => {
       this.setState(state);
     });
   }
-  
+
   /**
    * Connect to WebSocket server
    */
   async connect() {
     const config = await window.windyAPI.getServerConfig();
     const url = `ws://${config.host}:${config.port}`;
-    
+
     this.setConnectionStatus('connecting');
-    
+
     try {
       this.ws = new WebSocket(url);
-      
+
       this.ws.onopen = () => {
         console.log('WebSocket connected');
         this.reconnectAttempts = 0;
         this.setConnectionStatus('connected');
       };
-      
+
       this.ws.onmessage = (event) => {
         this.handleMessage(JSON.parse(event.data));
       };
-      
+
       this.ws.onclose = () => {
         console.log('WebSocket closed');
         this.setConnectionStatus('disconnected');
         this.scheduleReconnect();
       };
-      
+
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
         this.setConnectionStatus('error');
       };
-      
+
     } catch (error) {
       console.error('Connection failed:', error);
       this.setConnectionStatus('error');
       this.scheduleReconnect();
     }
   }
-  
+
   /**
    * Schedule reconnection attempt
    */
@@ -149,7 +158,7 @@ class WindyApp {
       setTimeout(() => this.connect(), delay);
     }
   }
-  
+
   /**
    * Handle incoming WebSocket messages
    */
@@ -158,25 +167,25 @@ class WindyApp {
       case 'state':
         this.setState(msg.state);
         break;
-        
+
       case 'transcript':
         this.addTranscriptSegment(msg);
         break;
-        
+
       case 'ack':
         console.log('Ack:', msg.action, msg.success);
         break;
-        
+
       case 'error':
         console.error('Server error:', msg.message);
         break;
-        
+
       case 'pong':
         // Latency check
         break;
     }
   }
-  
+
   /**
    * Send command to server
    */
@@ -185,19 +194,19 @@ class WindyApp {
       this.ws.send(JSON.stringify({ action, ...data }));
     }
   }
-  
+
   /**
    * Set visual state
    */
   setState(state) {
     this.currentState = state;
-    
+
     // Remove all state classes
     this.stateIndicator.classList.remove('idle', 'listening', 'buffering', 'error', 'injecting');
-    
+
     // Add current state class
     this.stateIndicator.classList.add(state);
-    
+
     // Update label
     const labels = {
       idle: 'Ready',
@@ -207,7 +216,7 @@ class WindyApp {
       injecting: 'Pasting'
     };
     this.stateLabel.textContent = labels[state] || state;
-    
+
     // Update record button
     if (state === 'listening') {
       this.recordBtn.classList.add('recording');
@@ -217,13 +226,13 @@ class WindyApp {
       this.recordBtn.querySelector('.label').textContent = 'Record';
     }
   }
-  
+
   /**
    * Set connection status
    */
   setConnectionStatus(status) {
     this.connectionDot.classList.remove('connected', 'connecting', 'error');
-    
+
     switch (status) {
       case 'connected':
         this.connectionDot.classList.add('connected');
@@ -242,7 +251,7 @@ class WindyApp {
         break;
     }
   }
-  
+
   /**
    * Toggle recording state
    */
@@ -253,31 +262,158 @@ class WindyApp {
       this.startRecording();
     }
   }
-  
+
   /**
-   * Start recording
+   * Start recording — captures audio and streams to server
+   * INVARIANT: Green strobe ONLY shows after mic access confirmed (FEAT-053)
    */
-  startRecording() {
+  async startRecording() {
     this.isRecording = true;
-    this.send('start');
-    this.setState('listening');
-    
+
     // Clear placeholder if exists
     const placeholder = this.transcriptContent.querySelector('.placeholder');
     if (placeholder) {
       placeholder.remove();
     }
+
+    try {
+      // Start audio capture FIRST — only show green strobe if mic works
+      await this.startAudioCapture();
+      this.send('start');
+      this.setState('listening');
+    } catch (error) {
+      console.error('Failed to start audio capture:', error);
+      this.isRecording = false;
+      this.setState('error');
+      // Briefly show error then return to idle
+      setTimeout(() => this.setState('idle'), 2000);
+    }
   }
-  
+
   /**
    * Stop recording
    */
   stopRecording() {
     this.isRecording = false;
+    this.stopAudioCapture();
     this.send('stop');
     this.setState('idle');
   }
-  
+
+  // ═══════════════════════════════════════════════
+  //  Audio Capture Pipeline (B2.6)
+  // ═══════════════════════════════════════════════
+
+  /**
+   * FEAT-028: Request mic access via getUserMedia
+   * FEAT-029: Create AudioContext + ScriptProcessorNode
+   * FEAT-030: Downsample to 16kHz mono
+   * FEAT-031: Convert Float32 → Int16 PCM
+   * FEAT-032: Stream binary via WebSocket
+   * FEAT-033: Feed audio level meter
+   */
+  async startAudioCapture() {
+    // B2.6.1: Request microphone access
+    this.mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,          // mono
+        sampleRate: 16000,        // Whisper expects 16kHz
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    });
+
+    // B2.6.2: Create AudioContext at 16kHz
+    this.audioContext = new AudioContext({ sampleRate: 16000 });
+    this.audioSource = this.audioContext.createMediaStreamSource(this.mediaStream);
+
+    // ScriptProcessorNode with 4096 buffer, 1 input channel, 1 output channel
+    this.audioProcessor = this.audioContext.createScriptProcessor(4096, 1, 1);
+
+    // Process each audio buffer
+    this.audioProcessor.onaudioprocess = (e) => {
+      const float32 = e.inputBuffer.getChannelData(0);
+
+      // B2.6.6: Update audio level meter
+      this.updateAudioMeter(float32);
+
+      // B2.6.3 + B2.6.4: Convert to Int16 PCM
+      const int16 = this.float32ToInt16(float32);
+
+      // B2.6.5: Stream as binary via WebSocket
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(int16.buffer);
+      }
+    };
+
+    // Wire: mic → processor → destination (must connect to destination for processing)
+    this.audioSource.connect(this.audioProcessor);
+    this.audioProcessor.connect(this.audioContext.destination);
+
+    // Show audio meter
+    this.audioMeterContainer.style.display = 'block';
+  }
+
+  /**
+   * Stop audio capture and release resources
+   */
+  stopAudioCapture() {
+    // Disconnect audio nodes
+    if (this.audioProcessor) {
+      this.audioProcessor.disconnect();
+      this.audioProcessor.onaudioprocess = null;
+      this.audioProcessor = null;
+    }
+    if (this.audioSource) {
+      this.audioSource.disconnect();
+      this.audioSource = null;
+    }
+
+    // Close AudioContext
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
+
+    // Release mic
+    if (this.mediaStream) {
+      this.mediaStream.getTracks().forEach(track => track.stop());
+      this.mediaStream = null;
+    }
+
+    // Hide audio meter
+    this.audioMeterContainer.style.display = 'none';
+    this.audioMeterBar.style.width = '0%';
+  }
+
+  /**
+   * Convert Float32 audio samples to Int16 PCM
+   * Whisper expects 16-bit PCM at 16kHz mono
+   */
+  float32ToInt16(float32Array) {
+    const int16 = new Int16Array(float32Array.length);
+    for (let i = 0; i < float32Array.length; i++) {
+      const s = Math.max(-1, Math.min(1, float32Array[i]));
+      int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return int16;
+  }
+
+  /**
+   * Update the audio level meter with current RMS level
+   */
+  updateAudioMeter(float32Array) {
+    let sum = 0;
+    for (let i = 0; i < float32Array.length; i++) {
+      sum += float32Array[i] * float32Array[i];
+    }
+    const rms = Math.sqrt(sum / float32Array.length);
+    // Scale RMS (0-1, usually 0-0.3) to percentage (0-100)
+    const level = Math.min(100, rms * 300);
+    this.audioMeterBar.style.width = `${level}%`;
+  }
+
   /**
    * Add transcript segment to display
    */
@@ -287,34 +423,34 @@ class WindyApp {
     if (existingPartial) {
       existingPartial.remove();
     }
-    
+
     // Create segment element
     const segment = document.createElement('div');
     segment.className = `segment${msg.partial ? ' partial' : ''}`;
-    
+
     // Add timestamp
     const time = document.createElement('div');
     time.className = 'segment-time';
     time.textContent = this.formatTime(msg.start);
     segment.appendChild(time);
-    
+
     // Add text
     const text = document.createElement('div');
     text.className = 'segment-text';
     text.textContent = msg.text;
     segment.appendChild(text);
-    
+
     this.transcriptContent.appendChild(segment);
-    
+
     // Store non-partial segments
     if (!msg.partial) {
       this.transcript.push(msg);
     }
-    
+
     // Auto-scroll to bottom
     this.transcriptScroll.scrollTop = this.transcriptScroll.scrollHeight;
   }
-  
+
   /**
    * Format time in seconds to MM:SS
    */
@@ -323,14 +459,14 @@ class WindyApp {
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
-  
+
   /**
    * Get full transcript text
    */
   getFullTranscript() {
     return this.transcript.map(s => s.text).join(' ');
   }
-  
+
   /**
    * Clear transcript
    */
@@ -338,7 +474,7 @@ class WindyApp {
     this.transcript = [];
     this.transcriptContent.innerHTML = '<div class="placeholder">Press <kbd>Ctrl+Shift+Space</kbd> to start recording</div>';
   }
-  
+
   /**
    * Copy transcript to clipboard
    */
@@ -353,7 +489,7 @@ class WindyApp {
       }, 1000);
     }
   }
-  
+
   /**
    * Paste transcript to cursor
    */

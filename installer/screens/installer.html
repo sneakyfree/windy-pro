@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windy Pro Setup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0F172A;
+            color: #E2E8F0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .wizard {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 32px;
+        }
+
+        .step {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+        }
+
+        .step.active {
+            display: flex;
+        }
+
+        h1 {
+            font-size: 22px;
+            margin-bottom: 8px;
+        }
+
+        h2 {
+            font-size: 16px;
+            color: #94A3B8;
+            font-weight: 400;
+            margin-bottom: 24px;
+        }
+
+        .hw-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .hw-card {
+            background: #1E293B;
+            border-radius: 8px;
+            padding: 14px;
+            border: 1px solid #334155;
+        }
+
+        .hw-card .label {
+            font-size: 11px;
+            color: #64748B;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .hw-card .value {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .model-rec {
+            background: linear-gradient(135deg, #064E3B, #065F46);
+            border: 1px solid #10B981;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .model-rec .tag {
+            font-size: 11px;
+            color: #6EE7B7;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .model-rec .name {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .model-rec .reason {
+            font-size: 13px;
+            color: #A7F3D0;
+        }
+
+        .progress-container {
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            height: 6px;
+            background: #1E293B;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #22C55E, #86EFAC);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 13px;
+            color: #94A3B8;
+            margin-top: 8px;
+        }
+
+        .perm-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #1E293B;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+        }
+
+        .perm-icon {
+            font-size: 20px;
+        }
+
+        .perm-label {
+            flex: 1;
+            font-size: 14px;
+        }
+
+        .perm-status {
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 12px;
+        }
+
+        .perm-status.granted {
+            background: #064E3B;
+            color: #6EE7B7;
+        }
+
+        .perm-status.needed {
+            background: #7F1D1D;
+            color: #FCA5A5;
+        }
+
+        .success-icon {
+            font-size: 64px;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            padding-top: 16px;
+            border-top: 1px solid #1E293B;
+        }
+
+        .btn {
+            padding: 10px 24px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-primary {
+            background: #22C55E;
+            color: #0F172A;
+        }
+
+        .btn-primary:hover {
+            background: #16A34A;
+        }
+
+        .btn-primary:disabled {
+            background: #334155;
+            color: #64748B;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #1E293B;
+            color: #94A3B8;
+        }
+
+        .btn-secondary:hover {
+            background: #334155;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #64748B;
+            border-top-color: #22C55E;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error-box {
+            background: #7F1D1D;
+            border: 1px solid #EF4444;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wizard">
+        <!-- Step 1: Welcome -->
+        <div class="step active" id="step1">
+            <h1>🌪️ Welcome to Windy Pro</h1>
+            <h2>Voice-to-text that just works. Let's set everything up.</h2>
+            <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+                <p style="font-size:14px; line-height:1.8; color:#94A3B8;">
+                    This wizard will:<br>
+                    ✅ Scan your hardware for optimal performance<br>
+                    ✅ Recommend the best transcription model<br>
+                    ✅ Install all dependencies automatically<br>
+                    ✅ Set up permissions for voice capture<br>
+                    <br>
+                    This takes about <strong style="color:#E2E8F0;">2-5 minutes</strong> depending on your internet
+                    speed.
+                </p>
+            </div>
+            <div class="nav">
+                <div></div>
+                <button class="btn btn-primary" onclick="goToStep(2)">Get Started →</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Hardware Scan -->
+        <div class="step" id="step2">
+            <h1>🔍 Hardware Scan</h1>
+            <h2>Detecting your system capabilities...</h2>
+            <div id="scanLoading" style="flex:1; display:flex; align-items:center; justify-content:center;">
+                <span class="spinner"></span>&nbsp;&nbsp;Scanning hardware...
+            </div>
+            <div id="scanResults" style="display:none; flex:1;">
+                <div class="hw-grid">
+                    <div class="hw-card">
+                        <div class="label">GPU</div>
+                        <div class="value" id="hwGpu">—</div>
+                    </div>
+                    <div class="hw-card">
+                        <div class="label">VRAM</div>
+                        <div class="value" id="hwVram">—</div>
+                    </div>
+                    <div class="hw-card">
+                        <div class="label">RAM</div>
+                        <div class="value" id="hwRam">—</div>
+                    </div>
+                    <div class="hw-card">
+                        <div class="label">Disk Free</div>
+                        <div class="value" id="hwDisk">—</div>
+                    </div>
+                    <div class="hw-card">
+                        <div class="label">CPU</div>
+                        <div class="value" id="hwCpu">—</div>
+                    </div>
+                    <div class="hw-card">
+                        <div class="label">Platform</div>
+                        <div class="value" id="hwPlatform">—</div>
+                    </div>
+                </div>
+            </div>
+            <div class="nav">
+                <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
+                <button class="btn btn-primary" id="scanNextBtn" disabled onclick="goToStep(3)">Next →</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Model Recommendation -->
+        <div class="step" id="step3">
+            <h1>🧠 Recommended Model</h1>
+            <h2>Based on your hardware, we recommend:</h2>
+            <div style="flex:1;">
+                <div class="model-rec">
+                    <div class="tag">Recommended</div>
+                    <div class="name" id="recModel">—</div>
+                    <div class="reason" id="recReason">—</div>
+                </div>
+                <div class="hw-grid">
+                    <div class="hw-card">
+                        <div class="label">Download</div>
+                        <div class="value" id="recSize">—</div>
+                    </div>
+                    <div class="hw-card">
+                        <div class="label">Quality</div>
+                        <div class="value" id="recQuality">—</div>
+                    </div>
+                </div>
+            </div>
+            <div class="nav">
+                <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
+                <button class="btn btn-primary" onclick="startInstall()">Install Now →</button>
+            </div>
+        </div>
+
+        <!-- Step 4: Download & Install Progress -->
+        <div class="step" id="step4">
+            <h1>📦 Installing</h1>
+            <h2 id="installSubtitle">Setting up your environment...</h2>
+            <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Starting...</div>
+                </div>
+                <div id="installError" style="display:none;"></div>
+            </div>
+            <div class="nav">
+                <div></div>
+                <button class="btn btn-primary" id="installNextBtn" disabled onclick="goToStep(5)">Next →</button>
+            </div>
+        </div>
+
+        <!-- Step 5: Permissions -->
+        <div class="step" id="step5">
+            <h1>🔐 Permissions</h1>
+            <h2>Windy Pro needs these permissions to work:</h2>
+            <div style="flex:1;">
+                <div class="perm-row">
+                    <span class="perm-icon">🎤</span>
+                    <span class="perm-label">Microphone Access</span>
+                    <span class="perm-status" id="permMic">Checking...</span>
+                </div>
+                <div class="perm-row">
+                    <span class="perm-icon">⌨️</span>
+                    <span class="perm-label">Accessibility (for text injection)</span>
+                    <span class="perm-status" id="permAccess">Checking...</span>
+                </div>
+                <p style="font-size:12px; color:#64748B; margin-top:16px;">
+                    Microphone permission is required. Accessibility permission is optional but needed for the
+                    paste-to-cursor feature.
+                </p>
+            </div>
+            <div class="nav">
+                <button class="btn btn-secondary" onclick="goToStep(4)">← Back</button>
+                <button class="btn btn-primary" onclick="goToStep(6)">Next →</button>
+            </div>
+        </div>
+
+        <!-- Step 6: Complete -->
+        <div class="step" id="step6">
+            <h1>🎉 All Set!</h1>
+            <h2>Windy Pro is ready to use.</h2>
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <div class="success-icon">🌪️✅</div>
+                <p style="font-size:14px; color:#94A3B8; text-align:center; line-height:1.6;">
+                    Press <strong style="color:#22C55E;">Ctrl+Shift+Space</strong> to start recording.<br>
+                    Press <strong style="color:#3B82F6;">Ctrl+Shift+V</strong> to paste your transcript.<br>
+                    <br>
+                    The green strobe means audio is being captured.<br>
+                    <span style="color:#64748B;">If it's green, you're recording. Always.</span>
+                </p>
+            </div>
+            <div class="nav">
+                <div></div>
+                <button class="btn btn-primary" onclick="finishSetup()">Launch Windy Pro →</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+
+        function goToStep(step) {
+            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+            document.getElementById(`step${step}`).classList.add('active');
+            currentStep = step;
+
+            if (step === 2) startHardwareScan();
+            if (step === 5) checkPermissions();
+        }
+
+        async function startHardwareScan() {
+            document.getElementById('scanLoading').style.display = 'flex';
+            document.getElementById('scanResults').style.display = 'none';
+            document.getElementById('scanNextBtn').disabled = true;
+
+            try {
+                const { hardware, recommendation } = await window.installerAPI.scanHardware();
+
+                document.getElementById('hwGpu').textContent = hardware.gpu.name;
+                document.getElementById('hwVram').textContent = hardware.gpu.vram > 0 ? `${hardware.gpu.vram} GB` : 'N/A';
+                document.getElementById('hwRam').textContent = `${hardware.ram} GB`;
+                document.getElementById('hwDisk').textContent = `${hardware.diskFree} GB`;
+                document.getElementById('hwCpu').textContent = hardware.cpuModel.substring(0, 24);
+                document.getElementById('hwPlatform').textContent = `${hardware.platform} ${hardware.arch}`;
+
+                document.getElementById('recModel').textContent = recommendation.model.toUpperCase();
+                document.getElementById('recReason').textContent = recommendation.reason;
+                document.getElementById('recSize').textContent = `${recommendation.specs.size} GB`;
+                document.getElementById('recQuality').textContent = recommendation.specs.quality;
+
+                document.getElementById('scanLoading').style.display = 'none';
+                document.getElementById('scanResults').style.display = 'block';
+                document.getElementById('scanNextBtn').disabled = false;
+            } catch (e) {
+                document.getElementById('scanLoading').innerHTML = `<div class="error-box">Scan failed: ${e.message}</div>`;
+            }
+        }
+
+        async function startInstall() {
+            goToStep(4);
+
+            window.installerAPI.onProgress(({ step, percent, message }) => {
+                document.getElementById('progressFill').style.width = `${percent}%`;
+                document.getElementById('progressText').textContent = message;
+            });
+
+            try {
+                const result = await window.installerAPI.install();
+                if (result.success) {
+                    document.getElementById('installNextBtn').disabled = false;
+                    document.getElementById('progressText').textContent = '✅ Installation complete!';
+                } else {
+                    document.getElementById('installError').style.display = 'block';
+                    document.getElementById('installError').innerHTML =
+                        `<div class="error-box">Installation failed: ${result.error}</div>`;
+                }
+            } catch (e) {
+                document.getElementById('installError').style.display = 'block';
+                document.getElementById('installError').innerHTML =
+                    `<div class="error-box">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function checkPermissions() {
+            try {
+                const perms = await window.installerAPI.checkPermissions();
+
+                const micEl = document.getElementById('permMic');
+                micEl.textContent = perms.mic ? 'Granted' : 'Needed';
+                micEl.className = `perm-status ${perms.mic ? 'granted' : 'needed'}`;
+
+                const accessEl = document.getElementById('permAccess');
+                accessEl.textContent = perms.accessibility ? 'Granted' : 'Optional';
+                accessEl.className = `perm-status ${perms.accessibility ? 'granted' : 'needed'}`;
+            } catch (e) {
+                // Non-blocking
+            }
+        }
+
+        async function finishSetup() {
+            await window.installerAPI.complete();
+        }
+    </script>
+</body>
+
+</html>
