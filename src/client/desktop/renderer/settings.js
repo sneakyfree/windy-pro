@@ -5,28 +5,28 @@
  */
 
 class SettingsPanel {
-    constructor(app) {
-        this.app = app;
-        this.panel = document.getElementById('settingsPanel');
-        this.isOpen = false;
-        this.init();
-    }
+  constructor(app) {
+    this.app = app;
+    this.panel = document.getElementById('settingsPanel');
+    this.isOpen = false;
+    this.init();
+  }
 
-    init() {
-        // Create settings panel HTML and inject if not already in DOM
-        if (!this.panel) {
-            this.panel = document.createElement('div');
-            this.panel.id = 'settingsPanel';
-            this.panel.className = 'settings-panel';
-            this.panel.innerHTML = this.buildHTML();
-            document.querySelector('.window').appendChild(this.panel);
-        }
-        this.bindEvents();
-        this.loadSettings();
+  init() {
+    // Create settings panel HTML and inject if not already in DOM
+    if (!this.panel) {
+      this.panel = document.createElement('div');
+      this.panel.id = 'settingsPanel';
+      this.panel.className = 'settings-panel';
+      this.panel.innerHTML = this.buildHTML();
+      document.querySelector('.window').appendChild(this.panel);
     }
+    this.bindEvents();
+    this.loadSettings();
+  }
 
-    buildHTML() {
-        return `
+  buildHTML() {
+    return `
       <div class="settings-header">
         <h2>⚙️ Settings</h2>
         <button class="settings-close" id="settingsClose">✕</button>
@@ -70,6 +70,25 @@ class SettingsPanel {
         </div>
         
         <div class="settings-section">
+          <h3>✨ Vibe Toggle</h3>
+          <div class="setting-row">
+            <label for="vibeEnabled">Clean-up Mode</label>
+            <input type="checkbox" id="vibeEnabled">
+          </div>
+          <p class="settings-hint">Removes filler words, fixes grammar, adds punctuation</p>
+        </div>
+        
+        <div class="settings-section">
+          <h3>🎙️ Input Device</h3>
+          <div class="setting-row">
+            <label for="micSelect">Microphone</label>
+            <select id="micSelect">
+              <option value="default">System Default</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="settings-section">
           <h3>⌨️ Hotkeys</h3>
           <div class="setting-row">
             <label>Toggle Recording</label>
@@ -104,98 +123,150 @@ class SettingsPanel {
         </div>
       </div>
     `;
-    }
+  }
 
-    bindEvents() {
-        // Close button
-        this.panel.querySelector('#settingsClose').addEventListener('click', () => this.close());
+  bindEvents() {
+    // Close button
+    this.panel.querySelector('#settingsClose').addEventListener('click', () => this.close());
 
-        // Model change
-        this.panel.querySelector('#modelSelect').addEventListener('change', (e) => {
-            this.saveSetting('model', e.target.value);
-            // Send config update to server
-            if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
-                this.app.ws.send(JSON.stringify({
-                    action: 'config',
-                    config: { model: e.target.value }
-                }));
-            }
-        });
+    // Model change
+    this.panel.querySelector('#modelSelect').addEventListener('change', (e) => {
+      this.saveSetting('model', e.target.value);
+      // Send config update to server
+      if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
+        this.app.ws.send(JSON.stringify({
+          action: 'config',
+          config: { model: e.target.value }
+        }));
+      }
+    });
 
-        // Device change
-        this.panel.querySelector('#deviceSelect').addEventListener('change', (e) => {
-            this.saveSetting('device', e.target.value);
-        });
+    // Device change (T18: propagate to server)
+    this.panel.querySelector('#deviceSelect').addEventListener('change', (e) => {
+      this.saveSetting('device', e.target.value);
+      if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
+        this.app.ws.send(JSON.stringify({
+          action: 'config',
+          config: { device: e.target.value }
+        }));
+      }
+    });
 
-        // Language change
-        this.panel.querySelector('#languageSelect').addEventListener('change', (e) => {
-            this.saveSetting('language', e.target.value);
-            if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
-                this.app.ws.send(JSON.stringify({
-                    action: 'config',
-                    config: { language: e.target.value }
-                }));
-            }
-        });
+    // Vibe toggle (T17)
+    this.panel.querySelector('#vibeEnabled').addEventListener('change', (e) => {
+      this.saveSetting('vibeEnabled', e.target.checked);
+      if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
+        this.app.ws.send(JSON.stringify({
+          action: 'config',
+          config: { vibe_enabled: e.target.checked }
+        }));
+      }
+    });
 
-        // Opacity slider
-        const opacityRange = this.panel.querySelector('#opacityRange');
-        const opacityValue = this.panel.querySelector('#opacityValue');
-        opacityRange.addEventListener('input', (e) => {
-            const opacity = e.target.value;
-            opacityValue.textContent = `${opacity}%`;
-            document.querySelector('.window').style.opacity = opacity / 100;
-            this.saveSetting('opacity', parseInt(opacity));
-        });
+    // Mic device selector (T20)
+    this.panel.querySelector('#micSelect').addEventListener('change', (e) => {
+      this.saveSetting('micDeviceId', e.target.value);
+    });
 
-        // Always on top
-        this.panel.querySelector('#alwaysOnTop').addEventListener('change', (e) => {
-            this.saveSetting('alwaysOnTop', e.target.checked);
-            if (window.windyAPI) {
-                window.windyAPI.updateSettings({ alwaysOnTop: e.target.checked });
-            }
-        });
-    }
+    // Language change
+    this.panel.querySelector('#languageSelect').addEventListener('change', (e) => {
+      this.saveSetting('language', e.target.value);
+      if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
+        this.app.ws.send(JSON.stringify({
+          action: 'config',
+          config: { language: e.target.value }
+        }));
+      }
+    });
 
-    loadSettings() {
-        if (!window.windyAPI) return;
+    // Opacity slider
+    const opacityRange = this.panel.querySelector('#opacityRange');
+    const opacityValue = this.panel.querySelector('#opacityValue');
+    opacityRange.addEventListener('input', (e) => {
+      const opacity = e.target.value;
+      opacityValue.textContent = `${opacity}%`;
+      document.querySelector('.window').style.opacity = opacity / 100;
+      this.saveSetting('opacity', parseInt(opacity));
+    });
 
-        try {
-            const settings = window.windyAPI.getSettings();
-            if (settings) {
-                if (settings.model) this.panel.querySelector('#modelSelect').value = settings.model;
-                if (settings.device) this.panel.querySelector('#deviceSelect').value = settings.device;
-                if (settings.language) this.panel.querySelector('#languageSelect').value = settings.language;
-                if (settings.opacity) {
-                    this.panel.querySelector('#opacityRange').value = settings.opacity;
-                    this.panel.querySelector('#opacityValue').textContent = `${settings.opacity}%`;
-                }
-                if (settings.alwaysOnTop !== undefined) {
-                    this.panel.querySelector('#alwaysOnTop').checked = settings.alwaysOnTop;
-                }
-            }
-        } catch (e) {
-            // Settings not available yet, use defaults
+    // Always on top
+    this.panel.querySelector('#alwaysOnTop').addEventListener('change', (e) => {
+      this.saveSetting('alwaysOnTop', e.target.checked);
+      if (window.windyAPI) {
+        window.windyAPI.updateSettings({ alwaysOnTop: e.target.checked });
+      }
+    });
+  }
+
+  loadSettings() {
+    if (!window.windyAPI) return;
+
+    try {
+      const settings = window.windyAPI.getSettings();
+      if (settings) {
+        if (settings.model) this.panel.querySelector('#modelSelect').value = settings.model;
+        if (settings.device) this.panel.querySelector('#deviceSelect').value = settings.device;
+        if (settings.language) this.panel.querySelector('#languageSelect').value = settings.language;
+        if (settings.opacity) {
+          this.panel.querySelector('#opacityRange').value = settings.opacity;
+          this.panel.querySelector('#opacityValue').textContent = `${settings.opacity}%`;
         }
-    }
-
-    saveSetting(key, value) {
-        if (window.windyAPI) {
-            window.windyAPI.updateSettings({ [key]: value });
+        if (settings.alwaysOnTop !== undefined) {
+          this.panel.querySelector('#alwaysOnTop').checked = settings.alwaysOnTop;
         }
+        if (settings.vibeEnabled !== undefined) {
+          this.panel.querySelector('#vibeEnabled').checked = settings.vibeEnabled;
+        }
+      }
+    } catch (e) {
+      // Settings not available yet, use defaults
     }
 
-    toggle() {
-        this.isOpen ? this.close() : this.open();
-    }
+    // Enumerate audio input devices (T20)
+    this.populateMicDevices();
+  }
 
-    open() {
-        this.panel.classList.add('open');
-        this.isOpen = true;
+  async populateMicDevices() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const mics = devices.filter(d => d.kind === 'audioinput');
+      const select = this.panel.querySelector('#micSelect');
+      select.innerHTML = '<option value="default">System Default</option>';
+      mics.forEach(mic => {
+        const opt = document.createElement('option');
+        opt.value = mic.deviceId;
+        opt.textContent = mic.label || `Microphone ${mic.deviceId.slice(0, 8)}`;
+        select.appendChild(opt);
+      });
+      // Restore saved selection
+      if (window.windyAPI) {
+        const settings = window.windyAPI.getSettings();
+        if (settings && settings.micDeviceId) {
+          select.value = settings.micDeviceId;
+        }
+      }
+    } catch (e) {
+      // Devices not available until mic permission granted
     }
+  }
 
-    close() {
-        this.panel.classList.remove('open');
-        this.isOpen = false;
+  saveSetting(key, value) {
+    if (window.windyAPI) {
+      window.windyAPI.updateSettings({ [key]: value });
     }
+  }
+
+  toggle() {
+    this.isOpen ? this.close() : this.open();
+  }
+
+  open() {
+    this.panel.classList.add('open');
+    this.isOpen = true;
+  }
+
+  close() {
+    this.panel.classList.remove('open');
+    this.isOpen = false;
+  }
 }

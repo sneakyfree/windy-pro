@@ -34,3 +34,7 @@ models/
 *.tmp
 *.temp
 windy_session.txt
+
+# Secrets / env files
+.env
+deploy/.env

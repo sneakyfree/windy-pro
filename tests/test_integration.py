@@ -10,9 +10,15 @@ import threading
 import time
 from src.engine.server import WindyServer
 
+# Use a random available port to avoid conflict with running server
+import socket
 
-# Use a random available port
-TEST_PORT = 9876
+def _get_free_port():
+    with socket.socket() as s:
+        s.bind(('', 0))
+        return s.getsockname()[1]
+
+TEST_PORT = _get_free_port()
 
 
 @pytest.fixture

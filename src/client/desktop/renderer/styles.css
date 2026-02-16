@@ -762,3 +762,67 @@ body {
     opacity: 0;
   }
 }
+
+/* ═══ Recovery Banner (T19) ═══ */
+
+.recovery-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #1e3a1e, #1a2e1a);
+  border-bottom: 1px solid var(--color-listening);
+  font-size: 12px;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.recovery-icon {
+  font-size: 14px;
+}
+
+.recovery-text {
+  flex: 1;
+  color: var(--text-secondary);
+}
+
+.recovery-restore {
+  padding: 3px 10px;
+  background: var(--color-listening);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.recovery-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+}
+
+/* ═══ Settings Hint (T17) ═══ */
+
+.settings-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: -4px 0 8px;
+  padding: 0 4px;
+  opacity: 0.7;
+}

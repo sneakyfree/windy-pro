@@ -215,6 +215,12 @@ class StreamingTranscriber:
             self._worker_thread.join(timeout=2.0)
             self._worker_thread = None
         
+        # Clean up recovery file on successful stop
+        try:
+            self._temp_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+        
         # Return accumulated transcript
         return " ".join(seg.text for seg in self._full_transcript)
     

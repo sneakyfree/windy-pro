@@ -13,6 +13,7 @@ const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, cl
 const path = require('path');
 const Store = require('electron-store');
 const { CursorInjector } = require('./injection/injector');
+const { WindyUpdater } = require('./updater');
 
 // Cursor injection module
 const injector = new CursorInjector();
@@ -311,32 +312,37 @@ ipcMain.handle('check-injection-permissions', async () => {
   return injector.checkPermissions();
 });
 
-// Update settings
+// Update settings — accepts flat keys from renderer and routes to correct store namespace
 ipcMain.on('update-settings', (event, settings) => {
-  if (settings.hotkeys) {
-    // Unregister old hotkeys
-    globalShortcut.unregisterAll();
-    store.set('hotkeys', settings.hotkeys);
-    registerHotkeys();
-  }
-  if (settings.server) {
-    store.set('server', settings.server);
-  }
-  if (settings.appearance) {
-    store.set('appearance', settings.appearance);
-    if (mainWindow) {
-      mainWindow.setAlwaysOnTop(settings.appearance.alwaysOnTop);
-      mainWindow.setOpacity(settings.appearance.opacity);
+  const appearanceKeys = ['alwaysOnTop', 'opacity'];
+  const serverKeys = ['host', 'port'];
+  const hotkeyKeys = ['toggleRecording', 'pasteTranscript', 'showHide'];
+
+  for (const [key, value] of Object.entries(settings)) {
+    if (appearanceKeys.includes(key)) {
+      store.set(`appearance.${key}`, key === 'opacity' ? value / 100 : value);
+      if (key === 'alwaysOnTop' && mainWindow) mainWindow.setAlwaysOnTop(value);
+      if (key === 'opacity' && mainWindow) mainWindow.setOpacity(value / 100);
+    } else if (serverKeys.includes(key)) {
+      store.set(`server.${key}`, value);
+    } else if (hotkeyKeys.includes(key)) {
+      store.set(`hotkeys.${key}`, value);
+      globalShortcut.unregisterAll();
+      registerHotkeys();
+    } else {
+      // Engine settings (model, device, language, vibeEnabled, micDeviceId)
+      store.set(`engine.${key}`, value);
     }
   }
 });
 
-// Get settings
+// Get settings — returns flat keys for the renderer
 ipcMain.handle('get-settings', () => {
   return {
-    hotkeys: store.get('hotkeys'),
-    server: store.get('server'),
-    appearance: store.get('appearance')
+    ...store.get('appearance'),
+    ...store.get('server'),
+    ...store.get('engine', {}),
+    hotkeys: store.get('hotkeys')
   };
 });
 
@@ -349,7 +355,10 @@ ipcMain.handle('get-server-config', () => {
 
 app.whenReady().then(async () => {
   // First-run setup wizard (Phase 3: B4)
-  const { InstallerWizard } = require('../../../installer/installer-wizard');
+  const installerPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'installer', 'installer-wizard')
+    : path.join(__dirname, '..', '..', '..', 'installer', 'installer-wizard');
+  const { InstallerWizard } = require(installerPath);
   if (InstallerWizard.needsSetup()) {
     const wizard = new InstallerWizard();
     const installed = await wizard.show();
@@ -363,6 +372,14 @@ app.whenReady().then(async () => {
   createWindow();
   createTray();
   registerHotkeys();
+
+  // Auto-update check (T16 — fail silently if no releases)
+  try {
+    const updater = new WindyUpdater();
+    updater.checkForUpdates();
+  } catch (e) {
+    console.log('[Main] Auto-updater skipped:', e.message);
+  }
 
   app.on('activate', () => {
     // macOS: re-create window if dock icon clicked

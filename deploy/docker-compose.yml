@@ -7,8 +7,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - WINDY_API_KEY=${WINDY_API_KEY:-dev-key-change-me}
-      - DATABASE_URL=postgresql://windy:windy_secret@postgres:5432/windy_pro
+      - WINDY_API_KEY=${WINDY_API_KEY:?Set WINDY_API_KEY in .env}
+      - WINDY_JWT_SECRET=${WINDY_JWT_SECRET:?Set WINDY_JWT_SECRET in .env}
+      - DATABASE_URL=postgresql://windy:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/windy_pro
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:
@@ -32,7 +33,7 @@ services:
     environment:
       POSTGRES_DB: windy_pro
       POSTGRES_USER: windy
-      POSTGRES_PASSWORD: windy_secret
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

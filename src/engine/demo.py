@@ -10,9 +10,10 @@ Usage:
 import sys
 import time
 import argparse
+from pathlib import Path
 
 # Add parent to path for imports
-sys.path.insert(0, str(__file__).rsplit('/', 2)[0])
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from engine.transcriber import StreamingTranscriber, TranscriberConfig, TranscriptionState
 from engine.audio_capture import AudioCapture

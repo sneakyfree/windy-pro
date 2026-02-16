@@ -10,6 +10,8 @@ Protocol:
 import asyncio
 import json
 import sys
+import os
+from pathlib import Path
 from typing import Set
 
 try:
@@ -155,11 +157,41 @@ class WindyServer:
         
         elif action == "config":
             config_data = cmd.get("config", {})
+            # T17: Handle vibe toggle
+            if "vibe_enabled" in config_data:
+                self.vibe.enabled = config_data["vibe_enabled"]
+            # T18: Handle device change
+            if "device" in config_data and self.transcriber:
+                self.transcriber.config.device = config_data["device"]
+            if "model" in config_data and self.transcriber:
+                self.transcriber.config.model_size = config_data["model"]
+            if "language" in config_data and self.transcriber:
+                self.transcriber.config.language = config_data["language"]
             await websocket.send(json.dumps({
                 "type": "ack",
                 "action": "config",
                 "success": True
             }))
+        
+        elif action == "recovery_check":
+            # T19: Check for crash recovery file
+            recovery_path = Path.home() / "windy_session.txt"
+            text = ""
+            if recovery_path.exists():
+                try:
+                    text = recovery_path.read_text().strip()
+                except Exception:
+                    pass
+            if text:
+                await websocket.send(json.dumps({
+                    "type": "recovery_available",
+                    "text": text
+                }))
+                # Remove recovery file after sending
+                try:
+                    recovery_path.unlink()
+                except Exception:
+                    pass
         
         elif action == "ping":
             await websocket.send(json.dumps({
@@ -260,8 +292,8 @@ async def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Windy Pro WebSocket Server")
-    parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
-    parser.add_argument("--port", type=int, default=9876, help="Port to listen on")
+    parser.add_argument("--host", default=os.environ.get("WINDY_HOST", "127.0.0.1"), help="Host to bind to")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("WINDY_PORT", "9876")), help="Port to listen on")
     parser.add_argument("--model", default="base", help="Whisper model size")
     parser.add_argument("--device", default="auto", help="Device (auto/cpu/cuda)")
     parser.add_argument("--language", default="en", help="Language code")

@@ -58,6 +58,22 @@ class PromptVault:
                 ON segments(session_id);
             CREATE INDEX IF NOT EXISTS idx_segments_text 
                 ON segments(text);
+
+            -- FTS5 full-text search index for fast segment search
+            CREATE VIRTUAL TABLE IF NOT EXISTS segments_fts
+                USING fts5(text, content=segments, content_rowid=id);
+
+            -- Triggers to keep FTS index in sync
+            CREATE TRIGGER IF NOT EXISTS segments_ai AFTER INSERT ON segments BEGIN
+                INSERT INTO segments_fts(rowid, text) VALUES (new.id, new.text);
+            END;
+            CREATE TRIGGER IF NOT EXISTS segments_ad AFTER DELETE ON segments BEGIN
+                INSERT INTO segments_fts(segments_fts, rowid, text) VALUES('delete', old.id, old.text);
+            END;
+            CREATE TRIGGER IF NOT EXISTS segments_au AFTER UPDATE ON segments BEGIN
+                INSERT INTO segments_fts(segments_fts, rowid, text) VALUES('delete', old.id, old.text);
+                INSERT INTO segments_fts(rowid, text) VALUES (new.id, new.text);
+            END;
         """)
         self._conn.commit()
     
@@ -148,15 +164,28 @@ class PromptVault:
     # ═════════════════════════════════
     
     def search(self, query: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Full-text search across all segments."""
-        rows = self._conn.execute("""
-            SELECT seg.*, ses.started_at as session_date
-            FROM segments seg
-            JOIN sessions ses ON seg.session_id = ses.id
-            WHERE seg.text LIKE ? AND seg.is_partial = 0
-            ORDER BY seg.created_at DESC
-            LIMIT ?
-        """, (f'%{query}%', limit)).fetchall()
+        """Full-text search across all segments using FTS5 index."""
+        try:
+            # Use FTS5 for fast indexed search
+            rows = self._conn.execute("""
+                SELECT seg.*, ses.started_at as session_date
+                FROM segments seg
+                JOIN segments_fts fts ON seg.id = fts.rowid
+                JOIN sessions ses ON seg.session_id = ses.id
+                WHERE segments_fts MATCH ? AND seg.is_partial = 0
+                ORDER BY seg.created_at DESC
+                LIMIT ?
+            """, (query, limit)).fetchall()
+        except Exception:
+            # Fallback to LIKE for backwards compatibility with old DBs
+            rows = self._conn.execute("""
+                SELECT seg.*, ses.started_at as session_date
+                FROM segments seg
+                JOIN sessions ses ON seg.session_id = ses.id
+                WHERE seg.text LIKE ? AND seg.is_partial = 0
+                ORDER BY seg.created_at DESC
+                LIMIT ?
+            """, (f'%{query}%', limit)).fetchall()
         return [dict(r) for r in rows]
     
     def export_session(self, session_id: int, format: str = 'txt') -> str:

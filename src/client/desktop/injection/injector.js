@@ -27,6 +27,9 @@ class CursorInjector {
             throw new Error('No text to inject');
         }
 
+        // Save existing clipboard content
+        const previousClipboard = clipboard.readText();
+
         // Step 1: Copy text to system clipboard
         clipboard.writeText(text);
 
@@ -47,6 +50,11 @@ class CursorInjector {
             default:
                 throw new Error(`Unsupported platform: ${this.platform}`);
         }
+
+        // Step 4: Restore previous clipboard after paste completes
+        setTimeout(() => {
+            clipboard.writeText(previousClipboard);
+        }, 500);
     }
 
     /**

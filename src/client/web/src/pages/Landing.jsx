@@ -183,17 +183,17 @@ export default function Landing() {
                     <h2 className="section-title">Download Windy Pro</h2>
                     <p className="section-subtitle">Available for all major platforms.</p>
                     <div className="download-grid">
-                        <a href="#" className="download-card">
+                        <a href="https://github.com/windy-pro/windy-pro/releases/latest" className="download-card" target="_blank" rel="noopener noreferrer">
                             <div className="download-icon">🍎</div>
                             <div className="download-platform">macOS</div>
                             <div className="download-detail">Intel & Apple Silicon</div>
                         </a>
-                        <a href="#" className="download-card">
+                        <a href="https://github.com/windy-pro/windy-pro/releases/latest" className="download-card" target="_blank" rel="noopener noreferrer">
                             <div className="download-icon">🪟</div>
                             <div className="download-platform">Windows</div>
                             <div className="download-detail">Windows 10+</div>
                         </a>
-                        <a href="#" className="download-card">
+                        <a href="https://github.com/windy-pro/windy-pro/releases/latest" className="download-card" target="_blank" rel="noopener noreferrer">
                             <div className="download-icon">🐧</div>
                             <div className="download-platform">Linux</div>
                             <div className="download-detail">AppImage & .deb</div>

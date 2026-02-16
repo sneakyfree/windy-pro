@@ -14,7 +14,7 @@ class DependencyInstaller {
     constructor() {
         this.appDataDir = path.join(os.homedir(), '.windy-pro');
         this.venvDir = path.join(this.appDataDir, 'venv');
-        this.requirementsPath = path.join(__dirname, '..', 'src', 'engine', 'requirements.txt');
+        this.requirementsPath = path.join(__dirname, '..', 'requirements.txt');
         this.onProgress = null;  // callback(step, percent, message)
     }
 

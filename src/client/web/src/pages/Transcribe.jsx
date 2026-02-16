@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import './Transcribe.css'
 
 export default function Transcribe() {
@@ -8,16 +8,18 @@ export default function Transcribe() {
     const [segments, setSegments] = useState([])
     const [audioLevel, setAudioLevel] = useState(0)
     const [connected, setConnected] = useState(false)
+    const navigate = useNavigate()
 
     const wsRef = useRef(null)
     const mediaStreamRef = useRef(null)
     const audioContextRef = useRef(null)
     const transcriptRef = useRef(null)
 
-    // Connect to cloud WebSocket
+    // Connect to cloud WebSocket (with auth token)
     const connect = useCallback(() => {
         const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-        const ws = new WebSocket(`${protocol}://${window.location.host}/ws/transcribe`)
+        const token = localStorage.getItem('windy_token')
+        const ws = new WebSocket(`${protocol}://${window.location.host}/ws/transcribe${token ? `?token=${token}` : ''}`)
 
         ws.onopen = () => {
             setConnected(true)
@@ -139,12 +141,21 @@ export default function Transcribe() {
         return `${m}:${s.toString().padStart(2, '0')}`
     }
 
+    const handleLogout = () => {
+        localStorage.removeItem('windy_token')
+        localStorage.removeItem('windy_user')
+        navigate('/auth')
+    }
+
     return (
         <div className="transcribe-page">
             {/* Top bar */}
             <nav className="transcribe-nav">
                 <Link to="/" className="transcribe-back">← Windy Pro</Link>
-                <div className={`connection-dot ${connected ? 'connected' : ''}`}></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div className={`connection-dot ${connected ? 'connected' : ''}`}></div>
+                    <button onClick={handleLogout} className="btn-logout">Logout</button>
+                </div>
             </nav>
 
             {/* State indicator */}

@@ -123,6 +123,8 @@ class WindyApp {
         console.log('WebSocket connected');
         this.reconnectAttempts = 0;
         this.setConnectionStatus('connected');
+        // T19: Check for crash recovery
+        this.send('recovery_check');
       };
 
       this.ws.onmessage = (event) => {
@@ -182,6 +184,11 @@ class WindyApp {
 
       case 'pong':
         // Latency check
+        break;
+
+      case 'recovery_available':
+        // T19: Show crash recovery banner
+        this.showRecoveryBanner(msg.text);
         break;
     }
   }
@@ -313,15 +320,24 @@ class WindyApp {
    * FEAT-033: Feed audio level meter
    */
   async startAudioCapture() {
+    // T20: Use saved mic device if set
+    const audioConstraints = {
+      channelCount: 1,          // mono
+      sampleRate: 16000,        // Whisper expects 16kHz
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true
+    };
+    if (window.windyAPI) {
+      const settings = window.windyAPI.getSettings();
+      if (settings && settings.micDeviceId && settings.micDeviceId !== 'default') {
+        audioConstraints.deviceId = { exact: settings.micDeviceId };
+      }
+    }
+
     // B2.6.1: Request microphone access
     this.mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,          // mono
-        sampleRate: 16000,        // Whisper expects 16kHz
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      }
+      audio: audioConstraints
     });
 
     // B2.6.2: Create AudioContext at 16kHz
@@ -496,6 +512,44 @@ class WindyApp {
   pasteTranscript() {
     const text = this.getFullTranscript();
     window.windyAPI.sendTranscriptForPaste(text);
+  }
+
+  /**
+   * T19: Show crash recovery banner
+   * @param {string} text - Recovered transcript text
+   */
+  showRecoveryBanner(text) {
+    if (!text || !text.trim()) return;
+
+    const banner = document.createElement('div');
+    banner.className = 'recovery-banner';
+    banner.innerHTML = `
+      <span class="recovery-icon">🔄</span>
+      <span class="recovery-text">Previous session recovered</span>
+      <button class="recovery-restore" id="recoveryRestore">Restore</button>
+      <button class="recovery-dismiss" id="recoveryDismiss">✕</button>
+    `;
+
+    const window_el = document.querySelector('.window');
+    window_el.insertBefore(banner, window_el.firstChild);
+
+    banner.querySelector('#recoveryRestore').addEventListener('click', () => {
+      // Split recovered text into segments and display
+      const lines = text.split('\n').filter(l => l.trim());
+      lines.forEach(line => {
+        this.addTranscriptSegment({
+          text: line.trim(),
+          is_partial: false,
+          start_time: 0,
+          end_time: 0
+        });
+      });
+      banner.remove();
+    });
+
+    banner.querySelector('#recoveryDismiss').addEventListener('click', () => {
+      banner.remove();
+    });
   }
 }
 
