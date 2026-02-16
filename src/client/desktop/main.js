@@ -12,7 +12,11 @@
 const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
+const { spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
 const { CursorInjector } = require('./injection/injector');
+const { WindyUpdater } = require('./updater');
 
 // Cursor injection module
 const injector = new CursorInjector();
@@ -45,6 +49,53 @@ const store = new Store({
 let mainWindow = null;
 let tray = null;
 let isRecording = false;
+let pythonProcess = null;
+
+/**
+ * Start the Python WebSocket server as a child process
+ */
+function startPythonServer() {
+  const serverConfig = store.get('server');
+  const appDataDir = path.join(os.homedir(), '.windy-pro');
+  const venvPython = process.platform === 'win32'
+    ? path.join(appDataDir, 'venv', 'Scripts', 'python.exe')
+    : path.join(appDataDir, 'venv', 'bin', 'python');
+
+  const pythonPath = fs.existsSync(venvPython) ? venvPython : 'python3';
+  const projectRoot = path.join(__dirname, '..', '..', '..');
+
+  console.log(`[Python] Starting server with: ${pythonPath}`);
+
+  pythonProcess = spawn(pythonPath, [
+    '-m', 'src.engine.server',
+    '--host', serverConfig.host,
+    '--port', String(serverConfig.port)
+  ], {
+    cwd: projectRoot,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, PYTHONUNBUFFERED: '1' }
+  });
+
+  pythonProcess.stdout.on('data', (data) => {
+    console.log(`[Python] ${data.toString().trim()}`);
+  });
+
+  pythonProcess.stderr.on('data', (data) => {
+    console.error(`[Python] ${data.toString().trim()}`);
+  });
+
+  pythonProcess.on('close', (code) => {
+    console.log(`[Python] Server exited with code ${code}`);
+    pythonProcess = null;
+  });
+
+  pythonProcess.on('error', (err) => {
+    console.error(`[Python] Failed to start: ${err.message}`);
+    if (mainWindow) {
+      mainWindow.webContents.send('state-change', 'error');
+    }
+  });
+}
 
 /**
  * Create the main floating window
@@ -345,6 +396,31 @@ ipcMain.handle('get-server-config', () => {
   return store.get('server');
 });
 
+// Minimize window
+ipcMain.on('minimize-window', () => {
+  if (mainWindow) mainWindow.minimize();
+});
+
+// Crash recovery — check for orphaned temp file
+ipcMain.handle('check-crash-recovery', async () => {
+  const tempFile = path.join(os.tmpdir(), 'windy_session.txt');
+  if (fs.existsSync(tempFile)) {
+    try {
+      const content = fs.readFileSync(tempFile, 'utf-8');
+      if (content.trim().length > 0) {
+        return { found: true, content, path: tempFile };
+      }
+    } catch (e) { /* ignore read errors */ }
+  }
+  return { found: false };
+});
+
+ipcMain.handle('dismiss-crash-recovery', async () => {
+  const tempFile = path.join(os.tmpdir(), 'windy_session.txt');
+  try { fs.unlinkSync(tempFile); } catch (e) { /* ignore */ }
+  return true;
+});
+
 // App lifecycle
 
 app.whenReady().then(async () => {
@@ -360,9 +436,35 @@ app.whenReady().then(async () => {
     }
   }
 
+  startPythonServer();
+  // Give server time to start before opening window
+  await new Promise(r => setTimeout(r, 2000));
+
   createWindow();
   createTray();
   registerHotkeys();
+
+  // Check for updates (non-blocking)
+  const updater = new WindyUpdater(mainWindow);
+  setTimeout(() => updater.checkForUpdates(), 5000);
+
+  // macOS: Check accessibility permission for cursor injection
+  if (process.platform === 'darwin') {
+    const perms = await injector.checkPermissions();
+    if (perms && !perms.accessibility) {
+      const { dialog, shell } = require('electron');
+      const result = await dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Accessibility Permission Needed',
+        message: 'Windy Pro needs Accessibility permission to paste text at your cursor.',
+        detail: 'Grant access in System Preferences → Privacy & Security → Accessibility.',
+        buttons: ['Open System Preferences', 'Later']
+      });
+      if (result.response === 0) {
+        shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
+      }
+    }
+  }
 
   app.on('activate', () => {
     // macOS: re-create window if dock icon clicked
@@ -381,6 +483,10 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true;
+  if (pythonProcess) {
+    pythonProcess.kill('SIGTERM');
+    pythonProcess = null;
+  }
 });
 
 app.on('will-quit', () => {

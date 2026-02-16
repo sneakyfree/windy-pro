@@ -24,6 +24,8 @@ src/client/desktop/dist/
 # OS
 .DS_Store
 Thumbs.db
+.env
+*.db
 
 # Whisper models (large files)
 *.pt

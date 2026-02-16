@@ -1,0 +1,6 @@
+# Optional GPU dependencies for Windy Pro
+# These require CUDA and may not be available on all Python versions.
+# Install with: pip install -r requirements-gpu.txt
+
+torch>=2.0.0
+torchaudio>=2.0.0

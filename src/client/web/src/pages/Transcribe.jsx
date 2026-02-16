@@ -17,7 +17,7 @@ export default function Transcribe() {
     // Connect to cloud WebSocket
     const connect = useCallback(() => {
         const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-        const ws = new WebSocket(`${protocol}://${window.location.host}/ws/transcribe`)
+        const ws = new WebSocket(`${protocol}://${window.location.host}/ws/stream`)
 
         ws.onopen = () => {
             setConnected(true)

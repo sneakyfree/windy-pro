@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (settings) => ipcRenderer.send('update-settings', settings),
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),
+  minimize: () => ipcRenderer.send('minimize-window'),
 
   // Recording control
   onToggleRecording: (callback) => {
@@ -42,6 +43,10 @@ contextBridge.exposeInMainWorld('windyAPI', {
   onInjectionError: (callback) => {
     ipcRenderer.on('injection-error', (event, message) => callback(message));
   },
+
+  // Crash recovery
+  checkCrashRecovery: () => ipcRenderer.invoke('check-crash-recovery'),
+  dismissCrashRecovery: () => ipcRenderer.invoke('dismiss-crash-recovery'),
 
   // Platform info
   platform: process.platform

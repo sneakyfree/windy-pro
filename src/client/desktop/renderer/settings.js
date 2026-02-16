@@ -5,28 +5,28 @@
  */
 
 class SettingsPanel {
-    constructor(app) {
-        this.app = app;
-        this.panel = document.getElementById('settingsPanel');
-        this.isOpen = false;
-        this.init();
-    }
+  constructor(app) {
+    this.app = app;
+    this.panel = document.getElementById('settingsPanel');
+    this.isOpen = false;
+    this.init();
+  }
 
-    init() {
-        // Create settings panel HTML and inject if not already in DOM
-        if (!this.panel) {
-            this.panel = document.createElement('div');
-            this.panel.id = 'settingsPanel';
-            this.panel.className = 'settings-panel';
-            this.panel.innerHTML = this.buildHTML();
-            document.querySelector('.window').appendChild(this.panel);
-        }
-        this.bindEvents();
-        this.loadSettings();
+  init() {
+    // Create settings panel HTML and inject if not already in DOM
+    if (!this.panel) {
+      this.panel = document.createElement('div');
+      this.panel.id = 'settingsPanel';
+      this.panel.className = 'settings-panel';
+      this.panel.innerHTML = this.buildHTML();
+      document.querySelector('.window').appendChild(this.panel);
     }
+    this.bindEvents();
+    this.loadSettings();
+  }
 
-    buildHTML() {
-        return `
+  buildHTML() {
+    return `
       <div class="settings-header">
         <h2>⚙️ Settings</h2>
         <button class="settings-close" id="settingsClose">✕</button>
@@ -67,6 +67,10 @@ class SettingsPanel {
               <option value="auto">Auto-detect</option>
             </select>
           </div>
+          <div class="setting-row">
+            <label for="vibeToggle">✨ Vibe Toggle (grammar cleanup)</label>
+            <input type="checkbox" id="vibeToggle">
+          </div>
         </div>
         
         <div class="settings-section">
@@ -104,98 +108,108 @@ class SettingsPanel {
         </div>
       </div>
     `;
-    }
+  }
 
-    bindEvents() {
-        // Close button
-        this.panel.querySelector('#settingsClose').addEventListener('click', () => this.close());
+  bindEvents() {
+    // Close button
+    this.panel.querySelector('#settingsClose').addEventListener('click', () => this.close());
 
-        // Model change
-        this.panel.querySelector('#modelSelect').addEventListener('change', (e) => {
-            this.saveSetting('model', e.target.value);
-            // Send config update to server
-            if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
-                this.app.ws.send(JSON.stringify({
-                    action: 'config',
-                    config: { model: e.target.value }
-                }));
-            }
-        });
+    // Model change
+    this.panel.querySelector('#modelSelect').addEventListener('change', (e) => {
+      this.saveSetting('model', e.target.value);
+      // Send config update to server
+      if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
+        this.app.ws.send(JSON.stringify({
+          action: 'config',
+          config: { model: e.target.value }
+        }));
+      }
+    });
 
-        // Device change
-        this.panel.querySelector('#deviceSelect').addEventListener('change', (e) => {
-            this.saveSetting('device', e.target.value);
-        });
+    // Device change
+    this.panel.querySelector('#deviceSelect').addEventListener('change', (e) => {
+      this.saveSetting('device', e.target.value);
+    });
 
-        // Language change
-        this.panel.querySelector('#languageSelect').addEventListener('change', (e) => {
-            this.saveSetting('language', e.target.value);
-            if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
-                this.app.ws.send(JSON.stringify({
-                    action: 'config',
-                    config: { language: e.target.value }
-                }));
-            }
-        });
+    // Language change
+    this.panel.querySelector('#languageSelect').addEventListener('change', (e) => {
+      this.saveSetting('language', e.target.value);
+      if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
+        this.app.ws.send(JSON.stringify({
+          action: 'config',
+          config: { language: e.target.value }
+        }));
+      }
+    });
 
-        // Opacity slider
-        const opacityRange = this.panel.querySelector('#opacityRange');
-        const opacityValue = this.panel.querySelector('#opacityValue');
-        opacityRange.addEventListener('input', (e) => {
-            const opacity = e.target.value;
-            opacityValue.textContent = `${opacity}%`;
-            document.querySelector('.window').style.opacity = opacity / 100;
-            this.saveSetting('opacity', parseInt(opacity));
-        });
+    // Vibe toggle
+    this.panel.querySelector('#vibeToggle').addEventListener('change', (e) => {
+      if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
+        this.app.ws.send(JSON.stringify({
+          action: 'config',
+          config: { vibe_enabled: e.target.checked }
+        }));
+      }
+    });
 
-        // Always on top
-        this.panel.querySelector('#alwaysOnTop').addEventListener('change', (e) => {
-            this.saveSetting('alwaysOnTop', e.target.checked);
-            if (window.windyAPI) {
-                window.windyAPI.updateSettings({ alwaysOnTop: e.target.checked });
-            }
-        });
-    }
+    // Opacity slider
+    const opacityRange = this.panel.querySelector('#opacityRange');
+    const opacityValue = this.panel.querySelector('#opacityValue');
+    opacityRange.addEventListener('input', (e) => {
+      const opacity = e.target.value;
+      opacityValue.textContent = `${opacity}%`;
+      document.querySelector('.window').style.opacity = opacity / 100;
+      this.saveSetting('opacity', parseInt(opacity) / 100);
+    });
 
-    loadSettings() {
-        if (!window.windyAPI) return;
+    // Always on top
+    this.panel.querySelector('#alwaysOnTop').addEventListener('change', (e) => {
+      this.saveSetting('alwaysOnTop', e.target.checked);
+    });
+  }
 
-        try {
-            const settings = window.windyAPI.getSettings();
-            if (settings) {
-                if (settings.model) this.panel.querySelector('#modelSelect').value = settings.model;
-                if (settings.device) this.panel.querySelector('#deviceSelect').value = settings.device;
-                if (settings.language) this.panel.querySelector('#languageSelect').value = settings.language;
-                if (settings.opacity) {
-                    this.panel.querySelector('#opacityRange').value = settings.opacity;
-                    this.panel.querySelector('#opacityValue').textContent = `${settings.opacity}%`;
-                }
-                if (settings.alwaysOnTop !== undefined) {
-                    this.panel.querySelector('#alwaysOnTop').checked = settings.alwaysOnTop;
-                }
-            }
-        } catch (e) {
-            // Settings not available yet, use defaults
+  async loadSettings() {
+    if (!window.windyAPI) return;
+
+    try {
+      const settings = await window.windyAPI.getSettings();
+      if (settings) {
+        if (settings.appearance?.opacity !== undefined) {
+          const pct = Math.round(settings.appearance.opacity * 100);
+          this.panel.querySelector('#opacityRange').value = pct;
+          this.panel.querySelector('#opacityValue').textContent = `${pct}%`;
         }
-    }
-
-    saveSetting(key, value) {
-        if (window.windyAPI) {
-            window.windyAPI.updateSettings({ [key]: value });
+        if (settings.appearance?.alwaysOnTop !== undefined) {
+          this.panel.querySelector('#alwaysOnTop').checked = settings.appearance.alwaysOnTop;
         }
+      }
+    } catch (e) {
+      // Settings not available yet, use defaults
     }
+  }
 
-    toggle() {
-        this.isOpen ? this.close() : this.open();
+  saveSetting(key, value) {
+    if (window.windyAPI) {
+      if (key === 'alwaysOnTop' || key === 'opacity') {
+        window.windyAPI.updateSettings({ appearance: { [key]: value } });
+      } else {
+        // For other settings like model, device, language
+        window.windyAPI.updateSettings({ [key]: value });
+      }
     }
+  }
 
-    open() {
-        this.panel.classList.add('open');
-        this.isOpen = true;
-    }
+  toggle() {
+    this.isOpen ? this.close() : this.open();
+  }
 
-    close() {
-        this.panel.classList.remove('open');
-        this.isOpen = false;
-    }
+  open() {
+    this.panel.classList.add('open');
+    this.isOpen = true;
+  }
+
+  close() {
+    this.panel.classList.remove('open');
+    this.isOpen = false;
+  }
 }

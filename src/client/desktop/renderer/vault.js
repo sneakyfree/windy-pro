@@ -244,9 +244,9 @@ class VaultPanel {
         const handler = (event) => {
             try {
                 const msg = JSON.parse(event.data);
-                if (msg.type === 'vault_export' && msg.content) {
+                if (msg.type === 'vault_export' && msg.text) {
                     // Copy to clipboard
-                    navigator.clipboard.writeText(msg.content).then(() => {
+                    navigator.clipboard.writeText(msg.text).then(() => {
                         this.showToast(`Exported as ${format.toUpperCase()} — copied to clipboard!`);
                     });
                     this.app.ws.removeEventListener('message', handler);

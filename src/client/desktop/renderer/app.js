@@ -53,6 +53,37 @@ class WindyApp {
     this.bindEvents();
     this.bindIPCEvents();
     await this.connect();
+
+    // Check for crash recovery
+    if (window.windyAPI?.checkCrashRecovery) {
+      const recovery = await window.windyAPI.checkCrashRecovery();
+      if (recovery.found) {
+        this.showCrashRecovery(recovery.content);
+      }
+    }
+  }
+
+  showCrashRecovery(content) {
+    const banner = document.createElement('div');
+    banner.style.cssText = 'padding:8px 12px;background:#f59e0b;color:#000;display:flex;align-items:center;justify-content:space-between;font-size:12px;border-bottom:1px solid #d97706;';
+    banner.innerHTML = `
+      <span>📝 Recovered transcript from last session</span>
+      <span>
+        <button id="recoveryCopy" style="margin-right:4px;padding:2px 8px;border-radius:4px;border:1px solid #000;background:#fff;cursor:pointer;">Copy</button>
+        <button id="recoveryDismiss" style="padding:2px 8px;border-radius:4px;border:1px solid #000;background:transparent;cursor:pointer;">✕</button>
+      </span>
+    `;
+    document.querySelector('.window').prepend(banner);
+
+    banner.querySelector('#recoveryCopy').addEventListener('click', () => {
+      navigator.clipboard.writeText(content);
+      banner.remove();
+      window.windyAPI.dismissCrashRecovery();
+    });
+    banner.querySelector('#recoveryDismiss').addEventListener('click', () => {
+      banner.remove();
+      window.windyAPI.dismissCrashRecovery();
+    });
   }
 
   /**
@@ -74,7 +105,9 @@ class WindyApp {
     // Window controls
     this.closeBtn.addEventListener('click', () => window.close());
     this.minimizeBtn.addEventListener('click', () => {
-      // Electron will handle minimize
+      if (window.windyAPI?.minimize) {
+        window.windyAPI.minimize();
+      }
     });
     this.settingsBtn.addEventListener('click', () => {
       this.settingsPanel.toggle();
