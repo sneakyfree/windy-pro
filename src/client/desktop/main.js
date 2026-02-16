@@ -444,6 +444,7 @@ app.whenReady().then(async () => {
     }
   }
 
+  startPythonServer();
   createWindow();
   createTray();
   registerHotkeys();
@@ -476,6 +477,11 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  // Kill Python server
+  if (pythonProcess) {
+    pythonProcess.kill();
+    pythonProcess = null;
+  }
   // Unregister all hotkeys
   globalShortcut.unregisterAll();
 });

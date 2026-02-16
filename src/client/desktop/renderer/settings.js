@@ -198,11 +198,11 @@ class SettingsPanel {
     });
   }
 
-  loadSettings() {
+  async loadSettings() {
     if (!window.windyAPI) return;
 
     try {
-      const settings = window.windyAPI.getSettings();
+      const settings = await window.windyAPI.getSettings();
       if (settings) {
         if (settings.model) this.panel.querySelector('#modelSelect').value = settings.model;
         if (settings.device) this.panel.querySelector('#deviceSelect').value = settings.device;
@@ -240,7 +240,7 @@ class SettingsPanel {
       });
       // Restore saved selection
       if (window.windyAPI) {
-        const settings = window.windyAPI.getSettings();
+        const settings = await window.windyAPI.getSettings();
         if (settings && settings.micDeviceId) {
           select.value = settings.micDeviceId;
         }

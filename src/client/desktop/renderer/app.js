@@ -337,7 +337,7 @@ class WindyApp {
       autoGainControl: true
     };
     if (window.windyAPI) {
-      const settings = window.windyAPI.getSettings();
+      const settings = await window.windyAPI.getSettings();
       if (settings && settings.micDeviceId && settings.micDeviceId !== 'default') {
         audioConstraints.deviceId = { exact: settings.micDeviceId };
       }
