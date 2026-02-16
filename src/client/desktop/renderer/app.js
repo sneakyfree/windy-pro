@@ -352,28 +352,45 @@ class WindyApp {
     this.audioContext = new AudioContext({ sampleRate: 16000 });
     this.audioSource = this.audioContext.createMediaStreamSource(this.mediaStream);
 
-    // ScriptProcessorNode with 4096 buffer, 1 input channel, 1 output channel
-    this.audioProcessor = this.audioContext.createScriptProcessor(4096, 1, 1);
+    // Use AudioWorklet (modern) with ScriptProcessorNode fallback (deprecated)
+    try {
+      await this.audioContext.audioWorklet.addModule('audio-processor.js');
+      this.audioProcessor = new AudioWorkletNode(this.audioContext, 'windy-audio-processor');
+      this.audioProcessor.port.onmessage = (e) => {
+        const int16Buffer = e.data;
+        // B2.6.5: Stream as binary via WebSocket
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(int16Buffer);
+        }
+      };
+      // Wire: mic → worklet
+      this.audioSource.connect(this.audioProcessor);
+      this.audioProcessor.connect(this.audioContext.destination);
 
-    // Process each audio buffer
-    this.audioProcessor.onaudioprocess = (e) => {
-      const float32 = e.inputBuffer.getChannelData(0);
-
-      // B2.6.6: Update audio level meter
-      this.updateAudioMeter(float32);
-
-      // B2.6.3 + B2.6.4: Convert to Int16 PCM
-      const int16 = this.float32ToInt16(float32);
-
-      // B2.6.5: Stream as binary via WebSocket
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(int16.buffer);
-      }
-    };
-
-    // Wire: mic → processor → destination (must connect to destination for processing)
-    this.audioSource.connect(this.audioProcessor);
-    this.audioProcessor.connect(this.audioContext.destination);
+      // Level meter via AnalyserNode (separate path)
+      this._analyser = this.audioContext.createAnalyser();
+      this._analyser.fftSize = 2048;
+      this.audioSource.connect(this._analyser);
+      this._levelInterval = setInterval(() => {
+        const data = new Float32Array(this._analyser.fftSize);
+        this._analyser.getFloatTimeDomainData(data);
+        this.updateAudioMeter(data);
+      }, 100);
+    } catch (workletErr) {
+      console.warn('[Audio] AudioWorklet unavailable, falling back to ScriptProcessorNode:', workletErr.message);
+      // Fallback: ScriptProcessorNode (deprecated but widely supported)
+      this.audioProcessor = this.audioContext.createScriptProcessor(4096, 1, 1);
+      this.audioProcessor.onaudioprocess = (e) => {
+        const float32 = e.inputBuffer.getChannelData(0);
+        this.updateAudioMeter(float32);
+        const int16 = this.float32ToInt16(float32);
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(int16.buffer);
+        }
+      };
+      this.audioSource.connect(this.audioProcessor);
+      this.audioProcessor.connect(this.audioContext.destination);
+    }
 
     // Show audio meter
     this.audioMeterContainer.style.display = 'block';
@@ -384,9 +401,18 @@ class WindyApp {
    */
   stopAudioCapture() {
     // Disconnect audio nodes
+    if (this._levelInterval) {
+      clearInterval(this._levelInterval);
+      this._levelInterval = null;
+    }
+    if (this._analyser) {
+      this._analyser.disconnect();
+      this._analyser = null;
+    }
     if (this.audioProcessor) {
       this.audioProcessor.disconnect();
-      this.audioProcessor.onaudioprocess = null;
+      if (this.audioProcessor.onaudioprocess) this.audioProcessor.onaudioprocess = null;
+      if (this.audioProcessor.port) this.audioProcessor.port.onmessage = null;
       this.audioProcessor = null;
     }
     if (this.audioSource) {

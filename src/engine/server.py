@@ -159,6 +159,11 @@ class WindyServer:
         
         if action == "start":
             if self.transcriber:
+                # Apply pending model change if queued
+                if self._pending_model:
+                    self.transcriber.config.model_size = self._pending_model
+                    self.transcriber.load_model()  # Reload with new model
+                    self._pending_model = None
                 self.transcriber.start_session()
                 self._current_session_id = self.vault.create_session()
                 await websocket.send(json.dumps({
