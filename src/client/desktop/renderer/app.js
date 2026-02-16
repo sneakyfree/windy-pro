@@ -53,6 +53,14 @@ class WindyApp {
     this.bindEvents();
     this.bindIPCEvents();
     await this.connect();
+
+    // Check for crash recovery via Electron IPC
+    if (window.windyAPI?.checkCrashRecovery) {
+      const recovery = await window.windyAPI.checkCrashRecovery();
+      if (recovery.found) {
+        this.showRecoveryBanner(recovery.content);
+      }
+    }
   }
 
   /**
@@ -74,7 +82,9 @@ class WindyApp {
     // Window controls
     this.closeBtn.addEventListener('click', () => window.close());
     this.minimizeBtn.addEventListener('click', () => {
-      // Electron will handle minimize
+      if (window.windyAPI?.minimize) {
+        window.windyAPI.minimize();
+      }
     });
     this.settingsBtn.addEventListener('click', () => {
       this.settingsPanel.toggle();
@@ -123,8 +133,6 @@ class WindyApp {
         console.log('WebSocket connected');
         this.reconnectAttempts = 0;
         this.setConnectionStatus('connected');
-        // T19: Check for crash recovery
-        this.send('recovery_check');
       };
 
       this.ws.onmessage = (event) => {
@@ -545,10 +553,12 @@ class WindyApp {
         });
       });
       banner.remove();
+      if (window.windyAPI?.dismissCrashRecovery) window.windyAPI.dismissCrashRecovery();
     });
 
     banner.querySelector('#recoveryDismiss').addEventListener('click', () => {
       banner.remove();
+      if (window.windyAPI?.dismissCrashRecovery) window.windyAPI.dismissCrashRecovery();
     });
   }
 }

@@ -46,6 +46,8 @@ class WindyServer:
         self.vault = PromptVault()
         self._current_session_id: int = None
         self.vibe = VibeProcessor()
+        self._pending_model = None
+        self._loop = None
         
     async def _broadcast(self, message: dict):
         """Send message to all connected clients."""
@@ -59,12 +61,22 @@ class WindyServer:
         )
     
     def _on_state_change(self, old_state: TranscriptionState, new_state: TranscriptionState):
-        """Handle transcriber state changes."""
-        asyncio.create_task(self._broadcast({
-            "type": "state",
-            "state": new_state.value,
-            "previous": old_state.value
-        }))
+        """Handle transcriber state changes (thread-safe)."""
+        if self._loop:
+            self._loop.call_soon_threadsafe(
+                asyncio.ensure_future,
+                self._broadcast({
+                    "type": "state",
+                    "state": new_state.value,
+                    "previous": old_state.value
+                })
+            )
+        else:
+            asyncio.create_task(self._broadcast({
+                "type": "state",
+                "state": new_state.value,
+                "previous": old_state.value
+            }))
     
     def _on_transcript(self, segment):
         """Handle new transcript segments."""
@@ -83,15 +95,29 @@ class WindyServer:
                 is_partial=segment.is_partial
             )
         
-        asyncio.create_task(self._broadcast({
-            "type": "transcript",
-            "text": segment.text,
-            "start": segment.start_time,
-            "end": segment.end_time,
-            "confidence": segment.confidence,
-            "partial": segment.is_partial,
-            "words": segment.words
-        }))
+        if self._loop:
+            self._loop.call_soon_threadsafe(
+                asyncio.ensure_future,
+                self._broadcast({
+                    "type": "transcript",
+                    "text": segment.text,
+                    "start": segment.start_time,
+                    "end": segment.end_time,
+                    "confidence": segment.confidence,
+                    "partial": segment.is_partial,
+                    "words": segment.words
+                })
+            )
+        else:
+            asyncio.create_task(self._broadcast({
+                "type": "transcript",
+                "text": segment.text,
+                "start": segment.start_time,
+                "end": segment.end_time,
+                "confidence": segment.confidence,
+                "partial": segment.is_partial,
+                "words": segment.words
+            }))
     
     async def _handle_client(self, websocket: WebSocketServerProtocol):
         """Handle a client connection."""
@@ -157,20 +183,34 @@ class WindyServer:
         
         elif action == "config":
             config_data = cmd.get("config", {})
-            # T17: Handle vibe toggle
-            if "vibe_enabled" in config_data:
-                self.vibe.enabled = config_data["vibe_enabled"]
-            # T18: Handle device change
-            if "device" in config_data and self.transcriber:
-                self.transcriber.config.device = config_data["device"]
-            if "model" in config_data and self.transcriber:
-                self.transcriber.config.model_size = config_data["model"]
+            applied = {}
+
+            # Language change (hot-swappable)
             if "language" in config_data and self.transcriber:
                 self.transcriber.config.language = config_data["language"]
+                applied["language"] = config_data["language"]
+
+            # Vibe toggle (hot-swappable)
+            if "vibe_enabled" in config_data:
+                self.vibe.enabled = config_data["vibe_enabled"]
+                applied["vibe_enabled"] = config_data["vibe_enabled"]
+
+            # Device change (hot-swappable)
+            if "device" in config_data and self.transcriber:
+                self.transcriber.config.device = config_data["device"]
+                applied["device"] = config_data["device"]
+
+            # Model change requires restart — queue it
+            if "model" in config_data:
+                applied["model"] = config_data["model"]
+                applied["model_note"] = "Model change takes effect on next session start"
+                self._pending_model = config_data["model"]
+
             await websocket.send(json.dumps({
                 "type": "ack",
                 "action": "config",
-                "success": True
+                "success": True,
+                "applied": applied
             }))
         
         elif action == "recovery_check":
@@ -251,6 +291,8 @@ class WindyServer:
     
     async def start(self, config: TranscriberConfig = None):
         """Start the WebSocket server."""
+        self._loop = asyncio.get_running_loop()
+        
         if not WEBSOCKETS_AVAILABLE:
             print("websockets not installed. Run: pip install websockets",
                   file=sys.stderr)
