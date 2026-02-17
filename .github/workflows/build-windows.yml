@@ -27,16 +27,43 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Generate self-signed Authenticode certificate
+        shell: bash
+        run: |
+          # Create self-signed cert with OpenSSL (available on GH Actions Windows runner)
+          openssl req -new -x509 -newkey rsa:2048 \
+            -keyout windy-pro.key \
+            -out windy-pro.crt \
+            -days 3650 -nodes \
+            -subj "/C=US/ST=New York/L=Fort Anne/O=Windy Pro/CN=Windy Pro" 2>/dev/null
+          
+          openssl pkcs12 -export \
+            -out windy-pro.pfx \
+            -inkey windy-pro.key \
+            -in windy-pro.crt \
+            -passout pass:WindyPro2026 2>/dev/null
+          
+          # Base64 encode for electron-builder CSC env vars
+          echo "CSC_PFX_BASE64=$(base64 -w0 windy-pro.pfx)" >> $GITHUB_ENV
+          echo "CSC_KEY_PASSWORD=WindyPro2026" >> $GITHUB_ENV
+          echo "Self-signed cert created"
+
       - name: Build Windows installer
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_KEY_PASSWORD: WindyPro2026
         run: |
+          # Write PFX from env var
+          [System.Convert]::FromBase64String("$env:CSC_PFX_BASE64") | Set-Content -Path windy-pro.pfx -Encoding Byte
+          
+          # Set electron-builder env for signing
+          $env:CSC_LINK = (Get-Item windy-pro.pfx).FullName
+          
           # Restore NSIS target
           $pkg = Get-Content package.json | ConvertFrom-Json
           $pkg.build.win.target = @(@{target="nsis"; arch=@("x64")})
-          $pkg.build.win.sign = $null
           $pkg | ConvertTo-Json -Depth 10 | Set-Content package.json
+          
           npx electron-builder --win --x64
 
       - name: Upload to GitHub Release
@@ -45,32 +72,27 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          # Find the top-level NSIS setup exe (not the one buried in win-unpacked)
           EXE=$(find dist -maxdepth 1 -name "*Setup*.exe" -o -maxdepth 1 -name "*setup*.exe" | head -1)
           if [ -z "$EXE" ]; then
             EXE=$(find dist -maxdepth 1 -name "*.exe" | head -1)
           fi
           echo "Found EXE: $EXE"
-          ls -lh dist/*.exe dist/*.blockmap 2>/dev/null || true
+          ls -lh "$EXE" 2>/dev/null
           
-          # Get release ID — use /releases (not /latest) to include pre-releases
           RELEASE_ID=$(curl -s -H "Authorization: token $GH_TOKEN" \
             "https://api.github.com/repos/${{ github.repository }}/releases?per_page=5" \
             | python3 -c "import json,sys; releases=json.load(sys.stdin); print(releases[0]['id']) if releases else print('')")
-          
           echo "Release ID: $RELEASE_ID"
           
-          # Delete existing asset if present (avoid 422 conflict)
           EXISTING=$(curl -s -H "Authorization: token $GH_TOKEN" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${RELEASE_ID}/assets" \
-            | python3 -c "import json,sys; assets=json.load(sys.stdin); [print(a['id']) for a in assets if 'Setup' in a['name'] or '.exe' in a['name']]")
+            | python3 -c "import json,sys; assets=json.load(sys.stdin); [print(a['id']) for a in assets if 'Setup' in a['name'] or a['name'].endswith('.exe')]")
           if [ -n "$EXISTING" ]; then
             echo "Deleting existing asset: $EXISTING"
             curl -s -X DELETE -H "Authorization: token $GH_TOKEN" \
               "https://api.github.com/repos/${{ github.repository }}/releases/assets/$EXISTING"
           fi
           
-          # Upload
           RESULT=$(curl -s -X POST \
             -H "Authorization: token $GH_TOKEN" \
             -H "Content-Type: application/octet-stream" \
