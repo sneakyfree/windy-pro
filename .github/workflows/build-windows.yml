@@ -45,23 +45,39 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          # Find the exe
-          EXE=$(find dist -name "*.exe" | head -1)
-          echo "Found: $EXE"
+          # Find the top-level NSIS setup exe (not the one buried in win-unpacked)
+          EXE=$(find dist -maxdepth 1 -name "*Setup*.exe" -o -maxdepth 1 -name "*setup*.exe" | head -1)
+          if [ -z "$EXE" ]; then
+            EXE=$(find dist -maxdepth 1 -name "*.exe" | head -1)
+          fi
+          echo "Found EXE: $EXE"
+          ls -lh dist/*.exe dist/*.blockmap 2>/dev/null || true
           
-          # Get latest release ID
+          # Get release ID — use /releases (not /latest) to include pre-releases
           RELEASE_ID=$(curl -s -H "Authorization: token $GH_TOKEN" \
-            https://api.github.com/repos/${{ github.repository }}/releases/latest \
-            | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+            "https://api.github.com/repos/${{ github.repository }}/releases?per_page=5" \
+            | python3 -c "import json,sys; releases=json.load(sys.stdin); print(releases[0]['id']) if releases else print('')")
           
-          echo "Uploading to release $RELEASE_ID"
+          echo "Release ID: $RELEASE_ID"
+          
+          # Delete existing asset if present (avoid 422 conflict)
+          EXISTING=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/${RELEASE_ID}/assets" \
+            | python3 -c "import json,sys; assets=json.load(sys.stdin); [print(a['id']) for a in assets if 'Setup' in a['name'] or '.exe' in a['name']]")
+          if [ -n "$EXISTING" ]; then
+            echo "Deleting existing asset: $EXISTING"
+            curl -s -X DELETE -H "Authorization: token $GH_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/assets/$EXISTING"
+          fi
           
           # Upload
-          curl -s -X POST \
+          RESULT=$(curl -s -X POST \
             -H "Authorization: token $GH_TOKEN" \
             -H "Content-Type: application/octet-stream" \
             --data-binary @"$EXE" \
-            "https://uploads.github.com/repos/${{ github.repository }}/releases/${RELEASE_ID}/assets?name=Windy-Pro-Setup-0.1.0.exe&label=Windows+Installer+(x64)"
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/${RELEASE_ID}/assets?name=Windy-Pro-Setup-0.1.0.exe&label=Windows+Installer+(x64)")
+          
+          echo "$RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print('Uploaded:', d.get('name'), '| State:', d.get('state'), '| URL:', d.get('browser_download_url',''))" 2>/dev/null || echo "Upload result: $RESULT"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
