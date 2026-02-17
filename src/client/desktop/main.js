@@ -431,7 +431,7 @@ ipcMain.handle('dismiss-crash-recovery', async () => {
 app.whenReady().then(async () => {
   // First-run setup wizard (Phase 3: B4)
   const installerPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'installer', 'installer-wizard')
+    ? path.join(app.getAppPath(), 'installer', 'installer-wizard')
     : path.join(__dirname, '..', '..', '..', 'installer', 'installer-wizard');
   const { InstallerWizard } = require(installerPath);
   if (InstallerWizard.needsSetup()) {

@@ -209,6 +209,45 @@ except Exception as e:
     }
 
     /**
+     * Install just Python deps (venv + pip) without downloading a model.
+     * Used by multi-model wizard flow.
+     */
+    async installDependencies() {
+        this._progress('python', 0, 'Checking Python installation...');
+        const python = await this.checkPython();
+        if (!python.available) {
+            throw new Error('Python 3.9+ is required. Please install Python from python.org');
+        }
+        this._progress('python', 5, `Found Python ${python.version}`);
+
+        if (!fs.existsSync(this.venvDir)) {
+            await this.createVenv(python.path);
+        } else {
+            this._progress('venv', 30, 'Virtual environment already exists.');
+        }
+
+        await this.installRequirements();
+        this._progress('deps', 50, 'Python environment ready.');
+    }
+
+    /**
+     * Set the default active model (writes a config file).
+     */
+    async setDefaultModel(modelId) {
+        const configPath = path.join(this.appDataDir, 'config.json');
+        let config = {};
+        if (fs.existsSync(configPath)) {
+            try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (e) {}
+        }
+        config.defaultModel = modelId;
+        config.installedModels = config.installedModels || [];
+        if (!config.installedModels.includes(modelId)) {
+            config.installedModels.push(modelId);
+        }
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    }
+
+    /**
      * Check if already installed
      */
     isInstalled() {
