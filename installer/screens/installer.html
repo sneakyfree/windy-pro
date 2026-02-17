@@ -74,51 +74,50 @@
     .connection-speed { font-size: 14px; font-weight: 700; color: #22C55E; }
     .connection-note { font-size: 11px; color: #64748B; margin-top: 1px; }
 
-    /* Model picker */
-    .model-grid { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; min-height: 0; padding-right: 4px; scrollbar-width: thin; scrollbar-color: #4A5568 #1E293B; }
-    .model-card {
-      background: #1E293B; border-radius: 10px; padding: 12px 14px;
+    /* Model picker — compact rows, no layout-shifting expansion */
+    .model-section { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 8px; }
+    .model-list { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+    .model-row {
+      display: flex; align-items: center; gap: 12px;
+      background: #1E293B; border-radius: 8px; padding: 10px 14px;
       border: 2px solid transparent; cursor: pointer; transition: all 0.15s;
-      display: flex; align-items: flex-start; gap: 12px;
+      user-select: none;
     }
-    .model-card:hover { border-color: #334155; }
-    .model-card.selected { border-color: #22C55E; background: #162B1F; }
-    .model-card.unavailable { opacity: 0.4; cursor: not-allowed; }
-    .model-checkbox {
+    .model-row:hover { border-color: #334155; background: #243347; }
+    .model-row.selected { border-color: #22C55E; background: #162B1F; }
+    .model-row.unavailable { opacity: 0.45; cursor: not-allowed; }
+    .model-chk {
       width: 18px; height: 18px; border-radius: 4px; border: 2px solid #475569;
-      margin-top: 2px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-      transition: all 0.15s;
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s; font-size: 11px; font-weight: 800; color: #0F172A;
     }
-    .model-card.selected .model-checkbox { background: #22C55E; border-color: #22C55E; }
-    .model-checkbox::after {
-      content: '✓'; color: #0F172A; font-size: 11px; font-weight: 800;
-      display: none;
+    .model-row.selected .model-chk { background: #22C55E; border-color: #22C55E; }
+    .model-row-name { font-size: 14px; font-weight: 700; flex-shrink: 0; min-width: 56px; }
+    .model-row-badge { font-size: 10px; background: #1E3A2F; color: #4ADE80; padding: 2px 7px; border-radius: 20px; flex-shrink: 0; }
+    .model-row-desc { font-size: 12px; color: #94A3B8; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .model-row-meta { display: flex; gap: 10px; flex-shrink: 0; margin-left: auto; padding-left: 8px; }
+    .meta-size { font-size: 11px; color: #64748B; }
+    .meta-time { font-size: 11px; color: #F59E0B; font-weight: 600; }
+    .meta-ram  { font-size: 11px; color: #64748B; }
+
+    /* Fixed detail panel — never changes height, updates on hover/select */
+    .model-detail-panel {
+      background: #1E293B; border-radius: 8px; padding: 12px 14px;
+      flex-shrink: 0; min-height: 90px;
+      border: 1px solid #334155;
     }
-    .model-card.selected .model-checkbox::after { display: block; }
-    .model-body { flex: 1; min-width: 0; }
-    .model-header { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
-    .model-name { font-size: 14px; font-weight: 700; }
-    .model-badge { font-size: 11px; background: #1E3A2F; color: #4ADE80; padding: 2px 7px; border-radius: 20px; }
-    .model-desc { font-size: 12px; color: #94A3B8; margin-bottom: 6px; }
-    .model-meta { display: flex; gap: 14px; align-items: center; }
-    .model-size { font-size: 11px; color: #64748B; }
-    .model-dl-time { font-size: 11px; color: #F59E0B; font-weight: 600; }
-    .model-ram { font-size: 11px; color: #64748B; }
-    .model-pros-cons {
-      display: none; margin-top: 8px; padding-top: 8px;
-      border-top: 1px solid #334155;
-    }
-    .model-card.selected .model-pros-cons { display: block; }
-    .model-card:not(.selected) .model-specs { opacity: 0.7; }
-    .model-card { padding: 10px 14px; transition: padding 0.15s; }
-    .pros-cons-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .pros-list, .cons-list { font-size: 11px; }
-    .pros-list li { color: #4ADE80; margin-bottom: 2px; }
-    .pros-list li::before { content: '+ '; }
-    .cons-list li { color: #F87171; margin-bottom: 2px; }
-    .cons-list li::before { content: '− '; }
-    .best-for { font-size: 11px; color: #94A3B8; margin-top: 6px; }
-    .best-for span { color: #E2E8F0; }
+    .mdp-title { font-size: 13px; font-weight: 700; color: #E2E8F0; margin-bottom: 6px; }
+    .mdp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
+    .mdp-pro  { font-size: 11px; color: #4ADE80; }
+    .mdp-pro::before  { content: '+ '; }
+    .mdp-con  { font-size: 11px; color: #F87171; }
+    .mdp-con::before  { content: '− '; }
+    .mdp-best { font-size: 11px; color: #94A3B8; margin-top: 6px; }
+    .mdp-best span { color: #CBD5E1; }
+    .mdp-empty { font-size: 12px; color: #475569; line-height: 1.5; }
+
+    /* Summary bar above Install button */
+    .model-summary { font-size: 12px; color: #94A3B8; text-align: right; padding-top: 6px; flex-shrink: 0; }
 
     /* Install screen */
     .install-wrap { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px; }
@@ -206,13 +205,17 @@
   <!-- STEP 2: Model Picker -->
   <div class="step" id="step-2">
     <h1>Choose your models</h1>
-    <p class="subtitle" id="model-subtitle">Select one or more — you can switch between them anytime</p>
-    <div class="model-grid" id="model-grid">
-      <!-- populated by JS -->
+    <p class="subtitle" id="model-subtitle">Select one or more — hover a row to see details</p>
+    <div class="model-section">
+      <div class="model-list" id="model-grid"><!-- populated by JS --></div>
+      <div class="model-detail-panel" id="model-detail">
+        <div class="mdp-empty">Hover or select a model to see details.</div>
+      </div>
     </div>
+    <div class="model-summary" id="model-summary"></div>
     <div class="btn-row">
       <button class="btn btn-secondary" onclick="goToStep(1)">Back</button>
-      <button class="btn btn-primary" id="btn-install" onclick="startInstall()">Install →</button>
+      <button class="btn btn-primary" id="btn-install" disabled onclick="startInstall()">Install →</button>
     </div>
   </div>
 
@@ -330,7 +333,7 @@
     }
   }
 
-  // ── Step 2: Model Grid ─────────────────────────────────────────────────────
+  // ── Step 2: Model Grid (compact rows) ─────────────────────────────────────
   function buildModelGrid() {
     const grid = document.getElementById('model-grid');
     grid.innerHTML = '';
@@ -338,46 +341,51 @@
     const recommendedId = hardwareData?.recommendation?.model || 'base';
 
     allModels.forEach(model => {
-      const card = document.createElement('div');
-      card.className = `model-card ${model.unavailable ? 'unavailable' : ''}`;
-      card.dataset.id = model.id;
+      const row = document.createElement('div');
+      row.className = `model-row ${model.unavailable ? 'unavailable' : ''}`;
+      row.dataset.id = model.id;
 
-      const prosHtml = (model.pros || []).map(p => `<li>${p}</li>`).join('');
-      const consHtml = (model.cons || []).map(c => `<li>${c}</li>`).join('');
+      const sizeLabel = model.size_gb < 1
+        ? Math.round(model.size_gb * 1024) + 'MB'
+        : model.size_gb + 'GB';
 
-      card.innerHTML = `
-        <div class="model-checkbox"></div>
-        <div class="model-body">
-          <div class="model-header">
-            <span class="model-name">${model.name}</span>
-            ${model.badge ? `<span class="model-badge">${model.badge}</span>` : ''}
-            ${model.recommended ? `<span class="model-badge" style="background:#1E3350;color:#60A5FA">Recommended for your PC</span>` : ''}
-          </div>
-          <div class="model-desc">${model.description}</div>
-          <div class="model-meta">
-            <span class="model-size">💾 ${model.size_gb < 1 ? Math.round(model.size_gb*1024)+'MB' : model.size_gb+'GB'}</span>
-            <span class="model-dl-time">⬇ ${model.download_time}</span>
-            <span class="model-ram">🧠 ${model.ram_gb}GB RAM</span>
-          </div>
-          <div class="model-pros-cons">
-            <div class="pros-cons-grid">
-              <ul class="pros-list">${prosHtml}</ul>
-              <ul class="cons-list">${consHtml}</ul>
-            </div>
-            <div class="best-for">Best for: <span>${model.best_for}</span></div>
-          </div>
+      const badge = model.recommended
+        ? `<span class="model-row-badge" style="background:#1E3350;color:#60A5FA">Recommended</span>`
+        : model.badge ? `<span class="model-row-badge">${model.badge}</span>` : '';
+
+      row.innerHTML = `
+        <div class="model-chk"></div>
+        <span class="model-row-name">${model.name}</span>
+        ${badge}
+        <span class="model-row-desc">${model.description}</span>
+        <div class="model-row-meta">
+          <span class="meta-size">💾 ${sizeLabel}</span>
+          <span class="meta-time">⬇ ${model.download_time}</span>
+          <span class="meta-ram">🧠 ${model.ram_gb}GB</span>
         </div>
       `;
 
       if (!model.unavailable) {
-        card.addEventListener('click', () => toggleModel(model.id));
+        row.addEventListener('click', () => toggleModel(model.id));
+        row.addEventListener('mouseenter', () => showModelDetail(model));
       }
 
-      grid.appendChild(card);
+      grid.appendChild(row);
     });
 
     // Auto-select recommended
     toggleModel(recommendedId, true);
+  }
+
+  function showModelDetail(model) {
+    const panel = document.getElementById('model-detail');
+    const prosHtml = (model.pros || []).map(p => `<div class="mdp-pro">${p}</div>`).join('');
+    const consHtml = (model.cons || []).map(c => `<div class="mdp-con">${c}</div>`).join('');
+    panel.innerHTML = `
+      <div class="mdp-title">${model.name} — ${model.description}</div>
+      <div class="mdp-grid">${prosHtml}${consHtml}</div>
+      ${model.best_for ? `<div class="mdp-best">Best for: <span>${model.best_for}</span></div>` : ''}
+    `;
   }
 
   function toggleModel(modelId, forceSelect = false) {
@@ -394,9 +402,11 @@
   }
 
   function updateModelCards() {
-    document.querySelectorAll('.model-card').forEach(card => {
-      const isSelected = selectedModelIds.includes(card.dataset.id);
-      card.classList.toggle('selected', isSelected);
+    document.querySelectorAll('.model-row').forEach(row => {
+      const isSelected = selectedModelIds.includes(row.dataset.id);
+      row.classList.toggle('selected', isSelected);
+      const chk = row.querySelector('.model-chk');
+      if (chk) chk.textContent = isSelected ? '✓' : '';
     });
 
     const totalGB = allModels
@@ -412,9 +422,12 @@
       ? `1 model selected · ${totalGB < 1 ? Math.round(totalGB*1024)+'MB' : totalGB.toFixed(1)+'GB'} · ${timeStr} download`
       : `${selectedModelIds.length} models selected · ${totalGB.toFixed(1)}GB total · ${timeStr} download`;
 
-    document.getElementById('model-subtitle').textContent = subtitle;
-    document.getElementById('btn-install').textContent =
-      `Install ${selectedModelIds.length > 1 ? selectedModelIds.length + ' Models' : 'Model'} →`;
+    document.getElementById('model-subtitle').textContent = 'Select one or more — hover a row to see details';
+    const summaryEl = document.getElementById('model-summary');
+    if (summaryEl) summaryEl.textContent = subtitle;
+    const installBtn = document.getElementById('btn-install');
+    installBtn.disabled = selectedModelIds.length === 0;
+    installBtn.textContent = `Install ${selectedModelIds.length > 1 ? selectedModelIds.length + ' Models' : 'Model'} →`;
   }
 
   // ── Step 3: Install ────────────────────────────────────────────────────────
