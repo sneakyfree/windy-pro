@@ -27,14 +27,6 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Create icon placeholder
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force -Path assets
-          # Create a minimal valid ICO file (16x16 placeholder)
-          $bytes = [byte[]](0,0,1,0,1,0,16,16,0,0,1,0,32,0,104,4,0,0,22,0,0,0)
-          [System.IO.File]::WriteAllBytes("assets/icon.ico", $bytes)
-
       - name: Build Windows installer
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
