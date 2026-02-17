@@ -1,484 +1,485 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Windy Pro Setup</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windy Pro Setup</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0F172A;
-            color: #E2E8F0;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0F172A;
+      color: #E2E8F0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
 
-        .wizard {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            padding: 32px;
-        }
+    .wizard { flex: 1; display: flex; flex-direction: column; padding: 28px 32px 20px; }
+    .step { display: none; flex: 1; flex-direction: column; }
+    .step.active { display: flex; }
 
-        .step {
-            display: none;
-            flex: 1;
-            flex-direction: column;
-        }
+    h1 { font-size: 22px; margin-bottom: 6px; }
+    .subtitle { font-size: 14px; color: #94A3B8; margin-bottom: 20px; }
 
-        .step.active {
-            display: flex;
-        }
+    /* Progress bar */
+    .progress-track {
+      display: flex; gap: 6px; margin-bottom: 24px;
+    }
+    .progress-dot {
+      flex: 1; height: 3px; border-radius: 2px;
+      background: #1E293B; transition: background 0.3s;
+    }
+    .progress-dot.done { background: #22C55E; }
+    .progress-dot.active { background: #86EFAC; }
 
-        h1 {
-            font-size: 22px;
-            margin-bottom: 8px;
-        }
+    /* Buttons */
+    .btn-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: auto; padding-top: 16px; }
+    .btn {
+      padding: 10px 24px; border-radius: 8px; border: none;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-primary { background: #22C55E; color: #0F172A; }
+    .btn-primary:hover { background: #16A34A; }
+    .btn-primary:disabled { background: #374151; color: #6B7280; cursor: not-allowed; }
+    .btn-secondary { background: #1E293B; color: #94A3B8; }
+    .btn-secondary:hover { background: #334155; color: #E2E8F0; }
 
-        h2 {
-            font-size: 16px;
-            color: #94A3B8;
-            font-weight: 400;
-            margin-bottom: 24px;
-        }
+    /* Welcome screen */
+    .logo { font-size: 48px; margin-bottom: 12px; }
+    .welcome-text { font-size: 15px; color: #CBD5E1; line-height: 1.6; margin-bottom: 16px; }
+    .feature-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .feature-list li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #94A3B8; }
+    .feature-list li::before { content: '✓'; color: #22C55E; font-weight: 700; }
 
-        .hw-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
+    /* Scan screen */
+    .scan-status {
+      background: #1E293B; border-radius: 12px; padding: 20px;
+      display: flex; flex-direction: column; gap: 12px; flex: 1;
+    }
+    .scan-row { display: flex; justify-content: space-between; align-items: center; }
+    .scan-label { font-size: 13px; color: #94A3B8; }
+    .scan-value { font-size: 13px; font-weight: 600; color: #E2E8F0; }
+    .scan-value.good { color: #22C55E; }
+    .scan-value.warn { color: #F59E0B; }
+    .scan-spinner { font-size: 13px; color: #64748B; }
+    .connection-badge {
+      background: #0F172A; border-radius: 8px; padding: 10px 14px;
+      display: flex; align-items: center; gap: 10px; margin-top: 4px;
+    }
+    .connection-icon { font-size: 20px; }
+    .connection-info { flex: 1; }
+    .connection-speed { font-size: 14px; font-weight: 700; color: #22C55E; }
+    .connection-note { font-size: 11px; color: #64748B; margin-top: 1px; }
 
-        .hw-card {
-            background: #1E293B;
-            border-radius: 8px;
-            padding: 14px;
-            border: 1px solid #334155;
-        }
+    /* Model picker */
+    .model-grid { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; }
+    .model-card {
+      background: #1E293B; border-radius: 10px; padding: 12px 14px;
+      border: 2px solid transparent; cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: flex-start; gap: 12px;
+    }
+    .model-card:hover { border-color: #334155; }
+    .model-card.selected { border-color: #22C55E; background: #162B1F; }
+    .model-card.unavailable { opacity: 0.4; cursor: not-allowed; }
+    .model-checkbox {
+      width: 18px; height: 18px; border-radius: 4px; border: 2px solid #475569;
+      margin-top: 2px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .model-card.selected .model-checkbox { background: #22C55E; border-color: #22C55E; }
+    .model-checkbox::after {
+      content: '✓'; color: #0F172A; font-size: 11px; font-weight: 800;
+      display: none;
+    }
+    .model-card.selected .model-checkbox::after { display: block; }
+    .model-body { flex: 1; min-width: 0; }
+    .model-header { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+    .model-name { font-size: 14px; font-weight: 700; }
+    .model-badge { font-size: 11px; background: #1E3A2F; color: #4ADE80; padding: 2px 7px; border-radius: 20px; }
+    .model-desc { font-size: 12px; color: #94A3B8; margin-bottom: 6px; }
+    .model-meta { display: flex; gap: 14px; align-items: center; }
+    .model-size { font-size: 11px; color: #64748B; }
+    .model-dl-time { font-size: 11px; color: #F59E0B; font-weight: 600; }
+    .model-ram { font-size: 11px; color: #64748B; }
+    .model-pros-cons {
+      display: none; margin-top: 8px; padding-top: 8px;
+      border-top: 1px solid #334155;
+    }
+    .model-card.selected .model-pros-cons { display: block; }
+    .pros-cons-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .pros-list, .cons-list { font-size: 11px; }
+    .pros-list li { color: #4ADE80; margin-bottom: 2px; }
+    .pros-list li::before { content: '+ '; }
+    .cons-list li { color: #F87171; margin-bottom: 2px; }
+    .cons-list li::before { content: '− '; }
+    .best-for { font-size: 11px; color: #94A3B8; margin-top: 6px; }
+    .best-for span { color: #E2E8F0; }
 
-        .hw-card .label {
-            font-size: 11px;
-            color: #64748B;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
+    /* Install screen */
+    .install-wrap { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px; }
+    .install-status { font-size: 15px; color: #E2E8F0; text-align: center; }
+    .install-detail { font-size: 13px; color: #64748B; text-align: center; }
+    .progress-bar-wrap { background: #1E293B; border-radius: 8px; height: 10px; overflow: hidden; }
+    .progress-bar-fill {
+      height: 100%; background: linear-gradient(90deg, #22C55E, #86EFAC);
+      border-radius: 8px; transition: width 0.4s ease; width: 0%;
+    }
+    .progress-steps { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .progress-step-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #475569; }
+    .progress-step-item.done { color: #22C55E; }
+    .progress-step-item.active { color: #E2E8F0; }
+    .step-icon { font-size: 16px; width: 20px; text-align: center; }
 
-        .hw-card .value {
-            font-size: 15px;
-            font-weight: 600;
-        }
+    /* Done screen */
+    .done-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+    .done-icon { font-size: 56px; }
+    .done-title { font-size: 22px; font-weight: 700; color: #22C55E; }
+    .done-desc { font-size: 14px; color: #94A3B8; text-align: center; max-width: 340px; line-height: 1.5; }
+    .done-models { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+    .done-model-tag { background: #162B1F; color: #4ADE80; border-radius: 20px; padding: 4px 12px; font-size: 12px; }
 
-        .model-rec {
-            background: linear-gradient(135deg, #064E3B, #065F46);
-            border: 1px solid #10B981;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-
-        .model-rec .tag {
-            font-size: 11px;
-            color: #6EE7B7;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
-
-        .model-rec .name {
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-
-        .model-rec .reason {
-            font-size: 13px;
-            color: #A7F3D0;
-        }
-
-        .progress-container {
-            margin: 20px 0;
-        }
-
-        .progress-bar {
-            height: 6px;
-            background: #1E293B;
-            border-radius: 3px;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #22C55E, #86EFAC);
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-
-        .progress-text {
-            font-size: 13px;
-            color: #94A3B8;
-            margin-top: 8px;
-        }
-
-        .perm-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: #1E293B;
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 8px;
-        }
-
-        .perm-icon {
-            font-size: 20px;
-        }
-
-        .perm-label {
-            flex: 1;
-            font-size: 14px;
-        }
-
-        .perm-status {
-            font-size: 12px;
-            padding: 3px 10px;
-            border-radius: 12px;
-        }
-
-        .perm-status.granted {
-            background: #064E3B;
-            color: #6EE7B7;
-        }
-
-        .perm-status.needed {
-            background: #7F1D1D;
-            color: #FCA5A5;
-        }
-
-        .success-icon {
-            font-size: 64px;
-            text-align: center;
-            margin: 20px 0;
-        }
-
-        .nav {
-            display: flex;
-            justify-content: space-between;
-            padding-top: 16px;
-            border-top: 1px solid #1E293B;
-        }
-
-        .btn {
-            padding: 10px 24px;
-            border-radius: 8px;
-            border: none;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .btn-primary {
-            background: #22C55E;
-            color: #0F172A;
-        }
-
-        .btn-primary:hover {
-            background: #16A34A;
-        }
-
-        .btn-primary:disabled {
-            background: #334155;
-            color: #64748B;
-            cursor: not-allowed;
-        }
-
-        .btn-secondary {
-            background: #1E293B;
-            color: #94A3B8;
-        }
-
-        .btn-secondary:hover {
-            background: #334155;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #64748B;
-            border-top-color: #22C55E;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .error-box {
-            background: #7F1D1D;
-            border: 1px solid #EF4444;
-            border-radius: 8px;
-            padding: 12px;
-            margin-top: 12px;
-            font-size: 13px;
-        }
-    </style>
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+  </style>
 </head>
-
 <body>
-    <div class="wizard">
-        <!-- Step 1: Welcome -->
-        <div class="step active" id="step1">
-            <h1>🌪️ Welcome to Windy Pro</h1>
-            <h2>Voice-to-text that just works. Let's set everything up.</h2>
-            <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
-                <p style="font-size:14px; line-height:1.8; color:#94A3B8;">
-                    This wizard will:<br>
-                    ✅ Scan your hardware for optimal performance<br>
-                    ✅ Recommend the best transcription model<br>
-                    ✅ Install all dependencies automatically<br>
-                    ✅ Set up permissions for voice capture<br>
-                    <br>
-                    This takes about <strong style="color:#E2E8F0;">2-5 minutes</strong> depending on your internet
-                    speed.
-                </p>
-            </div>
-            <div class="nav">
-                <div></div>
-                <button class="btn btn-primary" onclick="goToStep(2)">Get Started →</button>
-            </div>
-        </div>
+<div class="wizard">
 
-        <!-- Step 2: Hardware Scan -->
-        <div class="step" id="step2">
-            <h1>🔍 Hardware Scan</h1>
-            <h2>Detecting your system capabilities...</h2>
-            <div id="scanLoading" style="flex:1; display:flex; align-items:center; justify-content:center;">
-                <span class="spinner"></span>&nbsp;&nbsp;Scanning hardware...
-            </div>
-            <div id="scanResults" style="display:none; flex:1;">
-                <div class="hw-grid">
-                    <div class="hw-card">
-                        <div class="label">GPU</div>
-                        <div class="value" id="hwGpu">—</div>
-                    </div>
-                    <div class="hw-card">
-                        <div class="label">VRAM</div>
-                        <div class="value" id="hwVram">—</div>
-                    </div>
-                    <div class="hw-card">
-                        <div class="label">RAM</div>
-                        <div class="value" id="hwRam">—</div>
-                    </div>
-                    <div class="hw-card">
-                        <div class="label">Disk Free</div>
-                        <div class="value" id="hwDisk">—</div>
-                    </div>
-                    <div class="hw-card">
-                        <div class="label">CPU</div>
-                        <div class="value" id="hwCpu">—</div>
-                    </div>
-                    <div class="hw-card">
-                        <div class="label">Platform</div>
-                        <div class="value" id="hwPlatform">—</div>
-                    </div>
-                </div>
-            </div>
-            <div class="nav">
-                <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
-                <button class="btn btn-primary" id="scanNextBtn" disabled onclick="goToStep(3)">Next →</button>
-            </div>
-        </div>
+  <!-- Progress dots -->
+  <div class="progress-track">
+    <div class="progress-dot active" id="dot-0"></div>
+    <div class="progress-dot" id="dot-1"></div>
+    <div class="progress-dot" id="dot-2"></div>
+    <div class="progress-dot" id="dot-3"></div>
+  </div>
 
-        <!-- Step 3: Model Recommendation -->
-        <div class="step" id="step3">
-            <h1>🧠 Recommended Model</h1>
-            <h2>Based on your hardware, we recommend:</h2>
-            <div style="flex:1;">
-                <div class="model-rec">
-                    <div class="tag">Recommended</div>
-                    <div class="name" id="recModel">—</div>
-                    <div class="reason" id="recReason">—</div>
-                </div>
-                <div class="hw-grid">
-                    <div class="hw-card">
-                        <div class="label">Download</div>
-                        <div class="value" id="recSize">—</div>
-                    </div>
-                    <div class="hw-card">
-                        <div class="label">Quality</div>
-                        <div class="value" id="recQuality">—</div>
-                    </div>
-                </div>
-            </div>
-            <div class="nav">
-                <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
-                <button class="btn btn-primary" onclick="startInstall()">Install Now →</button>
-            </div>
-        </div>
-
-        <!-- Step 4: Download & Install Progress -->
-        <div class="step" id="step4">
-            <h1>📦 Installing</h1>
-            <h2 id="installSubtitle">Setting up your environment...</h2>
-            <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
-                <div class="progress-container">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
-                    <div class="progress-text" id="progressText">Starting...</div>
-                </div>
-                <div id="installError" style="display:none;"></div>
-            </div>
-            <div class="nav">
-                <div></div>
-                <button class="btn btn-primary" id="installNextBtn" disabled onclick="goToStep(5)">Next →</button>
-            </div>
-        </div>
-
-        <!-- Step 5: Permissions -->
-        <div class="step" id="step5">
-            <h1>🔐 Permissions</h1>
-            <h2>Windy Pro needs these permissions to work:</h2>
-            <div style="flex:1;">
-                <div class="perm-row">
-                    <span class="perm-icon">🎤</span>
-                    <span class="perm-label">Microphone Access</span>
-                    <span class="perm-status" id="permMic">Checking...</span>
-                </div>
-                <div class="perm-row">
-                    <span class="perm-icon">⌨️</span>
-                    <span class="perm-label">Accessibility (for text injection)</span>
-                    <span class="perm-status" id="permAccess">Checking...</span>
-                </div>
-                <p style="font-size:12px; color:#64748B; margin-top:16px;">
-                    Microphone permission is required. Accessibility permission is optional but needed for the
-                    paste-to-cursor feature.
-                </p>
-            </div>
-            <div class="nav">
-                <button class="btn btn-secondary" onclick="goToStep(4)">← Back</button>
-                <button class="btn btn-primary" onclick="goToStep(6)">Next →</button>
-            </div>
-        </div>
-
-        <!-- Step 6: Complete -->
-        <div class="step" id="step6">
-            <h1>🎉 All Set!</h1>
-            <h2>Windy Pro is ready to use.</h2>
-            <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;">
-                <div class="success-icon">🌪️✅</div>
-                <p style="font-size:14px; color:#94A3B8; text-align:center; line-height:1.6;">
-                    Press <strong style="color:#22C55E;">Ctrl+Shift+Space</strong> to start recording.<br>
-                    Press <strong style="color:#3B82F6;">Ctrl+Shift+V</strong> to paste your transcript.<br>
-                    <br>
-                    The green strobe means audio is being captured.<br>
-                    <span style="color:#64748B;">If it's green, you're recording. Always.</span>
-                </p>
-            </div>
-            <div class="nav">
-                <div></div>
-                <button class="btn btn-primary" onclick="finishSetup()">Launch Windy Pro →</button>
-            </div>
-        </div>
+  <!-- STEP 0: Welcome -->
+  <div class="step active" id="step-0">
+    <div class="logo">🌪️</div>
+    <h1>Welcome to Windy Pro</h1>
+    <p class="subtitle">Voice-to-text that never stops. The Green Strobe never lies.</p>
+    <p class="welcome-text">
+      This wizard will set up everything you need — takes about 2–5 minutes depending on your internet speed and which model you choose.
+    </p>
+    <ul class="feature-list">
+      <li>Unlimited recording — no 5-minute cutoff</li>
+      <li>Green Strobe = recording. Always. No guessing.</li>
+      <li>100% local — your words never leave your machine</li>
+      <li>Works anywhere you can type</li>
+    </ul>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="goToStep(1)">Get Started →</button>
     </div>
+  </div>
 
-    <script>
-        let currentStep = 1;
+  <!-- STEP 1: Hardware Scan -->
+  <div class="step" id="step-1">
+    <h1>Scanning your machine…</h1>
+    <p class="subtitle" id="scan-subtitle">Checking hardware and internet speed</p>
+    <div class="scan-status" id="scan-results">
+      <div class="scan-row"><span class="scan-label">CPU</span><span class="scan-value scan-spinner" id="scan-cpu">Detecting…</span></div>
+      <div class="scan-row"><span class="scan-label">RAM</span><span class="scan-value scan-spinner" id="scan-ram">Detecting…</span></div>
+      <div class="scan-row"><span class="scan-label">GPU</span><span class="scan-value scan-spinner" id="scan-gpu">Detecting…</span></div>
+      <div class="scan-row"><span class="scan-label">Storage</span><span class="scan-value scan-spinner" id="scan-disk">Detecting…</span></div>
+      <div class="connection-badge" id="conn-badge" style="display:none">
+        <div class="connection-icon">📡</div>
+        <div class="connection-info">
+          <div class="connection-speed" id="conn-speed">—</div>
+          <div class="connection-note" id="conn-note">Measuring download speed…</div>
+        </div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goToStep(0)">Back</button>
+      <button class="btn btn-primary" id="btn-to-models" disabled onclick="goToStep(2)">Choose Models →</button>
+    </div>
+  </div>
 
-        function goToStep(step) {
-            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-            document.getElementById(`step${step}`).classList.add('active');
-            currentStep = step;
+  <!-- STEP 2: Model Picker -->
+  <div class="step" id="step-2">
+    <h1>Choose your models</h1>
+    <p class="subtitle" id="model-subtitle">Select one or more — you can switch between them anytime</p>
+    <div class="model-grid" id="model-grid">
+      <!-- populated by JS -->
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goToStep(1)">Back</button>
+      <button class="btn btn-primary" id="btn-install" onclick="startInstall()">Install →</button>
+    </div>
+  </div>
 
-            if (step === 2) startHardwareScan();
-            if (step === 5) checkPermissions();
+  <!-- STEP 3: Installing -->
+  <div class="step" id="step-3">
+    <h1>Installing…</h1>
+    <p class="subtitle">Sit tight — setting everything up</p>
+    <div class="install-wrap">
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-fill"></div></div>
+      <div class="install-status" id="install-status">Starting…</div>
+      <div class="install-detail" id="install-detail"></div>
+      <div class="progress-steps">
+        <div class="progress-step-item" id="ps-venv"><span class="step-icon">🐍</span> Creating Python environment</div>
+        <div class="progress-step-item" id="ps-deps"><span class="step-icon">📦</span> Installing transcription engine</div>
+        <div class="progress-step-item" id="ps-model"><span class="step-icon">🧠</span> Downloading AI model</div>
+        <div class="progress-step-item" id="ps-done"><span class="step-icon">✅</span> Finishing up</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 4: Done -->
+  <div class="step" id="step-4">
+    <div class="done-wrap">
+      <div class="done-icon">🟢</div>
+      <div class="done-title">You're all set!</div>
+      <div class="done-models" id="done-models"></div>
+      <div class="done-desc">
+        Windy Pro is ready. The Green Strobe means it's recording — always.
+        Click Launch to start transcribing.
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="launchApp()">Launch Windy Pro 🎙️</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let hardwareData = null;
+  let allModels = [];
+  let selectedModelIds = [];
+  let currentStep = 0;
+
+  // ── Navigation ─────────────────────────────────────────────────────────────
+  function goToStep(n) {
+    document.querySelectorAll('.step').forEach((s, i) => {
+      s.classList.toggle('active', i === n);
+    });
+    document.querySelectorAll('.progress-dot').forEach((d, i) => {
+      d.classList.toggle('done', i < n);
+      d.classList.toggle('active', i === n);
+    });
+    currentStep = n;
+    if (n === 1 && !hardwareData) runScan();
+  }
+
+  // ── Step 1: Hardware Scan ──────────────────────────────────────────────────
+  async function runScan() {
+    document.getElementById('scan-subtitle').textContent = 'Checking hardware and measuring internet speed…';
+
+    try {
+      const result = await window.installerAPI.scanHardware();
+      hardwareData = result;
+      allModels = result.models || [];
+
+      const hw = result.hardware;
+      const speed = result.connectionSpeedMBps || 1.0;
+
+      // Update scan rows
+      const cpuEl = document.getElementById('scan-cpu');
+      cpuEl.textContent = `${hw.cpuModel?.split(' ').slice(0,4).join(' ') || 'Unknown'} (${hw.cpuCores} cores)`;
+      cpuEl.className = 'scan-value good';
+
+      const ramEl = document.getElementById('scan-ram');
+      ramEl.textContent = `${hw.ram} GB`;
+      ramEl.className = `scan-value ${hw.ram >= 8 ? 'good' : 'warn'}`;
+
+      const gpuEl = document.getElementById('scan-gpu');
+      if (hw.gpu?.nvidia) {
+        gpuEl.textContent = `NVIDIA ${hw.gpu.name} (${hw.gpu.vram}MB VRAM)`;
+        gpuEl.className = 'scan-value good';
+      } else if (hw.gpu?.appleSilicon) {
+        gpuEl.textContent = 'Apple Silicon (unified memory)';
+        gpuEl.className = 'scan-value good';
+      } else {
+        gpuEl.textContent = 'No GPU — CPU mode';
+        gpuEl.className = 'scan-value warn';
+      }
+
+      const diskEl = document.getElementById('scan-disk');
+      diskEl.textContent = `${Math.round(hw.diskFree / 1024)} GB free`;
+      diskEl.className = 'scan-value good';
+
+      // Connection speed
+      const connBadge = document.getElementById('conn-badge');
+      connBadge.style.display = 'flex';
+      document.getElementById('conn-speed').textContent =
+        speed >= 10 ? `${speed.toFixed(1)} MB/s — Fast connection 🚀` :
+        speed >= 2  ? `${speed.toFixed(1)} MB/s — Good connection` :
+                     `${speed.toFixed(1)} MB/s — Slow connection (large models will take a while)`;
+      document.getElementById('conn-note').textContent =
+        `Download time estimates are personalized to your connection`;
+
+      document.getElementById('scan-subtitle').textContent = 'Everything looks good! Ready to choose your models.';
+      document.getElementById('btn-to-models').disabled = false;
+
+      // Pre-build model grid
+      buildModelGrid();
+
+    } catch (err) {
+      document.getElementById('scan-subtitle').textContent = 'Scan failed — using defaults';
+      document.getElementById('btn-to-models').disabled = false;
+    }
+  }
+
+  // ── Step 2: Model Grid ─────────────────────────────────────────────────────
+  function buildModelGrid() {
+    const grid = document.getElementById('model-grid');
+    grid.innerHTML = '';
+
+    const recommendedId = hardwareData?.recommendation?.model || 'base';
+
+    allModels.forEach(model => {
+      const card = document.createElement('div');
+      card.className = `model-card ${model.unavailable ? 'unavailable' : ''}`;
+      card.dataset.id = model.id;
+
+      const prosHtml = (model.pros || []).map(p => `<li>${p}</li>`).join('');
+      const consHtml = (model.cons || []).map(c => `<li>${c}</li>`).join('');
+
+      card.innerHTML = `
+        <div class="model-checkbox"></div>
+        <div class="model-body">
+          <div class="model-header">
+            <span class="model-name">${model.name}</span>
+            ${model.badge ? `<span class="model-badge">${model.badge}</span>` : ''}
+            ${model.recommended ? `<span class="model-badge" style="background:#1E3350;color:#60A5FA">Recommended for your PC</span>` : ''}
+          </div>
+          <div class="model-desc">${model.description}</div>
+          <div class="model-meta">
+            <span class="model-size">💾 ${model.size_gb < 1 ? Math.round(model.size_gb*1024)+'MB' : model.size_gb+'GB'}</span>
+            <span class="model-dl-time">⬇ ${model.download_time}</span>
+            <span class="model-ram">🧠 ${model.ram_gb}GB RAM</span>
+          </div>
+          <div class="model-pros-cons">
+            <div class="pros-cons-grid">
+              <ul class="pros-list">${prosHtml}</ul>
+              <ul class="cons-list">${consHtml}</ul>
+            </div>
+            <div class="best-for">Best for: <span>${model.best_for}</span></div>
+          </div>
+        </div>
+      `;
+
+      if (!model.unavailable) {
+        card.addEventListener('click', () => toggleModel(model.id));
+      }
+
+      grid.appendChild(card);
+    });
+
+    // Auto-select recommended
+    toggleModel(recommendedId, true);
+  }
+
+  function toggleModel(modelId, forceSelect = false) {
+    const idx = selectedModelIds.indexOf(modelId);
+    if (idx >= 0 && !forceSelect) {
+      // Deselect — but keep at least one selected
+      if (selectedModelIds.length > 1) {
+        selectedModelIds.splice(idx, 1);
+      }
+    } else if (idx < 0) {
+      selectedModelIds.push(modelId);
+    }
+    updateModelCards();
+  }
+
+  function updateModelCards() {
+    document.querySelectorAll('.model-card').forEach(card => {
+      const isSelected = selectedModelIds.includes(card.dataset.id);
+      card.classList.toggle('selected', isSelected);
+    });
+
+    const totalGB = allModels
+      .filter(m => selectedModelIds.includes(m.id))
+      .reduce((sum, m) => sum + m.size_gb, 0);
+
+    const speed = hardwareData?.connectionSpeedMBps || 1.0;
+    const seconds = (totalGB * 1024) / speed;
+    const timeStr = seconds < 60 ? `~${Math.ceil(seconds)}s` :
+                    seconds < 3600 ? `~${Math.ceil(seconds/60)} min` : `~${(seconds/3600).toFixed(1)} hr`;
+
+    const subtitle = selectedModelIds.length === 1
+      ? `1 model selected · ${totalGB < 1 ? Math.round(totalGB*1024)+'MB' : totalGB.toFixed(1)+'GB'} · ${timeStr} download`
+      : `${selectedModelIds.length} models selected · ${totalGB.toFixed(1)}GB total · ${timeStr} download`;
+
+    document.getElementById('model-subtitle').textContent = subtitle;
+    document.getElementById('btn-install').textContent =
+      `Install ${selectedModelIds.length > 1 ? selectedModelIds.length + ' Models' : 'Model'} →`;
+  }
+
+  // ── Step 3: Install ────────────────────────────────────────────────────────
+  async function startInstall() {
+    goToStep(3);
+
+    // Tell main process which models were selected
+    await window.installerAPI.selectModels(selectedModelIds);
+
+    // Listen for progress events
+    window.installerAPI.onProgress((data) => {
+      const fill = document.getElementById('progress-fill');
+      const status = document.getElementById('install-status');
+      const detail = document.getElementById('install-detail');
+
+      fill.style.width = data.percent + '%';
+      status.textContent = data.message || 'Working…';
+
+      if (data.step === 'venv') {
+        setStepActive('ps-venv');
+      } else if (data.step === 'deps') {
+        setStepDone('ps-venv');
+        setStepActive('ps-deps');
+      } else if (data.step === 'model') {
+        setStepDone('ps-venv'); setStepDone('ps-deps');
+        setStepActive('ps-model');
+        if (data.modelCount > 1) {
+          detail.textContent = `Model ${data.modelIndex + 1} of ${data.modelCount}`;
         }
+      }
+    });
 
-        async function startHardwareScan() {
-            document.getElementById('scanLoading').style.display = 'flex';
-            document.getElementById('scanResults').style.display = 'none';
-            document.getElementById('scanNextBtn').disabled = true;
+    const result = await window.installerAPI.install();
 
-            try {
-                const { hardware, recommendation } = await window.installerAPI.scanHardware();
+    if (result.success) {
+      setStepDone('ps-venv'); setStepDone('ps-deps');
+      setStepDone('ps-model'); setStepDone('ps-done');
+      document.getElementById('progress-fill').style.width = '100%';
+      document.getElementById('install-status').textContent = 'All done! ✓';
 
-                document.getElementById('hwGpu').textContent = hardware.gpu.name;
-                document.getElementById('hwVram').textContent = hardware.gpu.vram > 0 ? `${hardware.gpu.vram} GB` : 'N/A';
-                document.getElementById('hwRam').textContent = `${hardware.ram} GB`;
-                document.getElementById('hwDisk').textContent = `${hardware.diskFree} GB`;
-                document.getElementById('hwCpu').textContent = hardware.cpuModel.substring(0, 24);
-                document.getElementById('hwPlatform').textContent = `${hardware.platform} ${hardware.arch}`;
+      // Build done screen
+      const doneTags = document.getElementById('done-models');
+      const installedModels = result.models || selectedModelIds;
+      doneTags.innerHTML = installedModels.map(id => {
+        const m = allModels.find(x => x.id === id);
+        return `<div class="done-model-tag">✓ ${m?.name || id} model</div>`;
+      }).join('');
 
-                document.getElementById('recModel').textContent = recommendation.model.toUpperCase();
-                document.getElementById('recReason').textContent = recommendation.reason;
-                document.getElementById('recSize').textContent = `${recommendation.specs.size} GB`;
-                document.getElementById('recQuality').textContent = recommendation.specs.quality;
+      setTimeout(() => goToStep(4), 800);
+    } else {
+      document.getElementById('install-status').textContent = '⚠ Installation failed';
+      document.getElementById('install-detail').textContent = result.error || 'Unknown error';
+    }
+  }
 
-                document.getElementById('scanLoading').style.display = 'none';
-                document.getElementById('scanResults').style.display = 'block';
-                document.getElementById('scanNextBtn').disabled = false;
-            } catch (e) {
-                document.getElementById('scanLoading').innerHTML = `<div class="error-box">Scan failed: ${e.message}</div>`;
-            }
-        }
+  function setStepActive(id) {
+    const el = document.getElementById(id);
+    if (el) el.className = 'progress-step-item active';
+  }
+  function setStepDone(id) {
+    const el = document.getElementById(id);
+    if (el) el.className = 'progress-step-item done';
+  }
 
-        async function startInstall() {
-            goToStep(4);
-
-            window.installerAPI.onProgress(({ step, percent, message }) => {
-                document.getElementById('progressFill').style.width = `${percent}%`;
-                document.getElementById('progressText').textContent = message;
-            });
-
-            try {
-                const result = await window.installerAPI.install();
-                if (result.success) {
-                    document.getElementById('installNextBtn').disabled = false;
-                    document.getElementById('progressText').textContent = '✅ Installation complete!';
-                } else {
-                    document.getElementById('installError').style.display = 'block';
-                    document.getElementById('installError').innerHTML =
-                        `<div class="error-box">Installation failed: ${result.error}</div>`;
-                }
-            } catch (e) {
-                document.getElementById('installError').style.display = 'block';
-                document.getElementById('installError').innerHTML =
-                    `<div class="error-box">Error: ${e.message}</div>`;
-            }
-        }
-
-        async function checkPermissions() {
-            try {
-                const perms = await window.installerAPI.checkPermissions();
-
-                const micEl = document.getElementById('permMic');
-                micEl.textContent = perms.mic ? 'Granted' : 'Needed';
-                micEl.className = `perm-status ${perms.mic ? 'granted' : 'needed'}`;
-
-                const accessEl = document.getElementById('permAccess');
-                accessEl.textContent = perms.accessibility ? 'Granted' : 'Optional';
-                accessEl.className = `perm-status ${perms.accessibility ? 'granted' : 'needed'}`;
-            } catch (e) {
-                // Non-blocking
-            }
-        }
-
-        async function finishSetup() {
-            await window.installerAPI.complete();
-        }
-    </script>
+  // ── Done ───────────────────────────────────────────────────────────────────
+  async function launchApp() {
+    await window.installerAPI.complete();
+  }
+</script>
 </body>
-
 </html>
