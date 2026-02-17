@@ -75,7 +75,7 @@
     .connection-note { font-size: 11px; color: #64748B; margin-top: 1px; }
 
     /* Model picker */
-    .model-grid { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: scroll; min-height: 0; padding-right: 6px; }
+    .model-grid { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; min-height: 0; padding-right: 4px; scrollbar-width: thin; scrollbar-color: #4A5568 #1E293B; }
     .model-card {
       background: #1E293B; border-radius: 10px; padding: 12px 14px;
       border: 2px solid transparent; cursor: pointer; transition: all 0.15s;
@@ -109,6 +109,8 @@
       border-top: 1px solid #334155;
     }
     .model-card.selected .model-pros-cons { display: block; }
+    .model-card:not(.selected) .model-specs { opacity: 0.7; }
+    .model-card { padding: 10px 14px; transition: padding 0.15s; }
     .pros-cons-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .pros-list, .cons-list { font-size: 11px; }
     .pros-list li { color: #4ADE80; margin-bottom: 2px; }

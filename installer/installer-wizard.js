@@ -128,8 +128,8 @@ class InstallerWizard {
     async show() {
         return new Promise((resolve) => {
             this.window = new BrowserWindow({
-                width: 620,
-                height: 520,
+                width: 640,
+                height: 740,
                 resizable: false,
                 frame: true,
                 center: true,
