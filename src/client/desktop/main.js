@@ -289,6 +289,7 @@ function updateTrayIcon(state) {
  * Register global hotkeys
  */
 function registerHotkeys() {
+  if (!app.isReady()) return;
   const hotkeys = store.get('hotkeys');
 
   // Toggle recording
@@ -377,8 +378,10 @@ ipcMain.on('update-settings', (event, settings) => {
       store.set(`server.${key}`, value);
     } else if (hotkeyKeys.includes(key)) {
       store.set(`hotkeys.${key}`, value);
-      globalShortcut.unregisterAll();
-      registerHotkeys();
+      if (app.isReady()) {
+        globalShortcut.unregisterAll();
+        registerHotkeys();
+      }
     } else {
       // Engine settings (model, device, language, vibeEnabled, micDeviceId)
       store.set(`engine.${key}`, value);
@@ -482,8 +485,10 @@ app.on('will-quit', () => {
     pythonProcess.kill();
     pythonProcess = null;
   }
-  // Unregister all hotkeys
-  globalShortcut.unregisterAll();
+  // Unregister all hotkeys (only safe after app is ready)
+  if (app.isReady()) {
+    globalShortcut.unregisterAll();
+  }
 });
 
 // Prevent multiple instances
