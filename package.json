@@ -3,7 +3,10 @@
     "version": "0.1.0",
     "description": "Voice-to-text desktop app powered by faster-whisper",
     "main": "src/client/desktop/main.js",
-    "author": "Windy Pro Team",
+    "author": {
+        "name": "Windy Pro",
+        "email": "dev@thewindstorm.uk"
+    },
     "license": "MIT",
     "scripts": {
         "start": "electron .",
@@ -67,7 +70,9 @@
             "target": [
                 "nsis"
             ],
-            "icon": "assets/icon.ico"
+            "icon": "assets/icon.ico",
+            "sign": null,
+            "signingHashAlgorithms": null
         },
         "linux": {
             "target": [
@@ -75,7 +80,8 @@
                 "deb"
             ],
             "icon": "assets/icon.png",
-            "category": "Utility"
+            "category": "Utility",
+            "maintainer": "Windy Pro <dev@thewindstorm.uk>"
         },
         "nsis": {
             "oneClick": false,

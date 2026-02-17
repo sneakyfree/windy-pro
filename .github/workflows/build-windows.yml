@@ -1,0 +1,78 @@
+name: Build Windows Installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      upload_to_release:
+        description: 'Upload to latest release'
+        required: true
+        default: 'true'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create icon placeholder
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path assets
+          # Create a minimal valid ICO file (16x16 placeholder)
+          $bytes = [byte[]](0,0,1,0,1,0,16,16,0,0,1,0,32,0,104,4,0,0,22,0,0,0)
+          [System.IO.File]::WriteAllBytes("assets/icon.ico", $bytes)
+
+      - name: Build Windows installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          # Restore NSIS target
+          $pkg = Get-Content package.json | ConvertFrom-Json
+          $pkg.build.win.target = @(@{target="nsis"; arch=@("x64")})
+          $pkg.build.win.sign = $null
+          $pkg | ConvertTo-Json -Depth 10 | Set-Content package.json
+          npx electron-builder --win --x64
+
+      - name: Upload to GitHub Release
+        if: ${{ github.event.inputs.upload_to_release == 'true' || startsWith(github.ref, 'refs/tags/') }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        shell: bash
+        run: |
+          # Find the exe
+          EXE=$(find dist -name "*.exe" | head -1)
+          echo "Found: $EXE"
+          
+          # Get latest release ID
+          RELEASE_ID=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/releases/latest \
+            | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+          
+          echo "Uploading to release $RELEASE_ID"
+          
+          # Upload
+          curl -s -X POST \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @"$EXE" \
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/${RELEASE_ID}/assets?name=Windy-Pro-Setup-0.1.0.exe&label=Windows+Installer+(x64)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windy-pro-windows
+          path: dist/*.exe
