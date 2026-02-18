@@ -1,96 +1,96 @@
 {
-    "name": "windy-pro",
-    "version": "0.1.0",
-    "description": "Voice-to-text desktop app powered by faster-whisper",
-    "main": "src/client/desktop/main.js",
-    "author": {
-        "name": "Windy Pro",
-        "email": "dev@thewindstorm.uk"
+  "name": "windy-pro",
+  "version": "0.1.1",
+  "description": "Voice-to-text desktop app powered by faster-whisper",
+  "main": "src/client/desktop/main.js",
+  "author": {
+    "name": "Windy Pro",
+    "email": "dev@thewindstorm.uk"
+  },
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "server": "python -m src.engine.server",
+    "test": "python -m pytest tests/ -v"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.0"
+  },
+  "build": {
+    "appId": "pro.windy.app",
+    "productName": "Windy Pro",
+    "directories": {
+      "output": "dist"
     },
-    "license": "MIT",
-    "scripts": {
-        "start": "electron .",
-        "dev": "electron . --dev",
-        "build": "electron-builder",
-        "build:win": "electron-builder --win",
-        "build:mac": "electron-builder --mac",
-        "build:linux": "electron-builder --linux",
-        "server": "python -m src.engine.server",
-        "test": "python -m pytest tests/ -v"
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "sneakyfree",
+        "repo": "windy-pro"
+      }
+    ],
+    "files": [
+      "src/**/*",
+      "installer/**/*",
+      "!**/*.pyc",
+      "!**/__pycache__"
+    ],
+    "extraResources": [
+      {
+        "from": "src/engine",
+        "to": "engine",
+        "filter": [
+          "**/*.py",
+          "requirements.txt"
+        ]
+      },
+      {
+        "from": "installer",
+        "to": "installer"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
-    "dependencies": {
-        "electron-store": "^8.1.0",
-        "electron-updater": "^6.1.0"
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico",
+      "sign": null,
+      "signingHashAlgorithms": null
     },
-    "devDependencies": {
-        "electron": "^28.0.0",
-        "electron-builder": "^24.9.0"
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Utility",
+      "maintainer": "Windy Pro <dev@thewindstorm.uk>",
+      "executableName": "windy-pro"
     },
-    "build": {
-        "appId": "pro.windy.app",
-        "productName": "Windy Pro",
-        "directories": {
-            "output": "dist"
-        },
-        "publish": [
-            {
-                "provider": "github",
-                "owner": "sneakyfree",
-                "repo": "windy-pro"
-            }
-        ],
-        "files": [
-            "src/**/*",
-            "installer/**/*",
-            "!**/*.pyc",
-            "!**/__pycache__"
-        ],
-        "extraResources": [
-            {
-                "from": "src/engine",
-                "to": "engine",
-                "filter": [
-                    "**/*.py",
-                    "requirements.txt"
-                ]
-            },
-            {
-                "from": "installer",
-                "to": "installer"
-            }
-        ],
-        "mac": {
-            "category": "public.app-category.productivity",
-            "target": [
-                "dmg",
-                "zip"
-            ],
-            "icon": "assets/icon.icns",
-            "hardenedRuntime": true,
-            "entitlements": "build/entitlements.mac.plist",
-            "entitlementsInherit": "build/entitlements.mac.plist"
-        },
-        "win": {
-            "target": [
-                "nsis"
-            ],
-            "icon": "assets/icon.ico",
-            "sign": null,
-            "signingHashAlgorithms": null
-        },
-        "linux": {
-            "target": [
-                "AppImage",
-                "deb"
-            ],
-            "icon": "assets/icon.png",
-            "category": "Utility",
-            "maintainer": "Windy Pro <dev@thewindstorm.uk>",
-            "executableName": "windy-pro"
-        },
-        "nsis": {
-            "oneClick": false,
-            "allowToChangeInstallationDirectory": true
-        }
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
+  }
 }
