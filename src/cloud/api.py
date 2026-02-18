@@ -6,11 +6,14 @@ DNA Strand: A4 (Cloud Mode)
 Helix Repair: T6 (auth), T7 (JWT), T8 (vault), T9 (WS path)
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Query, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Query, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import asyncio
 import json
 import uuid
@@ -155,14 +158,19 @@ app = FastAPI(
     version="0.2.0"
 )
 
+# Rate limiting
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 ALLOWED_ORIGINS = os.getenv("WINDY_CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"]
 )
 
 @app.on_event("startup")
@@ -238,7 +246,8 @@ async def get_current_user(authorization: str = Header(None)):
 # ═══════════════════════════════════
 
 @app.post("/api/v1/auth/register", response_model=AuthResponse)
-async def register(body: AuthRegister):
+@limiter.limit("5/minute")
+async def register(request: Request, body: AuthRegister):
     """Register a new user account."""
     if len(body.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
@@ -267,7 +276,8 @@ async def register(body: AuthRegister):
 
 
 @app.post("/api/v1/auth/login", response_model=AuthResponse)
-async def login(body: AuthLogin):
+@limiter.limit("5/minute")
+async def login(request: Request, body: AuthLogin):
     """Login with email and password."""
     conn = get_db()
     try:
