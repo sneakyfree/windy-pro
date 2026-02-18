@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import Landing from './pages/Landing'
 import Transcribe from './pages/Transcribe'
 import Auth from './pages/Auth'
+import Privacy from './pages/Privacy'
+import Terms from './pages/Terms'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function NotFound() {
@@ -23,6 +25,8 @@ export default function App() {
                     <ProtectedRoute><Transcribe /></ProtectedRoute>
                 } />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/terms" element={<Terms />} />
                 <Route path="*" element={<NotFound />} />
             </Routes>
         </BrowserRouter>

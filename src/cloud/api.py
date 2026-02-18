@@ -6,7 +6,8 @@ DNA Strand: A4 (Cloud Mode)
 Helix Repair: T6 (auth), T7 (JWT), T8 (vault), T9 (WS path)
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Query, status
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
@@ -19,6 +20,11 @@ import hashlib
 import hmac
 from datetime import datetime, timedelta
 from pathlib import Path
+import numpy as np
+import struct
+import logging
+
+logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════
 #  JWT — lightweight, zero-dep
@@ -206,7 +212,12 @@ class HealthResponse(BaseModel):
 #  Auth Dependencies
 # ═══════════════════════════════════
 
-API_KEY = os.getenv("WINDY_API_KEY", "dev-key-change-me")
+API_KEY = os.getenv("WINDY_API_KEY")
+if not API_KEY:
+    raise RuntimeError(
+        "WINDY_API_KEY environment variable is required. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
 
 async def verify_api_key(x_api_key: str = Header(None)):
     if not x_api_key or x_api_key != API_KEY:
@@ -394,20 +405,39 @@ async def health_check():
 #  Batch Transcription
 # ═══════════════════════════════════
 
-@app.post("/api/v1/transcribe", response_model=TranscriptionResult)
+@app.post("/api/v1/transcribe", status_code=501)
 async def transcribe_file(
     config: TranscriptionRequest,
     api_key: str = Depends(verify_api_key)
 ):
-    """Transcribe an uploaded audio file (batch mode)."""
-    return TranscriptionResult(
-        id=str(uuid.uuid4()),
-        text="[Cloud transcription placeholder]",
-        segments=[],
-        duration=0.0,
-        language=config.language,
-        model=config.model
+    """Batch transcription — not yet implemented."""
+    return JSONResponse(
+        status_code=501,
+        content={"detail": "Batch transcription is not yet available. Use the WebSocket endpoint /ws/transcribe for real-time streaming."}
     )
+
+
+# ═══════════════════════════════════
+#  Cloud Transcription Engine (singleton)
+# ═══════════════════════════════════
+
+_cloud_model = None
+_cloud_model_lock = asyncio.Lock()
+
+async def get_cloud_model():
+    """Lazy-load the Whisper model for cloud transcription."""
+    global _cloud_model
+    if _cloud_model is None:
+        async with _cloud_model_lock:
+            if _cloud_model is None:
+                from faster_whisper import WhisperModel
+                model_size = os.getenv("WINDY_CLOUD_MODEL", "base")
+                device = "cuda" if os.getenv("WINDY_CLOUD_DEVICE", "auto") == "cuda" else "cpu"
+                compute = "float16" if device == "cuda" else "int8"
+                logger.info(f"Loading cloud Whisper model: {model_size} on {device} ({compute})")
+                _cloud_model = WhisperModel(model_size, device=device, compute_type=compute)
+                logger.info("Cloud Whisper model loaded.")
+    return _cloud_model
 
 
 # ═══════════════════════════════════
@@ -416,30 +446,39 @@ async def transcribe_file(
 
 active_connections: dict = {}
 
+# Audio buffer: 16kHz Int16 mono = 32000 bytes per second
+CLOUD_AUDIO_CHUNK_THRESHOLD = 32000  # 1 second of audio
+
 @app.websocket("/ws/transcribe")
-async def websocket_transcribe(websocket: WebSocket, token: Optional[str] = Query(None)):
+async def websocket_transcribe(websocket: WebSocket):
     """
     WebSocket endpoint for real-time audio streaming.
-    Same protocol as local server for seamless switching.
-    Accepts optional JWT token via query param for auth.
+    Auth via first-message: client sends {action: "auth", token: "..."} as first message.
+    Then streams binary Int16 PCM audio at 16kHz mono.
     """
-    # Auth required — reject unauthenticated connections
-    if not token:
-        await websocket.accept()
-        await websocket.close(code=4001, reason="Authentication required")
-        return
+    await websocket.accept()
+    connection_id = str(uuid.uuid4())
+
+    # ─── First-message authentication ───
     try:
-        user = decode_token(token)
+        first_msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+        cmd = json.loads(first_msg)
+        if cmd.get("action") != "auth" or not cmd.get("token"):
+            await websocket.send_json({"type": "error", "message": "First message must be {action: 'auth', token: '...'}."})
+            await websocket.close(code=4001, reason="Authentication required")
+            return
+        user = decode_token(cmd["token"])
+    except (asyncio.TimeoutError, json.JSONDecodeError):
+        await websocket.close(code=4001, reason="Authentication timeout or invalid format")
+        return
     except HTTPException:
-        await websocket.accept()
+        await websocket.send_json({"type": "error", "message": "Invalid or expired token"})
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
-    await websocket.accept()
-    connection_id = str(uuid.uuid4())
     active_connections[connection_id] = {"ws": websocket, "user": user}
 
-    # Create session if authenticated
+    # Create session for authenticated user
     session_id = None
     if user:
         conn = get_db()
@@ -450,22 +489,71 @@ async def websocket_transcribe(websocket: WebSocket, token: Optional[str] = Quer
         conn.commit()
         conn.close()
 
+    # Audio accumulation buffer
+    audio_buffer = bytearray()
+    segment_start_time = 0.0
+    total_audio_seconds = 0.0
+    is_recording = False
+
     try:
         await websocket.send_json({
             "type": "state",
             "state": "idle",
             "connection_id": connection_id,
-            "authenticated": user is not None
+            "authenticated": True
         })
 
         while True:
             message = await websocket.receive()
 
             if "bytes" in message:
+                if not is_recording:
+                    continue
                 audio_data = message["bytes"]
-                # TODO: Feed to cloud transcriber instance
-                # TODO: Opus decoding when client supports it
-                pass
+                audio_buffer.extend(audio_data)
+
+                # When we have enough audio, transcribe
+                if len(audio_buffer) >= CLOUD_AUDIO_CHUNK_THRESHOLD:
+                    try:
+                        model = await get_cloud_model()
+                        # Convert Int16 PCM bytes to float32 numpy array
+                        int16_array = np.frombuffer(bytes(audio_buffer), dtype=np.int16)
+                        float32_array = int16_array.astype(np.float32) / 32768.0
+
+                        # Run transcription in thread pool to avoid blocking
+                        loop = asyncio.get_event_loop()
+                        segments_result, info = await loop.run_in_executor(
+                            None, lambda: model.transcribe(float32_array, language="en", beam_size=1, vad_filter=True)
+                        )
+                        segments_list = await loop.run_in_executor(None, lambda: list(segments_result))
+
+                        for seg in segments_list:
+                            segment_data = {
+                                "type": "transcript",
+                                "text": seg.text.strip(),
+                                "start_time": segment_start_time + seg.start,
+                                "end_time": segment_start_time + seg.end,
+                                "is_partial": False
+                            }
+                            await websocket.send_json(segment_data)
+
+                            # Save to vault if we have a session
+                            if session_id and seg.text.strip():
+                                conn = get_db()
+                                conn.execute(
+                                    "INSERT INTO segments (session_id, text, start_time, end_time, confidence) VALUES (?, ?, ?, ?, ?)",
+                                    (session_id, seg.text.strip(), segment_start_time + seg.start, segment_start_time + seg.end, 0.9)
+                                )
+                                conn.commit()
+                                conn.close()
+
+                        total_audio_seconds += len(audio_buffer) / (16000 * 2)  # 16kHz, 2 bytes per sample
+                        segment_start_time = total_audio_seconds
+                    except Exception as e:
+                        logger.error(f"Transcription error: {e}")
+                        await websocket.send_json({"type": "error", "message": f"Transcription failed: {str(e)}"})
+                    finally:
+                        audio_buffer.clear()
 
             elif "text" in message:
                 try:
@@ -473,10 +561,49 @@ async def websocket_transcribe(websocket: WebSocket, token: Optional[str] = Quer
                     action = cmd.get("action")
 
                     if action == "start":
+                        is_recording = True
+                        audio_buffer.clear()
+                        total_audio_seconds = 0.0
+                        segment_start_time = 0.0
                         await websocket.send_json({
-                            "type": "ack", "action": "start", "success": True
+                            "type": "state", "state": "listening"
                         })
                     elif action == "stop":
+                        is_recording = False
+
+                        # Transcribe remaining buffer
+                        if len(audio_buffer) > 0:
+                            try:
+                                model = await get_cloud_model()
+                                int16_array = np.frombuffer(bytes(audio_buffer), dtype=np.int16)
+                                float32_array = int16_array.astype(np.float32) / 32768.0
+                                loop = asyncio.get_event_loop()
+                                segments_result, _ = await loop.run_in_executor(
+                                    None, lambda: model.transcribe(float32_array, language="en", beam_size=1, vad_filter=True)
+                                )
+                                segments_list = await loop.run_in_executor(None, lambda: list(segments_result))
+                                for seg in segments_list:
+                                    if seg.text.strip():
+                                        await websocket.send_json({
+                                            "type": "transcript",
+                                            "text": seg.text.strip(),
+                                            "start_time": segment_start_time + seg.start,
+                                            "end_time": segment_start_time + seg.end,
+                                            "is_partial": False
+                                        })
+                                        if session_id:
+                                            conn = get_db()
+                                            conn.execute(
+                                                "INSERT INTO segments (session_id, text, start_time, end_time, confidence) VALUES (?, ?, ?, ?, ?)",
+                                                (session_id, seg.text.strip(), segment_start_time + seg.start, segment_start_time + seg.end, 0.9)
+                                            )
+                                            conn.commit()
+                                            conn.close()
+                            except Exception as e:
+                                logger.error(f"Final transcription error: {e}")
+                            finally:
+                                audio_buffer.clear()
+
                         # End session if authenticated
                         if session_id and user:
                             conn = get_db()
@@ -490,8 +617,7 @@ async def websocket_transcribe(websocket: WebSocket, token: Optional[str] = Quer
                             conn.close()
 
                         await websocket.send_json({
-                            "type": "ack", "action": "stop", "success": True,
-                            "transcript": ""
+                            "type": "state", "state": "idle"
                         })
                     elif action == "ping":
                         await websocket.send_json({

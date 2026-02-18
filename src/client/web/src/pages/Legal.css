@@ -1,0 +1,78 @@
+/* Legal pages (Privacy, Terms) */
+.legal-page {
+    min-height: 100vh;
+    background: #0a0a0f;
+    color: #e0e0e0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.legal-nav {
+    padding: 20px 40px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.legal-back {
+    color: #00ff88;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: opacity 0.2s;
+}
+.legal-back:hover {
+    opacity: 0.8;
+}
+
+.legal-content {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 60px 40px 100px;
+    line-height: 1.8;
+}
+
+.legal-content h1 {
+    font-size: 32px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+}
+
+.legal-updated {
+    color: #666;
+    font-size: 13px;
+    margin-bottom: 40px;
+}
+
+.legal-content h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #fff;
+    margin-top: 36px;
+    margin-bottom: 12px;
+}
+
+.legal-content p {
+    color: #b0b0b0;
+    margin-bottom: 16px;
+}
+
+.legal-content ul {
+    padding-left: 24px;
+    margin-bottom: 16px;
+}
+
+.legal-content li {
+    color: #b0b0b0;
+    margin-bottom: 8px;
+}
+
+.legal-content a {
+    color: #00ff88;
+    text-decoration: none;
+}
+.legal-content a:hover {
+    text-decoration: underline;
+}
+
+.legal-content strong {
+    color: #e0e0e0;
+}

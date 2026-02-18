@@ -15,20 +15,31 @@ export default function Transcribe() {
     const audioContextRef = useRef(null)
     const transcriptRef = useRef(null)
 
-    // Connect to cloud WebSocket (with auth token)
+    // Connect to cloud WebSocket (first-message auth)
     const connect = useCallback(() => {
         const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
         const token = localStorage.getItem('windy_token')
-        const ws = new WebSocket(`${protocol}://${window.location.host}/ws/transcribe${token ? `?token=${token}` : ''}`)
+        const ws = new WebSocket(`${protocol}://${window.location.host}/ws/transcribe`)
 
         ws.onopen = () => {
+            // Send auth as first message (token never in URL)
+            if (token) {
+                ws.send(JSON.stringify({ action: 'auth', token }))
+            }
             setConnected(true)
-            console.log('[Cloud] WebSocket connected')
+            console.log('[Cloud] WebSocket connected, auth sent')
         }
 
         ws.onmessage = (event) => {
             try {
                 const msg = JSON.parse(event.data)
+
+                if (msg.type === 'error' && msg.message?.includes('token')) {
+                    // Auth failure — redirect to login
+                    localStorage.removeItem('windy_token')
+                    navigate('/auth')
+                    return
+                }
 
                 if (msg.type === 'state') {
                     setState(msg.state)
@@ -57,7 +68,7 @@ export default function Transcribe() {
         }
 
         wsRef.current = ws
-    }, [])
+    }, [navigate])
 
     useEffect(() => {
         connect()

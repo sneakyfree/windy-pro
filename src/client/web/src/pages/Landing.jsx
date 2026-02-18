@@ -212,8 +212,8 @@ export default function Landing() {
                     <div className="footer-links">
                         <a href="#">GitHub</a>
                         <a href="#">Docs</a>
-                        <a href="#">Privacy</a>
-                        <a href="#">Terms</a>
+                        <Link to="/privacy">Privacy</Link>
+                        <Link to="/terms">Terms</Link>
                     </div>
                     <div className="footer-copy">© 2026 Windy Pro. The Green Strobe Never Lies.</div>
                 </div>
