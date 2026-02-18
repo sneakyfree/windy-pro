@@ -209,6 +209,15 @@ class StreamingTranscriber:
     def stop_session(self) -> str:
         """Stop the session and return full transcript."""
         self._running = False
+        
+        # Flush the audio queue immediately so the worker thread
+        # doesn't keep processing buffered chunks after stop
+        try:
+            while not self._audio_queue.empty():
+                self._audio_queue.get_nowait()
+        except Exception:
+            pass
+        
         self._set_state(TranscriptionState.IDLE)
         
         if self._worker_thread:
@@ -247,9 +256,13 @@ class StreamingTranscriber:
                 min_buffer_size = int(16000 * 2 * self.config.chunk_length_s)
                 
                 if len(audio_buffer) >= min_buffer_size:
+                    if not self._running:
+                        break  # Stop requested — don't process more
                     self._set_state(TranscriptionState.BUFFERING)
                     self._process_chunk(audio_buffer)
                     audio_buffer = b""
+                    if not self._running:
+                        break  # Stop requested during processing
                     self._set_state(TranscriptionState.LISTENING)
                     
             except Exception as e:

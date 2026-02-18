@@ -162,6 +162,10 @@ class WindyServer:
             if self.transcriber:
                 # Apply pending model change if queued
                 if self._pending_model:
+                    # Ensure any previous session is fully stopped first
+                    if self.transcriber._running:
+                        self.transcriber.stop_session()
+                    
                     self.transcriber.config.model_size = self._pending_model
                     await websocket.send(json.dumps({
                         "type": "state",
