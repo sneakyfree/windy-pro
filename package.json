@@ -91,6 +91,13 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "deb": {
+      "depends": [
+        "python3",
+        "python3-venv",
+        "python3-pip"
+      ]
     }
   }
 }
