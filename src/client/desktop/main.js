@@ -370,10 +370,11 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
       mainWindow.webContents.send('injection-error', error.message);
     }
 
-    // Show window again after paste
+    // Show window again after paste WITHOUT stealing focus
+    // so the user can proofread and hit Enter in their chat app
     setTimeout(() => {
       if (mainWindow) {
-        mainWindow.show();
+        mainWindow.showInactive();  // Show without taking focus
       }
       const newState = isRecording ? 'listening' : 'idle';
       mainWindow.webContents.send('state-change', newState);

@@ -62,8 +62,8 @@ class CursorInjector {
      */
     async injectWindows() {
         return new Promise((resolve, reject) => {
-            // Use PowerShell to simulate Ctrl+V then Enter
-            const cmd = 'powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\'); Start-Sleep -Milliseconds 100; [System.Windows.Forms.SendKeys]::SendWait(\'{ENTER}\')"';
+            // Use PowerShell to simulate Ctrl+V
+            const cmd = 'powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"';
             exec(cmd, { timeout: 3000 }, (error) => {
                 if (error) {
                     reject(new Error(`Windows injection failed: ${error.message}`));
@@ -110,9 +110,8 @@ class CursorInjector {
 
     async injectLinuxX11() {
         return new Promise((resolve, reject) => {
-            // Focus the previously active window, then paste, then press Enter to send
-            // The Enter keypress submits the text in chat apps (Telegram, Discord, etc.)
-            const cmd = 'sleep 0.15 && xdotool key --clearmodifiers ctrl+v && sleep 0.1 && xdotool key --clearmodifiers Return';
+            // Focus the previously active window, then paste
+            const cmd = 'sleep 0.15 && xdotool key --clearmodifiers ctrl+v';
             exec(cmd, { timeout: 5000, env: { ...process.env, DISPLAY: process.env.DISPLAY || ':0' } }, (error) => {
                 if (error) {
                     if (error.message.includes('not found') || error.message.includes('No such file')) {
@@ -129,8 +128,8 @@ class CursorInjector {
 
     async injectLinuxWayland() {
         return new Promise((resolve, reject) => {
-            // ydotool uses keycodes: 29=Ctrl, 47=V, 28=Enter
-            exec('ydotool key 29:1 47:1 47:0 29:0 && sleep 0.1 && ydotool key 28:1 28:0', { timeout: 3000 }, (error) => {
+            // ydotool uses keycodes: 29=Ctrl, 47=V
+            exec('ydotool key 29:1 47:1 47:0 29:0', { timeout: 3000 }, (error) => {
                 if (error) {
                     if (error.message.includes('not found') || error.message.includes('No such file')) {
                         reject(new Error('ydotool is required for Wayland text injection. Install it with: sudo apt install ydotool'));
