@@ -110,7 +110,10 @@ class CursorInjector {
 
     async injectLinuxX11() {
         return new Promise((resolve, reject) => {
-            exec('xdotool key ctrl+v', { timeout: 3000 }, (error) => {
+            // Focus the previously active window, then paste
+            // xdotool: get previous window from window stack, focus it, then send Ctrl+V
+            const cmd = 'sleep 0.15 && xdotool key --clearmodifiers ctrl+v';
+            exec(cmd, { timeout: 5000, env: { ...process.env, DISPLAY: process.env.DISPLAY || ':0' } }, (error) => {
                 if (error) {
                     if (error.message.includes('not found') || error.message.includes('No such file')) {
                         reject(new Error('xdotool is required for text injection. Install it with: sudo apt install xdotool'));

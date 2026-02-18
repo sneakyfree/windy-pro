@@ -10,6 +10,11 @@
  */
 
 const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard } = require('electron');
+
+// Fix: bake in --no-sandbox for Linux AppImage (chrome-sandbox SUID issue)
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('no-sandbox');
+}
 const path = require('path');
 const Store = require('electron-store');
 const { spawn } = require('child_process');
@@ -62,12 +67,16 @@ function startPythonServer() {
     : path.join(appDataDir, 'venv', 'bin', 'python');
 
   const pythonPath = fs.existsSync(venvPython) ? venvPython : 'python3';
-  const projectRoot = path.join(__dirname, '..', '..', '..');
+  const projectRoot = app.isPackaged
+    ? process.resourcesPath
+    : path.join(__dirname, '..', '..', '..');
+  const serverModule = app.isPackaged ? 'engine.server' : 'src.engine.server';
 
   console.log(`[Python] Starting server with: ${pythonPath}`);
+  console.log(`[Python] cwd: ${projectRoot}, module: ${serverModule}`);
 
   pythonProcess = spawn(pythonPath, [
-    '-m', 'src.engine.server',
+    '-m', serverModule,
     '--host', serverConfig.host,
     '--port', String(serverConfig.port)
   ], {
@@ -293,17 +302,19 @@ function registerHotkeys() {
   const hotkeys = store.get('hotkeys');
 
   // Toggle recording
-  globalShortcut.register(hotkeys.toggleRecording, () => {
+  const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
     toggleRecording();
   });
+  console.log(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
 
   // Paste transcript
-  globalShortcut.register(hotkeys.pasteTranscript, () => {
+  const regPaste = globalShortcut.register(hotkeys.pasteTranscript, () => {
     pasteTranscript();
   });
+  console.log(`[Hotkey] Paste transcript (${hotkeys.pasteTranscript}): ${regPaste ? 'OK' : 'FAILED'}`);
 
   // Show/hide window
-  globalShortcut.register(hotkeys.showHide, () => {
+  const regShow = globalShortcut.register(hotkeys.showHide, () => {
     if (mainWindow.isVisible()) {
       mainWindow.hide();
     } else {
@@ -311,6 +322,7 @@ function registerHotkeys() {
       mainWindow.focus();
     }
   });
+  console.log(`[Hotkey] Show/Hide (${hotkeys.showHide}): ${regShow ? 'OK' : 'FAILED'}`);
 }
 
 /**
@@ -343,6 +355,14 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
     mainWindow.webContents.send('state-change', 'injecting');
     updateTrayIcon('injecting');
 
+    // Hide Windy Pro window so focus returns to the previous app
+    if (mainWindow && mainWindow.isVisible()) {
+      mainWindow.hide();
+    }
+
+    // Small delay to let the OS switch focus
+    await new Promise(resolve => setTimeout(resolve, 200));
+
     try {
       await injector.inject(transcript);
     } catch (error) {
@@ -350,11 +370,15 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
       mainWindow.webContents.send('injection-error', error.message);
     }
 
+    // Show window again after paste
     setTimeout(() => {
+      if (mainWindow) {
+        mainWindow.show();
+      }
       const newState = isRecording ? 'listening' : 'idle';
       mainWindow.webContents.send('state-change', newState);
       updateTrayIcon(newState);
-    }, 200);
+    }, 500);
   }
 });
 
@@ -434,7 +458,7 @@ ipcMain.handle('dismiss-crash-recovery', async () => {
 app.whenReady().then(async () => {
   // First-run setup wizard (Phase 3: B4)
   const installerPath = app.isPackaged
-    ? path.join(app.getAppPath(), 'installer', 'installer-wizard')
+    ? path.join(process.resourcesPath, 'installer', 'installer-wizard')
     : path.join(__dirname, '..', '..', '..', 'installer', 'installer-wizard');
   const { InstallerWizard } = require(installerPath);
   if (InstallerWizard.needsSetup()) {

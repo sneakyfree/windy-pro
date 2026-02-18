@@ -261,7 +261,26 @@ body {
   font-size: 12px;
 }
 
-/* Transcript segments */
+/* Transcript segments — continuous text block */
+.transcript-para {
+  margin: 0;
+  padding: 8px 12px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.transcript-para .final-text {
+  color: var(--text-primary);
+}
+
+.transcript-para .partial-text {
+  opacity: 0.6;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+/* Legacy segment styles (kept for compatibility) */
 .segment {
   margin-bottom: 8px;
   padding: 8px 12px;

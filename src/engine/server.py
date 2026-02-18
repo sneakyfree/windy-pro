@@ -21,6 +21,7 @@ try:
 except ImportError:
     WEBSOCKETS_AVAILABLE = False
     websockets = None
+    WebSocketServerProtocol = object  # fallback for type annotations
 
 from .transcriber import StreamingTranscriber, TranscriberConfig, TranscriptionState
 from .vault import PromptVault

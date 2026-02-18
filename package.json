@@ -53,6 +53,10 @@
                     "**/*.py",
                     "requirements.txt"
                 ]
+            },
+            {
+                "from": "installer",
+                "to": "installer"
             }
         ],
         "mac": {
@@ -81,7 +85,8 @@
             ],
             "icon": "assets/icon.png",
             "category": "Utility",
-            "maintainer": "Windy Pro <dev@thewindstorm.uk>"
+            "maintainer": "Windy Pro <dev@thewindstorm.uk>",
+            "executableName": "windy-pro"
         },
         "nsis": {
             "oneClick": false,

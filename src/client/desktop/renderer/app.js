@@ -466,34 +466,44 @@ class WindyApp {
 
   /**
    * Add transcript segment to display
+   * Appends text inline as one continuous block (not separate lines)
    */
   addTranscriptSegment(msg) {
-    // Remove any existing partial segment
-    const existingPartial = this.transcriptContent.querySelector('.segment.partial');
+    // Remove any existing partial text
+    const existingPartial = this.transcriptContent.querySelector('.partial-text');
     if (existingPartial) {
       existingPartial.remove();
     }
 
-    // Create segment element
-    const segment = document.createElement('div');
-    segment.className = `segment${msg.partial ? ' partial' : ''}`;
+    // Get or create the continuous transcript paragraph
+    let para = this.transcriptContent.querySelector('.transcript-para');
+    if (!para) {
+      para = document.createElement('p');
+      para.className = 'transcript-para';
+      this.transcriptContent.appendChild(para);
+    }
 
-    // Add timestamp
-    const time = document.createElement('div');
-    time.className = 'segment-time';
-    time.textContent = this.formatTime(msg.start);
-    segment.appendChild(time);
+    if (msg.partial) {
+      // Partial text — show in gray, will be replaced
+      const span = document.createElement('span');
+      span.className = 'partial-text';
+      span.textContent = msg.text;
+      para.appendChild(span);
+    } else {
+      // Final text — append permanently with a space separator
+      if (para.childNodes.length > 0) {
+        // Add space between segments
+        const lastNode = para.lastChild;
+        if (lastNode && !lastNode.classList?.contains('partial-text')) {
+          para.appendChild(document.createTextNode(' '));
+        }
+      }
+      const span = document.createElement('span');
+      span.className = 'final-text';
+      span.textContent = msg.text;
+      para.appendChild(span);
 
-    // Add text
-    const text = document.createElement('div');
-    text.className = 'segment-text';
-    text.textContent = msg.text;
-    segment.appendChild(text);
-
-    this.transcriptContent.appendChild(segment);
-
-    // Store non-partial segments
-    if (!msg.partial) {
+      // Store non-partial segments
       this.transcript.push(msg);
     }
 
@@ -522,7 +532,7 @@ class WindyApp {
    */
   clearTranscript() {
     this.transcript = [];
-    this.transcriptContent.innerHTML = '<div class="placeholder">Press <kbd>Ctrl+Shift+Space</kbd> to start recording</div>';
+    this.transcriptContent.innerHTML = '<div class="placeholder">Press <kbd>Ctrl+Shift+Space</kbd> or click Record to start</div>';
   }
 
   /**
