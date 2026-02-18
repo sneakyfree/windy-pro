@@ -163,8 +163,24 @@ class WindyServer:
                 # Apply pending model change if queued
                 if self._pending_model:
                     self.transcriber.config.model_size = self._pending_model
-                    self.transcriber.load_model()  # Reload with new model
+                    await websocket.send(json.dumps({
+                        "type": "state",
+                        "state": "loading",
+                        "message": f"Loading {self._pending_model} model..."
+                    }))
+                    # Run model load in thread pool to avoid blocking event loop
+                    # (large models can take 30+ seconds to load)
+                    loop = asyncio.get_event_loop()
+                    success = await loop.run_in_executor(
+                        None, self.transcriber.load_model
+                    )
                     self._pending_model = None
+                    if not success:
+                        await websocket.send(json.dumps({
+                            "type": "error",
+                            "message": "Failed to load model"
+                        }))
+                        return
                 self.transcriber.start_session()
                 self._current_session_id = self.vault.create_session()
                 await websocket.send(json.dumps({

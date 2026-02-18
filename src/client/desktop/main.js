@@ -515,9 +515,10 @@ app.on('will-quit', () => {
   }
 });
 
-// Prevent multiple instances
+// Prevent multiple instances (with stale lock cleanup)
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
+  console.log('[Main] Another instance is running. Quitting.');
   app.quit();
 } else {
   app.on('second-instance', () => {
