@@ -553,9 +553,36 @@ class WindyApp {
   /**
    * Paste transcript to cursor
    */
-  pasteTranscript() {
+  async pasteTranscript() {
     const text = this.getFullTranscript();
+    if (!text) return;
+    
     window.windyAPI.sendTranscriptForPaste(text);
+    
+    // After paste: either clear or gray-out based on setting
+    const settings = await window.windyAPI.getSettings();
+    const clearOnPaste = settings && settings.clearOnPaste;
+    
+    if (clearOnPaste) {
+      // Clear everything
+      this.clearTranscript();
+    } else {
+      // Gray-out pasted text so user knows it's been sent
+      const para = this.transcriptContent.querySelector('.transcript-para');
+      if (para) {
+        // Wrap all current content in a pasted-text container
+        const pastedDiv = document.createElement('div');
+        pastedDiv.className = 'pasted-text';
+        // Move all children from para into pastedDiv
+        while (para.firstChild) {
+          pastedDiv.appendChild(para.firstChild);
+        }
+        para.appendChild(pastedDiv);
+      }
+      // Clear the transcript array so next recording starts fresh
+      // but the grayed-out text remains visible for scrollback
+      this.transcript = [];
+    }
   }
 
   /**

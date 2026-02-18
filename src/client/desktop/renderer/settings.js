@@ -89,6 +89,15 @@ class SettingsPanel {
         </div>
         
         <div class="settings-section">
+          <h3>📋 After Paste</h3>
+          <div class="setting-row">
+            <label for="clearOnPaste">Clear text after paste</label>
+            <input type="checkbox" id="clearOnPaste">
+          </div>
+          <p class="settings-hint">When off, pasted text stays visible but grayed out so you can scroll back</p>
+        </div>
+        
+        <div class="settings-section">
           <h3>⌨️ Hotkeys</h3>
           <div class="setting-row">
             <label>Toggle Recording</label>
@@ -163,6 +172,11 @@ class SettingsPanel {
       }
     });
 
+    // Clear on paste toggle
+    this.panel.querySelector('#clearOnPaste').addEventListener('change', (e) => {
+      this.saveSetting('clearOnPaste', e.target.checked);
+    });
+
     // Mic device selector (T20)
     this.panel.querySelector('#micSelect').addEventListener('change', (e) => {
       this.saveSetting('micDeviceId', e.target.value);
@@ -216,6 +230,9 @@ class SettingsPanel {
         }
         if (settings.vibeEnabled !== undefined) {
           this.panel.querySelector('#vibeEnabled').checked = settings.vibeEnabled;
+        }
+        if (settings.clearOnPaste !== undefined) {
+          this.panel.querySelector('#clearOnPaste').checked = settings.clearOnPaste;
         }
       }
     } catch (e) {

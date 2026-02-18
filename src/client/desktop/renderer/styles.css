@@ -280,6 +280,16 @@ body {
   color: var(--text-muted);
 }
 
+/* Pasted text: grayed out so user knows it's been sent */
+.transcript-para .pasted-text {
+  opacity: 0.35;
+  color: var(--text-muted);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  display: inline;
+}
+
 /* Legacy segment styles (kept for compatibility) */
 .segment {
   margin-bottom: 8px;
