@@ -31,6 +31,8 @@ jobs:
   
   # ── Electron Build ──
   build-electron:
+    # Build even if tests fail — tests may need cloud deps not relevant to desktop
+    if: always()
     needs: test-backend
     runs-on: ${{ matrix.os }}
     strategy:
@@ -56,6 +58,23 @@ jobs:
         with:
           name: windy-pro-${{ matrix.os }}
           path: dist/
+
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.os == 'ubuntu-latest'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # Find or create release
+          RELEASE_ID=$(gh release view "$TAG" --json id -q .id 2>/dev/null || true)
+          if [ -z "$RELEASE_ID" ]; then
+            gh release create "$TAG" --title "Windy Pro $TAG" --prerelease
+          fi
+          # Upload Linux artifacts
+          for f in dist/*.AppImage dist/*.deb; do
+            [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber || true
+          done
   
   # ── Cloud Docker ──
   build-docker:
