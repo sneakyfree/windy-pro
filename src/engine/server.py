@@ -162,29 +162,42 @@ class WindyServer:
             if self.transcriber:
                 # Apply pending model change if queued
                 if self._pending_model:
-                    # Ensure any previous session is fully stopped first
+                    # Nuclear approach: fully rebuild the transcriber
+                    # to avoid any stale state from the old model
                     if self.transcriber._running:
                         self.transcriber.stop_session()
                     
-                    self.transcriber.config.model_size = self._pending_model
                     await websocket.send(json.dumps({
                         "type": "state",
                         "state": "loading",
                         "message": f"Loading {self._pending_model} model..."
                     }))
-                    # Run model load in thread pool to avoid blocking event loop
-                    # (large models can take 30+ seconds to load)
+                    
+                    # Create a fresh transcriber with the new model
+                    old_config = self.transcriber.config
+                    old_config.model_size = self._pending_model
+                    new_transcriber = StreamingTranscriber(old_config)
+                    new_transcriber.on_state_change(self._on_state_change)
+                    new_transcriber.on_transcript(self._on_transcript)
+                    
+                    # Load model in thread pool to avoid blocking event loop
                     loop = asyncio.get_event_loop()
                     success = await loop.run_in_executor(
-                        None, self.transcriber.load_model
+                        None, new_transcriber.load_model
                     )
-                    self._pending_model = None
-                    if not success:
+                    
+                    if success:
+                        self.transcriber = new_transcriber
+                    else:
                         await websocket.send(json.dumps({
                             "type": "error",
-                            "message": "Failed to load model"
+                            "message": f"Failed to load {self._pending_model} model"
                         }))
+                        self._pending_model = None
                         return
+                    
+                    self._pending_model = None
+                
                 self.transcriber.start_session()
                 self._current_session_id = self.vault.create_session()
                 await websocket.send(json.dumps({
