@@ -292,8 +292,19 @@ class StreamingTranscriber:
             
             # Emit each segment
             for segment in segments:
+                text = segment.text.strip()
+                
+                # Whisper adds a trailing period to nearly every chunk
+                # because it treats each chunk as a complete utterance.
+                # During continuous recording, this creates false periods
+                # at chunk boundaries ("Hello, my." "name is Grant.").
+                # Strip trailing period unless it's an ellipsis or the
+                # text contains clear sentence structure (? or !).
+                if text.endswith('.') and not text.endswith('...'):
+                    text = text[:-1].rstrip()
+                
                 ts = TranscriptionSegment(
-                    text=segment.text.strip(),
+                    text=text,
                     start_time=segment.start,
                     end_time=segment.end,
                     confidence=getattr(segment, 'avg_logprob', 0.0),
