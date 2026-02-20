@@ -1,9 +1,9 @@
 # 🧬 WINDY PRO — DNA STRAND MASTER PLAN
 
-**Version:** 1.1.0
+**Version:** 1.2.0
 **Created:** 2026-02-04
-**Last Updated:** 2026-02-05
-**Authors:** Kit 0 + Kit-0C1Veron + Grant Whitmer
+**Last Updated:** 2026-02-20
+**Authors:** Kit 0 + Kit-0C1Veron + Antigravity + Grant Whitmer
 **Philosophy:** Begin with the end in mind. — Stephen R. Covey
 
 ---
@@ -15,26 +15,26 @@
 │                    WHAT BLOCKS WHAT (Dependency Graph)                   │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  ✅ A1 (Transcriber) ──┬──> ✅ A3 (Server) ──> 🔴 B2.6 (Audio Stream)   │
+│  ✅ A1 (Transcriber) ──┬──> ✅ A3 (Server) ──> ✅ B2.6 (Audio Stream)    │
 │  ✅ A2 (Audio Capture) ─┘                            │                   │
 │                                                      ▼                   │
-│                                            🔲 B3 (Cursor Injection)      │
+│                                            ✅ B3 (Cursor Injection)      │
 │                                                      │                   │
 │                                                      ▼                   │
-│                                            🔲 B4 (TurboTax Installer)    │
+│                                            ✅ B4 (TurboTax Installer)    │
 │                                                      │                   │
 │                                                      ▼                   │
-│                                               🎯 MVP LAUNCH              │
+│                                               🟡 MVP HARDENING           │
 │                                                                          │
-│  Legend: ✅ Done | 🔴 Critical Blocker | 🔲 Not Started | 🎯 Goal       │
+│  ✅ A4 (Cloud API) ──> ✅ C1 (Web Client) ──> 🟡 D1 (Deploy)             │
+│                                                                          │
+│  Legend: ✅ Done | 🟡 Needs Hardening | 🔲 Not Started | 🎯 Goal        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 🔴 CRITICAL BLOCKER IDENTIFIED
+### 🟡 CURRENT STATUS: MVP HARDENING PHASE
 
-**B2.6: Electron Audio Streaming** — The Electron renderer currently does NOT capture audio and stream it to the Python server. The Python `demo.py` works standalone, but the Electron ↔ Python integration is incomplete.
-
-**This must be fixed before anything else works end-to-end.**
+**All critical blockers resolved.** B2.6 audio streaming, B3 cursor injection, B4 installer, A4 cloud API, and C1 web client are all implemented. Focus now shifts to hardening, polishing UX to 9+ quality, and production deployment.
 
 ---
 
@@ -261,35 +261,38 @@ CODONS:
     └── stop()
 ```
 
-#### A4: Cloud API Server
+#### A4: Cloud API Server ✅
 ```
-FILE: src/api/main.py
-STATUS: 🔲 NOT STARTED (Phase 2)
-PRIORITY: LOW (after MVP)
+FILE: src/cloud/api.py
+STATUS: ✅ COMPLETE (694 lines)
+TESTED: Yes (tests/test_cloud_api.py — 13 tests)
 
 CODONS:
-├── A4.1 FastAPI Application
-│   ├── /health — health check
-│   ├── /ws/transcribe — WebSocket endpoint
-│   ├── /api/auth/register — user registration
-│   ├── /api/auth/login — JWT tokens
-│   └── /api/vault — prompt history CRUD
+├── A4.1 FastAPI Application ✅
+│   ├── /health — health check ✅
+│   ├── /ws/transcribe — WebSocket streaming endpoint ✅
+│   ├── /api/v1/auth/register — user registration ✅
+│   ├── /api/v1/auth/login — JWT tokens ✅
+│   ├── /api/v1/auth/me — user profile ✅
+│   └── /api/v1/vault/* — prompt history CRUD ✅
 │
-├── A4.2 Authentication
-│   ├── JWT tokens (access + refresh)
-│   ├── API key for CLI/automated use
-│   └── Rate limiting per user
+├── A4.2 Authentication ✅
+│   ├── JWT tokens (HS256, zero-dependency) ✅
+│   ├── API key for CLI/automated use ✅
+│   ├── Rate limiting per user (slowapi) ✅
+│   └── PBKDF2 password hashing ✅
 │
-├── A4.3 Audio Handling
-│   ├── Opus decoding (from client)
-│   ├── Queue management (multiple clients)
-│   └── Concurrency limiting (3-5 per KVM4)
+├── A4.3 Audio Handling ✅
+│   ├── Raw PCM Int16 streaming (Opus decoding TODO) 🟡
+│   ├── Per-user concurrency limiting (1 session max) ✅
+│   ├── Audio buffer accumulation + batch transcribe ✅
+│   └── Frame rate limiting (80 fps max) ✅
 │
-└── A4.4 Prompt Vault
-    ├── PostgreSQL storage
-    ├── User-scoped transcripts
-    ├── Search by date/keyword
-    └── Export to TXT/MD
+└── A4.4 Prompt Vault ✅
+    ├── SQLite storage (PostgreSQL via DATABASE_URL planned) 🟡
+    ├── User-scoped transcripts ✅
+    ├── Search by keyword (LIKE query) ✅
+    └── Export to TXT/MD (desktop vault.py — cloud REST TODO) 🟡
 ```
 
 ---
@@ -334,11 +337,11 @@ CODONS:
     └── FILE: src/client/desktop/preload.js (45 lines)
 ```
 
-#### B2: Renderer UI ✅ (with critical gap)
+#### B2: Renderer UI ✅
 ```
 FILES: src/client/desktop/renderer/
-STATUS: 🟡 MOSTLY COMPLETE (Missing B2.6)
-TESTED: Manually (UI works, but no audio)
+STATUS: ✅ COMPLETE (app.js 769 lines, styles.css 16K, settings.js 450 lines, vault.js 292 lines)
+TESTED: Manually (UI works, audio streams, transcripts display)
 
 CODONS:
 ├── B2.1 index.html ✅
@@ -358,167 +361,77 @@ CODONS:
 │   ├── Strobe animation ✅
 │   │   └── @keyframes strobe { 0%,100%: 0.15; 50%: 0.4 }
 │   │
-│   └── Full UI styling ✅ (320 lines)
+│   └── Full UI styling ✅ (16K)
 │
 ├── B2.3 app.js - WindyApp class ✅
 │   ├── WebSocket connection ✅
 │   ├── State management ✅
 │   ├── Transcript display ✅
 │   ├── Button handlers ✅
-│   └── IPC event handlers ✅
+│   ├── IPC event handlers ✅
+│   └── Archive route management ✅
 │
 ├── B2.4 Component: TranscriptView ✅
 │   ├── Auto-scroll to bottom ✅
 │   ├── Partial text styling (italics) ✅
-│   └── Timestamp per segment ✅
+│   ├── Timestamp per segment ✅
+│   └── Strobe-only mode (hide live text) ✅
 │
 ├── B2.5 Component: ControlBar ✅
 │   ├── Start/Stop button ✅
 │   ├── Clear button ✅
 │   ├── Copy button ✅
-│   └── Paste button ✅
+│   └── Paste button (with clear-on-paste option) ✅
 │
-└── B2.6 Audio Capture & Streaming 🔴 CRITICAL GAP
+└── B2.6 Audio Capture & Streaming ✅
     │
-    │  ⚠️ THE ELECTRON RENDERER DOES NOT CAPTURE AUDIO!
-    │  
-    │  Current state:
-    │  - WebSocket connects to Python server ✅
-    │  - Commands (start/stop) are sent ✅
-    │  - Transcripts are received ✅
-    │  - BUT NO AUDIO IS EVER SENT! ❌
+    │  ✅ IMPLEMENTED — AudioWorklet + ScriptProcessorNode fallback
+    │  FILE: app.js startAudioCapture() + audio-processor.js
     │
-    │  What's needed:
-    ├── B2.6.1 navigator.mediaDevices.getUserMedia() 🔲
-    ├── B2.6.2 AudioContext + ScriptProcessorNode (or AudioWorklet) 🔲
-    ├── B2.6.3 Downsample to 16kHz mono 🔲
-    ├── B2.6.4 Convert to Int16 PCM bytes 🔲
-    ├── B2.6.5 Stream via WebSocket as binary 🔲
-    └── B2.6.6 Audio level meter for UI feedback 🔲
-    
-    IMPLEMENTATION PLAN:
-    ┌────────────────────────────────────────────────────────────────┐
-    │  // In app.js, add to startRecording():                        │
-    │                                                                │
-    │  async startAudioCapture() {                                   │
-    │    const stream = await navigator.mediaDevices.getUserMedia({  │
-    │      audio: {                                                  │
-    │        channelCount: 1,                                        │
-    │        sampleRate: 16000,  // Whisper expects 16kHz            │
-    │        echoCancellation: true,                                 │
-    │        noiseSuppression: true                                  │
-    │      }                                                         │
-    │    });                                                         │
-    │                                                                │
-    │    const audioContext = new AudioContext({ sampleRate: 16000 });│
-    │    const source = audioContext.createMediaStreamSource(stream); │
-    │    const processor = audioContext.createScriptProcessor(4096); │
-    │                                                                │
-    │    processor.onaudioprocess = (e) => {                         │
-    │      const float32 = e.inputBuffer.getChannelData(0);          │
-    │      const int16 = this.float32ToInt16(float32);               │
-    │      if (this.ws.readyState === WebSocket.OPEN) {              │
-    │        this.ws.send(int16.buffer);  // Binary!                 │
-    │      }                                                         │
-    │    };                                                          │
-    │                                                                │
-    │    source.connect(processor);                                  │
-    │    processor.connect(audioContext.destination);                │
-    │  }                                                             │
-    │                                                                │
-    │  float32ToInt16(float32Array) {                                │
-    │    const int16 = new Int16Array(float32Array.length);          │
-    │    for (let i = 0; i < float32Array.length; i++) {             │
-    │      int16[i] = Math.max(-32768,                               │
-    │                 Math.min(32767, float32Array[i] * 32768));     │
-    │    }                                                           │
-    │    return int16;                                               │
-    │  }                                                             │
-    └────────────────────────────────────────────────────────────────┘
+    ├── B2.6.1 navigator.mediaDevices.getUserMedia() ✅
+    │   └── With saved mic device support (T20)
+    ├── B2.6.2 AudioWorklet (primary) + ScriptProcessorNode (fallback) ✅
+    ├── B2.6.3 AudioContext at 16kHz mono ✅
+    ├── B2.6.4 Float32 → Int16 PCM conversion (float32ToInt16) ✅
+    ├── B2.6.5 Stream via WebSocket as binary ✅
+    └── B2.6.6 Audio level meter (AnalyserNode + updateAudioMeter) ✅
+
+    INVARIANT ENFORCED (FEAT-053):
+    Green strobe ONLY shows AFTER mic access is confirmed.
+    startAudioCapture() runs BEFORE setState('listening').
 ```
 
-#### B3: Cursor Injection
+#### B3: Cursor Injection ✅
 ```
-FILE: src/client/desktop/injection/ (to be created)
-STATUS: 🔲 NOT STARTED (Phase 1.3)
-PRIORITY: HIGH (required for MVP)
-BLOCKED BY: B2.6
+FILE: src/client/desktop/injection/injector.js
+STATUS: ✅ COMPLETE (190 lines)
+TESTED: Manually (Windows, macOS, Linux X11/Wayland)
+APPROACH: Zero-dependency — native OS commands (no robotjs/@nut-tree)
 
 CODONS:
-├── B3.1 Windows Implementation 🔲
-│   │
-│   │  APPROACH: Use robotjs or @nut-tree/nut-js
-│   │
-│   │  Option A: robotjs (simpler, but binary deps)
-│   │  ├── npm install robotjs
-│   │  └── robot.keyTap('v', ['control'])
-│   │
-│   │  Option B: @nut-tree/nut-js (newer, actively maintained)
-│   │  ├── npm install @nut-tree/nut-js
-│   │  └── keyboard.type(Key.LeftControl, Key.V)
-│   │
-│   │  Option C: Native node addon (most reliable)
-│   │  ├── Use node-ffi-napi to call SendInput
-│   │  └── Most complex but most reliable
-│   │
-│   ├── B3.1.1 Install dependency 🔲
-│   ├── B3.1.2 Copy text to clipboard 🔲
-│   ├── B3.1.3 Simulate Ctrl+V 🔲
-│   ├── B3.1.4 Handle focus (restore previous window) 🔲
-│   └── B3.1.5 Test with Notepad, VS Code, Chrome 🔲
+├── B3.1 Windows Implementation ✅
+│   ├── PowerShell SendKeys for Ctrl+V ✅
+│   ├── Electron clipboard API for copy ✅
+│   └── 3-second timeout on exec ✅
 │
-├── B3.2 macOS Implementation 🔲
-│   │
-│   │  APPROACH: Use robotjs or AppleScript via osascript
-│   │
-│   │  Option A: robotjs
-│   │  └── robot.keyTap('v', ['command'])
-│   │
-│   │  Option B: AppleScript (no deps)
-│   │  ├── exec('osascript -e "tell app \\"System Events\\" to keystroke \\"v\\" using command down"')
-│   │  └── Requires Accessibility permission
-│   │
-│   ├── B3.2.1 Accessibility permission request 🔲
-│   │   └── Show dialog if not granted
-│   ├── B3.2.2 Copy text to clipboard 🔲
-│   ├── B3.2.3 Simulate Cmd+V 🔲
-│   └── B3.2.4 Test with TextEdit, VS Code, Chrome 🔲
+├── B3.2 macOS Implementation ✅
+│   ├── AppleScript osascript Cmd+V ✅
+│   ├── Accessibility permission detection ✅
+│   └── User-friendly permission denied message ✅
 │
-├── B3.3 Linux Implementation 🔲
-│   │
-│   │  APPROACH: xdotool (X11) or ydotool (Wayland)
-│   │
-│   │  X11:
-│   │  └── exec('xdotool key ctrl+v')
-│   │
-│   │  Wayland:
-│   │  └── exec('ydotool key ctrl+v')
-│   │
-│   ├── B3.3.1 Detect X11 vs Wayland 🔲
-│   ├── B3.3.2 Install xdotool/ydotool if missing 🔲
-│   ├── B3.3.3 Copy text to clipboard 🔲
-│   └── B3.3.4 Simulate Ctrl+V 🔲
+├── B3.3 Linux Implementation ✅
+│   ├── XDG_SESSION_TYPE detection (X11 vs Wayland) ✅
+│   ├── X11: xdotool key --clearmodifiers ctrl+v ✅
+│   ├── Wayland: ydotool key 29:1 47:1 47:0 29:0 ✅
+│   └── Missing tool detection with install instructions ✅
 │
-└── B3.4 Injection Flow 🔲
-    │
-    │  SEQUENCE:
-    │  1. User triggers paste (hotkey Ctrl+Shift+V or button)
-    │  2. Get current transcript from WindyApp
-    │  3. Copy to system clipboard
-    │  4. Flash INJECTING state (blue)
-    │  5. Simulate Ctrl+V / Cmd+V
-    │  6. Return to previous state (IDLE or LISTENING)
-    │
-    ├── B3.4.1 Implement in main.js IPC handler 🔲
-    ├── B3.4.2 Add platform detection 🔲
-    └── B3.4.3 Add error handling (permission denied, etc.) 🔲
-
-RECOMMENDED LIBRARY: @nut-tree/nut-js
-├── Cross-platform (Win/Mac/Linux)
-├── Actively maintained (2024+)
-├── TypeScript support
-├── Works with Electron
-└── npm install @nut-tree/nut-js
+└── B3.4 Injection Flow ✅
+    ├── Save previous clipboard → copy text → paste → restore clipboard ✅
+    ├── main.js IPC handler (transcript-for-paste) ✅
+    ├── Blue INJECTING state flash ✅
+    ├── Platform detection (process.platform) ✅
+    ├── Error handling + injection-error IPC ✅
+    └── checkPermissions() for proactive UX ✅
 ```
 
 #### B4: TurboTax Installer
@@ -689,13 +602,41 @@ CODONS:
 
 ### STRAND C: WEB/MOBILE CLIENT (React PWA)
 
-#### C1: Progressive Web App
+#### C1: Progressive Web App ✅
 ```
-FILE: src/client/web/
-STATUS: 🔲 NOT STARTED (Phase 3)
-PRIORITY: LOW (post-MVP)
+FILE: src/client/web/ (React + Vite)
+STATUS: ✅ COMPLETE (8 components/pages)
+TESTED: Manually (auth flow, cloud transcription)
 
-[Unchanged from v1.0 - deferred to Phase 3]
+CODONS:
+├── C1.1 Landing Page ✅
+│   └── FILE: src/client/web/src/pages/Landing.jsx (12K)
+│
+├── C1.2 Auth (Login/Register) ✅
+│   └── FILE: src/client/web/src/pages/Auth.jsx
+│
+├── C1.3 Cloud Transcription Page ✅
+│   ├── FILE: src/client/web/src/pages/Transcribe.jsx
+│   ├── Mic capture via getUserMedia ✅
+│   ├── WebSocket streaming to /ws/transcribe ✅
+│   └── JWT auth-first-message protocol ✅
+│
+├── C1.4 Protected Routes ✅
+│   └── FILE: src/client/web/src/components/ProtectedRoute.jsx
+│
+├── C1.5 Privacy Policy ✅
+│   └── FILE: src/client/web/src/pages/Privacy.jsx
+│
+├── C1.6 Terms of Service ✅
+│   └── FILE: src/client/web/src/pages/Terms.jsx
+│
+├── C1.7 PWA Support 🟡
+│   ├── manifest.json ✅
+│   ├── Service worker (sw.js) ✅
+│   └── Offline transcription 🔲 (requires local model)
+│
+└── C1.8 404 Page ✅
+    └── NotFound component in App.jsx
 ```
 
 ---
@@ -733,28 +674,34 @@ WEEK 1 (DONE):
 ├── [x] B1: Electron Shell ✅
 └── [x] B2.1-B2.5: UI Components ✅
 
-WEEK 2 (CURRENT — Kit-0C1Veron):
-├── [ ] 🔴 B2.6: Electron Audio Streaming ← CRITICAL BLOCKER
-│       ├── Implement navigator.mediaDevices.getUserMedia()
-│       ├── AudioContext + ScriptProcessorNode
+WEEK 2 (DONE):
+├── [x] B2.6: Electron Audio Streaming ✅
+│       ├── AudioWorklet + ScriptProcessorNode fallback
 │       ├── Float32 → Int16 conversion
-│       └── WebSocket binary streaming
-│
-├── [ ] End-to-end test: Electron → Python → Transcript
-└── [ ] Fix any latency/buffer issues
+│       └── WebSocket binary streaming + audio level meter
+├── [x] End-to-end test: Electron → Python → Transcript ✅
+└── [x] Settings panel, vault panel, vibe toggle ✅
 
-WEEK 3:
-├── [ ] B3.1: Windows Cursor Injection
-├── [ ] B3.2: macOS Cursor Injection
-├── [ ] B3.3: Linux Cursor Injection
-└── [ ] B3.4: Injection flow integration
+WEEK 3 (DONE):
+├── [x] B3.1: Windows Cursor Injection ✅ (PowerShell SendKeys)
+├── [x] B3.2: macOS Cursor Injection ✅ (AppleScript)
+├── [x] B3.3: Linux Cursor Injection ✅ (xdotool/ydotool)
+├── [x] B3.4: Injection flow integration ✅
+├── [x] A4: Cloud API (FastAPI) ✅
+└── [x] C1: Web client (React/Vite PWA) ✅
 
-WEEK 4:
-├── [ ] B4.1-B4.2: Hardware Detection + Model Selection
-├── [ ] B4.3: Dependency Bundling (PyInstaller)
-├── [ ] B4.4-B4.5: Permissions + Installer UI
-├── [ ] B4.6: Packaging (NSIS, DMG, AppImage)
-└── [ ] MVP COMPLETE 🎯
+WEEK 4 (DONE):
+├── [x] B4.1-B4.2: Hardware Detection + Model Selection ✅
+├── [x] B4.3: Dependency Installer (venv + pip + model download) ✅
+├── [x] B4.4-B4.5: Permissions + Installer UI ✅
+├── [x] B4.6: Packaging config (NSIS, DMG, AppImage) ✅
+└── [x] MVP FEATURE COMPLETE 🎯
+
+CURRENT: MVP HARDENING
+├── [ ] Harden all features to quality 9+
+├── [ ] Infrastructure deployment (Docker, nginx, SSL)
+├── [ ] Comprehensive testing (expand test suite)
+└── [ ] Domain & branding
 ```
 
 ### Phase 2: Cloud Backend (Weeks 5-6)
@@ -769,70 +716,72 @@ WEEK 4:
 
 ---
 
-## 🔬 GAP ANALYSIS — 2026-02-05
+## 🔬 GAP ANALYSIS — 2026-02-20
 
-Performed by Kit-0C1Veron after full repo audit.
+Performed by Antigravity after full repo audit. Previous audit by Kit-0C1Veron (2026-02-05).
 
 ### Strand A (Engine)
 | Codon | Status | Gap | Action Required |
 |-------|--------|-----|-----------------|
-| A1.1-A1.5 | ✅ | None | — |
-| A2.1-A2.4 | ✅ | None | — |
-| A3.1-A3.3 | ✅ | None | — |
-| A4.* | 🔲 | Not started | Phase 2 |
+| A1.1-A1.5 | ✅ | Minor: error recovery, thread safety | Harden (RP-02) |
+| A2.1-A2.4 | ✅ | Minor: runtime device selection | Polish (RP-02) |
+| A3.1-A3.3 | ✅ | Minor: heartbeat, safe_send | Polish (RP-02) |
+| A4.1-A4.4 | ✅ | Opus decoding, PostgreSQL, batch transcribe | Harden (RP-03) |
 
 ### Strand B (Desktop)
 | Codon | Status | Gap | Action Required |
 |-------|--------|-----|-----------------|
-| B1.1-B1.5 | ✅ | None | — |
-| B2.1-B2.5 | ✅ | None | — |
-| **B2.6** | 🔴 | **CRITICAL: No audio streaming** | **Implement NOW** |
-| B3.1-B3.4 | 🔲 | Not started | Week 3 |
-| B4.1-B4.6 | 🔲 | Not started | Week 4 |
+| B1.1-B1.5 | ✅ | Graceful shutdown, auto-restart | Polish (RP-04) |
+| B2.1-B2.6 | ✅ | Session timer, word count, error UX | Polish (RP-04, RP-05) |
+| B3.1-B3.4 | ✅ | Retry logic, special chars, paste delay | Harden (RP-06) |
+| B4.1-B4.6 | ✅ | Progress bars, E2E testing, packaging | Complete (RP-07) |
 
 ### Strand C (Web)
 | Codon | Status | Gap | Action Required |
 |-------|--------|-----|-----------------|
-| C1.* | 🔲 | Not started | Phase 3 |
+| C1.1-C1.8 | ✅ | Audio meter, vault page, mobile UX | Upgrade (RP-08) |
 
 ### Strand D (Infrastructure)
 | Codon | Status | Gap | Action Required |
 |-------|--------|-----|-----------------|
-| D1.* | 🔲 | Not started | Phase 2 |
-| D2.* | 🔲 | Not started | Before launch |
+| D1.* | 🟡 | Config exists, not deployed/tested | Deploy (RP-09) |
+| D2.* | 🔲 | No domain, no SSL | Register + configure (RP-09) |
 
-### Priority Actions (Immediate)
-1. **B2.6: Implement Electron audio streaming** ← BLOCKS EVERYTHING
-2. **Test end-to-end flow** (Electron → Python → Transcript)
-3. **B3: Cursor injection** (can start in parallel once B2.6 works)
+### Priority Actions (Hardening Phase)
+1. **Engine hardening** — error recovery, thread safety, heartbeat
+2. **Cloud API hardening** — PostgreSQL, batch transcribe, auth refresh
+3. **Desktop UX polish** — session timer, word count, reconnect toast
+4. **Web client upgrade** — audio meter, vault page, mobile responsive
+5. **Infrastructure deployment** — Docker, nginx, SSL, domain
 
 ---
 
 ## 🚨 KNOWN ISSUES & TECHNICAL DEBT
 
-### Issue #1: Audio Not Streaming from Electron
-- **Severity:** CRITICAL
-- **Location:** src/client/desktop/renderer/app.js
-- **Problem:** `startRecording()` sends `{"action": "start"}` but never streams audio bytes
-- **Fix:** Implement B2.6 codons
+### ~~Issue #1: Audio Not Streaming from Electron~~ ✅ RESOLVED
+- **Fixed:** B2.6 fully implemented with AudioWorklet + fallback
 
-### Issue #2: Missing electron-store Dependency
-- **Severity:** LOW
+### Issue #2: Missing electron-store Dependency ✅ RESOLVED
+- **Fixed:** electron-store is in package.json dependencies
+
+### Issue #3: Tray Icon ✅ RESOLVED
+- **Fixed:** createTrayIcon() generates colored circles via raw RGBA pixels
+- **Enhancement planned:** Use PNG assets from assets/ folder (RP-04)
+
+### ~~Issue #4: canvas Dependency~~ ✅ RESOLVED
+- **Fixed:** Removed canvas dependency, using raw RGBA pixel approach
+
+### Issue #5: Cloud API uses SQLite in production 🟡 NEW
+- **Severity:** MEDIUM
+- **Location:** src/cloud/api.py
+- **Problem:** Cloud API uses SQLite, but docker-compose expects PostgreSQL
+- **Fix:** Add DATABASE_URL support for PostgreSQL (RP-09)
+
+### Issue #6: No OAuth for cloud storage integrations 🟡 NEW
+- **Severity:** MEDIUM
 - **Location:** src/client/desktop/main.js
-- **Problem:** `require('electron-store')` but not in package.json dependencies
-- **Fix:** `npm install electron-store` (already in package.json, just need npm install)
-
-### Issue #3: Tray Icon Placeholder
-- **Severity:** LOW
-- **Location:** src/client/desktop/main.js line ~100
-- **Problem:** `createTrayIcon()` returns empty native image
-- **Fix:** Add actual icon files to assets/
-
-### Issue #4: canvas Dependency Not Installed
-- **Severity:** LOW
-- **Location:** src/client/desktop/main.js line ~108
-- **Problem:** `require('canvas')` will fail — canvas not in deps
-- **Fix:** Remove canvas requirement, use pre-made icon files instead
+- **Problem:** Dropbox/Google Drive require manual token entry
+- **Fix:** Implement OAuth2 PKCE flows (RP-10)
 
 ---
 
@@ -938,6 +887,12 @@ The organism is DONE when:
 | 2026-02-05 | Kit-0C1Veron | Updated status markers (B1, B2.1-B2.5 now ✅) |
 | 2026-02-05 | Kit-0C1Veron | Added Gap Analysis section |
 | 2026-02-05 | Kit-0C1Veron | Revised Phase Timeline |
+| 2026-02-20 | Antigravity | **v1.2.0**: Full repo audit — plan was severely outdated |
+| 2026-02-20 | Antigravity | B2.6 ✅, B3 ✅, B4 ✅, A4 ✅, C1 ✅ — all implemented |
+| 2026-02-20 | Antigravity | Updated Critical Path: all blockers resolved |
+| 2026-02-20 | Antigravity | Added orphan features: Vibe, Updater, Settings, Vault panels |
+| 2026-02-20 | Antigravity | New gap analysis focused on hardening (scores 7→9+) |
+| 2026-02-20 | Antigravity | Updated Known Issues: 4 resolved, 2 new identified |
 
 ---
 

@@ -67,6 +67,17 @@ const MODEL_CATALOG = [
         cons: ['Requires GPU or very fast CPU', '6GB download', 'Slower on CPU-only'],
         best_for: 'Broadcast, legal, medical, multilingual',
         badge: '💎 Professional'
+    },
+    {
+        id: 'large-v3-turbo',
+        name: 'Large Turbo',
+        size_gb: 3.1,
+        ram_gb: 16,
+        description: '2x faster than Large with near-identical accuracy. GPU recommended.',
+        pros: ['Same quality as Large', '2x faster inference', 'Half the download size'],
+        cons: ['Still needs 16GB+ RAM or GPU', 'Slightly lower on edge cases'],
+        best_for: 'Power users who want Large quality at Base speed',
+        badge: '⚡ Best Value'
     }
 ];
 

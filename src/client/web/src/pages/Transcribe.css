@@ -91,6 +91,25 @@
     border-radius: 2px;
 }
 
+.session-timer {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--green);
+    letter-spacing: 0.5px;
+    min-width: 40px;
+}
+
+.word-count {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: auto;
+}
+
 /* Transcript area */
 .transcript-area {
     flex: 1;
@@ -208,15 +227,106 @@
 
 /* Mobile */
 @media (max-width: 768px) {
+    .transcribe-nav {
+        padding: 10px 16px;
+    }
+
+    .transcribe-back {
+        font-size: 13px;
+    }
+
+    .state-bar {
+        flex-wrap: wrap;
+        padding: 8px 16px;
+        gap: 8px;
+    }
+
+    .session-timer {
+        font-size: 11px;
+    }
+
+    .audio-meter {
+        max-width: 120px;
+    }
+
+    .word-count {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+
+    .transcript-area {
+        padding: 14px 16px;
+    }
+
+    .transcript-empty h3 {
+        font-size: 17px;
+    }
+
+    .transcript-empty p {
+        font-size: 13px;
+        max-width: 300px;
+    }
+
+    .segment {
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
     .control-bar {
         padding: 16px;
         gap: 16px;
+        padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     }
 
     .record-btn {
         width: 64px;
         height: 64px;
         font-size: 24px;
+    }
+
+    .ctrl-btn {
+        width: 48px;
+        height: 48px;
+        min-width: 48px;
+        min-height: 48px;
+    }
+
+    .btn-logout {
+        padding: 10px 16px;
+        font-size: 13px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+}
+
+/* Small phone */
+@media (max-width: 480px) {
+    .transcribe-nav {
+        padding: 8px 12px;
+    }
+
+    .state-bar {
+        padding: 6px 12px;
+    }
+
+    .transcript-area {
+        padding: 10px 12px;
+    }
+
+    .segment-time {
+        display: none;
+    }
+
+    .control-bar {
+        padding: 12px;
+        gap: 12px;
+    }
+
+    .record-btn {
+        width: 56px;
+        height: 56px;
+        font-size: 22px;
     }
 }
 

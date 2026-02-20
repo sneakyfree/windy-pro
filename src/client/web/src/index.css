@@ -171,8 +171,38 @@ a:hover {
         padding: 0 16px;
     }
 
+    .btn {
+        min-height: 44px;
+        padding: 12px 24px;
+        font-size: 14px;
+        touch-action: manipulation;
+    }
+
     .btn-large {
         padding: 14px 28px;
         font-size: 15px;
+    }
+
+    body {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+}
+
+/* Small phone */
+@media (max-width: 480px) {
+    .container {
+        padding: 0 12px;
+    }
+
+    .btn {
+        padding: 12px 20px;
+        font-size: 14px;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .btn-large {
+        padding: 14px 24px;
+        font-size: 14px;
     }
 }

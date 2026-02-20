@@ -210,8 +210,8 @@ export default function Landing() {
                         <span>Windy Pro</span>
                     </div>
                     <div className="footer-links">
-                        <a href="#">GitHub</a>
-                        <a href="#">Docs</a>
+                        <a href="https://github.com/windypro/windy-pro" target="_blank" rel="noopener noreferrer">GitHub</a>
+                        <a href="https://github.com/windypro/windy-pro#readme" target="_blank" rel="noopener noreferrer">Docs</a>
                         <Link to="/privacy">Privacy</Link>
                         <Link to="/terms">Terms</Link>
                     </div>

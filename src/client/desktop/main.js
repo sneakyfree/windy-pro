@@ -9,7 +9,7 @@
  * DNA Strand: B1.1
  */
 
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog } = require('electron');
 
 // Fix: bake in --no-sandbox for Linux AppImage (chrome-sandbox SUID issue)
 if (process.platform === 'linux') {
@@ -47,6 +47,23 @@ const store = new Store({
     appearance: {
       alwaysOnTop: true,
       opacity: 1.0
+    },
+    engine: {
+      clearOnPaste: false,
+      livePreview: true,
+      autoArchive: true,
+      archiveLocalEnabled: true,
+      archiveMode: 'both',
+      archiveRouteToday: 'local',
+      archiveFolder: path.join(os.homedir(), 'Documents', 'WindyProArchive'),
+      dropboxEnabled: false,
+      dropboxAccessToken: '',
+      dropboxFolder: '/WindyProArchive',
+      dropboxLastTestAt: '',
+      googleEnabled: false,
+      googleAccessToken: '',
+      googleFolderId: '',
+      googleLastTestAt: ''
     }
   }
 });
@@ -55,6 +72,142 @@ let mainWindow = null;
 let tray = null;
 let isRecording = false;
 let pythonProcess = null;
+let pythonRestartCount = 0;
+const MAX_PYTHON_RESTARTS = 3;
+
+async function uploadFileToDropbox(localPath, remotePath, accessToken) {
+  const https = require('https');
+  const content = fs.readFileSync(localPath);
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'content.dropboxapi.com',
+      path: '/2/files/upload',
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Dropbox-API-Arg': JSON.stringify({
+          path: remotePath,
+          mode: 'overwrite',
+          autorename: false,
+          mute: true,
+          strict_conflict: false
+        }),
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': content.length
+      }
+    }, (res) => {
+      let body = '';
+      res.on('data', (d) => { body += d.toString(); });
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve({ ok: true, status: res.statusCode, body });
+        } else {
+          reject(new Error(`Dropbox upload failed ${res.statusCode}: ${body}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(content);
+    req.end();
+  });
+}
+
+async function uploadFileToGoogleDrive(localPath, filename, accessToken, folderId = '') {
+  const https = require('https');
+  const content = fs.readFileSync(localPath);
+  const boundary = 'windypro_' + Date.now();
+  const metadata = {
+    name: filename,
+    ...(folderId ? { parents: [folderId] } : {})
+  };
+  const preamble = Buffer.from(
+    `--${boundary}\r\n` +
+    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+    `${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Type: text/markdown\r\n\r\n`
+  );
+  const ending = Buffer.from(`\r\n--${boundary}--\r\n`);
+  const body = Buffer.concat([preamble, content, ending]);
+
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'www.googleapis.com',
+      path: '/upload/drive/v3/files?uploadType=multipart',
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+        'Content-Length': body.length
+      }
+    }, (res) => {
+      let resp = '';
+      res.on('data', (d) => { resp += d.toString(); });
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve({ ok: true, status: res.statusCode, body: resp });
+        } else {
+          reject(new Error(`Google upload failed ${res.statusCode}: ${resp}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+function getArchiveFolder() {
+  return store.get('engine.archiveFolder') || path.join(os.homedir(), 'Documents', 'WindyProArchive');
+}
+
+function ensureDir(dir) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+function appendArchiveEntry({ text, startedAt, endedAt }) {
+  const engine = store.get('engine', {});
+  if (!engine.autoArchive || !engine.archiveLocalEnabled || !text || !text.trim()) return { archived: false };
+
+  const archiveRoot = getArchiveFolder();
+  ensureDir(archiveRoot);
+
+  const start = startedAt ? new Date(startedAt) : new Date();
+  const end = endedAt ? new Date(endedAt) : new Date();
+  const yyyy = String(start.getFullYear());
+  const mm = String(start.getMonth() + 1).padStart(2, '0');
+  const dd = String(start.getDate()).padStart(2, '0');
+  const HH = String(start.getHours()).padStart(2, '0');
+  const MM = String(start.getMinutes()).padStart(2, '0');
+  const SS = String(start.getSeconds()).padStart(2, '0');
+  const dateKey = `${yyyy}-${mm}-${dd}`;
+  const timeKey = `${HH}${MM}${SS}`;
+
+  const dayDir = path.join(archiveRoot, dateKey);
+  ensureDir(dayDir);
+
+  const safeText = text.trim();
+  const mode = engine.archiveMode || 'both';
+  const meta = `Start: ${start.toISOString()}\nEnd: ${end.toISOString()}\nWords: ${safeText.split(/\s+/).filter(Boolean).length}`;
+
+  const wrote = [];
+
+  if (mode === 'chunk' || mode === 'both') {
+    const chunkPath = path.join(dayDir, `${timeKey}.md`);
+    const chunk = `# Windy Pro Dictation\n\n${meta}\n\n---\n\n${safeText}\n`;
+    fs.writeFileSync(chunkPath, chunk, 'utf-8');
+    wrote.push(chunkPath);
+  }
+
+  if (mode === 'daily' || mode === 'both') {
+    const dailyPath = path.join(dayDir, `${dateKey}.md`);
+    const block = `\n## ${HH}:${MM}:${SS}\n\n${meta.replace(/\n/g, ' | ')}\n\n${safeText}\n`;
+    fs.appendFileSync(dailyPath, block, 'utf-8');
+    wrote.push(dailyPath);
+  }
+
+  return { archived: true, files: wrote };
+}
 
 /**
  * Start the Python WebSocket server as a child process
@@ -75,6 +228,11 @@ function startPythonServer() {
   console.log(`[Python] Starting server with: ${pythonPath}`);
   console.log(`[Python] cwd: ${projectRoot}, module: ${serverModule}`);
 
+  // Notify renderer that Python is loading
+  if (mainWindow) {
+    mainWindow.webContents.send('python-loading', true);
+  }
+
   pythonProcess = spawn(pythonPath, [
     '-m', serverModule,
     '--host', serverConfig.host,
@@ -86,7 +244,12 @@ function startPythonServer() {
   });
 
   pythonProcess.stdout.on('data', (data) => {
-    console.log(`[Python] ${data.toString().trim()}`);
+    const msg = data.toString().trim();
+    console.log(`[Python] ${msg}`);
+    // Detect server ready
+    if (msg.includes('Waiting for connections') || msg.includes('Server running')) {
+      if (mainWindow) mainWindow.webContents.send('python-loading', false);
+    }
   });
 
   pythonProcess.stderr.on('data', (data) => {
@@ -96,12 +259,26 @@ function startPythonServer() {
   pythonProcess.on('close', (code) => {
     console.log(`[Python] Server exited with code ${code}`);
     pythonProcess = null;
+
+    // Auto-restart on unexpected exit (code != 0 and not quitting)
+    if (code !== 0 && !app.isQuitting && pythonRestartCount < MAX_PYTHON_RESTARTS) {
+      pythonRestartCount++;
+      console.log(`[Python] Auto-restarting (attempt ${pythonRestartCount}/${MAX_PYTHON_RESTARTS})...`);
+      setTimeout(() => startPythonServer(), 1000);
+    } else if (code !== 0 && pythonRestartCount >= MAX_PYTHON_RESTARTS) {
+      console.error('[Python] Max restarts reached. Server will not restart.');
+      if (mainWindow) {
+        mainWindow.webContents.send('state-change', 'error');
+        mainWindow.webContents.send('python-loading', false);
+      }
+    }
   });
 
   pythonProcess.on('error', (err) => {
     console.error(`[Python] Failed to start: ${err.message}`);
     if (mainWindow) {
       mainWindow.webContents.send('state-change', 'error');
+      mainWindow.webContents.send('python-loading', false);
     }
   });
 }
@@ -424,6 +601,119 @@ ipcMain.handle('get-settings', () => {
   };
 });
 
+ipcMain.handle('choose-archive-folder', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory', 'createDirectory'],
+    defaultPath: getArchiveFolder()
+  });
+  if (result.canceled || !result.filePaths?.length) return { canceled: true };
+  const selected = result.filePaths[0];
+  store.set('engine.archiveFolder', selected);
+  return { canceled: false, path: selected };
+});
+
+ipcMain.handle('test-dropbox-connection', async () => {
+  try {
+    const engine = store.get('engine', {});
+    if (!engine.dropboxAccessToken) return { ok: false, error: 'Missing Dropbox token' };
+    const tmp = path.join(os.tmpdir(), `windy_dropbox_test_${Date.now()}.txt`);
+    fs.writeFileSync(tmp, 'Windy Pro Dropbox connection test', 'utf-8');
+    const base = (engine.dropboxFolder || '/WindyProArchive').replace(/\/$/, '');
+    await uploadFileToDropbox(tmp, `${base}/_connection_test.txt`, engine.dropboxAccessToken);
+    try { fs.unlinkSync(tmp); } catch (_) { }
+    const ts = new Date().toISOString();
+    store.set('engine.dropboxLastTestAt', ts);
+    return { ok: true, testedAt: ts };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.handle('test-google-connection', async () => {
+  try {
+    const engine = store.get('engine', {});
+    if (!engine.googleAccessToken) return { ok: false, error: 'Missing Google token' };
+    const tmp = path.join(os.tmpdir(), `windy_google_test_${Date.now()}.md`);
+    fs.writeFileSync(tmp, '# Windy Pro Google Drive connection test\n', 'utf-8');
+    await uploadFileToGoogleDrive(
+      tmp,
+      '_connection_test.md',
+      engine.googleAccessToken,
+      engine.googleFolderId || ''
+    );
+    try { fs.unlinkSync(tmp); } catch (_) { }
+    const ts = new Date().toISOString();
+    store.set('engine.googleLastTestAt', ts);
+    return { ok: true, testedAt: ts };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.on('archive-transcript', async (event, payload) => {
+  try {
+    const route = payload?.route || store.get('engine.archiveRouteToday') || 'local';
+    const res = appendArchiveEntry(payload || {});
+    if (!res.archived) {
+      event.reply('archive-result', { ok: false, reason: 'skipped' });
+      return;
+    }
+
+    const cloud = {
+      dropbox: { attempted: false, ok: false, error: null },
+      google: { attempted: false, ok: false, error: null }
+    };
+    const engine = store.get('engine', {});
+
+    if (route === 'local_dropbox') {
+      cloud.dropbox.attempted = true;
+      if (!engine.dropboxEnabled || !engine.dropboxAccessToken) {
+        cloud.dropbox.error = 'Dropbox not configured';
+      } else {
+        try {
+          const base = (engine.dropboxFolder || '/WindyProArchive').replace(/\/$/, '');
+          for (const f of res.files) {
+            const rel = path.relative(getArchiveFolder(), f).replace(/\\/g, '/');
+            const remotePath = `${base}/${rel}`;
+            await uploadFileToDropbox(f, remotePath, engine.dropboxAccessToken);
+          }
+          cloud.dropbox.ok = true;
+        } catch (e) {
+          cloud.dropbox.error = e.message;
+        }
+      }
+    }
+
+    if (route === 'local_google') {
+      cloud.google.attempted = true;
+      if (!engine.googleEnabled || !engine.googleAccessToken) {
+        cloud.google.error = 'Google Drive not configured';
+      } else {
+        try {
+          for (const f of res.files) {
+            const rel = path.relative(getArchiveFolder(), f).replace(/\\/g, '_');
+            await uploadFileToGoogleDrive(
+              f,
+              `WindyPro_${rel}`,
+              engine.googleAccessToken,
+              engine.googleFolderId || ''
+            );
+          }
+          cloud.google.ok = true;
+        } catch (e) {
+          cloud.google.error = e.message;
+        }
+      }
+    }
+
+    console.log('[Archive] Saved:', res.files.join(', '));
+    event.reply('archive-result', { ok: true, ...res, route, cloud });
+  } catch (err) {
+    console.error('[Archive] Failed:', err.message);
+    event.reply('archive-result', { ok: false, error: err.message });
+  }
+});
+
 // Get server config for WebSocket connection
 ipcMain.handle('get-server-config', () => {
   return store.get('server');
@@ -505,9 +795,21 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
-  // Kill Python server
+  // Graceful Python server shutdown: SIGTERM → 3s → SIGKILL
   if (pythonProcess) {
-    pythonProcess.kill();
+    try {
+      if (process.platform === 'win32') {
+        // Windows: taskkill for clean shutdown
+        spawn('taskkill', ['/pid', String(pythonProcess.pid), '/f', '/t']);
+      } else {
+        pythonProcess.kill('SIGTERM');
+        // Force kill after 3 seconds if still running
+        const pid = pythonProcess.pid;
+        setTimeout(() => {
+          try { process.kill(pid, 'SIGKILL'); } catch (_) { /* already dead */ }
+        }, 3000);
+      }
+    } catch (_) { /* ignore */ }
     pythonProcess = null;
   }
   // Unregister all hotkeys (only safe after app is ready)

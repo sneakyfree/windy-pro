@@ -8,7 +8,7 @@
 
 .legal-nav {
     padding: 20px 40px;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .legal-back {
@@ -18,6 +18,7 @@
     font-weight: 500;
     transition: opacity 0.2s;
 }
+
 .legal-back:hover {
     opacity: 0.8;
 }
@@ -69,10 +70,64 @@
     color: #00ff88;
     text-decoration: none;
 }
+
 .legal-content a:hover {
     text-decoration: underline;
 }
 
 .legal-content strong {
     color: #e0e0e0;
+}
+
+/* Tablet */
+@media (max-width: 768px) {
+    .legal-nav {
+        padding: 16px 20px;
+    }
+
+    .legal-content {
+        padding: 40px 20px 80px;
+    }
+
+    .legal-content h1 {
+        font-size: 26px;
+    }
+
+    .legal-content h2 {
+        font-size: 18px;
+        margin-top: 28px;
+    }
+}
+
+/* Small phone */
+@media (max-width: 480px) {
+    .legal-nav {
+        padding: 14px 16px;
+    }
+
+    .legal-back {
+        font-size: 13px;
+    }
+
+    .legal-content {
+        padding: 28px 16px 60px;
+    }
+
+    .legal-content h1 {
+        font-size: 22px;
+    }
+
+    .legal-content h2 {
+        font-size: 16px;
+        margin-top: 24px;
+    }
+
+    .legal-content p,
+    .legal-content li {
+        font-size: 14px;
+    }
+
+    .legal-content ul {
+        padding-left: 18px;
+    }
 }

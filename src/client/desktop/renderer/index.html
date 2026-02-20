@@ -29,7 +29,11 @@
     <div class="state-indicator" id="stateIndicator">
       <div class="state-glow" id="stateGlow"></div>
       <div class="state-label" id="stateLabel">Ready</div>
+      <span class="session-timer" id="sessionTimer"></span>
     </div>
+
+    <!-- Reconnect Toast -->
+    <div class="reconnect-toast" id="reconnectToast" style="display:none;"></div>
 
     <!-- Audio Level Meter -->
     <div class="audio-meter-container" id="audioMeterContainer" style="display: none;">
@@ -61,12 +65,20 @@
       <button class="control-btn" id="pasteBtn" title="Paste to Cursor">
         <span class="icon">📝</span>
       </button>
+      <select class="archive-route" id="archiveRouteSelect" title="Today route: where dictations archive today">
+        <option value="local">Route: Local</option>
+        <option value="local_dropbox">Route: Local + Dropbox</option>
+        <option value="local_google">Route: Local + Google</option>
+        <option value="off">Route: Off today</option>
+      </select>
     </div>
 
     <!-- Connection Status -->
     <div class="status-bar" id="statusBar">
       <span class="status-dot" id="connectionDot"></span>
       <span class="status-text" id="connectionText">Connecting...</span>
+      <span class="word-count" id="wordCount"></span>
+      <span class="archive-badge" id="archiveStatus">Archive: idle</span>
     </div>
   </div>
 

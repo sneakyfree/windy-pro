@@ -90,6 +90,9 @@ class StreamingTranscriber:
         self._audio_queue = queue.Queue()
         self._running = False
         self._worker_thread = None
+        self._buffer_lock = threading.Lock()  # Thread-safe audio buffer access
+        self._consecutive_errors = 0
+        self._max_consecutive_errors = 5
         
         # Crash recovery: temp file for continuous writes
         if self.config.temp_file_path:
@@ -99,6 +102,16 @@ class StreamingTranscriber:
         
         # Accumulated transcript for the session
         self._full_transcript = []
+    
+    @property
+    def model_loaded(self) -> bool:
+        """Whether a Whisper model is currently loaded."""
+        return self.model is not None
+    
+    @property
+    def session_word_count(self) -> int:
+        """Count of words in the current session transcript."""
+        return sum(len(seg.text.split()) for seg in self._full_transcript)
         
     def _set_state(self, new_state: TranscriptionState):
         """Update state and notify callbacks."""
@@ -234,9 +247,10 @@ class StreamingTranscriber:
         return " ".join(seg.text for seg in self._full_transcript)
     
     def feed_audio(self, audio_chunk: bytes):
-        """Feed audio data to the transcriber."""
-        if self._running:
-            self._audio_queue.put(audio_chunk)
+        """Feed audio data to the transcriber (thread-safe)."""
+        if self._running and audio_chunk:
+            with self._buffer_lock:
+                self._audio_queue.put(audio_chunk)
     
     def _process_audio_loop(self):
         """Background thread for processing audio chunks."""
@@ -244,9 +258,10 @@ class StreamingTranscriber:
         
         while self._running:
             try:
-                # Get audio from queue with timeout
+                # Get audio from queue with timeout (thread-safe)
                 try:
-                    chunk = self._audio_queue.get(timeout=0.1)
+                    with self._buffer_lock:
+                        chunk = self._audio_queue.get(timeout=0.1)
                     audio_buffer += chunk
                 except queue.Empty:
                     continue
@@ -259,26 +274,53 @@ class StreamingTranscriber:
                     if not self._running:
                         break  # Stop requested — don't process more
                     self._set_state(TranscriptionState.BUFFERING)
+                    
+                    # Process with timeout safeguard (10s max per chunk)
+                    process_start = time.monotonic()
                     self._process_chunk(audio_buffer)
+                    process_duration = time.monotonic() - process_start
+                    if process_duration > 10.0:
+                        print(f"Warning: chunk processing took {process_duration:.1f}s (threshold: 10s)", file=sys.stderr)
+                    
                     audio_buffer = b""
+                    self._consecutive_errors = 0  # Reset on success
                     if not self._running:
                         break  # Stop requested during processing
                     self._set_state(TranscriptionState.LISTENING)
                     
             except Exception as e:
+                self._consecutive_errors += 1
+                print(f"Processing error ({self._consecutive_errors}/{self._max_consecutive_errors}): {e}", file=sys.stderr)
+                
+                if self._consecutive_errors >= self._max_consecutive_errors:
+                    self._set_state(TranscriptionState.ERROR)
+                    print("Too many consecutive errors — stopping session", file=sys.stderr)
+                    self._running = False
+                    break
+                
+                # Auto-recover: brief ERROR flash then back to LISTENING
                 self._set_state(TranscriptionState.ERROR)
-                print(f"Processing error: {e}", file=sys.stderr)
                 time.sleep(0.5)
-                self._set_state(TranscriptionState.LISTENING)
+                if self._running:
+                    self._set_state(TranscriptionState.LISTENING)
+                audio_buffer = b""  # Discard corrupted buffer
     
     def _process_chunk(self, audio_data: bytes):
-        """Process a chunk of audio and emit segments."""
+        """Process a chunk of audio and emit segments.
+        
+        Error handling: catches RuntimeError and ValueError from model.transcribe(),
+        logs the error, and returns gracefully so the processing loop can continue.
+        """
         if not self.model or not NUMPY_AVAILABLE:
             return
         
         try:
             # Convert bytes to numpy array (assuming 16-bit PCM, 16kHz mono)
             audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+            
+            # Skip near-silent chunks (avoid hallucinations on silence)
+            if audio_np.size > 0 and np.max(np.abs(audio_np)) < 0.001:
+                return
             
             # Transcribe with word-level timestamps
             segments, info = self.model.transcribe(
@@ -317,6 +359,10 @@ class StreamingTranscriber:
                 if ts.text:
                     self._emit_segment(ts)
                     
+        except (RuntimeError, ValueError) as e:
+            # Model-level errors (e.g., CUDA OOM, invalid input shape)
+            # Log and return so the loop can auto-recover
+            print(f"Transcription model error (recoverable): {e}", file=sys.stderr)
         except Exception as e:
             print(f"Transcription error: {e}", file=sys.stderr)
     

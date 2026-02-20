@@ -18,6 +18,10 @@ class WindyApp {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 10;
     this.reconnectDelay = 1000;
+    this.livePreview = true;
+    this.recordingStartedAt = null;
+    this._sessionTimerInterval = null;
+    this._sessionStartTime = null;
 
     // Audio capture state (B2.6)
     this.mediaStream = null;
@@ -35,8 +39,10 @@ class WindyApp {
     this.clearBtn = document.getElementById('clearBtn');
     this.copyBtn = document.getElementById('copyBtn');
     this.pasteBtn = document.getElementById('pasteBtn');
+    this.archiveRouteSelect = document.getElementById('archiveRouteSelect');
     this.connectionDot = document.getElementById('connectionDot');
     this.connectionText = document.getElementById('connectionText');
+    this.archiveStatus = document.getElementById('archiveStatus');
     this.closeBtn = document.getElementById('closeBtn');
     this.minimizeBtn = document.getElementById('minimizeBtn');
     this.settingsBtn = document.getElementById('settingsBtn');
@@ -53,6 +59,23 @@ class WindyApp {
     this.bindEvents();
     this.bindIPCEvents();
     await this.connect();
+
+    // Load UI behavior settings
+    if (window.windyAPI?.getSettings) {
+      const settings = await window.windyAPI.getSettings();
+      this.livePreview = settings?.livePreview !== false;
+      const route = settings?.archiveRouteToday || 'local';
+      if (this.archiveRouteSelect) this.archiveRouteSelect.value = route;
+      if (route === 'off') {
+        this.setArchiveStatus('Archive off (today)', 'warn');
+      } else if (route === 'local_dropbox') {
+        this.setArchiveStatus('Route: Local + Dropbox', 'ok');
+      } else if (route === 'local_google') {
+        this.setArchiveStatus('Route: Local + Google', 'ok');
+      } else {
+        this.setArchiveStatus('Archive route: Local', 'ok');
+      }
+    }
 
     // Check for crash recovery via Electron IPC
     if (window.windyAPI?.checkCrashRecovery) {
@@ -78,6 +101,23 @@ class WindyApp {
 
     // Paste button
     this.pasteBtn.addEventListener('click', () => this.pasteTranscript());
+
+    // Today archive route
+    this.archiveRouteSelect?.addEventListener('change', () => {
+      const route = this.archiveRouteSelect.value;
+      if (window.windyAPI?.updateSettings) {
+        window.windyAPI.updateSettings({ archiveRouteToday: route });
+      }
+      if (route === 'off') {
+        this.setArchiveStatus('Archive off (today)', 'warn');
+      } else if (route === 'local_dropbox') {
+        this.setArchiveStatus('Route: Local + Dropbox', 'ok');
+      } else if (route === 'local_google') {
+        this.setArchiveStatus('Route: Local + Google', 'ok');
+      } else {
+        this.setArchiveStatus('Archive route: Local', 'ok');
+      }
+    });
 
     // Window controls
     this.closeBtn.addEventListener('click', () => window.close());
@@ -105,15 +145,43 @@ class WindyApp {
       }
     });
 
-    // Request transcript for paste
+    // Request transcript for paste (global hotkey path)
+    // Reuse pasteTranscript() so behavior matches clicking the Paste button:
+    // - sends current transcript
+    // - then clear/gray-out based on setting
     window.windyAPI.onRequestTranscript(() => {
-      const text = this.getFullTranscript();
-      window.windyAPI.sendTranscriptForPaste(text);
+      this.pasteTranscript();
     });
 
     // State change from main process
     window.windyAPI.onStateChange((state) => {
       this.setState(state);
+    });
+
+    // Archive result badge updates
+    window.windyAPI.onArchiveResult?.((res) => {
+      const route = this.archiveRouteSelect?.value || 'local';
+      if (res?.ok) {
+        if (route === 'local_dropbox') {
+          if (res?.cloud?.dropbox?.ok) {
+            this.setArchiveStatus('Archived local ✓ · Dropbox ✓', 'ok');
+          } else {
+            this.setArchiveStatus('Archived local ✓ · Dropbox failed', 'warn');
+          }
+        } else if (route === 'local_google') {
+          if (res?.cloud?.google?.ok) {
+            this.setArchiveStatus('Archived local ✓ · Google ✓', 'ok');
+          } else {
+            this.setArchiveStatus('Archived local ✓ · Google failed', 'warn');
+          }
+        } else {
+          this.setArchiveStatus('Archived local ✓', 'ok');
+        }
+      } else if (res?.reason === 'skipped') {
+        this.setArchiveStatus('Archive skipped', 'warn');
+      } else {
+        this.setArchiveStatus('Archive failed', 'error');
+      }
     });
   }
 
@@ -165,7 +233,33 @@ class WindyApp {
       this.reconnectAttempts++;
       const delay = this.reconnectDelay * Math.min(this.reconnectAttempts, 5);
       console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+      this.showReconnectToast(`Reconnecting (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
       setTimeout(() => this.connect(), delay);
+    } else {
+      this.showReconnectToast('Connection lost. Please restart.', true);
+    }
+  }
+
+  showReconnectToast(message, persistent = false) {
+    const toast = document.getElementById('reconnectToast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.style.display = 'block';
+    toast.classList.add('visible');
+    if (!persistent) {
+      clearTimeout(this._reconnectToastTimer);
+      this._reconnectToastTimer = setTimeout(() => {
+        toast.classList.remove('visible');
+        setTimeout(() => { toast.style.display = 'none'; }, 300);
+      }, 5000);
+    }
+  }
+
+  hideReconnectToast() {
+    const toast = document.getElementById('reconnectToast');
+    if (toast) {
+      toast.classList.remove('visible');
+      setTimeout(() => { toast.style.display = 'none'; }, 300);
     }
   }
 
@@ -184,6 +278,22 @@ class WindyApp {
 
       case 'ack':
         console.log('Ack:', msg.action, msg.success);
+        if (msg.action === 'stop' && msg.success && msg.transcript && window.windyAPI?.archiveTranscript) {
+          const route = this.archiveRouteSelect?.value || 'local';
+          if (route === 'off') {
+            this.setArchiveStatus('Archive off (today)', 'warn');
+            this.recordingStartedAt = null;
+            break;
+          }
+          const endedAt = new Date().toISOString();
+          window.windyAPI.archiveTranscript({
+            text: msg.transcript,
+            startedAt: this.recordingStartedAt,
+            endedAt,
+            route
+          });
+          this.recordingStartedAt = null;
+        }
         break;
 
       case 'error':
@@ -232,6 +342,18 @@ class WindyApp {
     };
     this.stateLabel.textContent = labels[state] || state;
 
+    // Session timer management
+    if (state === 'listening') {
+      this.startSessionTimer();
+    } else if (state === 'idle' || state === 'error') {
+      this.stopSessionTimer();
+    }
+
+    // In strobe-only mode, reveal accumulated text when recording cycle finishes
+    if (!this.livePreview && state === 'idle') {
+      this.renderStoredTranscript();
+    }
+
     // Update record button
     if (state === 'listening') {
       this.recordBtn.classList.add('recording');
@@ -240,6 +362,38 @@ class WindyApp {
       this.recordBtn.classList.remove('recording');
       this.recordBtn.querySelector('.label').textContent = 'Record';
     }
+  }
+
+  startSessionTimer() {
+    this._sessionStartTime = Date.now();
+    const timerEl = document.getElementById('sessionTimer');
+    if (!timerEl) return;
+    timerEl.textContent = '00:00';
+    timerEl.style.display = 'inline';
+    if (this._sessionTimerInterval) clearInterval(this._sessionTimerInterval);
+    this._sessionTimerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - this._sessionStartTime) / 1000);
+      const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const ss = String(elapsed % 60).padStart(2, '0');
+      timerEl.textContent = `${mm}:${ss}`;
+    }, 1000);
+  }
+
+  stopSessionTimer() {
+    if (this._sessionTimerInterval) {
+      clearInterval(this._sessionTimerInterval);
+      this._sessionTimerInterval = null;
+    }
+    const timerEl = document.getElementById('sessionTimer');
+    if (timerEl) timerEl.style.display = 'none';
+  }
+
+  updateWordCount() {
+    const wordCountEl = document.getElementById('wordCount');
+    if (!wordCountEl) return;
+    const text = this.transcript.map(t => t.text).join(' ');
+    const count = text.trim() ? text.trim().split(/\s+/).length : 0;
+    wordCountEl.textContent = count > 0 ? `${count} word${count !== 1 ? 's' : ''}` : '';
   }
 
   /**
@@ -265,6 +419,13 @@ class WindyApp {
         this.connectionText.textContent = 'Connection Error';
         break;
     }
+  }
+
+  setArchiveStatus(text, level = 'ok') {
+    if (!this.archiveStatus) return;
+    this.archiveStatus.textContent = text;
+    this.archiveStatus.classList.remove('ok', 'warn', 'error');
+    this.archiveStatus.classList.add(level);
   }
 
   /**
@@ -294,10 +455,12 @@ class WindyApp {
     try {
       // Start audio capture FIRST — only show green strobe if mic works
       await this.startAudioCapture();
+      this.recordingStartedAt = new Date().toISOString();
       this.send('start');
       this.setState('listening');
     } catch (error) {
       console.error('Failed to start audio capture:', error);
+      this.recordingStartedAt = null;
       this.isRecording = false;
       this.setState('error');
       // Briefly show error then return to idle
@@ -465,10 +628,55 @@ class WindyApp {
   }
 
   /**
+   * Rebuild transcript paragraph from stored final segments.
+   */
+  renderStoredTranscript() {
+    const placeholder = this.transcriptContent.querySelector('.placeholder');
+    if (placeholder) placeholder.remove();
+
+    // Remove transient partial text
+    const existingPartial = this.transcriptContent.querySelector('.partial-text');
+    if (existingPartial) existingPartial.remove();
+
+    let para = this.transcriptContent.querySelector('.transcript-para');
+    if (!para) {
+      para = document.createElement('p');
+      para.className = 'transcript-para';
+      this.transcriptContent.appendChild(para);
+    }
+
+    // Keep any already-pasted archive blocks; rebuild only final live text spans
+    const pastedBlocks = Array.from(para.querySelectorAll('.pasted-text'));
+    para.innerHTML = '';
+    pastedBlocks.forEach(block => para.appendChild(block));
+
+    this.transcript.forEach((segment, idx) => {
+      if (para.childNodes.length > 0) para.appendChild(document.createTextNode(' '));
+      const span = document.createElement('span');
+      span.className = 'final-text';
+      span.textContent = segment.text;
+      para.appendChild(span);
+    });
+
+    this.transcriptScroll.scrollTop = this.transcriptScroll.scrollHeight;
+  }
+
+  /**
    * Add transcript segment to display
    * Appends text inline as one continuous block (not separate lines)
    */
   addTranscriptSegment(msg) {
+    // Always retain final segments for copy/paste reliability
+    if (!msg.partial) {
+      this.transcript.push(msg);
+    }
+
+    // In strobe-only mode, suppress live rendering while recording/buffering
+    if (!this.livePreview && (this.currentState === 'listening' || this.currentState === 'buffering')) {
+      if (!msg.partial) this.updateWordCount();
+      return;
+    }
+
     // Remove any existing partial text
     const existingPartial = this.transcriptContent.querySelector('.partial-text');
     if (existingPartial) {
@@ -492,7 +700,6 @@ class WindyApp {
     } else {
       // Final text — append permanently with a space separator
       if (para.childNodes.length > 0) {
-        // Add space between segments
         const lastNode = para.lastChild;
         if (lastNode && !lastNode.classList?.contains('partial-text')) {
           para.appendChild(document.createTextNode(' '));
@@ -502,9 +709,7 @@ class WindyApp {
       span.className = 'final-text';
       span.textContent = msg.text;
       para.appendChild(span);
-
-      // Store non-partial segments
-      this.transcript.push(msg);
+      this.updateWordCount();
     }
 
     // Auto-scroll to bottom
@@ -533,6 +738,7 @@ class WindyApp {
   clearTranscript() {
     this.transcript = [];
     this.transcriptContent.innerHTML = '<div class="placeholder">Press <kbd>Ctrl+Shift+Space</kbd> or click Record to start</div>';
+    this.updateWordCount();
   }
 
   /**
@@ -556,13 +762,13 @@ class WindyApp {
   async pasteTranscript() {
     const text = this.getFullTranscript();
     if (!text) return;
-    
+
     window.windyAPI.sendTranscriptForPaste(text);
-    
+
     // After paste: either clear or gray-out based on setting
     const settings = await window.windyAPI.getSettings();
     const clearOnPaste = settings && settings.clearOnPaste;
-    
+
     if (clearOnPaste) {
       // Clear everything
       this.clearTranscript();

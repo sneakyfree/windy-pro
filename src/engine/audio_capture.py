@@ -46,6 +46,44 @@ class AudioCapture:
         self._running = False
         self._audio_callback: Optional[Callable] = None
         self._level_callback: Optional[Callable] = None
+    
+    def select_device(self, device_index: Optional[int]):
+        """Change the audio device at runtime.
+        
+        If currently recording, stops and restarts with the new device.
+        
+        Args:
+            device_index: Audio device index, or None for system default
+        """
+        was_running = self._running
+        if was_running:
+            self.stop()
+        self.device = device_index
+        if was_running:
+            self.start()
+    
+    def get_current_device(self) -> dict:
+        """Get info about the currently selected audio device.
+        
+        Returns:
+            Dict with 'index', 'name', 'channels', 'sample_rate', or
+            a fallback dict if device info can't be queried.
+        """
+        if not SOUNDDEVICE_AVAILABLE:
+            return {'index': None, 'name': 'unavailable', 'channels': 0, 'sample_rate': 0}
+        try:
+            if self.device is not None:
+                dev = sd.query_devices(self.device)
+            else:
+                dev = sd.query_devices(kind='input')
+            return {
+                'index': self.device,
+                'name': dev.get('name', 'Unknown') if isinstance(dev, dict) else str(dev),
+                'channels': dev.get('max_input_channels', 0) if isinstance(dev, dict) else 0,
+                'sample_rate': dev.get('default_samplerate', 0) if isinstance(dev, dict) else 0
+            }
+        except Exception:
+            return {'index': self.device, 'name': 'Unknown', 'channels': 0, 'sample_rate': 0}
         
     def list_devices(self) -> list:
         """List available audio input devices."""
@@ -101,7 +139,11 @@ class AudioCapture:
                 print(f"Audio callback error: {e}", file=sys.stderr)
     
     def start(self) -> bool:
-        """Start capturing audio."""
+        """Start capturing audio.
+        
+        Includes retry logic (2 attempts, 500ms gap) for devices that
+        need a warm-up period after being released by another app.
+        """
         if not SOUNDDEVICE_AVAILABLE:
             print("sounddevice not installed. Run: pip install sounddevice", 
                   file=sys.stderr)
@@ -110,23 +152,31 @@ class AudioCapture:
         if self._running:
             return True
         
-        try:
-            self._running = True
-            self._stream = sd.InputStream(
-                device=self.device,
-                channels=self.CHANNELS,
-                samplerate=self.SAMPLE_RATE,
-                dtype=self.DTYPE,
-                blocksize=self.BLOCK_SIZE,
-                callback=self._audio_handler
-            )
-            self._stream.start()
-            return True
-            
-        except Exception as e:
-            self._running = False
-            print(f"Failed to start audio capture: {e}", file=sys.stderr)
-            return False
+        import time as _time
+        max_attempts = 2
+        for attempt in range(1, max_attempts + 1):
+            try:
+                self._running = True
+                self._stream = sd.InputStream(
+                    device=self.device,
+                    channels=self.CHANNELS,
+                    samplerate=self.SAMPLE_RATE,
+                    dtype=self.DTYPE,
+                    blocksize=self.BLOCK_SIZE,
+                    callback=self._audio_handler
+                )
+                self._stream.start()
+                return True
+                
+            except Exception as e:
+                self._running = False
+                if attempt < max_attempts:
+                    print(f"Audio capture attempt {attempt} failed: {e}. Retrying...", file=sys.stderr)
+                    _time.sleep(0.5)
+                else:
+                    print(f"Failed to start audio capture after {max_attempts} attempts: {e}", file=sys.stderr)
+                    return False
+        return False
     
     def stop(self):
         """Stop capturing audio."""

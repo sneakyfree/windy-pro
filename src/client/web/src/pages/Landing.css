@@ -517,4 +517,56 @@
         flex-direction: column;
         text-align: center;
     }
+
+    .footer-links {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .footer-links a {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        padding: 8px 4px;
+    }
+}
+
+/* Small phone */
+@media (max-width: 480px) {
+    .hero {
+        padding: 100px 0 40px;
+    }
+
+    .hero-stats {
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .hero-actions {
+        flex-direction: column;
+        padding: 0 16px;
+    }
+
+    .hero-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .download-card {
+        min-width: auto;
+        width: 100%;
+        padding: 24px 20px;
+    }
+
+    .footer-links {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 16px;
+    }
+
+    .footer-links a {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
 }

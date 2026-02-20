@@ -20,9 +20,10 @@ class CursorInjector {
     /**
      * Inject text into the currently focused application
      * @param {string} text - Text to inject
+     * @param {number} retryCount - Internal retry counter
      * @returns {Promise<void>}
      */
-    async inject(text) {
+    async inject(text, retryCount = 0) {
         if (!text || !text.trim()) {
             throw new Error('No text to inject');
         }
@@ -33,28 +34,46 @@ class CursorInjector {
         // Step 1: Copy text to system clipboard
         clipboard.writeText(text);
 
-        // Step 2: Small delay to ensure clipboard is ready
-        await this.sleep(50);
+        // Step 2: Allow clipboard to settle (100ms — increased from 50ms)
+        await this.sleep(100);
 
-        // Step 3: Simulate paste keystroke (platform-specific)
-        switch (this.platform) {
-            case 'win32':
-                await this.injectWindows();
-                break;
-            case 'darwin':
-                await this.injectMacOS();
-                break;
-            case 'linux':
-                await this.injectLinux();
-                break;
-            default:
-                throw new Error(`Unsupported platform: ${this.platform}`);
+        // Step 2.5: Verify clipboard content (guard against race)
+        const verify = clipboard.readText();
+        if (verify !== text) {
+            console.warn('[Injector] Clipboard verification failed, retrying write');
+            clipboard.writeText(text);
+            await this.sleep(100);
         }
 
-        // Step 4: Restore previous clipboard after paste completes
+        // Step 3: Simulate paste keystroke (platform-specific)
+        try {
+            switch (this.platform) {
+                case 'win32':
+                    await this.injectWindows();
+                    break;
+                case 'darwin':
+                    await this.injectMacOS();
+                    break;
+                case 'linux':
+                    await this.injectLinux();
+                    break;
+                default:
+                    throw new Error(`Unsupported platform: ${this.platform}`);
+            }
+        } catch (err) {
+            // One retry on failure
+            if (retryCount < 1) {
+                console.warn(`[Injector] Paste failed, retrying (${retryCount + 1})`);
+                await this.sleep(300);
+                return this.inject(text, retryCount + 1);
+            }
+            throw err;
+        }
+
+        // Step 4: Restore previous clipboard after paste completes (2s wait)
         setTimeout(() => {
             clipboard.writeText(previousClipboard);
-        }, 500);
+        }, 2000);
     }
 
     /**

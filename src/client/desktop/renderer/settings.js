@@ -33,6 +33,20 @@ class SettingsPanel {
       </div>
       <div class="settings-body">
         <div class="settings-section">
+          <h3>🧭 Simple Mode</h3>
+          <div class="setting-row" title="ON: clear transcript after paste. OFF: keep it visible (lighter + italic) for scrollback.">
+            <label for="clearOnPaste">Clear after paste</label>
+            <input type="checkbox" id="clearOnPaste">
+          </div>
+          <p class="settings-hint">When off, pasted text stays visible but grayed out so you can scroll back.</p>
+          <div class="setting-row" title="When OFF, only the green strobe shows during recording. This can reduce UI overhead on weaker machines.">
+            <label for="livePreview">Show live words while recording</label>
+            <input type="checkbox" id="livePreview" checked>
+          </div>
+          <p class="settings-hint">ON = words stream live. OFF = strobe-only during recording; text appears after stop.</p>
+        </div>
+
+        <div class="settings-section">
           <h3>🎤 Transcription</h3>
           <div class="setting-row">
             <label for="modelSelect">Model Size</label>
@@ -89,14 +103,66 @@ class SettingsPanel {
         </div>
         
         <div class="settings-section">
-          <h3>📋 After Paste</h3>
-          <div class="setting-row">
-            <label for="clearOnPaste">Clear text after paste</label>
-            <input type="checkbox" id="clearOnPaste">
+          <h3>🗄️ Archive</h3>
+          <div class="setting-row" title="Automatically save each completed dictation locally.">
+            <label for="autoArchive">Auto-archive dictations</label>
+            <input type="checkbox" id="autoArchive">
           </div>
-          <p class="settings-hint">When off, pasted text stays visible but grayed out so you can scroll back</p>
+          <div class="setting-row" title="Local archive destination in your filesystem.">
+            <label for="archiveFolder">Local archive folder</label>
+            <div class="setting-inline">
+              <input type="text" id="archiveFolder" readonly>
+              <button id="browseArchiveFolder" class="settings-btn">Browse</button>
+            </div>
+          </div>
+          <div class="setting-row" title="Chunk: one file per stop. Daily: one rolling file. Both: both outputs.">
+            <label for="archiveMode">Archive format</label>
+            <select id="archiveMode">
+              <option value="chunk">Per recording chunk</option>
+              <option value="daily">Daily rolling file</option>
+              <option value="both">Both</option>
+            </select>
+          </div>
+          <div class="setting-row" title="Enable Dropbox sync for routes that include Dropbox.">
+            <label for="dropboxEnabled">Enable Dropbox sync</label>
+            <input type="checkbox" id="dropboxEnabled">
+          </div>
+          <div class="setting-row" title="Dropbox API access token (stored locally on this machine).">
+            <label for="dropboxAccessToken">Dropbox token</label>
+            <input type="password" id="dropboxAccessToken" placeholder="dbx_...">
+          </div>
+          <div class="setting-row" title="Dropbox destination folder.">
+            <label for="dropboxFolder">Dropbox folder</label>
+            <input type="text" id="dropboxFolder" placeholder="/WindyProArchive">
+          </div>
+          <div class="setting-row">
+            <label>Dropbox connection</label>
+            <div class="setting-inline">
+              <button id="testDropbox" class="settings-btn">Test</button>
+              <span class="settings-meta" id="dropboxLastTest">Never tested</span>
+            </div>
+          </div>
+          <div class="setting-row" title="Enable Google Drive sync for routes that include Google.">
+            <label for="googleEnabled">Enable Google sync</label>
+            <input type="checkbox" id="googleEnabled">
+          </div>
+          <div class="setting-row" title="Google OAuth access token (stored locally on this machine).">
+            <label for="googleAccessToken">Google token</label>
+            <input type="password" id="googleAccessToken" placeholder="ya29...">
+          </div>
+          <div class="setting-row" title="Optional Drive folder ID. Leave blank for My Drive root.">
+            <label for="googleFolderId">Google folder ID</label>
+            <input type="text" id="googleFolderId" placeholder="Optional folder id">
+          </div>
+          <div class="setting-row">
+            <label>Google connection</label>
+            <div class="setting-inline">
+              <button id="testGoogle" class="settings-btn">Test</button>
+              <span class="settings-meta" id="googleLastTest">Never tested</span>
+            </div>
+          </div>
         </div>
-        
+
         <div class="settings-section">
           <h3>⌨️ Hotkeys</h3>
           <div class="setting-row">
@@ -177,6 +243,60 @@ class SettingsPanel {
       this.saveSetting('clearOnPaste', e.target.checked);
     });
 
+    // Live preview toggle
+    this.panel.querySelector('#livePreview').addEventListener('change', (e) => {
+      this.saveSetting('livePreview', e.target.checked);
+      this.app.livePreview = e.target.checked;
+    });
+
+    // Archive controls
+    this.panel.querySelector('#autoArchive').addEventListener('change', (e) => {
+      this.saveSetting('autoArchive', e.target.checked);
+    });
+    this.panel.querySelector('#archiveMode').addEventListener('change', (e) => {
+      this.saveSetting('archiveMode', e.target.value);
+    });
+    this.panel.querySelector('#browseArchiveFolder').addEventListener('click', async () => {
+      if (!window.windyAPI?.chooseArchiveFolder) return;
+      const result = await window.windyAPI.chooseArchiveFolder();
+      if (!result?.canceled && result?.path) {
+        this.panel.querySelector('#archiveFolder').value = result.path;
+        this.saveSetting('archiveFolder', result.path);
+      }
+    });
+    this.panel.querySelector('#dropboxEnabled').addEventListener('change', (e) => {
+      this.saveSetting('dropboxEnabled', e.target.checked);
+    });
+    this.panel.querySelector('#dropboxAccessToken').addEventListener('change', (e) => {
+      this.saveSetting('dropboxAccessToken', e.target.value || '');
+    });
+    this.panel.querySelector('#dropboxFolder').addEventListener('change', (e) => {
+      this.saveSetting('dropboxFolder', e.target.value || '/WindyProArchive');
+    });
+    this.panel.querySelector('#googleEnabled').addEventListener('change', (e) => {
+      this.saveSetting('googleEnabled', e.target.checked);
+    });
+    this.panel.querySelector('#googleAccessToken').addEventListener('change', (e) => {
+      this.saveSetting('googleAccessToken', e.target.value || '');
+    });
+    this.panel.querySelector('#googleFolderId').addEventListener('change', (e) => {
+      this.saveSetting('googleFolderId', e.target.value || '');
+    });
+    this.panel.querySelector('#testDropbox').addEventListener('click', async () => {
+      const res = await window.windyAPI?.testDropboxConnection?.();
+      if (res?.ok && res?.testedAt) {
+        this.updateLastTestIndicator('#dropboxLastTest', res.testedAt);
+      }
+      this.showToast(res?.ok ? 'Dropbox connection OK ✅' : `Dropbox failed: ${res?.error || 'unknown error'}`);
+    });
+    this.panel.querySelector('#testGoogle').addEventListener('click', async () => {
+      const res = await window.windyAPI?.testGoogleConnection?.();
+      if (res?.ok && res?.testedAt) {
+        this.updateLastTestIndicator('#googleLastTest', res.testedAt);
+      }
+      this.showToast(res?.ok ? 'Google connection OK ✅' : `Google failed: ${res?.error || 'unknown error'}`);
+    });
+
     // Mic device selector (T20)
     this.panel.querySelector('#micSelect').addEventListener('change', (e) => {
       this.saveSetting('micDeviceId', e.target.value);
@@ -234,6 +354,19 @@ class SettingsPanel {
         if (settings.clearOnPaste !== undefined) {
           this.panel.querySelector('#clearOnPaste').checked = settings.clearOnPaste;
         }
+        this.panel.querySelector('#livePreview').checked = settings.livePreview !== false;
+        this.app.livePreview = settings.livePreview !== false;
+        this.panel.querySelector('#autoArchive').checked = settings.autoArchive !== false;
+        this.panel.querySelector('#archiveMode').value = settings.archiveMode || 'both';
+        this.panel.querySelector('#archiveFolder').value = settings.archiveFolder || '';
+        this.panel.querySelector('#dropboxEnabled').checked = !!settings.dropboxEnabled;
+        this.panel.querySelector('#dropboxAccessToken').value = settings.dropboxAccessToken || '';
+        this.panel.querySelector('#dropboxFolder').value = settings.dropboxFolder || '/WindyProArchive';
+        this.updateLastTestIndicator('#dropboxLastTest', settings.dropboxLastTestAt);
+        this.panel.querySelector('#googleEnabled').checked = !!settings.googleEnabled;
+        this.panel.querySelector('#googleAccessToken').value = settings.googleAccessToken || '';
+        this.panel.querySelector('#googleFolderId').value = settings.googleFolderId || '';
+        this.updateLastTestIndicator('#googleLastTest', settings.googleLastTestAt);
       }
     } catch (e) {
       // Settings not available yet, use defaults
@@ -265,6 +398,33 @@ class SettingsPanel {
     } catch (e) {
       // Devices not available until mic permission granted
     }
+  }
+
+  showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'settings-toast';
+    toast.textContent = message;
+    this.panel.appendChild(toast);
+    setTimeout(() => toast.remove(), 2600);
+  }
+
+  getLastTestMeta(iso) {
+    if (!iso) return { text: 'Never tested', level: 'never' };
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime())) return { text: 'Never tested', level: 'never' };
+    const ageMs = Date.now() - dt.getTime();
+    const oneDay = 24 * 60 * 60 * 1000;
+    const level = ageMs <= oneDay ? 'recent' : 'stale';
+    return { text: `Last: ${dt.toLocaleString()}`, level };
+  }
+
+  updateLastTestIndicator(selector, iso) {
+    const el = this.panel.querySelector(selector);
+    if (!el) return;
+    const meta = this.getLastTestMeta(iso);
+    el.textContent = meta.text;
+    el.classList.remove('recent', 'stale', 'never');
+    el.classList.add(meta.level);
   }
 
   saveSetting(key, value) {

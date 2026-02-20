@@ -8,6 +8,10 @@ export default function Transcribe() {
     const [segments, setSegments] = useState([])
     const [audioLevel, setAudioLevel] = useState(0)
     const [connected, setConnected] = useState(false)
+    const [sessionStart, setSessionStart] = useState(null)
+    const [elapsed, setElapsed] = useState(0)
+    const [copyMsg, setCopyMsg] = useState('')
+    const [reconnectCount, setReconnectCount] = useState(0)
     const navigate = useNavigate()
 
     const wsRef = useRef(null)
@@ -64,6 +68,7 @@ export default function Transcribe() {
 
         ws.onclose = () => {
             setConnected(false)
+            setReconnectCount(prev => prev + 1)
             setTimeout(connect, 3000)
         }
 
@@ -81,6 +86,15 @@ export default function Transcribe() {
             transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight
         }
     }, [segments])
+
+    // Session timer
+    useEffect(() => {
+        if (!sessionStart) return
+        const id = setInterval(() => {
+            setElapsed(Math.floor((Date.now() - sessionStart) / 1000))
+        }, 1000)
+        return () => clearInterval(id)
+    }, [sessionStart])
 
     // Start audio capture
     const startRecording = async () => {
@@ -118,9 +132,13 @@ export default function Transcribe() {
             source.connect(processor)
             processor.connect(audioCtx.destination)
 
+            // Resume AudioContext for Chrome autoplay policy
+            if (audioCtx.state === 'suspended') await audioCtx.resume()
+
             // Tell server to start
             wsRef.current?.send(JSON.stringify({ action: 'start' }))
             setIsRecording(true)
+            setSessionStart(Date.now())
         } catch (err) {
             setState('error')
             console.error('[Audio] Mic access denied:', err)
@@ -136,6 +154,8 @@ export default function Transcribe() {
         // Tell server to stop
         wsRef.current?.send(JSON.stringify({ action: 'stop' }))
         setIsRecording(false)
+        setSessionStart(null)
+        setElapsed(0)
     }
 
     const clearTranscript = () => setSegments([])
@@ -143,7 +163,11 @@ export default function Transcribe() {
     const copyTranscript = () => {
         const text = segments.map(s => s.text).join(' ')
         navigator.clipboard.writeText(text)
+        setCopyMsg('Copied!')
+        setTimeout(() => setCopyMsg(''), 2000)
     }
+
+    const wordCount = segments.filter(s => !s.isPartial).reduce((n, s) => n + (s.text?.trim().split(/\s+/).length || 0), 0)
 
     const formatTime = (seconds) => {
         if (!seconds) return '0:00'
@@ -174,10 +198,14 @@ export default function Transcribe() {
                 <div className="state-dot"></div>
                 <span className="state-label">{state.toUpperCase()}</span>
                 {isRecording && (
-                    <div className="audio-meter">
-                        <div className="audio-meter-fill" style={{ width: `${Math.min(audioLevel * 400, 100)}%` }}></div>
-                    </div>
+                    <>
+                        <span className="session-timer">{formatTime(elapsed)}</span>
+                        <div className="audio-meter">
+                            <div className="audio-meter-fill" style={{ width: `${Math.min(audioLevel * 400, 100)}%` }}></div>
+                        </div>
+                    </>
                 )}
+                {wordCount > 0 && <span className="word-count">{wordCount} words</span>}
             </div>
 
             {/* Transcript area */}
@@ -211,7 +239,7 @@ export default function Transcribe() {
                     {isRecording ? '⏹' : '🎙️'}
                 </button>
                 <button className="ctrl-btn" onClick={copyTranscript} title="Copy All">
-                    📋
+                    {copyMsg || '📋'}
                 </button>
             </div>
         </div>

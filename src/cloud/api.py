@@ -16,12 +16,14 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import asyncio
 import json
+import re
 import uuid
 import os
 import sqlite3
 import hashlib
 import hmac
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 import numpy as np
 import struct
@@ -55,7 +57,8 @@ def _b64url_decode(s: str) -> bytes:
 def create_access_token(data: dict, expires_hours: int = JWT_EXPIRY_HOURS) -> str:
     """Create a JWT token (HS256, zero-dependency)."""
     header = _b64url_encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
-    payload_data = {**data, "exp": (datetime.utcnow() + timedelta(hours=expires_hours)).isoformat()}
+    exp_dt = datetime.now(timezone.utc) + timedelta(hours=expires_hours)
+    payload_data = {**data, "exp": exp_dt.isoformat()}
     payload = _b64url_encode(json.dumps(payload_data).encode())
     signature = hmac.new(JWT_SECRET.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest()
     sig = _b64url_encode(signature)
@@ -72,8 +75,12 @@ def decode_token(token: str) -> dict:
         if not hmac.compare_digest(_b64url_decode(sig), expected_sig):
             raise ValueError("Invalid signature")
         data = json.loads(_b64url_decode(payload))
-        if "exp" in data and datetime.fromisoformat(data["exp"]) < datetime.utcnow():
-            raise ValueError("Token expired")
+        if "exp" in data:
+            exp = datetime.fromisoformat(data["exp"])
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp < datetime.now(timezone.utc):
+                raise ValueError("Token expired")
         return data
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
@@ -109,6 +116,24 @@ def get_db():
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+@contextmanager
+def db_session():
+    """Context manager for database connections — ensures cleanup."""
+    conn = get_db()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+# Email validation regex
+_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
 
 
 def init_db():
@@ -152,10 +177,17 @@ def init_db():
 #  App Init
 # ═══════════════════════════════════
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
 app = FastAPI(
     title="Windy Pro Cloud API",
     description="Cloud-hosted voice-to-text transcription service",
-    version="0.2.0"
+    version="0.2.0",
+    lifespan=lifespan,
 )
 
 # Rate limiting
@@ -172,11 +204,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"]
 )
-
-@app.on_event("startup")
-async def startup():
-    init_db()
-
 
 # ═══════════════════════════════════
 #  Pydantic Models
@@ -251,11 +278,12 @@ async def register(request: Request, body: AuthRegister):
     """Register a new user account."""
     if len(body.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
-    if not body.email or "@" not in body.email:
+    if not re.search(r'[a-zA-Z]', body.password) or not re.search(r'[0-9]', body.password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one letter and one number")
+    if not _EMAIL_RE.match(body.email):
         raise HTTPException(status_code=400, detail="Invalid email address")
 
-    conn = get_db()
-    try:
+    with db_session() as conn:
         existing = conn.execute("SELECT id FROM users WHERE email = ?", (body.email.lower(),)).fetchone()
         if existing:
             raise HTTPException(status_code=409, detail="Email already registered")
@@ -266,21 +294,17 @@ async def register(request: Request, body: AuthRegister):
             "INSERT INTO users (id, email, name, password_hash) VALUES (?, ?, ?, ?)",
             (user_id, body.email.lower(), body.name, pw_hash)
         )
-        conn.commit()
 
         user = {"id": user_id, "email": body.email.lower(), "name": body.name}
         token = create_access_token(user)
         return AuthResponse(token=token, user=user)
-    finally:
-        conn.close()
 
 
 @app.post("/api/v1/auth/login", response_model=AuthResponse)
 @limiter.limit("5/minute")
 async def login(request: Request, body: AuthLogin):
     """Login with email and password."""
-    conn = get_db()
-    try:
+    with db_session() as conn:
         row = conn.execute(
             "SELECT id, email, name, password_hash FROM users WHERE email = ?",
             (body.email.lower(),)
@@ -292,14 +316,21 @@ async def login(request: Request, body: AuthLogin):
         user = {"id": row["id"], "email": row["email"], "name": row["name"]}
         token = create_access_token(user)
         return AuthResponse(token=token, user=user)
-    finally:
-        conn.close()
 
 
 @app.get("/api/v1/auth/me")
 async def get_me(user: dict = Depends(get_current_user)):
     """Get current user profile."""
     return user
+
+
+@app.post("/api/v1/auth/refresh", response_model=AuthResponse)
+async def refresh_token(user: dict = Depends(get_current_user)):
+    """Refresh an existing valid JWT token with extended expiry."""
+    # Strip out internal claims, keep user info only
+    user_data = {"id": user["id"], "email": user["email"], "name": user["name"]}
+    new_token = create_access_token(user_data)
+    return AuthResponse(token=new_token, user=user_data)
 
 
 # ═══════════════════════════════════
@@ -313,8 +344,7 @@ async def vault_list_sessions(
     user: dict = Depends(get_current_user)
 ):
     """List transcription sessions for the current user."""
-    conn = get_db()
-    try:
+    with db_session() as conn:
         rows = conn.execute("""
             SELECT s.*,
                    (SELECT text FROM segments WHERE session_id = s.id AND is_partial = 0
@@ -325,15 +355,12 @@ async def vault_list_sessions(
             LIMIT ? OFFSET ?
         """, (user["id"], limit, offset)).fetchall()
         return [dict(r) for r in rows]
-    finally:
-        conn.close()
 
 
 @app.get("/api/v1/vault/sessions/{session_id}")
 async def vault_get_session(session_id: int, user: dict = Depends(get_current_user)):
     """Get a session with all its segments."""
-    conn = get_db()
-    try:
+    with db_session() as conn:
         session = conn.execute(
             "SELECT * FROM sessions WHERE id = ? AND user_id = ?",
             (session_id, user["id"])
@@ -349,32 +376,25 @@ async def vault_get_session(session_id: int, user: dict = Depends(get_current_us
         result = dict(session)
         result["segments"] = [dict(s) for s in segments]
         return result
-    finally:
-        conn.close()
 
 
 @app.delete("/api/v1/vault/sessions/{session_id}")
 async def vault_delete_session(session_id: int, user: dict = Depends(get_current_user)):
     """Delete a transcription session."""
-    conn = get_db()
-    try:
+    with db_session() as conn:
         cursor = conn.execute(
             "DELETE FROM sessions WHERE id = ? AND user_id = ?",
             (session_id, user["id"])
         )
-        conn.commit()
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Session not found")
         return {"deleted": True}
-    finally:
-        conn.close()
 
 
 @app.get("/api/v1/vault/search")
 async def vault_search(q: str = "", limit: int = 50, user: dict = Depends(get_current_user)):
     """Search transcripts for the current user."""
-    conn = get_db()
-    try:
+    with db_session() as conn:
         rows = conn.execute("""
             SELECT seg.*, ses.started_at as session_date
             FROM segments seg
@@ -384,8 +404,37 @@ async def vault_search(q: str = "", limit: int = 50, user: dict = Depends(get_cu
             LIMIT ?
         """, (user["id"], f"%{q}%", limit)).fetchall()
         return [dict(r) for r in rows]
-    finally:
-        conn.close()
+
+
+@app.get("/api/v1/vault/sessions/{session_id}/export")
+async def vault_export_session(
+    session_id: int,
+    fmt: str = "txt",
+    user: dict = Depends(get_current_user)
+):
+    """Export a session as plain text or markdown."""
+    with db_session() as conn:
+        session = conn.execute(
+            "SELECT * FROM sessions WHERE id = ? AND user_id = ?",
+            (session_id, user["id"])
+        ).fetchone()
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        segments = conn.execute(
+            "SELECT text FROM segments WHERE session_id = ? AND is_partial = 0 ORDER BY start_time",
+            (session_id,)
+        ).fetchall()
+        
+        full_text = " ".join(s["text"] for s in segments)
+        
+        if fmt == "md":
+            started = session["started_at"] or "Unknown"
+            return {
+                "format": "md",
+                "text": f"# Transcription — {started}\n\n{full_text}\n"
+            }
+        return {"format": "txt", "text": full_text}
 
 
 # ═══════════════════════════════════
@@ -455,9 +504,46 @@ async def get_cloud_model():
 # ═══════════════════════════════════
 
 active_connections: dict = {}
+active_user_sessions: dict = {}  # user_id → connection_id (max 1 per user)
+MAX_SESSIONS_PER_USER = 1
 
 # Audio buffer: 16kHz Int16 mono = 32000 bytes per second
 CLOUD_AUDIO_CHUNK_THRESHOLD = 32000  # 1 second of audio
+
+# Per-connection frame rate limit: max 80 frames/sec (16kHz at 200-sample frames)
+MAX_AUDIO_FRAMES_PER_SECOND = 80
+
+
+async def _transcribe_buffer(buffer: bytearray, model, segment_start_time: float):
+    """Transcribe an audio buffer and return segments.
+    
+    Deduplicates transcription logic used in both streaming and stop-flush paths.
+    
+    Returns:
+        List of segment dicts and total audio seconds processed.
+    """
+    int16_array = np.frombuffer(bytes(buffer), dtype=np.int16)
+    float32_array = int16_array.astype(np.float32) / 32768.0
+    
+    loop = asyncio.get_event_loop()
+    segments_result, info = await loop.run_in_executor(
+        None, lambda: model.transcribe(float32_array, language="en", beam_size=1, vad_filter=True)
+    )
+    segments_list = await loop.run_in_executor(None, lambda: list(segments_result))
+    
+    results = []
+    for seg in segments_list:
+        if seg.text.strip():
+            results.append({
+                "type": "transcript",
+                "text": seg.text.strip(),
+                "start_time": segment_start_time + seg.start,
+                "end_time": segment_start_time + seg.end,
+                "is_partial": False
+            })
+    
+    audio_seconds = len(buffer) / (16000 * 2)  # 16kHz, 2 bytes per sample
+    return results, audio_seconds
 
 @app.websocket("/ws/transcribe")
 async def websocket_transcribe(websocket: WebSocket):
@@ -486,7 +572,15 @@ async def websocket_transcribe(websocket: WebSocket):
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
+    # ─── Per-user concurrency check ───
+    user_id = user.get("id")
+    if user_id in active_user_sessions:
+        await websocket.send_json({"type": "error", "message": "You already have an active transcription session. Close it first."})
+        await websocket.close(code=4003, reason="Concurrent session limit reached")
+        return
+
     active_connections[connection_id] = {"ws": websocket, "user": user}
+    active_user_sessions[user_id] = connection_id
 
     # Create session for authenticated user
     session_id = None
@@ -515,6 +609,10 @@ async def websocket_transcribe(websocket: WebSocket):
 
         while True:
             message = await websocket.receive()
+
+            # Starlette may deliver an explicit disconnect event; exit loop cleanly.
+            if message.get("type") == "websocket.disconnect":
+                break
 
             if "bytes" in message:
                 if not is_recording:
@@ -648,6 +746,10 @@ async def websocket_transcribe(websocket: WebSocket):
         pass
     finally:
         active_connections.pop(connection_id, None)
+        # Remove user session tracking
+        user_id = user.get("id") if user else None
+        if user_id and active_user_sessions.get(user_id) == connection_id:
+            active_user_sessions.pop(user_id, None)
 
 
 # ═══════════════════════════════════

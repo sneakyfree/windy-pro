@@ -196,4 +196,24 @@
     .auth-form-wrapper {
         padding: 32px 24px;
     }
+
+    /* Prevent iOS auto-zoom on focus (requires ≥16px) */
+    .form-group input {
+        font-size: 16px;
+    }
+
+    .auth-tab {
+        min-height: 44px;
+        touch-action: manipulation;
+    }
+
+    .auth-submit {
+        min-height: 48px;
+        touch-action: manipulation;
+    }
+
+    .auth-switch {
+        min-height: 44px;
+        padding: 8px 12px;
+    }
 }
