@@ -186,7 +186,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Windy Pro Cloud API",
     description="Cloud-hosted voice-to-text transcription service",
-    version="0.2.0",
+    version="0.1.1",
     lifespan=lifespan,
 )
 
@@ -453,7 +453,7 @@ async def health_check():
 
     return HealthResponse(
         status="healthy",
-        version="0.2.0",
+        version="0.1.1",
         gpu_available=gpu_available,
         models_loaded=[],
         active_connections=len(active_connections)

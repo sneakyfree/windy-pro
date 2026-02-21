@@ -31,7 +31,7 @@ export default function Transcribe() {
                 ws.send(JSON.stringify({ action: 'auth', token }))
             }
             setConnected(true)
-            console.log('[Cloud] WebSocket connected, auth sent')
+            // WebSocket connected — send auth token
         }
 
         ws.onmessage = (event) => {

@@ -183,17 +183,17 @@ export default function Landing() {
                     <h2 className="section-title">Download Windy Pro</h2>
                     <p className="section-subtitle">Available for all major platforms.</p>
                     <div className="download-grid">
-                        <a href="https://github.com/windypro/windy-pro/releases/latest/download/Windy-Pro.dmg" className="download-card">
+                        <a href="https://github.com/sneakyfree/windy-pro/releases/latest/download/Windy-Pro.dmg" className="download-card">
                             <div className="download-icon">🍎</div>
                             <div className="download-platform">macOS</div>
                             <div className="download-detail">Intel & Apple Silicon</div>
                         </a>
-                        <a href="https://github.com/windypro/windy-pro/releases/latest/download/Windy-Pro-Setup.exe" className="download-card">
+                        <a href="https://github.com/sneakyfree/windy-pro/releases/latest/download/Windy-Pro-Setup.exe" className="download-card">
                             <div className="download-icon">🪟</div>
                             <div className="download-platform">Windows</div>
                             <div className="download-detail">Windows 10+</div>
                         </a>
-                        <a href="https://github.com/windypro/windy-pro/releases/latest/download/Windy-Pro.AppImage" className="download-card">
+                        <a href="https://github.com/sneakyfree/windy-pro/releases/latest/download/Windy-Pro.AppImage" className="download-card">
                             <div className="download-icon">🐧</div>
                             <div className="download-platform">Linux</div>
                             <div className="download-detail">AppImage & .deb</div>
@@ -210,8 +210,8 @@ export default function Landing() {
                         <span>Windy Pro</span>
                     </div>
                     <div className="footer-links">
-                        <a href="https://github.com/windypro/windy-pro" target="_blank" rel="noopener noreferrer">GitHub</a>
-                        <a href="https://github.com/windypro/windy-pro#readme" target="_blank" rel="noopener noreferrer">Docs</a>
+                        <a href="https://github.com/sneakyfree/windy-pro" target="_blank" rel="noopener noreferrer">GitHub</a>
+                        <a href="https://github.com/sneakyfree/windy-pro#readme" target="_blank" rel="noopener noreferrer">Docs</a>
                         <Link to="/privacy">Privacy</Link>
                         <Link to="/terms">Terms</Link>
                     </div>
