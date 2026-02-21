@@ -99,7 +99,17 @@
       "icon": "assets/icon.png",
       "category": "Utility",
       "maintainer": "Windy Pro <dev@thewindstorm.uk>",
-      "executableName": "windy-pro"
+      "executableName": "windy-pro",
+      "desktop": {
+        "Name": "Windy Pro",
+        "Comment": "Voice-to-text transcription",
+        "Exec": "\"windy-pro\" %U",
+        "Terminal": "false",
+        "Type": "Application",
+        "Categories": "Utility;Audio;Accessibility;",
+        "StartupWMClass": "windy-pro",
+        "MimeType": ""
+      }
     },
     "nsis": {
       "oneClick": false,

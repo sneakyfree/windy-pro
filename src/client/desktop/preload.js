@@ -61,5 +61,8 @@ contextBridge.exposeInMainWorld('windyAPI', {
   },
 
   // Platform info
-  platform: process.platform
+  platform: process.platform,
+
+  // App version (reads from package.json via main process)
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 });

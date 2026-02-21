@@ -446,6 +446,9 @@ class WindyApp {
   async startRecording() {
     this.isRecording = true;
 
+    // Lock transcript editing during recording
+    this.transcriptContent.contentEditable = 'false';
+
     // Clear placeholder if exists
     const placeholder = this.transcriptContent.querySelector('.placeholder');
     if (placeholder) {
@@ -476,6 +479,11 @@ class WindyApp {
     this.stopAudioCapture();
     this.send('stop');
     this.setState('idle');
+
+    // Enable transcript editing after stop
+    if (this.transcript.length > 0 || this.transcriptContent.textContent.trim()) {
+      this.transcriptContent.contentEditable = 'true';
+    }
   }
 
   // ═══════════════════════════════════════════════
@@ -729,6 +737,10 @@ class WindyApp {
    * Get full transcript text
    */
   getFullTranscript() {
+    // If user has edited the transcript via contentEditable, read from DOM
+    if (this.transcriptContent.isContentEditable) {
+      return this.transcriptContent.textContent.trim();
+    }
     return this.transcript.map(s => s.text).join(' ');
   }
 
@@ -738,6 +750,7 @@ class WindyApp {
   clearTranscript() {
     this.transcript = [];
     this.transcriptContent.innerHTML = '<div class="placeholder">Press <kbd>Ctrl+Shift+Space</kbd> or click Record to start</div>';
+    this.transcriptContent.contentEditable = 'false';
     this.updateWordCount();
   }
 
@@ -770,24 +783,27 @@ class WindyApp {
     const clearOnPaste = settings && settings.clearOnPaste;
 
     if (clearOnPaste) {
-      // Clear everything
+      // === CLEAR MODE ===
+      // Reset everything — transcript array, DOM, contentEditable, word count
       this.clearTranscript();
     } else {
+      // === GRAY MODE ===
       // Gray-out pasted text so user knows it's been sent
       const para = this.transcriptContent.querySelector('.transcript-para');
       if (para) {
-        // Wrap all current content in a pasted-text container
         const pastedDiv = document.createElement('div');
         pastedDiv.className = 'pasted-text';
-        // Move all children from para into pastedDiv
         while (para.firstChild) {
           pastedDiv.appendChild(para.firstChild);
         }
         para.appendChild(pastedDiv);
       }
-      // Clear the transcript array so next recording starts fresh
-      // but the grayed-out text remains visible for scrollback
+      // Clear transcript array so next recording starts fresh
+      // but grayed-out text remains visible for scrollback
       this.transcript = [];
+      // Disable editing — paste is a session boundary
+      this.transcriptContent.contentEditable = 'false';
+      this.updateWordCount();
     }
   }
 

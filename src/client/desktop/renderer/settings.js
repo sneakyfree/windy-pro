@@ -194,7 +194,7 @@ class SettingsPanel {
         
         <div class="settings-section">
           <h3>ℹ️ About</h3>
-          <p class="settings-about">Windy Pro v0.1.0<br>Voice-to-text with the Green Strobe guarantee.</p>
+          <p class="settings-about" id="aboutVersion">Windy Pro<br>Voice-to-text with the Green Strobe guarantee.</p>
         </div>
       </div>
     `;
@@ -370,6 +370,14 @@ class SettingsPanel {
       }
     } catch (e) {
       // Settings not available yet, use defaults
+    }
+
+    // Populate version from package.json
+    if (window.windyAPI?.getAppVersion) {
+      window.windyAPI.getAppVersion().then(v => {
+        const el = this.panel.querySelector('#aboutVersion');
+        if (el) el.innerHTML = `Windy Pro v${v}<br>Voice-to-text with the Green Strobe guarantee.`;
+      }).catch(() => { });
     }
 
     // Enumerate audio input devices (T20)

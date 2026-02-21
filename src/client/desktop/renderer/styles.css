@@ -244,6 +244,17 @@ body {
   font-size: 14px;
   line-height: 1.6;
   color: var(--text-primary);
+  user-select: text;
+  cursor: text;
+}
+
+.transcript-content[contenteditable="true"] {
+  outline: none;
+  caret-color: var(--green);
+}
+
+.transcript-content[contenteditable="false"] {
+  cursor: default;
 }
 
 .placeholder {

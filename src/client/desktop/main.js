@@ -591,6 +591,9 @@ ipcMain.on('update-settings', (event, settings) => {
   }
 });
 
+// Get app version from package.json
+ipcMain.handle('get-app-version', () => app.getVersion());
+
 // Get settings — returns flat keys for the renderer
 ipcMain.handle('get-settings', () => {
   return {
