@@ -626,13 +626,17 @@ async def websocket_transcribe(websocket: WebSocket, token: str = Query(None)):
     # Create session for authenticated user
     session_id = None
     if user:
-        conn = get_db()
-        cursor = conn.execute(
-            "INSERT INTO sessions (user_id) VALUES (?)", (user["id"],)
-        )
-        session_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+        try:
+            conn = get_db()
+            cursor = conn.execute(
+                "INSERT INTO sessions (user_id) VALUES (?)", (user["id"],)
+            )
+            session_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"Could not create DB session (non-fatal): {e}")
+            session_id = None
 
     # Audio accumulation buffer
     audio_buffer = bytearray()
@@ -641,6 +645,7 @@ async def websocket_transcribe(websocket: WebSocket, token: str = Query(None)):
     is_recording = False
 
     try:
+        logger.info(f"[WS {connection_id}] Sending idle state to client")
         await websocket.send_json({
             "type": "state",
             "state": "idle",
@@ -648,6 +653,7 @@ async def websocket_transcribe(websocket: WebSocket, token: str = Query(None)):
             "authenticated": True
         })
 
+        logger.info(f"[WS {connection_id}] Entering main loop")
         while True:
             message = await websocket.receive()
 
@@ -714,10 +720,14 @@ async def websocket_transcribe(websocket: WebSocket, token: str = Query(None)):
                     action = cmd.get("action")
 
                     if action == "start":
+                        logger.info(f"[WS {connection_id}] Start recording")
                         is_recording = True
                         audio_buffer.clear()
                         total_audio_seconds = 0.0
                         segment_start_time = 0.0
+                        await websocket.send_json({
+                            "type": "ack", "action": "start", "success": True
+                        })
                         await websocket.send_json({
                             "type": "state", "state": "listening"
                         })
