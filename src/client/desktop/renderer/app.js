@@ -23,6 +23,13 @@ class WindyApp {
     this._sessionTimerInterval = null;
     this._sessionStartTime = null;
 
+    // Cloud transcription state
+    this.transcriptionEngine = 'local';  // 'local' | 'cloud' | 'smart'
+    this.cloudUrl = 'wss://windypro.thewindstorm.uk';
+    this.cloudWs = null;
+    this.cloudToken = null;
+    this._usingCloud = false;  // When smart mode, tracks if currently using cloud
+
     // Audio capture state (B2.6)
     this.mediaStream = null;
     this.audioContext = null;
@@ -75,7 +82,31 @@ class WindyApp {
       } else {
         this.setArchiveStatus('Archive route: Local', 'ok');
       }
+
+      // Load cloud transcription settings at startup
+      // Key is 'engine' not 'transcriptionEngine' (matches saveSetting('engine', val))
+      if (settings?.engine) this.transcriptionEngine = settings.engine;
+      if (settings?.cloudUrl) this.cloudUrl = settings.cloudUrl;
+      if (settings?.cloudToken) this.cloudToken = settings.cloudToken;
+      if (settings?.cloudEmail) this.cloudEmail = settings.cloudEmail;
+      if (settings?.cloudPassword) this.cloudPassword = settings.cloudPassword;
+      console.log(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
     }
+
+    // Fallback: also check localStorage for cloud settings (always available)
+    try {
+      const lsEngine = localStorage.getItem('windy_engine');
+      const lsCloudUrl = localStorage.getItem('windy_cloudUrl');
+      const lsCloudToken = localStorage.getItem('windy_cloudToken');
+      const lsCloudEmail = localStorage.getItem('windy_cloudEmail');
+      const lsCloudPassword = localStorage.getItem('windy_cloudPassword');
+      if (lsEngine && !this.transcriptionEngine) this.transcriptionEngine = lsEngine;
+      if (lsCloudUrl && !this.cloudUrl) this.cloudUrl = lsCloudUrl;
+      if (lsCloudToken && !this.cloudToken) this.cloudToken = lsCloudToken;
+      if (lsCloudEmail && !this.cloudEmail) this.cloudEmail = lsCloudEmail;
+      if (lsCloudPassword && !this.cloudPassword) this.cloudPassword = lsCloudPassword;
+      console.log(`[Init] Final: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
+    } catch (_) { }
 
     // Check for crash recovery via Electron IPC
     if (window.windyAPI?.checkCrashRecovery) {
@@ -204,7 +235,9 @@ class WindyApp {
       };
 
       this.ws.onmessage = (event) => {
-        this.handleMessage(JSON.parse(event.data));
+        const parsed = JSON.parse(event.data);
+        console.error('[WS] Received:', parsed.type, parsed.text || '');
+        this.handleMessage(parsed);
       };
 
       this.ws.onclose = () => {
@@ -270,14 +303,27 @@ class WindyApp {
     switch (msg.type) {
       case 'state':
         this.setState(msg.state);
+        // Update model badge on loading state
+        if (msg.state === 'loading' && msg.message) {
+          this.updateModelBadge(null, true, msg.message);
+        }
         break;
 
       case 'transcript':
+        console.error('[handleMessage] transcript:', msg.text, 'partial:', msg.partial);
         this.addTranscriptSegment(msg);
         break;
 
       case 'ack':
         console.log('Ack:', msg.action, msg.success);
+        // Update model badge from start ack
+        if (msg.action === 'start' && msg.model) {
+          this.updateModelBadge(msg.model);
+        }
+        // Update model badge from config ack
+        if (msg.action === 'config' && msg.applied?.model_reloaded) {
+          this.updateModelBadge(msg.applied.model);
+        }
         if (msg.action === 'stop' && msg.success && msg.transcript && window.windyAPI?.archiveTranscript) {
           const route = this.archiveRouteSelect?.value || 'local';
           if (route === 'off') {
@@ -308,6 +354,10 @@ class WindyApp {
         // T19: Show crash recovery banner
         this.showRecoveryBanner(msg.text);
         break;
+
+      case 'performance':
+        this.handlePerformanceFeedback(msg);
+        break;
     }
   }
 
@@ -315,8 +365,9 @@ class WindyApp {
    * Send command to server
    */
   send(action, data = {}) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ action, ...data }));
+    const ws = this.getActiveWs();
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ action, ...data }));
     }
   }
 
@@ -429,6 +480,235 @@ class WindyApp {
   }
 
   /**
+   * Update model badge in status bar
+   */
+  updateModelBadge(modelName, loading = false, message = '') {
+    const badge = document.getElementById('modelBadge');
+    if (!badge) return;
+    // Use engine-aware icon
+    const icon = this._usingCloud ? '☁️🔒' : this.transcriptionEngine === 'cloud' ? '☁️🔒' : this.transcriptionEngine === 'smart' ? '🧠' : '🏠';
+    if (loading) {
+      badge.textContent = `${icon} ${message || 'Loading...'}`;
+      badge.classList.add('loading');
+    } else {
+      badge.textContent = `${icon} ${modelName || 'unknown'}`;
+      badge.classList.remove('loading');
+    }
+  }
+
+  /**
+   * Handle runtime performance feedback from server
+   */
+  handlePerformanceFeedback(msg) {
+    const badge = document.getElementById('modelBadge');
+    if (!badge) return;
+
+    // Skip local performance badge updates when cloud is active
+    if (this._usingCloud) {
+      badge.textContent = '☁️🔒 cloud ✅';
+      badge.classList.remove('loading');
+      return;
+    }
+
+    const engineIcon = '🏠';
+
+    if (msg.status === 'slow') {
+      badge.textContent = `${engineIcon} ${msg.model} ⚠️ slow`;
+      badge.classList.add('loading');
+      badge.title = `Performance ratio: ${msg.ratio}x (>1.0 = too slow)`;
+
+      // Smart mode: auto-switch to cloud if struggling for 2+ chunks
+      if (this.transcriptionEngine === 'smart' && !this._usingCloud && this.cloudUrl) {
+        this._usingCloud = true;
+        this.connectCloudWS().then(() => {
+          badge.textContent = `☁️🔒 cloud ✅`;
+          badge.classList.remove('loading');
+          this.showReconnectToast('🧠 Smart mode: switched to cloud for better performance 🔒');
+        }).catch(() => {
+          this._usingCloud = false;
+          this.showReconnectToast('⚠️ Cloud unavailable. Continuing local.');
+        });
+      } else if (msg.recommend) {
+        this.showReconnectToast(`⚠️ "${msg.model}" is too slow for real-time. Try switching to "${msg.recommend}" in Settings.`);
+      }
+    } else {
+      badge.textContent = `${engineIcon} ${msg.model} ✅`;
+      badge.classList.remove('loading');
+      badge.title = `Performance ratio: ${msg.ratio}x (keeping up)`;
+    }
+  }
+
+  /**
+   * Get the active WebSocket for audio streaming.
+   * Routes to cloud WS when in cloud mode or smart mode with cloud active.
+   */
+  getActiveWs() {
+    if (this.transcriptionEngine === 'cloud' || (this.transcriptionEngine === 'smart' && this._usingCloud)) {
+      // Try cloud WS, fall back to local if not connected
+      if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN) {
+        return this.cloudWs;
+      }
+      // Cloud not available — fall back to local silently
+      return this.ws;
+    }
+    return this.ws;
+  }
+
+  /**
+   * Get the HTTPS API base URL from the WSS cloud URL
+   */
+  get cloudApiBase() {
+    if (!this.cloudUrl) return '';
+    return this.cloudUrl.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://').replace(/\/$/, '');
+  }
+
+  /**
+   * Refresh cloud token by re-authenticating before WS connection
+   */
+  async refreshCloudToken() {
+    if (!this.cloudToken || !this.cloudApiBase) return;
+    try {
+      // Try token refresh first
+      const res = await fetch(this.cloudApiBase + '/api/v1/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: this.cloudToken })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        this.cloudToken = data.token;
+        console.log('[Cloud] Token refreshed ✅');
+        return;
+      }
+    } catch (_) { }
+    console.warn('[Cloud] Token refresh failed, using existing token');
+  }
+
+  /**
+   * Connect to cloud transcription WebSocket
+   */
+  async connectCloudWS() {
+    if (!this.cloudUrl) throw new Error('No cloud URL configured');
+
+    // Step 1: Get a fresh token via REST login (if we have email/password)
+    if (this.cloudEmail && this.cloudPassword) {
+      try {
+        const apiBase = this.cloudUrl.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://').replace(/\/$/, '');
+        const res = await fetch(apiBase + '/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: this.cloudEmail, password: this.cloudPassword })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          this.cloudToken = data.token;
+          console.log('[Cloud] Got fresh token via REST login');
+          if (window.windyAPI) {
+            window.windyAPI.updateSettings({ cloudToken: data.token });
+          }
+        }
+      } catch (e) {
+        console.warn('[Cloud] REST login failed (CORS?), using stored token:', e.message);
+      }
+    }
+
+    if (!this.cloudToken) {
+      throw new Error('No cloud token available. Please sign in first.');
+    }
+
+    // Step 2: Connect WS with token as query param (Veron 1 protocol)
+    return new Promise((resolve, reject) => {
+      const baseUrl = this.cloudUrl.replace(/\/$/, '') + '/ws/transcribe';
+      const url = baseUrl + '?token=' + encodeURIComponent(this.cloudToken);
+      console.log(`[Cloud] Connecting to ${baseUrl} (with token query param)`);
+      this.cloudWs = new WebSocket(url);
+      this.cloudWs.binaryType = 'arraybuffer';
+      let startSent = false;
+      let resolved = false;
+
+      this.cloudWs.onopen = () => {
+        console.log('[Cloud] WebSocket opened');
+      };
+
+      this.cloudWs.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          console.log('[Cloud] ← ' + msg.type + ':', JSON.stringify(msg).substring(0, 200));
+
+          if (msg.type === 'transcript') {
+            // Cloud uses 'is_partial', local uses 'partial' — normalize
+            if (msg.is_partial !== undefined && msg.partial === undefined) {
+              msg.partial = msg.is_partial;
+            }
+            this.handleMessage(msg);
+          } else if (msg.type === 'state') {
+            // After receiving welcome state, send start command
+            if (!startSent && (msg.state === 'idle' || msg.authenticated)) {
+              startSent = true;
+              console.log('[Cloud] Got welcome, sending start...');
+              this.cloudWs.send(JSON.stringify({ action: 'start' }));
+            }
+            // When server confirms listening, resolve
+            if (msg.state === 'listening' && !resolved) {
+              resolved = true;
+              console.log('[Cloud] Server is listening — ready for audio ✅');
+              resolve();
+            }
+          } else if (msg.type === 'ack') {
+            // Some server versions send ack instead of state:listening
+            if (!resolved) {
+              resolved = true;
+              console.log('[Cloud] Server acknowledged start ✅');
+              resolve();
+            }
+          } else if (msg.type === 'error') {
+            console.error('[Cloud] Error:', msg.message);
+            if (!resolved) {
+              resolved = true;
+              reject(new Error(msg.message));
+            }
+          }
+        } catch (_) {
+          // Binary data — ignore
+        }
+      };
+
+      this.cloudWs.onerror = (err) => {
+        console.error('[Cloud] WebSocket error:', err);
+        reject(err);
+      };
+
+      this.cloudWs.onclose = (event) => {
+        console.log(`[Cloud] Disconnected. Code: ${event.code}, Reason: ${event.reason}`);
+        this.cloudWs = null;
+        this._usingCloud = false;
+      };
+
+      // Timeout — 5 seconds
+      setTimeout(() => {
+        if (this.cloudWs?.readyState !== WebSocket.OPEN) {
+          this.cloudWs?.close();
+          reject(new Error('Cloud connection timed out'));
+        }
+      }, 5000);
+    });
+  }
+
+  /**
+   * Disconnect cloud WebSocket
+   */
+  disconnectCloudWS() {
+    if (this.cloudWs) {
+      try {
+        this.cloudWs.send(JSON.stringify({ action: 'stop' }));
+      } catch (_) { }
+      this.cloudWs.close();
+      this.cloudWs = null;
+      this._usingCloud = false;
+    }
+  }
+
+  /**
    * Toggle recording state
    */
   toggleRecording() {
@@ -456,17 +736,49 @@ class WindyApp {
     }
 
     try {
+      // If cloud mode, attempt cloud WS connection first
+      // Use default URL if not explicitly set
+      if (this.transcriptionEngine === 'cloud' && !this.cloudUrl) {
+        this.cloudUrl = 'wss://windypro.thewindstorm.uk';
+      }
+      console.warn(`[Record] engine=${this.transcriptionEngine}, cloudUrl="${this.cloudUrl}", cloudToken=${this.cloudToken ? 'exists' : 'MISSING'}`);
+      if (this.transcriptionEngine === 'cloud' && this.cloudUrl && this.cloudUrl.startsWith('wss://')) {
+        try {
+          await this.connectCloudWS();
+          this._usingCloud = true;
+          this.updateModelBadge('cloud', false);
+        } catch (err) {
+          console.warn('[Cloud] Connection failed, falling back to local:', err.message);
+          this._usingCloud = false;
+          this.showReconnectToast('⚠️ Cloud unavailable — using local transcription.');
+        }
+      } else if (this.transcriptionEngine === 'cloud') {
+        // No cloud URL set — use local with a hint
+        this.showReconnectToast('☁️ Cloud mode selected but no URL configured. Using local.');
+      }
+
       // Start audio capture FIRST — only show green strobe if mic works
       await this.startAudioCapture();
       this.recordingStartedAt = new Date().toISOString();
-      this.send('start');
+
+      // Verify cloud WS is still alive after audio capture started
+      if (this._usingCloud) {
+        if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN) {
+          console.log('[Cloud] ✅ WS still open after audio capture started — streaming to cloud');
+        } else {
+          console.warn('[Cloud] ⚠️ WS closed during audio setup — falling back to local');
+          this._usingCloud = false;
+          this.send('start');
+        }
+      } else {
+        this.send('start');
+      }
       this.setState('listening');
     } catch (error) {
       console.error('Failed to start audio capture:', error);
       this.recordingStartedAt = null;
       this.isRecording = false;
       this.setState('error');
-      // Briefly show error then return to idle
       setTimeout(() => this.setState('idle'), 2000);
     }
   }
@@ -529,9 +841,10 @@ class WindyApp {
       this.audioProcessor = new AudioWorkletNode(this.audioContext, 'windy-audio-processor');
       this.audioProcessor.port.onmessage = (e) => {
         const int16Buffer = e.data;
-        // B2.6.5: Stream as binary via WebSocket
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          this.ws.send(int16Buffer);
+        // B2.6.5: Stream as binary via active WebSocket (local or cloud)
+        const activeWs = this.getActiveWs();
+        if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+          activeWs.send(int16Buffer);
         }
       };
       // Wire: mic → worklet
@@ -555,8 +868,9 @@ class WindyApp {
         const float32 = e.inputBuffer.getChannelData(0);
         this.updateAudioMeter(float32);
         const int16 = this.float32ToInt16(float32);
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          this.ws.send(int16.buffer);
+        const activeWs = this.getActiveWs();
+        if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+          activeWs.send(int16.buffer);
         }
       };
       this.audioSource.connect(this.audioProcessor);
@@ -674,6 +988,7 @@ class WindyApp {
    * Appends text inline as one continuous block (not separate lines)
    */
   addTranscriptSegment(msg) {
+    console.error('[addTranscript] text:', msg.text, 'partial:', msg.partial, 'livePreview:', this.livePreview, 'state:', this.currentState);
     // Always retain final segments for copy/paste reliability
     if (!msg.partial) {
       this.transcript.push(msg);
@@ -749,7 +1064,13 @@ class WindyApp {
    */
   clearTranscript() {
     this.transcript = [];
-    this.transcriptContent.innerHTML = '<div class="placeholder">Press <kbd>Ctrl+Shift+Space</kbd> or click Record to start</div>';
+    this.transcriptContent.innerHTML = `<div class="placeholder">
+      <div style="margin-bottom:8px;font-weight:600;opacity:0.9;">⌨️ Keyboard Shortcuts</div>
+      <div style="margin:4px 0;"><kbd>Ctrl+Shift+Space</kbd> — <span style="color:#22C55E;font-weight:600;">Start</span> recording</div>
+      <div style="margin:4px 0;"><kbd>Ctrl+Shift+Space</kbd> — <span style="color:#EF4444;font-weight:600;">Stop</span> recording</div>
+      <div style="margin:4px 0;"><kbd>Ctrl+Shift+V</kbd> — <span style="color:#4ECDC4;font-weight:600;">Paste</span> transcript to cursor</div>
+      <div style="margin:4px 0;"><kbd>Ctrl+Shift+W</kbd> — <span style="color:#F7DC6F;font-weight:600;">Show / Hide</span> app window</div>
+    </div>`;
     this.transcriptContent.contentEditable = 'false';
     this.updateWordCount();
   }

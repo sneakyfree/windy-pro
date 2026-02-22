@@ -195,7 +195,7 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-ALLOWED_ORIGINS = os.getenv("WINDY_CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+ALLOWED_ORIGINS = os.getenv("WINDY_CORS_ORIGINS", "*").split(",")
 
 app.add_middleware(
     CORSMiddleware,
@@ -527,7 +527,11 @@ async def _transcribe_buffer(buffer: bytearray, model, segment_start_time: float
     
     loop = asyncio.get_event_loop()
     segments_result, info = await loop.run_in_executor(
-        None, lambda: model.transcribe(float32_array, language="en", beam_size=1, vad_filter=True)
+        None, lambda: model.transcribe(
+            float32_array, language="en", beam_size=5, vad_filter=True,
+            condition_on_previous_text=False, initial_prompt="Clear English speech.",
+            no_speech_threshold=0.6, log_prob_threshold=-1.0
+        )
     )
     segments_list = await loop.run_in_executor(None, lambda: list(segments_result))
     
@@ -559,11 +563,31 @@ async def websocket_transcribe(websocket: WebSocket):
     try:
         first_msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
         cmd = json.loads(first_msg)
-        if cmd.get("action") != "auth" or not cmd.get("token"):
-            await websocket.send_json({"type": "error", "message": "First message must be {action: 'auth', token: '...'}."})
+        if cmd.get("action") != "auth":
+            await websocket.send_json({"type": "error", "message": "First message must be {action: 'auth', ...}."})
             await websocket.close(code=4001, reason="Authentication required")
             return
-        user = decode_token(cmd["token"])
+
+        # Support both token auth and inline email/password auth
+        if cmd.get("token"):
+            user = decode_token(cmd["token"])
+        elif cmd.get("email") and cmd.get("password"):
+            # Inline login via WebSocket (bypasses CORS for desktop clients)
+            email = cmd["email"].lower()
+            with db_session() as conn:
+                row = conn.execute("SELECT id, email, name, password_hash FROM users WHERE email = ?", (email,)).fetchone()
+            if not row or not verify_password(cmd["password"], row[3]):
+                await websocket.send_json({"type": "error", "message": "Invalid email or password"})
+                await websocket.close(code=4001, reason="Invalid credentials")
+                return
+            user = {"id": row[0], "email": row[1], "name": row[2]}
+            # Send fresh token back to client
+            fresh_token = create_access_token({"id": row[0], "email": row[1], "name": row[2]})
+            await websocket.send_json({"type": "token", "token": fresh_token})
+        else:
+            await websocket.send_json({"type": "error", "message": "Provide token or email+password"})
+            await websocket.close(code=4001, reason="Authentication required")
+            return
     except (asyncio.TimeoutError, json.JSONDecodeError):
         await websocket.close(code=4001, reason="Authentication timeout or invalid format")
         return
@@ -572,12 +596,18 @@ async def websocket_transcribe(websocket: WebSocket):
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
-    # ─── Per-user concurrency check ───
+    # ─── Per-user concurrency: evict old session instead of rejecting ───
     user_id = user.get("id")
     if user_id in active_user_sessions:
-        await websocket.send_json({"type": "error", "message": "You already have an active transcription session. Close it first."})
-        await websocket.close(code=4003, reason="Concurrent session limit reached")
-        return
+        old_conn_id = active_user_sessions[user_id]
+        logger.warning(f"Evicting stale session {old_conn_id} for user {user_id}")
+        old_conn = active_connections.pop(old_conn_id, None)
+        if old_conn and old_conn.get("ws"):
+            try:
+                await old_conn["ws"].close(code=4003, reason="Session replaced by new connection")
+            except Exception:
+                pass
+        del active_user_sessions[user_id]
 
     active_connections[connection_id] = {"ws": websocket, "user": user}
     active_user_sessions[user_id] = connection_id
@@ -631,7 +661,11 @@ async def websocket_transcribe(websocket: WebSocket):
                         # Run transcription in thread pool to avoid blocking
                         loop = asyncio.get_event_loop()
                         segments_result, info = await loop.run_in_executor(
-                            None, lambda: model.transcribe(float32_array, language="en", beam_size=1, vad_filter=True)
+                            None, lambda: model.transcribe(
+                                float32_array, language="en", beam_size=5, vad_filter=True,
+                                condition_on_previous_text=False, initial_prompt="Clear English speech.",
+                                no_speech_threshold=0.6, log_prob_threshold=-1.0
+                            )
                         )
                         segments_list = await loop.run_in_executor(None, lambda: list(segments_result))
 
@@ -687,7 +721,11 @@ async def websocket_transcribe(websocket: WebSocket):
                                 float32_array = int16_array.astype(np.float32) / 32768.0
                                 loop = asyncio.get_event_loop()
                                 segments_result, _ = await loop.run_in_executor(
-                                    None, lambda: model.transcribe(float32_array, language="en", beam_size=1, vad_filter=True)
+                                    None, lambda: model.transcribe(
+                                        float32_array, language="en", beam_size=5, vad_filter=True,
+                                        condition_on_previous_text=False, initial_prompt="Clear English speech.",
+                                        no_speech_threshold=0.6, log_prob_threshold=-1.0
+                                    )
                                 )
                                 segments_list = await loop.run_in_executor(None, lambda: list(segments_result))
                                 for seg in segments_list:

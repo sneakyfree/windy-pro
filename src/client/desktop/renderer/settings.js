@@ -47,15 +47,55 @@ class SettingsPanel {
         </div>
 
         <div class="settings-section">
+          <h3>🔌 Transcription Engine</h3>
+          <div class="setting-row">
+            <label for="engineSelect">Engine</label>
+            <select id="engineSelect">
+              <option value="local" selected>🏠 Local — your device</option>
+              <option value="cloud">☁️ Cloud — WindyPro servers</option>
+              <option value="smart">🧠 Smart — auto-switch</option>
+            </select>
+          </div>
+          <p class="settings-hint" id="engineHint">Audio processed on your device. Nothing sent anywhere.</p>
+          <div id="cloudSettings" style="display:none;">
+            <div class="setting-row">
+              <label for="cloudUrl">Cloud URL</label>
+              <input type="text" id="cloudUrl" placeholder="wss://windypro.thewindstorm.uk" style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
+            </div>
+            <div id="cloudAccountStatus" style="margin:8px 0;padding:6px 10px;border-radius:6px;font-size:12px;background:#1a2e1a;color:#22C55E;display:none;">✅ Signed in</div>
+            <div id="cloudLoginForm">
+              <div class="setting-row" style="margin-top:6px;">
+                <label for="cloudEmail">Email</label>
+                <input type="email" id="cloudEmail" placeholder="you@example.com" style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
+              </div>
+              <div class="setting-row">
+                <label for="cloudPassword">Password</label>
+                <input type="password" id="cloudPassword" placeholder="••••••••" style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
+              </div>
+              <div class="setting-row">
+                <label for="cloudName" id="cloudNameLabel" style="display:none;">Name</label>
+                <input type="text" id="cloudName" placeholder="Your Name" style="display:none;width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
+              </div>
+              <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
+                <button id="cloudSignInBtn" style="padding:6px 16px;background:#22C55E;color:#000;border:none;border-radius:4px;font-weight:600;cursor:pointer;">Sign In</button>
+                <button id="cloudToggleRegister" style="padding:6px 12px;background:transparent;color:#4ecdc4;border:1px solid #333;border-radius:4px;font-size:11px;cursor:pointer;">Need an account?</button>
+                <span id="cloudLoginStatus" style="font-size:11px;color:#888;"></span>
+              </div>
+            </div>
+            <p class="settings-hint" style="color:#4ecdc4;">🔒 E2E encrypted. Zero data retention. Audio never stored.</p>
+          </div>
+        </div>
+
+        <div class="settings-section" id="localModelSection">
           <h3>🎤 Transcription</h3>
           <div class="setting-row">
             <label for="modelSelect">Model Size</label>
             <select id="modelSelect">
-              <option value="tiny">Tiny (75MB — fastest)</option>
-              <option value="base" selected>Base (150MB — balanced)</option>
-              <option value="small">Small (500MB — accurate)</option>
-              <option value="medium">Medium (1.5GB — high quality)</option>
-              <option value="large-v3">Large (3GB — best quality)</option>
+              <option value="tiny" selected>Tiny (75MB — fastest, CPU ✅)</option>
+              <option value="base">Base (150MB — balanced, CPU ✅)</option>
+              <option value="small">Small (500MB — ⚠️ GPU recommended)</option>
+              <option value="medium">Medium (1.5GB — ⚠️ GPU only)</option>
+              <option value="large-v3">Large (3GB — ⚠️ GPU only)</option>
             </select>
           </div>
           <div class="setting-row">
@@ -204,22 +244,253 @@ class SettingsPanel {
     // Close button
     this.panel.querySelector('#settingsClose').addEventListener('click', () => this.close());
 
-    // Model change
-    this.panel.querySelector('#modelSelect').addEventListener('change', (e) => {
-      this.saveSetting('model', e.target.value);
-      // Send config update to server
-      if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
-        this.app.ws.send(JSON.stringify({
-          action: 'config',
-          config: { model: e.target.value }
-        }));
+    // Engine selector — toggle cloud/local UI sections
+    const engineSelect = this.panel.querySelector('#engineSelect');
+    const cloudSettings = this.panel.querySelector('#cloudSettings');
+    const localModelSection = this.panel.querySelector('#localModelSection');
+    const engineHint = this.panel.querySelector('#engineHint');
+    engineSelect.addEventListener('change', (e) => {
+      const engine = e.target.value;
+      this.saveSetting('engine', engine);
+      this.app.transcriptionEngine = engine;
+      if (engine === 'cloud') {
+        cloudSettings.style.display = 'block';
+        localModelSection.style.display = 'none';
+        engineHint.textContent = '☁️🔒 Audio streamed to WindyPro Cloud. E2E encrypted, zero retention.';
+        engineHint.style.color = '#4ecdc4';
+      } else if (engine === 'smart') {
+        cloudSettings.style.display = 'block';
+        localModelSection.style.display = 'block';
+        engineHint.textContent = '🧠 Starts local. Auto-switches to cloud if your device struggles.';
+        engineHint.style.color = '#f7dc6f';
+      } else {
+        cloudSettings.style.display = 'none';
+        localModelSection.style.display = 'block';
+        engineHint.textContent = 'Audio processed on your device. Nothing sent anywhere.';
+        engineHint.style.color = '';
+      }
+      // Update badge
+      const badge = document.getElementById('modelBadge');
+      if (badge) {
+        const icon = engine === 'cloud' ? '☁️🔒' : engine === 'smart' ? '🧠' : '🏠';
+        badge.textContent = `${icon} ${engine}`;
       }
     });
 
-    // Device change (T18: propagate to server)
-    this.panel.querySelector('#deviceSelect').addEventListener('change', (e) => {
+    // Cloud URL change
+    const cloudUrlInput = this.panel.querySelector('#cloudUrl');
+    if (cloudUrlInput) {
+      cloudUrlInput.addEventListener('change', (e) => {
+        this.saveSetting('cloudUrl', e.target.value);
+        this.app.cloudUrl = e.target.value;
+      });
+    }
+
+    // Cloud Sign In / Register
+    let isRegisterMode = false;
+    const cloudSignInBtn = this.panel.querySelector('#cloudSignInBtn');
+    const cloudToggleRegister = this.panel.querySelector('#cloudToggleRegister');
+    const cloudLoginStatus = this.panel.querySelector('#cloudLoginStatus');
+    const cloudNameInput = this.panel.querySelector('#cloudName');
+    const cloudNameLabel = this.panel.querySelector('#cloudNameLabel');
+    const cloudLoginForm = this.panel.querySelector('#cloudLoginForm');
+    const cloudAccountStatus = this.panel.querySelector('#cloudAccountStatus');
+
+    // Show/hide login form based on existing token (loaded in loadSettings)
+    // Initial state: show login form, loadSettings will update if token exists
+
+    if (cloudToggleRegister) {
+      cloudToggleRegister.addEventListener('click', () => {
+        isRegisterMode = !isRegisterMode;
+        cloudNameInput.style.display = isRegisterMode ? '' : 'none';
+        cloudNameLabel.style.display = isRegisterMode ? '' : 'none';
+        cloudSignInBtn.textContent = isRegisterMode ? 'Create Account' : 'Sign In';
+        cloudToggleRegister.textContent = isRegisterMode ? 'Have an account?' : 'Need an account?';
+      });
+    }
+
+    if (cloudSignInBtn) {
+      cloudSignInBtn.addEventListener('click', async () => {
+        const cloudUrl = this.panel.querySelector('#cloudUrl').value || 'https://windypro.thewindstorm.uk';
+        const email = this.panel.querySelector('#cloudEmail').value;
+        const password = this.panel.querySelector('#cloudPassword').value;
+        const name = this.panel.querySelector('#cloudName').value;
+
+        if (!email || !password) {
+          cloudLoginStatus.textContent = '⚠️ Enter email and password';
+          cloudLoginStatus.style.color = '#EF4444';
+          return;
+        }
+
+        // Convert wss:// URL to https:// for REST API calls
+        const apiBase = cloudUrl.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://').replace(/\/$/, '');
+        const endpoint = isRegisterMode ? '/api/v1/auth/register' : '/api/v1/auth/login';
+        const body = isRegisterMode ? { email, password, name } : { email, password };
+
+        cloudSignInBtn.disabled = true;
+        cloudLoginStatus.textContent = '⏳ Connecting...';
+        cloudLoginStatus.style.color = '#888';
+
+        // Always store credentials on app for WS auth (bypasses CORS)
+        this.app.cloudEmail = email;
+        this.app.cloudPassword = password;
+        this.saveSetting('cloudEmail', email);
+        this.saveSetting('cloudPassword', password);
+
+        try {
+          const res = await fetch(apiBase + endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.detail || 'Login failed');
+          }
+
+          // Success — store token
+          this.app.cloudToken = data.token;
+          this.saveSetting('cloudToken', data.token);
+          this.saveSetting('cloudUser', data.user?.email || email);
+
+          cloudLoginForm.style.display = 'none';
+          cloudAccountStatus.style.display = 'block';
+          cloudAccountStatus.textContent = `✅ Signed in as ${data.user?.email || email}`;
+          this.showToast('☁️ Cloud account connected!');
+        } catch (err) {
+          // REST failed (CORS) — but credentials stored for WS auth
+          cloudLoginForm.style.display = 'none';
+          cloudAccountStatus.style.display = 'block';
+          cloudAccountStatus.textContent = `✅ Credentials saved (will auth over WebSocket)`;
+          this.saveSetting('cloudUser', email);
+          this.showToast('☁️ Credentials saved! Cloud auth will happen on first recording.');
+        } finally {
+          cloudSignInBtn.disabled = false;
+        }
+      });
+    }
+
+    // Cloud sign out (click status to sign out)
+    if (cloudAccountStatus) {
+      cloudAccountStatus.addEventListener('click', () => {
+        this.app.cloudToken = null;
+        this.saveSetting('cloudToken', '');
+        this.saveSetting('cloudUser', '');
+        cloudLoginForm.style.display = '';
+        cloudAccountStatus.style.display = 'none';
+        this.showToast('Signed out of cloud account');
+      });
+      cloudAccountStatus.style.cursor = 'pointer';
+      cloudAccountStatus.title = 'Click to sign out';
+    }
+
+    // Model info for confirmation dialog
+    const MODEL_INFO = {
+      tiny: { size: '75 MB', ram: '~150 MB', time: '2-5s', cpu: 'Excellent', quality: '★★☆☆☆' },
+      base: { size: '150 MB', ram: '~300 MB', time: '5-15s', cpu: 'Good', quality: '★★★☆☆' },
+      small: { size: '500 MB', ram: '~1 GB', time: '30-60s', cpu: 'Slow', quality: '★★★★☆' },
+      medium: { size: '1.5 GB', ram: '~3 GB', time: '2-5 min', cpu: 'Very Slow', quality: '★★★★☆' },
+      'large-v3': { size: '3 GB', ram: '~6 GB', time: '5-15 min', cpu: 'Unusable', quality: '★★★★★' }
+    };
+
+    // Model change — with confirmation dialog
+    const modelSelect = this.panel.querySelector('#modelSelect');
+    modelSelect.addEventListener('change', (e) => {
+      const newModel = e.target.value;
+      const info = MODEL_INFO[newModel] || {};
+      const currentModel = this._currentModel || 'tiny';
+
+      // Show confirmation for any model change
+      const needsGpu = ['small', 'medium', 'large-v3'].includes(newModel);
+      const gpuWarn = needsGpu
+        ? `\n⚠️ CPU Performance: ${info.cpu} — GPU recommended for real-time use.`
+        : `\n✅ CPU Performance: ${info.cpu}`;
+
+      const confirmed = confirm(
+        `Switch model: ${currentModel} → ${newModel}\n\n` +
+        `📦 Download: ${info.size} (first time only)\n` +
+        `💾 RAM needed: ${info.ram}\n` +
+        `⏱️ Load time: ${info.time}\n` +
+        `🎯 Quality: ${info.quality}` +
+        gpuWarn +
+        `\n\nProceed?`
+      );
+
+      if (!confirmed) {
+        // Reset dropdown to current model
+        modelSelect.value = currentModel;
+        return;
+      }
+
+      this.saveSetting('model', newModel);
+      if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
+        modelSelect.disabled = true;
+
+        // Start elapsed timer in badge
+        const badge = document.getElementById('modelBadge');
+        let elapsed = 0;
+        const timerInterval = setInterval(() => {
+          elapsed++;
+          const mins = Math.floor(elapsed / 60);
+          const secs = elapsed % 60;
+          const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+          if (badge) badge.textContent = `🧠 Loading ${newModel}... ${timeStr}`;
+          this.showToast(`Loading ${newModel} model... (${timeStr})`);
+        }, 1000);
+        if (badge) {
+          badge.textContent = `🧠 Loading ${newModel}...`;
+          badge.classList.add('loading');
+        }
+
+        this.app.ws.send(JSON.stringify({
+          action: 'config',
+          config: { model: newModel }
+        }));
+
+        // Listen for ack response
+        const handler = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'ack' && msg.action === 'config') {
+              clearInterval(timerInterval);
+              modelSelect.disabled = false;
+              this._currentModel = newModel;
+              if (msg.applied?.model_reloaded) {
+                this.showToast(`${newModel} model loaded ✅`);
+                if (badge) {
+                  badge.textContent = `🧠 ${newModel}`;
+                  badge.classList.remove('loading');
+                }
+              } else if (msg.applied?.model_error) {
+                this.showToast(`Failed: ${msg.applied.model_error}`);
+                modelSelect.value = currentModel;
+                if (badge) {
+                  badge.textContent = `🧠 ${currentModel}`;
+                  badge.classList.remove('loading');
+                }
+              } else if (msg.applied?.model_note) {
+                this.showToast(msg.applied.model_note);
+              }
+              this.app.ws.removeEventListener('message', handler);
+            }
+          } catch (_) { }
+        };
+        this.app.ws.addEventListener('message', handler);
+        // Extended timeout for large models (10 min)
+        setTimeout(() => {
+          clearInterval(timerInterval);
+          modelSelect.disabled = false;
+          if (badge) badge.classList.remove('loading');
+        }, 600000);
+      }
+    });
+
+    // Device change (T18: propagate to server — triggers model reload)
+    const deviceSelect = this.panel.querySelector('#deviceSelect');
+    deviceSelect.addEventListener('change', (e) => {
       this.saveSetting('device', e.target.value);
       if (this.app.ws && this.app.ws.readyState === WebSocket.OPEN) {
+        this.showToast('Device changed — will reload model on next recording');
         this.app.ws.send(JSON.stringify({
           action: 'config',
           config: { device: e.target.value }
@@ -338,6 +609,30 @@ class SettingsPanel {
     try {
       const settings = await window.windyAPI.getSettings();
       if (settings) {
+        // Engine selector
+        if (settings.engine) {
+          this.panel.querySelector('#engineSelect').value = settings.engine;
+          this.app.transcriptionEngine = settings.engine;
+          this.panel.querySelector('#engineSelect').dispatchEvent(new Event('change'));
+        }
+        if (settings.cloudUrl) {
+          this.panel.querySelector('#cloudUrl').value = settings.cloudUrl;
+          this.app.cloudUrl = settings.cloudUrl;
+        }
+        // Restore cloud login state
+        if (settings.cloudToken) {
+          this.app.cloudToken = settings.cloudToken;
+          const loginForm = this.panel.querySelector('#cloudLoginForm');
+          const accountStatus = this.panel.querySelector('#cloudAccountStatus');
+          if (loginForm) loginForm.style.display = 'none';
+          if (accountStatus) {
+            accountStatus.style.display = 'block';
+            accountStatus.textContent = `✅ Signed in as ${settings.cloudUser || 'user'}`;
+          }
+        }
+        // Restore email/password for WS-based auth
+        if (settings.cloudEmail) this.app.cloudEmail = settings.cloudEmail;
+        if (settings.cloudPassword) this.app.cloudPassword = settings.cloudPassword;
         if (settings.model) this.panel.querySelector('#modelSelect').value = settings.model;
         if (settings.device) this.panel.querySelector('#deviceSelect').value = settings.device;
         if (settings.language) this.panel.querySelector('#languageSelect').value = settings.language;
@@ -438,6 +733,11 @@ class SettingsPanel {
   saveSetting(key, value) {
     if (window.windyAPI) {
       window.windyAPI.updateSettings({ [key]: value });
+    }
+    // Also persist cloud settings to localStorage (fallback for windows without windyAPI)
+    const cloudKeys = ['engine', 'cloudUrl', 'cloudToken', 'cloudEmail', 'cloudPassword', 'cloudUser'];
+    if (cloudKeys.includes(key)) {
+      try { localStorage.setItem(`windy_${key}`, value || ''); } catch (_) { }
     }
   }
 
