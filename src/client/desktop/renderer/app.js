@@ -94,18 +94,19 @@ class WindyApp {
     }
 
     // Fallback: also check localStorage for cloud settings (always available)
+    // localStorage ALWAYS overrides defaults since it reflects user's most recent Settings choice
     try {
       const lsEngine = localStorage.getItem('windy_engine');
       const lsCloudUrl = localStorage.getItem('windy_cloudUrl');
       const lsCloudToken = localStorage.getItem('windy_cloudToken');
       const lsCloudEmail = localStorage.getItem('windy_cloudEmail');
       const lsCloudPassword = localStorage.getItem('windy_cloudPassword');
-      if (lsEngine && !this.transcriptionEngine) this.transcriptionEngine = lsEngine;
-      if (lsCloudUrl && !this.cloudUrl) this.cloudUrl = lsCloudUrl;
-      if (lsCloudToken && !this.cloudToken) this.cloudToken = lsCloudToken;
-      if (lsCloudEmail && !this.cloudEmail) this.cloudEmail = lsCloudEmail;
-      if (lsCloudPassword && !this.cloudPassword) this.cloudPassword = lsCloudPassword;
-      console.log(`[Init] Final: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
+      if (lsEngine) this.transcriptionEngine = lsEngine;
+      if (lsCloudUrl) this.cloudUrl = lsCloudUrl;
+      if (lsCloudToken) this.cloudToken = lsCloudToken;
+      if (lsCloudEmail) this.cloudEmail = lsCloudEmail;
+      if (lsCloudPassword) this.cloudPassword = lsCloudPassword;
+      console.log(`[Init] Final: Engine=${this.transcriptionEngine}, CloudToken=${this.cloudToken ? '✅' : '❌'}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
     } catch (_) { }
 
     // Check for crash recovery via Electron IPC
@@ -748,6 +749,14 @@ class WindyApp {
     }
 
     try {
+      // Reload cloud settings from localStorage (they may have been saved after init)
+      const lsToken = localStorage.getItem('windy_cloudToken');
+      const lsUrl = localStorage.getItem('windy_cloudUrl');
+      const lsEngine = localStorage.getItem('windy_engine');
+      if (lsToken) this.cloudToken = lsToken;
+      if (lsUrl) this.cloudUrl = lsUrl;
+      if (lsEngine) this.transcriptionEngine = lsEngine;
+
       // If cloud mode, attempt cloud WS connection first
       // Use default URL if not explicitly set
       if (this.transcriptionEngine === 'cloud' && !this.cloudUrl) {
