@@ -550,51 +550,62 @@ async def _transcribe_buffer(buffer: bytearray, model, segment_start_time: float
     return results, audio_seconds
 
 @app.websocket("/ws/transcribe")
-async def websocket_transcribe(websocket: WebSocket):
+async def websocket_transcribe(websocket: WebSocket, token: str = Query(None)):
     """
     WebSocket endpoint for real-time audio streaming.
-    Auth via first-message: client sends {action: "auth", token: "..."} as first message.
+    Auth via query param (?token=xxx) or first-message: {action: "auth", token: "..."}.
     Then streams binary Int16 PCM audio at 16kHz mono.
     """
     await websocket.accept()
     connection_id = str(uuid.uuid4())
+    user = None
 
-    # ─── First-message authentication ───
-    try:
-        first_msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
-        cmd = json.loads(first_msg)
-        if cmd.get("action") != "auth":
-            await websocket.send_json({"type": "error", "message": "First message must be {action: 'auth', ...}."})
-            await websocket.close(code=4001, reason="Authentication required")
+    # ─── Query-param authentication (preferred) ───
+    if token:
+        try:
+            user = decode_token(token)
+            logger.info(f"WS auth via query param for user {user.get('email', '?')}")
+        except Exception as e:
+            logger.error(f"Query param token invalid: {e}")
+            await websocket.send_json({"type": "error", "message": "Invalid or expired token"})
+            await websocket.close(code=4001, reason="Invalid or expired token")
             return
 
-        # Support both token auth and inline email/password auth
-        if cmd.get("token"):
-            user = decode_token(cmd["token"])
-        elif cmd.get("email") and cmd.get("password"):
-            # Inline login via WebSocket (bypasses CORS for desktop clients)
-            email = cmd["email"].lower()
-            with db_session() as conn:
-                row = conn.execute("SELECT id, email, name, password_hash FROM users WHERE email = ?", (email,)).fetchone()
-            if not row or not verify_password(cmd["password"], row[3]):
-                await websocket.send_json({"type": "error", "message": "Invalid email or password"})
-                await websocket.close(code=4001, reason="Invalid credentials")
+    # ─── First-message authentication (fallback) ───
+    if not user:
+        try:
+            first_msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+            cmd = json.loads(first_msg)
+            if cmd.get("action") != "auth":
+                await websocket.send_json({"type": "error", "message": "First message must be {action: 'auth', ...}."})
+                await websocket.close(code=4001, reason="Authentication required")
                 return
-            user = {"id": row[0], "email": row[1], "name": row[2]}
-            # Send fresh token back to client
-            fresh_token = create_access_token({"id": row[0], "email": row[1], "name": row[2]})
-            await websocket.send_json({"type": "token", "token": fresh_token})
-        else:
-            await websocket.send_json({"type": "error", "message": "Provide token or email+password"})
-            await websocket.close(code=4001, reason="Authentication required")
+
+            # Support both token auth and inline email/password auth
+            if cmd.get("token"):
+                user = decode_token(cmd["token"])
+            elif cmd.get("email") and cmd.get("password"):
+                email = cmd["email"].lower()
+                with db_session() as conn:
+                    row = conn.execute("SELECT id, email, name, password_hash FROM users WHERE email = ?", (email,)).fetchone()
+                if not row or not verify_password(cmd["password"], row[3]):
+                    await websocket.send_json({"type": "error", "message": "Invalid email or password"})
+                    await websocket.close(code=4001, reason="Invalid credentials")
+                    return
+                user = {"id": row[0], "email": row[1], "name": row[2]}
+                fresh_token = create_access_token({"id": row[0], "email": row[1], "name": row[2]})
+                await websocket.send_json({"type": "token", "token": fresh_token})
+            else:
+                await websocket.send_json({"type": "error", "message": "Provide token or email+password"})
+                await websocket.close(code=4001, reason="Authentication required")
+                return
+        except (asyncio.TimeoutError, json.JSONDecodeError):
+            await websocket.close(code=4001, reason="Authentication timeout or invalid format")
             return
-    except (asyncio.TimeoutError, json.JSONDecodeError):
-        await websocket.close(code=4001, reason="Authentication timeout or invalid format")
-        return
-    except HTTPException:
-        await websocket.send_json({"type": "error", "message": "Invalid or expired token"})
-        await websocket.close(code=4001, reason="Invalid or expired token")
-        return
+        except HTTPException:
+            await websocket.send_json({"type": "error", "message": "Invalid or expired token"})
+            await websocket.close(code=4001, reason="Invalid or expired token")
+            return
 
     # ─── Per-user concurrency: evict old session instead of rejecting ───
     user_id = user.get("id")

@@ -675,14 +675,26 @@ class WindyApp {
 
       this.cloudWs.onerror = (err) => {
         console.error('[Cloud] WebSocket error:', err);
-        reject(err);
+        if (!resolved) { resolved = true; reject(err); }
       };
 
       this.cloudWs.onclose = (event) => {
         console.log(`[Cloud] Disconnected. Code: ${event.code}, Reason: ${event.reason}`);
+        if (this._cloudPingInterval) {
+          clearInterval(this._cloudPingInterval);
+          this._cloudPingInterval = null;
+        }
         this.cloudWs = null;
         this._usingCloud = false;
+        if (!resolved) { resolved = true; reject(new Error(`Cloud WS closed: ${event.code}`)); }
       };
+
+      // Keepalive pings to prevent Cloudflare tunnel from dropping idle WS
+      this._cloudPingInterval = setInterval(() => {
+        if (this.cloudWs?.readyState === WebSocket.OPEN) {
+          this.cloudWs.send(JSON.stringify({ action: 'ping' }));
+        }
+      }, 15000);
 
       // Timeout — 5 seconds
       setTimeout(() => {
