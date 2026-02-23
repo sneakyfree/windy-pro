@@ -1,3 +1,36 @@
+// Prevent EPIPE crashes when stdout/stderr pipe breaks
+process.stdout?.on('error', (err) => { if (err.code !== 'EPIPE') throw err; });
+process.stderr?.on('error', (err) => { if (err.code !== 'EPIPE') throw err; });
+
+// Global crash handler — log to ~/.config/windy-pro/crash.log
+const _fs = require('fs');
+const _path = require('path');
+const _os = require('os');
+const crashLogPath = _path.join(_os.homedir(), '.config', 'windy-pro', 'crash.log');
+
+function writeCrashLog(type, err) {
+  try {
+    const dir = _path.dirname(crashLogPath);
+    if (!_fs.existsSync(dir)) _fs.mkdirSync(dir, { recursive: true });
+    // Redact API keys from error messages
+    let msg = String(err?.stack || err?.message || err);
+    msg = msg.replace(/Bearer\s+\S+/gi, 'Bearer ***REDACTED***');
+    msg = msg.replace(/sk-[a-zA-Z0-9]+/g, 'sk-***');
+    msg = msg.replace(/key[_-]?[a-zA-Z0-9]{10,}/gi, 'KEY_REDACTED');
+    const entry = `[${new Date().toISOString()}] ${type}: ${msg}\n`;
+    _fs.appendFileSync(crashLogPath, entry);
+  } catch (_) { }
+}
+
+process.on('uncaughtException', (err) => {
+  writeCrashLog('UncaughtException', err);
+  console.error('[CRASH]', err.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  writeCrashLog('UnhandledRejection', reason);
+  console.error('[REJECTION]', String(reason));
+});
 /**
  * Windy Pro - Electron Main Process
  * 
@@ -9,12 +42,15 @@
  * DNA Strand: B1.1
  */
 
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog, Notification } = require('electron');
 
 // Fix: bake in --no-sandbox for Linux AppImage (chrome-sandbox SUID issue)
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('no-sandbox');
 }
+// Enable Web Speech API support
+app.commandLine.appendSwitch('enable-speech-dispatcher');
+app.commandLine.appendSwitch('enable-features', 'WebSpeechAPI');
 const path = require('path');
 const Store = require('electron-store');
 const { spawn } = require('child_process');
@@ -22,6 +58,13 @@ const fs = require('fs');
 const os = require('os');
 const { CursorInjector } = require('./injection/injector');
 const { WindyUpdater } = require('./updater');
+
+// Safe IPC send — guards against disposed render frames
+function safeSend(channel, ...args) {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send(channel, ...args);
+  }
+}
 
 // Cursor injection module
 const injector = new CursorInjector();
@@ -49,6 +92,7 @@ const store = new Store({
       opacity: 1.0
     },
     engine: {
+      model: 'base',
       clearOnPaste: false,
       livePreview: true,
       autoArchive: true,
@@ -69,6 +113,7 @@ const store = new Store({
 });
 
 let mainWindow = null;
+let miniWindow = null;
 let tray = null;
 let isRecording = false;
 let pythonProcess = null;
@@ -230,13 +275,22 @@ function startPythonServer() {
 
   // Notify renderer that Python is loading
   if (mainWindow) {
-    mainWindow.webContents.send('python-loading', true);
+    safeSend('python-loading', true);
+  }
+
+  const engineConfig = store.get('engine', {});
+  const modelSize = engineConfig.model || 'base';
+
+  // Soft performance note — runtime monitoring handles actual detection
+  if (!['tiny', 'base'].includes(modelSize)) {
+    console.log(`[Performance] Using "${modelSize}" model — runtime monitoring will check if it keeps up`);
   }
 
   pythonProcess = spawn(pythonPath, [
     '-m', serverModule,
     '--host', serverConfig.host,
-    '--port', String(serverConfig.port)
+    '--port', String(serverConfig.port),
+    '--model', modelSize
   ], {
     cwd: projectRoot,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -248,7 +302,9 @@ function startPythonServer() {
     console.log(`[Python] ${msg}`);
     // Detect server ready
     if (msg.includes('Waiting for connections') || msg.includes('Server running')) {
-      if (mainWindow) mainWindow.webContents.send('python-loading', false);
+      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+        safeSend('python-loading', false);
+      }
     }
   });
 
@@ -268,8 +324,8 @@ function startPythonServer() {
     } else if (code !== 0 && pythonRestartCount >= MAX_PYTHON_RESTARTS) {
       console.error('[Python] Max restarts reached. Server will not restart.');
       if (mainWindow) {
-        mainWindow.webContents.send('state-change', 'error');
-        mainWindow.webContents.send('python-loading', false);
+        safeSend('state-change', 'error');
+        safeSend('python-loading', false);
       }
     }
   });
@@ -277,8 +333,8 @@ function startPythonServer() {
   pythonProcess.on('error', (err) => {
     console.error(`[Python] Failed to start: ${err.message}`);
     if (mainWindow) {
-      mainWindow.webContents.send('state-change', 'error');
-      mainWindow.webContents.send('python-loading', false);
+      safeSend('state-change', 'error');
+      safeSend('python-loading', false);
     }
   });
 }
@@ -328,6 +384,44 @@ function createWindow() {
 
   // Load the renderer
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+
+  // CSP Headers
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; " +
+          "script-src 'self'; " +
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+          "font-src 'self' https://fonts.gstatic.com; " +
+          "connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.deepgram.com https://api.groq.com https://api.openai.com wss://api.deepgram.com; " +
+          "img-src 'self' data:; " +
+          "media-src 'self' blob:;"
+        ]
+      }
+    });
+  });
+
+  // Renderer crash handler
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    writeCrashLog('RendererCrash', `reason=${details.reason} exitCode=${details.exitCode}`);
+    console.error('[Main] Renderer crashed:', details.reason);
+    // Reload the renderer
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+      }
+    }, 1000);
+  });
+
+  // Forward renderer console messages to terminal for debugging
+  mainWindow.webContents.on('console-message', (event, level, message) => {
+    // Only forward errors, not debug spam — prevents EPIPE on stdout
+    if (level >= 2) {  // 2 = warning, 3 = error
+      try { console.log(`[Renderer] ${message}`); } catch (_) { }
+    }
+  });
 
   // Save window position on move/resize
   mainWindow.on('move', saveWindowBounds);
@@ -401,19 +495,30 @@ function updateTrayMenu() {
       label: isRecording ? '⏹ Stop Recording' : '🎤 Start Recording',
       click: () => toggleRecording()
     },
+    {
+      label: '📋 Paste Last Transcript',
+      click: () => pasteTranscript()
+    },
     { type: 'separator' },
     {
       label: '⚙️ Settings',
       click: () => {
         mainWindow.show();
-        mainWindow.webContents.send('open-settings');
+        safeSend('open-settings');
       }
     },
     {
       label: '📋 Open Vault',
       click: () => {
         mainWindow.show();
-        mainWindow.webContents.send('open-vault');
+        safeSend('open-vault');
+      }
+    },
+    {
+      label: '📜 History',
+      click: () => {
+        mainWindow.show();
+        safeSend('open-history');
       }
     },
     { type: 'separator' },
@@ -472,6 +577,64 @@ function updateTrayIcon(state) {
 }
 
 /**
+ * Create or show the mini tornado widget
+ */
+function showMiniWidget() {
+  if (miniWindow && !miniWindow.isDestroyed()) {
+    miniWindow.show();
+    updateMiniState(isRecording ? 'recording' : 'idle');
+    return;
+  }
+  
+  miniWindow = new BrowserWindow({
+    width: 60,
+    height: 60,
+    x: 100,
+    y: 100,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    focusable: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'mini-preload.js')
+    }
+  });
+  
+  miniWindow.loadFile(path.join(__dirname, 'renderer', 'mini-widget.html'));
+  miniWindow.setVisibleOnAllWorkspaces(true);
+  
+  miniWindow.on('closed', () => { miniWindow = null; });
+  
+  // Update state after load
+  miniWindow.webContents.on('did-finish-load', () => {
+    updateMiniState(isRecording ? 'recording' : 'idle');
+  });
+}
+
+/**
+ * Update mini widget state
+ */
+function updateMiniState(state) {
+  if (miniWindow && !miniWindow.isDestroyed() && miniWindow.webContents && !miniWindow.webContents.isDestroyed()) {
+    miniWindow.webContents.send('mini-state-change', state);
+  }
+}
+
+// Handle expand from mini widget
+ipcMain.on('mini-expand', () => {
+  if (miniWindow && !miniWindow.isDestroyed()) miniWindow.hide();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
+/**
  * Register global hotkeys
  */
 function registerHotkeys() {
@@ -490,10 +653,17 @@ function registerHotkeys() {
   });
   console.log(`[Hotkey] Paste transcript (${hotkeys.pasteTranscript}): ${regPaste ? 'OK' : 'FAILED'}`);
 
-  // Show/hide window
+  // Show/hide window — toggle between main window and mini tornado widget
   const regShow = globalShortcut.register(hotkeys.showHide, () => {
     if (mainWindow.isVisible()) {
+      // Minimize to tornado widget
       mainWindow.hide();
+      showMiniWidget();
+    } else if (miniWindow && miniWindow.isVisible()) {
+      // Expand back to main window
+      miniWindow.hide();
+      mainWindow.show();
+      mainWindow.focus();
     } else {
       mainWindow.show();
       mainWindow.focus();
@@ -507,9 +677,10 @@ function registerHotkeys() {
  */
 function toggleRecording() {
   isRecording = !isRecording;
-  mainWindow.webContents.send('toggle-recording', isRecording);
+  safeSend('toggle-recording', isRecording);
   updateTrayMenu();
   updateTrayIcon(isRecording ? 'listening' : 'idle');
+  updateMiniState(isRecording ? 'recording' : 'idle');
 
   // Update tray icon color based on state
   if (tray) {
@@ -521,7 +692,7 @@ function toggleRecording() {
  * Paste current transcript to cursor position
  */
 function pasteTranscript() {
-  mainWindow.webContents.send('request-transcript');
+  safeSend('request-transcript');
 }
 
 // IPC Handlers
@@ -529,7 +700,7 @@ function pasteTranscript() {
 // Get transcript and paste it via cursor injection
 ipcMain.on('transcript-for-paste', async (event, transcript) => {
   if (transcript && transcript.trim()) {
-    mainWindow.webContents.send('state-change', 'injecting');
+    safeSend('state-change', 'injecting');
     updateTrayIcon('injecting');
 
     // Hide Windy Pro window so focus returns to the previous app
@@ -544,7 +715,7 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
       await injector.inject(transcript);
     } catch (error) {
       console.error('Injection failed:', error.message);
-      mainWindow.webContents.send('injection-error', error.message);
+      safeSend('injection-error', error.message);
     }
 
     // Show window again after paste WITHOUT stealing focus
@@ -554,7 +725,7 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
         mainWindow.showInactive();  // Show without taking focus
       }
       const newState = isRecording ? 'listening' : 'idle';
-      mainWindow.webContents.send('state-change', newState);
+      safeSend('state-change', newState);
       updateTrayIcon(newState);
     }, 500);
   }
@@ -653,6 +824,87 @@ ipcMain.handle('test-google-connection', async () => {
   }
 });
 
+ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
+  const fs = require('fs');
+  const os = require('os');
+  const { execSync } = require('child_process');
+  
+  const tmpDir = os.tmpdir();
+  const webmPath = `${tmpDir}/windy-batch-${Date.now()}.webm`;
+  const wavPath = `${tmpDir}/windy-batch-${Date.now()}.wav`;
+  
+  try {
+    // Save base64 audio to temp file
+    const buffer = Buffer.from(base64Audio, 'base64');
+    fs.writeFileSync(webmPath, buffer);
+    
+    // Convert to WAV using ffmpeg
+    execSync(`ffmpeg -y -i "${webmPath}" -ar 16000 -ac 1 -c:a pcm_s16le "${wavPath}" 2>/dev/null`);
+    
+    // Find the Python venv — check multiple locations
+    const path = require('path');
+    const appRoot = path.resolve(__dirname, '..', '..', '..');
+    const venvPaths = [
+      path.join(appRoot, 'venv', 'bin', 'python3'),
+      `${app.getPath('userData')}/venv/bin/python3`,
+      '/usr/bin/python3'
+    ];
+    const pythonPath = venvPaths.find(p => fs.existsSync(p)) || 'python3';
+    console.log('[Batch] Using python:', pythonPath);
+    
+    // Run faster-whisper transcription via temp script
+    const modelName = store.get('engine.model') || 'base';
+    const scriptPath = `${tmpDir}/windy-batch-transcribe-${Date.now()}.py`;
+    const scriptContent = [
+      'from faster_whisper import WhisperModel',
+      `model = WhisperModel("${modelName}", device="cpu", compute_type="int8")`,
+      `segments, info = model.transcribe("${wavPath}", language="en", beam_size=5, condition_on_previous_text=True, vad_filter=True, no_speech_threshold=0.6)`,
+      'text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())',
+      'print(text)'
+    ].join('\n');
+    fs.writeFileSync(scriptPath, scriptContent);
+    
+    const result = execSync(`${pythonPath} "${scriptPath}"`, {
+      timeout: 120000,
+      maxBuffer: 10 * 1024 * 1024
+    });
+    
+    try { fs.unlinkSync(scriptPath); } catch (_) {}
+    
+    return result.toString().trim();
+  } catch (err) {
+    console.error('[Batch Local] Error:', err.message);
+    throw new Error(`Local transcription failed: ${err.message}`);
+  } finally {
+    // Cleanup temp files
+    try { fs.unlinkSync(webmPath); } catch (_) {}
+    try { fs.unlinkSync(wavPath); } catch (_) {}
+  }
+});
+
+ipcMain.handle('auto-paste-text', async (event, text) => {
+  if (!text || !text.trim()) return false;
+  try {
+    const { clipboard } = require('electron');
+    clipboard.writeText(text.trim());
+    // Small delay to let the app window hide, then paste at cursor
+    await new Promise(r => setTimeout(r, 200));
+    // Simulate Ctrl+V at current cursor position
+    if (process.platform === 'linux') {
+      require('child_process').execSync('xdotool key --clearmodifiers ctrl+v', { timeout: 5000 });
+    } else if (process.platform === 'darwin') {
+      require('child_process').execSync('osascript -e \'tell application "System Events" to keystroke "v" using command down\'', { timeout: 5000 });
+    } else {
+      // Windows — use PowerShell
+      require('child_process').execSync('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"', { timeout: 5000 });
+    }
+    return true;
+  } catch (err) {
+    console.error('[AutoPaste] Failed:', err.message);
+    return false;
+  }
+});
+
 ipcMain.on('archive-transcript', async (event, payload) => {
   try {
     const route = payload?.route || store.get('engine.archiveRouteToday') || 'local';
@@ -727,6 +979,50 @@ ipcMain.on('minimize-window', () => {
   if (mainWindow) mainWindow.minimize();
 });
 
+// Batch transcription complete notification
+ipcMain.on('batch-complete', (event, { wordCount }) => {
+  // Update tray icon back to idle
+  updateTrayIcon('idle');
+  updateMiniState('idle');
+  updateTrayMenu();
+
+  // Show OS notification
+  if (Notification.isSupported()) {
+    const notification = new Notification({
+      title: '✨ Transcription Ready!',
+      body: `${wordCount || 0} words captured and polished.`,
+      silent: false
+    });
+    notification.on('click', () => {
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+    notification.show();
+  }
+});
+
+// Batch processing started — update tray to red
+ipcMain.on('batch-processing', () => {
+  updateTrayIcon('error'); // red = processing
+  updateMiniState('processing');
+  if (tray) tray.setToolTip('Windy Pro — Processing transcription...');
+});
+
+// Save file dialog
+ipcMain.handle('save-file', async (event, { content, defaultName, filters }) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: defaultName || 'transcript.txt',
+    filters: filters || [{ name: 'Text', extensions: ['txt'] }]
+  });
+  if (!result.canceled && result.filePath) {
+    fs.writeFileSync(result.filePath, content, 'utf8');
+    return { ok: true, path: result.filePath };
+  }
+  return { ok: false };
+});
+
 // Crash recovery — check for orphaned temp file
 ipcMain.handle('check-crash-recovery', async () => {
   const tempFile = path.join(os.tmpdir(), 'windy_session.txt');
@@ -771,12 +1067,22 @@ app.whenReady().then(async () => {
   registerHotkeys();
 
   // Auto-update check (T16 — fail silently if no releases)
+  let updaterInstance = null;
   try {
-    const updater = new WindyUpdater();
-    updater.checkForUpdates();
+    updaterInstance = new WindyUpdater();
+    updaterInstance.checkForUpdates();
   } catch (e) {
     console.log('[Main] Auto-updater skipped:', e.message);
   }
+
+  // Manual update check from settings
+  ipcMain.handle('check-for-updates', async () => {
+    if (updaterInstance) {
+      updaterInstance.forceCheck();
+      return { ok: true };
+    }
+    return { ok: false, error: 'Updater not available' };
+  });
 
   app.on('activate', () => {
     // macOS: re-create window if dock icon clicked

@@ -38,3 +38,20 @@ windy_session.txt
 # Secrets / env files
 .env
 deploy/.env
+
+# Web client
+src/client/web/dist/
+src/client/web/node_modules/
+
+# Electron builds
+*.deb
+*.AppImage
+*.snap
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Antigravity brain
+.gemini/

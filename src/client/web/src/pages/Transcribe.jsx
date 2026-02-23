@@ -139,6 +139,9 @@ export default function Transcribe() {
             wsRef.current?.send(JSON.stringify({ action: 'start' }))
             setIsRecording(true)
             setSessionStart(Date.now())
+
+            // Haptic feedback on mobile
+            if (navigator.vibrate) navigator.vibrate(50)
         } catch (err) {
             setState('error')
             console.error('[Audio] Mic access denied:', err)
@@ -150,6 +153,18 @@ export default function Transcribe() {
         mediaStreamRef.current?.getTracks().forEach(t => t.stop())
         audioContextRef.current?.close()
         setAudioLevel(0)
+
+        // Haptic feedback on mobile
+        if (navigator.vibrate) navigator.vibrate([30, 50, 30])
+
+        // Auto-copy transcript to clipboard
+        const text = segments.map(s => s.text).join(' ').trim()
+        if (text) {
+            navigator.clipboard.writeText(text).then(() => {
+                setCopyMsg('✅ Copied to clipboard!')
+                setTimeout(() => setCopyMsg(''), 3000)
+            }).catch(() => { })
+        }
 
         // Tell server to stop
         wsRef.current?.send(JSON.stringify({ action: 'stop' }))
@@ -239,9 +254,14 @@ export default function Transcribe() {
                     {isRecording ? '⏹' : '🎙️'}
                 </button>
                 <button className="ctrl-btn" onClick={copyTranscript} title="Copy All">
-                    {copyMsg || '📋'}
+                    📋
                 </button>
             </div>
+
+            {/* Copy toast */}
+            {copyMsg && (
+                <div className="copy-toast">{copyMsg}</div>
+            )}
         </div>
     )
 }

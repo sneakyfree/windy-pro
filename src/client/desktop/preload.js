@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('windyAPI', {
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),
   chooseArchiveFolder: () => ipcRenderer.invoke('choose-archive-folder'),
   archiveTranscript: (payload) => ipcRenderer.send('archive-transcript', payload),
+  batchTranscribeLocal: (base64Audio) => ipcRenderer.invoke('batch-transcribe-local', base64Audio),
+  autoPasteText: (text) => ipcRenderer.invoke('auto-paste-text', text),
   onArchiveResult: (callback) => {
     ipcRenderer.on('archive-result', (event, payload) => callback(payload));
   },
@@ -60,9 +62,18 @@ contextBridge.exposeInMainWorld('windyAPI', {
     ipcRenderer.on('python-loading', (event, isLoading) => callback(isLoading));
   },
 
+  // Batch processing notifications
+  notifyBatchComplete: (wordCount) => ipcRenderer.send('batch-complete', { wordCount }),
+  notifyBatchProcessing: () => ipcRenderer.send('batch-processing'),
+  onOpenHistory: (callback) => {
+    ipcRenderer.on('open-history', () => callback());
+  },
+  saveFile: (options) => ipcRenderer.invoke('save-file', options),
+
   // Platform info
   platform: process.platform,
 
   // App version (reads from package.json via main process)
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
 });

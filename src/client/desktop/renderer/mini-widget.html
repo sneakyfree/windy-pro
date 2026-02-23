@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 56px; height: 56px;
+    background: transparent;
+    overflow: hidden;
+    -webkit-app-region: drag;
+    user-select: none;
+  }
+  .widget {
+    width: 56px; height: 56px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: radial-gradient(circle, #1a2332 0%, #0d1520 100%);
+    border: 2px solid #2a3a4a;
+    cursor: grab;
+    position: relative;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .widget:active { cursor: grabbing; }
+  .widget.recording {
+    border-color: #00ff88;
+    box-shadow: 0 0 12px rgba(0,255,136,0.5), 0 0 24px rgba(0,255,136,0.2);
+  }
+  .widget.processing {
+    border-color: #ffaa00;
+    box-shadow: 0 0 12px rgba(255,170,0,0.5);
+  }
+  .widget.jolt {
+    animation: jolt 0.3s ease-out;
+  }
+  @keyframes jolt {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.25); }
+    60% { transform: scale(0.9); }
+    100% { transform: scale(1); }
+  }
+  .tornado {
+    font-size: 28px;
+    filter: drop-shadow(0 0 4px rgba(100,200,255,0.3));
+    transition: filter 0.3s;
+  }
+  .recording .tornado {
+    animation: spin 1.2s linear infinite;
+    filter: drop-shadow(0 0 8px rgba(0,255,136,0.6));
+  }
+  .processing .tornado {
+    animation: pulse 0.8s ease-in-out infinite;
+    filter: drop-shadow(0 0 8px rgba(255,170,0,0.6));
+  }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.7; }
+    50% { transform: scale(1.15); opacity: 1; }
+  }
+  /* Green recording ring */
+  .ring {
+    position: absolute;
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    pointer-events: none;
+  }
+  .recording .ring {
+    border-color: rgba(0,255,136,0.4);
+    animation: ring-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes ring-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.4; }
+    50% { transform: scale(1.15); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+  <div class="widget" id="widget">
+    <div class="ring"></div>
+    <span class="tornado">🌪️</span>
+  </div>
+  <script>
+    const widget = document.getElementById('widget');
+    
+    // Listen for state changes from main process
+    if (window.windyMini) {
+      window.windyMini.onStateChange((state) => {
+        widget.classList.remove('recording', 'processing', 'jolt');
+        if (state === 'recording') {
+          widget.classList.add('jolt');
+          setTimeout(() => {
+            widget.classList.remove('jolt');
+            widget.classList.add('recording');
+          }, 300);
+        } else if (state === 'processing') {
+          widget.classList.add('processing');
+        } else if (state === 'idle') {
+          widget.classList.add('jolt');
+          setTimeout(() => widget.classList.remove('jolt'), 300);
+        }
+      });
+    }
+    
+    // Double-click to expand back to main window
+    widget.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      if (window.windyMini) window.windyMini.expandWindow();
+    });
+  </script>
+</body>
+</html>

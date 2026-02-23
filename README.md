@@ -1,168 +1,158 @@
 # Windy Pro
 
-**Real-time voice-to-text with a trustable state machine.**
+**Voice-to-text with a trustable state machine.**
 
 > "The Green Strobe Never Lies."
 
 ## What is Windy Pro?
 
-A local-first voice-to-text platform that eliminates the anxiety of "Is it recording?" with clear visual feedback and no arbitrary time limits.
+A local-first voice-to-text platform that eliminates the anxiety of "Is it recording?" with clear visual feedback — plus a powerful cloud option with GPU acceleration for the highest quality output.
 
-### Key Differentiators vs Wispr Flow
+### Key Features
+
+| Feature | Details |
+|---------|---------|
+| **Batch Mode** ✨ | Record first, get polished text on stop. LLM-cleaned punctuation, paragraphs, and formatting. Best quality. |
+| **Live Mode** | Words stream in real-time as you speak. Faster feedback, lower quality. |
+| **5 Engines** | Local (offline), WindyPro Cloud (GPU), Deepgram, Groq, OpenAI |
+| **Configurable Duration** | 5/10/15/30 minute recordings |
+| **Green Strobe** | Trustable visual feedback — if it's green, your words are being captured |
+| **Privacy-first** | Local mode: nothing leaves your device. Cloud: E2E encrypted, zero retention. |
+| **Auto-archive** | Local, Dropbox, and Google Drive sync |
+
+### vs Wispr Flow
 
 | Feature | Wispr Flow | Windy Pro |
-|---------|------------|-----------|
-| Session Limit | ~5 minutes | **Unlimited** |
-| Feedback | Opaque | **Real-time Green Strobe** |
+|---------|------------|-----------:|
+| Session Limit | ~5 minutes | **Up to 30 min** |
+| Feedback | Opaque | **Green Strobe** |
 | Privacy | Cloud only | **Local-first** |
-| Output | Polished | **Raw/Verbatim** (perfect for LLM prompts) |
+| Batch Mode | ✅ | **✅ + LLM cleanup** |
+| Engines | 1 | **5** |
 | Cost | ~$17/mo | **Free (local) / $5 (cloud)** |
 
 ## Quick Start
 
 ### Prerequisites
 
-- Python 3.10+
-- CUDA 11.7+ (for GPU acceleration, optional)
+- Node.js 18+ (Electron client)
+- Python 3.10+ (local transcription engine)
+- CUDA 11.7+ (optional, for GPU acceleration)
 
 ### Installation
 
 ```bash
-# Clone and enter directory
 cd windy-pro
 
-# Create virtual environment
+# Python backend
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or: venv\Scripts\activate  # Windows
-
-# Install dependencies
+source venv/bin/activate
 pip install -r requirements.txt
 
-# Download a model (happens automatically on first run)
+# Electron client
+npm install
 ```
 
-### Run the Demo
+### Run the App
 
 ```bash
-# Quick test with tiny model
-python src/engine/demo.py --model tiny
-
-# Better accuracy with base model
-python src/engine/demo.py --model base
-
-# Best accuracy (requires more RAM/VRAM)
-python src/engine/demo.py --model large-v3-turbo
-```
-
-### Run the WebSocket Server (for Electron client)
-
-```bash
+# Start local transcription server
 python -m src.engine.server --model base --port 9876
+
+# Start Electron app (in another terminal)
+npm start
 ```
+
+### Run the Cloud API (Veron server)
+
+```bash
+# Set required env vars
+export WINDY_JWT_SECRET="your-secret"
+export WINDY_API_KEY="your-api-key"
+
+# Start cloud API
+uvicorn src.cloud.api:app --host 0.0.0.0 --port 8000
+```
+
+## Transcription Engines
+
+| Engine | Type | Quality | Speed | Setup |
+|--------|------|---------|-------|-------|
+| 🏠 **Local** | Offline | ★★★☆☆ | Real-time | Works out of the box |
+| ☁️ **WindyPro Cloud** | GPU (RTX 5090) | ★★★★★ | Batch | Sign up in Settings |
+| 🎙️ **Deepgram** | Streaming | ★★★★★ | Real-time | API key |
+| ⚡ **Groq** | LPU | ★★★★☆ | Fastest | API key |
+| 🌐 **OpenAI** | Cloud | ★★★★☆ | Batch | API key |
+
+## Recording Modes
+
+### ✨ Batch Mode (Default)
+Record audio, then process everything at once for the best quality:
+1. Press **Ctrl+Shift+Space** — green strobe activates
+2. Speak naturally — no text appears yet
+3. Press **Ctrl+Shift+Space** again — "✨ Processing..." state
+4. Polished text appears with proper punctuation and paragraphs
+
+The cloud batch endpoint uses GPU transcription (Whisper large-v3) + LLM cleanup (Ollama) for formatting.
+
+### 📝 Live Mode
+Words stream in real-time as you speak. Lower quality but immediate feedback.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Electron Client (Future)                  │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────────────┐  │
-│  │ Green Strobe│  │ Text Display │  │ Cursor Injection   │  │
-│  └──────┬──────┘  └──────┬───────┘  └─────────┬──────────┘  │
-│         │                │                    │              │
-│         └────────────────┴────────────────────┘              │
-│                          │                                   │
-│                   WebSocket Connection                       │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-┌─────────────────────────┴───────────────────────────────────┐
-│                    Python Backend                            │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────────────┐  │
-│  │Audio Capture│→ │ Transcriber  │→ │  WebSocket Server  │  │
-│  │(Microphone) │  │(faster-whis) │  │   (JSON/Binary)    │  │
-│  └─────────────┘  └──────┬───────┘  └────────────────────┘  │
-│                          │                                   │
-│                  ┌───────┴────────┐                         │
-│                  │  Temp File     │  (Crash Recovery)       │
-│                  │ session.txt    │                         │
-│                  └────────────────┘                         │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│              Electron Client                     │
+│  ┌──────────┐  ┌───────────┐  ┌──────────────┐  │
+│  │Green     │  │Transcript │  │Settings      │  │
+│  │Strobe    │  │Display    │  │Panel         │  │
+│  └──────────┘  └───────────┘  └──────────────┘  │
+│                 │                                 │
+│        WebSocket / REST (batch)                   │
+└─────────────────┬───────────────────────────────┘
+                  │
+  ┌───────────────┼──────────────────────┐
+  │               │                      │
+  ▼               ▼                      ▼
+Local Server   Cloud API            Third-party APIs
+(Python WS)    (FastAPI/GPU)        (Deepgram/Groq/OpenAI)
 ```
 
-## State Machine
+## Hotkeys
 
-The core of Windy Pro's UX is the **Trustable State Machine**:
+| Hotkey | Action |
+|--------|--------|
+| **Ctrl+Shift+Space** | Toggle Recording |
+| **Ctrl+Shift+V** | Paste Transcript |
+| **Ctrl+Shift+W** | Show/Hide Window |
 
+## Testing
+
+```bash
+source venv/bin/activate
+python -m pytest tests/ -v
 ```
-┌─────────────┐
-│   IDLE      │ ← Gray, not recording
-└──────┬──────┘
-       │ User presses hotkey
-       ▼
-┌─────────────┐
-│  LISTENING  │ ← GREEN STROBE (you are safe)
-└──────┬──────┘
-       │ Processing backlog
-       ▼
-┌─────────────┐
-│  BUFFERING  │ ← Yellow (temporary)
-└──────┬──────┘
-       │ Error condition
-       ▼
-┌─────────────┐
-│   ERROR     │ ← Red + auto-reconnect
-└──────┬──────┘
-       │ Hotkey release
-       ▼
-┌─────────────┐
-│  INJECTING  │ ← Blue flash (pasting to cursor)
-└─────────────┘
-```
-
-**Rule:** If the Green Strobe is on, your words are being captured. Period.
 
 ## Project Structure
 
 ```
 windy-pro/
-├── README.md
-├── requirements.txt
 ├── src/
-│   ├── engine/           # Python backend
-│   │   ├── transcriber.py    # Core transcription engine
-│   │   ├── audio_capture.py  # Microphone input
-│   │   ├── server.py         # WebSocket server
-│   │   └── demo.py           # CLI demo
-│   └── client/           # Electron frontend (Phase 1.2)
-└── docs/
-    ├── 00_AI_CONTEXT_INJECTION.md
-    ├── 01_VISION_AND_STRATEGY.md
-    ├── 02_TECHNICAL_ARCHITECTURE.md
-    ├── 03_MASTER_ROADMAP.md
-    └── 04_BOARD_SYNTHESIS_ANALYSIS.md
+│   ├── engine/              # Local Python transcription
+│   │   ├── transcriber.py
+│   │   └── server.py
+│   ├── client/
+│   │   ├── desktop/         # Electron app
+│   │   │   ├── main.js
+│   │   │   └── renderer/
+│   │   │       ├── app.js
+│   │   │       ├── settings.js
+│   │   │       └── index.html
+│   │   └── web/             # React web client
+│   └── cloud/
+│       └── api.py           # FastAPI cloud server
+└── tests/
 ```
-
-## Roadmap
-
-### Phase 1: Desktop MVP ✅ In Progress
-- [x] Python wrapper for faster-whisper
-- [x] Streaming partial tokens
-- [x] Crash recovery (temp file)
-- [x] WebSocket server
-- [ ] Electron floating window
-- [ ] Cursor injection
-- [ ] TurboTax installer
-
-### Phase 2: Windy Cloud
-- [ ] Dockerize backend
-- [ ] Deploy to VPS
-- [ ] Opus audio compression
-- [ ] API key authentication
-
-### Phase 3: Ecosystem
-- [ ] Prompt Vault (history)
-- [ ] VS Code extension
-- [ ] Mobile PWA
 
 ## License
 

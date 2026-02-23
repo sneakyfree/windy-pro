@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:*; media-src 'self' mediastream:;">
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* wss: https:; media-src 'self' mediastream:;">
   <title>Windy Pro</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -19,9 +19,9 @@
         <span class="title">Windy Pro</span>
       </div>
       <div class="title-bar-right">
-        <button class="title-btn" id="settingsBtn" title="Settings">⚙️</button>
-        <button class="title-btn" id="minimizeBtn" title="Minimize">─</button>
-        <button class="title-btn close" id="closeBtn" title="Close">×</button>
+        <button class="title-btn" id="settingsBtn" title="Settings" aria-label="Open settings">⚙️</button>
+        <button class="title-btn" id="minimizeBtn" title="Minimize" aria-label="Minimize window">─</button>
+        <button class="title-btn close" id="closeBtn" title="Close" aria-label="Close window">×</button>
       </div>
     </div>
 
@@ -45,27 +45,38 @@
       <div class="transcript-scroll" id="transcriptScroll">
         <div class="transcript-content" id="transcriptContent">
           <!-- Transcript segments will appear here -->
-          <div class="placeholder">Press <kbd>Ctrl+Shift+Space</kbd> to start recording</div>
+          <div class="placeholder">
+            <div style="margin-bottom:8px;font-weight:600;opacity:0.9;">⌨️ Keyboard Shortcuts</div>
+            <div style="margin:4px 0;"><kbd>Ctrl+Shift+Space</kbd> — <span
+                style="color:#22C55E;font-weight:600;">Start</span> recording</div>
+            <div style="margin:4px 0;"><kbd>Ctrl+Shift+Space</kbd> — <span
+                style="color:#EF4444;font-weight:600;">Stop</span> recording</div>
+            <div style="margin:4px 0;"><kbd>Ctrl+Shift+V</kbd> — <span
+                style="color:#4ECDC4;font-weight:600;">Paste</span> transcript to cursor</div>
+            <div style="margin:4px 0;"><kbd>Ctrl+Shift+W</kbd> — <span style="color:#F7DC6F;font-weight:600;">Show /
+                Hide</span> app window</div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Control Bar -->
-    <div class="control-bar">
-      <button class="control-btn primary" id="recordBtn" title="Start/Stop Recording">
+    <div class="control-bar" role="toolbar" aria-label="Recording controls">
+      <button class="control-btn primary" id="recordBtn" title="Start/Stop Recording" aria-label="Toggle recording">
         <span class="icon">🎤</span>
         <span class="label">Record</span>
       </button>
-      <button class="control-btn" id="clearBtn" title="Clear Transcript">
+      <button class="control-btn" id="clearBtn" title="Clear Transcript" aria-label="Clear transcript">
         <span class="icon">🗑️</span>
       </button>
-      <button class="control-btn" id="copyBtn" title="Copy All">
+      <button class="control-btn" id="copyBtn" title="Copy All" aria-label="Copy transcript to clipboard">
         <span class="icon">📋</span>
       </button>
-      <button class="control-btn" id="pasteBtn" title="Paste to Cursor">
+      <button class="control-btn" id="pasteBtn" title="Paste to Cursor" aria-label="Paste transcript at cursor">
         <span class="icon">📝</span>
       </button>
-      <select class="archive-route" id="archiveRouteSelect" title="Today route: where dictations archive today">
+      <select class="archive-route" id="archiveRouteSelect" title="Today route: where dictations archive today"
+        aria-label="Archive route">
         <option value="local">Route: Local</option>
         <option value="local_dropbox">Route: Local + Dropbox</option>
         <option value="local_google">Route: Local + Google</option>
@@ -78,11 +89,15 @@
       <span class="status-dot" id="connectionDot"></span>
       <span class="status-text" id="connectionText">Connecting...</span>
       <span class="word-count" id="wordCount"></span>
+      <span class="model-badge" id="modelBadge" title="Current transcription model">🏠 base</span>
       <span class="archive-badge" id="archiveStatus">Archive: idle</span>
     </div>
   </div>
 
   <script src="vault.js"></script>
+  <script src="wizard.js"></script>
+  <script src="changelog.js"></script>
+  <script src="history.js"></script>
   <script src="settings.js"></script>
   <script src="app.js"></script>
 </body>

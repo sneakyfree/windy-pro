@@ -8,7 +8,8 @@
  */
 
 const { autoUpdater } = require('electron-updater');
-const { dialog, BrowserWindow } = require('electron');
+const { dialog, BrowserWindow, Notification } = require('electron');
+const Store = require('electron-store');
 
 class WindyUpdater {
     constructor() {
@@ -54,14 +55,35 @@ class WindyUpdater {
     }
 
     /**
-     * Check for updates (call on app startup)
+     * Check for updates (call on app startup).
+     * Only checks once per day to avoid spamming GitHub API.
      */
     checkForUpdates() {
         try {
+            const store = new Store();
+            const lastCheck = store.get('lastUpdateCheck', 0);
+            const oneDayMs = 24 * 60 * 60 * 1000;
+            if (Date.now() - lastCheck < oneDayMs) {
+                console.log('[Updater] Skipping — checked within last 24h');
+                return;
+            }
+            store.set('lastUpdateCheck', Date.now());
             autoUpdater.checkForUpdates();
         } catch (error) {
-            // Silently fail if update server unreachable
             console.log('[Updater] Check failed (offline?):', error.message);
+        }
+    }
+
+    /**
+     * Force check (from settings button), ignores daily limit.
+     */
+    forceCheck() {
+        try {
+            const store = new Store();
+            store.set('lastUpdateCheck', Date.now());
+            autoUpdater.checkForUpdates();
+        } catch (error) {
+            console.log('[Updater] Force check failed:', error.message);
         }
     }
 

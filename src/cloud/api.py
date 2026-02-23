@@ -186,7 +186,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Windy Pro Cloud API",
     description="Cloud-hosted voice-to-text transcription service",
-    version="0.1.1",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
@@ -453,7 +453,7 @@ async def health_check():
 
     return HealthResponse(
         status="healthy",
-        version="0.1.1",
+        version="0.4.0",
         gpu_available=gpu_available,
         models_loaded=[],
         active_connections=len(active_connections)
@@ -464,16 +464,147 @@ async def health_check():
 #  Batch Transcription
 # ═══════════════════════════════════
 
-@app.post("/api/v1/transcribe", status_code=501)
-async def transcribe_file(
-    config: TranscriptionRequest,
-    api_key: str = Depends(verify_api_key)
+async def _llm_cleanup(raw_text: str) -> str:
+    """
+    Use a small LLM to clean up transcription:
+    - Fix punctuation and capitalization
+    - Add paragraph breaks at natural points
+    - Fix common transcription errors
+    - Remove filler words (um, uh, like, you know)
+
+    Uses the Veron GPU's spare capacity.
+    If no LLM is available, falls back to rule-based cleanup.
+    """
+    # Try using a local LLM via Ollama if available
+    try:
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": "llama3.2:3b",
+                    "prompt": (
+                        "Clean up this voice transcription. Fix punctuation, capitalization, "
+                        "and paragraph structure. Remove filler words (um, uh, like, you know). "
+                        "Keep the original meaning exactly. Do not add or change any words. "
+                        "Only fix formatting.\n\n"
+                        f"Transcription:\n{raw_text}\n\nCleaned text:"
+                    ),
+                    "stream": False,
+                    "options": {"temperature": 0.1}
+                },
+                timeout=30.0
+            )
+            if response.status_code == 200:
+                data = response.json()
+                cleaned = data.get("response", "").strip()
+                if cleaned and len(cleaned) > len(raw_text) * 0.5:
+                    return cleaned
+    except Exception:
+        pass
+
+    # Fallback: rule-based cleanup
+    text = raw_text
+    # Capitalize first letter of sentences
+    text = re.sub(r'(?<=[.!?]\s)(\w)', lambda m: m.group(1).upper(), text)
+    if text:
+        text = text[0].upper() + text[1:]
+    # Add period at end if missing
+    if text and text[-1] not in '.!?':
+        text += '.'
+    # Remove common fillers
+    for filler in [' um ', ' uh ', ' like, ', ' you know, ', ' I mean, ']:
+        text = text.replace(filler, ' ')
+    # Clean up multiple spaces
+    text = re.sub(r' +', ' ', text)
+    return text.strip()
+
+
+@app.post("/api/v1/transcribe/batch")
+async def batch_transcribe(
+    request: Request,
+    user: dict = Depends(get_current_user)
 ):
-    """Batch transcription — not yet implemented."""
-    return JSONResponse(
-        status_code=501,
-        content={"detail": "Batch transcription is not yet available. Use the WebSocket endpoint /ws/transcribe for real-time streaming."}
-    )
+    """
+    Batch transcription — upload complete audio, get polished text back.
+    Supports up to 30 minutes of audio.
+    Uses large-v3 on GPU + LLM cleanup for highest quality.
+    """
+    # Get audio from request body
+    body = await request.body()
+    if len(body) > 100_000_000:  # 100MB max
+        raise HTTPException(status_code=413, detail="Audio too large (100MB max)")
+    if len(body) == 0:
+        return {"text": "", "raw_text": "", "duration": 0, "language": "en", "segments": []}
+
+    # Save to temp file
+    import tempfile
+    import subprocess as _sp
+    with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as tmp:
+        tmp.write(body)
+        tmp_path = tmp.name
+
+    wav_path = tmp_path + '.wav'
+    try:
+        # Convert to WAV via ffmpeg
+        _sp.run([
+            'ffmpeg', '-y', '-i', tmp_path,
+            '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav_path
+        ], capture_output=True, check=True)
+
+        # Transcribe with GPU model
+        model = await get_cloud_model()
+        loop = asyncio.get_event_loop()
+        segments_result, info = await loop.run_in_executor(
+            None, lambda: model.transcribe(
+                wav_path,
+                language="en",
+                beam_size=5,
+                best_of=5,
+                vad_filter=True,
+                condition_on_previous_text=True,
+                word_timestamps=True,
+                no_speech_threshold=0.6
+            )
+        )
+
+        # Collect all segments
+        full_segments = await loop.run_in_executor(None, lambda: list(segments_result))
+        raw_text = " ".join(seg.text.strip() for seg in full_segments if seg.text.strip())
+
+        # LLM cleanup pass
+        polished_text = await _llm_cleanup(raw_text)
+
+        return {
+            "text": polished_text,
+            "raw_text": raw_text,
+            "duration": info.duration,
+            "language": info.language,
+            "segments": [
+                {
+                    "text": seg.text.strip(),
+                    "start": seg.start,
+                    "end": seg.end,
+                    "words": [{"word": w.word, "start": w.start, "end": w.end} for w in (seg.words or [])]
+                }
+                for seg in full_segments if seg.text.strip()
+            ]
+        }
+    except _sp.CalledProcessError as e:
+        logger.error(f"ffmpeg conversion failed: {e.stderr}")
+        raise HTTPException(status_code=422, detail="Audio format conversion failed. Ensure audio is valid.")
+    except Exception as e:
+        logger.error(f"Batch transcription failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        try:
+            os.unlink(wav_path)
+        except OSError:
+            pass
 
 
 # ═══════════════════════════════════

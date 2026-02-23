@@ -169,18 +169,35 @@ class TestVault:
 
 
 # ═══════════════════════════════════
-#  Batch Transcription (501)
+#  Batch Transcription
 # ═══════════════════════════════════
 
 class TestBatchTranscription:
-    def test_batch_returns_501(self, client, api_key_headers):
-        res = client.post("/api/v1/transcribe", json={
-            "audio_data": "base64data",
-            "language": "en",
-            "model": "base"
-        }, headers=api_key_headers)
-        assert res.status_code == 501
-        assert "not yet available" in res.json()["detail"]
+    def test_batch_requires_auth(self, client):
+        """POST /api/v1/transcribe/batch without auth should 401."""
+        res = client.post("/api/v1/transcribe/batch", content=b"fake-audio")
+        assert res.status_code == 401
+
+    def test_batch_empty_body(self, client, auth_headers):
+        """POST /api/v1/transcribe/batch with empty body should return empty result."""
+        res = client.post(
+            "/api/v1/transcribe/batch",
+            content=b"",
+            headers={**auth_headers, "Content-Type": "application/octet-stream"}
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["text"] == ""
+        assert data["raw_text"] == ""
+
+    def test_batch_endpoint_exists(self, client, auth_headers):
+        """POST /api/v1/transcribe/batch should accept POST and not 404/405."""
+        res = client.post(
+            "/api/v1/transcribe/batch",
+            content=b"",
+            headers={**auth_headers, "Content-Type": "application/octet-stream"}
+        )
+        assert res.status_code not in (404, 405, 501)
 
 
 # ═══════════════════════════════════

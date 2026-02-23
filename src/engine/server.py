@@ -56,42 +56,64 @@ class WindyServer:
     async def _broadcast(self, message: dict):
         """Send message to all connected clients."""
         if not self.clients:
+            # print(f"[DEBUG] _broadcast: NO clients to send to!")
             return
         
         data = json.dumps(message)
+        # print(f"[DEBUG] _broadcast: sending {message.get('type','')} to {len(self.clients)} clients, data_len={len(data)}")
         # Use _safe_send to gracefully handle dead connections
-        await asyncio.gather(
+        results = await asyncio.gather(
             *[self._safe_send(client, data) for client in list(self.clients)],
             return_exceptions=True
         )
+        # print(f"[DEBUG] _broadcast: send complete, results={results}")
     
     async def _safe_send(self, ws: WebSocketServerProtocol, data: str):
         """Send data to a single client, removing it on failure."""
         try:
             await ws.send(data)
-        except Exception:
+            # print(f"[DEBUG] _safe_send: OK")
+        except Exception as e:
+            # print(f"[DEBUG] _safe_send: FAILED: {e}")
             self.clients.discard(ws)
     
+    def _on_performance_warning(self, ratio: float, current_model: str, recommend: str | None):
+        """Called from transcriber thread when performance ratio is tracked."""
+        # Rate-limit: only broadcast once per 10 seconds
+        now = time.monotonic()
+        if not hasattr(self, '_last_perf_broadcast'):
+            self._last_perf_broadcast = 0
+        if now - self._last_perf_broadcast < 10:
+            return
+        self._last_perf_broadcast = now
+        
+        msg = {
+            "type": "performance",
+            "ratio": round(ratio, 2),
+            "model": current_model,
+            "recommend": recommend,
+            "status": "slow" if ratio > 1.0 else "ok"
+        }
+        coro = self._broadcast(msg)
+        if self._loop and self._loop.is_running():
+            asyncio.run_coroutine_threadsafe(coro, self._loop)
+
     def _on_state_change(self, old_state: TranscriptionState, new_state: TranscriptionState):
         """Handle transcriber state changes (thread-safe)."""
-        if self._loop:
-            self._loop.call_soon_threadsafe(
-                asyncio.ensure_future,
-                self._broadcast({
-                    "type": "state",
-                    "state": new_state.value,
-                    "previous": old_state.value
-                })
-            )
+        coro = self._broadcast({
+            "type": "state",
+            "state": new_state.value,
+            "previous": old_state.value
+        })
+        if self._loop and self._loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+            future.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
         else:
-            asyncio.create_task(self._broadcast({
-                "type": "state",
-                "state": new_state.value,
-                "previous": old_state.value
-            }))
+            asyncio.create_task(coro)
     
     def _on_transcript(self, segment):
         """Handle new transcript segments."""
+        # print(f"[DEBUG] _on_transcript called: text='{segment.text}' partial={segment.is_partial} clients={len(self.clients)}")
         # Apply vibe processing if enabled
         if self.vibe.enabled and not segment.is_partial:
             original_text = segment.text
@@ -114,29 +136,20 @@ class WindyServer:
                 is_partial=segment.is_partial
             )
         
-        if self._loop:
-            self._loop.call_soon_threadsafe(
-                asyncio.ensure_future,
-                self._broadcast({
-                    "type": "transcript",
-                    "text": segment.text,
-                    "start": segment.start_time,
-                    "end": segment.end_time,
-                    "confidence": segment.confidence,
-                    "partial": segment.is_partial,
-                    "words": segment.words
-                })
-            )
+        coro = self._broadcast({
+            "type": "transcript",
+            "text": segment.text,
+            "start": segment.start_time,
+            "end": segment.end_time,
+            "confidence": segment.confidence,
+            "partial": segment.is_partial,
+            "words": segment.words
+        })
+        if self._loop and self._loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+            future.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
         else:
-            asyncio.create_task(self._broadcast({
-                "type": "transcript",
-                "text": segment.text,
-                "start": segment.start_time,
-                "end": segment.end_time,
-                "confidence": segment.confidence,
-                "partial": segment.is_partial,
-                "words": segment.words
-            }))
+            asyncio.create_task(coro)
     
     async def _handle_client(self, websocket: WebSocketServerProtocol):
         """Handle a client connection."""
@@ -156,6 +169,11 @@ class WindyServer:
                     # Binary = audio data
                     if self.transcriber:
                         self.transcriber.feed_audio(message)
+                    if not hasattr(self, '_audio_debug_count'):
+                        self._audio_debug_count = 0
+                    self._audio_debug_count += 1
+                    if self._audio_debug_count % 50 == 1:
+                        pass  # Debug logging removed to prevent EPIPE
                 else:
                     # Text = command
                     try:
@@ -223,12 +241,22 @@ class WindyServer:
                     "type": "ack",
                     "action": "start",
                     "success": True,
-                    "session_id": self._current_session_id
+                    "session_id": self._current_session_id,
+                    "model": self.transcriber.config.model_size,
+                    "device": self.transcriber.config.device
                 }))
         
         elif action == "stop":
             if self.transcriber:
-                transcript = self.transcriber.stop_session()
+                # Run stop_session in executor to avoid blocking the event loop.
+                # This lets queued transcript broadcasts (from the worker thread)
+                # drain before we send the stop ack.
+                loop = asyncio.get_running_loop()
+                transcript = await loop.run_in_executor(
+                    None, self.transcriber.stop_session
+                )
+                # Allow any pending transcript broadcasts to flush
+                await asyncio.sleep(0.1)
                 word_count = len(transcript.split()) if transcript else 0
                 duration_s = 0.0
                 if hasattr(self, '_session_start_time') and self._session_start_time:
@@ -261,16 +289,62 @@ class WindyServer:
                 self.vibe.enabled = config_data["vibe_enabled"]
                 applied["vibe_enabled"] = config_data["vibe_enabled"]
 
-            # Device change (hot-swappable)
+            # Device change — requires model reload (same as model change)
             if "device" in config_data and self.transcriber:
-                self.transcriber.config.device = config_data["device"]
-                applied["device"] = config_data["device"]
+                new_device = config_data["device"]
+                self.transcriber.config.device = new_device
+                applied["device"] = new_device
+                # Queue model reload with new device
+                self._pending_model = self.transcriber.config.model_size
+                applied["device_note"] = "Device change will reload model"
 
-            # Model change requires restart — queue it
+            # Model change — hot-reload immediately if no active session
             if "model" in config_data:
-                applied["model"] = config_data["model"]
-                applied["model_note"] = "Model change takes effect on next session start"
-                self._pending_model = config_data["model"]
+                new_model = config_data["model"]
+                applied["model"] = new_model
+                
+                if self.transcriber and not self.transcriber._running:
+                    # No active session — reload immediately
+                    await websocket.send(json.dumps({
+                        "type": "state",
+                        "state": "loading",
+                        "message": f"Loading {new_model} model..."
+                    }))
+                    await self._broadcast({
+                        "type": "state",
+                        "state": "loading",
+                        "message": f"Loading {new_model} model..."
+                    })
+                    
+                    old_config = self.transcriber.config
+                    old_config.model_size = new_model
+                    new_transcriber = StreamingTranscriber(old_config)
+                    new_transcriber.on_state_change(self._on_state_change)
+                    new_transcriber.on_transcript(self._on_transcript)
+                    new_transcriber.on_performance_warning(self._on_performance_warning)
+                    
+                    loop = asyncio.get_event_loop()
+                    success = await loop.run_in_executor(
+                        None, new_transcriber.load_model
+                    )
+                    
+                    if success:
+                        self.transcriber = new_transcriber
+                        applied["model_reloaded"] = True
+                        print(f"Model hot-reloaded to: {new_model}")
+                    else:
+                        applied["model_reloaded"] = False
+                        applied["model_error"] = f"Failed to load {new_model}"
+                    
+                    self._pending_model = None
+                    await self._broadcast({
+                        "type": "state",
+                        "state": "idle"
+                    })
+                else:
+                    # Session active — queue for next session
+                    self._pending_model = new_model
+                    applied["model_note"] = "Model change takes effect on next session start"
 
             await websocket.send(json.dumps({
                 "type": "ack",
@@ -369,6 +443,7 @@ class WindyServer:
         self.transcriber = StreamingTranscriber(config)
         self.transcriber.on_state_change(self._on_state_change)
         self.transcriber.on_transcript(self._on_transcript)
+        self.transcriber.on_performance_warning(self._on_performance_warning)
 
         # Optional test/CI bypass for model loading to keep integration tests
         # deterministic when whisper dependencies are intentionally absent.

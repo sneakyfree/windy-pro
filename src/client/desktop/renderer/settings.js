@@ -44,6 +44,29 @@ class SettingsPanel {
             <input type="checkbox" id="livePreview" checked>
           </div>
           <p class="settings-hint">ON = words stream live. OFF = strobe-only during recording; text appears after stop.</p>
+          <div class="setting-row">
+            <label for="recordingModeSelect">Recording Mode</label>
+            <select id="recordingModeSelect">
+              <option value="batch" selected>✨ Batch — polished text on stop (best quality)</option>
+              <option value="live">📝 Live — words appear as you speak (faster, lower quality)</option>
+            </select>
+          </div>
+          <p class="settings-hint" id="recordingModeHint">Records audio, then processes everything at once for the best possible quality. Like Wispr Flow but with longer recordings (up to 30 min).</p>
+          <div class="setting-row" id="maxDurationRow">
+            <label for="maxRecordingSelect">Max Recording</label>
+            <select id="maxRecordingSelect">
+              <option value="5">5 minutes</option>
+              <option value="10" selected>10 minutes</option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+            </select>
+          </div>
+          <p class="settings-hint">Longer recordings = more context = better quality. Processing time increases with length.</p>
+          <div class="setting-row" title="Save batch recordings for playback.">
+            <label for="saveAudio">Save audio recordings</label>
+            <input type="checkbox" id="saveAudio" checked>
+          </div>
+          <p class="settings-hint">When on, a playback bar appears after batch processing so you can re-listen.</p>
         </div>
 
         <div class="settings-section">
@@ -51,9 +74,12 @@ class SettingsPanel {
           <div class="setting-row">
             <label for="engineSelect">Engine</label>
             <select id="engineSelect">
-              <option value="local" selected>🏠 Local — your device</option>
-              <option value="cloud">☁️ Cloud — WindyPro servers</option>
-              <option value="smart">🧠 Smart — auto-switch</option>
+              <option value="local" selected>🏠 Local — works offline, fully private</option>
+              <option value="cloud">☁️ WindyPro Cloud — E2E encrypted</option>
+              <option value="deepgram">🎙️ Deepgram — best real-time quality</option>
+              <option value="groq">⚡ Groq — fastest cloud (whisper-large-v3)</option>
+              <option value="openai">🌐 OpenAI Whisper — reliable cloud</option>
+              <option value="smart">🧠 Smart — auto-switch local↔cloud</option>
             </select>
           </div>
           <p class="settings-hint" id="engineHint">Audio processed on your device. Nothing sent anywhere.</p>
@@ -86,6 +112,30 @@ class SettingsPanel {
           </div>
         </div>
 
+        <div id="apiKeySection" style="display:none;">
+          <div id="apiKey_deepgram_row" style="display:none;margin:8px 0;">
+            <div class="setting-row">
+              <label for="deepgramApiKey">Deepgram Key</label>
+              <input type="password" id="deepgramApiKey" placeholder="dg_..." style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
+            </div>
+            <p class="settings-hint" style="font-size:11px;color:#888;">Real-time streaming with interim results. 12,000 free mins/month. Best for live dictation.</p>
+          </div>
+          <div id="apiKey_groq_row" style="display:none;margin:8px 0;">
+            <div class="setting-row">
+              <label for="groqApiKey">Groq Key</label>
+              <input type="password" id="groqApiKey" placeholder="gsk_..." style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
+            </div>
+            <p class="settings-hint" style="font-size:11px;color:#888;">Whisper-large-v3 on custom LPU. Blazing fast batch processing. Free tier available.</p>
+          </div>
+          <div id="apiKey_openai_row" style="display:none;margin:8px 0;">
+            <div class="setting-row">
+              <label for="openaiApiKey">OpenAI Key</label>
+              <input type="password" id="openaiApiKey" placeholder="sk-..." style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
+            </div>
+            <p class="settings-hint" style="font-size:11px;color:#888;">OpenAI Whisper-1 API. Reliable and accurate. Pay-per-use ($0.006/min).</p>
+          </div>
+        </div>
+
         <div class="settings-section" id="localModelSection">
           <h3>🎤 Transcription</h3>
           <div class="setting-row">
@@ -113,14 +163,22 @@ class SettingsPanel {
               <option value="es">Español</option>
               <option value="fr">Français</option>
               <option value="de">Deutsch</option>
+              <option value="pt">Português</option>
+              <option value="it">Italiano</option>
               <option value="ja">日本語</option>
               <option value="zh">中文</option>
               <option value="ko">한국어</option>
-              <option value="pt">Português</option>
-              <option value="it">Italiano</option>
+              <option value="ar">العربية</option>
+              <option value="hi">हिन्दी</option>
+              <option value="ru">Русский</option>
               <option value="auto">Auto-detect</option>
             </select>
           </div>
+          <div class="setting-row" title="Identify different speakers in the transcript. Only available with Cloud and Deepgram engines.">
+            <label for="diarizeEnabled">Identify speakers</label>
+            <input type="checkbox" id="diarizeEnabled">
+          </div>
+          <p class="settings-hint">Labels speakers as Speaker 1, Speaker 2, etc. Cloud &amp; Deepgram only.</p>
         </div>
         
         <div class="settings-section">
@@ -205,17 +263,18 @@ class SettingsPanel {
 
         <div class="settings-section">
           <h3>⌨️ Hotkeys</h3>
+          <p class="settings-hint">Click a shortcut to rebind, then press the new key combo.</p>
           <div class="setting-row">
             <label>Toggle Recording</label>
-            <span class="hotkey-display">Ctrl+Shift+Space</span>
+            <div class="shortcut-capture" id="shortcutToggle" tabindex="0" data-key="toggleRecording">Ctrl+Shift+Space</div>
           </div>
           <div class="setting-row">
             <label>Paste Transcript</label>
-            <span class="hotkey-display">Ctrl+Shift+V</span>
+            <div class="shortcut-capture" id="shortcutPaste" tabindex="0" data-key="pasteTranscript">Ctrl+Shift+V</div>
           </div>
           <div class="setting-row">
             <label>Show/Hide Window</label>
-            <span class="hotkey-display">Ctrl+Shift+W</span>
+            <div class="shortcut-capture" id="shortcutShowHide" tabindex="0" data-key="showHide">Ctrl+Shift+W</div>
           </div>
         </div>
         
@@ -231,10 +290,20 @@ class SettingsPanel {
             <input type="checkbox" id="alwaysOnTop" checked>
           </div>
         </div>
+
+        <div class="settings-section">
+          <h3>📊 Analytics</h3>
+          <div class="setting-row" title="Anonymous metrics: engine used, recording duration, batch vs live, language. Never transcript content.">
+            <label for="analyticsEnabled">Help improve Windy Pro</label>
+            <input type="checkbox" id="analyticsEnabled">
+          </div>
+          <p class="settings-hint">Sends anonymous usage stats (engine, duration, mode, language). Never transcript text.</p>
+        </div>
         
         <div class="settings-section">
           <h3>ℹ️ About</h3>
           <p class="settings-about" id="aboutVersion">Windy Pro<br>Voice-to-text with the Green Strobe guarantee.</p>
+          <button class="settings-btn" id="checkUpdatesBtn" style="margin-top:8px;">🔄 Check for Updates</button>
         </div>
       </div>
     `;
@@ -253,27 +322,43 @@ class SettingsPanel {
       const engine = e.target.value;
       this.saveSetting('engine', engine);
       this.app.transcriptionEngine = engine;
-      if (engine === 'cloud') {
-        cloudSettings.style.display = 'block';
-        localModelSection.style.display = 'none';
-        engineHint.textContent = '☁️🔒 Audio streamed to WindyPro Cloud. E2E encrypted, zero retention.';
-        engineHint.style.color = '#4ecdc4';
-      } else if (engine === 'smart') {
-        cloudSettings.style.display = 'block';
-        localModelSection.style.display = 'block';
-        engineHint.textContent = '🧠 Starts local. Auto-switches to cloud if your device struggles.';
-        engineHint.style.color = '#f7dc6f';
-      } else {
-        cloudSettings.style.display = 'none';
-        localModelSection.style.display = 'block';
-        engineHint.textContent = 'Audio processed on your device. Nothing sent anywhere.';
-        engineHint.style.color = '';
+      // Show/hide relevant sections based on engine
+      const apiKeySection = this.panel.querySelector('#apiKeySection');
+      const engineInfo = {
+        local: { hint: '🔒 <b>Fully private.</b> Audio never leaves your device. Uses faster-whisper (base model). No internet needed.', color: '#22C55E', cloud: false, local: true, api: false },
+        cloud: { hint: '🔒 <b>E2E encrypted.</b> Streamed to WindyPro servers. Large-v3 on RTX 5090 GPU. Zero data retention.', color: '#4ecdc4', cloud: true, local: false, api: false },
+        deepgram: { hint: '🎙️ <b>Best real-time quality.</b> Streaming with interim results. ★★★★★ accuracy. 12,000 free mins/month. <a href="https://console.deepgram.com/signup" style="color:#4ecdc4;">Get free key →</a>', color: '#f0f0f0', cloud: false, local: false, api: 'deepgram' },
+        groq: { hint: '⚡ <b>Fastest cloud.</b> Whisper-large-v3 on Groq LPU. ~1s per chunk. Free tier. <a href="https://console.groq.com" style="color:#4ecdc4;">Get free key →</a>', color: '#f0f0f0', cloud: false, local: false, api: 'groq' },
+        openai: { hint: '🌐 <b>Reliable cloud.</b> OpenAI Whisper API. Good accuracy. Paid. <a href="https://platform.openai.com/api-keys" style="color:#4ecdc4;">Get key →</a>', color: '#f0f0f0', cloud: false, local: false, api: 'openai' },
+        smart: { hint: '🧠 <b>Auto-switches.</b> Starts local, falls back to cloud if CPU struggles.', color: '#f7dc6f', cloud: true, local: true, api: false }
+      };
+      const info = engineInfo[engine] || engineInfo.local;
+      engineHint.innerHTML = info.hint;
+      engineHint.style.color = info.color;
+      cloudSettings.style.display = info.cloud ? 'block' : 'none';
+      localModelSection.style.display = info.local ? 'block' : 'none';
+      if (apiKeySection) {
+        apiKeySection.style.display = info.api ? 'block' : 'none';
+        ['deepgram', 'groq', 'openai'].forEach(k => {
+          const row = this.panel.querySelector('#apiKey_' + k + '_row');
+          if (row) row.style.display = (k === info.api) ? 'block' : 'none';
+        });
       }
       // Update badge
       const badge = document.getElementById('modelBadge');
       if (badge) {
-        const icon = engine === 'cloud' ? '☁️🔒' : engine === 'smart' ? '🧠' : '🏠';
-        badge.textContent = `${icon} ${engine}`;
+        const icons = { local: '🏠', cloud: '☁️🔒', deepgram: '🎙️', groq: '⚡', openai: '🌐', smart: '🧠' };
+        badge.textContent = `${icons[engine] || '🏠'} ${engine}`;
+      }
+    });
+
+    // API key inputs
+    ['deepgram', 'groq', 'openai'].forEach(provider => {
+      const input = this.panel.querySelector('#' + provider + 'ApiKey');
+      if (input) {
+        input.addEventListener('change', (e) => {
+          this.saveSetting(provider + 'ApiKey', e.target.value.trim());
+        });
       }
     });
 
@@ -520,6 +605,77 @@ class SettingsPanel {
       this.app.livePreview = e.target.checked;
     });
 
+    // Recording mode (batch / live)
+    const recordingModeSelect = this.panel.querySelector('#recordingModeSelect');
+    if (recordingModeSelect) {
+      recordingModeSelect.addEventListener('change', (e) => {
+        this.saveSetting('recordingMode', e.target.value);
+        const hint = this.panel.querySelector('#recordingModeHint');
+        const maxRow = this.panel.querySelector('#maxDurationRow');
+        if (e.target.value === 'batch') {
+          if (hint) hint.textContent = 'Records audio, then processes everything at once for the best possible quality. Like Wispr Flow but with longer recordings.';
+          if (maxRow) maxRow.style.display = 'flex';
+        } else {
+          if (hint) hint.textContent = 'Words appear in real-time as you speak. Faster feedback but lower quality.';
+          if (maxRow) maxRow.style.display = 'none';
+        }
+      });
+    }
+
+    // Max recording duration
+    const maxRecordingSelect = this.panel.querySelector('#maxRecordingSelect');
+    if (maxRecordingSelect) {
+      maxRecordingSelect.addEventListener('change', (e) => {
+        this.saveSetting('maxRecordingMin', e.target.value);
+      });
+    }
+
+    // Save audio recordings toggle
+    const saveAudioEl = this.panel.querySelector('#saveAudio');
+    if (saveAudioEl) {
+      saveAudioEl.addEventListener('change', (e) => {
+        localStorage.setItem('windy_saveAudio', e.target.checked ? 'true' : 'false');
+      });
+    }
+
+    // Keyboard shortcut capture
+    this.panel.querySelectorAll('.shortcut-capture').forEach(el => {
+      el.addEventListener('focus', () => {
+        el.classList.add('capturing');
+        el.textContent = 'Press keys...';
+      });
+      el.addEventListener('blur', () => {
+        el.classList.remove('capturing');
+        // Restore current value if nothing was set
+        if (el.textContent === 'Press keys...') {
+          this._restoreShortcutDisplay(el);
+        }
+      });
+      el.addEventListener('keydown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Build Electron-compatible accelerator string
+        const parts = [];
+        if (e.ctrlKey || e.metaKey) parts.push('CommandOrControl');
+        if (e.altKey) parts.push('Alt');
+        if (e.shiftKey) parts.push('Shift');
+        // Get the actual key (not modifier-only)
+        const key = e.key;
+        if (!['Control', 'Shift', 'Alt', 'Meta'].includes(key)) {
+          if (key === ' ') parts.push('Space');
+          else if (key.length === 1) parts.push(key.toUpperCase());
+          else parts.push(key);
+
+          const accelerator = parts.join('+');
+          const settingKey = el.dataset.key;
+          el.textContent = accelerator.replace('CommandOrControl', 'Ctrl');
+          el.classList.remove('capturing');
+          el.blur();
+          this.saveSetting(settingKey, accelerator);
+        }
+      });
+    });
+
     // Archive controls
     this.panel.querySelector('#autoArchive').addEventListener('change', (e) => {
       this.saveSetting('autoArchive', e.target.checked);
@@ -584,6 +740,42 @@ class SettingsPanel {
       }
     });
 
+    // Diarization toggle
+    const diarizeEl = this.panel.querySelector('#diarizeEnabled');
+    if (diarizeEl) {
+      diarizeEl.addEventListener('change', (e) => {
+        this.saveSetting('diarize', e.target.checked);
+        localStorage.setItem('windy_diarize', e.target.checked ? 'true' : 'false');
+      });
+    }
+
+    // Analytics toggle
+    const analyticsEl = this.panel.querySelector('#analyticsEnabled');
+    if (analyticsEl) {
+      analyticsEl.addEventListener('change', (e) => {
+        localStorage.setItem('windy_analytics', e.target.checked ? 'true' : 'false');
+        this.saveSetting('analyticsEnabled', e.target.checked);
+      });
+    }
+
+    // Check for updates button
+    const checkUpdBtn = this.panel.querySelector('#checkUpdatesBtn');
+    if (checkUpdBtn) {
+      checkUpdBtn.addEventListener('click', async () => {
+        checkUpdBtn.textContent = '⏳ Checking...';
+        checkUpdBtn.disabled = true;
+        try {
+          if (window.windyAPI?.checkForUpdates) {
+            await window.windyAPI.checkForUpdates();
+          }
+        } catch (_) { }
+        setTimeout(() => {
+          checkUpdBtn.textContent = '🔄 Check for Updates';
+          checkUpdBtn.disabled = false;
+        }, 3000);
+      });
+    }
+
     // Opacity slider
     const opacityRange = this.panel.querySelector('#opacityRange');
     const opacityValue = this.panel.querySelector('#opacityValue');
@@ -619,6 +811,14 @@ class SettingsPanel {
           this.panel.querySelector('#cloudUrl').value = settings.cloudUrl;
           this.app.cloudUrl = settings.cloudUrl;
         }
+        // Restore API keys
+        ['deepgram', 'groq', 'openai'].forEach(p => {
+          const key = settings[p + 'ApiKey'];
+          if (key) {
+            const input = this.panel.querySelector('#' + p + 'ApiKey');
+            if (input) input.value = key;
+          }
+        });
         // Restore cloud login state
         if (settings.cloudToken) {
           this.app.cloudToken = settings.cloudToken;
@@ -646,11 +846,37 @@ class SettingsPanel {
         if (settings.vibeEnabled !== undefined) {
           this.panel.querySelector('#vibeEnabled').checked = settings.vibeEnabled;
         }
+        if (settings.diarize !== undefined) {
+          const dEl = this.panel.querySelector('#diarizeEnabled');
+          if (dEl) dEl.checked = settings.diarize;
+        }
         if (settings.clearOnPaste !== undefined) {
           this.panel.querySelector('#clearOnPaste').checked = settings.clearOnPaste;
         }
         this.panel.querySelector('#livePreview').checked = settings.livePreview !== false;
         this.app.livePreview = settings.livePreview !== false;
+        // Recording mode restore
+        if (settings.recordingMode) {
+          const modeSelect = this.panel.querySelector('#recordingModeSelect');
+          if (modeSelect) {
+            modeSelect.value = settings.recordingMode;
+            modeSelect.dispatchEvent(new Event('change'));
+          }
+        }
+        if (settings.maxRecordingMin) {
+          const maxSelect = this.panel.querySelector('#maxRecordingSelect');
+          if (maxSelect) maxSelect.value = settings.maxRecordingMin;
+        }
+        // Restore custom hotkeys
+        if (settings.hotkeys) {
+          const map = { toggleRecording: '#shortcutToggle', pasteTranscript: '#shortcutPaste', showHide: '#shortcutShowHide' };
+          for (const [key, selector] of Object.entries(map)) {
+            const el = this.panel.querySelector(selector);
+            if (el && settings.hotkeys[key]) {
+              el.textContent = settings.hotkeys[key].replace('CommandOrControl', 'Ctrl');
+            }
+          }
+        }
         this.panel.querySelector('#autoArchive').checked = settings.autoArchive !== false;
         this.panel.querySelector('#archiveMode').value = settings.archiveMode || 'both';
         this.panel.querySelector('#archiveFolder').value = settings.archiveFolder || '';
@@ -730,12 +956,24 @@ class SettingsPanel {
     el.classList.add(meta.level);
   }
 
+  /**
+   * Restore shortcut display text when user blurs without pressing a combo.
+   */
+  _restoreShortcutDisplay(el) {
+    const defaults = {
+      toggleRecording: 'Ctrl+Shift+Space',
+      pasteTranscript: 'Ctrl+Shift+V',
+      showHide: 'Ctrl+Shift+W'
+    };
+    el.textContent = defaults[el.dataset.key] || 'Not set';
+  }
+
   saveSetting(key, value) {
     if (window.windyAPI) {
       window.windyAPI.updateSettings({ [key]: value });
     }
     // Also persist cloud settings to localStorage (fallback for windows without windyAPI)
-    const cloudKeys = ['engine', 'cloudUrl', 'cloudToken', 'cloudEmail', 'cloudPassword', 'cloudUser'];
+    const cloudKeys = ['engine', 'cloudUrl', 'cloudToken', 'cloudEmail', 'cloudPassword', 'cloudUser', 'recordingMode', 'maxRecordingMin', 'language'];
     if (cloudKeys.includes(key)) {
       try { localStorage.setItem(`windy_${key}`, value || ''); } catch (_) { }
     }

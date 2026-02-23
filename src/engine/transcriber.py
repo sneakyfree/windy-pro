@@ -59,15 +59,15 @@ class TranscriptionSegment:
 @dataclass
 class TranscriberConfig:
     """Configuration for the transcription engine."""
-    model_size: str = "base"  # tiny, base, small, medium, large-v3, large-v3-turbo
+    model_size: str = "base"  # base delivers good accuracy on CPU; tiny/small/medium/large-v3 available
     device: str = "auto"      # auto, cpu, cuda
     compute_type: str = "auto"  # auto, int8, float16, float32
     language: str = "en"
     vad_enabled: bool = True
     vad_threshold: float = 0.5
     temp_file_path: Optional[str] = None  # For crash recovery
-    chunk_length_s: float = 2.0  # Audio chunk length for processing (reduced from 5.0 for lower latency)
-    beam_size: int = 5
+    chunk_length_s: float = 3.0  # Audio chunk length — 3s balances quality with latency
+    beam_size: int = 5  # beam=5 (Whisper default) for good accuracy
 
 
 class StreamingTranscriber:
@@ -102,6 +102,8 @@ class StreamingTranscriber:
         
         # Accumulated transcript for the session
         self._full_transcript = []
+        self._on_performance_warning_cb = None
+        self._perf_ratios = []
     
     @property
     def model_loaded(self) -> bool:
@@ -131,6 +133,10 @@ class StreamingTranscriber:
     def on_transcript(self, callback: Callable):
         """Register a callback for new transcript segments."""
         self._transcript_callbacks.append(callback)
+    
+    def on_performance_warning(self, callback: Callable):
+        """Register a callback for performance warnings (ratio, model, recommendation)."""
+        self._on_performance_warning_cb = callback
     
     def _emit_segment(self, segment: TranscriptionSegment):
         """Emit a transcript segment to callbacks and temp file."""
@@ -220,22 +226,38 @@ class StreamingTranscriber:
         self._set_state(TranscriptionState.LISTENING)
     
     def stop_session(self) -> str:
-        """Stop the session and return full transcript."""
+        """Stop the session and return full transcript.
+        
+        IMPORTANT: Does NOT discard buffered audio. Drains remaining
+        audio through the transcription pipeline so no words are lost.
+        The worker thread sees _running=False and exits after processing
+        what's left in the buffer.
+        """
         self._running = False
         
-        # Flush the audio queue immediately so the worker thread
-        # doesn't keep processing buffered chunks after stop
+        # Do NOT flush the queue — let the worker thread drain it.
+        # Signal stop by setting _running=False; the worker loop
+        # will finish its current chunk and exit.
+        
+        self._set_state(TranscriptionState.BUFFERING)  # Show processing state
+        
+        if self._worker_thread:
+            # Give the worker up to 10s to finish processing remaining audio
+            self._worker_thread.join(timeout=10.0)
+            self._worker_thread = None
+        
+        # Now process any remaining audio that was queued after the worker exited
+        remaining = b""
         try:
             while not self._audio_queue.empty():
-                self._audio_queue.get_nowait()
+                remaining += self._audio_queue.get_nowait()
         except Exception:
             pass
         
-        self._set_state(TranscriptionState.IDLE)
+        if remaining and len(remaining) > 1600:  # At least 0.05s of audio
+            self._process_chunk(remaining)
         
-        if self._worker_thread:
-            self._worker_thread.join(timeout=2.0)
-            self._worker_thread = None
+        self._set_state(TranscriptionState.IDLE)
         
         # Clean up recovery file on successful stop
         try:
@@ -255,37 +277,80 @@ class StreamingTranscriber:
     def _process_audio_loop(self):
         """Background thread for processing audio chunks."""
         audio_buffer = b""
+        sample_rate = 16000
+        bytes_per_sample = 2
+        max_buffer_bytes = int(sample_rate * bytes_per_sample * 10.0)  # Cap at 10s for quality
         
-        while self._running:
+        while True:
             try:
-                # Get audio from queue with timeout (thread-safe)
+                # Exit only when stopped AND no more audio to process
+                if not self._running and self._audio_queue.empty() and len(audio_buffer) == 0:
+                    break
+                
+                # Drain ALL pending items from queue at once (not one-at-a-time)
+                drained = []
                 try:
-                    with self._buffer_lock:
-                        chunk = self._audio_queue.get(timeout=0.1)
-                    audio_buffer += chunk
+                    while True:
+                        chunk = self._audio_queue.get_nowait()
+                        drained.append(chunk)
                 except queue.Empty:
+                    pass
+                
+                if not drained and not audio_buffer:
+                    if not self._running:
+                        break  # Stopped and nothing left
+                    time.sleep(0.05)
                     continue
                 
-                # Process when we have enough audio
-                # (16kHz * 2 bytes * chunk_length_s)
-                min_buffer_size = int(16000 * 2 * self.config.chunk_length_s)
+                audio_buffer += b"".join(drained)
                 
-                if len(audio_buffer) >= min_buffer_size:
-                    if not self._running:
-                        break  # Stop requested — don't process more
+                # Cap buffer to prevent runaway latency — keep only recent audio
+                if len(audio_buffer) > max_buffer_bytes:
+                    excess = len(audio_buffer) - max_buffer_bytes
+                    audio_buffer = audio_buffer[excess:]
+                
+                # Process when we have enough audio, OR when stopping with remaining audio
+                min_buffer_size = int(sample_rate * bytes_per_sample * self.config.chunk_length_s)
+                should_process = len(audio_buffer) >= min_buffer_size or (not self._running and len(audio_buffer) > 1600)
+                
+                if should_process:
                     self._set_state(TranscriptionState.BUFFERING)
                     
-                    # Process with timeout safeguard (10s max per chunk)
+                    # Process with timeout safeguard
+                    audio_duration_s = len(audio_buffer) / 32000.0
+                    # print(f"[DEBUG] Processing chunk: {len(audio_buffer)} bytes ({audio_duration_s:.1f}s audio)")
                     process_start = time.monotonic()
                     self._process_chunk(audio_buffer)
                     process_duration = time.monotonic() - process_start
-                    if process_duration > 10.0:
-                        print(f"Warning: chunk processing took {process_duration:.1f}s (threshold: 10s)", file=sys.stderr)
+                    # print(f"[DEBUG] Chunk processed in {process_duration:.2f}s")
+                    
+                    # Performance ratio tracking
+                    ratio = process_duration / max(audio_duration_s, 0.01)
+                    if not hasattr(self, '_perf_ratios'):
+                        self._perf_ratios = []
+                    self._perf_ratios.append(ratio)
+                    # Keep last 5 ratios for rolling average
+                    self._perf_ratios = self._perf_ratios[-5:]
+                    avg_ratio = sum(self._perf_ratios) / len(self._perf_ratios)
+                    
+                    # Warn if model can't keep up (after at least 2 chunks to skip warmup)
+                    if len(self._perf_ratios) >= 2 and avg_ratio > 1.0:
+                        recommend = "tiny" if self.config.model_size != "tiny" else None
+                        if self._on_performance_warning_cb:
+                            self._on_performance_warning_cb(
+                                avg_ratio, self.config.model_size, recommend
+                            )
+                    elif len(self._perf_ratios) >= 2 and avg_ratio < 0.5:
+                        # Model is keeping up well — broadcast good performance  
+                        if self._on_performance_warning_cb:
+                            self._on_performance_warning_cb(
+                                avg_ratio, self.config.model_size, None
+                            )
                     
                     audio_buffer = b""
-                    self._consecutive_errors = 0  # Reset on success
+                    self._consecutive_errors = 0
                     if not self._running:
-                        break  # Stop requested during processing
+                        break
                     self._set_state(TranscriptionState.LISTENING)
                     
             except Exception as e:
@@ -322,14 +387,17 @@ class StreamingTranscriber:
             if audio_np.size > 0 and np.max(np.abs(audio_np)) < 0.001:
                 return
             
-            # Transcribe with word-level timestamps
+            # Transcribe — condition_on_previous_text=False prevents hallucination buildup
             segments, info = self.model.transcribe(
                 audio_np,
                 language=self.config.language,
                 beam_size=self.config.beam_size,
-                word_timestamps=True,
+                word_timestamps=False,
                 vad_filter=self.config.vad_enabled,
-                vad_parameters=dict(threshold=self.config.vad_threshold)
+                vad_parameters=dict(threshold=self.config.vad_threshold),
+                condition_on_previous_text=False,
+                no_speech_threshold=0.6,
+                log_prob_threshold=-1.0
             )
             
             # Emit each segment
@@ -353,7 +421,7 @@ class StreamingTranscriber:
                     is_partial=False,
                     words=[
                         {"word": w.word, "start": w.start, "end": w.end, "prob": w.probability}
-                        for w in (segment.words or [])
+                        for w in (getattr(segment, 'words', None) or [])
                     ]
                 )
                 if ts.text:

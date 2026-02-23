@@ -24,7 +24,16 @@ class WindyApp {
     this._sessionStartTime = null;
 
     // Cloud transcription state
-    this.transcriptionEngine = 'local';  // 'local' | 'cloud' | 'smart'
+    this.transcriptionEngine = 'local';  // 'local' | 'cloud' | 'deepgram' | 'groq' | 'openai' | 'smart'
+
+    // Web Speech API state (kept for future Chrome-tab relay)
+    this.speechRecognition = null;
+    this._streamingText = '';
+    this._interimText = '';
+
+    // API-based engine state
+    this._apiMediaRecorder = null;
+    this._apiAudioChunks = [];
     this.cloudUrl = 'wss://windypro.thewindstorm.uk';
     this.cloudWs = null;
     this.cloudToken = null;
@@ -56,6 +65,21 @@ class WindyApp {
     this.audioMeterContainer = document.getElementById('audioMeterContainer');
     this.audioMeterBar = document.getElementById('audioMeterBar');
 
+    // Live transcript debounce (100ms = max 10 updates/sec)
+    this._lastTranscriptUpdate = 0;
+    this._transcriptUpdateTimer = null;
+
+    // Screen reader live region
+    this._srAnnouncer = document.getElementById('srAnnouncer');
+    if (!this._srAnnouncer) {
+      this._srAnnouncer = document.createElement('div');
+      this._srAnnouncer.id = 'srAnnouncer';
+      this._srAnnouncer.setAttribute('role', 'status');
+      this._srAnnouncer.setAttribute('aria-live', 'polite');
+      this._srAnnouncer.className = 'sr-only';
+      document.body.appendChild(this._srAnnouncer);
+    }
+
     // Initialize
     this.init();
   }
@@ -63,8 +87,21 @@ class WindyApp {
   async init() {
     this.settingsPanel = new SettingsPanel(this);
     this.vaultPanel = new VaultPanel(this);
+    this.historyPanel = new HistoryPanel(this);
     this.bindEvents();
     this.bindIPCEvents();
+
+    // First-run wizard
+    const wizard = new SetupWizard(this);
+    if (wizard.shouldShow()) {
+      wizard.show();
+      return; // Don't connect until wizard is done — user will reload or recording will trigger connect
+    }
+
+    // What's New popup (shows once per version)
+    const changelog = new ChangelogPopup();
+    changelog.show();
+
     await this.connect();
 
     // Load UI behavior settings
@@ -169,12 +206,8 @@ class WindyApp {
   bindIPCEvents() {
     // Toggle recording from hotkey
     window.windyAPI.onToggleRecording((isRecording) => {
-      this.isRecording = isRecording;
-      if (isRecording) {
-        this.startRecording();
-      } else {
-        this.stopRecording();
-      }
+      // Route through toggleRecording() so engine selection is respected
+      this.toggleRecording();
     });
 
     // Request transcript for paste (global hotkey path)
@@ -188,6 +221,14 @@ class WindyApp {
     // State change from main process
     window.windyAPI.onStateChange((state) => {
       this.setState(state);
+    });
+
+    window.windyAPI.onOpenVault?.(() => {
+      this.vaultPanel.toggle();
+    });
+
+    window.windyAPI.onOpenHistory?.(() => {
+      this.historyPanel.toggle();
     });
 
     // Archive result badge updates
@@ -311,7 +352,7 @@ class WindyApp {
         break;
 
       case 'transcript':
-        console.error('[handleMessage] transcript:', msg.text, 'partial:', msg.partial);
+        console.debug('[handleMessage] transcript:', msg.text, 'partial:', msg.partial);
         this.addTranscriptSegment(msg);
         break;
 
@@ -366,9 +407,13 @@ class WindyApp {
    * Send command to server
    */
   send(action, data = {}) {
-    const ws = this.getActiveWs();
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ action, ...data }));
+    try {
+      const ws = this.getActiveWs();
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action, ...data }));
+      }
+    } catch (err) {
+      console.warn('[IPC] send() failed:', err.message);
     }
   }
 
@@ -393,6 +438,18 @@ class WindyApp {
       injecting: 'Pasting'
     };
     this.stateLabel.textContent = labels[state] || state;
+
+    // Screen reader announcement
+    const announcements = {
+      listening: 'Recording started',
+      buffering: 'Processing transcription',
+      idle: 'Ready',
+      error: 'An error occurred',
+      injecting: 'Pasting transcript'
+    };
+    if (this._srAnnouncer && announcements[state]) {
+      this._srAnnouncer.textContent = announcements[state];
+    }
 
     // Session timer management
     if (state === 'listening') {
@@ -486,8 +543,19 @@ class WindyApp {
   updateModelBadge(modelName, loading = false, message = '') {
     const badge = document.getElementById('modelBadge');
     if (!badge) return;
+
+    // When non-local engine is active, show that engine's badge — ignore local server updates
+    const nonLocalEngines = ['stream', 'deepgram', 'groq', 'openai'];
+    if (nonLocalEngines.includes(this.transcriptionEngine) && !nonLocalEngines.includes(modelName) && !loading) {
+      const icons = { stream: '🎙️', deepgram: '🎙️', groq: '⚡', openai: '🌐' };
+      badge.textContent = `${icons[this.transcriptionEngine] || '🏠'} ${this.transcriptionEngine}`;
+      badge.classList.remove('loading');
+      return;
+    }
+
     // Use engine-aware icon
-    const icon = this._usingCloud ? '☁️🔒' : this.transcriptionEngine === 'cloud' ? '☁️🔒' : this.transcriptionEngine === 'smart' ? '🧠' : '🏠';
+    const iconMap = { stream: '🎙️', deepgram: '🎙️', groq: '⚡', openai: '🌐', cloud: '☁️🔒', smart: '🧠' };
+    const icon = this._usingCloud ? '☁️🔒' : iconMap[this.transcriptionEngine] || '🏠';
     if (loading) {
       badge.textContent = `${icon} ${message || 'Loading...'}`;
       badge.classList.add('loading');
@@ -721,14 +789,1032 @@ class WindyApp {
     }
   }
 
+  // ═══════════════════════════════════════════════
+  //  Web Speech API (Stream Engine)
+  // ═══════════════════════════════════════════════
+
+  /**
+   * Start streaming speech recognition using the Web Speech API (Google).
+   * Provides real-time interim + final results with excellent accuracy.
+   */
+  async startStreamRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      this.showReconnectToast('⚠️ Web Speech API not supported. Falling back to local.');
+      this.transcriptionEngine = 'local';
+      return this.startRecording();
+    }
+
+    this.speechRecognition = new SpeechRecognition();
+    this.speechRecognition.continuous = true;
+    this.speechRecognition.interimResults = true;
+    this.speechRecognition.lang = 'en-US';
+    this.speechRecognition.maxAlternatives = 1;
+    this._streamingText = '';
+    this._interimText = '';
+
+    this.speechRecognition.onresult = (event) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Append final results
+      if (finalTranscript) {
+        this._streamingText += finalTranscript;
+        // Add as a transcript segment for copy/paste/archive
+        this.transcript.push({
+          text: finalTranscript.trim(),
+          partial: false,
+          start: 0,
+          end: 0,
+          confidence: 1.0,
+          words: []
+        });
+        this.updateWordCount();
+      }
+      this._interimText = interimTranscript;
+
+      // Render the full text + interim
+      this._renderStreamTranscript();
+    };
+
+    this.speechRecognition.onerror = (event) => {
+      console.error('[Stream] Speech recognition error:', event.error);
+      if (event.error === 'not-allowed') {
+        this.showReconnectToast('🚫 Microphone access denied.');
+        this.stopStreamRecognition();
+      } else if (event.error === 'no-speech') {
+        // Normal — just means silence. Don't stop.
+      } else if (event.error === 'network') {
+        this.showReconnectToast('⚠️ Network error — check internet connection.');
+      }
+    };
+
+    this.speechRecognition.onend = () => {
+      // Auto-restart if still recording (Web Speech API stops after silence)
+      if (this.isRecording) {
+        try {
+          this.speechRecognition.start();
+        } catch (e) {
+          console.warn('[Stream] Could not restart:', e);
+        }
+      }
+    };
+
+    try {
+      this.speechRecognition.start();
+      this.isRecording = true;
+      this.recordingStartedAt = new Date().toISOString();
+      this.transcriptContent.contentEditable = 'false';
+
+      // Clear placeholder
+      const placeholder = this.transcriptContent.querySelector('.placeholder');
+      if (placeholder) placeholder.remove();
+
+      this.setState('listening');
+      this.updateModelBadge('stream', false);
+      console.log('[Stream] Web Speech API started — streaming to Google');
+    } catch (err) {
+      console.error('[Stream] Failed to start:', err);
+      this.showReconnectToast('⚠️ Could not start speech recognition. Falling back to local.');
+      this.transcriptionEngine = 'local';
+      this.startRecording();
+    }
+  }
+
+  /**
+   * Stop streaming speech recognition
+   */
+  stopStreamRecognition() {
+    if (this.speechRecognition) {
+      this.isRecording = false; // Set BEFORE abort so onend doesn't restart
+      try {
+        this.speechRecognition.stop();
+      } catch (_) { }
+      this.speechRecognition = null;
+    }
+    this._interimText = '';
+    // Final render without interim text
+    this._renderStreamTranscript();
+    this.setState('idle');
+
+    // Enable editing
+    if (this.transcript.length > 0 || this.transcriptContent.textContent.trim()) {
+      this.transcriptContent.contentEditable = 'true';
+    }
+
+    // Archive the transcript
+    if (this._streamingText.trim() && window.windyAPI?.archiveTranscript) {
+      const route = this.archiveRouteSelect?.value || 'local';
+      if (route !== 'off') {
+        window.windyAPI.archiveTranscript({
+          text: this._streamingText.trim(),
+          startedAt: this.recordingStartedAt,
+          endedAt: new Date().toISOString(),
+          route
+        });
+      }
+    }
+    this.recordingStartedAt = null;
+  }
+
+  /**
+   * Render the stream transcript (final + interim) into the transcript area
+   */
+  _renderStreamTranscript() {
+    // Remove placeholder
+    const placeholder = this.transcriptContent.querySelector('.placeholder');
+    if (placeholder) placeholder.remove();
+
+    // Get or create paragraph
+    let para = this.transcriptContent.querySelector('.transcript-para');
+    if (!para) {
+      para = document.createElement('p');
+      para.className = 'transcript-para';
+      this.transcriptContent.appendChild(para);
+    }
+
+    // Keep pasted blocks
+    const pastedBlocks = Array.from(para.querySelectorAll('.pasted-text'));
+    para.innerHTML = '';
+    pastedBlocks.forEach(block => para.appendChild(block));
+
+    // Add final text
+    if (this._streamingText) {
+      const finalSpan = document.createElement('span');
+      finalSpan.className = 'final-text';
+      finalSpan.textContent = this._streamingText;
+      para.appendChild(finalSpan);
+    }
+
+    // Add interim text (gray, will be replaced)
+    if (this._interimText) {
+      const interimSpan = document.createElement('span');
+      interimSpan.className = 'partial-text';
+      interimSpan.style.opacity = '0.5';
+      interimSpan.textContent = this._interimText;
+      para.appendChild(interimSpan);
+    }
+
+    // Scroll to bottom
+    this.transcriptScroll.scrollTop = this.transcriptScroll.scrollHeight;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  Batch Mode Recording
+  // ═══════════════════════════════════════════════
+
+  /**
+   * Start batch recording — captures full audio, processes on stop.
+   * Uses MediaRecorder for high-quality capture.
+   */
+  async startBatchRecording() {
+    try {
+      // 1. Get mic access
+      const audioConstraints = {
+        channelCount: 1,
+        sampleRate: 16000,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      };
+      if (window.windyAPI) {
+        const settings = await window.windyAPI.getSettings();
+        if (settings && settings.micDeviceId && settings.micDeviceId !== 'default') {
+          audioConstraints.deviceId = { exact: settings.micDeviceId };
+        }
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+
+      // 2. Use MediaRecorder to capture full audio
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus' : 'audio/webm';
+      this._batchRecorder = new MediaRecorder(stream, { mimeType });
+      this._batchChunks = [];
+
+      this._batchRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) this._batchChunks.push(e.data);
+      };
+
+      // 3. Record continuously (timeslice = 1000ms for smooth data flow)
+      this._batchRecorder.start(1000);
+
+      // 4. Set up max duration auto-stop
+      const maxMin = parseInt(localStorage.getItem('windy_maxRecordingMin') || '10');
+      this._batchMaxTimer = setTimeout(() => {
+        this.showReconnectToast('⏰ Max recording time reached. Processing...');
+        this.stopBatchRecording();
+      }, maxMin * 60 * 1000);
+
+      // 5. Warning at 30s before max
+      if (maxMin * 60 > 30) {
+        this._batchWarnTimer = setTimeout(() => {
+          this.showReconnectToast(`⏰ ${maxMin} min limit in 30 seconds...`);
+        }, (maxMin * 60 - 30) * 1000);
+      }
+
+      // 6. UI state
+      this.isRecording = true;
+      this.setState('listening');
+      this._batchStream = stream;
+      this.recordingStartedAt = new Date().toISOString();
+      this.transcriptContent.contentEditable = 'false';
+
+      // Clear placeholder
+      const placeholder = this.transcriptContent.querySelector('.placeholder');
+      if (placeholder) placeholder.remove();
+
+      this.transcriptContent.innerHTML = '<p class="batch-recording-hint" style="color:#888;text-align:center;padding:20px;">🎙️ Recording... text will appear when you stop</p>';
+      this.startSessionTimer();
+      this.updateModelBadge('batch', false);
+      console.log('[Batch] Recording started');
+    } catch (err) {
+      console.warn('[Batch] Failed to start:', err.message || err);
+      // Full cleanup on start failure
+      clearTimeout(this._batchMaxTimer);
+      clearTimeout(this._batchWarnTimer);
+      if (this._batchStream) {
+        this._batchStream.getTracks().forEach(t => t.stop());
+        this._batchStream = null;
+      }
+      this._batchRecorder = null;
+      this._batchChunks = [];
+      this.isRecording = false;
+      this.setState('idle');
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        this.showReconnectToast('🚫 Microphone access denied. Check system permissions.');
+      } else {
+        this.showReconnectToast('⚠️ Could not access microphone.');
+      }
+    }
+  }
+
+  /**
+   * Stop batch recording and send audio for processing.
+   */
+  async stopBatchRecording() {
+    // Clear timers
+    clearTimeout(this._batchMaxTimer);
+    clearTimeout(this._batchWarnTimer);
+    this.isRecording = false;
+    this.stopSessionTimer();
+
+    if (!this._batchRecorder || this._batchRecorder.state === 'inactive') {
+      this.setState('idle');
+      return;
+    }
+
+    return new Promise((resolve) => {
+      this._batchRecorder.onstop = async () => {
+        // Stop mic
+        if (this._batchStream) {
+          this._batchStream.getTracks().forEach(t => t.stop());
+          this._batchStream = null;
+        }
+
+        // Build audio blob
+        const audioBlob = new Blob(this._batchChunks, { type: this._batchRecorder.mimeType });
+        this._batchChunks = [];
+        this._lastBatchBlob = audioBlob;  // Save for audio playback
+
+        // Show processing state
+        this.setState('buffering');
+        this.transcriptContent.innerHTML = '<p class="batch-processing-indicator"><span class="processing-spinner"></span> Processing your recording...<br><span style="font-size:12px;color:#888;">This may take a moment for longer recordings</span></p>';
+
+        // Notify tray
+        if (window.windyAPI?.notifyBatchProcessing) {
+          try { window.windyAPI.notifyBatchProcessing(); } catch (_) { }
+        }
+
+        try {
+          // Choose engine
+          const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine;
+          let result;
+
+          if (engine === 'local') {
+            // Process locally via the Python WebSocket server
+            result = await this._batchTranscribeLocal(audioBlob);
+          } else if (engine === 'cloud') {
+            // Use WindyPro Cloud batch endpoint
+            result = await this._batchTranscribeCloud(audioBlob);
+          } else if (engine === 'groq') {
+            result = await this._transcribeWithApi('groq', localStorage.getItem('windy_groqApiKey'), audioBlob);
+          } else if (engine === 'openai') {
+            result = await this._transcribeWithApi('openai', localStorage.getItem('windy_openaiApiKey'), audioBlob);
+          } else {
+            // Default to cloud
+            result = await this._batchTranscribeCloud(audioBlob);
+          }
+
+          // Display polished result
+          this._displayBatchResult(result);
+        } catch (err) {
+          console.error('[Batch] Transcription failed:', err);
+          this.showReconnectToast(`⚠️ Processing failed: ${err.message}`);
+          this.setState('error');
+          setTimeout(() => this.setState('idle'), 3000);
+        }
+
+        resolve();
+      };
+
+      this._batchRecorder.stop();
+    });
+  }
+
+  /**
+   * Upload audio blob to WindyPro Cloud batch endpoint.
+   * Includes a 5-minute timeout for long recordings.
+   */
+  async _batchTranscribeLocal(audioBlob) {
+    // Save audio blob to temp file, then use IPC to have main process
+    // run ffmpeg + faster-whisper on it directly (avoids AudioContext crashes)
+    try {
+      // Convert blob to base64 and send to main process for transcription
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuffer);
+      let binary = '';
+      for (let i = 0; i < uint8.length; i++) {
+        binary += String.fromCharCode(uint8[i]);
+      }
+      const base64 = btoa(binary);
+      
+      // Use IPC to transcribe via main process (which has fs access)
+      if (window.windyAPI?.batchTranscribeLocal) {
+        const result = await window.windyAPI.batchTranscribeLocal(base64);
+        return result || '';
+      } else {
+        throw new Error('Local batch transcription not available — update required');
+      }
+    } catch (err) {
+      throw new Error(`Local batch failed: ${err.message}`);
+    }
+  }
+
+  async _batchTranscribeCloud(audioBlob) {
+    const token = this.cloudToken || localStorage.getItem('windy_cloudToken');
+    const cloudUrl = (this.cloudUrl || localStorage.getItem('windy_cloudUrl') || 'https://windypro.thewindstorm.uk')
+      .replace('wss://', 'https://');
+
+    if (!token) {
+      throw new Error('Not signed in to WindyPro Cloud. Open Settings to sign in.');
+    }
+
+    console.log(`[Batch] Uploading ${(audioBlob.size / 1024 / 1024).toFixed(1)}MB to cloud`);
+
+    // AbortController for timeout (5 min for long recordings)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+
+    try {
+      // Build query params for language & diarization
+      const lang = localStorage.getItem('windy_language') || 'en';
+      const diarize = localStorage.getItem('windy_diarize') === 'true';
+      const params = new URLSearchParams({ language: lang });
+      if (diarize) params.append('diarize', 'true');
+
+      const response = await fetch(`${cloudUrl}/api/v1/transcribe/batch?${params}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/octet-stream'
+        },
+        body: audioBlob,
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Cloud error ${response.status}: ${err}`);
+      }
+
+      const data = await response.json();
+      return data.text || data.raw_text || '';
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error('Cloud processing timed out (5 min). Try a shorter recording or a different engine.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  /**
+   * Display the polished batch transcription result.
+   */
+  _displayBatchResult(text) {
+    if (!text || !text.trim()) {
+      this.transcriptContent.innerHTML = '<p style="color:#888;text-align:center;">No speech detected in recording.</p>';
+      this.setState('idle');
+      return;
+    }
+
+    // Split into paragraphs (respect existing line breaks, or add them every ~3 sentences)
+    const paragraphs = text.split(/\n+/).filter(p => p.trim());
+
+    // Build formatted HTML
+    let html = '';
+    paragraphs.forEach(p => {
+      html += `<p class="transcript-para" style="margin:0 0 12px 0;line-height:1.5;">${p.trim()}</p>`;
+    });
+
+    this.transcriptContent.innerHTML = html;
+    this.transcriptContent.contentEditable = 'true';
+
+    // Add export buttons bar
+    this._showExportButtons(text.trim());
+
+    // Update transcript array for copy/paste
+    this.transcript = [{ text: text.trim(), partial: false, start: 0, end: 0, confidence: 1, words: [] }];
+    this.updateWordCount();
+    this.setState('idle');
+    
+    // Auto-paste at cursor if enabled (default: ON)
+    const autoPaste = localStorage.getItem('windy_autoPaste') !== 'false';
+    if (autoPaste && text.trim() && window.windyAPI?.autoPasteText) {
+      // Small delay to let processing UI finish
+      setTimeout(async () => {
+        try {
+          await window.windyAPI.autoPasteText(text.trim());
+          // Only clear if "Clear after paste" is checked (stored in electron-store, not localStorage)
+          let clearAfterPaste = true;
+          if (window.windyAPI?.getSettings) {
+            try {
+              const settings = await window.windyAPI.getSettings();
+              clearAfterPaste = settings.clearOnPaste !== false;
+            } catch (_) {}
+          }
+          if (clearAfterPaste) {
+            this.transcriptContent.innerHTML = '';
+            this.transcript = [];
+            this.updateWordCount();
+          }
+        } catch (err) {
+          console.warn('[AutoPaste] Failed, use Ctrl+Shift+V to paste manually');
+        }
+      }, 500);
+    }
+
+    // Notify tray: batch complete
+    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+    if (window.windyAPI?.notifyBatchComplete) {
+      try { window.windyAPI.notifyBatchComplete(wordCount); } catch (_) { }
+    }
+
+    // Save to history
+    this._saveToHistory(text.trim(), wordCount);
+
+    // Opt-in analytics (never transcript content)
+    this._sendAnalytics({ wordCount });
+
+    // Save audio recording if enabled
+    if (this._lastBatchBlob) {
+      this._saveAudioRecording(this._lastBatchBlob);
+    }
+
+    // Archive
+    if (window.windyAPI?.archiveTranscript) {
+      const route = this.archiveRouteSelect?.value || 'local';
+      if (route !== 'off') {
+        window.windyAPI.archiveTranscript({
+          text: text.trim(),
+          startedAt: this.recordingStartedAt,
+          endedAt: new Date().toISOString(),
+          route
+        });
+      }
+    }
+    this.recordingStartedAt = null;
+  }
+
+  /**
+   * Save transcript to local history (localStorage, last 20).
+   */
+  _saveToHistory(text, wordCount) {
+    try {
+      const history = JSON.parse(localStorage.getItem('windy_history') || '[]');
+      const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine || 'local';
+      history.unshift({
+        id: Date.now(),
+        text,
+        wordCount,
+        engine,
+        date: new Date().toISOString()
+      });
+      // Keep last 20
+      while (history.length > 20) history.pop();
+      localStorage.setItem('windy_history', JSON.stringify(history));
+    } catch (_) { }
+  }
+
+  /**
+   * Save audio recording blob for playback.
+   */
+  /**
+   * Send anonymous usage analytics (opt-in only).
+   * Never sends transcript content.
+   * @param {{ wordCount: number }} data
+   */
+  _sendAnalytics(data) {
+    try {
+      if (localStorage.getItem('windy_analytics') !== 'true') return;
+      const payload = {
+        engine: localStorage.getItem('windy_engine') || 'local',
+        mode: localStorage.getItem('windy_recordingMode') || 'batch',
+        language: localStorage.getItem('windy_language') || 'en',
+        wordCount: data.wordCount || 0,
+        durationSec: this._sessionSeconds || 0,
+        ts: new Date().toISOString()
+      };
+      fetch('https://windypro.thewindstorm.uk/api/v1/analytics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(() => { }); // Fire and forget
+    } catch (_) { }
+  }
+
+  /**
+   * Save audio recording blob for playback.
+   */
+  _saveAudioRecording(blob) {
+    const saveAudio = localStorage.getItem('windy_saveAudio') !== 'false';
+    if (!saveAudio || !blob) return;
+
+    // Create object URL for playback
+    const audioUrl = URL.createObjectURL(blob);
+    this._showPlaybackBar(audioUrl);
+  }
+
+  /**
+   * Show a small audio playback bar below the transcript.
+   */
+  _showPlaybackBar(audioUrl) {
+    // Remove existing playback bar
+    const existing = document.getElementById('batchPlaybackBar');
+    if (existing) existing.remove();
+
+    const bar = document.createElement('div');
+    bar.id = 'batchPlaybackBar';
+    bar.className = 'playback-bar';
+    bar.innerHTML = `
+      <span class="playback-label">🔊 Recording</span>
+      <audio controls src="${audioUrl}" preload="metadata" style="flex:1;height:28px;"></audio>
+    `;
+
+    // Insert after transcript container
+    const container = document.getElementById('transcriptContainer');
+    if (container) {
+      container.parentNode.insertBefore(bar, container.nextSibling);
+    }
+  }
+
+  /**
+   * Show export buttons after batch transcription.
+   */
+  _showExportButtons(text) {
+    // Remove existing
+    const existing = document.getElementById('exportBar');
+    if (existing) existing.remove();
+
+    const bar = document.createElement('div');
+    bar.id = 'exportBar';
+    bar.className = 'export-bar';
+    bar.innerHTML = `
+      <button class="export-btn" data-format="copy" title="Copy to clipboard">📋 Copy</button>
+      <button class="export-btn" data-format="txt" title="Save as plain text">📄 .txt</button>
+      <button class="export-btn" data-format="md" title="Save as Markdown">📝 .md</button>
+      <button class="export-btn" data-format="srt" title="Save as subtitles">📊 .srt</button>
+    `;
+
+    // Insert before control bar
+    const controlBar = document.querySelector('.control-bar');
+    if (controlBar) {
+      controlBar.parentNode.insertBefore(bar, controlBar);
+    }
+
+    // Bind click handlers
+    bar.querySelectorAll('.export-btn').forEach(btn => {
+      btn.addEventListener('click', () => this._exportTranscript(text, btn.dataset.format));
+    });
+  }
+
+  /**
+   * Export transcript in specified format.
+   */
+  async _exportTranscript(text, format) {
+    if (format === 'copy') {
+      // Use navigator clipboard
+      try {
+        await navigator.clipboard.writeText(text);
+        this.showReconnectToast('📋 Copied to clipboard!');
+      } catch (_) {
+        this.showReconnectToast('⚠️ Copy failed.');
+      }
+      return;
+    }
+
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    let content, defaultName, filters;
+
+    if (format === 'txt') {
+      content = text;
+      defaultName = `transcript-${timestamp}.txt`;
+      filters = [{ name: 'Text', extensions: ['txt'] }];
+    } else if (format === 'md') {
+      const paragraphs = text.split(/\n+/).filter(p => p.trim());
+      content = `# Transcript — ${new Date().toLocaleString()}\n\n${paragraphs.map(p => p.trim()).join('\n\n')}\n`;
+      defaultName = `transcript-${timestamp}.md`;
+      filters = [{ name: 'Markdown', extensions: ['md'] }];
+    } else if (format === 'srt') {
+      // Generate SRT from text — split into ~10s chunks
+      const words = text.split(/\s+/);
+      const chunkSize = 15; // words per subtitle
+      let srt = '';
+      for (let i = 0, idx = 1; i < words.length; i += chunkSize, idx++) {
+        const chunk = words.slice(i, i + chunkSize).join(' ');
+        const startSec = Math.floor(i / 2.5);
+        const endSec = Math.floor(Math.min(i + chunkSize, words.length) / 2.5);
+        const startTime = this._formatSrtTime(startSec);
+        const endTime = this._formatSrtTime(endSec);
+        srt += `${idx}\n${startTime} --> ${endTime}\n${chunk}\n\n`;
+      }
+      content = srt.trim();
+      defaultName = `transcript-${timestamp}.srt`;
+      filters = [{ name: 'Subtitles', extensions: ['srt'] }];
+    }
+
+    if (window.windyAPI?.saveFile) {
+      const result = await window.windyAPI.saveFile({ content, defaultName, filters });
+      if (result?.ok) {
+        this.showReconnectToast(`✅ Saved to ${result.path.split('/').pop()}`);
+      }
+    } else {
+      // Fallback: download link
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = defaultName;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  /**
+   * Format seconds to SRT time format (HH:MM:SS,mmm).
+   */
+  _formatSrtTime(secs) {
+    const h = String(Math.floor(secs / 3600)).padStart(2, '0');
+    const m = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+    const s = String(Math.floor(secs % 60)).padStart(2, '0');
+    return `${h}:${m}:${s},000`;
+  }
+
+  // ═══════════════════════════════════════════════
+  //  API-based Engines (Deepgram, Groq, OpenAI)
+  // ═══════════════════════════════════════════════
+
+  /**
+   * Start recording for API-based transcription.
+   * Records audio via MediaRecorder, sends chunks to the API.
+   */
+  async startApiRecording(engine) {
+    // Get API key
+    const keyMap = { deepgram: 'deepgramApiKey', groq: 'groqApiKey', openai: 'openaiApiKey' };
+    const apiKey = localStorage.getItem('windy_' + keyMap[engine]) || '';
+    if (!apiKey) {
+      this.showReconnectToast(`⚠️ No ${engine} API key configured. Open Settings to add one.`);
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this._apiAudioChunks = [];
+      this._streamingText = '';
+      this.isRecording = true;
+      this.recordingStartedAt = new Date().toISOString();
+      this.transcriptContent.contentEditable = 'false';
+
+      // Clear placeholder
+      const placeholder = this.transcriptContent.querySelector('.placeholder');
+      if (placeholder) placeholder.remove();
+
+      // For Deepgram: use WebSocket streaming for real-time results
+      if (engine === 'deepgram') {
+        await this._startDeepgramStreaming(stream, apiKey);
+      } else {
+        // For Groq/OpenAI: batch per chunk using MediaRecorder
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus' : 'audio/webm';
+        this._apiMediaRecorder = new MediaRecorder(stream, { mimeType });
+
+        this._apiMediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            this._apiAudioChunks.push(event.data);
+          }
+        };
+
+        this._apiMediaRecorder.onstop = async () => {
+          // Process accumulated audio
+          if (this._apiAudioChunks.length > 0) {
+            const audioBlob = new Blob(this._apiAudioChunks, { type: mimeType });
+            this.setState('buffering');
+            try {
+              const text = await this._transcribeWithApi(engine, apiKey, audioBlob);
+              if (text && text.trim()) {
+                this._streamingText += (this._streamingText ? ' ' : '') + text.trim();
+                this.transcript.push({ text: text.trim(), partial: false, start: 0, end: 0, confidence: 1.0, words: [] });
+                this._renderStreamTranscript();
+                this.updateWordCount();
+              }
+            } catch (err) {
+              console.error(`[${engine}] Transcription failed:`, err);
+              this.showReconnectToast(`⚠️ ${engine} error: ${err.message}`);
+            }
+          }
+          this.setState('idle');
+          stream.getTracks().forEach(t => t.stop());
+
+          // Archive
+          if (this._streamingText.trim() && window.windyAPI?.archiveTranscript) {
+            const route = this.archiveRouteSelect?.value || 'local';
+            if (route !== 'off') {
+              window.windyAPI.archiveTranscript({
+                text: this._streamingText.trim(),
+                startedAt: this.recordingStartedAt,
+                endedAt: new Date().toISOString(),
+                route
+              });
+            }
+          }
+          this.transcriptContent.contentEditable = 'true';
+          this.recordingStartedAt = null;
+        };
+
+        // For Groq/OpenAI: record in 5-second chunks for progressive transcription
+        this._apiMediaRecorder.start(5000);
+
+        // Process chunks as they arrive (progressive transcription)
+        this._apiChunkInterval = setInterval(async () => {
+          if (this._apiAudioChunks.length > 0 && this.isRecording) {
+            const chunks = this._apiAudioChunks.splice(0);
+            const blob = new Blob(chunks, { type: mimeType });
+            try {
+              const text = await this._transcribeWithApi(engine, apiKey, blob);
+              if (text && text.trim()) {
+                this._streamingText += (this._streamingText ? ' ' : '') + text.trim();
+                this.transcript.push({ text: text.trim(), partial: false, start: 0, end: 0, confidence: 1.0, words: [] });
+                this._renderStreamTranscript();
+                this.updateWordCount();
+              }
+            } catch (err) {
+              console.error(`[${engine}] Chunk transcription failed:`, err);
+            }
+          }
+        }, 6000); // Process every 6s (giving 1s buffer after 5s chunks)
+      }
+
+      this.setState('listening');
+      this.updateModelBadge(engine, false);
+      console.log(`[API] ${engine} recording started`);
+    } catch (err) {
+      console.error(`[API] Failed to start ${engine}:`, err);
+      this.showReconnectToast(`⚠️ Could not access microphone.`);
+      this.isRecording = false;
+    }
+  }
+
+  /**
+   * Stop API-based recording
+   */
+  stopApiRecording() {
+    this.isRecording = false;
+    if (this._apiChunkInterval) {
+      clearInterval(this._apiChunkInterval);
+      this._apiChunkInterval = null;
+    }
+    if (this._deepgramWs) {
+      this._deepgramWs.close();
+      this._deepgramWs = null;
+    }
+    if (this._apiMediaRecorder && this._apiMediaRecorder.state !== 'inactive') {
+      this._apiMediaRecorder.stop(); // triggers onstop handler
+    } else {
+      this.setState('idle');
+      this.transcriptContent.contentEditable = 'true';
+    }
+    this._apiMediaRecorder = null;
+  }
+
+  /**
+   * Transcribe audio blob with Groq or OpenAI API.
+   * @param {string} engine - 'groq' or 'openai'
+   * @param {string} apiKey - API key
+   * @param {Blob} audioBlob - Audio data
+   * @returns {Promise<string>} Transcribed text
+   */
+  async _transcribeWithApi(engine, apiKey, audioBlob) {
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'audio.webm');
+    formData.append('model', engine === 'groq' ? 'whisper-large-v3' : 'whisper-1');
+    formData.append('language', localStorage.getItem('windy_language') || 'en');
+
+    const urls = {
+      groq: 'https://api.groq.com/openai/v1/audio/transcriptions',
+      openai: 'https://api.openai.com/v1/audio/transcriptions'
+    };
+
+    // 30-second timeout for API calls
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30 * 1000);
+
+    try {
+      const response = await fetch(urls[engine], {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+        body: formData,
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        if (response.status >= 500) {
+          throw new Error('Processing failed — try again or switch to a different engine.');
+        }
+        throw new Error(`${response.status}: ${err}`);
+      }
+
+      const data = await response.json();
+      return data.text || '';
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error('API request timed out (30s). Try again or use a different engine.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  /**
+   * Start Deepgram real-time WebSocket streaming
+   */
+  async _startDeepgramStreaming(stream, apiKey) {
+    const dgLang = localStorage.getItem('windy_language') || 'en';
+    const dgDiarize = localStorage.getItem('windy_diarize') === 'true';
+    let dgUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&language=${dgLang}&smart_format=true&interim_results=true&punctuate=true`;
+    if (dgDiarize) dgUrl += '&diarize=true';
+
+    this._deepgramWs = new WebSocket(dgUrl, ['token', apiKey]);
+
+    this._deepgramWs.onopen = () => {
+      console.log('[Deepgram] WebSocket connected');
+      // Stream audio to Deepgram
+      const audioCtx = new AudioContext({ sampleRate: 16000 });
+      const source = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+      processor.onaudioprocess = (e) => {
+        if (this._deepgramWs && this._deepgramWs.readyState === WebSocket.OPEN) {
+          const inputData = e.inputBuffer.getChannelData(0);
+          // Convert float32 to int16
+          const int16 = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            int16[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+          }
+          this._deepgramWs.send(int16.buffer);
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+      this._dgAudioCtx = audioCtx;
+      this._dgProcessor = processor;
+      this._dgSource = source;
+      this._dgStream = stream;
+    };
+
+    this._deepgramWs.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.channel?.alternatives?.[0]) {
+          const alt = data.channel.alternatives[0];
+          const text = alt.transcript;
+          if (text) {
+            if (data.is_final) {
+              this._streamingText += (this._streamingText ? ' ' : '') + text;
+              this.transcript.push({ text: text.trim(), partial: false, start: 0, end: 0, confidence: alt.confidence || 1, words: [] });
+              this._interimText = '';
+              this.updateWordCount();
+            } else {
+              this._interimText = text;
+            }
+            this._renderStreamTranscript();
+          }
+        }
+      } catch (err) {
+        console.error('[Deepgram] Parse error:', err);
+      }
+    };
+
+    this._deepgramWs.onerror = (err) => {
+      console.error('[Deepgram] WebSocket error:', err);
+      this.showReconnectToast('⚠️ Deepgram connection error. Check API key.');
+    };
+
+    this._deepgramWs.onclose = () => {
+      console.log('[Deepgram] WebSocket closed');
+      // Clean up audio pipeline
+      if (this._dgProcessor) this._dgProcessor.disconnect();
+      if (this._dgSource) this._dgSource.disconnect();
+      if (this._dgAudioCtx) this._dgAudioCtx.close();
+      if (this._dgStream) this._dgStream.getTracks().forEach(t => t.stop());
+
+      if (this.isRecording) {
+        this.isRecording = false;
+        this.setState('idle');
+        this.transcriptContent.contentEditable = 'true';
+        // Archive
+        if (this._streamingText.trim() && window.windyAPI?.archiveTranscript) {
+          const route = this.archiveRouteSelect?.value || 'local';
+          if (route !== 'off') {
+            window.windyAPI.archiveTranscript({
+              text: this._streamingText.trim(),
+              startedAt: this.recordingStartedAt,
+              endedAt: new Date().toISOString(),
+              route
+            });
+          }
+        }
+        this.recordingStartedAt = null;
+      }
+    };
+  }
+
   /**
    * Toggle recording state
+   * Debounced to prevent double-tap races (e.g. rapid Ctrl+Shift+Space)
    */
+  /** Play a short blip sound for start/stop feedback */
+  _playBlip(frequency = 880, duration = 0.08) {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = frequency;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + duration);
+      setTimeout(() => ctx.close(), 200);
+    } catch (_) {}
+  }
+
   toggleRecording() {
+    // Debounce guard: ignore rapid toggles within 500ms
+    if (this._toggleLock) return;
+    this._toggleLock = true;
+    setTimeout(() => { this._toggleLock = false; }, 500);
+
+    const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine;
+    const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
+
     if (this.isRecording) {
-      this.stopRecording();
+      // Stop — low blip
+      this._playBlip(440, 0.1);
+      if (this._batchRecorder) {
+        this.stopBatchRecording();
+      } else if (['deepgram', 'groq', 'openai'].includes(engine) && this._apiMediaRecorder) {
+        this.stopApiRecording();
+      } else if (engine === 'stream' && this.speechRecognition) {
+        this.stopStreamRecognition();
+      } else {
+        this.stopRecording();
+      }
     } else {
-      this.startRecording();
+      // Start — high blip
+      this._playBlip(880, 0.08);
+      if (recordingMode === 'batch') {
+        this.startBatchRecording();
+      } else if (['deepgram', 'groq', 'openai'].includes(engine)) {
+        this.startApiRecording(engine);
+      } else if (engine === 'stream') {
+        this.startStreamRecognition();
+      } else {
+        this.startRecording();
+      }
     }
   }
 
@@ -1009,7 +2095,7 @@ class WindyApp {
    * Appends text inline as one continuous block (not separate lines)
    */
   addTranscriptSegment(msg) {
-    console.error('[addTranscript] text:', msg.text, 'partial:', msg.partial, 'livePreview:', this.livePreview, 'state:', this.currentState);
+    console.debug('[addTranscript] text:', msg.text, 'partial:', msg.partial, 'livePreview:', this.livePreview, 'state:', this.currentState);
     // Always retain final segments for copy/paste reliability
     if (!msg.partial) {
       this.transcript.push(msg);
