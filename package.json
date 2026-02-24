@@ -103,7 +103,6 @@
       "desktop": {
         "Name": "Windy Pro",
         "Comment": "Voice-to-text transcription",
-        "Exec": "\"windy-pro\" %U",
         "Terminal": "false",
         "Type": "Application",
         "Categories": "Utility;Audio;Accessibility;",
