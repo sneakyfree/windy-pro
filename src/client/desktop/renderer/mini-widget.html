@@ -27,8 +27,8 @@
       justify-content: center;
       position: relative;
       cursor: grab;
-      background: radial-gradient(circle, #0d1520 60%, transparent 70%);
-      border-radius: 50%;
+      background: radial-gradient(circle, #0d1520 60%, #000 100%);
+      -webkit-app-region: drag;
     }
 
     .widget.dragging {
@@ -174,6 +174,8 @@
         if (currentState !== 'recording') return;
         voiceLevelReceived = true;
         lastVoiceLevelTime = Date.now();
+        // Override CSS animation so inline JS styles take effect
+        tornado.style.animation = 'none';
         // Lerp toward target for smoothness
         smoothLevel += (level - smoothLevel) * 0.35;
       });
@@ -195,7 +197,11 @@
         
         // If no voice level data received in last 1 second, let CSS fallback handle animation
         if (!voiceLevelReceived || (Date.now() - lastVoiceLevelTime > 1000)) {
-          // Don't override inline styles — CSS .recording .tornado animation handles it
+          // Restore CSS animation fallback
+          tornado.style.animation = '';
+          tornado.style.transform = '';
+          tornado.style.filter = '';
+          glowRing.style.boxShadow = 'none';
           animFrame = requestAnimationFrame(frame);
           return;
         }
@@ -255,10 +261,12 @@
 
     widget.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
+      e.preventDefault();
       isDragging = true;
       dragStartX = e.screenX;
       dragStartY = e.screenY;
       widget.classList.add('dragging');
+      console.log('[MiniWidget] Drag start:', e.screenX, e.screenY);
     });
 
     document.addEventListener('mousemove', (e) => {
