@@ -581,9 +581,9 @@ function updateTrayIcon(state) {
  */
 function showMiniWidget() {
   if (miniWindow && !miniWindow.isDestroyed()) {
-    miniWindow.show();
-    updateMiniState(isRecording ? 'recording' : 'idle');
-    return;
+    // Destroy and recreate to ensure fresh JS load (avoids stale CSP-blocked state)
+    miniWindow.destroy();
+    miniWindow = null;
   }
 
   const tornadoSize = store.get('tornadoSize') || 56;
