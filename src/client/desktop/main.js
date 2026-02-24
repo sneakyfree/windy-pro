@@ -742,20 +742,10 @@ function toggleRecording() {
   updateTrayMenu();
   updateTrayIcon(isRecording ? 'listening' : 'idle');
 
-  // Always show mini widget when recording starts (for voice strobe)
-  if (isRecording) {
-    showMiniWidget();
-  }
+  // Update mini widget state if it's visible (don't force-show it)
   updateMiniState(isRecording ? 'recording' : 'idle');
 
-  // Hide mini widget when recording stops (if main window is visible)
-  if (!isRecording && mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
-    if (miniWindow && !miniWindow.isDestroyed()) {
-      miniWindow.hide();
-    }
-  }
-
-  // Update tray icon color based on state
+    // Update tray icon color based on state
   if (tray) {
     tray.setToolTip(isRecording ? 'Windy Pro - Recording...' : 'Windy Pro');
   }
