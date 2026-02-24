@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   archiveTranscript: (payload) => ipcRenderer.send('archive-transcript', payload),
   batchTranscribeLocal: (base64Audio) => ipcRenderer.invoke('batch-transcribe-local', base64Audio),
   autoPasteText: (text) => ipcRenderer.invoke('auto-paste-text', text),
+  sendVoiceLevel: (level) => ipcRenderer.send('voice-level', level),
   onArchiveResult: (callback) => {
     ipcRenderer.on('archive-result', (event, payload) => callback(payload));
   },
@@ -76,4 +77,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   // App version (reads from package.json via main process)
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  updateTornadoSize: (size) => ipcRenderer.send('update-tornado-size', size),
+  getArchiveHistory: () => ipcRenderer.invoke('get-archive-history'),
+  deleteArchiveEntry: (filePath) => ipcRenderer.invoke('delete-archive-entry', filePath),
 });

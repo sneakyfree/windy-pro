@@ -1,115 +1,260 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<meta charset="UTF-8">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body {
-    width: 56px; height: 56px;
-    background: transparent;
-    overflow: hidden;
-    -webkit-app-region: drag;
-    user-select: none;
-  }
-  .widget {
-    width: 56px; height: 56px;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: 50%;
-    background: radial-gradient(circle, #1a2332 0%, #0d1520 100%);
-    border: 2px solid #2a3a4a;
-    cursor: grab;
-    position: relative;
-    transition: border-color 0.3s, box-shadow 0.3s;
-  }
-  .widget:active { cursor: grabbing; }
-  .widget.recording {
-    border-color: #00ff88;
-    box-shadow: 0 0 12px rgba(0,255,136,0.5), 0 0 24px rgba(0,255,136,0.2);
-  }
-  .widget.processing {
-    border-color: #ffaa00;
-    box-shadow: 0 0 12px rgba(255,170,0,0.5);
-  }
-  .widget.jolt {
-    animation: jolt 0.3s ease-out;
-  }
-  @keyframes jolt {
-    0% { transform: scale(1); }
-    30% { transform: scale(1.25); }
-    60% { transform: scale(0.9); }
-    100% { transform: scale(1); }
-  }
-  .tornado {
-    font-size: 28px;
-    filter: drop-shadow(0 0 4px rgba(100,200,255,0.3));
-    transition: filter 0.3s;
-  }
-  .recording .tornado {
-    animation: spin 1.2s linear infinite;
-    filter: drop-shadow(0 0 8px rgba(0,255,136,0.6));
-  }
-  .processing .tornado {
-    animation: pulse 0.8s ease-in-out infinite;
-    filter: drop-shadow(0 0 8px rgba(255,170,0,0.6));
-  }
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  @keyframes pulse {
-    0%, 100% { transform: scale(1); opacity: 0.7; }
-    50% { transform: scale(1.15); opacity: 1; }
-  }
-  /* Green recording ring */
-  .ring {
-    position: absolute;
-    width: 52px; height: 52px;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    pointer-events: none;
-  }
-  .recording .ring {
-    border-color: rgba(0,255,136,0.4);
-    animation: ring-pulse 1.5s ease-in-out infinite;
-  }
-  @keyframes ring-pulse {
-    0%, 100% { transform: scale(1); opacity: 0.4; }
-    50% { transform: scale(1.15); opacity: 0; }
-  }
-</style>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .widget {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      -webkit-app-region: drag;
+      cursor: grab;
+      background: transparent;
+    }
+
+    .widget:active {
+      cursor: grabbing;
+    }
+
+    /* Glow ring — behind the emoji */
+    .glow-ring {
+      position: absolute;
+      width: 80%;
+      height: 80%;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    /* Tornado emoji — NO rotation ever */
+    .tornado {
+      font-size: 28px;
+      pointer-events: none;
+      text-shadow: 0 0 3px rgba(0, 0, 0, 0.8), 0 0 6px rgba(0, 0, 0, 0.5);
+      will-change: transform, filter;
+    }
+
+    /* Processing: amber pulse (CSS-only, no rotation) */
+    .widget.processing .tornado {
+      animation: amber-pulse 1.5s ease-in-out infinite;
+    }
+
+    .widget.processing .glow-ring {
+      animation: amber-glow 1.5s ease-in-out infinite;
+    }
+
+    @keyframes amber-pulse {
+
+      0%,
+      100% {
+        transform: scale(1);
+        opacity: 0.7;
+        filter: drop-shadow(0 0 6px rgba(255, 170, 0, 0.4));
+      }
+
+      50% {
+        transform: scale(1.08);
+        opacity: 1;
+        filter: drop-shadow(0 0 12px rgba(255, 170, 0, 0.7));
+      }
+    }
+
+    @keyframes amber-glow {
+
+      0%,
+      100% {
+        box-shadow: 0 0 8px 2px rgba(255, 170, 0, 0.2);
+      }
+
+      50% {
+        box-shadow: 0 0 16px 6px rgba(255, 170, 0, 0.5);
+      }
+    }
+
+    /* Jolt: quick scale bounce on start/stop */
+    .widget.jolt .tornado {
+      animation: jolt 0.25s ease-out;
+    }
+
+    /* Fallback vibration when voice levels aren't arriving */
+    .widget.recording .tornado {
+      animation: vibrate-fallback 0.15s ease-in-out infinite alternate;
+      filter: drop-shadow(0 0 8px rgba(0,255,136,0.5));
+    }
+    @keyframes vibrate-fallback {
+      0% { transform: translate(-1px, -1px) scale(1.02); }
+      25% { transform: translate(1px, 0px) scale(1.04); }
+      50% { transform: translate(-1px, 1px) scale(1.02); }
+      75% { transform: translate(1px, -1px) scale(1.03); }
+      100% { transform: translate(0px, 1px) scale(1.02); }
+    }
+
+    @keyframes jolt {
+      0% {
+        transform: scale(1);
+      }
+
+      30% {
+        transform: scale(1.25);
+      }
+
+      60% {
+        transform: scale(0.92);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+  </style>
 </head>
+
 <body>
   <div class="widget" id="widget">
-    <div class="ring"></div>
-    <span class="tornado">🌪️</span>
+    <div class="glow-ring" id="glowRing"></div>
+    <span class="tornado" id="tornado">🌪️</span>
   </div>
   <script>
     const widget = document.getElementById('widget');
-    
-    // Listen for state changes from main process
+    const glowRing = document.getElementById('glowRing');
+    const tornado = document.getElementById('tornado');
+    let currentState = 'idle';
+    let animFrame = null;
+    let smoothLevel = 0;
+    let breathPhase = 0;
+    let lastVoiceLevelTime = 0;
+    let voiceLevelReceived = false;
+
     if (window.windyMini) {
+      // ═══ State changes ═══
       window.windyMini.onStateChange((state) => {
-        widget.classList.remove('recording', 'processing', 'jolt');
+        console.log('[MiniWidget] State:', state);
+        currentState = state;
+
+        // Clear everything
+        widget.className = 'widget';
+        tornado.style.transform = '';
+        tornado.style.filter = '';
+        glowRing.style.boxShadow = 'none';
+        stopAnimation();
+
         if (state === 'recording') {
           widget.classList.add('jolt');
           setTimeout(() => {
             widget.classList.remove('jolt');
             widget.classList.add('recording');
-          }, 300);
+            startVoiceAnimation();
+          }, 250);
         } else if (state === 'processing') {
           widget.classList.add('processing');
-        } else if (state === 'idle') {
-          widget.classList.add('jolt');
-          setTimeout(() => widget.classList.remove('jolt'), 300);
         }
+        // idle: widget has class 'widget' only — tornado is completely still
+      });
+
+      // ═══ Voice levels ═══
+      window.windyMini.onVoiceLevel((level) => {
+        if (currentState !== 'recording') return;
+        voiceLevelReceived = true;
+        lastVoiceLevelTime = Date.now();
+        // Lerp toward target for smoothness
+        smoothLevel += (level - smoothLevel) * 0.35;
+      });
+
+      // ═══ Resize ═══
+      window.windyMini.onResize((size) => {
+        console.log('[MiniWidget] Resize:', size);
+        tornado.style.fontSize = Math.round(size * 0.5) + 'px';
       });
     }
-    
-    // Double-click to expand back to main window
+
+    // ═══ Voice-reactive animation loop ═══
+    function startVoiceAnimation() {
+      smoothLevel = 0;
+      breathPhase = 0;
+
+      function frame() {
+        if (currentState !== 'recording') return;
+        
+        // If no voice level data received in last 1 second, let CSS fallback handle animation
+        if (!voiceLevelReceived || (Date.now() - lastVoiceLevelTime > 1000)) {
+          // Don't override inline styles — CSS .recording .tornado animation handles it
+          animFrame = requestAnimationFrame(frame);
+          return;
+        }
+        
+        const lv = smoothLevel;
+
+        if (lv < 0.05) {
+          // Silent: subtle breathing pulse (scale 1.0 → 1.02, 2s cycle)
+          breathPhase += 0.03; // ~2s cycle at 60fps
+          const breathScale = 1.0 + Math.sin(breathPhase) * 0.01;
+          tornado.style.transform = `scale(${breathScale})`;
+          tornado.style.filter = 'drop-shadow(0 0 2px rgba(0,255,136,0.15))';
+          glowRing.style.boxShadow = 'none';
+        } else {
+          // Voice active: vibrate + scale + glow
+          breathPhase = 0;
+
+          // Jitter: ±1 to ±3px proportional to level
+          const intensity = Math.min(lv * 2, 1.0);
+          const jx = (Math.random() - 0.5) * intensity * 6; // ±3px at max
+          const jy = (Math.random() - 0.5) * intensity * 6;
+
+          // Scale: 1.0 to 1.1
+          const sc = 1.0 + intensity * 0.1;
+
+          tornado.style.transform = `translate(${jx}px, ${jy}px) scale(${sc})`;
+
+          // Green glow behind emoji
+          const glowBlur = 4 + intensity * 14;
+          const glowOpacity = 0.2 + intensity * 0.8;
+          tornado.style.filter = `drop-shadow(0 0 ${glowBlur}px rgba(0,255,136,${glowOpacity}))`;
+
+          // Glow ring
+          const ringBlur = 4 + intensity * 16;
+          const ringSpread = intensity * 6;
+          const ringOpacity = 0.15 + intensity * 0.6;
+          glowRing.style.boxShadow = `0 0 ${ringBlur}px ${ringSpread}px rgba(0,255,136,${ringOpacity})`;
+        }
+
+        animFrame = requestAnimationFrame(frame);
+      }
+      animFrame = requestAnimationFrame(frame);
+    }
+
+    function stopAnimation() {
+      if (animFrame) {
+        cancelAnimationFrame(animFrame);
+        animFrame = null;
+      }
+      smoothLevel = 0;
+      breathPhase = 0;
+    }
+
+    // Double-click to expand
     widget.addEventListener('dblclick', (e) => {
       e.preventDefault();
       if (window.windyMini) window.windyMini.expandWindow();
     });
   </script>
 </body>
+
 </html>

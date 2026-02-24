@@ -585,10 +585,13 @@ function showMiniWidget() {
     updateMiniState(isRecording ? 'recording' : 'idle');
     return;
   }
-  
-  miniWindow = new BrowserWindow({
-    width: 60,
-    height: 60,
+
+  const tornadoSize = store.get('tornadoSize') || 56;
+  const winSize = tornadoSize + 4;
+
+  const winOpts = {
+    width: winSize,
+    height: winSize,
     x: 100,
     y: 100,
     frame: false,
@@ -597,22 +600,35 @@ function showMiniWidget() {
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
-    focusable: false,
+    focusable: true,
+    backgroundColor: '#00000000',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'mini-preload.js')
     }
-  });
-  
+  };
+
+  // Linux: transparent windows can't be dragged via app-region on some WMs.
+  // Use non-transparent with dark bg as fallback.
+  if (process.platform === 'linux') {
+    winOpts.transparent = false;
+    winOpts.backgroundColor = '#0d1520';
+  }
+
+  miniWindow = new BrowserWindow(winOpts);
+
   miniWindow.loadFile(path.join(__dirname, 'renderer', 'mini-widget.html'));
   miniWindow.setVisibleOnAllWorkspaces(true);
-  
+
   miniWindow.on('closed', () => { miniWindow = null; });
-  
-  // Update state after load
+
+  // Forward state + size after load
   miniWindow.webContents.on('did-finish-load', () => {
     updateMiniState(isRecording ? 'recording' : 'idle');
+    if (miniWindow && !miniWindow.isDestroyed()) {
+      miniWindow.webContents.send('mini-resize', tornadoSize);
+    }
   });
 }
 
@@ -631,6 +647,33 @@ ipcMain.on('mini-expand', () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.show();
     mainWindow.focus();
+  }
+});
+
+// Handle mini widget drag
+ipcMain.on('mini-move', (event, { dx, dy }) => {
+  if (miniWindow && !miniWindow.isDestroyed()) {
+    const [x, y] = miniWindow.getPosition();
+    miniWindow.setPosition(x + dx, y + dy);
+  }
+});
+
+// Forward voice levels from renderer to mini widget
+ipcMain.on('voice-level', (event, level) => {
+  if (miniWindow && !miniWindow.isDestroyed() && miniWindow.webContents && !miniWindow.webContents.isDestroyed()) {
+    miniWindow.webContents.send('mini-voice-level', level);
+  }
+});
+
+// Update tornado widget size from settings slider
+ipcMain.on('update-tornado-size', (event, size) => {
+  store.set('tornadoSize', size);
+  const winSize = size + 4;
+  if (miniWindow && !miniWindow.isDestroyed()) {
+    miniWindow.setSize(winSize, winSize);
+    if (miniWindow.webContents && !miniWindow.webContents.isDestroyed()) {
+      miniWindow.webContents.send('mini-resize', size);
+    }
   }
 });
 
@@ -653,18 +696,20 @@ function registerHotkeys() {
   });
   console.log(`[Hotkey] Paste transcript (${hotkeys.pasteTranscript}): ${regPaste ? 'OK' : 'FAILED'}`);
 
-  // Show/hide window — toggle between main window and mini tornado widget
+  // Show/hide window — three-state cycle: Full Window → Tornado → Hidden → Full Window
   const regShow = globalShortcut.register(hotkeys.showHide, () => {
-    if (mainWindow.isVisible()) {
-      // Minimize to tornado widget
+    const mainVisible = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible();
+    const miniVisible = miniWindow && !miniWindow.isDestroyed() && miniWindow.isVisible();
+
+    if (mainVisible) {
+      // State 1 → State 2: Full window → Tornado
       mainWindow.hide();
       showMiniWidget();
-    } else if (miniWindow && miniWindow.isVisible()) {
-      // Expand back to main window
+    } else if (miniVisible) {
+      // State 2 → State 3: Tornado → Hidden (everything gone)
       miniWindow.hide();
-      mainWindow.show();
-      mainWindow.focus();
     } else {
+      // State 3 → State 1: Hidden → Full window
       mainWindow.show();
       mainWindow.focus();
     }
@@ -828,19 +873,19 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
   const fs = require('fs');
   const os = require('os');
   const { execSync } = require('child_process');
-  
+
   const tmpDir = os.tmpdir();
   const webmPath = `${tmpDir}/windy-batch-${Date.now()}.webm`;
   const wavPath = `${tmpDir}/windy-batch-${Date.now()}.wav`;
-  
+
   try {
     // Save base64 audio to temp file
     const buffer = Buffer.from(base64Audio, 'base64');
     fs.writeFileSync(webmPath, buffer);
-    
+
     // Convert to WAV using ffmpeg
     execSync(`ffmpeg -y -i "${webmPath}" -ar 16000 -ac 1 -c:a pcm_s16le "${wavPath}" 2>/dev/null`);
-    
+
     // Find the Python venv — check multiple locations
     const path = require('path');
     const appRoot = path.resolve(__dirname, '..', '..', '..');
@@ -851,7 +896,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     ];
     const pythonPath = venvPaths.find(p => fs.existsSync(p)) || 'python3';
     console.log('[Batch] Using python:', pythonPath);
-    
+
     // Run faster-whisper transcription via temp script
     const modelName = store.get('engine.model') || 'base';
     const scriptPath = `${tmpDir}/windy-batch-transcribe-${Date.now()}.py`;
@@ -863,22 +908,22 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
       'print(text)'
     ].join('\n');
     fs.writeFileSync(scriptPath, scriptContent);
-    
+
     const result = execSync(`${pythonPath} "${scriptPath}"`, {
       timeout: 120000,
       maxBuffer: 10 * 1024 * 1024
     });
-    
-    try { fs.unlinkSync(scriptPath); } catch (_) {}
-    
+
+    try { fs.unlinkSync(scriptPath); } catch (_) { }
+
     return result.toString().trim();
   } catch (err) {
     console.error('[Batch Local] Error:', err.message);
     throw new Error(`Local transcription failed: ${err.message}`);
   } finally {
     // Cleanup temp files
-    try { fs.unlinkSync(webmPath); } catch (_) {}
-    try { fs.unlinkSync(wavPath); } catch (_) {}
+    try { fs.unlinkSync(webmPath); } catch (_) { }
+    try { fs.unlinkSync(wavPath); } catch (_) { }
   }
 });
 
@@ -902,6 +947,108 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
   } catch (err) {
     console.error('[AutoPaste] Failed:', err.message);
     return false;
+  }
+});
+
+// ═══ History: Read archive files from disk ═══
+ipcMain.handle('get-archive-history', async () => {
+  const fs = require('fs');
+  const archiveDir = store.get('engine.archiveFolder') || path.join(os.homedir(), 'Documents', 'WindyProArchive');
+  const entries = [];
+
+  try {
+    if (!fs.existsSync(archiveDir)) return entries;
+
+    // Walk {archiveDir}/{YYYY-MM-DD}/{HHMMSS}.md
+    const dateDirs = fs.readdirSync(archiveDir).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    for (const dateDir of dateDirs.sort().reverse()) {
+      const dirPath = path.join(archiveDir, dateDir);
+      const stat = fs.statSync(dirPath);
+      if (!stat.isDirectory()) continue;
+
+      const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.md')).sort().reverse();
+      for (const file of files) {
+        const filePath = path.join(dirPath, file);
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          // Parse the .md file: title line, metadata, then text
+          const lines = content.split('\n');
+          let text = '';
+          let wordCount = 0;
+          let engine = 'local';
+          let dateStr = '';
+
+          // Extract metadata from frontmatter-like lines
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (line.startsWith('# ')) continue; // title
+            if (line.startsWith('**') && line.includes(':')) {
+              if (line.includes('Words:')) {
+                const m = line.match(/Words:\s*(\d+)/);
+                if (m) wordCount = parseInt(m[1]);
+              }
+              if (line.includes('Start:') || line.includes('Time:')) {
+                const m = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/);
+                if (m) dateStr = m[1];
+              }
+              if (line.includes('Engine:')) {
+                const m = line.match(/Engine:\s*(\w+)/);
+                if (m) engine = m[1].toLowerCase();
+              }
+              continue;
+            }
+            if (line === '---' || line.trim() === '') continue;
+            // Everything after metadata is transcript text
+            text = lines.slice(i).join('\n').trim();
+            break;
+          }
+
+          // Fallback date from dir/file name
+          if (!dateStr) {
+            const timePart = file.replace('.md', '');
+            dateStr = `${dateDir}T${timePart.substring(0, 2)}:${timePart.substring(2, 4)}:${timePart.substring(4, 6)}`;
+          }
+
+          if (!wordCount && text) {
+            wordCount = text.split(/\s+/).filter(Boolean).length;
+          }
+
+          entries.push({
+            date: dateStr,
+            text,
+            wordCount,
+            engine,
+            _source: 'archive',
+            _archivePath: filePath,
+            _id: `archive-${dateDir}-${file}`
+          });
+        } catch (e) {
+          console.warn('[History] Failed to parse:', filePath, e.message);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[History] Archive scan error:', e.message);
+  }
+
+  return entries;
+});
+
+// ═══ History: Delete archive entry ═══
+ipcMain.handle('delete-archive-entry', async (event, filePath) => {
+  const fs = require('fs');
+  if (!filePath || !filePath.includes('WindyProArchive')) {
+    throw new Error('Invalid archive path');
+  }
+  try {
+    fs.unlinkSync(filePath);
+    // Remove empty parent dir
+    const dir = path.dirname(filePath);
+    const remaining = fs.readdirSync(dir);
+    if (remaining.length === 0) fs.rmdirSync(dir);
+    return { deleted: true };
+  } catch (e) {
+    throw new Error(`Delete failed: ${e.message}`);
   }
 });
 

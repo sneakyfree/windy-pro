@@ -292,6 +292,15 @@ class SettingsPanel {
         </div>
 
         <div class="settings-section">
+          <h3>🌪️ Tornado Widget</h3>
+          <div class="setting-row">
+            <label for="tornadoSize">Tornado size</label>
+            <input type="range" id="tornadoSize" min="32" max="128" step="8" value="56" style="flex:1;margin:0 8px;">
+            <span id="tornadoSizeValue" style="min-width:36px;text-align:right;">56px</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
           <h3>📊 Analytics</h3>
           <div class="setting-row" title="Anonymous metrics: engine used, recording duration, batch vs live, language. Never transcript content.">
             <label for="analyticsEnabled">Help improve Windy Pro</label>
@@ -749,6 +758,21 @@ class SettingsPanel {
       });
     }
 
+    // Tornado size slider
+    const tornadoRange = this.panel.querySelector('#tornadoSize');
+    const tornadoValue = this.panel.querySelector('#tornadoSizeValue');
+    if (tornadoRange && tornadoValue) {
+      tornadoRange.addEventListener('input', (e) => {
+        const size = parseInt(e.target.value);
+        tornadoValue.textContent = size + 'px';
+        localStorage.setItem('windy_tornadoSize', size);
+        this.saveSetting('tornadoSize', size);
+        if (window.windyAPI?.updateTornadoSize) {
+          window.windyAPI.updateTornadoSize(size);
+        }
+      });
+    }
+
     // Analytics toggle
     const analyticsEl = this.panel.querySelector('#analyticsEnabled');
     if (analyticsEl) {
@@ -866,6 +890,15 @@ class SettingsPanel {
         if (settings.maxRecordingMin) {
           const maxSelect = this.panel.querySelector('#maxRecordingSelect');
           if (maxSelect) maxSelect.value = settings.maxRecordingMin;
+        }
+        // Restore tornado size
+        if (settings.tornadoSize !== undefined) {
+          const tornadoRange = this.panel.querySelector('#tornadoSize');
+          const tornadoValue = this.panel.querySelector('#tornadoSizeValue');
+          if (tornadoRange && tornadoValue) {
+            tornadoRange.value = settings.tornadoSize;
+            tornadoValue.textContent = settings.tornadoSize + 'px';
+          }
         }
         // Restore custom hotkeys
         if (settings.hotkeys) {

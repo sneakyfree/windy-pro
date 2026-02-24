@@ -168,6 +168,15 @@ class WindyApp {
     // Copy button
     this.copyBtn.addEventListener('click', () => this.copyTranscript());
 
+    // History button
+    const histBtn = document.getElementById('historyBtn');
+    if (histBtn) {
+      histBtn.addEventListener('click', () => {
+        if (!this.historyPanel) this.historyPanel = new HistoryPanel(this);
+        this.historyPanel.toggle();
+      });
+    }
+
     // Paste button
     this.pasteBtn.addEventListener('click', () => this.pasteTranscript());
 
@@ -1021,6 +1030,38 @@ class WindyApp {
         }, (maxMin * 60 - 30) * 1000);
       }
 
+      // 5b. Voice level monitoring for mini widget strobe
+      try {
+        this._batchAudioCtx = new AudioContext();
+        const source = this._batchAudioCtx.createMediaStreamSource(stream);
+        this._batchAnalyser = this._batchAudioCtx.createAnalyser();
+        this._batchAnalyser.fftSize = 256;
+        source.connect(this._batchAnalyser);
+        const dataArray = new Uint8Array(this._batchAnalyser.frequencyBinCount);
+
+        const timeDomainData = new Uint8Array(this._batchAnalyser.fftSize);
+        this._voiceLevelInterval = setInterval(() => {
+          if (!this._batchAnalyser) return;
+          this._batchAnalyser.getByteTimeDomainData(timeDomainData);
+          // Calculate RMS from time domain (more reliable for voice)
+          let sumSquares = 0;
+          for (let i = 0; i < timeDomainData.length; i++) {
+            const normalized = (timeDomainData[i] - 128) / 128;
+            sumSquares += normalized * normalized;
+          }
+          const rms = Math.sqrt(sumSquares / timeDomainData.length);
+          // Amplify and clamp to 0-1
+          const level = Math.min(rms * 4, 1.0);
+          // Send to main process for mini widget
+          if (window.windyAPI?.sendVoiceLevel) {
+            window.windyAPI.sendVoiceLevel(level);
+            if (level > 0.05) console.log('[VoiceLevel] sent:', level.toFixed(3));
+          }
+        }, 50); // 20 updates/sec for smooth strobe
+      } catch (e) {
+        console.warn('[Batch] Voice level monitor failed:', e.message);
+      }
+
       // 6. UI state
       this.isRecording = true;
       this.setState('listening');
@@ -1064,6 +1105,18 @@ class WindyApp {
     // Clear timers
     clearTimeout(this._batchMaxTimer);
     clearTimeout(this._batchWarnTimer);
+
+    // Stop voice level monitoring
+    if (this._voiceLevelInterval) {
+      clearInterval(this._voiceLevelInterval);
+      this._voiceLevelInterval = null;
+    }
+    if (this._batchAudioCtx) {
+      try { this._batchAudioCtx.close(); } catch (_) { }
+      this._batchAudioCtx = null;
+      this._batchAnalyser = null;
+    }
+
     this.isRecording = false;
     this.stopSessionTimer();
 
@@ -1146,7 +1199,7 @@ class WindyApp {
         binary += String.fromCharCode(uint8[i]);
       }
       const base64 = btoa(binary);
-      
+
       // Use IPC to transcribe via main process (which has fs access)
       if (window.windyAPI?.batchTranscribeLocal) {
         const result = await window.windyAPI.batchTranscribeLocal(base64);
@@ -1237,7 +1290,7 @@ class WindyApp {
     this.transcript = [{ text: text.trim(), partial: false, start: 0, end: 0, confidence: 1, words: [] }];
     this.updateWordCount();
     this.setState('idle');
-    
+
     // Auto-paste at cursor if enabled (default: ON)
     const autoPaste = localStorage.getItem('windy_autoPaste') !== 'false';
     if (autoPaste && text.trim() && window.windyAPI?.autoPasteText) {
@@ -1251,7 +1304,7 @@ class WindyApp {
             try {
               const settings = await window.windyAPI.getSettings();
               clearAfterPaste = settings.clearOnPaste !== false;
-            } catch (_) {}
+            } catch (_) { }
           }
           if (clearAfterPaste) {
             this.transcriptContent.innerHTML = '';
@@ -1779,7 +1832,7 @@ class WindyApp {
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + duration);
       setTimeout(() => ctx.close(), 200);
-    } catch (_) {}
+    } catch (_) { }
   }
 
   toggleRecording() {
