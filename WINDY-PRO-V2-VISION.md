@@ -195,6 +195,48 @@ The 0.1% who could crack it are researchers who don't need our models anyway. Ev
 
 ---
 
+## 4B. DUAL INFERENCE ENGINE STRATEGY — PLATFORM-OPTIMIZED PERFORMANCE
+
+### The Problem
+
+faster-whisper (our current inference engine) uses CTranslate2, which has excellent CUDA (NVIDIA GPU) support but **no Apple Metal support**. On Macs, inference runs on CPU only — significantly slower than it could be.
+
+### The Solution: Two Engines, Same Models
+
+**whisper.cpp** is a pure C/C++ implementation of Whisper by Georgi Gerganov (creator of llama.cpp). MIT licensed. It supports **Apple Metal GPU acceleration**, which means Mac users get GPU-accelerated inference — dramatically faster on any Mac with Apple Silicon (M1/M2/M3/M4) or a decent AMD GPU.
+
+We ship two inference backends, selected automatically per platform:
+
+| Platform | Inference Engine | GPU Acceleration | Model Format |
+|----------|-----------------|-----------------|--------------|
+| **Windows** | faster-whisper (CTranslate2) | NVIDIA CUDA | CTranslate2 |
+| **Linux** | faster-whisper (CTranslate2) | NVIDIA CUDA | CTranslate2 |
+| **macOS** | whisper.cpp | Apple Metal | GGUF |
+
+**The user never sees this.** WindySense detects the platform and loads the appropriate engine. Same seven Windy models, same accuracy, same branding — different engine under the hood optimized for each OS.
+
+### What This Means For Packaging
+
+Each of our seven fine-tuned models gets converted to TWO formats during OC1's Phase 4:
+1. **CTranslate2 format** → for faster-whisper (Windows/Linux)
+2. **GGUF format** → for whisper.cpp (macOS)
+
+Both formats go into the `.wpr` container (or we ship platform-specific `.wpr` files — Mac installer downloads GGUF variants, Windows/Linux downloads CT2 variants). This keeps download sizes the same per platform.
+
+### Performance Impact
+
+On a Mac with Apple Silicon:
+- CPU-only (current): ~1-2x realtime for large models (barely keeping up)
+- Metal GPU (with whisper.cpp): ~4-8x realtime (comfortably ahead)
+
+This is the difference between "laggy and frustrating" and "instant and magical" on Mac hardware. It's a massive UX win for ~30% of our potential user base.
+
+### Legal
+
+whisper.cpp is MIT licensed. Same as everything else. Fork it, use it, ship it. Zero restrictions.
+
+---
+
 ## 5. WINDYSENSE — THE ADAPTIVE INTELLIGENCE ENGINE
 
 ### What It Is
@@ -960,15 +1002,29 @@ merged.save_pretrained("windy-standard-v1")
 
 ### PHASE 4: CONVERT & QUANTIZE (Days 7-8)
 
-**Convert each merged model to CTranslate2 format:**
+**Each fine-tuned model must be converted to TWO formats (dual inference engine strategy):**
+
+**Format 1: CTranslate2 (for faster-whisper — Windows/Linux):**
 ```bash
 ct2-whisper-converter --model windy-standard-v1 --output_dir windy-standard-ct2 --quantization float16
 ```
 
-**Quantization strategy:**
+**Format 2: GGUF (for whisper.cpp — macOS with Metal GPU acceleration):**
+```bash
+# Install whisper.cpp and use its conversion script
+python whisper.cpp/models/convert-h5-to-ggml.py windy-standard-v1 . ./windy-standard.gguf
+# Or use the HF-to-GGUF converter if available
+```
+
+whisper.cpp supports Apple Metal, giving Mac users GPU-accelerated inference. This is critical — without it, Macs run CPU-only and large models are painfully slow. With Metal, even Windy Ultra runs comfortably on Apple Silicon.
+
+**Quantization strategy (applies to BOTH formats):**
 - Tiny, Base: float16 (already small, preserve quality)
 - Small: float16 primary, int8 variant as option
 - Medium, Distil-large, Large, Model 7: float16 primary, int8_float16 variant
+- For GGUF: also produce q5_0 and q8_0 quantized variants (whisper.cpp native quant)
+
+**Deliverable: Two complete sets of seven models — 7x CTranslate2 + 7x GGUF.** The installer downloads only the format matching the user's platform.
 
 ---
 
