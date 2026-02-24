@@ -901,13 +901,23 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     const buffer = Buffer.from(base64Audio, 'base64');
     fs.writeFileSync(webmPath, buffer);
 
-    // Find ffmpeg — check bundled location, then PATH
+    // Find ffmpeg — check bundled location (.windy-pro), userData, then PATH
     const path = require('path');
+    const os = require('os');
     const appDataDir = app.getPath('userData');
+    const homeDataDir = path.join(os.homedir(), '.windy-pro');
     let ffmpegCmd = 'ffmpeg';
-    const bundledFfmpeg = path.join(appDataDir, 'ffmpeg', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
-    if (fs.existsSync(bundledFfmpeg)) {
-      ffmpegCmd = `"${bundledFfmpeg}"`;
+    const ffmpegExeName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+    const ffmpegSearchPaths = [
+      path.join(homeDataDir, 'ffmpeg', ffmpegExeName),
+      path.join(appDataDir, 'ffmpeg', ffmpegExeName),
+      path.join(path.dirname(process.execPath), ffmpegExeName),
+    ];
+    for (const fp of ffmpegSearchPaths) {
+      if (fs.existsSync(fp)) {
+        ffmpegCmd = `"${fp}"`;
+        break;
+      }
     }
 
     // Convert to WAV using ffmpeg
