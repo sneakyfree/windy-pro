@@ -5,6 +5,10 @@ export default defineConfig({
     plugins: [react()],
     server: {
         port: 5173,
+        allowedHosts: [
+            'windypro.thewindstorm.uk',
+            '.thewindstorm.uk'
+        ],
         proxy: {
             '/api': 'http://localhost:8000',
             '/ws': {

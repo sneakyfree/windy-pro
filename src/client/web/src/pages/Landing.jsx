@@ -194,20 +194,20 @@ export default function Landing() {
                     <h2 className="section-title">Download Windy Pro</h2>
                     <p className="section-subtitle">Available for all major platforms.</p>
                     <div className="download-grid">
-                        <a href="https://github.com/sneakyfree/windy-pro/releases/latest/download/Windy-Pro.dmg" className="download-card">
-                            <div className="download-icon">🍎</div>
-                            <div className="download-platform">macOS</div>
-                            <div className="download-detail">Intel & Apple Silicon</div>
-                        </a>
-                        <a href="https://github.com/sneakyfree/windy-pro/releases/latest/download/Windy-Pro-Setup.exe" className="download-card">
+                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.4.0/Windy-Pro-Setup-0.1.0.exe" className="download-card">
                             <div className="download-icon">🪟</div>
                             <div className="download-platform">Windows</div>
                             <div className="download-detail">Windows 10+</div>
                         </a>
-                        <a href="https://github.com/sneakyfree/windy-pro/releases/latest/download/Windy-Pro.AppImage" className="download-card">
+                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.4.0/Windy-Pro-0.4.0.AppImage" className="download-card">
                             <div className="download-icon">🐧</div>
-                            <div className="download-platform">Linux</div>
-                            <div className="download-detail">AppImage & .deb</div>
+                            <div className="download-platform">Linux AppImage</div>
+                            <div className="download-detail">Universal — just run it</div>
+                        </a>
+                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.4.0/windy-pro_0.4.0_amd64.deb" className="download-card">
+                            <div className="download-icon">🐧</div>
+                            <div className="download-platform">Linux .deb</div>
+                            <div className="download-detail">Ubuntu / Debian</div>
                         </a>
                     </div>
                 </div>
