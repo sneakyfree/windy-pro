@@ -798,6 +798,9 @@ Clicking "Upgrade" → in-app Stripe checkout → pays the difference → model 
 - **"Transcribe Your Meeting. Clone Your Voice. Build Your Avatar. All at Once."**
 - **"The World's Premier Voice Clone and AI Avatar Data Platform."**
 
+### Call-to-Action / Culture Lines
+- **"Get Voice-Pilled."** *(Windy Pro)* — The cultural conversion moment. You tried it, you can't go back.
+
 ### Pricing Lines
 - **"Start at $9. Upgrade When You're Ready."**
 - **"Professional-Grade Speech AI, Priced for the Whole World."**
