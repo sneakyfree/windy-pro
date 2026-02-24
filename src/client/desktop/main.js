@@ -1134,6 +1134,26 @@ ipcMain.on('archive-transcript', async (event, payload) => {
   }
 });
 
+// Save audio recording to archive folder
+ipcMain.handle('archive-audio', async (event, base64) => {
+  try {
+    const archiveRoot = getArchiveFolder();
+    const now = new Date();
+    const dateKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const timeKey = `${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+    const dayDir = path.join(archiveRoot, dateKey);
+    ensureDir(dayDir);
+    const audioPath = path.join(dayDir, `${timeKey}.webm`);
+    const buffer = Buffer.from(base64, 'base64');
+    fs.writeFileSync(audioPath, buffer);
+    console.log(`[Archive] Audio saved: ${audioPath} (${(buffer.length/1024).toFixed(0)}KB)`);
+    return { ok: true, path: audioPath };
+  } catch (err) {
+    console.error('[Archive] Audio save failed:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
 // Get server config for WebSocket connection
 ipcMain.handle('get-server-config', () => {
   return store.get('server');

@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),
   chooseArchiveFolder: () => ipcRenderer.invoke('choose-archive-folder'),
   archiveTranscript: (payload) => ipcRenderer.send('archive-transcript', payload),
+  archiveAudio: (base64) => ipcRenderer.invoke('archive-audio', base64),
   batchTranscribeLocal: (base64Audio) => ipcRenderer.invoke('batch-transcribe-local', base64Audio),
   autoPasteText: (text) => ipcRenderer.invoke('auto-paste-text', text),
   sendVoiceLevel: (level) => ipcRenderer.send('voice-level', level),

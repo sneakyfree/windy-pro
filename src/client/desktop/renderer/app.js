@@ -1403,13 +1403,24 @@ class WindyApp {
   /**
    * Save audio recording blob for playback.
    */
-  _saveAudioRecording(blob) {
+  async _saveAudioRecording(blob) {
     const saveAudio = localStorage.getItem('windy_saveAudio') !== 'false';
     if (!saveAudio || !blob) return;
 
-    // Create object URL for playback
+    // Create object URL for in-session playback
     const audioUrl = URL.createObjectURL(blob);
     this._showPlaybackBar(audioUrl);
+
+    // Save to disk archive alongside transcripts
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      if (window.windyAPI?.archiveAudio) {
+        await window.windyAPI.archiveAudio(base64);
+      }
+    } catch (e) {
+      console.warn('[Audio] Failed to save recording:', e.message);
+    }
   }
 
   /**
