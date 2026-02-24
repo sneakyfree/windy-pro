@@ -23,7 +23,7 @@ export default function Landing() {
             {/* Hero Section */}
             <header className="hero">
                 <div className="container hero-inner">
-                    <div className="hero-badge">✨ Now with Vibe Toggle — AI grammar correction</div>
+                    <div className="hero-badge">🌪️ v0.4.0 — Tornado Widget, Audio Archive, Batch Mode</div>
                     <h1 className="hero-title">
                         Voice to Text,<br />
                         <span className="hero-gradient">Unlimited.</span>
@@ -101,13 +101,23 @@ export default function Landing() {
                         </div>
                         <div className="feature-card">
                             <div className="feature-icon">✨</div>
-                            <h3>Vibe Toggle</h3>
-                            <p>One-click grammar cleanup. Remove fillers, fix punctuation, polish your transcript.</p>
+                            <h3>Batch Mode</h3>
+                            <p>Record everything, process once. Like Wispr Flow — best quality transcription with zero interruptions.</p>
                         </div>
                         <div className="feature-card">
-                            <div className="feature-icon">💾</div>
-                            <h3>Prompt Vault</h3>
-                            <p>Every session saved locally. Search, export, and revisit your transcription history.</p>
+                            <div className="feature-icon">🌪️</div>
+                            <h3>Tornado Widget</h3>
+                            <p>Draggable floating indicator that pulses green with your voice. Minimize to a tiny tornado — your desktop stays clean.</p>
+                        </div>
+                        <div className="feature-card">
+                            <div className="feature-icon">📜</div>
+                            <h3>History & Search</h3>
+                            <p>Every transcript searchable and organized by date. Export to .txt, .md, or .srt. Your entire voice archive at your fingertips.</p>
+                        </div>
+                        <div className="feature-card">
+                            <div className="feature-icon">🎵</div>
+                            <h3>Audio Archive</h3>
+                            <p>Save recordings alongside transcripts. Build a voice library for avatar training, voice cloning, or personal AI development.</p>
                         </div>
                     </div>
                 </div>
@@ -152,10 +162,11 @@ export default function Landing() {
                             <ul className="pricing-features">
                                 <li>✓ Unlimited recording time</li>
                                 <li>✓ All Whisper models</li>
-                                <li>✓ Cursor injection</li>
-                                <li>✓ Prompt Vault</li>
-                                <li>✓ Vibe Toggle</li>
-                                <li>✓ 100% offline</li>
+                                <li>✓ Auto-paste at cursor</li>
+                                <li>✓ Tornado widget</li>
+                                <li>✓ History & search</li>
+                                <li>✓ Audio archive</li>
+                                <li>✓ 100% offline & private</li>
                             </ul>
                             <a href="#download" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>Download</a>
                         </div>
@@ -165,11 +176,11 @@ export default function Landing() {
                             <div className="pricing-period">cancel anytime</div>
                             <ul className="pricing-features">
                                 <li>✓ Everything in Local</li>
-                                <li>✓ Cloud transcription API</li>
+                                <li>✓ Cloud transcription (large-v3)</li>
                                 <li>✓ Mobile web access</li>
                                 <li>✓ Sync across devices</li>
+                                <li>✓ Voice clone-ready exports</li>
                                 <li>✓ Priority support</li>
-                                <li>✓ Early access to new features</li>
                             </ul>
                             <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Free Trial</Link>
                         </div>
