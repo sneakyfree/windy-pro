@@ -199,7 +199,7 @@ export default function Landing() {
                             <div className="download-platform">macOS</div>
                             <div className="download-detail">Coming Soon</div>
                         </div>
-                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.4.0/Windy-Pro-Setup-0.1.0.exe" className="download-card">
+                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.4.0/Windy-Pro-Setup-0.4.0.exe" className="download-card">
                             <div className="download-icon">🪟</div>
                             <div className="download-platform">Windows</div>
                             <div className="download-detail">Windows 10+</div>
