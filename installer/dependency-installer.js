@@ -225,9 +225,40 @@ class DependencyInstaller {
             return;
         }
 
-        if (process.platform !== 'win32') {
-            this._progress('ffmpeg', 65, 'ffmpeg not found — install via package manager (apt/brew).');
-            return;
+        if (process.platform === 'darwin') {
+            this._progress('ffmpeg', 55, 'Installing ffmpeg via Homebrew...');
+            try {
+                await this.execAsync('which brew');
+                await this.execAsync('brew install ffmpeg', { timeout: 300000 });
+                this._progress('ffmpeg', 65, 'ffmpeg installed via Homebrew.');
+                return;
+            } catch (e) {
+                // Try downloading static binary
+                this._progress('ffmpeg', 55, 'Downloading ffmpeg for macOS...');
+                try {
+                    if (!fs.existsSync(path.join(this.appDataDir, 'ffmpeg'))) {
+                        fs.mkdirSync(path.join(this.appDataDir, 'ffmpeg'), { recursive: true });
+                    }
+                    await this.execAsync(`curl -L -o "${ffmpegExe}" "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip" && chmod +x "${ffmpegExe}"`, { timeout: 300000 });
+                    this._progress('ffmpeg', 65, 'ffmpeg installed.');
+                    return;
+                } catch (e2) {
+                    this._progress('ffmpeg', 65, 'ffmpeg install failed — please install manually: brew install ffmpeg');
+                    return;
+                }
+            }
+        }
+
+        if (process.platform === 'linux') {
+            this._progress('ffmpeg', 55, 'Installing ffmpeg...');
+            try {
+                await this.execAsync('sudo apt-get install -y ffmpeg', { timeout: 120000 });
+                this._progress('ffmpeg', 65, 'ffmpeg installed.');
+                return;
+            } catch (e) {
+                this._progress('ffmpeg', 65, 'ffmpeg not found — please install: sudo apt install ffmpeg');
+                return;
+            }
         }
 
         // Download ffmpeg for Windows
@@ -421,7 +452,26 @@ except Exception as e:
      */
     isInstalled() {
         const pythonPath = this.getPythonPath();
-        return fs.existsSync(pythonPath);
+        if (!fs.existsSync(pythonPath)) return false;
+
+        // Check faster_whisper is installed
+        try {
+            const { execSync } = require('child_process');
+            execSync(`"${pythonPath}" -c "import faster_whisper"`, { timeout: 10000, stdio: 'pipe' });
+        } catch (e) {
+            return false;
+        }
+
+        // Check ffmpeg is available (PATH or bundled)
+        const ffmpegExe = path.join(this.appDataDir, 'ffmpeg', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+        try {
+            const { execSync } = require('child_process');
+            execSync('ffmpeg -version', { timeout: 5000, stdio: 'pipe' });
+        } catch (e) {
+            if (!fs.existsSync(ffmpegExe)) return false;
+        }
+
+        return true;
     }
 
     execAsync(cmd, options = {}) {
