@@ -97,10 +97,15 @@ class DependencyInstaller {
         this._progress('deps', 30, 'Installing Python dependencies...');
 
         const pipPath = this.getPipPath();
+        const pythonPath = this.getPythonPath();
 
-        // Upgrade pip first
-        await this.execAsync(`"${pipPath}" install --upgrade pip`);
-        this._progress('deps', 40, 'Pip upgraded. Installing packages...');
+        // Upgrade pip first (use python -m pip on Windows to avoid self-overwrite error)
+        try {
+            await this.execAsync(`"${pythonPath}" -m pip install --upgrade pip`);
+        } catch (e) {
+            console.warn('[Installer] pip upgrade failed (non-fatal):', e.message);
+        }
+        this._progress('deps', 40, 'Installing packages...');
 
         // Find requirements.txt — try multiple paths
         let reqPath = this.requirementsPath;
@@ -110,11 +115,11 @@ class DependencyInstaller {
         }
 
         if (fs.existsSync(reqPath)) {
-            await this.execAsync(`"${pipPath}" install -r "${reqPath}"`, { timeout: 300000 });
+            await this.execAsync(`"${pythonPath}" -m pip install -r "${reqPath}"`, { timeout: 300000 });
         } else {
             // Install core deps directly
             await this.execAsync(
-                `"${pipPath}" install faster-whisper numpy sounddevice soundfile websockets`,
+                `"${pythonPath}" -m pip install faster-whisper numpy sounddevice soundfile websockets`,
                 { timeout: 300000 }
             );
         }
