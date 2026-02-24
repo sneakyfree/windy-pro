@@ -698,8 +698,43 @@ STEP 6: SETUP COMPLETE
   "Windy Pro is ready. Start talking."
   [Launch Windy Pro]
   
-  Shows quick tips:
-  - "Press [hotkey] to start/stop transcription"
+  Shows quick tips panel with platform-detected shortcuts:
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │                    ⌨️  KEYBOARD SHORTCUTS                    │
+  │                                                             │
+  │  🎙️ Start / Stop Recording                                  │
+  │     Windows/Linux:  Ctrl + Shift + Space                    │
+  │     macOS:          ⌘ + Shift + Space                       │
+  │                                                             │
+  │  📋 Paste Last Transcript                                    │
+  │     Windows/Linux:  Ctrl + Shift + V                        │
+  │     macOS:          ⌘ + Shift + V                           │
+  │                                                             │
+  │  👁️ Show / Hide Windy Pro                                    │
+  │     Windows/Linux:  Ctrl + Shift + W                        │
+  │     macOS:          ⌘ + Shift + W                           │
+  │                                                             │
+  │  🔄 Switch Model (cycle)                                     │
+  │     Windows/Linux:  Ctrl + Shift + M                        │
+  │     macOS:          ⌘ + Shift + M                           │
+  │                                                             │
+  │  ⏸️ Pause / Resume Recording                                 │
+  │     Windows/Linux:  Ctrl + Shift + P                        │
+  │     macOS:          ⌘ + Shift + P                           │
+  │                                                             │
+  │  📂 Open Archive                                             │
+  │     Windows/Linux:  Ctrl + Shift + A                        │
+  │     macOS:          ⌘ + Shift + A                           │
+  │                                                             │
+  │  ⚙️ Open Settings                                            │
+  │     Windows/Linux:  Ctrl + ,                                │
+  │     macOS:          ⌘ + ,                                   │
+  │                                                             │
+  │  All shortcuts customizable in Settings → Hotkeys           │
+  └─────────────────────────────────────────────────────────────┘
+
+  Additional tips:
   - "WindySense will automatically select the best model"
   - "Visit Settings to enable audio/video archiving"
 ```
@@ -1385,7 +1420,7 @@ The v2.0 installer must be fully self-contained:
 | Disk space | Check before downloading, warn if insufficient |
 | Network issues | Retry with backoff, resume partial downloads, checksum verification |
 | Audio devices | Enumerate on first launch, let user pick mic, test audio levels |
-| Hotkeys | Platform-specific defaults, customizable, conflict detection |
+| Hotkeys | Platform-specific defaults (see §20 Keyboard Shortcuts), customizable, conflict detection |
 | Crash recovery | Auto-save in-progress recordings, recover on next launch |
 | Multiple instances | Clear "already running" message with force-restart option |
 | Antivirus | Signed executables, standard ports, HTTPS only |
@@ -1393,4 +1428,39 @@ The v2.0 installer must be fully self-contained:
 ### Implementation Priority
 All 15 items must be resolved BEFORE v2.0 ships. No exceptions. No "we'll fix it later."
 The user should go from download → working transcription in under 5 minutes with ZERO manual troubleshooting on ANY platform (Windows, macOS Intel, macOS ARM, Linux x86, Linux ARM).
+
+---
+
+## 20. KEYBOARD SHORTCUTS — COMPLETE REFERENCE
+
+### Global Hotkeys (work even when Windy Pro is minimized/hidden)
+
+All global hotkeys use `CommandOrControl+Shift+<Key>` — Electron resolves this to `Ctrl` on Windows/Linux and `⌘` on macOS automatically.
+
+| Action | Windows / Linux | macOS | Electron Accelerator | Default |
+|--------|----------------|-------|---------------------|---------|
+| 🎙️ Start / Stop Recording | `Ctrl+Shift+Space` | `⌘+Shift+Space` | `CommandOrControl+Shift+Space` | ✅ |
+| 📋 Paste Last Transcript | `Ctrl+Shift+V` | `⌘+Shift+V` | `CommandOrControl+Shift+V` | ✅ |
+| 👁️ Show / Hide Window | `Ctrl+Shift+W` | `⌘+Shift+W` | `CommandOrControl+Shift+W` | ✅ |
+| 🔄 Cycle Model | `Ctrl+Shift+M` | `⌘+Shift+M` | `CommandOrControl+Shift+M` | v2.0 |
+| ⏸️ Pause / Resume | `Ctrl+Shift+P` | `⌘+Shift+P` | `CommandOrControl+Shift+P` | v2.0 |
+| 📂 Open Archive | `Ctrl+Shift+A` | `⌘+Shift+A` | `CommandOrControl+Shift+A` | v2.0 |
+
+### In-App Shortcuts (only when Windy Pro window is focused)
+
+| Action | Windows / Linux | macOS | Notes |
+|--------|----------------|-------|-------|
+| ⚙️ Open Settings | `Ctrl+,` | `⌘+,` | Standard platform convention |
+| 🔍 Search Transcripts | `Ctrl+F` | `⌘+F` | In Archive view |
+| ❌ Cancel Processing | `Escape` | `Escape` | Stops stuck transcription |
+| 📤 Export Transcript | `Ctrl+E` | `⌘+E` | Exports current transcript |
+| 🗑️ Delete Recording | `Delete` | `⌘+Backspace` | In Archive view, with confirm |
+
+### Implementation Notes
+- **Auto-detection**: App detects `process.platform` and displays the correct modifier in all UI elements — never show `Ctrl` on Mac or `⌘` on Windows
+- **Setup Complete screen**: Shows the shortcuts panel with platform-correct combos (see §9 Installer UX, Step 6)
+- **Settings → Hotkeys**: Users can rebind any shortcut; conflict detection warns if combo is already taken by another app
+- **Tray tooltip**: Shows toggle recording shortcut as reminder (e.g., "Windy Pro — Ctrl+Shift+Space to record")
+- **Electron `globalShortcut`**: Register on `app.ready`, unregister on `will-quit`. Re-register when user changes bindings.
+- **Fallback**: If a global hotkey fails to register (conflict), notify user with the specific conflicting shortcut and suggest alternatives
 
