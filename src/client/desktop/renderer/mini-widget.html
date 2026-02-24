@@ -1,307 +1,79 @@
 <!DOCTYPE html>
 <html>
-
 <head>
   <meta charset="UTF-8">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    html,
-    body {
-      width: 100%;
-      height: 100%;
+    html, body {
+      width: 100%; height: 100%;
       background: transparent;
       overflow: hidden;
       user-select: none;
     }
 
     .widget {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
       position: relative;
       cursor: grab;
       background: transparent;
       -webkit-app-region: drag;
     }
 
-    .widget.dragging {
-      cursor: grabbing;
-    }
+    .widget.dragging { cursor: grabbing; }
 
-    /* Glow ring — behind the emoji */
     .glow-ring {
-      position: absolute;
-      width: 80%;
-      height: 80%;
-      border-radius: 50%;
-      pointer-events: none;
+      position: absolute; width: 80%; height: 80%;
+      border-radius: 50%; pointer-events: none;
     }
 
-    /* Tornado emoji — NO rotation ever */
     .tornado {
-      font-size: 28px;
-      pointer-events: none;
-      /* Multi-layer outline for visibility on any background */
+      font-size: 28px; pointer-events: none;
       text-shadow:
-        0 0 4px rgba(0,0,0,0.9),
-        0 0 8px rgba(0,0,0,0.7),
-        1px 1px 2px rgba(0,0,0,0.9),
-        -1px -1px 2px rgba(0,0,0,0.9),
+        0 0 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7),
+        1px 1px 2px rgba(0,0,0,0.9), -1px -1px 2px rgba(0,0,0,0.9),
         0 0 12px rgba(100,100,100,0.3);
       will-change: transform, filter;
     }
 
-    /* Processing: amber pulse (CSS-only, no rotation) */
+    /* Processing: amber pulse */
     .widget.processing .tornado {
       animation: amber-pulse 1.5s ease-in-out infinite;
     }
-
     .widget.processing .glow-ring {
       animation: amber-glow 1.5s ease-in-out infinite;
     }
 
     @keyframes amber-pulse {
-
-      0%,
-      100% {
-        transform: scale(1);
-        opacity: 0.7;
-        filter: drop-shadow(0 0 6px rgba(255, 170, 0, 0.4));
-      }
-
-      50% {
-        transform: scale(1.08);
-        opacity: 1;
-        filter: drop-shadow(0 0 12px rgba(255, 170, 0, 0.7));
-      }
+      0%, 100% { transform: scale(1); opacity: 0.7; filter: drop-shadow(0 0 6px rgba(255,170,0,0.4)); }
+      50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 12px rgba(255,170,0,0.7)); }
     }
-
     @keyframes amber-glow {
-
-      0%,
-      100% {
-        box-shadow: 0 0 8px 2px rgba(255, 170, 0, 0.2);
-      }
-
-      50% {
-        box-shadow: 0 0 16px 6px rgba(255, 170, 0, 0.5);
-      }
+      0%, 100% { box-shadow: 0 0 8px 2px rgba(255,170,0,0.2); }
+      50% { box-shadow: 0 0 16px 6px rgba(255,170,0,0.5); }
     }
 
-    /* Jolt: quick scale bounce on start/stop */
-    .widget.jolt .tornado {
-      animation: jolt 0.25s ease-out;
+    /* Jolt on start/stop */
+    .widget.jolt .tornado { animation: jolt 0.25s ease-out; }
+    @keyframes jolt {
+      0% { transform: scale(1); }
+      30% { transform: scale(1.25); }
+      60% { transform: scale(0.92); }
+      100% { transform: scale(1); }
     }
 
-    /* Recording state: green glow baseline (animation handled by JS) */
+    /* Recording baseline glow (JS handles the rest) */
     .widget.recording .tornado {
       filter: drop-shadow(0 0 4px rgba(0,255,136,0.3));
     }
-
-    @keyframes jolt {
-      0% {
-        transform: scale(1);
-      }
-
-      30% {
-        transform: scale(1.25);
-      }
-
-      60% {
-        transform: scale(0.92);
-      }
-
-      100% {
-        transform: scale(1);
-      }
-    }
   </style>
 </head>
-
 <body>
   <div class="widget" id="widget">
     <div class="glow-ring" id="glowRing"></div>
     <span class="tornado" id="tornado">🌪️</span>
   </div>
-  <script>
-    const widget = document.getElementById('widget');
-    const glowRing = document.getElementById('glowRing');
-    const tornado = document.getElementById('tornado');
-    let currentState = 'idle';
-    let animFrame = null;
-    let smoothLevel = 0;
-    let breathPhase = 0;
-    let lastVoiceLevelTime = 0;
-    let voiceLevelReceived = false;
-
-    // Debug: log to title so it's visible in window
-    function dbg(msg) {
-      document.title = msg;
-      console.log('[MiniWidget]', msg);
-    }
-    dbg('init windyMini=' + !!window.windyMini);
-
-    if (window.windyMini) {
-      // ═══ State changes ═══
-      window.windyMini.onStateChange((state) => {
-        dbg('State:' + state);
-        currentState = state;
-
-        // Clear everything
-        widget.className = 'widget';
-        tornado.style.transform = '';
-        tornado.style.filter = '';
-        glowRing.style.boxShadow = 'none';
-        stopAnimation();
-
-        if (state === 'recording') {
-          widget.classList.add('jolt');
-          setTimeout(() => {
-            widget.classList.remove('jolt');
-            widget.classList.add('recording');
-            startVoiceAnimation();
-          }, 250);
-        } else if (state === 'processing') {
-          widget.classList.add('processing');
-        }
-        // idle: widget has class 'widget' only — tornado is completely still
-      });
-
-      // ═══ Voice levels ═══
-      let _vlCount = 0;
-      window.windyMini.onVoiceLevel((level) => {
-        if (_vlCount < 3) { dbg('VL:' + level.toFixed(2) + ' st=' + currentState); _vlCount++; }
-        if (currentState !== 'recording') return;
-        voiceLevelReceived = true;
-        lastVoiceLevelTime = Date.now();
-        // Lerp toward target for smoothness
-        smoothLevel += (level - smoothLevel) * 0.35;
-      });
-
-      // ═══ Resize ═══
-      window.windyMini.onResize((size) => {
-        console.log('[MiniWidget] Resize:', size);
-        tornado.style.fontSize = Math.round(size * 0.5) + 'px';
-      });
-    }
-
-    // ═══ Voice-reactive animation loop ═══
-    let _frameCount = 0;
-    function startVoiceAnimation() {
-      dbg('startVoiceAnim');
-      smoothLevel = 0;
-      breathPhase = 0;
-
-      function frame() {
-        if (currentState !== 'recording') { dbg('frame:notRec'); return; }
-        _frameCount++;
-        if (_frameCount <= 3 || _frameCount % 300 === 0) {
-          dbg('frame#' + _frameCount + ' vl=' + smoothLevel.toFixed(2) + ' recv=' + voiceLevelReceived);
-        }
-        
-        // If no voice level data in last 1 second, do JS-based gentle breathing
-        if (!voiceLevelReceived || (Date.now() - lastVoiceLevelTime > 1000)) {
-          breathPhase += 0.03;
-          const breathScale = 1.0 + Math.sin(breathPhase) * 0.015;
-          tornado.style.transform = `scale(${breathScale})`;
-          tornado.style.filter = 'drop-shadow(0 0 4px rgba(0,255,136,0.3))';
-          glowRing.style.boxShadow = 'none';
-          animFrame = requestAnimationFrame(frame);
-          return;
-        }
-        
-        const lv = smoothLevel;
-
-        if (lv < 0.05) {
-          // Silent: subtle breathing pulse (scale 1.0 → 1.02, 2s cycle)
-          breathPhase += 0.03; // ~2s cycle at 60fps
-          const breathScale = 1.0 + Math.sin(breathPhase) * 0.01;
-          tornado.style.transform = `scale(${breathScale})`;
-          tornado.style.filter = 'drop-shadow(0 0 2px rgba(0,255,136,0.15))';
-          glowRing.style.boxShadow = 'none';
-        } else {
-          // Voice active: vibrate + scale + glow
-          breathPhase = 0;
-
-          // Jitter: ±1 to ±3px proportional to level
-          const intensity = Math.min(lv * 2, 1.0);
-          const jx = (Math.random() - 0.5) * intensity * 6; // ±3px at max
-          const jy = (Math.random() - 0.5) * intensity * 6;
-
-          // Scale: 1.0 to 1.1
-          const sc = 1.0 + intensity * 0.1;
-
-          tornado.style.transform = `translate(${jx}px, ${jy}px) scale(${sc})`;
-
-          // Green glow behind emoji
-          const glowBlur = 4 + intensity * 14;
-          const glowOpacity = 0.2 + intensity * 0.8;
-          tornado.style.filter = `drop-shadow(0 0 ${glowBlur}px rgba(0,255,136,${glowOpacity}))`;
-
-          // Glow ring
-          const ringBlur = 4 + intensity * 16;
-          const ringSpread = intensity * 6;
-          const ringOpacity = 0.15 + intensity * 0.6;
-          glowRing.style.boxShadow = `0 0 ${ringBlur}px ${ringSpread}px rgba(0,255,136,${ringOpacity})`;
-        }
-
-        animFrame = requestAnimationFrame(frame);
-      }
-      animFrame = requestAnimationFrame(frame);
-    }
-
-    function stopAnimation() {
-      if (animFrame) {
-        cancelAnimationFrame(animFrame);
-        animFrame = null;
-      }
-      smoothLevel = 0;
-      breathPhase = 0;
-    }
-
-    // ═══ Manual drag (works on Linux where -webkit-app-region: drag fails) ═══
-    let isDragging = false;
-    let dragStartX = 0, dragStartY = 0;
-
-    widget.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      isDragging = true;
-      dragStartX = e.screenX;
-      dragStartY = e.screenY;
-      widget.classList.add('dragging');
-      console.log('[MiniWidget] Drag start:', e.screenX, e.screenY);
-    });
-
-    document.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      const dx = e.screenX - dragStartX;
-      const dy = e.screenY - dragStartY;
-      if (dx !== 0 || dy !== 0) {
-        dragStartX = e.screenX;
-        dragStartY = e.screenY;
-        if (window.windyMini) window.windyMini.moveWindow(dx, dy);
-      }
-    });
-
-    document.addEventListener('mouseup', () => {
-      isDragging = false;
-      widget.classList.remove('dragging');
-    });
-
-    // Double-click to expand
-    widget.addEventListener('dblclick', (e) => {
-      e.preventDefault();
-      if (window.windyMini) window.windyMini.expandWindow();
-    });
-  </script>
+  <script src="mini-widget.js"></script>
 </body>
-
 </html>
