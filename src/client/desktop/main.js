@@ -580,20 +580,25 @@ function updateTrayIcon(state) {
  * Create or show the mini tornado widget
  */
 function showMiniWidget() {
+  // Save position before destroying so we can restore it
   if (miniWindow && !miniWindow.isDestroyed()) {
-    // Destroy and recreate to ensure fresh JS load (avoids stale CSP-blocked state)
+    const [px, py] = miniWindow.getPosition();
+    store.set('tornadoX', px);
+    store.set('tornadoY', py);
     miniWindow.destroy();
     miniWindow = null;
   }
 
   const tornadoSize = store.get('tornadoSize') || 56;
   const winSize = tornadoSize + 4;
+  const savedX = store.get('tornadoX');
+  const savedY = store.get('tornadoY');
 
   const winOpts = {
     width: winSize,
     height: winSize,
-    x: 100,
-    y: 100,
+    x: savedX != null ? savedX : 100,
+    y: savedY != null ? savedY : 100,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -657,7 +662,10 @@ ipcMain.on('mini-expand', () => {
 ipcMain.on('mini-move', (event, { dx, dy }) => {
   if (miniWindow && !miniWindow.isDestroyed()) {
     const [x, y] = miniWindow.getPosition();
-    miniWindow.setPosition(x + dx, y + dy);
+    const nx = x + dx, ny = y + dy;
+    miniWindow.setPosition(nx, ny);
+    store.set('tornadoX', nx);
+    store.set('tornadoY', ny);
   }
 });
 
