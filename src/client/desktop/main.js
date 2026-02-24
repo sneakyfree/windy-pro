@@ -928,11 +928,13 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     const appRoot = path.resolve(__dirname, '..', '..', '..');
     const venvPaths = process.platform === 'win32'
       ? [
+          path.join(os.homedir(), '.windy-pro', 'venv', 'Scripts', 'python.exe'),
           path.join(appDataDir, 'venv', 'Scripts', 'python.exe'),
           path.join(appRoot, 'venv', 'Scripts', 'python.exe'),
           'python'
         ]
       : [
+          path.join(os.homedir(), '.windy-pro', 'venv', 'bin', 'python3'),
           path.join(appRoot, 'venv', 'bin', 'python3'),
           path.join(appDataDir, 'venv', 'bin', 'python3'),
           '/usr/bin/python3'
