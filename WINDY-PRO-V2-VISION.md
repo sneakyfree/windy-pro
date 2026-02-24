@@ -545,12 +545,75 @@ STEP 4: PAYMENT
   Credit/debit card, Apple Pay, Google Pay, PayPal.
   Takes 30 seconds.
 
-STEP 5: DOWNLOAD MODELS
-  Only downloads the models included in the selected tier.
-  Progress bar shows each model downloading.
+STEP 5: DOWNLOAD & INSTALL MODELS (The Brand Experience Screen)
+  This is the longest step — potentially 15-60 minutes depending on
+  tier and connection speed. This is PRIME REAL ESTATE. The user is
+  captive. We turn a boring wait into a brand immersion experience.
+
+  ┌─────────────────────────────────────────────────────┐
+  │                   Windy Pro Setup                    │
+  │  ━━━━━━━━━━  ━━━━━━━━━━  ━━━━━━━━━━  ━━━━━━━━━━━  │
+  │                                                      │
+  │                Installing...                         │
+  │      "No Internet, No Problem." ✨                   │
+  │                                                      │
+  │  ████████████████████░░░░░░░░░░  68%                │
+  │                                                      │
+  │  Downloading Windy Standard... (466 MB)              │
+  │  Model 3 of 7  ·  2.1 GB remaining  ·  ~12 min     │
+  │                                                      │
+  │  ✅ Windy Lite ............... 75 MB      Done       │
+  │  ✅ Windy Core ............... 142 MB     Done       │
+  │  🔄 Windy Standard .......... 466 MB     68%        │
+  │  ⏳ Windy Global ............ 1.5 GB     Queued     │
+  │  ⏳ Windy Pro ............... 1.5 GB     Queued     │
+  │  ⏳ Windy Ultra ............. 3.1 GB     Queued     │
+  │  ⏳ Windy Seven ............. TBD        Queued     │
+  │                                                      │
+  │  ┌──────────────────────────────────────────────┐   │
+  │  │  💡 "Stay Local. Stay Private.              │   │
+  │  │     Your voice never leaves your device."   │   │
+  │  └──────────────────────────────────────────────┘   │
+  │                                                      │
+  │           ◉ ○ ○ ○ ○ ○ ○  (carousel dots)           │
+  └─────────────────────────────────────────────────────┘
+
+  MONIKER CAROUSEL — Cycles every 8-10 seconds with gentle fade:
   
-  "Downloading Windy Core... 142 MB ████████░░ 80%"
-  "Downloading Windy Standard... 466 MB ██░░░░░░░░ 20%"
+  1. 🔒 "No Internet, No Problem.
+        Your voice never leaves your device."
+  
+  2. 🎯 "Seven proprietary models.
+        Trained in-house. Available nowhere else."
+  
+  3. 🧠 "WindySense adapts to your hardware in real-time.
+        You just talk."
+  
+  4. 🎤 "The longer you use it, the better it knows your voice."
+  
+  5. 🧬 "Talk today. Live forever.
+        Build your voice clone automatically."
+  
+  6. 💰 "No subscription. No monthly fees.
+        This is yours for life."
+  
+  7. 🌍 "From airplane mode to boardroom —
+        Windy Pro works everywhere."
+
+  VISUAL POLISH:
+  - Subtle pulsing glow on the progress bar (alive, not obnoxious)
+  - Each model gets a checkmark animation when complete
+  - Carousel dots show current position (like iPhone home screen)
+  - Total remaining size + ETA always visible
+  - If a model download is large (>1 GB), show per-model sub-progress
+  - Background: dark theme with subtle gradient, matches Windy Pro brand
+
+  WHY THIS MATTERS:
+  By the time the install finishes, the user has passively absorbed
+  our ENTIRE value proposition — seven models, local-first, privacy,
+  adaptive intelligence, voice cloning, no subscription — without
+  reading a single webpage. Captive audience + brand reinforcement
+  = user arrives at first launch already believing in the product.
 
 STEP 6: SETUP COMPLETE
   "Windy Pro is ready. Start talking."
