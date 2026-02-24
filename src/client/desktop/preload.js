@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   // Batch processing notifications
   notifyBatchComplete: (wordCount) => ipcRenderer.send('batch-complete', { wordCount }),
   notifyBatchProcessing: () => ipcRenderer.send('batch-processing'),
+  notifyRecordingFailed: () => ipcRenderer.send('recording-failed'),
   onOpenHistory: (callback) => {
     ipcRenderer.on('open-history', () => callback());
   },

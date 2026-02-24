@@ -26,12 +26,11 @@
       align-items: center;
       justify-content: center;
       position: relative;
-      -webkit-app-region: drag;
       cursor: grab;
       background: transparent;
     }
 
-    .widget:active {
+    .widget.dragging {
       cursor: grabbing;
     }
 
@@ -248,6 +247,34 @@
       smoothLevel = 0;
       breathPhase = 0;
     }
+
+    // ═══ Manual drag (works on Linux where -webkit-app-region: drag fails) ═══
+    let isDragging = false;
+    let dragStartX = 0, dragStartY = 0;
+
+    widget.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      isDragging = true;
+      dragStartX = e.screenX;
+      dragStartY = e.screenY;
+      widget.classList.add('dragging');
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.screenX - dragStartX;
+      const dy = e.screenY - dragStartY;
+      if (dx !== 0 || dy !== 0) {
+        dragStartX = e.screenX;
+        dragStartY = e.screenY;
+        if (window.windyMini) window.windyMini.moveWindow(dx, dy);
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+      widget.classList.remove('dragging');
+    });
 
     // Double-click to expand
     widget.addEventListener('dblclick', (e) => {

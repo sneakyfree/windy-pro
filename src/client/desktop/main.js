@@ -609,11 +609,11 @@ function showMiniWidget() {
     }
   };
 
-  // Linux: transparent windows can't be dragged via app-region on some WMs.
-  // Use non-transparent with dark bg as fallback.
+  // Linux: transparent windows crash on some GPU/driver combos (int3 trap).
+  // Use opaque dark bg + rounded CSS for a clean mini-widget look.
   if (process.platform === 'linux') {
     winOpts.transparent = false;
-    winOpts.backgroundColor = '#0d1520';
+    winOpts.backgroundColor = '#000000';
   }
 
   miniWindow = new BrowserWindow(winOpts);
@@ -628,6 +628,24 @@ function showMiniWidget() {
     updateMiniState(isRecording ? 'recording' : 'idle');
     if (miniWindow && !miniWindow.isDestroyed()) {
       miniWindow.webContents.send('mini-resize', tornadoSize);
+
+      // Linux: window isn't transparent, so clip to a circle with setShape
+      if (process.platform === 'linux') {
+        const s = miniWindow.getSize();
+        const r = Math.floor(s[0] / 2);
+        const cx = r, cy = r;
+        // Approximate circle with a polygon
+        const points = 64;
+        const rects = [];
+        for (let y = 0; y < s[1]; y++) {
+          const dy = y - cy;
+          const halfW = Math.floor(Math.sqrt(Math.max(0, r * r - dy * dy)));
+          if (halfW > 0) {
+            rects.push({ x: cx - halfW, y, width: halfW * 2, height: 1 });
+          }
+        }
+        miniWindow.setShape(rects);
+      }
     }
   });
 }
@@ -1155,6 +1173,15 @@ ipcMain.on('batch-processing', () => {
   updateTrayIcon('error'); // red = processing
   updateMiniState('processing');
   if (tray) tray.setToolTip('Windy Pro — Processing transcription...');
+});
+
+// Recording failed in renderer — sync main state back to idle
+ipcMain.on('recording-failed', () => {
+  isRecording = false;
+  updateTrayMenu();
+  updateTrayIcon('idle');
+  updateMiniState('idle');
+  if (tray) tray.setToolTip('Windy Pro');
 });
 
 // Save file dialog

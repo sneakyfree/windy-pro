@@ -1090,6 +1090,10 @@ class WindyApp {
       this._batchChunks = [];
       this.isRecording = false;
       this.setState('idle');
+      // Tell main process recording failed so it can sync state
+      if (window.windyAPI?.notifyRecordingFailed) {
+        window.windyAPI.notifyRecordingFailed();
+      }
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         this.showReconnectToast('🚫 Microphone access denied. Check system permissions.');
       } else {
