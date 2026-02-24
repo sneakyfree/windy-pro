@@ -417,6 +417,12 @@
     box-shadow: var(--shadow-glow);
 }
 
+.download-coming-soon {
+    opacity: 0.5;
+    cursor: default;
+    pointer-events: none;
+}
+
 .download-icon {
     font-size: 36px;
     margin-bottom: 12px;
