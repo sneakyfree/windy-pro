@@ -36,7 +36,9 @@ class DependencyInstaller {
      * @returns {Promise<{available: boolean, version: string, path: string}>}
      */
     async checkPython() {
-        const commands = ['python3', 'python'];
+        const commands = process.platform === 'win32'
+            ? ['python', 'python3', 'py -3']
+            : ['python3', 'python'];
 
         for (const cmd of commands) {
             try {
@@ -45,8 +47,9 @@ class DependencyInstaller {
                 if (match) {
                     const [, major, minor] = match.map(Number);
                     if (major >= 3 && minor >= 9) {
-                        const pythonPath = await this.execAsync(`which ${cmd}`).catch(() => cmd);
-                        return { available: true, version: `${major}.${minor}`, path: pythonPath.trim() || cmd };
+                        const whichCmd = process.platform === 'win32' ? 'where' : 'which';
+                        const pythonPath = await this.execAsync(`${whichCmd} ${cmd.split(' ')[0]}`).catch(() => cmd);
+                        return { available: true, version: `${major}.${minor}`, path: pythonPath.trim().split('\n')[0] || cmd };
                     }
                 }
             } catch (e) {
@@ -54,6 +57,80 @@ class DependencyInstaller {
             }
         }
         return { available: false, version: '', path: '' };
+    }
+
+    /**
+     * Auto-install Python on Windows if missing
+     */
+    async installPython() {
+        if (process.platform !== 'win32') {
+            throw new Error('Python 3.9+ is required. Install via: sudo apt install python3 (Linux) or brew install python (macOS)');
+        }
+
+        this._progress('python', 2, 'Python not found — downloading Python installer...');
+        const installerUrl = 'https://www.python.org/ftp/python/3.12.3/python-3.12.3-amd64.exe';
+        const installerPath = path.join(this.appDataDir, 'python-installer.exe');
+
+        try {
+            await this.execAsync(`curl -L -o "${installerPath}" "${installerUrl}"`, { timeout: 300000 });
+            this._progress('python', 3, 'Installing Python (this may take a minute)...');
+
+            // Silent install with PATH and pip
+            await this.execAsync(
+                `"${installerPath}" /quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0`,
+                { timeout: 300000 }
+            );
+
+            // Cleanup installer
+            try { fs.unlinkSync(installerPath); } catch (e) {}
+
+            this._progress('python', 4, 'Python installed. Verifying...');
+
+            // Re-check after install (need to refresh PATH)
+            const refreshedPath = process.env.LOCALAPPDATA
+                ? `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python312\\python.exe`
+                : 'python';
+
+            if (fs.existsSync(refreshedPath)) {
+                return { available: true, version: '3.12', path: refreshedPath };
+            }
+
+            // Try standard check again
+            return await this.checkPython();
+        } catch (err) {
+            console.error('[Installer] Python install failed:', err.message);
+            throw new Error('Failed to install Python automatically. Please install Python 3.9+ from python.org');
+        }
+    }
+
+    /**
+     * Install Visual C++ Redistributable on Windows if needed
+     */
+    async ensureVCRedist() {
+        if (process.platform !== 'win32') return;
+
+        // Check if VC++ redist is present by looking for common DLL
+        try {
+            await this.execAsync('where vcruntime140.dll');
+            return; // Already installed
+        } catch (e) {
+            // Not found in PATH, check System32
+            const sys32 = `${process.env.SYSTEMROOT || 'C:\\Windows'}\\System32\\vcruntime140.dll`;
+            if (fs.existsSync(sys32)) return;
+        }
+
+        this._progress('vcredist', 45, 'Installing Visual C++ Runtime...');
+        const url = 'https://aka.ms/vs/17/release/vc_redist.x64.exe';
+        const installerPath = path.join(this.appDataDir, 'vc_redist.x64.exe');
+
+        try {
+            await this.execAsync(`curl -L -o "${installerPath}" "${url}"`, { timeout: 120000 });
+            await this.execAsync(`"${installerPath}" /quiet /norestart`, { timeout: 120000 });
+            try { fs.unlinkSync(installerPath); } catch (e) {}
+            this._progress('vcredist', 48, 'Visual C++ Runtime installed.');
+        } catch (err) {
+            console.warn('[Installer] VC++ Redist install failed (non-fatal):', err.message);
+        }
     }
 
     /**
@@ -257,13 +334,19 @@ except Exception as e:
      * Run the complete installation
      */
     async installAll(modelSize = 'base') {
-        // Step 1: Check Python
+        // Step 1: Check Python (auto-install on Windows if missing)
         this._progress('python', 0, 'Checking Python installation...');
-        const python = await this.checkPython();
+        let python = await this.checkPython();
         if (!python.available) {
-            throw new Error('Python 3.9+ is required. Please install Python from python.org');
+            python = await this.installPython();
+            if (!python.available) {
+                throw new Error('Python 3.9+ is required. Please install Python from python.org');
+            }
         }
         this._progress('python', 5, `Found Python ${python.version}`);
+
+        // Step 1.5: Ensure VC++ Redistributable on Windows
+        await this.ensureVCRedist();
 
         // Step 2: Create venv
         if (!fs.existsSync(this.venvDir)) {
@@ -295,11 +378,15 @@ except Exception as e:
      */
     async installDependencies() {
         this._progress('python', 0, 'Checking Python installation...');
-        const python = await this.checkPython();
+        let python = await this.checkPython();
         if (!python.available) {
-            throw new Error('Python 3.9+ is required. Please install Python from python.org');
+            python = await this.installPython();
+            if (!python.available) {
+                throw new Error('Python 3.9+ is required. Please install Python from python.org');
+            }
         }
         this._progress('python', 5, `Found Python ${python.version}`);
+        await this.ensureVCRedist();
 
         if (!fs.existsSync(this.venvDir)) {
             await this.createVenv(python.path);
