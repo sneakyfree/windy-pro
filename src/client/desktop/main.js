@@ -629,23 +629,8 @@ function showMiniWidget() {
     if (miniWindow && !miniWindow.isDestroyed()) {
       miniWindow.webContents.send('mini-resize', tornadoSize);
 
-      // Linux: window isn't transparent, so clip to a circle with setShape
-      if (process.platform === 'linux') {
-        const s = miniWindow.getSize();
-        const r = Math.floor(s[0] / 2);
-        const cx = r, cy = r;
-        // Approximate circle with a polygon
-        const points = 64;
-        const rects = [];
-        for (let y = 0; y < s[1]; y++) {
-          const dy = y - cy;
-          const halfW = Math.floor(Math.sqrt(Math.max(0, r * r - dy * dy)));
-          if (halfW > 0) {
-            rects.push({ x: cx - halfW, y, width: halfW * 2, height: 1 });
-          }
-        }
-        miniWindow.setShape(rects);
-      }
+      // Linux: can't do transparent, so round it visually with CSS border-radius
+      // (setShape breaks mouse events). The dark bg is styled in mini-widget.html.
     }
   });
 }
@@ -677,7 +662,12 @@ ipcMain.on('mini-move', (event, { dx, dy }) => {
 });
 
 // Forward voice levels from renderer to mini widget
+let _voiceLevelLogCount = 0;
 ipcMain.on('voice-level', (event, level) => {
+  if (_voiceLevelLogCount < 5 && level > 0.05) {
+    console.log(`[VoiceLevel→Mini] level=${level.toFixed(3)} miniWindow=${!!miniWindow}`);
+    _voiceLevelLogCount++;
+  }
   if (miniWindow && !miniWindow.isDestroyed() && miniWindow.webContents && !miniWindow.webContents.isDestroyed()) {
     miniWindow.webContents.send('mini-voice-level', level);
   }
