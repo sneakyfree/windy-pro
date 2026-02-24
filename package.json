@@ -1,6 +1,6 @@
 {
   "name": "windy-pro",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Voice-to-text desktop app powered by faster-whisper",
   "main": "src/client/desktop/main.js",
   "author": {
