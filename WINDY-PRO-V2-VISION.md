@@ -1360,3 +1360,37 @@ We never name competitors. We're above that. But here's how we position against 
 *This document is the single source of truth for the Windy Pro v2.0 vision. Any Kit waking up fresh should read this document in full before doing any work on Windy Pro. It captures not just WHAT we're building, but WHY — the strategic thinking behind every decision.*
 
 *No Internet, No Problem. Stay Local. Stay Private. Talk Today. Live Forever.* 🎯
+
+---
+
+## 19. EDGE CASE IMMUNITY — BOMB-PROOF INSTALLER
+
+### Lesson Learned (24 Feb 2026)
+Grant spent hours testing the Mac install and hit: Python 3.9 incompatibility, missing ffmpeg, mic permissions not requested, model download timeout, window too small, server port conflicts, and Gatekeeper warnings. Every one of these is unacceptable for a shipping product.
+
+### The Rule: ZERO External Dependencies. ZERO Silent Failures.
+
+The v2.0 installer must be fully self-contained:
+
+| Component | Solution |
+|-----------|----------|
+| Python | Bundle Python 3.11+ inside the installer (or compile server to standalone binary) |
+| ffmpeg | Bundle static ffmpeg binary per platform inside the app |
+| Models | Download .wpr from our CDN with progress, resume, and retry |
+| Mic permissions | Auto-request on first launch via systemPreferences.askForMediaAccess (macOS) |
+| Port selection | Auto-detect available port if default is busy |
+| Window size | Minimum 500x600, Welcome screen fully visible without resizing |
+| Code signing | Apple Developer cert for macOS, code signing cert for Windows |
+| Error messages | Specific, actionable, never just "ERROR" |
+| Disk space | Check before downloading, warn if insufficient |
+| Network issues | Retry with backoff, resume partial downloads, checksum verification |
+| Audio devices | Enumerate on first launch, let user pick mic, test audio levels |
+| Hotkeys | Platform-specific defaults, customizable, conflict detection |
+| Crash recovery | Auto-save in-progress recordings, recover on next launch |
+| Multiple instances | Clear "already running" message with force-restart option |
+| Antivirus | Signed executables, standard ports, HTTPS only |
+
+### Implementation Priority
+All 15 items must be resolved BEFORE v2.0 ships. No exceptions. No "we'll fix it later."
+The user should go from download → working transcription in under 5 minutes with ZERO manual troubleshooting on ANY platform (Windows, macOS Intel, macOS ARM, Linux x86, Linux ARM).
+
