@@ -205,31 +205,68 @@ faster-whisper (our current inference engine) uses CTranslate2, which has excell
 
 **whisper.cpp** is a pure C/C++ implementation of Whisper by Georgi Gerganov (creator of llama.cpp). MIT licensed. It supports **Apple Metal GPU acceleration**, which means Mac users get GPU-accelerated inference — dramatically faster on any Mac with Apple Silicon (M1/M2/M3/M4) or a decent AMD GPU.
 
-We ship two inference backends, selected automatically per platform:
+We ship multiple inference backends, selected automatically per platform:
 
 | Platform | Inference Engine | GPU Acceleration | Model Format |
 |----------|-----------------|-----------------|--------------|
 | **Windows** | faster-whisper (CTranslate2) | NVIDIA CUDA | CTranslate2 |
 | **Linux** | faster-whisper (CTranslate2) | NVIDIA CUDA | CTranslate2 |
 | **macOS** | whisper.cpp | Apple Metal | GGUF |
+| **iOS / iPadOS** | whisper.cpp | Core ML + Neural Engine | Core ML |
+| **Android** | whisper.cpp | Vulkan GPU | GGUF |
 
-**The user never sees this.** WindySense detects the platform and loads the appropriate engine. Same seven Windy models, same accuracy, same branding — different engine under the hood optimized for each OS.
+**The user never sees this.** WindySense detects the platform and loads the appropriate engine. Same seven Windy models, same accuracy, same branding — different engine under the hood optimized for each platform.
+
+### Why This Is Critical For Mobile (1.2 Billion iPhones)
+
+Every iPhone since the iPhone 8 has Apple's Neural Engine — a dedicated AI accelerator:
+
+| iPhone | Neural Engine | AI Performance |
+|--------|-------------|----------------|
+| iPhone 12 | 16-core | 11 TOPS |
+| iPhone 13 | 16-core | 15.8 TOPS |
+| iPhone 14 | 16-core | 17 TOPS |
+| iPhone 15 Pro | 16-core | 35 TOPS |
+| iPhone 16 Pro | 16-core | 38 TOPS |
+
+whisper.cpp supports **Core ML**, which taps the Neural Engine directly. The performance difference is dramatic:
+
+| Model | CPU-only (no whisper.cpp) | whisper.cpp + Core ML |
+|-------|--------------------------|----------------------|
+| Windy Lite (tiny) | ~10x realtime | ~50x+ realtime |
+| Windy Core (base) | ~5x realtime | ~25x realtime |
+| Windy Standard (small) | ~2x realtime | ~10x realtime |
+| Windy Pro (distil-large) | Barely usable | ~3-4x realtime ✅ |
+
+**Without whisper.cpp + Core ML:** iPhone users are stuck with tiny/base models. Anything bigger is laggy.
+**With whisper.cpp + Core ML:** iPhone users run Windy Standard or even Windy Pro — desktop-quality transcription on a phone, fully offline.
+
+This is the key to our entire mobile strategy. 1.2 billion active iPhones + 1 billion iPads and Macs = **2+ billion Apple devices** where whisper.cpp delivers a dramatically superior experience.
+
+Android phones also benefit — whisper.cpp runs via NDK with Vulkan GPU acceleration. Not as dramatic as Apple's Neural Engine, but significantly faster than CPU-only.
+
+**The ad writes itself:** Someone on a subway, no signal, speaking into their iPhone, getting perfect transcription from Windy Standard running locally on the Neural Engine. "No Internet, No Problem" — on your phone.
 
 ### What This Means For Packaging
 
-Each of our seven fine-tuned models gets converted to TWO formats during OC1's Phase 4:
+Each of our seven fine-tuned models gets converted to THREE formats during OC1's Phase 4:
 1. **CTranslate2 format** → for faster-whisper (Windows/Linux)
-2. **GGUF format** → for whisper.cpp (macOS)
+2. **GGUF format** → for whisper.cpp (macOS + Android)
+3. **Core ML format** → for whisper.cpp (iOS/iPadOS — optimized for Neural Engine)
 
-Both formats go into the `.wpr` container (or we ship platform-specific `.wpr` files — Mac installer downloads GGUF variants, Windows/Linux downloads CT2 variants). This keeps download sizes the same per platform.
+The installer auto-detects platform and downloads only the correct format. Download sizes stay the same per platform.
 
 ### Performance Impact
 
-On a Mac with Apple Silicon:
+**Mac (Apple Silicon):**
 - CPU-only (current): ~1-2x realtime for large models (barely keeping up)
 - Metal GPU (with whisper.cpp): ~4-8x realtime (comfortably ahead)
 
-This is the difference between "laggy and frustrating" and "instant and magical" on Mac hardware. It's a massive UX win for ~30% of our potential user base.
+**iPhone (Apple Silicon):**
+- CPU-only: Large models unusable, small models mediocre
+- Core ML + Neural Engine: Standard/Pro models run comfortably in real-time
+
+This is the difference between "laggy and frustrating" and "instant and magical" across the entire Apple ecosystem.
 
 ### Legal
 
@@ -1002,29 +1039,46 @@ merged.save_pretrained("windy-standard-v1")
 
 ### PHASE 4: CONVERT & QUANTIZE (Days 7-8)
 
-**Each fine-tuned model must be converted to TWO formats (dual inference engine strategy):**
+**Each fine-tuned model must be converted to THREE formats (multi-platform inference strategy):**
 
 **Format 1: CTranslate2 (for faster-whisper — Windows/Linux):**
 ```bash
 ct2-whisper-converter --model windy-standard-v1 --output_dir windy-standard-ct2 --quantization float16
 ```
 
-**Format 2: GGUF (for whisper.cpp — macOS with Metal GPU acceleration):**
+**Format 2: GGUF (for whisper.cpp — macOS Metal + Android Vulkan):**
 ```bash
 # Install whisper.cpp and use its conversion script
 python whisper.cpp/models/convert-h5-to-ggml.py windy-standard-v1 . ./windy-standard.gguf
 # Or use the HF-to-GGUF converter if available
 ```
 
-whisper.cpp supports Apple Metal, giving Mac users GPU-accelerated inference. This is critical — without it, Macs run CPU-only and large models are painfully slow. With Metal, even Windy Ultra runs comfortably on Apple Silicon.
+**Format 3: Core ML (for whisper.cpp — iOS/iPadOS Neural Engine):**
+```bash
+# Use whisper.cpp's Core ML conversion tools
+# or coremltools to convert directly from PyTorch
+python -m coremltools.converters --model windy-standard-v1 --output windy-standard.mlmodelc
+# whisper.cpp includes generate-coreml-model.sh for this
+```
 
-**Quantization strategy (applies to BOTH formats):**
+**Why three formats:**
+- CTranslate2: Best CUDA performance for Windows/Linux
+- GGUF: whisper.cpp with Apple Metal (Mac GPU) and Vulkan (Android GPU)
+- Core ML: Taps Apple Neural Engine on iPhone/iPad — transforms unusable large models into real-time performers. Critical for mobile strategy (1.2 billion iPhones).
+
+**Quantization strategy (applies to ALL formats):**
 - Tiny, Base: float16 (already small, preserve quality)
 - Small: float16 primary, int8 variant as option
 - Medium, Distil-large, Large, Model 7: float16 primary, int8_float16 variant
 - For GGUF: also produce q5_0 and q8_0 quantized variants (whisper.cpp native quant)
+- For Core ML: FP16 primary (Neural Engine handles this natively)
 
-**Deliverable: Two complete sets of seven models — 7x CTranslate2 + 7x GGUF.** The installer downloads only the format matching the user's platform.
+**Deliverable: Three complete sets of seven models:**
+- 7x CTranslate2 — for Windows/Linux installer
+- 7x GGUF — for macOS + Android installer
+- 7x Core ML — for iOS/iPadOS app
+
+The installer/app auto-detects platform and downloads only the correct format.
 
 ---
 
