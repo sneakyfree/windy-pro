@@ -141,10 +141,17 @@
     let lastVoiceLevelTime = 0;
     let voiceLevelReceived = false;
 
+    // Debug: log to title so it's visible in window
+    function dbg(msg) {
+      document.title = msg;
+      console.log('[MiniWidget]', msg);
+    }
+    dbg('init windyMini=' + !!window.windyMini);
+
     if (window.windyMini) {
       // ═══ State changes ═══
       window.windyMini.onStateChange((state) => {
-        console.log('[MiniWidget] State:', state);
+        dbg('State:' + state);
         currentState = state;
 
         // Clear everything
@@ -168,7 +175,9 @@
       });
 
       // ═══ Voice levels ═══
+      let _vlCount = 0;
       window.windyMini.onVoiceLevel((level) => {
+        if (_vlCount < 3) { dbg('VL:' + level.toFixed(2) + ' st=' + currentState); _vlCount++; }
         if (currentState !== 'recording') return;
         voiceLevelReceived = true;
         lastVoiceLevelTime = Date.now();
@@ -184,12 +193,18 @@
     }
 
     // ═══ Voice-reactive animation loop ═══
+    let _frameCount = 0;
     function startVoiceAnimation() {
+      dbg('startVoiceAnim');
       smoothLevel = 0;
       breathPhase = 0;
 
       function frame() {
-        if (currentState !== 'recording') return;
+        if (currentState !== 'recording') { dbg('frame:notRec'); return; }
+        _frameCount++;
+        if (_frameCount <= 3 || _frameCount % 300 === 0) {
+          dbg('frame#' + _frameCount + ' vl=' + smoothLevel.toFixed(2) + ' recv=' + voiceLevelReceived);
+        }
         
         // If no voice level data in last 1 second, do JS-based gentle breathing
         if (!voiceLevelReceived || (Date.now() - lastVoiceLevelTime > 1000)) {

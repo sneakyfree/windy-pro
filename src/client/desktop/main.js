@@ -618,6 +618,11 @@ function showMiniWidget() {
 
   miniWindow.on('closed', () => { miniWindow = null; });
 
+  // Capture mini widget console output for debugging
+  miniWindow.webContents.on('console-message', (e, level, msg) => {
+    console.log(`[Mini] ${msg}`);
+  });
+
   // Forward state + size after load
   miniWindow.webContents.on('did-finish-load', () => {
     updateMiniState(isRecording ? 'recording' : 'idle');
