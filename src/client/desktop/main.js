@@ -609,12 +609,7 @@ function showMiniWidget() {
     }
   };
 
-  // Linux: transparent windows crash on some GPU/driver combos (int3 trap).
-  // Use opaque dark bg + rounded CSS for a clean mini-widget look.
-  if (process.platform === 'linux') {
-    winOpts.transparent = false;
-    winOpts.backgroundColor = '#000000';
-  }
+  // Linux: keep transparent. If GPU issues occur, launch with --disable-gpu.
 
   miniWindow = new BrowserWindow(winOpts);
 

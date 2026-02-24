@@ -27,7 +27,7 @@
       justify-content: center;
       position: relative;
       cursor: grab;
-      background: radial-gradient(circle, #0d1520 60%, #000 100%);
+      background: transparent;
       -webkit-app-region: drag;
     }
 
@@ -48,7 +48,13 @@
     .tornado {
       font-size: 28px;
       pointer-events: none;
-      text-shadow: 0 0 3px rgba(0, 0, 0, 0.8), 0 0 6px rgba(0, 0, 0, 0.5);
+      /* Multi-layer outline for visibility on any background */
+      text-shadow:
+        0 0 4px rgba(0,0,0,0.9),
+        0 0 8px rgba(0,0,0,0.7),
+        1px 1px 2px rgba(0,0,0,0.9),
+        -1px -1px 2px rgba(0,0,0,0.9),
+        0 0 12px rgba(100,100,100,0.3);
       will-change: transform, filter;
     }
 
@@ -94,17 +100,9 @@
       animation: jolt 0.25s ease-out;
     }
 
-    /* Fallback vibration when voice levels aren't arriving */
+    /* Recording state: green glow baseline (animation handled by JS) */
     .widget.recording .tornado {
-      animation: vibrate-fallback 0.15s ease-in-out infinite alternate;
-      filter: drop-shadow(0 0 8px rgba(0,255,136,0.5));
-    }
-    @keyframes vibrate-fallback {
-      0% { transform: translate(-1px, -1px) scale(1.02); }
-      25% { transform: translate(1px, 0px) scale(1.04); }
-      50% { transform: translate(-1px, 1px) scale(1.02); }
-      75% { transform: translate(1px, -1px) scale(1.03); }
-      100% { transform: translate(0px, 1px) scale(1.02); }
+      filter: drop-shadow(0 0 4px rgba(0,255,136,0.3));
     }
 
     @keyframes jolt {
@@ -174,8 +172,6 @@
         if (currentState !== 'recording') return;
         voiceLevelReceived = true;
         lastVoiceLevelTime = Date.now();
-        // Override CSS animation so inline JS styles take effect
-        tornado.style.animation = 'none';
         // Lerp toward target for smoothness
         smoothLevel += (level - smoothLevel) * 0.35;
       });
@@ -195,12 +191,12 @@
       function frame() {
         if (currentState !== 'recording') return;
         
-        // If no voice level data received in last 1 second, let CSS fallback handle animation
+        // If no voice level data in last 1 second, do JS-based gentle breathing
         if (!voiceLevelReceived || (Date.now() - lastVoiceLevelTime > 1000)) {
-          // Restore CSS animation fallback
-          tornado.style.animation = '';
-          tornado.style.transform = '';
-          tornado.style.filter = '';
+          breathPhase += 0.03;
+          const breathScale = 1.0 + Math.sin(breathPhase) * 0.015;
+          tornado.style.transform = `scale(${breathScale})`;
+          tornado.style.filter = 'drop-shadow(0 0 4px rgba(0,255,136,0.3))';
           glowRing.style.boxShadow = 'none';
           animFrame = requestAnimationFrame(frame);
           return;
