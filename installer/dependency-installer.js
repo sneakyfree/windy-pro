@@ -127,6 +127,79 @@ class DependencyInstaller {
         this._progress('deps', 70, 'Python dependencies installed.');
     }
 
+        /**
+     * Ensure ffmpeg is available (download on Windows if missing)
+     */
+    async ensureFfmpeg() {
+        // Check if ffmpeg is already available
+        try {
+            await this.execAsync('ffmpeg -version');
+            this._progress('ffmpeg', 65, 'ffmpeg found.');
+            return;
+        } catch (e) {
+            // Not in PATH
+        }
+
+        // Check bundled location
+        const ffmpegDir = path.join(this.appDataDir, 'ffmpeg');
+        const ffmpegExe = path.join(ffmpegDir, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+        if (fs.existsSync(ffmpegExe)) {
+            this._progress('ffmpeg', 65, 'ffmpeg found (bundled).');
+            return;
+        }
+
+        if (process.platform !== 'win32') {
+            this._progress('ffmpeg', 65, 'ffmpeg not found — install via package manager (apt/brew).');
+            return;
+        }
+
+        // Download ffmpeg for Windows
+        this._progress('ffmpeg', 55, 'Downloading ffmpeg for Windows...');
+        const url = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip';
+        const zipPath = path.join(this.appDataDir, 'ffmpeg-download.zip');
+
+        try {
+            // Download using curl (available on Windows 10+)
+            await this.execAsync(`curl -L -o "${zipPath}" "${url}"`, { timeout: 300000 });
+            this._progress('ffmpeg', 60, 'Extracting ffmpeg...');
+
+            // Extract using PowerShell
+            if (!fs.existsSync(ffmpegDir)) fs.mkdirSync(ffmpegDir, { recursive: true });
+            await this.execAsync(
+                `powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${this.appDataDir}\\ffmpeg-temp' -Force"`,
+                { timeout: 120000 }
+            );
+
+            // Find and move ffmpeg.exe
+            const tempDir = path.join(this.appDataDir, 'ffmpeg-temp');
+            const findFfmpeg = (dir) => {
+                const items = fs.readdirSync(dir);
+                for (const item of items) {
+                    const full = path.join(dir, item);
+                    if (item === 'ffmpeg.exe') return full;
+                    if (fs.statSync(full).isDirectory()) {
+                        const found = findFfmpeg(full);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+            const foundExe = findFfmpeg(tempDir);
+            if (foundExe) {
+                fs.copyFileSync(foundExe, ffmpegExe);
+            }
+
+            // Cleanup
+            try { fs.unlinkSync(zipPath); } catch (e) {}
+            try { fs.rmSync(path.join(this.appDataDir, 'ffmpeg-temp'), { recursive: true }); } catch (e) {}
+
+            this._progress('ffmpeg', 65, 'ffmpeg installed.');
+        } catch (err) {
+            console.warn('[Installer] ffmpeg download failed:', err.message);
+            this._progress('ffmpeg', 65, 'ffmpeg download failed — please install manually from ffmpeg.org');
+        }
+    }
+
     /**
      * Download the Whisper model
      * faster-whisper downloads it on first use, we trigger that here
@@ -202,6 +275,9 @@ except Exception as e:
         // Step 3: Install deps
         await this.installRequirements();
 
+        // Step 3.5: Install ffmpeg on Windows if missing
+        await this.ensureFfmpeg();
+
         // Step 4: Download model
         await this.downloadModel(modelSize);
 
@@ -232,6 +308,7 @@ except Exception as e:
         }
 
         await this.installRequirements();
+        await this.ensureFfmpeg();
         this._progress('deps', 50, 'Python environment ready.');
     }
 

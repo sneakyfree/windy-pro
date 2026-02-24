@@ -901,18 +901,33 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     const buffer = Buffer.from(base64Audio, 'base64');
     fs.writeFileSync(webmPath, buffer);
 
+    // Find ffmpeg — check bundled location, then PATH
+    const path = require('path');
+    const appDataDir = app.getPath('userData');
+    let ffmpegCmd = 'ffmpeg';
+    const bundledFfmpeg = path.join(appDataDir, 'ffmpeg', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+    if (fs.existsSync(bundledFfmpeg)) {
+      ffmpegCmd = `"${bundledFfmpeg}"`;
+    }
+
     // Convert to WAV using ffmpeg
-    execSync(`ffmpeg -y -i "${webmPath}" -ar 16000 -ac 1 -c:a pcm_s16le "${wavPath}" 2>/dev/null`);
+    const devnull = process.platform === 'win32' ? '2>NUL' : '2>/dev/null';
+    execSync(`${ffmpegCmd} -y -i "${webmPath}" -ar 16000 -ac 1 -c:a pcm_s16le "${wavPath}" ${devnull}`);
 
     // Find the Python venv — check multiple locations
-    const path = require('path');
     const appRoot = path.resolve(__dirname, '..', '..', '..');
-    const venvPaths = [
-      path.join(appRoot, 'venv', 'bin', 'python3'),
-      `${app.getPath('userData')}/venv/bin/python3`,
-      '/usr/bin/python3'
-    ];
-    const pythonPath = venvPaths.find(p => fs.existsSync(p)) || 'python3';
+    const venvPaths = process.platform === 'win32'
+      ? [
+          path.join(appDataDir, 'venv', 'Scripts', 'python.exe'),
+          path.join(appRoot, 'venv', 'Scripts', 'python.exe'),
+          'python'
+        ]
+      : [
+          path.join(appRoot, 'venv', 'bin', 'python3'),
+          path.join(appDataDir, 'venv', 'bin', 'python3'),
+          '/usr/bin/python3'
+        ];
+    const pythonPath = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
     console.log('[Batch] Using python:', pythonPath);
 
     // Run faster-whisper transcription via temp script
