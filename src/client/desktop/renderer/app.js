@@ -1446,11 +1446,17 @@ class WindyApp {
     const bar = document.createElement('div');
     bar.id = 'exportBar';
     bar.className = 'export-bar';
+    const collapsed = localStorage.getItem('windy_exportCollapsed') === 'true';
     bar.innerHTML = `
-      <button class="export-btn" data-format="copy" title="Copy to clipboard">📋 Copy</button>
-      <button class="export-btn" data-format="txt" title="Save as plain text">📄 .txt</button>
-      <button class="export-btn" data-format="md" title="Save as Markdown">📝 .md</button>
-      <button class="export-btn" data-format="srt" title="Save as subtitles">📊 .srt</button>
+      <div class="export-toggle" id="exportToggle" title="Toggle export options">
+        <span class="export-chevron ${collapsed ? '' : 'open'}">${collapsed ? '▸' : '▾'}</span> Export
+      </div>
+      <div class="export-buttons ${collapsed ? 'collapsed' : ''}" id="exportButtons">
+        <button class="export-btn" data-format="copy" title="Copy to clipboard">📋 Copy</button>
+        <button class="export-btn" data-format="txt" title="Save as plain text">📄 .txt</button>
+        <button class="export-btn" data-format="md" title="Save as Markdown">📝 .md</button>
+        <button class="export-btn" data-format="srt" title="Save as subtitles">📊 .srt</button>
+      </div>
     `;
 
     // Insert before control bar
@@ -1458,6 +1464,16 @@ class WindyApp {
     if (controlBar) {
       controlBar.parentNode.insertBefore(bar, controlBar);
     }
+
+    // Toggle collapse
+    bar.querySelector('#exportToggle').addEventListener('click', () => {
+      const btns = bar.querySelector('#exportButtons');
+      const chev = bar.querySelector('.export-chevron');
+      const isCollapsed = btns.classList.toggle('collapsed');
+      chev.textContent = isCollapsed ? '▸' : '▾';
+      chev.classList.toggle('open', !isCollapsed);
+      localStorage.setItem('windy_exportCollapsed', isCollapsed);
+    });
 
     // Bind click handlers
     bar.querySelectorAll('.export-btn').forEach(btn => {

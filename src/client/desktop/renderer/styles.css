@@ -557,18 +557,21 @@ body {
 }
 
 .settings-close {
-  background: none;
-  border: none;
+  background: var(--bg-tertiary, #21262d);
+  border: 1px solid var(--border-color, #30363d);
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 16px;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-size: 18px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 6px;
+  transition: all 0.15s;
 }
 
 .settings-close:hover {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--color-error, #ef4444);
+  color: #fff;
+  border-color: var(--color-error, #ef4444);
 }
 
 .settings-body {
@@ -1564,12 +1567,38 @@ body {
    ═══════════════════════════════ */
 
 .export-bar {
-  display: flex;
-  gap: 6px;
-  padding: 8px 12px;
+  padding: 4px 12px 8px;
   background: var(--bg-secondary);
   border-top: 1px solid var(--bg-tertiary);
   animation: slideUp 0.3s ease;
+}
+
+.export-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.export-toggle:hover { color: var(--text-secondary); }
+.export-chevron { font-size: 10px; transition: transform 0.2s; }
+
+.export-buttons {
+  display: flex;
+  gap: 6px;
+  overflow: hidden;
+  max-height: 40px;
+  opacity: 1;
+  transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
+  margin-top: 4px;
+}
+.export-buttons.collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
 }
 
 .export-btn {
@@ -1681,18 +1710,20 @@ select:focus-visible,
   color: var(--text-primary, #e6edf3);
 }
 .history-close {
-  background: none;
-  border: none;
-  color: var(--text-tertiary, #484f58);
-  font-size: 16px;
+  background: var(--bg-tertiary, #21262d);
+  border: 1px solid var(--border-color, #30363d);
+  color: var(--text-secondary, #8b949e);
+  font-size: 18px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 12px;
+  border-radius: 6px;
   transition: all 0.15s;
 }
 .history-close:hover {
-  background: var(--bg-tertiary, #21262d);
-  color: var(--text-primary, #e6edf3);
+  background: var(--color-error, #ef4444);
+  color: #fff;
+  border-color: var(--color-error, #ef4444);
 }
 
 /* Stats */
