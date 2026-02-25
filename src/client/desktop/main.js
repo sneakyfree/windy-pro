@@ -922,7 +922,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
 
     // Convert to WAV using ffmpeg
     const devnull = process.platform === 'win32' ? '2>NUL' : '2>/dev/null';
-    execSync(`${ffmpegCmd} -y -i "${webmPath}" -ar 16000 -ac 1 -c:a pcm_s16le "${wavPath}" ${devnull}`);
+    execSync(`${ffmpegCmd} -y -i "${webmPath}" -ar 16000 -ac 1 -acodec pcm_s16le "${wavPath}" ${devnull}`);
 
     // Find the Python venv — check multiple locations
     const appRoot = path.resolve(__dirname, '..', '..', '..');
