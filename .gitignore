@@ -55,3 +55,7 @@ htmlcov/
 
 # Antigravity brain
 .gemini/
+
+# Bundled dependencies (too large for git)
+bundled/
+extraResources/

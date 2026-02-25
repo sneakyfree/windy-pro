@@ -944,10 +944,22 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
 
     // Run faster-whisper transcription via temp script
     const modelName = store.get('engine.model') || 'base';
+    // Check for bundled model first
+    const localModelDir = path.join(os.homedir(), '.windy-pro', 'model', `faster-whisper-${modelName}`);
+    let bundledModelDir = '';
+    if (process.resourcesPath) {
+      bundledModelDir = path.join(process.resourcesPath, 'bundled', 'model', `faster-whisper-${modelName}`);
+    }
+    let modelRef = `"${modelName}"`;
+    if (fs.existsSync(path.join(localModelDir, 'model.bin'))) {
+      modelRef = `"${localModelDir.replace(/\\/g, '/')}"`;
+    } else if (bundledModelDir && fs.existsSync(path.join(bundledModelDir, 'model.bin'))) {
+      modelRef = `"${bundledModelDir.replace(/\\/g, '/')}"`;
+    }
     const scriptPath = `${tmpDir}/windy-batch-transcribe-${Date.now()}.py`;
     const scriptContent = [
       'from faster_whisper import WhisperModel',
-      `model = WhisperModel("${modelName}", device="cpu", compute_type="int8")`,
+      `model = WhisperModel(${modelRef}, device="cpu", compute_type="int8")`,
       `segments, info = model.transcribe("${wavPath.replace(/\\/g, '/')}", language="en", beam_size=5, condition_on_previous_text=True, vad_filter=True, no_speech_threshold=0.6)`,
       'text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())',
       'print(text)'

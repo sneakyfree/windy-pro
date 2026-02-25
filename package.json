@@ -1,6 +1,6 @@
 {
   "name": "windy-pro",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Voice-to-text desktop app powered by faster-whisper",
   "main": "src/client/desktop/main.js",
   "author": {
@@ -28,6 +28,13 @@
   },
   "build": {
     "appId": "pro.windy.app",
+    "extraResources": [
+      {
+        "from": "extraResources/",
+        "to": "bundled",
+        "filter": ["**/*"]
+      }
+    ],
     "productName": "Windy Pro",
     "directories": {
       "output": "dist"
@@ -57,6 +64,11 @@
       {
         "from": "installer",
         "to": "installer"
+      },
+      {
+        "from": "extraResources/",
+        "to": "bundled",
+        "filter": ["**/*"]
       }
     ],
     "mac": {
@@ -65,13 +77,7 @@
         {
           "target": "dmg",
           "arch": [
-            "universal"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "universal"
+            "x64"
           ]
         }
       ],
@@ -116,11 +122,7 @@
       "include": "build/installer.nsh"
     },
     "deb": {
-      "depends": [
-        "python3",
-        "python3-venv",
-        "python3-pip"
-      ]
+      "depends": []
     }
   }
 }

@@ -1,487 +1,198 @@
 /**
- * Windy Pro - Dependency Installer
- * Handles Python environment setup and model downloads.
+ * Windy Pro Dependency Installer — Bundled Edition (v0.5.0)
  * 
- * DNA Strand: B4.3, B4.4
+ * All dependencies ship inside the app. No internet required.
+ * This installer extracts bundled Python, ffmpeg, venv, and model
+ * to ~/.windy-pro/ on first run.
  */
-
-const { exec, spawn } = require('child_process');
-const os = require('os');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const { execSync, exec } = require('child_process');
 
 class DependencyInstaller {
-    constructor() {
+    constructor(appRoot) {
+        this.appRoot = appRoot;
         this.appDataDir = path.join(os.homedir(), '.windy-pro');
         this.venvDir = path.join(this.appDataDir, 'venv');
-        this.requirementsPath = path.join(__dirname, '..', 'requirements.txt');
-        this.onProgress = null;  // callback(step, percent, message)
-    }
-
-    /**
-     * Set progress callback
-     */
-    setProgressCallback(callback) {
-        this.onProgress = callback;
-    }
-
-    _progress(step, percent, message) {
-        if (this.onProgress) {
-            this.onProgress(step, percent, message);
+        this.listeners = [];
+        
+        // Find bundled resources directory
+        // In packaged app: process.resourcesPath/bundled/
+        // In dev: appRoot/extraResources/
+        if (process.resourcesPath) {
+            this.bundledDir = path.join(process.resourcesPath, 'bundled');
+        } else {
+            this.bundledDir = path.join(appRoot, 'extraResources');
         }
     }
 
-    /**
-     * Check if Python 3.9+ is available
-     * @returns {Promise<{available: boolean, version: string, path: string}>}
-     */
-    async checkPython() {
-        const commands = process.platform === 'win32'
-            ? ['python', 'python3', 'py -3']
-            : ['python3', 'python'];
-
-        for (const cmd of commands) {
-            try {
-                const output = await this.execAsync(`${cmd} --version`);
-                const match = output.trim().match(/Python (\d+)\.(\d+)\.(\d+)/);
-                if (match) {
-                    const [, major, minor] = match.map(Number);
-                    if (major >= 3 && minor >= 9) {
-                        const whichCmd = process.platform === 'win32' ? 'where' : 'which';
-                        const pythonPath = await this.execAsync(`${whichCmd} ${cmd.split(' ')[0]}`).catch(() => cmd);
-                        return { available: true, version: `${major}.${minor}`, path: pythonPath.trim().split('\n')[0] || cmd };
-                    }
-                }
-            } catch (e) {
-                // Try next command
-            }
-        }
-        return { available: false, version: '', path: '' };
+    on(event, fn) { this.listeners.push({ event, fn }); }
+    
+    _progress(step, pct, msg) {
+        this.listeners
+            .filter(l => l.event === 'progress')
+            .forEach(l => l.fn({ step, percent: pct, message: msg }));
     }
 
-    /**
-     * Auto-install Python on Windows if missing
-     */
-    async installPython() {
-        if (process.platform !== 'win32') {
-            throw new Error('Python 3.9+ is required. Install via: sudo apt install python3 (Linux) or brew install python (macOS)');
-        }
-
-        this._progress('python', 2, 'Python not found — downloading Python installer...');
-        const installerUrl = 'https://www.python.org/ftp/python/3.12.3/python-3.12.3-amd64.exe';
-        const installerPath = path.join(this.appDataDir, 'python-installer.exe');
-
-        try {
-            await this.execAsync(`curl -L -o "${installerPath}" "${installerUrl}"`, { timeout: 300000 });
-            this._progress('python', 3, 'Installing Python (this may take a minute)...');
-
-            // Silent install with PATH and pip
-            await this.execAsync(
-                `"${installerPath}" /quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_test=0`,
-                { timeout: 300000 }
-            );
-
-            // Cleanup installer
-            try { fs.unlinkSync(installerPath); } catch (e) {}
-
-            this._progress('python', 4, 'Python installed. Verifying...');
-
-            // Re-check after install (need to refresh PATH)
-            const refreshedPath = process.env.LOCALAPPDATA
-                ? `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python312\\python.exe`
-                : 'python';
-
-            if (fs.existsSync(refreshedPath)) {
-                return { available: true, version: '3.12', path: refreshedPath };
-            }
-
-            // Try standard check again
-            return await this.checkPython();
-        } catch (err) {
-            console.error('[Installer] Python install failed:', err.message);
-            throw new Error('Failed to install Python automatically. Please install Python 3.9+ from python.org');
-        }
-    }
-
-    /**
-     * Install Visual C++ Redistributable on Windows if needed
-     */
-    async ensureVCRedist() {
-        if (process.platform !== 'win32') return;
-
-        // Check if VC++ redist is present by looking for common DLL
-        try {
-            await this.execAsync('where vcruntime140.dll');
-            return; // Already installed
-        } catch (e) {
-            // Not found in PATH, check System32
-            const sys32 = `${process.env.SYSTEMROOT || 'C:\\Windows'}\\System32\\vcruntime140.dll`;
-            if (fs.existsSync(sys32)) return;
-        }
-
-        this._progress('vcredist', 45, 'Installing Visual C++ Runtime...');
-        const url = 'https://aka.ms/vs/17/release/vc_redist.x64.exe';
-        const installerPath = path.join(this.appDataDir, 'vc_redist.x64.exe');
-
-        try {
-            await this.execAsync(`curl -L -o "${installerPath}" "${url}"`, { timeout: 120000 });
-            await this.execAsync(`"${installerPath}" /quiet /norestart`, { timeout: 120000 });
-            try { fs.unlinkSync(installerPath); } catch (e) {}
-            this._progress('vcredist', 48, 'Visual C++ Runtime installed.');
-        } catch (err) {
-            console.warn('[Installer] VC++ Redist install failed (non-fatal):', err.message);
-        }
-    }
-
-    /**
-     * Create Python virtual environment
-     */
-    async createVenv(pythonPath) {
-        this._progress('venv', 10, 'Creating Python virtual environment...');
-
-        if (!fs.existsSync(this.appDataDir)) {
-            fs.mkdirSync(this.appDataDir, { recursive: true });
-        }
-
-        await this.execAsync(`"${pythonPath}" -m venv "${this.venvDir}"`);
-        this._progress('venv', 30, 'Virtual environment created.');
-    }
-
-    /**
-     * Get the pip executable path within the venv
-     */
-    getPipPath() {
+    getBundledPythonPath() {
         if (process.platform === 'win32') {
-            return path.join(this.venvDir, 'Scripts', 'pip.exe');
+            return path.join(this.bundledDir, 'python', 'python.exe');
         }
-        return path.join(this.venvDir, 'bin', 'pip');
+        return path.join(this.bundledDir, 'python', 'bin', 'python3');
     }
 
-    /**
-     * Get the python executable path within the venv
-     */
     getPythonPath() {
         if (process.platform === 'win32') {
             return path.join(this.venvDir, 'Scripts', 'python.exe');
         }
-        return path.join(this.venvDir, 'bin', 'python');
+        return path.join(this.venvDir, 'bin', 'python3');
     }
 
-    /**
-     * Install Python requirements
-     */
-    async installRequirements() {
-        this._progress('deps', 30, 'Installing Python dependencies...');
-
-        const pipPath = this.getPipPath();
-        const pythonPath = this.getPythonPath();
-
-        // Upgrade pip first (use python -m pip on Windows to avoid self-overwrite error)
-        try {
-            await this.execAsync(`"${pythonPath}" -m pip install --upgrade pip`);
-        } catch (e) {
-            console.warn('[Installer] pip upgrade failed (non-fatal):', e.message);
-        }
-        this._progress('deps', 40, 'Installing packages...');
-
-        // Find requirements.txt — try multiple paths
-        let reqPath = this.requirementsPath;
-        if (!fs.existsSync(reqPath)) {
-            // Try relative to app root
-            reqPath = path.join(process.resourcesPath || __dirname, '..', 'requirements.txt');
-        }
-
-        if (fs.existsSync(reqPath)) {
-            await this.execAsync(`"${pythonPath}" -m pip install -r "${reqPath}"`, { timeout: 300000 });
-        } else {
-            // Install core deps directly
-            await this.execAsync(
-                `"${pythonPath}" -m pip install faster-whisper numpy sounddevice soundfile websockets`,
-                { timeout: 300000 }
-            );
-        }
-
-        this._progress('deps', 70, 'Python dependencies installed.');
+    getFfmpegPath() {
+        const localFfmpeg = path.join(this.appDataDir, 'ffmpeg',
+            process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+        if (fs.existsSync(localFfmpeg)) return localFfmpeg;
+        
+        const bundledFfmpeg = path.join(this.bundledDir, 'ffmpeg',
+            process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+        if (fs.existsSync(bundledFfmpeg)) return bundledFfmpeg;
+        
+        return 'ffmpeg'; // fallback to PATH
     }
 
-        /**
-     * Ensure ffmpeg is available (download on Windows if missing)
-     */
-    async ensureFfmpeg() {
-        // Check if ffmpeg is already available
-        try {
-            await this.execAsync('ffmpeg -version');
-            this._progress('ffmpeg', 65, 'ffmpeg found.');
-            return;
-        } catch (e) {
-            // Not in PATH
-        }
-
-        // Check bundled location
-        const ffmpegDir = path.join(this.appDataDir, 'ffmpeg');
-        const ffmpegExe = path.join(ffmpegDir, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
-        if (fs.existsSync(ffmpegExe)) {
-            this._progress('ffmpeg', 65, 'ffmpeg found (bundled).');
-            return;
-        }
-
-        if (process.platform === 'darwin') {
-            this._progress('ffmpeg', 55, 'Installing ffmpeg via Homebrew...');
-            try {
-                await this.execAsync('which brew');
-                await this.execAsync('brew install ffmpeg', { timeout: 300000 });
-                this._progress('ffmpeg', 65, 'ffmpeg installed via Homebrew.');
-                return;
-            } catch (e) {
-                // Try downloading static binary
-                this._progress('ffmpeg', 55, 'Downloading ffmpeg for macOS...');
-                try {
-                    if (!fs.existsSync(path.join(this.appDataDir, 'ffmpeg'))) {
-                        fs.mkdirSync(path.join(this.appDataDir, 'ffmpeg'), { recursive: true });
-                    }
-                    await this.execAsync(`curl -L -o "${ffmpegExe}" "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip" && chmod +x "${ffmpegExe}"`, { timeout: 300000 });
-                    this._progress('ffmpeg', 65, 'ffmpeg installed.');
-                    return;
-                } catch (e2) {
-                    this._progress('ffmpeg', 65, 'ffmpeg install failed — please install manually: brew install ffmpeg');
-                    return;
-                }
-            }
-        }
-
-        if (process.platform === 'linux') {
-            this._progress('ffmpeg', 55, 'Installing ffmpeg...');
-            try {
-                await this.execAsync('sudo apt-get install -y ffmpeg', { timeout: 120000 });
-                this._progress('ffmpeg', 65, 'ffmpeg installed.');
-                return;
-            } catch (e) {
-                this._progress('ffmpeg', 65, 'ffmpeg not found — please install: sudo apt install ffmpeg');
-                return;
-            }
-        }
-
-        // Download ffmpeg for Windows
-        this._progress('ffmpeg', 55, 'Downloading ffmpeg for Windows...');
-        const url = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip';
-        const zipPath = path.join(this.appDataDir, 'ffmpeg-download.zip');
-
-        try {
-            // Download using curl (available on Windows 10+)
-            await this.execAsync(`curl -L -o "${zipPath}" "${url}"`, { timeout: 300000 });
-            this._progress('ffmpeg', 60, 'Extracting ffmpeg...');
-
-            // Extract using PowerShell
-            if (!fs.existsSync(ffmpegDir)) fs.mkdirSync(ffmpegDir, { recursive: true });
-            await this.execAsync(
-                `powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${this.appDataDir}\\ffmpeg-temp' -Force"`,
-                { timeout: 120000 }
-            );
-
-            // Find and move ffmpeg.exe
-            const tempDir = path.join(this.appDataDir, 'ffmpeg-temp');
-            const findFfmpeg = (dir) => {
-                const items = fs.readdirSync(dir);
-                for (const item of items) {
-                    const full = path.join(dir, item);
-                    if (item === 'ffmpeg.exe') return full;
-                    if (fs.statSync(full).isDirectory()) {
-                        const found = findFfmpeg(full);
-                        if (found) return found;
-                    }
-                }
-                return null;
-            };
-            const foundExe = findFfmpeg(tempDir);
-            if (foundExe) {
-                fs.copyFileSync(foundExe, ffmpegExe);
-            }
-
-            // Cleanup
-            try { fs.unlinkSync(zipPath); } catch (e) {}
-            try { fs.rmSync(path.join(this.appDataDir, 'ffmpeg-temp'), { recursive: true }); } catch (e) {}
-
-            this._progress('ffmpeg', 65, 'ffmpeg installed.');
-        } catch (err) {
-            console.warn('[Installer] ffmpeg download failed:', err.message);
-            this._progress('ffmpeg', 65, 'ffmpeg download failed — please install manually from ffmpeg.org');
-        }
-    }
-
-    /**
-     * Download the Whisper model
-     * faster-whisper downloads it on first use, we trigger that here
-     */
-    async downloadModel(modelSize = 'base') {
-        this._progress('model', 70, `Downloading ${modelSize} model... (this may take a few minutes)`);
-
-        const pythonPath = this.getPythonPath();
-        const downloadScript = `
-import sys
-try:
-    from faster_whisper import WhisperModel
-    print("Downloading model: ${modelSize}")
-    model = WhisperModel("${modelSize}", device="cpu", compute_type="int8")
-    print("Model ready!")
-except Exception as e:
-    print(f"Error: {e}", file=sys.stderr)
-    sys.exit(1)
-`;
-
-        const tmpScript = path.join(this.appDataDir, '_download_model.py');
-        fs.writeFileSync(tmpScript, downloadScript);
-
-        try {
-            await this.execAsync(`"${pythonPath}" "${tmpScript}"`, { timeout: 600000 });
-            this._progress('model', 95, `Model ${modelSize} downloaded and ready.`);
-        } finally {
-            // Clean up temp script
-            try { fs.unlinkSync(tmpScript); } catch (e) { }
-        }
-    }
-
-    /**
-     * Check system permissions (mic, accessibility)
-     */
-    async checkPermissions() {
-        const results = { mic: false, accessibility: true };
-
-        if (process.platform === 'darwin') {
-            try {
-                const { systemPreferences } = require('electron');
-                results.mic = await systemPreferences.askForMediaAccess('microphone');
-                results.accessibility = systemPreferences.isTrustedAccessibilityClient(false);
-            } catch (e) {
-                // Not in Electron context
-            }
-        } else {
-            results.mic = true;  // Linux/Windows handle mic via browser API
-        }
-
-        return results;
-    }
-
-    /**
-     * Run the complete installation
-     */
-    async installAll(modelSize = 'base') {
-        // Step 1: Check Python (auto-install on Windows if missing)
-        this._progress('python', 0, 'Checking Python installation...');
-        let python = await this.checkPython();
-        if (!python.available) {
-            python = await this.installPython();
-            if (!python.available) {
-                throw new Error('Python 3.9+ is required. Please install Python from python.org');
-            }
-        }
-        this._progress('python', 5, `Found Python ${python.version}`);
-
-        // Step 1.5: Ensure VC++ Redistributable on Windows
-        await this.ensureVCRedist();
-
-        // Step 2: Create venv
-        if (!fs.existsSync(this.venvDir)) {
-            await this.createVenv(python.path);
-        } else {
-            this._progress('venv', 30, 'Virtual environment already exists.');
-        }
-
-        // Step 3: Install deps
-        await this.installRequirements();
-
-        // Step 3.5: Install ffmpeg on Windows if missing
-        await this.ensureFfmpeg();
-
-        // Step 4: Download model
-        await this.downloadModel(modelSize);
-
-        // Step 5: Verify
-        this._progress('verify', 98, 'Verifying installation...');
-        const pythonPath = this.getPythonPath();
-        await this.execAsync(`"${pythonPath}" -c "from faster_whisper import WhisperModel; print('OK')"`);
-
-        this._progress('complete', 100, 'Installation complete! Ready to transcribe.');
-    }
-
-    /**
-     * Install just Python deps (venv + pip) without downloading a model.
-     * Used by multi-model wizard flow.
-     */
-    async installDependencies() {
-        this._progress('python', 0, 'Checking Python installation...');
-        let python = await this.checkPython();
-        if (!python.available) {
-            python = await this.installPython();
-            if (!python.available) {
-                throw new Error('Python 3.9+ is required. Please install Python from python.org');
-            }
-        }
-        this._progress('python', 5, `Found Python ${python.version}`);
-        await this.ensureVCRedist();
-
-        if (!fs.existsSync(this.venvDir)) {
-            await this.createVenv(python.path);
-        } else {
-            this._progress('venv', 30, 'Virtual environment already exists.');
-        }
-
-        await this.installRequirements();
-        await this.ensureFfmpeg();
-        this._progress('deps', 50, 'Python environment ready.');
-    }
-
-    /**
-     * Set the default active model (writes a config file).
-     */
-    async setDefaultModel(modelId) {
-        const configPath = path.join(this.appDataDir, 'config.json');
-        let config = {};
-        if (fs.existsSync(configPath)) {
-            try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (e) {}
-        }
-        config.defaultModel = modelId;
-        config.installedModels = config.installedModels || [];
-        if (!config.installedModels.includes(modelId)) {
-            config.installedModels.push(modelId);
-        }
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-    }
-
-    /**
-     * Check if already installed
-     */
     isInstalled() {
         const pythonPath = this.getPythonPath();
         if (!fs.existsSync(pythonPath)) return false;
 
         // Check faster_whisper is installed
         try {
-            const { execSync } = require('child_process');
             execSync(`"${pythonPath}" -c "import faster_whisper"`, { timeout: 10000, stdio: 'pipe' });
         } catch (e) {
             return false;
         }
 
-        // Check ffmpeg is available (PATH or bundled)
-        const ffmpegExe = path.join(this.appDataDir, 'ffmpeg', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
-        try {
-            const { execSync } = require('child_process');
-            execSync('ffmpeg -version', { timeout: 5000, stdio: 'pipe' });
-        } catch (e) {
-            if (!fs.existsSync(ffmpegExe)) return false;
+        // Check ffmpeg
+        const ffmpegPath = this.getFfmpegPath();
+        if (ffmpegPath === 'ffmpeg') {
+            try {
+                execSync('ffmpeg -version', { timeout: 5000, stdio: 'pipe' });
+            } catch (e) {
+                return false;
+            }
         }
+
+        // Check model exists
+        const modelDir = path.join(this.appDataDir, 'model', 'faster-whisper-base');
+        if (!fs.existsSync(path.join(modelDir, 'model.bin'))) return false;
 
         return true;
     }
 
-    execAsync(cmd, options = {}) {
+    copyDirSync(src, dst) {
+        if (!fs.existsSync(src)) throw new Error(`Source not found: ${src}`);
+        fs.mkdirSync(dst, { recursive: true });
+        const entries = fs.readdirSync(src, { withFileTypes: true });
+        for (const entry of entries) {
+            const srcPath = path.join(src, entry.name);
+            const dstPath = path.join(dst, entry.name);
+            if (entry.isDirectory()) {
+                this.copyDirSync(srcPath, dstPath);
+            } else {
+                fs.copyFileSync(srcPath, dstPath);
+                // Preserve execute permissions
+                const stat = fs.statSync(srcPath);
+                fs.chmodSync(dstPath, stat.mode);
+            }
+        }
+    }
+
+    async installAll() {
+        fs.mkdirSync(this.appDataDir, { recursive: true });
+
+        // Step 1: Extract bundled venv (has Python + faster-whisper pre-installed)
+        this._progress('venv', 10, 'Setting up Python environment...');
+        const bundledVenv = path.join(this.bundledDir, 'venv');
+        if (fs.existsSync(bundledVenv) && !fs.existsSync(this.getPythonPath())) {
+            try {
+                this.copyDirSync(bundledVenv, this.venvDir);
+                this._progress('venv', 30, 'Python environment ready.');
+            } catch (e) {
+                this._progress('venv', 30, `Venv copy failed: ${e.message}. Trying from bundled Python...`);
+                await this._createVenvFromBundledPython();
+            }
+        } else if (!fs.existsSync(this.getPythonPath())) {
+            await this._createVenvFromBundledPython();
+        } else {
+            this._progress('venv', 30, 'Python environment already exists.');
+        }
+
+        // Step 2: Extract ffmpeg
+        this._progress('ffmpeg', 40, 'Setting up ffmpeg...');
+        const ffmpegDst = path.join(this.appDataDir, 'ffmpeg');
+        const ffmpegExe = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+        const bundledFfmpeg = path.join(this.bundledDir, 'ffmpeg', ffmpegExe);
+        if (!fs.existsSync(path.join(ffmpegDst, ffmpegExe)) && fs.existsSync(bundledFfmpeg)) {
+            fs.mkdirSync(ffmpegDst, { recursive: true });
+            fs.copyFileSync(bundledFfmpeg, path.join(ffmpegDst, ffmpegExe));
+            if (process.platform !== 'win32') {
+                fs.chmodSync(path.join(ffmpegDst, ffmpegExe), 0o755);
+            }
+        }
+        this._progress('ffmpeg', 55, 'ffmpeg ready.');
+
+        // Step 3: Extract Whisper model
+        this._progress('model', 60, 'Setting up speech recognition model...');
+        const modelDst = path.join(this.appDataDir, 'model', 'faster-whisper-base');
+        const bundledModel = path.join(this.bundledDir, 'model', 'faster-whisper-base');
+        if (!fs.existsSync(path.join(modelDst, 'model.bin')) && fs.existsSync(bundledModel)) {
+            this.copyDirSync(bundledModel, modelDst);
+        }
+        this._progress('model', 85, 'Model ready.');
+
+        // Step 4: Verify everything works
+        this._progress('verify', 90, 'Verifying installation...');
+        try {
+            const pythonPath = this.getPythonPath();
+            execSync(`"${pythonPath}" -c "from faster_whisper import WhisperModel; print('OK')"`, 
+                { timeout: 30000, stdio: 'pipe' });
+            this._progress('verify', 100, 'All dependencies verified! Ready to transcribe.');
+        } catch (e) {
+            this._progress('verify', 100, `Warning: Verification failed (${e.message}). Transcription may not work.`);
+        }
+    }
+
+    async _createVenvFromBundledPython() {
+        const bundledPython = this.getBundledPythonPath();
+        if (!fs.existsSync(bundledPython)) {
+            // Last resort: try system python
+            this._progress('venv', 15, 'No bundled Python found. Trying system Python...');
+            const sysPython = process.platform === 'win32' ? 'python' : 'python3';
+            try {
+                execSync(`${sysPython} -m venv "${this.venvDir}"`, { timeout: 60000, stdio: 'pipe' });
+            } catch (e) {
+                throw new Error('No Python available. Please install Python 3.9+ manually.');
+            }
+        } else {
+            execSync(`"${bundledPython}" -m venv "${this.venvDir}"`, { timeout: 60000, stdio: 'pipe' });
+        }
+        
+        // Install faster-whisper
+        this._progress('venv', 20, 'Installing transcription engine...');
+        const pipBin = process.platform === 'win32'
+            ? path.join(this.venvDir, 'Scripts', 'pip.exe')
+            : path.join(this.venvDir, 'bin', 'pip');
+        execSync(`"${pipBin}" install faster-whisper`, { timeout: 300000, stdio: 'pipe' });
+    }
+
+    execAsync(cmd, opts = {}) {
         return new Promise((resolve, reject) => {
-            exec(cmd, { timeout: 30000, ...options }, (error, stdout, stderr) => {
-                if (error) reject(error);
-                else resolve(stdout || stderr);
+            exec(cmd, { timeout: 120000, ...opts }, (err, stdout, stderr) => {
+                if (err) reject(err);
+                else resolve(stdout);
             });
         });
     }
 }
 
-module.exports = { DependencyInstaller };
+module.exports = DependencyInstaller;
