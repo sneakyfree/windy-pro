@@ -1904,6 +1904,7 @@
         selectedModels = new Set(recommendation.recommended);
 
       } catch (err) {
+        console.error('Hardware scan error:', err);
         document.getElementById('scan-subtitle').textContent = 'Scan failed — using defaults';
         document.getElementById('btn-to-account').disabled = false;
       }
@@ -2088,7 +2089,11 @@
       selectPackage('recommended');
     }
 
-    function buildModelList() {
+    async function buildModelList() {
+      // Ensure models are loaded (handles race condition with async hardware scan)
+      if (!allModels.length && !hardwareData) {
+        await runHardwareScan();
+      }
       buildPackages();
       if (recommendation) {
         document.getElementById('windytune-explanation').textContent = recommendation.explanation + ' You can also select individual models below, or download more anytime from Settings → Model Manager.';
