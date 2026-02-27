@@ -1516,20 +1516,16 @@
       <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px; overflow-x:auto;">
         <div style="font-size:17px; font-weight:800; margin-bottom:8px; color:var(--text);">📊 Model Comparison Matrix</div>
         <p style="font-size:16px; color:var(--text-dim); margin-bottom:12px;">Click any row to select or deselect. Green highlight = selected. Your plan determines which models are available.</p>
-        <table id="model-matrix" style="width:100%; border-collapse:collapse; font-size:15px; min-width:750px;">
+        <table id="model-matrix" style="width:100%; border-collapse:collapse; font-size:14px;">
           <thead>
             <tr style="border-bottom:2px solid var(--border); text-align:left;">
-              <th style="padding:8px 4px; color:var(--green); width:24px;">✓</th>
-              <th style="padding:8px 4px; color:var(--green);">Model</th>
-              <th style="padding:8px 4px; color:var(--text-dim);">Type</th>
-              <th style="padding:8px 4px; color:var(--text-dim);">Size</th>
-              <th style="padding:8px 4px; color:var(--text-dim);">Speed</th>
-              <th style="padding:8px 4px; color:var(--text-dim);">RAM</th>
-              <th style="padding:8px 4px; color:var(--text-dim);">GPU?</th>
-              <th style="padding:8px 4px; color:var(--text-dim);">Langs</th>
-              <th style="padding:8px 4px; color:var(--text-dim);">Best For</th>
-              <th style="padding:8px 4px; color:#4ADE80;">Strength</th>
-              <th style="padding:8px 4px; color:#F87171;">Trade-off</th>
+              <th style="padding:10px 6px; color:var(--green); width:28px;">✓</th>
+              <th style="padding:10px 6px; color:var(--green);">Model</th>
+              <th style="padding:10px 6px; color:var(--text-dim);">Size</th>
+              <th style="padding:10px 6px; color:var(--text-dim);">Speed</th>
+              <th style="padding:10px 6px; color:var(--text-dim);">GPU?</th>
+              <th style="padding:10px 6px; color:#4ADE80;">Strength</th>
+              <th style="padding:10px 6px; color:#F87171;">Trade-off</th>
             </tr>
           </thead>
           <tbody id="matrix-body"><!-- JS populates --></tbody>
@@ -2156,17 +2152,13 @@
           refreshMatrix();
         };
         tr.innerHTML = `
-          <td style="padding:7px 4px; color:var(--green); font-weight:800;">${sel ? '✅' : '⬜'}</td>
-          <td style="padding:7px 4px; font-weight:700; color:${sel ? 'var(--green)' : 'var(--text)'};">${m.shortName || m.name}</td>
-          <td style="padding:7px 4px; color:var(--text-dim);">${familyLabel}</td>
-          <td style="padding:7px 4px; color:var(--text);">${sizeTxt}</td>
-          <td style="padding:7px 4px; color:var(--text);">${m.speed}</td>
-          <td style="padding:7px 4px; color:var(--text-dim);">${ramNeeded[m.id] || '?'}</td>
-          <td style="padding:7px 4px; color:${gpuNeeded[m.id]?.startsWith('Yes') ? 'var(--yellow)' : 'var(--green)'};">${gpuNeeded[m.id] || '?'}</td>
-          <td style="padding:7px 4px; color:var(--text-dim);">${langs}</td>
-          <td style="padding:7px 4px; color:var(--text-dim); font-size:15px;">${bestFor[m.id] || ''}</td>
-          <td style="padding:7px 4px; color:#4ADE80; font-size:15px;">${shortStrength[m.id] || ''}</td>
-          <td style="padding:7px 4px; color:#F87171; font-size:15px;">${shortWeakness[m.id] || ''}</td>
+          <td style="padding:9px 6px; color:var(--green); font-weight:800; font-size:16px;">${sel ? '✅' : '⬜'}</td>
+          <td style="padding:9px 6px; font-weight:700; color:${sel ? 'var(--green)' : 'var(--text)'};">${familyLabel} ${m.shortName || m.name}</td>
+          <td style="padding:9px 6px; color:var(--text);">${sizeTxt}</td>
+          <td style="padding:9px 6px; color:var(--text);">${m.speed}</td>
+          <td style="padding:9px 6px; color:${gpuNeeded[m.id]?.startsWith('Yes') ? 'var(--yellow)' : 'var(--green)'};">${gpuNeeded[m.id] || '?'}</td>
+          <td style="padding:9px 6px; color:#4ADE80;">${shortStrength[m.id] || ''}</td>
+          <td style="padding:9px 6px; color:#F87171;">${shortWeakness[m.id] || ''}</td>
         `;
         tbody.appendChild(tr);
       });
