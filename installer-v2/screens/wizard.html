@@ -2035,16 +2035,17 @@
       const ids = packages[tier] || packages.recommended;
       selectedModels = new Set(ids);
 
-      // Update package selector visuals
-      document.querySelectorAll('.pkg-option').forEach(el => {
-        el.style.borderColor = 'var(--border)';
-        el.style.background = 'var(--bg-card)';
+      // Update ALL package cards — reset then highlight selected
+      const pkgIds = { light: 'pkg-light', recommended: 'pkg-recommended', power: 'pkg-power' };
+      Object.entries(pkgIds).forEach(([key, elId]) => {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        if (key === tier) {
+          el.style.cssText = el.style.cssText.replace(/border:[^;]+;/, 'border:2px solid #22C55E;').replace(/background:[^;]+;/, 'background:#162B1F;');
+        } else {
+          el.style.cssText = el.style.cssText.replace(/border:[^;]+;/, 'border:2px solid #1E293B;').replace(/background:[^;]+;/, 'background:#111827;');
+        }
       });
-      const selected = document.getElementById(`pkg-${tier === 'recommended' ? 'recommended' : tier}`);
-      if (selected) {
-        selected.style.borderColor = 'var(--green)';
-        selected.style.background = 'var(--green-dark)';
-      }
 
       filterFamily(document.querySelector('.family-tab.active')?.dataset?.family || 'all');
     }
