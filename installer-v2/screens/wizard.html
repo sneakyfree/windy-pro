@@ -1451,16 +1451,35 @@
         <p id="model-explanation">WindyTune analyzed your hardware. Here's what we recommend.</p>
       </div>
 
-      <!-- WindyTune Recommendation Banner -->
-      <div id="windytune-banner" style="background: var(--green-dark); border: 1px solid var(--green); border-radius: 12px; padding: 16px 18px; margin-bottom: 12px;">
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
-          <span style="font-size:20px;">🌪️</span>
-          <span style="font-size:15px; font-weight:800; color:var(--green);">WindyTune Recommended Package</span>
-          <span style="font-size:11px; color:var(--text-muted); margin-left:auto;" id="windytune-size"></span>
+      <!-- 3-Tier Package Selector -->
+      <div id="package-selector" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px;">
+        <!-- Light Package -->
+        <div class="pkg-option" id="pkg-light" onclick="selectPackage('light')" style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center;">
+          <div style="font-size:20px; margin-bottom:4px;">🍃</div>
+          <div style="font-size:13px; font-weight:800; color:var(--text);">Light</div>
+          <div style="font-size:11px; color:var(--text-dim); margin:4px 0;">1–2 models</div>
+          <div style="font-size:10px; color:var(--text-muted);" id="pkg-light-size">~120 MB</div>
+          <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">Fast install, minimal space</div>
         </div>
-        <p style="font-size:12px; color:var(--text-dim); line-height:1.5;" id="windytune-explanation"></p>
-        <button class="btn btn-primary" style="margin-top:10px; width:100%; padding:10px;" onclick="selectRecommended()">✅ Accept WindyTune Recommendation</button>
+        <!-- Recommended Package -->
+        <div class="pkg-option pkg-selected" id="pkg-recommended" onclick="selectPackage('recommended')" style="background:var(--green-dark); border:2px solid var(--green); border-radius:12px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center; position:relative;">
+          <div style="position:absolute; top:-8px; left:50%; transform:translateX(-50%); background:var(--green); color:var(--bg); font-size:9px; font-weight:800; padding:2px 10px; border-radius:10px;">★ RECOMMENDED</div>
+          <div style="font-size:20px; margin-bottom:4px;">🌪️</div>
+          <div style="font-size:13px; font-weight:800; color:var(--green);">Optimal</div>
+          <div style="font-size:11px; color:var(--text-dim); margin:4px 0;">2–3 models</div>
+          <div style="font-size:10px; color:var(--text-muted);" id="pkg-rec-size">~288 MB</div>
+          <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">Best for your hardware</div>
+        </div>
+        <!-- Power Package -->
+        <div class="pkg-option" id="pkg-power" onclick="selectPackage('power')" style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center;">
+          <div style="font-size:20px; margin-bottom:4px;">⚡</div>
+          <div style="font-size:13px; font-weight:800; color:var(--text);">Power</div>
+          <div style="font-size:11px; color:var(--text-dim); margin:4px 0;">4–5 models</div>
+          <div style="font-size:10px; color:var(--text-muted);" id="pkg-power-size">~800 MB</div>
+          <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">Maximum flexibility</div>
+        </div>
       </div>
+      <p style="font-size:12px; color:var(--text-dim); line-height:1.5; margin-bottom:8px; padding:0 4px;" id="windytune-explanation"></p>
 
       <!-- Education Box -->
       <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:12px;">
@@ -1483,14 +1502,20 @@
         </div>
         <div style="margin-top:10px; font-size:11px; color:var(--text-muted); border-top:1px solid var(--border); padding-top:8px; line-height:1.6;">
           <strong style="color:var(--text-dim);">Frequently Asked Questions:</strong><br>
-          <strong>Can you have too many models?</strong> No! They just take disk space. WindyTune auto-switches between them — you never have to think about it.<br>
-          <strong>Can you have too few?</strong> One model is enough to start. You can always add more later.<br>
-          <strong>Can you install more later?</strong> Yes! Anytime, from Settings → Model Manager.<br>
-          <strong>Can you delete models later?</strong> Yes! Remove any model anytime to free up space.<br>
-          <strong>Do I have to switch models manually?</strong> Never. WindyTune handles it automatically. It reads your CPU load, RAM, battery, even ambient noise — and picks the best model for the moment. <em>Grandma-simple or power-user deep: your choice.</em>
+          <strong>Can I have too many models?</strong> No! They just take disk space. WindyTune auto-switches between them — you never think about it.<br>
+          <strong>Can I have too few?</strong> One model is enough. You can always download more later.<br>
+          <strong>Can I download more models later?</strong> Absolutely! Go to Settings → Model Manager anytime. Browse, download, delete — it's your choice.<br>
+          <strong>Can I change my mind?</strong> Yes! Delete any model, try a different one, mix and match. Come back and experiment as much as you want.<br>
+          <strong>Can I select all 15 models?</strong> If your plan includes them, yes! Power users can download every model and let WindyTune pick the best one moment by moment.<br>
+          <strong>How do power users mix and match?</strong> Below these packages, you'll see every individual model. Select or deselect any combination. Your plan determines which models are available to you.<br>
+          <strong>Do I have to switch models manually?</strong> Never. WindyTune handles it automatically — CPU load, RAM, battery, ambient noise. <em>Grandma-simple or power-user deep: your choice.</em>
         </div>
       </div>
 
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+        <span style="font-size:12px; font-weight:700; color:var(--text-dim);">🔧 Or customize — select individual models:</span>
+        <span style="font-size:10px; color:var(--text-muted);">Click ▼ Details to learn more about each model</span>
+      </div>
       <div class="family-tabs">
         <button class="family-tab active" data-family="all" onclick="filterFamily('all')">All (15)</button>
         <button class="family-tab" data-family="core" onclick="filterFamily('core')">⚡ Core (GPU)</button>
@@ -1959,22 +1984,84 @@
       'lingua-hi':     { pros: ['Hindi + Hinglish code-switching', 'Trained on Indian English accents too'], cons: ['Hindi only', '500 MB'], bestFor: 'Hindi speakers, Indian professionals, Hinglish environments', ramNeeded: '6 GB', gpuNeeded: 'None' },
     };
 
-    function selectRecommended() {
-      if (!recommendation) return;
-      selectedModels = new Set(recommendation.recommended);
+    // 3-tier packages based on hardware + always include English-optimized model
+    let packages = { light: [], recommended: [], power: [] };
+
+    function buildPackages() {
+      if (!recommendation || !allModels.length) return;
+      const rec = recommendation.recommended;
+      const opt = recommendation.optional || [];
+      const hasGPU = hardwareData?.gpu?.nvidia || hardwareData?.gpu?.appleSilicon;
+
+      // Always try to include our English-optimized model (faster-whisper replacement)
+      const englishModel = hasGPU ? 'core-pro' : 'edge-pro';
+      const englishAvail = allModels.find(m => m.id === englishModel);
+
+      // LIGHT: 1-2 models — smallest viable set
+      packages.light = rec.slice(0, 1);
+      if (packages.light.length < 2 && rec.length > 1) packages.light.push(rec[1]);
+
+      // RECOMMENDED: 2-3 models — optimal set + English model if not already included
+      packages.recommended = [...rec];
+      if (englishAvail && !packages.recommended.includes(englishModel)) {
+        packages.recommended.push(englishModel);
+      }
+      // Cap at 3-4
+      if (packages.recommended.length > 4) packages.recommended = packages.recommended.slice(0, 4);
+
+      // POWER: 4-5 models — recommended + optional picks
+      packages.power = [...new Set([...packages.recommended, ...opt])];
+      if (packages.power.length > 6) packages.power = packages.power.slice(0, 6);
+      if (packages.power.length < 4 && allModels.length > 4) {
+        // Add some more from catalog
+        for (const m of allModels) {
+          if (!packages.power.includes(m.id) && packages.power.length < 5) {
+            packages.power.push(m.id);
+          }
+        }
+      }
+
+      // Update size labels
+      const fmtSize = (ids) => {
+        const mb = ids.reduce((s, id) => s + (allModels.find(m => m.id === id)?.sizeMB || 0), 0);
+        return mb < 1024 ? `~${mb} MB` : `~${(mb/1024).toFixed(1)} GB`;
+      };
+      document.getElementById('pkg-light-size').textContent = fmtSize(packages.light);
+      document.getElementById('pkg-rec-size').textContent = fmtSize(packages.recommended);
+      document.getElementById('pkg-power-size').textContent = fmtSize(packages.power);
+    }
+
+    function selectPackage(tier) {
+      const ids = packages[tier] || packages.recommended;
+      selectedModels = new Set(ids);
+
+      // Update package selector visuals
+      document.querySelectorAll('.pkg-option').forEach(el => {
+        el.style.borderColor = 'var(--border)';
+        el.style.background = 'var(--bg-card)';
+      });
+      const selected = document.getElementById(`pkg-${tier === 'recommended' ? 'recommended' : tier}`);
+      if (selected) {
+        selected.style.borderColor = 'var(--green)';
+        selected.style.background = 'var(--green-dark)';
+      }
+
       filterFamily(document.querySelector('.family-tab.active')?.dataset?.family || 'all');
     }
 
+    function selectRecommended() {
+      selectPackage('recommended');
+    }
+
     function buildModelList() {
-      // Populate WindyTune banner
+      buildPackages();
+      // Populate explanation
       if (recommendation) {
-        const recSize = recommendation.recommended.reduce((s, id) => {
-          const m = allModels.find(x => x.id === id);
-          return s + (m?.sizeMB || 0);
-        }, 0);
-        const sizeTxt = recSize < 1024 ? `${recSize} MB` : `${(recSize/1024).toFixed(1)} GB`;
-        document.getElementById('windytune-size').textContent = `${recommendation.recommended.length} models · ${sizeTxt}`;
-        document.getElementById('windytune-explanation').textContent = recommendation.explanation;
+        document.getElementById('windytune-explanation').textContent = recommendation.explanation + ' You can also select individual models below, or download more anytime from Settings → Model Manager.';
+      }
+      // Default to recommended package
+      if (selectedModels.size === 0 || (recommendation && selectedModels.size === recommendation.recommended.length)) {
+        selectedModels = new Set(packages.recommended);
       }
       filterFamily('all');
     }
