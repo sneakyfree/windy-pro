@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Windy Pro — Installation Wizard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0A0E1A;
+    --bg-card: #111827;
+    --bg-hover: #1A2332;
+    --border: #1E293B;
+    --text: #E2E8F0;
+    --text-dim: #94A3B8;
+    --text-muted: #64748B;
+    --green: #22C55E;
+    --green-glow: rgba(34, 197, 94, 0.3);
+    --green-dark: #162B1F;
+    --blue: #3B82F6;
+    --purple: #A855F7;
+    --yellow: #F59E0B;
+    --red: #EF4444;
+    --tornado: #22C55E;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ─── PROGRESS TRACK (top) ─── */
+  .progress-track {
+    display: flex; gap: 4px; padding: 16px 28px 0; flex-shrink: 0;
+  }
+  .progress-seg {
+    flex: 1; height: 3px; border-radius: 2px; background: var(--border);
+    transition: background 0.5s;
+  }
+  .progress-seg.done { background: var(--green); }
+  .progress-seg.active { background: var(--green); opacity: 0.6; animation: pulse-seg 2s infinite; }
+  @keyframes pulse-seg { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+  .step-labels {
+    display: flex; padding: 6px 28px 12px; gap: 4px; flex-shrink: 0;
+  }
+  .step-label {
+    flex: 1; font-size: 10px; color: var(--text-muted); text-align: center;
+    transition: color 0.3s;
+  }
+  .step-label.active { color: var(--green); font-weight: 600; }
+  .step-label.done { color: var(--text-dim); }
+
+  /* ─── WIZARD CONTAINER ─── */
+  .wizard { flex: 1; display: flex; flex-direction: column; padding: 0 28px 20px; overflow: hidden; }
+  .screen { display: none; flex: 1; flex-direction: column; min-height: 0; }
+  .screen.active { display: flex; }
+
+  /* ─── BUTTONS ─── */
+  .btn-row { display: flex; gap: 10px; justify-content: flex-end; flex-shrink: 0; padding-top: 16px; border-top: 1px solid var(--border); margin-top: auto; }
+  .btn {
+    padding: 11px 28px; border-radius: 10px; border: none;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    font-family: inherit; transition: all 0.2s;
+  }
+  .btn-primary { background: var(--green); color: var(--bg); }
+  .btn-primary:hover { background: #16A34A; transform: translateY(-1px); box-shadow: 0 4px 20px var(--green-glow); }
+  .btn-primary:disabled { background: #374151; color: #6B7280; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--bg-hover); color: var(--text); }
+
+  /* ─── TORNADO ANIMATION ─── */
+  .tornado-container { position: relative; width: 80px; height: 80px; margin: 0 auto 16px; }
+  .tornado {
+    font-size: 64px; display: block; text-align: center; line-height: 80px;
+    animation: tornado-spin 3s linear infinite;
+  }
+  @keyframes tornado-spin {
+    0% { transform: rotate(0deg) scale(1); }
+    25% { transform: rotate(90deg) scale(1.05); }
+    50% { transform: rotate(180deg) scale(1); }
+    75% { transform: rotate(270deg) scale(0.95); }
+    100% { transform: rotate(360deg) scale(1); }
+  }
+  .tornado-glow {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: 100px; height: 100px; border-radius: 50%;
+    background: radial-gradient(circle, var(--green-glow) 0%, transparent 70%);
+    animation: glow-pulse 2s ease-in-out infinite;
+  }
+  @keyframes glow-pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+
+  /* ─── SCREEN 0: WELCOME ─── */
+  .welcome-hero { text-align: center; padding-top: 12px; }
+  .welcome-hero h1 { font-size: 28px; font-weight: 900; margin-bottom: 4px; }
+  .welcome-hero h1 span { color: var(--green); }
+  .welcome-subtitle { font-size: 15px; color: var(--text-dim); margin-bottom: 24px; font-style: italic; }
+  .welcome-features { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .wf-card {
+    background: var(--bg-card); border-radius: 10px; padding: 14px;
+    border: 1px solid var(--border); transition: border-color 0.2s;
+  }
+  .wf-card:hover { border-color: var(--green); }
+  .wf-card-emoji { font-size: 24px; margin-bottom: 6px; }
+  .wf-card-title { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+  .wf-card-desc { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+  .welcome-quote { text-align: center; font-size: 13px; color: var(--text-muted); font-style: italic; margin-top: 8px; }
+
+  /* ─── SCREEN 1: HARDWARE SCAN ─── */
+  .scan-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;
+  }
+  .scan-card {
+    background: var(--bg-card); border-radius: 10px; padding: 16px;
+    border: 1px solid var(--border);
+  }
+  .scan-card-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .scan-card-value { font-size: 16px; font-weight: 700; }
+  .scan-card-value.good { color: var(--green); }
+  .scan-card-value.warn { color: var(--yellow); }
+  .scan-card-value.scanning { color: var(--text-muted); animation: pulse-text 1.5s infinite; }
+  @keyframes pulse-text { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+  .scan-card-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  .scan-summary {
+    background: var(--bg-card); border-radius: 10px; padding: 16px;
+    border: 1px solid var(--green); margin-top: auto;
+  }
+  .scan-summary-title { font-size: 14px; font-weight: 700; color: var(--green); margin-bottom: 4px; }
+  .scan-summary-text { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+
+  /* ─── SCREEN 2: ACCOUNT ─── */
+  .account-section { flex: 1; display: flex; flex-direction: column; gap: 16px; }
+  .account-option {
+    background: var(--bg-card); border-radius: 12px; padding: 20px;
+    border: 2px solid var(--border); cursor: pointer; transition: all 0.2s;
+  }
+  .account-option:hover { border-color: var(--green); background: var(--bg-hover); }
+  .account-option.selected { border-color: var(--green); background: var(--green-dark); }
+  .account-option h3 { font-size: 16px; margin-bottom: 4px; }
+  .account-option p { font-size: 13px; color: var(--text-dim); }
+  .account-form { display: none; margin-top: 16px; }
+  .account-form.visible { display: flex; flex-direction: column; gap: 10px; }
+  .input-field {
+    width: 100%; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit;
+    outline: none; transition: border-color 0.2s;
+  }
+  .input-field:focus { border-color: var(--green); }
+  .input-field::placeholder { color: var(--text-muted); }
+
+  /* ─── SCREEN 3: MODEL PICKER ─── */
+  .model-header { margin-bottom: 12px; }
+  .model-header h1 { font-size: 20px; margin-bottom: 4px; }
+  .model-header p { font-size: 13px; color: var(--text-dim); }
+
+  .family-tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-shrink: 0; }
+  .family-tab {
+    padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg-card); font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; color: var(--text-dim);
+    font-family: inherit;
+  }
+  .family-tab.active { border-color: var(--green); color: var(--green); background: var(--green-dark); }
+  .family-tab:hover { border-color: var(--text-muted); }
+
+  .model-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; flex: 1; min-height: 0; padding-right: 4px; }
+
+  .model-card {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg-card); border-radius: 10px; padding: 12px 14px;
+    border: 2px solid transparent; cursor: pointer; transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .model-card:hover { border-color: var(--border); background: var(--bg-hover); }
+  .model-card.selected { border-color: var(--green); background: var(--green-dark); }
+  .model-card.recommended { border-color: rgba(34, 197, 94, 0.3); }
+  .model-card.locked { opacity: 0.4; cursor: not-allowed; }
+
+  .model-chk {
+    width: 20px; height: 20px; border-radius: 5px; border: 2px solid var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800; color: var(--bg); transition: all 0.2s; flex-shrink: 0;
+  }
+  .model-card.selected .model-chk { background: var(--green); border-color: var(--green); }
+
+  .model-info { flex: 1; min-width: 0; }
+  .model-name { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .model-badge { font-size: 9px; padding: 2px 8px; border-radius: 20px; background: var(--green-dark); color: var(--green); font-weight: 600; }
+  .model-badge.flagship { background: #2D1B4E; color: var(--purple); }
+  .model-badge.popular { background: #1E3A2F; color: #4ADE80; }
+  .model-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  .model-meta { display: flex; gap: 12px; flex-shrink: 0; }
+  .model-meta-item { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+  .model-meta-item .val { font-weight: 600; color: var(--text-dim); }
+
+  .model-summary-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; flex-shrink: 0; font-size: 13px; color: var(--text-dim);
+  }
+  .model-summary-bar .total { color: var(--green); font-weight: 700; }
+
+  /* ─── SCREEN 4: DOWNLOAD & INSTALL (THE BRAND EXPERIENCE) ─── */
+  .install-screen { flex: 1; display: flex; flex-direction: column; }
+
+  .install-progress-section { margin-bottom: 16px; }
+  .install-overall-bar {
+    width: 100%; height: 8px; border-radius: 4px; background: var(--border);
+    overflow: hidden; position: relative;
+  }
+  .install-overall-fill {
+    height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, var(--green), #4ADE80, var(--green));
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+    transition: width 0.5s ease;
+    width: 0%;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  .install-percent-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 8px;
+  }
+  .install-percent { font-size: 28px; font-weight: 900; color: var(--green); }
+  .install-eta { font-size: 13px; color: var(--text-muted); }
+
+  .install-status-text { font-size: 14px; color: var(--text); margin-bottom: 4px; font-weight: 600; }
+  .install-detail-text { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+  .install-fun-text { font-size: 12px; color: var(--text-muted); font-style: italic; }
+
+  /* Model download list */
+  .download-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; max-height: 130px; overflow-y: auto; }
+  .dl-item { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 6px 10px; border-radius: 6px; background: var(--bg-card); }
+  .dl-item-icon { font-size: 14px; width: 20px; text-align: center; }
+  .dl-item-name { font-weight: 600; min-width: 140px; }
+  .dl-item-size { color: var(--text-muted); min-width: 60px; }
+  .dl-item-bar { flex: 1; height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+  .dl-item-fill { height: 100%; border-radius: 2px; background: var(--green); transition: width 0.3s; }
+  .dl-item-status { color: var(--text-muted); min-width: 50px; text-align: right; }
+  .dl-item.done .dl-item-icon { color: var(--green); }
+  .dl-item.active { background: var(--bg-hover); }
+
+  /* Feature card (bottom section during download) */
+  .brand-card {
+    background: var(--bg-card); border-radius: 12px; padding: 18px 20px;
+    border: 1px solid var(--border); margin-top: auto;
+    transition: opacity 0.5s ease; min-height: 120px;
+  }
+  .brand-card-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .brand-card-body { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+  .brand-card-dots { display: flex; justify-content: center; gap: 6px; margin-top: 10px; }
+  .brand-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: background 0.3s; }
+  .brand-dot.active { background: var(--green); }
+
+  /* Moniker banner (rotates above the feature card) */
+  .moniker-banner {
+    text-align: center; padding: 12px; margin-bottom: 8px;
+    transition: opacity 0.5s ease;
+  }
+  .moniker-emoji { font-size: 28px; margin-bottom: 4px; }
+  .moniker-text { font-size: 16px; font-weight: 800; color: var(--text); }
+  .moniker-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  /* ─── SCREEN 5: COMPLETE ─── */
+  .complete-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .complete-tornado { font-size: 72px; margin-bottom: 16px; }
+  .complete-strobe {
+    width: 24px; height: 24px; border-radius: 50%; background: var(--green);
+    margin: 0 auto 16px; animation: strobe 1.5s ease-in-out infinite;
+  }
+  @keyframes strobe { 0%,100% { opacity: 0.3; box-shadow: 0 0 20px var(--green-glow); } 50% { opacity: 1; box-shadow: 0 0 40px var(--green-glow); } }
+  .complete-title { font-size: 26px; font-weight: 900; color: var(--green); margin-bottom: 8px; }
+  .complete-models { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; }
+  .complete-tag { background: var(--green-dark); color: var(--green); border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 600; }
+  .complete-desc { font-size: 14px; color: var(--text-dim); max-width: 420px; line-height: 1.6; margin-bottom: 20px; }
+
+  .shortcuts-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 420px;
+    margin-bottom: 16px;
+  }
+  .shortcut-item {
+    background: var(--bg-card); border-radius: 8px; padding: 10px 12px;
+    text-align: left; border: 1px solid var(--border);
+  }
+  .shortcut-keys { font-size: 12px; font-weight: 700; color: var(--green); font-family: 'SF Mono', 'Fira Code', monospace; }
+  .shortcut-action { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  .complete-quote { font-size: 13px; color: var(--text-muted); font-style: italic; margin-top: 8px; }
+
+  /* ─── SCROLLBAR ─── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<!-- Progress Track -->
+<div class="progress-track">
+  <div class="progress-seg active" id="seg-0"></div>
+  <div class="progress-seg" id="seg-1"></div>
+  <div class="progress-seg" id="seg-2"></div>
+  <div class="progress-seg" id="seg-3"></div>
+  <div class="progress-seg" id="seg-4"></div>
+  <div class="progress-seg" id="seg-5"></div>
+</div>
+<div class="step-labels">
+  <span class="step-label active" id="lbl-0">Welcome</span>
+  <span class="step-label" id="lbl-1">Hardware</span>
+  <span class="step-label" id="lbl-2">Account</span>
+  <span class="step-label" id="lbl-3">Models</span>
+  <span class="step-label" id="lbl-4">Install</span>
+  <span class="step-label" id="lbl-5">Ready!</span>
+</div>
+
+<div class="wizard">
+
+  <!-- ═══ SCREEN 0: WELCOME ═══ -->
+  <div class="screen active" id="screen-0">
+    <div class="welcome-hero">
+      <div class="tornado-container">
+        <div class="tornado-glow"></div>
+        <span class="tornado">🌪️</span>
+      </div>
+      <h1>Welcome to <span>Windy Pro</span></h1>
+      <p class="welcome-subtitle">"And God said, 'Let there be light.' And there was Windy Pro."</p>
+    </div>
+
+    <div class="welcome-features">
+      <div class="wf-card">
+        <div class="wf-card-emoji">🟢</div>
+        <div class="wf-card-title">The Green Strobe</div>
+        <div class="wf-card-desc">If it's green, you're recording. Always. No guessing. No anxiety.</div>
+      </div>
+      <div class="wf-card">
+        <div class="wf-card-emoji">🔒</div>
+        <div class="wf-card-title">100% Private</div>
+        <div class="wf-card-desc">Your voice never leaves your device. Zero telemetry. Zero data collection.</div>
+      </div>
+      <div class="wf-card">
+        <div class="wf-card-emoji">🌪️</div>
+        <div class="wf-card-title">15 Models</div>
+        <div class="wf-card-desc">Proprietary models developed in our lab. From 42 MB to 2.9 GB.</div>
+      </div>
+      <div class="wf-card">
+        <div class="wf-card-emoji">✈️</div>
+        <div class="wf-card-title">No Internet, No Problem</div>
+        <div class="wf-card-desc">Works at 35,000 feet, zero bars, airplane mode. Always.</div>
+      </div>
+    </div>
+
+    <p class="welcome-quote">"In the beginning was the Word." — Your voice creates worlds.</p>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="goToScreen(1)">Get Started 🌪️</button>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN 1: HARDWARE SCAN ═══ -->
+  <div class="screen" id="screen-1">
+    <h1 style="font-size:20px; margin-bottom:4px;">🔍 Scanning Your Machine</h1>
+    <p style="font-size:13px; color:var(--text-dim); margin-bottom:16px;" id="scan-subtitle">We're analyzing your hardware to find the perfect configuration...</p>
+
+    <div class="scan-grid">
+      <div class="scan-card">
+        <div class="scan-card-label">🖥️ Processor</div>
+        <div class="scan-card-value scanning" id="scan-cpu">Detecting...</div>
+        <div class="scan-card-sub" id="scan-cpu-sub"></div>
+      </div>
+      <div class="scan-card">
+        <div class="scan-card-label">🧠 Memory</div>
+        <div class="scan-card-value scanning" id="scan-ram">Detecting...</div>
+        <div class="scan-card-sub" id="scan-ram-sub"></div>
+      </div>
+      <div class="scan-card">
+        <div class="scan-card-label">⚡ Graphics</div>
+        <div class="scan-card-value scanning" id="scan-gpu">Detecting...</div>
+        <div class="scan-card-sub" id="scan-gpu-sub"></div>
+      </div>
+      <div class="scan-card">
+        <div class="scan-card-label">💾 Storage</div>
+        <div class="scan-card-value scanning" id="scan-disk">Detecting...</div>
+        <div class="scan-card-sub" id="scan-disk-sub"></div>
+      </div>
+      <div class="scan-card">
+        <div class="scan-card-label">📡 Network Speed</div>
+        <div class="scan-card-value scanning" id="scan-net">Measuring...</div>
+        <div class="scan-card-sub" id="scan-net-sub"></div>
+      </div>
+      <div class="scan-card">
+        <div class="scan-card-label">🔋 Power</div>
+        <div class="scan-card-value scanning" id="scan-battery">Checking...</div>
+        <div class="scan-card-sub" id="scan-battery-sub"></div>
+      </div>
+    </div>
+
+    <div class="scan-summary" id="scan-summary" style="display:none">
+      <div class="scan-summary-title" id="scan-summary-title">✅ Hardware Analysis Complete</div>
+      <div class="scan-summary-text" id="scan-summary-text"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="goToScreen(0)">← Back</button>
+      <button class="btn btn-primary" id="btn-to-account" disabled onclick="goToScreen(2)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN 2: ACCOUNT ═══ -->
+  <div class="screen" id="screen-2">
+    <h1 style="font-size:20px; margin-bottom:4px;">🔑 Your Windy Pro Account</h1>
+    <p style="font-size:13px; color:var(--text-dim); margin-bottom:16px;">Sign in to activate your models. One account, up to 5 devices.</p>
+
+    <div class="account-section">
+      <div class="account-option" id="opt-login" onclick="selectAccountOption('login')">
+        <h3>🔓 Sign In</h3>
+        <p>Already have an account? Welcome back.</p>
+        <div class="account-form" id="form-login">
+          <input class="input-field" type="email" id="login-email" placeholder="Email address">
+          <input class="input-field" type="password" id="login-password" placeholder="Password">
+        </div>
+      </div>
+
+      <div class="account-option" id="opt-register" onclick="selectAccountOption('register')">
+        <h3>✨ Create Account</h3>
+        <p>New to Windy Pro? Start your journey.</p>
+        <div class="account-form" id="form-register">
+          <input class="input-field" type="text" id="reg-name" placeholder="Full name">
+          <input class="input-field" type="email" id="reg-email" placeholder="Email address">
+          <input class="input-field" type="password" id="reg-password" placeholder="Create password">
+        </div>
+      </div>
+
+      <div class="account-option" id="opt-skip" onclick="selectAccountOption('skip')">
+        <h3>⏭️ Try Free Tier</h3>
+        <p>Get started with 3 free models. Create an account later.</p>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="goToScreen(1)">← Back</button>
+      <button class="btn btn-primary" id="btn-to-models" onclick="goToScreen(3)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN 3: MODEL PICKER ═══ -->
+  <div class="screen" id="screen-3">
+    <div class="model-header">
+      <h1>🌪️ Choose Your Models</h1>
+      <p id="model-explanation">WindyTune analyzed your hardware. Here's what we recommend.</p>
+    </div>
+
+    <div class="family-tabs">
+      <button class="family-tab active" data-family="all" onclick="filterFamily('all')">All (15)</button>
+      <button class="family-tab" data-family="core" onclick="filterFamily('core')">⚡ Core</button>
+      <button class="family-tab" data-family="edge" onclick="filterFamily('edge')">🛡️ Edge</button>
+      <button class="family-tab" data-family="lingua" onclick="filterFamily('lingua')">🌍 Lingua</button>
+    </div>
+
+    <div class="model-list" id="model-list">
+      <!-- Populated by JS -->
+    </div>
+
+    <div class="model-summary-bar">
+      <span id="model-count">0 models selected</span>
+      <span>Total: <span class="total" id="model-total-size">0 MB</span> · <span id="model-dl-time">~0 min</span></span>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="goToScreen(2)">← Back</button>
+      <button class="btn btn-primary" id="btn-install" disabled onclick="startInstall()">Install Selected →</button>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN 4: DOWNLOAD & INSTALL ═══ -->
+  <div class="screen" id="screen-4">
+    <div class="install-screen">
+      <!-- Overall progress -->
+      <div class="install-progress-section">
+        <div class="install-overall-bar"><div class="install-overall-fill" id="install-fill"></div></div>
+        <div class="install-percent-row">
+          <div class="install-percent" id="install-percent">0%</div>
+          <div class="install-eta" id="install-eta"></div>
+        </div>
+      </div>
+
+      <!-- Current action -->
+      <div class="install-status-text" id="install-status">Preparing installation...</div>
+      <div class="install-detail-text" id="install-detail">We're about to set up your voice-to-text engine, download your selected models, and configure everything for your hardware.</div>
+      <div class="install-fun-text" id="install-fun"></div>
+
+      <!-- Per-model download list -->
+      <div class="download-list" id="download-list"></div>
+
+      <!-- Moniker banner (rotates) -->
+      <div class="moniker-banner" id="moniker-banner">
+        <div class="moniker-emoji" id="moniker-emoji">🌪️</div>
+        <div class="moniker-text" id="moniker-text">No Internet, No Problem.</div>
+        <div class="moniker-sub" id="moniker-sub">Your voice never leaves your device.</div>
+      </div>
+
+      <!-- Feature education card (rotates) -->
+      <div class="brand-card" id="brand-card">
+        <div class="brand-card-title" id="brand-title">🌪️ WindyTune — Your Personal AI DJ</div>
+        <div class="brand-card-body" id="brand-body">WindyTune monitors your hardware every 30 seconds and automatically selects the optimal model. You never notice. You just keep talking.</div>
+        <div class="brand-card-dots" id="brand-dots"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SCREEN 5: COMPLETE ═══ -->
+  <div class="screen" id="screen-5">
+    <div class="complete-screen">
+      <div class="complete-strobe"></div>
+      <div class="complete-title">You're Ready! 🌪️</div>
+      <div class="complete-models" id="complete-models"></div>
+      <div class="complete-desc">
+        The Green Strobe is waiting. Your voice creates worlds.<br>
+        Here are your shortcuts:
+      </div>
+
+      <div class="shortcuts-grid" id="shortcuts-grid">
+        <div class="shortcut-item">
+          <div class="shortcut-keys" id="key-record">Ctrl+Shift+Space</div>
+          <div class="shortcut-action">🎙️ Start / Stop Recording</div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys" id="key-paste">Ctrl+Shift+V</div>
+          <div class="shortcut-action">📋 Paste Transcript</div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys" id="key-show">Ctrl+Shift+W</div>
+          <div class="shortcut-action">👁️ Show / Hide</div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys" id="key-model">Ctrl+Shift+M</div>
+          <div class="shortcut-action">🔄 Switch Model</div>
+        </div>
+      </div>
+
+      <p class="complete-quote">"And God said, 'Let there be light.' And there was Windy Pro." 🌪️</p>
+
+      <div class="btn-row" style="border-top:none; justify-content:center;">
+        <button class="btn btn-primary" style="padding:14px 40px; font-size:16px;" onclick="launchApp()">Launch Windy Pro 🎙️</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// WINDY PRO v2.0 INSTALLATION WIZARD — CLIENT-SIDE LOGIC
+// ══════════════════════════════════════════════════════════════════════════════
+
+let currentScreen = 0;
+let hardwareData = null;
+let recommendation = null;
+let allModels = [];
+let selectedModels = new Set();
+let accountMode = 'skip';
+let brandRotationInterval = null;
+let monikerRotationInterval = null;
+let currentBrandIndex = 0;
+let currentMonikerIndex = 0;
+
+// ─── Brand content (injected from core/brand-content.js via preload) ───
+const MONIKERS = [
+  { emoji: '🌪️', text: 'No Internet, No Problem.', sub: 'Your voice never leaves your device.' },
+  { emoji: '🟢', text: 'The Green Strobe Never Lies.', sub: "If it's green, you're recording. Always." },
+  { emoji: '🔒', text: 'Stay Local. Stay Private.', sub: "We don't upload your voice. Period." },
+  { emoji: '💊', text: 'Get Voice-Pilled.', sub: "Once you try local voice-to-text, you can't go back." },
+  { emoji: '🐕', text: '"WindyPro make me go MoboLoco!"', sub: '42 MB model. Smaller than most selfies.' },
+  { emoji: '💰', text: 'Pay Once. Use Forever.', sub: 'No subscription. No monthly fees. Yours for life.' },
+  { emoji: '🧬', text: 'Talk Today. Live Forever.', sub: 'Build your voice clone dataset while you work.' },
+  { emoji: '⌨️', text: 'Never Touch a Keyboard Again.', sub: 'Dictate everything. Paste anywhere.' },
+  { emoji: '🌍', text: '99 Languages. Zero Internet.', sub: 'From Arabic to Yoruba — all local.' },
+  { emoji: '✝️', text: 'By the Words of His Mouth...', sub: 'The Heavens Were Created.' },
+  { emoji: '🎤', text: 'It Learns Your Voice.', sub: 'After 2 hours, it knows you.' },
+  { emoji: '✈️', text: 'Airplane Mode? No Problem.', sub: '35,000 feet. Perfect transcription.' },
+  { emoji: '📱', text: 'One Download. A Partner for Life.', sub: '15 models. One mission. Your words, perfectly.' }
+];
+
+const FEATURE_CARDS = [
+  { title: '🌪️ WindyTune — Your Personal AI DJ', body: 'WindyTune monitors your hardware every 30 seconds — CPU temp, available RAM, GPU load, battery level. If your laptop throttles, it switches to a lighter model seamlessly. Plug into power? Automatic upgrade. You never notice.' },
+  { title: '🧬 Soul File — Your Digital Legacy', body: "Every time you use Windy Pro, you're building a dataset of your voice — pitch, timbre, rhythm, accent, emotional range. After 50 hours: studio-grade voice clone ready. After 200 hours: full digital twin. A thousand years from now, your descendants hear YOUR voice." },
+  { title: '🌍 Windy Translate — The Love Story', body: "Paris. Evening. A café. He's American. She's French. He holds up his phone and speaks English. She reads French. She speaks French. He reads English. No internet. No cloud. Just two people connecting in any language." },
+  { title: '☁️ WindyPro Cloud — Your Privacy, Your Storage', body: "Your privacy is paramount! We never use your data for anything. Period. Free: 5 GB. Starter: 50 GB for $2/mo. Builder: 500 GB for $8/mo. Unlimited: $15/mo. Store everything — documents, photos, files. Replace Dropbox with something that respects you." },
+  { title: '🎙️ Voice Fingerprinting', body: "After 5 minutes, Windy Pro creates a mathematical fingerprint of your voice. After 2 hours, it can pick YOUR words out of a crowded party with music blaring. Your voice. In any crowd. Crystal clear." },
+  { title: '📹 Build Your AI Avatar', body: "Turn on video archiving and your camera captures your face, expressions, mannerisms. Combined with your voice data, this becomes the foundation for a digital avatar twin. 5 hours: basic profile. 50 hours: studio-grade. ♾️: Your legacy, preserved forever." },
+  { title: '🔒 Truly Private', body: "Every competitor sends your voice to the cloud. They 'promise' it's private. We don't promise — we engineered it. Your words never leave your device. Zero telemetry. Zero data collection. Even our cloud mode is end-to-end encrypted." },
+  { title: '💎 15 Proprietary Models', body: 'Developed in our lab. Fine-tuned by our engineers on dedicated GPU hardware. Not available anywhere else. Every model is encrypted, fingerprinted to your account, and continually refined. These are OUR models.' },
+  { title: '🐕 MoboLoco — Go Local on Mobile', body: "42 megabytes. That's our smallest model. Smaller than most selfies. Install it on your phone and forget it. It's always there. No internet required. The Green Strobe never lies — even on your phone." },
+  { title: '📊 Your Soul File Journey', body: "5 hours → Basic voice profile. 20 hours → Good clone quality. 50 hours → Excellent, studio-grade. 200 hours → Full digital twin. ♾️ → Your legacy, preserved forever. Some people download Windy Pro just for this." },
+  { title: '💳 Pricing That Respects You', body: "Free to start. Plus: $4.99/mo. Pro: $9.99/mo. Pro Max: $19.99/mo with Translate. Or pay once: Lifetime $149, Lifetime+ $249. Translate add-on: $7.99/mo. Your choice. Your terms. No tricks." },
+  { title: '🔐 Model Security', body: "Every model is encrypted in our proprietary .wpr format. Fingerprinted to your account. Steganographically watermarked. If anyone tries to steal our models, we trace it to the exact account. Our Terms of Service are very clear." },
+  { title: '🐧 Linux? We Love Linux.', body: "Windows, macOS, AND Linux. Full feature parity. No compromises. No 'coming soon.' Linux users are loyal, vocal, and deserve great software. We're proud to have you." }
+];
+
+const FUN_MESSAGES = [
+  'Tuning the tornado...',
+  'Calibrating the Green Strobe...',
+  'Warming up the voice engine...',
+  'Building your private voice fortress...',
+  'Preparing to never need internet again...',
+  'Setting up your keyboard retirement plan...',
+  'Activating MoboLoco mode... 🐕',
+  'Preparing the Soul File vault...',
+  'Loading 99 languages...',
+  'Almost ready to get you voice-pilled... 💊',
+  "You'll be separating the heavens and earth in no time...",
+  'Parting the Red Sea of bad transcription...',
+  'Let there be voice-to-text... ✨',
+  "You'll be moving mountains with your voice soon..."
+];
+
+// ─── NAVIGATION ───
+function goToScreen(n) {
+  document.querySelectorAll('.screen').forEach((s, i) => s.classList.toggle('active', i === n));
+  document.querySelectorAll('.progress-seg').forEach((s, i) => {
+    s.classList.toggle('done', i < n);
+    s.classList.toggle('active', i === n);
+  });
+  document.querySelectorAll('.step-label').forEach((s, i) => {
+    s.classList.toggle('done', i < n);
+    s.classList.toggle('active', i === n);
+  });
+  currentScreen = n;
+
+  if (n === 1 && !hardwareData) runHardwareScan();
+  if (n === 3) buildModelList();
+  if (n === 4) startBrandRotations();
+  if (n !== 4) stopBrandRotations();
+}
+
+// ─── SCREEN 1: HARDWARE SCAN ───
+async function runHardwareScan() {
+  try {
+    const result = await window.wizardAPI.scanHardware();
+    hardwareData = result.hardware;
+    recommendation = result.recommendation;
+    allModels = result.models;
+
+    const hw = hardwareData;
+
+    // CPU
+    const cpuEl = document.getElementById('scan-cpu');
+    cpuEl.textContent = hw.cpu.model.split(' ').slice(0, 5).join(' ');
+    cpuEl.className = 'scan-card-value good';
+    document.getElementById('scan-cpu-sub').textContent = `${hw.cpu.cores} cores · ${hw.cpu.arch}`;
+
+    // RAM
+    const ramEl = document.getElementById('scan-ram');
+    ramEl.textContent = `${hw.ram.totalGB} GB`;
+    ramEl.className = `scan-card-value ${hw.ram.totalGB >= 8 ? 'good' : 'warn'}`;
+    document.getElementById('scan-ram-sub').textContent = `${hw.ram.freeGB} GB available right now`;
+
+    // GPU
+    const gpuEl = document.getElementById('scan-gpu');
+    gpuEl.textContent = hw.gpu.name;
+    gpuEl.className = `scan-card-value ${hw.gpu.type !== 'none' ? 'good' : 'warn'}`;
+    document.getElementById('scan-gpu-sub').textContent = hw.gpu.vramGB > 0 ? `${hw.gpu.vramGB} GB VRAM` : 'CPU inference mode';
+
+    // Disk
+    const diskEl = document.getElementById('scan-disk');
+    diskEl.textContent = `${hw.disk.freeGB} GB free`;
+    diskEl.className = `scan-card-value ${hw.disk.freeGB >= 10 ? 'good' : 'warn'}`;
+
+    // Network
+    const netEl = document.getElementById('scan-net');
+    const speed = hw.network.speedMBps;
+    const q = hw.network.quality;
+    netEl.textContent = speed > 0 ? `${speed} MB/s` : 'Offline';
+    netEl.className = `scan-card-value ${q === 'fast' || q === 'good' ? 'good' : 'warn'}`;
+    document.getElementById('scan-net-sub').textContent =
+      q === 'fast' ? 'Fast connection 🚀' :
+      q === 'good' ? 'Good connection' :
+      q === 'slow' ? 'Slower connection — downloads will take longer' :
+      'Very slow or offline';
+
+    // Battery
+    const batEl = document.getElementById('scan-battery');
+    if (hw.battery.hasBattery) {
+      batEl.textContent = `${hw.battery.level}% · ${hw.battery.powerSource}`;
+      batEl.className = `scan-card-value ${hw.battery.level >= 30 ? 'good' : 'warn'}`;
+    } else {
+      batEl.textContent = 'AC Power (Desktop)';
+      batEl.className = 'scan-card-value good';
+    }
+
+    // Summary
+    const summary = document.getElementById('scan-summary');
+    summary.style.display = 'block';
+    document.getElementById('scan-summary-text').textContent = recommendation.explanation;
+    document.getElementById('scan-subtitle').textContent = 'Analysis complete! Here\'s what we found.';
+
+    document.getElementById('btn-to-account').disabled = false;
+
+    // Pre-select recommended models
+    selectedModels = new Set(recommendation.recommended);
+
+  } catch (err) {
+    document.getElementById('scan-subtitle').textContent = 'Scan failed — using defaults';
+    document.getElementById('btn-to-account').disabled = false;
+  }
+}
+
+// ─── SCREEN 2: ACCOUNT ───
+function selectAccountOption(mode) {
+  accountMode = mode;
+  ['login', 'register', 'skip'].forEach(m => {
+    document.getElementById(`opt-${m}`).classList.toggle('selected', m === mode);
+    const form = document.getElementById(`form-${m}`);
+    if (form) form.classList.toggle('visible', m === mode);
+  });
+}
+
+// ─── SCREEN 3: MODEL PICKER ───
+function buildModelList() {
+  filterFamily('all');
+}
+
+function filterFamily(family) {
+  document.querySelectorAll('.family-tab').forEach(t => t.classList.toggle('active', t.dataset.family === family));
+
+  const list = document.getElementById('model-list');
+  list.innerHTML = '';
+
+  const models = family === 'all' ? allModels : allModels.filter(m => m.family === family);
+
+  models.forEach(m => {
+    const isSelected = selectedModels.has(m.id);
+    const isRecommended = recommendation?.recommended.includes(m.id);
+
+    const card = document.createElement('div');
+    card.className = `model-card ${isSelected ? 'selected' : ''} ${isRecommended ? 'recommended' : ''}`;
+    card.dataset.id = m.id;
+
+    const sizeTxt = m.sizeMB < 1024 ? `${m.sizeMB} MB` : `${(m.sizeMB/1024).toFixed(1)} GB`;
+    const badgeHtml = m.badge ? `<span class="model-badge ${m.badge.includes('Flagship') ? 'flagship' : 'popular'}">${m.badge}</span>` :
+                      isRecommended ? '<span class="model-badge">★ Recommended</span>' : '';
+
+    card.innerHTML = `
+      <div class="model-chk">${isSelected ? '✓' : ''}</div>
+      <div class="model-info">
+        <div class="model-name">${m.shortName || m.name} ${badgeHtml}</div>
+        <div class="model-desc">${m.description}</div>
+      </div>
+      <div class="model-meta">
+        <div class="model-meta-item">💾 <span class="val">${sizeTxt}</span></div>
+        <div class="model-meta-item">⚡ <span class="val">${m.speed}</span></div>
+      </div>
+    `;
+
+    card.onclick = () => toggleModel(m.id);
+    list.appendChild(card);
+  });
+
+  updateModelSummary();
+}
+
+function toggleModel(id) {
+  if (selectedModels.has(id)) {
+    if (selectedModels.size > 1) selectedModels.delete(id);
+  } else {
+    selectedModels.add(id);
+  }
+
+  document.querySelectorAll('.model-card').forEach(card => {
+    const sel = selectedModels.has(card.dataset.id);
+    card.classList.toggle('selected', sel);
+    card.querySelector('.model-chk').textContent = sel ? '✓' : '';
+  });
+
+  updateModelSummary();
+}
+
+function updateModelSummary() {
+  const count = selectedModels.size;
+  const totalMB = allModels.filter(m => selectedModels.has(m.id)).reduce((s, m) => s + m.sizeMB, 0);
+  const sizeTxt = totalMB < 1024 ? `${totalMB} MB` : `${(totalMB/1024).toFixed(1)} GB`;
+
+  const speed = hardwareData?.network?.speedMBps || 1;
+  const secs = totalMB / speed;
+  const timeTxt = secs < 60 ? `~${Math.ceil(secs)}s` : secs < 3600 ? `~${Math.ceil(secs/60)} min` : `~${(secs/3600).toFixed(1)} hr`;
+
+  document.getElementById('model-count').textContent = `${count} model${count !== 1 ? 's' : ''} selected`;
+  document.getElementById('model-total-size').textContent = sizeTxt;
+  document.getElementById('model-dl-time').textContent = timeTxt;
+
+  document.getElementById('btn-install').disabled = count === 0;
+  document.getElementById('btn-install').textContent = `Install ${count} Model${count !== 1 ? 's' : ''} →`;
+}
+
+// ─── SCREEN 4: INSTALL (THE BRAND EXPERIENCE) ───
+async function startInstall() {
+  goToScreen(4);
+
+  // Build download list UI
+  const dlList = document.getElementById('download-list');
+  dlList.innerHTML = '';
+  const selectedArr = allModels.filter(m => selectedModels.has(m.id));
+  selectedArr.forEach(m => {
+    const sizeTxt = m.sizeMB < 1024 ? `${m.sizeMB} MB` : `${(m.sizeMB/1024).toFixed(1)} GB`;
+    const div = document.createElement('div');
+    div.className = 'dl-item';
+    div.id = `dl-${m.id}`;
+    div.innerHTML = `
+      <span class="dl-item-icon">⏳</span>
+      <span class="dl-item-name">${m.shortName || m.name}</span>
+      <span class="dl-item-size">${sizeTxt}</span>
+      <div class="dl-item-bar"><div class="dl-item-fill" style="width:0%"></div></div>
+      <span class="dl-item-status">Queued</span>
+    `;
+    dlList.appendChild(div);
+  });
+
+  // Send selected models to main process
+  await window.wizardAPI.selectModels([...selectedModels]);
+
+  // Listen for progress
+  window.wizardAPI.onProgress((data) => {
+    // Overall progress
+    document.getElementById('install-fill').style.width = data.percent + '%';
+    document.getElementById('install-percent').textContent = Math.round(data.percent) + '%';
+
+    if (data.eta) document.getElementById('install-eta').textContent = data.eta;
+    if (data.message) document.getElementById('install-status').textContent = data.message;
+    if (data.detail) document.getElementById('install-detail').textContent = data.detail;
+
+    // Per-model progress
+    if (data.modelId) {
+      const dlItem = document.getElementById(`dl-${data.modelId}`);
+      if (dlItem) {
+        const fill = dlItem.querySelector('.dl-item-fill');
+        const status = dlItem.querySelector('.dl-item-status');
+        const icon = dlItem.querySelector('.dl-item-icon');
+
+        if (data.modelPercent !== undefined) {
+          fill.style.width = data.modelPercent + '%';
+          status.textContent = Math.round(data.modelPercent) + '%';
+          icon.textContent = '🔄';
+          dlItem.classList.add('active');
+          dlItem.classList.remove('done');
+        }
+        if (data.modelDone) {
+          fill.style.width = '100%';
+          status.textContent = '✅';
+          icon.textContent = '✅';
+          dlItem.classList.remove('active');
+          dlItem.classList.add('done');
+        }
+      }
+    }
+
+    // Random fun message rotation
+    if (data.percent % 7 < 1) {
+      document.getElementById('install-fun').textContent = FUN_MESSAGES[Math.floor(Math.random() * FUN_MESSAGES.length)];
+    }
+  });
+
+  // Start the install
+  const result = await window.wizardAPI.install();
+
+  if (result.success) {
+    document.getElementById('install-fill').style.width = '100%';
+    document.getElementById('install-percent').textContent = '100%';
+    document.getElementById('install-status').textContent = '✅ Installation Complete!';
+    document.getElementById('install-detail').textContent = 'Everything is ready. The Green Strobe awaits.';
+
+    // Build complete screen
+    const completeTags = document.getElementById('complete-models');
+    completeTags.innerHTML = selectedArr.map(m => `<div class="complete-tag">✓ ${m.shortName || m.name}</div>`).join('');
+
+    // Platform-specific shortcuts
+    if (hardwareData?.platform === 'darwin') {
+      document.getElementById('key-record').textContent = '⌘+Shift+Space';
+      document.getElementById('key-paste').textContent = '⌘+Shift+V';
+      document.getElementById('key-show').textContent = '⌘+Shift+W';
+      document.getElementById('key-model').textContent = '⌘+Shift+M';
+    }
+
+    setTimeout(() => goToScreen(5), 1500);
+  } else {
+    document.getElementById('install-status').textContent = '⚠️ Installation Failed';
+    document.getElementById('install-detail').textContent = result.error || 'Unknown error. Please try again.';
+  }
+}
+
+// ─── BRAND ROTATION (during download) ───
+function startBrandRotations() {
+  // Moniker rotation every 8 seconds
+  monikerRotationInterval = setInterval(() => {
+    currentMonikerIndex = (currentMonikerIndex + 1) % MONIKERS.length;
+    const m = MONIKERS[currentMonikerIndex];
+    const banner = document.getElementById('moniker-banner');
+    banner.style.opacity = '0';
+    setTimeout(() => {
+      document.getElementById('moniker-emoji').textContent = m.emoji;
+      document.getElementById('moniker-text').textContent = m.text;
+      document.getElementById('moniker-sub').textContent = m.sub;
+      banner.style.opacity = '1';
+    }, 400);
+  }, 8000);
+
+  // Feature card rotation every 15 seconds
+  brandRotationInterval = setInterval(() => {
+    currentBrandIndex = (currentBrandIndex + 1) % FEATURE_CARDS.length;
+    const card = FEATURE_CARDS[currentBrandIndex];
+    const el = document.getElementById('brand-card');
+    el.style.opacity = '0';
+    setTimeout(() => {
+      document.getElementById('brand-title').textContent = card.title;
+      document.getElementById('brand-body').textContent = card.body;
+      // Update dots
+      const dots = document.getElementById('brand-dots');
+      dots.innerHTML = FEATURE_CARDS.slice(0, 6).map((_, i) =>
+        `<div class="brand-dot ${i === currentBrandIndex % 6 ? 'active' : ''}"></div>`
+      ).join('');
+      el.style.opacity = '1';
+    }, 400);
+  }, 15000);
+}
+
+function stopBrandRotations() {
+  if (brandRotationInterval) { clearInterval(brandRotationInterval); brandRotationInterval = null; }
+  if (monikerRotationInterval) { clearInterval(monikerRotationInterval); monikerRotationInterval = null; }
+}
+
+// ─── LAUNCH ───
+async function launchApp() {
+  await window.wizardAPI.complete();
+}
+</script>
+</body>
+</html>
