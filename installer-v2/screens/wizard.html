@@ -1512,9 +1512,32 @@
         </div>
       </div>
 
+      <!-- MODEL COMPARISON MATRIX -->
+      <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px; overflow-x:auto;">
+        <div style="font-size:17px; font-weight:800; margin-bottom:8px; color:var(--text);">📊 Model Comparison Matrix</div>
+        <p style="font-size:14px; color:var(--text-dim); margin-bottom:12px;">Click any row to select or deselect. Green highlight = selected. Your plan determines which models are available.</p>
+        <table id="model-matrix" style="width:100%; border-collapse:collapse; font-size:13px; min-width:750px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border); text-align:left;">
+              <th style="padding:8px 4px; color:var(--green); width:24px;">✓</th>
+              <th style="padding:8px 4px; color:var(--green);">Model</th>
+              <th style="padding:8px 4px; color:var(--text-dim);">Type</th>
+              <th style="padding:8px 4px; color:var(--text-dim);">Size</th>
+              <th style="padding:8px 4px; color:var(--text-dim);">Speed</th>
+              <th style="padding:8px 4px; color:var(--text-dim);">RAM</th>
+              <th style="padding:8px 4px; color:var(--text-dim);">GPU?</th>
+              <th style="padding:8px 4px; color:var(--text-dim);">Langs</th>
+              <th style="padding:8px 4px; color:var(--text-dim);">Best For</th>
+              <th style="padding:8px 4px; color:#4ADE80;">Strength</th>
+              <th style="padding:8px 4px; color:#F87171;">Trade-off</th>
+            </tr>
+          </thead>
+          <tbody id="matrix-body"><!-- JS populates --></tbody>
+        </table>
+      </div>
+
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-        <span style="font-size:15px; font-weight:700; color:var(--text-dim);">🔧 Or customize — select individual models:</span>
-        <span style="font-size:15px; color:var(--text-muted);">Click ▼ Details to learn more about each model</span>
+        <span style="font-size:15px; font-weight:700; color:var(--text);">🔧 Or browse models with expandable details:</span>
       </div>
       <div class="family-tabs">
         <button class="family-tab active" data-family="all" onclick="filterFamily('all')">All (15)</button>
@@ -2056,15 +2079,92 @@
 
     function buildModelList() {
       buildPackages();
-      // Populate explanation
       if (recommendation) {
         document.getElementById('windytune-explanation').textContent = recommendation.explanation + ' You can also select individual models below, or download more anytime from Settings → Model Manager.';
       }
-      // Default to recommended package
       if (selectedModels.size === 0 || (recommendation && selectedModels.size === recommendation.recommended.length)) {
         selectedModels = new Set(packages.recommended);
       }
+      buildMatrix();
       filterFamily('all');
+    }
+
+    function buildMatrix() {
+      const tbody = document.getElementById('matrix-body');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      const shortStrength = {
+        'core-spark': 'Fastest GPU model', 'core-pulse': 'Reliable everyday GPU', 'core-standard': 'Handles accents well',
+        'core-global': 'Best multilingual (GPU)', 'core-pro': 'Flagship English (GPU)', 'core-turbo': 'Near-Ultra, 2x faster',
+        'core-ultra': 'BEST accuracy. Period.', 'edge-spark': 'Only 42 MB!', 'edge-pulse': 'Fast & phone-friendly',
+        'edge-standard': 'Best size/accuracy balance', 'edge-global': 'Multilingual on CPU', 'edge-pro': 'Best English on CPU',
+        'lingua-es': 'All Spanish dialects', 'lingua-fr': 'All French dialects', 'lingua-hi': 'Hindi + Hinglish'
+      };
+      const shortWeakness = {
+        'core-spark': 'Basic accuracy', 'core-pulse': 'Not for jargon', 'core-standard': 'Needs 2GB VRAM',
+        'core-global': 'Slower (2x)', 'core-pro': 'English only', 'core-turbo': 'Needs 6GB VRAM',
+        'core-ultra': '2.9 GB, needs 10GB VRAM', 'edge-spark': 'Basic accuracy', 'edge-pulse': 'Occasional errors',
+        'edge-standard': 'Not Pro/Ultra level', 'edge-global': 'Slower (2x), 515 MB', 'edge-pro': 'English only',
+        'lingua-es': 'Spanish only', 'lingua-fr': 'French only', 'lingua-hi': 'Hindi only'
+      };
+      const ramNeeded = {
+        'core-spark':'4 GB','core-pulse':'4 GB','core-standard':'8 GB','core-global':'16 GB','core-pro':'16 GB',
+        'core-turbo':'16 GB','core-ultra':'24 GB','edge-spark':'2 GB','edge-pulse':'3 GB','edge-standard':'4 GB',
+        'edge-global':'8 GB','edge-pro':'8 GB','lingua-es':'6 GB','lingua-fr':'6 GB','lingua-hi':'6 GB'
+      };
+      const gpuNeeded = {
+        'core-spark':'Yes','core-pulse':'Yes','core-standard':'Yes (2GB)','core-global':'Yes (5GB)','core-pro':'Yes (5GB)',
+        'core-turbo':'Yes (6GB)','core-ultra':'Yes (10GB)','edge-spark':'No','edge-pulse':'No','edge-standard':'No',
+        'edge-global':'No','edge-pro':'No','lingua-es':'No','lingua-fr':'No','lingua-hi':'No'
+      };
+      const bestFor = {
+        'core-spark':'Quick dictation','core-pulse':'Emails, casual notes','core-standard':'Meetings, content',
+        'core-global':'Multilingual meetings','core-pro':'English professionals','core-turbo':'Best quality, faster',
+        'core-ultra':'Broadcast, legal, medical','edge-spark':'Phones, emergencies','edge-pulse':'Mobile dictation',
+        'edge-standard':'Laptops, everyday','edge-global':'Travel, translation','edge-pro':'English on laptop',
+        'lingua-es':'Spanish speakers','lingua-fr':'French speakers','lingua-hi':'Hindi speakers'
+      };
+
+      allModels.forEach(m => {
+        const sel = selectedModels.has(m.id);
+        const sizeTxt = m.sizeMB < 1024 ? `${m.sizeMB} MB` : `${(m.sizeMB/1024).toFixed(1)} GB`;
+        const familyLabel = m.family === 'core' ? '⚡ GPU' : m.family === 'edge' ? '🛡️ CPU' : '🌍 Lang';
+        const langs = m.family === 'lingua' ? '1' : '99';
+        const tr = document.createElement('tr');
+        tr.style.cssText = `border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.2s; ${sel ? 'background:#162B1F;' : ''}`;
+        tr.dataset.id = m.id;
+        tr.onmouseenter = () => { if (!selectedModels.has(m.id)) tr.style.background = '#1A2332'; };
+        tr.onmouseleave = () => { if (!selectedModels.has(m.id)) tr.style.background = ''; };
+        tr.onclick = () => {
+          toggleModel(m.id);
+          refreshMatrix();
+        };
+        tr.innerHTML = `
+          <td style="padding:7px 4px; color:var(--green); font-weight:800;">${sel ? '✅' : '⬜'}</td>
+          <td style="padding:7px 4px; font-weight:700; color:${sel ? 'var(--green)' : 'var(--text)'};">${m.shortName || m.name}</td>
+          <td style="padding:7px 4px; color:var(--text-dim);">${familyLabel}</td>
+          <td style="padding:7px 4px; color:var(--text);">${sizeTxt}</td>
+          <td style="padding:7px 4px; color:var(--text);">${m.speed}</td>
+          <td style="padding:7px 4px; color:var(--text-dim);">${ramNeeded[m.id] || '?'}</td>
+          <td style="padding:7px 4px; color:${gpuNeeded[m.id]?.startsWith('Yes') ? 'var(--yellow)' : 'var(--green)'};">${gpuNeeded[m.id] || '?'}</td>
+          <td style="padding:7px 4px; color:var(--text-dim);">${langs}</td>
+          <td style="padding:7px 4px; color:var(--text-dim); font-size:12px;">${bestFor[m.id] || ''}</td>
+          <td style="padding:7px 4px; color:#4ADE80; font-size:12px;">${shortStrength[m.id] || ''}</td>
+          <td style="padding:7px 4px; color:#F87171; font-size:12px;">${shortWeakness[m.id] || ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function refreshMatrix() {
+      document.querySelectorAll('#matrix-body tr').forEach(tr => {
+        const id = tr.dataset.id;
+        const sel = selectedModels.has(id);
+        tr.style.background = sel ? '#162B1F' : '';
+        tr.cells[0].textContent = sel ? '✅' : '⬜';
+        tr.cells[1].style.color = sel ? 'var(--green)' : 'var(--text)';
+      });
     }
 
     function filterFamily(family) {
