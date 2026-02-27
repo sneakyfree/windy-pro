@@ -37,11 +37,12 @@ class InstallWizard {
   async show() {
     return new Promise((resolve) => {
       this.window = new BrowserWindow({
-        width: 700,
-        height: 820,
+        width: 1100,
+        height: 900,
         minWidth: 600,
         minHeight: 700,
         resizable: true,
+        maximizable: true,
         center: true,
         frame: true,
         title: 'Windy Pro — Setup',

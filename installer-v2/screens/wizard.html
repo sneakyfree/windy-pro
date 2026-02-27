@@ -111,6 +111,7 @@
       flex-direction: column;
       padding: 0 28px 20px;
       overflow: hidden;
+      min-height: 0;
     }
 
     .screen {
@@ -119,6 +120,7 @@
       flex-direction: column;
       min-height: 0;
       overflow-y: auto;
+      padding-bottom: 20px;
     }
 
     .screen.active {
@@ -1291,14 +1293,16 @@
     <div class="progress-seg" id="seg-3"></div>
     <div class="progress-seg" id="seg-4"></div>
     <div class="progress-seg" id="seg-5"></div>
+    <div class="progress-seg" id="seg-6"></div>
   </div>
   <div class="step-labels">
     <span class="step-label active" id="lbl-0">Welcome</span>
     <span class="step-label" id="lbl-1">Hardware</span>
     <span class="step-label" id="lbl-2">Account</span>
-    <span class="step-label" id="lbl-3">Models</span>
-    <span class="step-label" id="lbl-4">Install</span>
-    <span class="step-label" id="lbl-5">Ready!</span>
+    <span class="step-label" id="lbl-3">Learn</span>
+    <span class="step-label" id="lbl-4">Choose</span>
+    <span class="step-label" id="lbl-5">Install</span>
+    <span class="step-label" id="lbl-6">Ready!</span>
   </div>
 
   <div class="wizard">
@@ -1446,7 +1450,99 @@
     </div>
 
     <!-- ═══ SCREEN 3: MODEL PICKER ═══ -->
+    <!-- ═══ SCREEN 3: LEARN ABOUT MODELS ═══ -->
     <div class="screen" id="screen-3">
+      <div class="model-header">
+        <h1>📖 Meet Your 15 Models</h1>
+        <p>Windy Pro ships 15 proprietary voice models in 3 families. Here's how they work.</p>
+      </div>
+
+      <!-- Lighter vs Heavier -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+        <div style="background:var(--bg-card); border:2px solid var(--green); border-radius:12px; padding:16px;">
+          <div style="font-size:16px; font-weight:800; color:var(--green); margin-bottom:8px;">🍃 Lighter Models (42–168 MB)</div>
+          <div style="font-size:15px; color:var(--text); line-height:1.8;">
+            ✅ Take up less space<br>
+            ✅ Run faster, use less battery<br>
+            ✅ Work great on phones & old laptops<br>
+            ⚠️ Lower accuracy on accents & jargon
+          </div>
+        </div>
+        <div style="background:var(--bg-card); border:2px solid var(--blue); border-radius:12px; padding:16px;">
+          <div style="font-size:16px; font-weight:800; color:var(--blue); margin-bottom:8px;">⚡ Heavier Models (500 MB–2.9 GB)</div>
+          <div style="font-size:15px; color:var(--text); line-height:1.8;">
+            ✅ Near-perfect accuracy<br>
+            ✅ Handle accents, jargon, 99 languages<br>
+            ✅ Professional / broadcast quality<br>
+            ⚠️ Need more RAM (or GPU for Core models)
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 Families -->
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:16px;">
+        <div style="background:var(--bg-card); border:1px solid #3B82F6; border-radius:10px; padding:14px; text-align:center;">
+          <div style="font-size:24px;">⚡</div>
+          <div style="font-size:15px; font-weight:800; color:#3B82F6;">Windy Core</div>
+          <div style="font-size:14px; color:var(--text-dim);">7 GPU models</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">Maximum speed & accuracy.<br>Requires dedicated GPU.</div>
+        </div>
+        <div style="background:var(--bg-card); border:1px solid #22C55E; border-radius:10px; padding:14px; text-align:center;">
+          <div style="font-size:24px;">🛡️</div>
+          <div style="font-size:15px; font-weight:800; color:#22C55E;">Windy Edge</div>
+          <div style="font-size:14px; color:var(--text-dim);">5 CPU models</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">Runs anywhere. No GPU needed.<br>Phones, laptops, tablets.</div>
+        </div>
+        <div style="background:var(--bg-card); border:1px solid #A855F7; border-radius:10px; padding:14px; text-align:center;">
+          <div style="font-size:24px;">🌍</div>
+          <div style="font-size:15px; font-weight:800; color:#A855F7;">Windy Lingua</div>
+          <div style="font-size:14px; color:var(--text-dim);">3 language specialists</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">Spanish, French, Hindi.<br>Purpose-built for each.</div>
+        </div>
+      </div>
+
+      <!-- Full model matrix — read-only, for learning -->
+      <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px;">
+        <div style="font-size:17px; font-weight:800; margin-bottom:8px; color:var(--text);">📊 All 15 Models at a Glance</div>
+        <div style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
+          <table id="model-matrix" style="width:100%; border-collapse:collapse; font-size:14px;">
+            <thead style="position:sticky; top:0; background:var(--bg-card); z-index:1;">
+              <tr style="border-bottom:2px solid var(--border); text-align:left;">
+                <th style="padding:8px 6px; color:var(--green);">Model</th>
+                <th style="padding:8px 6px; color:var(--text-dim);">Family</th>
+                <th style="padding:8px 6px; color:var(--text-dim);">Size</th>
+                <th style="padding:8px 6px; color:var(--text-dim);">Speed</th>
+                <th style="padding:8px 6px; color:var(--text-dim);">GPU?</th>
+                <th style="padding:8px 6px; color:#4ADE80;">Strength</th>
+              </tr>
+            </thead>
+            <tbody id="matrix-body"><!-- JS populates --></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- FAQ -->
+      <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:14px; font-size:15px; color:var(--text); line-height:1.8;">
+        <div style="font-size:16px; font-weight:800; margin-bottom:8px;">💡 Frequently Asked Questions</div>
+        <strong>Can I have too many models?</strong> Nope! They just take disk space. WindyTune juggles them for you. 🎪<br>
+        <strong>Can I download more later?</strong> Absolutely! Settings → Model Manager, anytime.<br>
+        <strong>Can I change my mind?</strong> Yes! Delete one, try another. No judgment. 🔬<br>
+        <strong>Do I have to switch models manually?</strong> Never. WindyTune reads your hardware and picks the best one automatically. 🎧<br>
+        <strong>Can I select all 15?</strong> If your plan includes them — YES! Go full Pokédex. 🎯
+      </div>
+
+      <div style="background:var(--green-dark); border:1px solid var(--green); border-radius:10px; padding:14px 16px; text-align:center; font-size:15px; color:var(--green); margin-bottom:10px;">
+        🌪️ <strong>WindyTune</strong> will automatically pick the best model for your hardware, moment by moment. <em>Grandma-simple or power-user deep: your call.</em>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goToScreen(2)">← Back</button>
+        <button class="btn btn-primary" onclick="goToScreen(4)">Choose My Models →</button>
+      </div>
+    </div>
+
+    <!-- ═══ SCREEN 4: CHOOSE & SELECT MODELS ═══ -->
+    <div class="screen" id="screen-4">
       <div class="model-header">
         <h1>🌪️ Choose Your Models</h1>
         <p id="model-explanation">WindyTune analyzed your hardware. Here's what we recommend.</p>
@@ -1454,113 +1550,53 @@
 
       <!-- 3-Tier Package Selector -->
       <div id="package-selector" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px;">
-        <!-- Light Package -->
         <div class="pkg-option" id="pkg-light" onclick="selectPackage('light')" style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center;">
           <div style="font-size:20px; margin-bottom:4px;">🍃</div>
           <div style="font-size:15px; font-weight:800; color:var(--text);">Light</div>
           <div style="font-size:16px; color:var(--text-dim); margin:4px 0;">1–2 models</div>
           <div style="font-size:15px; color:var(--text-muted);" id="pkg-light-size">~120 MB</div>
-          <div style="font-size:15px; color:var(--text-muted); margin-top:4px;">Fast install, minimal space</div>
         </div>
-        <!-- Recommended Package -->
         <div class="pkg-option pkg-selected" id="pkg-recommended" onclick="selectPackage('recommended')" style="background:var(--green-dark); border:2px solid var(--green); border-radius:12px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center; position:relative;">
           <div style="position:absolute; top:-8px; left:50%; transform:translateX(-50%); background:var(--green); color:var(--bg); font-size:9px; font-weight:800; padding:2px 10px; border-radius:10px;">★ RECOMMENDED</div>
           <div style="font-size:20px; margin-bottom:4px;">🌪️</div>
           <div style="font-size:15px; font-weight:800; color:var(--green);">Optimal</div>
           <div style="font-size:16px; color:var(--text-dim); margin:4px 0;">2–3 models</div>
           <div style="font-size:15px; color:var(--text-muted);" id="pkg-rec-size">~288 MB</div>
-          <div style="font-size:15px; color:var(--text-muted); margin-top:4px;">Best for your hardware</div>
         </div>
-        <!-- Power Package -->
         <div class="pkg-option" id="pkg-power" onclick="selectPackage('power')" style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center;">
           <div style="font-size:20px; margin-bottom:4px;">⚡</div>
           <div style="font-size:15px; font-weight:800; color:var(--text);">Power</div>
           <div style="font-size:16px; color:var(--text-dim); margin:4px 0;">4–5 models</div>
           <div style="font-size:15px; color:var(--text-muted);" id="pkg-power-size">~800 MB</div>
-          <div style="font-size:15px; color:var(--text-muted); margin-top:4px;">Maximum flexibility</div>
         </div>
       </div>
-      <p style="font-size:16px; color:var(--text); line-height:1.6; margin-bottom:10px; padding:0 4px;" id="windytune-explanation"></p>
+      <p style="font-size:15px; color:var(--text); line-height:1.5; margin-bottom:14px; padding:0 4px;" id="windytune-explanation"></p>
 
-      <!-- Education Box -->
-      <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:12px;">
-        <div style="font-size:15px; font-weight:700; margin-bottom:8px; color:var(--text);">💡 How Models Work — Quick Guide</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:15px; color:var(--text); line-height:1.7;">
-          <div>
-            <span style="color:var(--green); font-weight:700;">Lighter Models</span> (42–168 MB)<br>
-            ✅ Take up less space<br>
-            ✅ Run faster, use less battery<br>
-            ✅ Work great on phones & old laptops<br>
-            ⚠️ Lower accuracy on accents & jargon
-          </div>
-          <div>
-            <span style="color:var(--blue); font-weight:700;">Heavier Models</span> (500 MB–2.9 GB)<br>
-            ✅ Near-perfect accuracy<br>
-            ✅ Handle accents, jargon, 99 languages<br>
-            ✅ Professional / broadcast quality<br>
-            ⚠️ Need more RAM (or a GPU for Core models)
-          </div>
+      <!-- Selected models checklist — clean and simple -->
+      <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px;">
+        <div style="font-size:16px; font-weight:800; margin-bottom:10px; color:var(--text);">📦 Your Selection</div>
+        <div id="selected-models-checklist" style="font-size:15px; color:var(--text); line-height:2.0;">
+          <!-- Populated by JS -->
         </div>
-        <div style="margin-top:10px; font-size:15px; color:var(--text-dim); border-top:1px solid var(--border); padding-top:10px; line-height:1.8;">
-          <strong style="color:var(--text); font-size:16px;">Frequently Asked Questions:</strong><br>
-          <strong>Can I have too many models?</strong> Nope! They just take disk space. WindyTune juggles them for you like a pro circus performer. 🎪<br>
-          <strong>Can I have too few?</strong> One model is all you need to get started. Think of it as your starter Pokémon — you can catch more later. 😄<br>
-          <strong>Can I download more models later?</strong> Absolutely! Settings → Model Manager, anytime. Browse, download, delete. It's like Netflix for voice models.<br>
-          <strong>Can I change my mind?</strong> Yes! Delete one, try another, mix and match. We won't judge. Experimentation is encouraged. 🔬<br>
-          <strong>Can I select all 15 models?</strong> If your plan includes them — YES! Go full Pokédex. Gotta catch 'em all. WindyTune picks the best one moment by moment.<br>
-          <strong>How do power users mix and match?</strong> Check out the Comparison Matrix below — click any row to select it. Your plan determines which models are available.<br>
-          <strong>Do I have to switch models manually?</strong> Never ever. WindyTune reads your CPU, RAM, battery, even ambient noise. It's like having a personal DJ for your voice engine. <em>Grandma-simple or power-user deep: your call.</em> 🎧
-        </div>
-      </div>
-
-      <!-- MODEL COMPARISON MATRIX -->
-      <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px; overflow-x:auto;">
-        <div style="font-size:17px; font-weight:800; margin-bottom:8px; color:var(--text);">📊 Model Comparison Matrix</div>
-        <p style="font-size:16px; color:var(--text-dim); margin-bottom:12px;">Click any row to select or deselect. Green highlight = selected. Your plan determines which models are available.</p>
-        <table id="model-matrix" style="width:100%; border-collapse:collapse; font-size:14px;">
-          <thead>
-            <tr style="border-bottom:2px solid var(--border); text-align:left;">
-              <th style="padding:10px 6px; color:var(--green); width:28px;">✓</th>
-              <th style="padding:10px 6px; color:var(--green);">Model</th>
-              <th style="padding:10px 6px; color:var(--text-dim);">Size</th>
-              <th style="padding:10px 6px; color:var(--text-dim);">Speed</th>
-              <th style="padding:10px 6px; color:var(--text-dim);">GPU?</th>
-              <th style="padding:10px 6px; color:#4ADE80;">Strength</th>
-              <th style="padding:10px 6px; color:#F87171;">Trade-off</th>
-            </tr>
-          </thead>
-          <tbody id="matrix-body"><!-- JS populates --></tbody>
-        </table>
-      </div>
-
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-        <span style="font-size:15px; font-weight:700; color:var(--text);">🔧 Or browse models with expandable details:</span>
-      </div>
-      <div class="family-tabs">
-        <button class="family-tab active" data-family="all" onclick="filterFamily('all')">All (15)</button>
-        <button class="family-tab" data-family="core" onclick="filterFamily('core')">⚡ Core (GPU)</button>
-        <button class="family-tab" data-family="edge" onclick="filterFamily('edge')">🛡️ Edge (CPU)</button>
-        <button class="family-tab" data-family="lingua" onclick="filterFamily('lingua')">🌍 Lingua</button>
-      </div>
-
-      <div class="model-list" id="model-list">
-        <!-- Populated by JS -->
       </div>
 
       <div class="model-summary-bar">
         <span id="model-count">0 models selected</span>
-        <span>Total: <span class="total" id="model-total-size">0 MB</span> · <span id="model-dl-time">~0
-            min</span></span>
+        <span>Total: <span class="total" id="model-total-size">0 MB</span> · <span id="model-dl-time">~0 min</span></span>
+      </div>
+
+      <div style="text-align:center; margin-bottom:10px;">
+        <span style="font-size:13px; color:var(--text-muted);">Want to customize? Go back to the Learn page and read about each model, then pick a different package.</span>
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(2)">← Back</button>
+        <button class="btn btn-ghost" onclick="goToScreen(3)">← Back</button>
         <button class="btn btn-primary" id="btn-install" disabled onclick="startInstall()">Install Selected →</button>
       </div>
     </div>
 
-    <!-- ═══ SCREEN 4: DOWNLOAD & INSTALL ═══ -->
-    <div class="screen" id="screen-4">
+    <!-- ═══ SCREEN 5: DOWNLOAD & INSTALL ═══ -->
+    <div class="screen" id="screen-5">
       <div class="install-screen">
         <!-- Overall progress -->
         <div class="install-progress-section">
@@ -1604,8 +1640,8 @@
       </div>
     </div>
 
-    <!-- ═══ SCREEN 5: COMPLETE ═══ -->
-    <div class="screen" id="screen-5">
+    <!-- ═══ SCREEN 6: COMPLETE ═══ -->
+    <div class="screen" id="screen-6">
       <div class="complete-screen">
         <div class="complete-strobe"></div>
         <div class="complete-title">You're Ready! 🌪️</div>
@@ -1833,8 +1869,9 @@
       currentScreen = n;
 
       if (n === 1 && !hardwareData) runHardwareScan();
-      if (n === 3) buildModelList();
-      if (n === 4) startBrandRotations();
+      if (n === 3) buildEducationMatrix();
+      if (n === 4) buildModelList();
+      if (n === 5) startBrandRotations();
       if (n !== 4) stopBrandRotations();
     }
 
@@ -1941,6 +1978,23 @@
       el.classList.add('visible');
       document.getElementById('auth-error').classList.remove('visible');
       document.getElementById('btn-to-models').disabled = false;
+
+      // Collapse sign-in/register/free forms — show signed-in state
+      ['opt-login','opt-register','opt-skip'].forEach(id => {
+        const box = document.getElementById(id);
+        if (box) {
+          if (id === 'opt-login' || id === 'opt-register') {
+            // Dim and collapse the form areas
+            box.style.opacity = '0.4';
+            box.style.pointerEvents = 'none';
+            const form = box.querySelector('.account-form');
+            if (form) form.classList.remove('visible');
+          } else {
+            box.style.opacity = '0.4';
+            box.style.pointerEvents = 'none';
+          }
+        }
+      });
     }
 
     async function handleLogin() {
@@ -2085,11 +2139,53 @@
         }
       });
 
-      filterFamily(document.querySelector('.family-tab.active')?.dataset?.family || 'all');
+      buildSelectedChecklist();
     }
 
     function selectRecommended() {
       selectPackage('recommended');
+    }
+
+    async function buildEducationMatrix() {
+      if (!allModels.length && !hardwareData) {
+        await runHardwareScan();
+      }
+      const tbody = document.getElementById('matrix-body');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      const familyColors = { core: '#3B82F6', edge: '#22C55E', lingua: '#A855F7' };
+      const familyLabels = { core: '⚡ Core', edge: '🛡️ Edge', lingua: '🌍 Lingua' };
+      const MODEL_DETAILS = {
+        'core-spark': { strength: 'Ultra-fast English', gpu: 'Yes (1GB)' },
+        'core-pulse': { strength: 'Fast & reliable', gpu: 'Yes (1GB)' },
+        'core-standard': { strength: 'Great all-rounder', gpu: 'Yes (2GB)' },
+        'core-global': { strength: 'Multilingual powerhouse', gpu: 'Yes (5GB)' },
+        'core-pro': { strength: 'English excellence', gpu: 'Yes (5GB)' },
+        'core-turbo': { strength: 'Near-Ultra at 2x speed', gpu: 'Yes (6GB)' },
+        'core-ultra': { strength: 'BEST accuracy. Period.', gpu: 'Yes (10GB)' },
+        'edge-spark': { strength: '42 MB! Fits anything', gpu: 'No' },
+        'edge-pulse': { strength: 'Phone-optimized', gpu: 'No' },
+        'edge-standard': { strength: 'Best balance', gpu: 'No' },
+        'edge-global': { strength: 'Multilingual on CPU', gpu: 'No' },
+        'edge-pro': { strength: 'English on CPU', gpu: 'No' },
+        'lingua-es': { strength: 'Spanish specialist', gpu: 'No' },
+        'lingua-fr': { strength: 'French specialist', gpu: 'No' },
+        'lingua-hi': { strength: 'Hindi specialist', gpu: 'No' },
+      };
+      allModels.forEach(m => {
+        const d = MODEL_DETAILS[m.id] || {};
+        const tr = document.createElement('tr');
+        tr.style.cssText = 'border-bottom:1px solid var(--border); cursor:default;';
+        tr.innerHTML = `
+          <td style="padding:8px 6px; font-weight:700; color:var(--text);">${m.shortName || m.name}</td>
+          <td style="padding:8px 6px; color:${familyColors[m.family] || '#888'};">${familyLabels[m.family] || m.family}</td>
+          <td style="padding:8px 6px; color:var(--text-dim);">${m.sizeMB >= 1000 ? (m.sizeMB/1000).toFixed(1)+' GB' : m.sizeMB+' MB'}</td>
+          <td style="padding:8px 6px; color:var(--text-dim);">${m.speed || '—'}</td>
+          <td style="padding:8px 6px; color:var(--text-dim);">${d.gpu || '—'}</td>
+          <td style="padding:8px 6px; color:#4ADE80;">${d.strength || ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
     }
 
     async function buildModelList() {
@@ -2104,8 +2200,28 @@
       if (selectedModels.size === 0 || (recommendation && selectedModels.size === recommendation.recommended.length)) {
         selectedModels = new Set(packages.recommended);
       }
-      buildMatrix();
-      filterFamily('all');
+      buildSelectedChecklist();
+    }
+
+    function buildSelectedChecklist() {
+      const checklist = document.getElementById('selected-models-checklist');
+      if (!checklist) return;
+      checklist.innerHTML = '';
+      const familyIcons = { core: '⚡', edge: '🛡️', lingua: '🌍' };
+      allModels.filter(m => selectedModels.has(m.id)).forEach(m => {
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--border);';
+        const sizeStr = m.sizeMB >= 1000 ? (m.sizeMB/1000).toFixed(1)+' GB' : m.sizeMB+' MB';
+        div.innerHTML = `<span style="color:var(--green); font-size:18px;">✅</span>
+          <span style="flex:1; font-weight:700;">${familyIcons[m.family]||''} ${m.name}</span>
+          <span style="color:var(--text-dim); font-size:14px;">${sizeStr}</span>
+          <span style="color:var(--text-dim); font-size:14px;">${m.speed || ''}</span>`;
+        checklist.appendChild(div);
+      });
+      if (checklist.children.length === 0) {
+        checklist.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:20px;">No models selected. Choose a package above.</div>';
+      }
+      updateModelSummary();
     }
 
     function buildMatrix() {
@@ -2312,9 +2428,9 @@
       log.scrollTop = log.scrollHeight;
     }
 
-    // ─── SCREEN 4: INSTALL (THE BRAND EXPERIENCE) ───
+    // ─── SCREEN 5: INSTALL (THE BRAND EXPERIENCE) ───
     async function startInstall() {
-      goToScreen(4);
+      goToScreen(5);
 
       // Activate progress bar glow
       document.querySelector('.install-overall-bar').classList.add('active-glow');
@@ -2442,7 +2558,7 @@
           document.getElementById('nxt-key-record').textContent = '⌘+Shift+Space';
         }
 
-        setTimeout(() => goToScreen(5), 1500);
+        setTimeout(() => goToScreen(6), 1500);
       } else {
         document.getElementById('install-status').textContent = '⚠️ Installation Failed';
         document.getElementById('install-detail').textContent = result.error || 'Unknown error. Please try again.';
