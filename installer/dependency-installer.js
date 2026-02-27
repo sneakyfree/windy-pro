@@ -195,4 +195,4 @@ class DependencyInstaller {
     }
 }
 
-module.exports = DependencyInstaller;
+module.exports = { DependencyInstaller };
