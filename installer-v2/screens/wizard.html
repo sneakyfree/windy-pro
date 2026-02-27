@@ -1421,6 +1421,7 @@
             <input class="input-field" type="text" id="reg-name" placeholder="Full name">
             <input class="input-field" type="email" id="reg-email" placeholder="Email address">
             <input class="input-field" type="password" id="reg-password" placeholder="Create password">
+            <input class="input-field" type="password" id="reg-password-confirm" placeholder="Confirm password">
             <button class="auth-btn" id="btn-register" onclick="event.stopPropagation(); handleRegister()">Create
               Account →</button>
           </div>
@@ -1968,8 +1969,10 @@
       const name = document.getElementById('reg-name').value.trim();
       const email = document.getElementById('reg-email').value.trim();
       const password = document.getElementById('reg-password').value;
+      const passwordConfirm = document.getElementById('reg-password-confirm').value;
       if (!name || !email || !password) { showAuthError('Please fill in all fields.'); return; }
       if (password.length < 6) { showAuthError('Password must be at least 6 characters.'); return; }
+      if (password !== passwordConfirm) { showAuthError('Passwords do not match. Please try again.'); return; }
       const btn = document.getElementById('btn-register');
       btn.classList.add('loading');
       btn.disabled = true;

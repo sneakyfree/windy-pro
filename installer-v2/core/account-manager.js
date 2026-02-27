@@ -7,6 +7,7 @@
  */
 
 const https = require('https');
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -288,9 +289,10 @@ class AccountManager {
   _apiRequest(method, endpoint, body, token) {
     return new Promise((resolve, reject) => {
       const url = new URL(`${API_BASE}${endpoint}`);
+      const isHttps = url.protocol === 'https:';
       const options = {
         hostname: url.hostname,
-        port: url.port || 443,
+        port: url.port || (isHttps ? 443 : 80),
         path: url.pathname,
         method,
         timeout: 15000,
@@ -304,7 +306,8 @@ class AccountManager {
         options.headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const req = https.request(options, (res) => {
+      const transport = isHttps ? https : http;
+      const req = transport.request(options, (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
