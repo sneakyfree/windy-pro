@@ -1311,7 +1311,7 @@
           <span class="tornado">🌪️</span>
         </div>
         <h1>Welcome to <span>Windy Pro</span></h1>
-        <p class="welcome-subtitle">"And God said, 'Let there be light.' And there was Windy Pro."</p>
+        <p class="welcome-subtitle">"In the beginning was the Word. The words of your mouth create worlds."</p>
       </div>
 
       <div class="welcome-features">
@@ -1337,7 +1337,7 @@
         </div>
       </div>
 
-      <p class="welcome-quote">"In the beginning was the Word." — Your voice creates worlds.</p>
+      <p class="welcome-quote">"In the beginning was the Word." — The words of your mouth create worlds.</p>
 
       <div class="btn-row">
         <button class="btn btn-primary" onclick="goToScreen(1)">Get Started 🌪️</button>
@@ -1451,10 +1451,50 @@
         <p id="model-explanation">WindyTune analyzed your hardware. Here's what we recommend.</p>
       </div>
 
+      <!-- WindyTune Recommendation Banner -->
+      <div id="windytune-banner" style="background: var(--green-dark); border: 1px solid var(--green); border-radius: 12px; padding: 16px 18px; margin-bottom: 12px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+          <span style="font-size:20px;">🌪️</span>
+          <span style="font-size:15px; font-weight:800; color:var(--green);">WindyTune Recommended Package</span>
+          <span style="font-size:11px; color:var(--text-muted); margin-left:auto;" id="windytune-size"></span>
+        </div>
+        <p style="font-size:12px; color:var(--text-dim); line-height:1.5;" id="windytune-explanation"></p>
+        <button class="btn btn-primary" style="margin-top:10px; width:100%; padding:10px;" onclick="selectRecommended()">✅ Accept WindyTune Recommendation</button>
+      </div>
+
+      <!-- Education Box -->
+      <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:12px;">
+        <div style="font-size:13px; font-weight:700; margin-bottom:8px; color:var(--text);">💡 How Models Work — Quick Guide</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:11px; color:var(--text-dim); line-height:1.5;">
+          <div>
+            <span style="color:var(--green); font-weight:700;">Lighter Models</span> (42–168 MB)<br>
+            ✅ Take up less space<br>
+            ✅ Run faster, use less battery<br>
+            ✅ Work great on phones & old laptops<br>
+            ⚠️ Lower accuracy on accents & jargon
+          </div>
+          <div>
+            <span style="color:var(--blue); font-weight:700;">Heavier Models</span> (500 MB–2.9 GB)<br>
+            ✅ Near-perfect accuracy<br>
+            ✅ Handle accents, jargon, 99 languages<br>
+            ✅ Professional / broadcast quality<br>
+            ⚠️ Need more RAM (or a GPU for Core models)
+          </div>
+        </div>
+        <div style="margin-top:10px; font-size:11px; color:var(--text-muted); border-top:1px solid var(--border); padding-top:8px; line-height:1.6;">
+          <strong style="color:var(--text-dim);">Frequently Asked Questions:</strong><br>
+          <strong>Can you have too many models?</strong> No! They just take disk space. WindyTune auto-switches between them — you never have to think about it.<br>
+          <strong>Can you have too few?</strong> One model is enough to start. You can always add more later.<br>
+          <strong>Can you install more later?</strong> Yes! Anytime, from Settings → Model Manager.<br>
+          <strong>Can you delete models later?</strong> Yes! Remove any model anytime to free up space.<br>
+          <strong>Do I have to switch models manually?</strong> Never. WindyTune handles it automatically. It reads your CPU load, RAM, battery, even ambient noise — and picks the best model for the moment. <em>Grandma-simple or power-user deep: your choice.</em>
+        </div>
+      </div>
+
       <div class="family-tabs">
         <button class="family-tab active" data-family="all" onclick="filterFamily('all')">All (15)</button>
-        <button class="family-tab" data-family="core" onclick="filterFamily('core')">⚡ Core</button>
-        <button class="family-tab" data-family="edge" onclick="filterFamily('edge')">🛡️ Edge</button>
+        <button class="family-tab" data-family="core" onclick="filterFamily('core')">⚡ Core (GPU)</button>
+        <button class="family-tab" data-family="edge" onclick="filterFamily('edge')">🛡️ Edge (CPU)</button>
         <button class="family-tab" data-family="lingua" onclick="filterFamily('lingua')">🌍 Lingua</button>
       </div>
 
@@ -1900,7 +1940,42 @@
     }
 
     // ─── SCREEN 3: MODEL PICKER ───
+    // Extended model details for education
+    const MODEL_DETAILS = {
+      'core-spark':    { pros: ['Fastest GPU model — 32x real-time', 'Only 75 MB', 'Great for quick notes'], cons: ['Basic accuracy', 'Struggles with accents'], bestFor: 'Quick dictation, real-time captions, embedded systems', ramNeeded: '4 GB', gpuNeeded: 'Any NVIDIA GPU' },
+      'core-pulse':    { pros: ['Fast and reliable on GPU', 'Good everyday accuracy'], cons: ['Not great for technical jargon'], bestFor: 'Emails, casual notes, everyday dictation', ramNeeded: '4 GB', gpuNeeded: 'Any NVIDIA GPU' },
+      'core-standard': { pros: ['Strong accuracy', 'Handles accents well', 'Good for meetings'], cons: ['Needs 2 GB VRAM', 'Moderate speed (6x)'], bestFor: 'Meetings, technical content, content creation', ramNeeded: '8 GB', gpuNeeded: '2+ GB VRAM' },
+      'core-global':   { pros: ['Best multilingual GPU model', 'Handles code-switching (mixing languages)'], cons: ['1.5 GB download', 'Needs 5 GB VRAM', 'Slower (2x)'], bestFor: 'Multilingual users, international meetings, translation prep', ramNeeded: '16 GB', gpuNeeded: '5+ GB VRAM' },
+      'core-pro':      { pros: ['Flagship English accuracy on GPU', 'Fast (6x)', 'Distilled from Ultra'], cons: ['English only', '1.5 GB download'], bestFor: 'English power users, professionals, long recording sessions', ramNeeded: '16 GB', gpuNeeded: '5+ GB VRAM' },
+      'core-turbo':    { pros: ['Near-Ultra quality', '2x faster than Ultra', 'All 99 languages'], cons: ['1.6 GB download', 'Needs 6 GB VRAM'], bestFor: 'When you want the best but need it faster', ramNeeded: '16 GB', gpuNeeded: '6+ GB VRAM' },
+      'core-ultra':    { pros: ['BEST accuracy available. Period.', 'All 99 languages', 'Broadcast/legal/medical quality'], cons: ['2.9 GB download', 'Needs 10 GB VRAM', 'Slowest (1x real-time)'], bestFor: 'Broadcast, legal transcription, medical, professional multilingual', ramNeeded: '24 GB', gpuNeeded: '10+ GB VRAM' },
+      'edge-spark':    { pros: ['Only 42 MB — smaller than a selfie!', 'Runs on ANY device', 'Perfect for phones'], cons: ['Basic accuracy', 'Not for accents or jargon'], bestFor: 'Phones, tablets, offline emergencies, budget devices', ramNeeded: '2 GB', gpuNeeded: 'None' },
+      'edge-pulse':    { pros: ['Fast and light (78 MB)', 'Good phone performance', 'No GPU needed'], cons: ['Occasional errors on fast speech'], bestFor: 'Mobile dictation, voice memos, on-the-go notes', ramNeeded: '3 GB', gpuNeeded: 'None' },
+      'edge-standard': { pros: ['Best balance of size vs accuracy', 'Only 168 MB', 'No GPU needed', 'Our most popular model'], cons: ['Not quite as accurate as Pro/Ultra', 'Moderate speed (6x)'], bestFor: 'Laptops, everyday use, coffee shop dictation', ramNeeded: '4 GB', gpuNeeded: 'None' },
+      'edge-global':   { pros: ['Multilingual on CPU', 'All 99 languages', 'Great for travel'], cons: ['515 MB download', 'Needs 8 GB RAM', 'Slower (2x)'], bestFor: 'Travelers, multilingual professionals, translation work', ramNeeded: '8 GB', gpuNeeded: 'None' },
+      'edge-pro':      { pros: ['Best English accuracy without a GPU', 'Fast (4x)', 'Professional quality on CPU'], cons: ['English only', '515 MB download'], bestFor: 'English-first professionals on laptops/tablets', ramNeeded: '8 GB', gpuNeeded: 'None' },
+      'lingua-es':     { pros: ['Trained specifically on Spanish dialects', 'Castilian, Mexican, Caribbean, Andean', 'Handles Spanglish code-switching'], cons: ['Spanish only', '500 MB'], bestFor: 'Native Spanish speakers, bilingual environments', ramNeeded: '6 GB', gpuNeeded: 'None' },
+      'lingua-fr':     { pros: ['All French dialects — Metropolitan, Canadian, African', 'Handles Franglais'], cons: ['French only', '500 MB'], bestFor: 'Native French speakers, French-English workplaces', ramNeeded: '6 GB', gpuNeeded: 'None' },
+      'lingua-hi':     { pros: ['Hindi + Hinglish code-switching', 'Trained on Indian English accents too'], cons: ['Hindi only', '500 MB'], bestFor: 'Hindi speakers, Indian professionals, Hinglish environments', ramNeeded: '6 GB', gpuNeeded: 'None' },
+    };
+
+    function selectRecommended() {
+      if (!recommendation) return;
+      selectedModels = new Set(recommendation.recommended);
+      filterFamily(document.querySelector('.family-tab.active')?.dataset?.family || 'all');
+    }
+
     function buildModelList() {
+      // Populate WindyTune banner
+      if (recommendation) {
+        const recSize = recommendation.recommended.reduce((s, id) => {
+          const m = allModels.find(x => x.id === id);
+          return s + (m?.sizeMB || 0);
+        }, 0);
+        const sizeTxt = recSize < 1024 ? `${recSize} MB` : `${(recSize/1024).toFixed(1)} GB`;
+        document.getElementById('windytune-size').textContent = `${recommendation.recommended.length} models · ${sizeTxt}`;
+        document.getElementById('windytune-explanation').textContent = recommendation.explanation;
+      }
       filterFamily('all');
     }
 
@@ -1915,6 +1990,10 @@
       models.forEach(m => {
         const isSelected = selectedModels.has(m.id);
         const isRecommended = recommendation?.recommended.includes(m.id);
+        const details = MODEL_DETAILS[m.id] || {};
+
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'margin-bottom: 4px;';
 
         const card = document.createElement('div');
         card.className = `model-card ${isSelected ? 'selected' : ''} ${isRecommended ? 'recommended' : ''}`;
@@ -1924,23 +2003,65 @@
         const badgeHtml = m.badge ? `<span class="model-badge ${m.badge.includes('Flagship') ? 'flagship' : 'popular'}">${m.badge}</span>` :
           isRecommended ? '<span class="model-badge">★ Recommended</span>' : '';
 
+        const familyEmoji = m.family === 'core' ? '⚡' : m.family === 'edge' ? '🛡️' : '🌍';
+        const familyLabel = m.family === 'core' ? 'GPU' : m.family === 'edge' ? 'CPU' : 'Specialist';
+
         card.innerHTML = `
-      <div class="model-chk">${isSelected ? '✓' : ''}</div>
-      <div class="model-info">
-        <div class="model-name">${m.shortName || m.name} ${badgeHtml}</div>
-        <div class="model-desc">${m.description}</div>
-      </div>
-      <div class="model-meta">
-        <div class="model-meta-item">💾 <span class="val">${sizeTxt}</span></div>
-        <div class="model-meta-item">⚡ <span class="val">${m.speed}</span></div>
-      </div>
-    `;
+          <div class="model-chk">${isSelected ? '✓' : ''}</div>
+          <div class="model-info">
+            <div class="model-name">${m.shortName || m.name} ${badgeHtml} <span style="font-size:10px;color:var(--text-muted);font-weight:400;">${familyEmoji} ${familyLabel}</span></div>
+            <div class="model-desc">${m.description}</div>
+          </div>
+          <div class="model-meta">
+            <div class="model-meta-item">💾 <span class="val">${sizeTxt}</span></div>
+            <div class="model-meta-item">⚡ <span class="val">${m.speed}</span></div>
+            <button class="expand-btn" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-size:11px;padding:3px 8px;cursor:pointer;font-family:inherit;" onclick="event.stopPropagation(); toggleExpand('${m.id}')">▼ Details</button>
+          </div>
+        `;
 
         card.onclick = () => toggleModel(m.id);
-        list.appendChild(card);
+
+        // Expandable detail panel
+        const detail = document.createElement('div');
+        detail.id = `detail-${m.id}`;
+        detail.style.cssText = 'display:none; background:var(--bg-card); border:1px solid var(--border); border-top:none; border-radius:0 0 10px 10px; padding:12px 14px; margin-top:-2px; font-size:11px; line-height:1.6;';
+        
+        const prosHtml = (details.pros || []).map(p => `<div style="color:#4ADE80;">✅ ${p}</div>`).join('');
+        const consHtml = (details.cons || []).map(c => `<div style="color:#F87171;">⚠️ ${c}</div>`).join('');
+        
+        detail.innerHTML = `
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 16px;">
+            <div><strong style="color:var(--green);font-size:12px;">Strengths</strong>${prosHtml}</div>
+            <div><strong style="color:var(--yellow);font-size:12px;">Considerations</strong>${consHtml}</div>
+          </div>
+          <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border); color:var(--text-dim);">
+            <strong>Best for:</strong> ${details.bestFor || m.description}<br>
+            <strong>RAM needed:</strong> ${details.ramNeeded || '?'} · <strong>GPU:</strong> ${details.gpuNeeded || 'None'}
+          </div>
+        `;
+
+        wrapper.appendChild(card);
+        wrapper.appendChild(detail);
+        list.appendChild(wrapper);
       });
 
       updateModelSummary();
+    }
+
+    function toggleExpand(modelId) {
+      const detail = document.getElementById(`detail-${modelId}`);
+      if (!detail) return;
+      const isVisible = detail.style.display !== 'none';
+      // Close all others
+      document.querySelectorAll('[id^="detail-"]').forEach(d => d.style.display = 'none');
+      document.querySelectorAll('.expand-btn').forEach(b => b.textContent = '▼ Details');
+      if (!isVisible) {
+        detail.style.display = 'block';
+        // Find the button for this model
+        const card = detail.previousElementSibling;
+        const btn = card?.querySelector('.expand-btn');
+        if (btn) btn.textContent = '▲ Hide';
+      }
     }
 
     function toggleModel(id) {
