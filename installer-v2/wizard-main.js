@@ -8,10 +8,16 @@
 
 const { BrowserWindow, ipcMain, app } = require('electron');
 const path = require('path');
+const os = require('os');
 const { HardwareDetector } = require('./core/hardware-detect');
 const { MODEL_CATALOG, MODEL_FAMILIES, getTotalSize, formatSize } = require('./core/models');
 const { recommend, estimateDownloadTime } = require('./core/windytune');
 const { INSTALL_STEP_MESSAGES, getRandomLoadingMessage } = require('./core/brand-content');
+const { DownloadManager } = require('./core/download-manager');
+const { AccountManager } = require('./core/account-manager');
+
+const APP_DIR = path.join(os.homedir(), '.windy-pro');
+const MODELS_DIR = path.join(APP_DIR, 'models');
 
 class InstallWizard {
   constructor(opts = {}) {
@@ -20,7 +26,9 @@ class InstallWizard {
     this.hardware = null;
     this.recommendation = null;
     this.selectedModels = [];
-    this.platformAdapter = opts.platformAdapter || null; // Injected per platform
+    this.platformAdapter = opts.platformAdapter || null;
+    this.downloadManager = new DownloadManager(MODELS_DIR);
+    this.accountManager = new AccountManager(APP_DIR);
   }
 
   /**
@@ -83,6 +91,30 @@ class InstallWizard {
       return { selected: this.selectedModels };
     });
 
+    // ─── Account ───
+    ipcMain.handle('wizard-login', async (event, email, password) => {
+      try {
+        const account = await this.accountManager.login(email, password);
+        return { success: true, account: { email: account.email, name: account.name, tier: account.tier } };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
+    });
+
+    ipcMain.handle('wizard-register', async (event, name, email, password) => {
+      try {
+        const account = await this.accountManager.register(name, email, password);
+        return { success: true, account: { email: account.email, name: account.name, tier: account.tier } };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
+    });
+
+    ipcMain.handle('wizard-free-account', async () => {
+      const account = this.accountManager.createFreeAccount();
+      return { success: true, account: { name: account.name, tier: account.tier } };
+    });
+
     // ─── Install ───
     ipcMain.handle('wizard-install', async () => {
       const models = this.selectedModels.length > 0 ? this.selectedModels : this.recommendation?.recommended || ['edge-spark'];
@@ -132,47 +164,36 @@ class InstallWizard {
         // Phase 2: Download models (this is the long part — 25% to 90%)
         const modelRange = 65; // 25% to 90%
         const modelStart = 25;
+        const modelObjects = models.map(id => MODEL_CATALOG.find(m => m.id === id)).filter(Boolean);
+        const token = this.accountManager.getToken();
 
-        for (let i = 0; i < models.length; i++) {
-          const modelId = models[i];
-          const modelInfo = MODEL_CATALOG.find(m => m.id === modelId);
-          const modelName = modelInfo?.shortName || modelInfo?.name || modelId;
-          const modelSize = modelInfo ? formatSize(modelInfo.sizeMB) : '?';
-
-          const basePercent = modelStart + (i / models.length) * modelRange;
-          const modelShare = modelRange / models.length;
-
-          this.sendProgress({
-            percent: basePercent,
-            message: `${INSTALL_STEP_MESSAGES['download-model'].title} — ${modelName}`,
-            detail: `Downloading ${modelName} (${modelSize}) · Model ${i + 1} of ${models.length}`,
-            modelId,
-            modelPercent: 0
-          });
-
-          // Simulate download (replace with real download in platform adapter)
-          if (this.platformAdapter) {
-            await this.platformAdapter.downloadModel(modelId, modelInfo, (pct) => {
+        await this.downloadManager.downloadMultiple(
+          modelObjects,
+          // Overall progress callback
+          (data) => {
+            if (data.phase === 'downloading') {
+              const modelInfo = MODEL_CATALOG.find(m => m.id === data.modelId);
+              const modelName = modelInfo?.shortName || modelInfo?.name || data.modelId;
+              const modelSize = modelInfo ? formatSize(modelInfo.sizeMB) : '?';
               this.sendProgress({
-                percent: basePercent + (pct / 100) * modelShare,
-                modelId,
-                modelPercent: pct
-              });
-            });
-          } else {
-            // Simulation for testing
-            for (let p = 0; p <= 100; p += 5) {
-              await new Promise(r => setTimeout(r, 100));
-              this.sendProgress({
-                percent: basePercent + (p / 100) * modelShare,
-                modelId,
-                modelPercent: p
+                percent: modelStart + (data.overallPercent / 100) * modelRange,
+                message: `${INSTALL_STEP_MESSAGES['download-model'].title} — ${modelName}`,
+                detail: `Downloading ${modelName} (${modelSize}) · Model ${data.modelIndex + 1} of ${data.modelCount}`,
               });
             }
-          }
-
-          this.sendProgress({ modelId, modelDone: true });
-        }
+          },
+          // Per-model progress callback
+          (data) => {
+            this.sendProgress({
+              percent: modelStart + (data.overallPercent / 100) * modelRange,
+              modelId: data.modelId,
+              modelPercent: data.modelPercent,
+              modelDone: data.modelDone,
+              eta: data.eta
+            });
+          },
+          token
+        );
 
         // Phase 3: Verify
         this.sendProgress({

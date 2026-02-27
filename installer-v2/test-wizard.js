@@ -1,16 +1,25 @@
 /**
- * Windy Pro v2.0 — Test the Installation Wizard
- * Run: npx electron installer-v2/test-wizard.js
+ * Windy Pro v2.0 — Launch the Installation Wizard
+ * 
+ * Run modes:
+ *   npx electron installer-v2/test-wizard.js           — Simulated (no real installs)
+ *   npx electron installer-v2/test-wizard.js --real     — Real installs with platform adapter
  */
 
-const { app, BrowserWindow } = require('electron');
+const { app } = require('electron');
 const { InstallWizard } = require('./wizard-main');
-const { LinuxDebianAdapter } = require('./adapters/linux-debian');
+const { getAdapter, getPlatformName } = require('./adapters');
+
+const realMode = process.argv.includes('--real');
 
 app.whenReady().then(async () => {
+  console.log(`🌪️  Windy Pro v2.0 Installation Wizard`);
+  console.log(`   Platform: ${getPlatformName()}`);
+  console.log(`   Mode: ${realMode ? 'REAL INSTALL' : 'SIMULATION (use --real for actual install)'}`);
+  console.log('');
+
   const wizard = new InstallWizard({
-    platformAdapter: null // Set to new LinuxDebianAdapter() for real install
-    // platformAdapter: new LinuxDebianAdapter() // Uncomment for real install
+    platformAdapter: realMode ? getAdapter() : null
   });
 
   await wizard.show();
