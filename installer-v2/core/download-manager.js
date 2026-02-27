@@ -14,7 +14,8 @@ const path = require('path');
 const crypto = require('crypto');
 
 // CDN configuration
-const CDN_BASE = 'https://models.windypro.thewindstorm.uk/v2';
+// Production: const CDN_BASE = 'https://models.windypro.thewindstorm.uk/v2';
+const CDN_BASE = process.env.MODEL_CDN || 'http://localhost:8099/v2';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 const CHUNK_LOG_INTERVAL = 500; // Report progress every 500ms

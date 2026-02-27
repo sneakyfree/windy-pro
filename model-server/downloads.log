@@ -1,0 +1,2 @@
+{"timestamp":"2026-02-27T03:09:20.044Z","accountId":"dev-001","deviceId":"unknown","modelId":"edge-spark","action":"download-full","fileSize":440402}
+{"timestamp":"2026-02-27T03:09:20.072Z","accountId":"dev-001","deviceId":"unknown","modelId":"edge-spark","action":"download-resume","rangeStart":100,"rangeEnd":199,"chunkSize":100}

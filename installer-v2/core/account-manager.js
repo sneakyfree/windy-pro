@@ -12,7 +12,8 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 
-const API_BASE = 'https://api.windypro.thewindstorm.uk/v1';
+// Production: const API_BASE = 'https://api.windypro.thewindstorm.uk/v1';
+const API_BASE = process.env.ACCOUNT_API || 'http://localhost:8098/v1';
 const MAX_DEVICES = 5;
 
 class AccountManager {
@@ -210,7 +211,7 @@ class AccountManager {
         this._saveAccount();
         return true;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return false;
   }
@@ -267,7 +268,7 @@ class AccountManager {
       if (fs.existsSync(this.configPath)) {
         return JSON.parse(fs.readFileSync(this.configPath, 'utf-8'));
       }
-    } catch (e) {}
+    } catch (e) { }
     return null;
   }
 

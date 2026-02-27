@@ -1,0 +1,18 @@
+{
+    "name": "windy-pro-model-server",
+    "version": "2.0.0",
+    "description": "Windy Pro v2.0 — Model Download Server (.wpr files with JWT auth, Range support)",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js",
+        "dev": "node server.js",
+        "generate-models": "node generate-test-models.js"
+    },
+    "dependencies": {
+        "express": "^4.18.2",
+        "jsonwebtoken": "^9.0.2",
+        "morgan": "^1.10.0",
+        "cors": "^2.8.5"
+    },
+    "private": true
+}
