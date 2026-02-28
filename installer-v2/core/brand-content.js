@@ -149,24 +149,24 @@ const INSTALL_STEP_MESSAGES = {
     tip: 'Every device gets a great experience. WindyTune customizes everything.'
   },
   'check-deps': {
-    title: '📋 Checking Dependencies',
-    detail: 'Verifying Python, audio drivers, and system libraries are ready.',
-    tip: 'We bundle everything we need. No manual installation required.'
+    title: '🌪️ Preparing the Windy Ecosystem',
+    detail: 'Setting up everything Windy Pro needs to transform your voice into text. Prepare to get Windy, baby!',
+    tip: 'We bundle everything. No chasing downloads. No terminal commands. That\'s Windy.'
   },
   'install-python': {
-    title: '🐍 Setting Up Python Environment',
-    detail: 'Installing a sandboxed Python environment for the transcription engine. This stays completely inside Windy Pro — it won\'t touch your system Python.',
-    tip: 'Your system stays clean. Everything lives in ~/.windy-pro/'
+    title: '🌪️ Setting Up the Windy Engine Room',
+    detail: 'Building your private Windy voice processing environment. Everything stays inside Windy Pro — isolated, secure, yours.',
+    tip: 'Your system stays clean. The Windy ecosystem lives in its own space.'
   },
   'install-ffmpeg': {
-    title: '🎵 Installing Audio Engine',
-    detail: 'Setting up ffmpeg for audio processing. This handles the conversion between your microphone and our speech models.',
-    tip: 'ffmpeg is the industry standard. Used by YouTube, Spotify, and now you.'
+    title: '🎙️ Configuring Windy Audio Capture',
+    detail: 'Setting up the Windy audio pipeline — the bridge between your microphone and our 15 voice engines.',
+    tip: 'Broadcast-quality audio processing. That\'s Windy.'
   },
   'install-cuda': {
-    title: '⚡ Setting Up GPU Acceleration',
-    detail: 'Configuring CUDA toolkit for your NVIDIA GPU. This will make transcription dramatically faster.',
-    tip: 'GPU acceleration = real-time transcription. CPU-only still works great.'
+    title: '⚡ Activating Windy GPU Turbo Mode',
+    detail: 'Your NVIDIA GPU is about to make Windy fly. Real-time transcription at GPU speed.',
+    tip: 'GPU + Windy Core = instant transcription. That\'s WINDY, baby! 🌪️'
   },
   'download-model': {
     title: '🧠 Downloading Windy Pro Model',

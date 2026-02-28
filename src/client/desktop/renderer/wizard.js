@@ -1,261 +1,547 @@
 /**
- * Windy Pro — Setup Wizard
- * Shows on first launch to guide users through engine + mode selection.
+ * Windy Pro — First-Run Setup Wizard (v2)
+ * 6-step premium onboarding: Welcome → Mic → Engine → Account → Plan → Ready
  */
 class SetupWizard {
-    constructor(app) {
-        this.app = app;
-        this.step = 0;
-        this.choices = {
-            recordingMode: 'batch',
-            engine: 'local',
-            apiKey: ''
-        };
-        this.overlay = null;
-    }
+  constructor(app) {
+    this.app = app;
+    this.totalSteps = 6;
+    this.step = 0;
+    this.overlay = null;
+    this._micStream = null;
+    this._micCtx = null;
+    this._micInterval = null;
+    this._hardware = null;
+    this._pollTimer = null;
+    this.choices = {
+      engine: 'local',
+      recordingMode: 'batch',
+      accountEmail: '',
+      accountSkipped: false,
+      planTier: 'free'
+    };
+  }
 
-    shouldShow() {
-        return !localStorage.getItem('windy_wizardComplete');
-    }
+  async shouldShow() {
+    // Check electron-store first
+    try {
+      if (window.windyAPI?.getWizardState) {
+        const state = await window.windyAPI.getWizardState();
+        if (state?.completed) return false;
+        this.step = state?.currentStep || 0;
+      }
+    } catch (_) { }
+    // Also check localStorage fallback
+    if (localStorage.getItem('windy_wizardComplete') === 'true') return false;
+    // Skip for v0.5.0 upgraders — they already have settings configured
+    if (localStorage.getItem('windy_engine')) return false;
+    try {
+      if (window.windyAPI?.getSettings) {
+        const settings = await window.windyAPI.getSettings();
+        if (settings?.model && settings.model !== 'base') return false;
+      }
+    } catch (_) { }
+    return true;
+  }
 
-    show() {
-        if (!this.shouldShow()) return;
-        this.overlay = document.createElement('div');
-        this.overlay.id = 'setupWizard';
-        this.overlay.className = 'wizard-overlay';
-        this.overlay.innerHTML = this._buildHTML();
-        document.body.appendChild(this.overlay);
-        this._bindEvents();
-        this._showStep(0);
-    }
+  async show() {
+    const shouldShow = await this.shouldShow();
+    if (!shouldShow) return;
 
-    _buildHTML() {
-        return `
-      <div class="wizard-container">
-        <!-- Progress bar -->
-        <div class="wizard-progress">
-          <div class="wizard-progress-fill" id="wizardProgressFill" style="width:25%"></div>
+    this.overlay = document.createElement('div');
+    this.overlay.id = 'setupWizard';
+    this.overlay.className = 'wizard-overlay';
+    this.overlay.innerHTML = this._buildHTML();
+    document.body.appendChild(this.overlay);
+    this._bindEvents();
+    this._showStep(this.step);
+  }
+
+  _buildHTML() {
+    return `
+      <div class="wizard-container wizard-v2">
+        <div class="wizard-dots" id="wizardDots">
+          ${Array.from({ length: this.totalSteps }, (_, i) =>
+      `<div class="wizard-dot ${i === 0 ? 'active' : ''}" data-step="${i}"></div>`
+    ).join('')}
         </div>
+        <div class="wizard-slides" id="wizardSlides">
 
-        <!-- Step 0: Welcome -->
-        <div class="wizard-step" id="wizardStep0">
-          <div class="wizard-emoji">🌪️</div>
-          <h2 class="wizard-title">Welcome to Windy Pro</h2>
-          <p class="wizard-desc">Voice-to-text that just works. Let's get you set up in 30 seconds.</p>
-          <ul class="wizard-features">
-            <li>🎙️ Record your voice, get polished text</li>
-            <li>🔒 Privacy-first — works offline or in the cloud</li>
-            <li>⚡ 5 transcription engines to choose from</li>
-            <li>✨ LLM cleanup for perfect punctuation & formatting</li>
-          </ul>
-          <button class="wizard-btn primary" data-action="next">Get Started →</button>
-        </div>
+          <!-- Step 0: Welcome -->
+          <div class="wizard-step" id="wizardStep0">
+            <div class="wizard-emoji">🌪️</div>
+            <h2 class="wizard-title">Welcome to Windy Pro</h2>
+            <p class="wizard-desc">Record your voice, get polished text.<br>100% local. 100% private.</p>
+            <ul class="wizard-features">
+              <li>🎙️ Record your voice, get polished text instantly</li>
+              <li>🔒 Privacy-first — everything stays on your device</li>
+              <li>⚡ 15 transcription engines to choose from</li>
+              <li>✨ AI cleanup for perfect punctuation & formatting</li>
+              <li>🌍 99 languages supported</li>
+            </ul>
+            <button class="wizard-btn primary" data-action="next">Get Started →</button>
+          </div>
 
-        <!-- Step 1: Choose Mode -->
-        <div class="wizard-step" id="wizardStep1" style="display:none">
-          <h2 class="wizard-title">Choose Your Recording Mode</h2>
-          <p class="wizard-desc">How should Windy Pro process your audio?</p>
-          <div class="wizard-cards">
-            <div class="wizard-card selected" data-mode="batch" id="wizCardBatch">
-              <div class="card-badge">✨ Recommended</div>
-              <div class="card-icon">🎬</div>
-              <h3>Batch Mode</h3>
-              <p>Record first, then process everything at once for the best quality.</p>
-              <ul class="card-pros">
-                <li>✅ Best accuracy & formatting</li>
-                <li>✅ LLM-polished output</li>
-                <li>✅ Up to 30 min recordings</li>
-              </ul>
+          <!-- Step 1: Microphone -->
+          <div class="wizard-step" id="wizardStep1" style="display:none">
+            <div class="wizard-emoji">🎤</div>
+            <h2 class="wizard-title">Test Your Microphone</h2>
+            <p class="wizard-desc">Windy Pro needs microphone access to record your voice.</p>
+            <div class="wiz-mic-area" id="wizMicArea">
+              <button class="wizard-btn primary wiz-mic-test-btn" id="wizMicTestBtn">🎤 Test Microphone</button>
+              <div class="wiz-mic-meter" id="wizMicMeter" style="display:none">
+                <div class="wiz-mic-meter-bar" id="wizMicMeterBar"></div>
+              </div>
+              <div class="wiz-mic-status" id="wizMicStatus"></div>
             </div>
-            <div class="wizard-card" data-mode="live" id="wizCardLive">
-              <div class="card-icon">📝</div>
-              <h3>Live Mode</h3>
-              <p>Words appear instantly as you speak. Faster feedback, lower quality.</p>
-              <ul class="card-pros">
-                <li>✅ Real-time feedback</li>
-                <li>⚠️ Lower accuracy</li>
-                <li>⚠️ No LLM cleanup</li>
-              </ul>
+            <div class="wiz-mic-denied" id="wizMicDenied" style="display:none">
+              <p class="wiz-mic-denied-msg">⚠️ Microphone access was denied.</p>
+              <p class="wiz-mic-denied-help">To fix this:<br>
+                • <strong>Linux:</strong> Check PulseAudio/PipeWire settings<br>
+                • <strong>macOS:</strong> System Preferences → Privacy → Microphone<br>
+                • <strong>Windows:</strong> Settings → Privacy → Microphone</p>
+              <button class="wizard-btn secondary" id="wizMicRetry">Try Again</button>
+            </div>
+            <div class="wizard-nav">
+              <button class="wizard-btn secondary" data-action="back">← Back</button>
+              <button class="wizard-btn primary" data-action="next" id="wizMicNext" disabled>Next →</button>
             </div>
           </div>
-          <div class="wizard-nav">
-            <button class="wizard-btn secondary" data-action="back">← Back</button>
-            <button class="wizard-btn primary" data-action="next">Next →</button>
-          </div>
-        </div>
 
-        <!-- Step 2: Choose Engine -->
-        <div class="wizard-step" id="wizardStep2" style="display:none">
-          <h2 class="wizard-title">Choose Your Engine</h2>
-          <p class="wizard-desc">Where should your audio be processed?</p>
-          <div class="wizard-engine-list">
-            <div class="wizard-engine selected" data-engine="local">
-              <span class="engine-icon">🏠</span>
-              <div class="engine-info">
-                <strong>Local</strong>
-                <span class="engine-tag">Free · Private · Offline</span>
-              </div>
-              <span class="engine-check">✓</span>
+          <!-- Step 2: Engine -->
+          <div class="wizard-step" id="wizardStep2" style="display:none">
+            <h2 class="wizard-title">Choose Your Engine</h2>
+            <div class="wiz-hw-info" id="wizHwInfo">
+              <div class="wiz-hw-loading">🔍 Detecting your hardware…</div>
             </div>
-            <div class="wizard-engine" data-engine="cloud">
-              <span class="engine-icon">☁️</span>
-              <div class="engine-info">
-                <strong>WindyPro Cloud</strong>
-                <span class="engine-tag">GPU · Best Quality · $5/mo</span>
-              </div>
-              <span class="engine-check">✓</span>
-            </div>
-            <div class="wizard-engine" data-engine="deepgram">
-              <span class="engine-icon">🎙️</span>
-              <div class="engine-info">
-                <strong>Deepgram</strong>
-                <span class="engine-tag">Best Streaming · API Key</span>
-              </div>
-              <span class="engine-check">✓</span>
-            </div>
-            <div class="wizard-engine" data-engine="groq">
-              <span class="engine-icon">⚡</span>
-              <div class="engine-info">
-                <strong>Groq</strong>
-                <span class="engine-tag">Fastest · Free Tier · API Key</span>
-              </div>
-              <span class="engine-check">✓</span>
-            </div>
-            <div class="wizard-engine" data-engine="openai">
-              <span class="engine-icon">🌐</span>
-              <div class="engine-info">
-                <strong>OpenAI Whisper</strong>
-                <span class="engine-tag">Reliable · API Key</span>
-              </div>
-              <span class="engine-check">✓</span>
+            <div class="wizard-engine-list" id="wizEngineList"></div>
+            <div class="wizard-nav">
+              <button class="wizard-btn secondary" data-action="back">← Back</button>
+              <button class="wizard-btn primary" data-action="next">Next →</button>
             </div>
           </div>
-          <div class="wizard-apikey-row" id="wizApiKeyRow" style="display:none">
-            <label id="wizApiKeyLabel">API Key</label>
-            <input type="password" id="wizApiKeyInput" placeholder="Paste your API key here" class="wizard-input">
-            <a id="wizApiKeyLink" href="#" class="wizard-link" target="_blank">Get a key →</a>
-          </div>
-          <div class="wizard-nav">
-            <button class="wizard-btn secondary" data-action="back">← Back</button>
-            <button class="wizard-btn primary" data-action="next">Next →</button>
-          </div>
-        </div>
 
-        <!-- Step 3: Ready -->
-        <div class="wizard-step" id="wizardStep3" style="display:none">
-          <div class="wizard-emoji">🚀</div>
-          <h2 class="wizard-title">You're Ready!</h2>
-          <div class="wizard-summary" id="wizardSummary"></div>
-          <p class="wizard-desc" style="margin-top:12px;">Press <kbd>Ctrl+Shift+Space</kbd> to start recording anytime.</p>
-          <button class="wizard-btn primary" data-action="finish">Start Recording 🎤</button>
+          <!-- Step 3: Account -->
+          <div class="wizard-step" id="wizardStep3" style="display:none">
+            <div class="wizard-emoji">👤</div>
+            <h2 class="wizard-title">Create Your Account</h2>
+            <p class="wizard-desc">Optional — sync settings and unlock cloud features.</p>
+            <div class="wiz-account-form" id="wizAccountForm">
+              <input type="text" class="wizard-input" id="wizAccName" placeholder="Your name">
+              <input type="email" class="wizard-input" id="wizAccEmail" placeholder="Email address">
+              <input type="password" class="wizard-input" id="wizAccPassword" placeholder="Password (min 8 chars)">
+              <button class="wizard-btn primary" id="wizAccCreateBtn">Create Free Account</button>
+              <div class="wiz-acc-status" id="wizAccStatus"></div>
+            </div>
+            <div class="wiz-account-divider">
+              <span>or</span>
+            </div>
+            <button class="wizard-btn secondary wiz-skip-btn" id="wizAccSkipBtn">Skip — use offline only</button>
+            <div class="wizard-nav" style="margin-top:12px;">
+              <button class="wizard-btn secondary" data-action="back">← Back</button>
+              <button class="wizard-btn primary" data-action="next" id="wizAccNext">Next →</button>
+            </div>
+          </div>
+
+          <!-- Step 4: Plan -->
+          <div class="wizard-step" id="wizardStep4" style="display:none">
+            <h2 class="wizard-title">Choose Your Plan</h2>
+            <p class="wizard-desc">Start free — upgrade anytime from Settings.</p>
+            <div class="wiz-plan-cards" id="wizPlanCards"></div>
+            <div class="wiz-plan-coupon">
+              <input type="text" class="wizard-input" id="wizCouponInput" placeholder="Have a coupon code?">
+              <button class="wizard-btn secondary wiz-coupon-apply" id="wizCouponBtn">Apply</button>
+            </div>
+            <div class="wiz-coupon-result" id="wizCouponResult"></div>
+            <div class="wiz-plan-status" id="wizPlanStatus"></div>
+            <div class="wizard-nav">
+              <button class="wizard-btn secondary" data-action="back">← Back</button>
+              <button class="wizard-btn primary" data-action="next" id="wizPlanNext">Next →</button>
+            </div>
+          </div>
+
+          <!-- Step 5: All Set -->
+          <div class="wizard-step" id="wizardStep5" style="display:none">
+            <div class="wizard-emoji">🚀</div>
+            <h2 class="wizard-title">You're All Set!</h2>
+            <p class="wizard-desc">Press the shortcut below to start recording anywhere.</p>
+            <div class="wiz-shortcuts">
+              <div class="wiz-shortcut-row"><kbd>Ctrl+Shift+Space</kbd><span>Start / Stop recording</span></div>
+              <div class="wiz-shortcut-row"><kbd>Ctrl+Shift+V</kbd><span>Paste transcript at cursor</span></div>
+              <div class="wiz-shortcut-row"><kbd>Ctrl+Shift+W</kbd><span>Show / Hide window</span></div>
+            </div>
+            <div class="wiz-system-options" id="wizSystemOptions">
+              <label class="wiz-checkbox-row">
+                <input type="checkbox" id="wizAutostart" checked>
+                <span>Launch Windy Pro on login</span>
+              </label>
+            </div>
+            <button class="wizard-btn primary wiz-finish-btn" data-action="finish">Start Recording 🎤</button>
+          </div>
         </div>
-      </div>
-    `;
+      </div>`;
+  }
+
+  _showStep(n) {
+    if (n < 0 || n >= this.totalSteps) return;
+    this.step = n;
+
+    // Update slides
+    for (let i = 0; i < this.totalSteps; i++) {
+      const el = document.getElementById(`wizardStep${i}`);
+      if (el) el.style.display = i === n ? 'flex' : 'none';
     }
 
-    _showStep(n) {
-        this.step = n;
-        for (let i = 0; i < 4; i++) {
-            const el = document.getElementById(`wizardStep${i}`);
-            if (el) el.style.display = i === n ? 'flex' : 'none';
-        }
-        const fill = document.getElementById('wizardProgressFill');
-        if (fill) fill.style.width = `${((n + 1) / 4) * 100}%`;
+    // Update dots
+    const dots = this.overlay.querySelectorAll('.wizard-dot');
+    dots.forEach((d, i) => {
+      d.classList.toggle('active', i === n);
+      d.classList.toggle('completed', i < n);
+    });
 
-        // Update summary on last step
-        if (n === 3) {
-            const summary = document.getElementById('wizardSummary');
-            const modeLabel = this.choices.recordingMode === 'batch' ? '✨ Batch (best quality)' : '📝 Live (real-time)';
-            const engineLabels = { local: '🏠 Local', cloud: '☁️ WindyPro Cloud', deepgram: '🎙️ Deepgram', groq: '⚡ Groq', openai: '🌐 OpenAI' };
-            summary.innerHTML = `
-        <div class="summary-row"><span>Recording Mode</span><strong>${modeLabel}</strong></div>
-        <div class="summary-row"><span>Engine</span><strong>${engineLabels[this.choices.engine]}</strong></div>
-      `;
-        }
-    }
+    // Save state
+    this._saveState();
 
-    _bindEvents() {
-        // Navigation buttons
-        this.overlay.querySelectorAll('[data-action]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const action = e.currentTarget.dataset.action;
-                if (action === 'next') this._showStep(this.step + 1);
-                else if (action === 'back') this._showStep(this.step - 1);
-                else if (action === 'finish') this._complete();
-            });
+    // Step-specific init
+    if (n === 2) this._initEngineStep();
+    if (n === 4) this._initPlanStep();
+  }
+
+  async _saveState() {
+    try {
+      if (window.windyAPI?.setWizardState) {
+        const completedSteps = [];
+        for (let i = 0; i < this.step; i++) completedSteps.push(i);
+        await window.windyAPI.setWizardState({
+          currentStep: this.step,
+          completedSteps
         });
+      }
+    } catch (_) { }
+  }
 
-        // Mode cards
-        this.overlay.querySelectorAll('.wizard-card').forEach(card => {
-            card.addEventListener('click', () => {
-                this.overlay.querySelectorAll('.wizard-card').forEach(c => c.classList.remove('selected'));
-                card.classList.add('selected');
-                this.choices.recordingMode = card.dataset.mode;
-            });
-        });
+  _bindEvents() {
+    // Nav buttons
+    this.overlay.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const action = e.currentTarget.dataset.action;
+        if (action === 'next') this._showStep(this.step + 1);
+        else if (action === 'back') this._showStep(this.step - 1);
+        else if (action === 'finish') this._complete();
+      });
+    });
 
-        // Engine rows
-        this.overlay.querySelectorAll('.wizard-engine').forEach(row => {
-            row.addEventListener('click', () => {
-                this.overlay.querySelectorAll('.wizard-engine').forEach(r => r.classList.remove('selected'));
-                row.classList.add('selected');
-                this.choices.engine = row.dataset.engine;
-                this._updateApiKeyRow();
-            });
-        });
+    // Step 1: Mic test
+    const micTestBtn = this.overlay.querySelector('#wizMicTestBtn');
+    const micRetry = this.overlay.querySelector('#wizMicRetry');
+    if (micTestBtn) micTestBtn.addEventListener('click', () => this._testMicrophone());
+    if (micRetry) micRetry.addEventListener('click', () => this._testMicrophone());
+
+    // Step 3: Account
+    const accCreate = this.overlay.querySelector('#wizAccCreateBtn');
+    const accSkip = this.overlay.querySelector('#wizAccSkipBtn');
+    if (accCreate) accCreate.addEventListener('click', () => this._createAccount());
+    if (accSkip) accSkip.addEventListener('click', () => this._skipAccount());
+
+    // Step 4: Coupon
+    const couponBtn = this.overlay.querySelector('#wizCouponBtn');
+    if (couponBtn) couponBtn.addEventListener('click', () => this._applyCoupon());
+  }
+
+  // ═══ Step 1: Microphone Test ═══
+
+  async _testMicrophone() {
+    const btn = this.overlay.querySelector('#wizMicTestBtn');
+    const meter = this.overlay.querySelector('#wizMicMeter');
+    const meterBar = this.overlay.querySelector('#wizMicMeterBar');
+    const status = this.overlay.querySelector('#wizMicStatus');
+    const denied = this.overlay.querySelector('#wizMicDenied');
+    const nextBtn = this.overlay.querySelector('#wizMicNext');
+
+    btn.style.display = 'none';
+    denied.style.display = 'none';
+    status.textContent = '⏳ Requesting microphone access…';
+    status.className = 'wiz-mic-status';
+
+    try {
+      this._micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true }
+      });
+
+      meter.style.display = 'block';
+      status.textContent = '🎤 Speak now — you should see the meter move!';
+      status.classList.add('wiz-mic-ok');
+
+      // Audio analyser
+      this._micCtx = new AudioContext();
+      const source = this._micCtx.createMediaStreamSource(this._micStream);
+      const analyser = this._micCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      let peakDetected = false;
+      this._micInterval = setInterval(() => {
+        analyser.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        const level = Math.min(avg / 80, 1);
+        meterBar.style.width = `${level * 100}%`;
+
+        if (level > 0.15 && !peakDetected) {
+          peakDetected = true;
+          status.textContent = '✅ Microphone is working! You\'re good to go.';
+          nextBtn.disabled = false;
+        }
+      }, 50);
+    } catch (err) {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        denied.style.display = 'block';
+        status.textContent = '';
+      } else {
+        status.textContent = `❌ ${err.message}`;
+        status.classList.add('wiz-mic-error');
+      }
+      // Allow skipping even if mic fails
+      nextBtn.disabled = false;
+    }
+  }
+
+  _stopMicTest() {
+    if (this._micInterval) { clearInterval(this._micInterval); this._micInterval = null; }
+    if (this._micCtx) { try { this._micCtx.close(); } catch (_) { } this._micCtx = null; }
+    if (this._micStream) { this._micStream.getTracks().forEach(t => t.stop()); this._micStream = null; }
+  }
+
+  // ═══ Step 2: Engine Auto-Detection ═══
+
+  async _initEngineStep() {
+    const hwInfo = this.overlay.querySelector('#wizHwInfo');
+    const engineList = this.overlay.querySelector('#wizEngineList');
+
+    // Stop any running mic test
+    this._stopMicTest();
+
+    if (this._hardware) {
+      // Already loaded
+      return;
     }
 
-    _updateApiKeyRow() {
-        const row = document.getElementById('wizApiKeyRow');
-        const label = document.getElementById('wizApiKeyLabel');
-        const link = document.getElementById('wizApiKeyLink');
-        const needsKey = ['deepgram', 'groq', 'openai'].includes(this.choices.engine);
-        row.style.display = needsKey ? 'flex' : 'none';
-
-        const links = {
-            deepgram: 'https://console.deepgram.com/signup',
-            groq: 'https://console.groq.com/keys',
-            openai: 'https://platform.openai.com/api-keys'
-        };
-        if (needsKey) {
-            label.textContent = `${this.choices.engine.charAt(0).toUpperCase() + this.choices.engine.slice(1)} API Key`;
-            link.href = links[this.choices.engine] || '#';
-        }
+    try {
+      if (window.windyAPI?.detectHardware) {
+        this._hardware = await window.windyAPI.detectHardware();
+      } else {
+        this._hardware = { totalRAM: 8, cpuCores: 4, recommendedEngine: 'edge-standard', recommendation: 'We recommend Edge Standard for your system.' };
+      }
+    } catch (_) {
+      this._hardware = { totalRAM: 8, cpuCores: 4, recommendedEngine: 'edge-standard', recommendation: 'We recommend Edge Standard for your system.' };
     }
 
-    _complete() {
-        // Save recording mode
-        localStorage.setItem('windy_recordingMode', this.choices.recordingMode);
-        if (window.windyAPI?.updateSettings) {
-            window.windyAPI.updateSettings({ recordingMode: this.choices.recordingMode });
-        }
+    const hw = this._hardware;
 
-        // Save engine
-        localStorage.setItem('windy_engine', this.choices.engine);
-        if (window.windyAPI?.updateSettings) {
-            window.windyAPI.updateSettings({ engine: this.choices.engine });
-        }
+    // Hardware info card
+    hwInfo.innerHTML = `
+      <div class="wiz-hw-card">
+        <div class="wiz-hw-row"><span>💻 CPU</span><strong>${hw.cpuCores} cores</strong></div>
+        <div class="wiz-hw-row"><span>🧠 RAM</span><strong>${hw.totalRAM} GB</strong></div>
+        ${hw.gpu ? `<div class="wiz-hw-row"><span>🎮 GPU</span><strong>${hw.gpu.name} (${Math.round(hw.gpu.vramMB / 1024)}GB)</strong></div>` : ''}
+        ${hw.diskFreeGB ? `<div class="wiz-hw-row"><span>💾 Free Disk</span><strong>${hw.diskFreeGB} GB</strong></div>` : ''}
+        <p class="wiz-hw-rec">💡 ${hw.recommendation}</p>
+      </div>`;
 
-        // Save API key if provided
-        const apiKeyInput = document.getElementById('wizApiKeyInput');
-        if (apiKeyInput && apiKeyInput.value.trim()) {
-            const key = apiKeyInput.value.trim();
-            const keyMap = { deepgram: 'deepgramApiKey', groq: 'groqApiKey', openai: 'openaiApiKey' };
-            const storageKey = keyMap[this.choices.engine];
-            if (storageKey) {
-                localStorage.setItem(`windy_${storageKey}`, key);
-                if (window.windyAPI?.updateSettings) {
-                    window.windyAPI.updateSettings({ [storageKey]: key });
-                }
-            }
-        }
+    // Engine cards
+    const engines = [
+      { key: 'edge-spark', icon: '🛡️', name: 'Edge Spark', desc: '42 MB · Ultra-light', speed: '32×', quality: '★★☆☆☆' },
+      { key: 'edge-pulse', icon: '🛡️', name: 'Edge Pulse', desc: '78 MB · Phone-friendly', speed: '16×', quality: '★★★☆☆' },
+      { key: 'edge-standard', icon: '🛡️', name: 'Edge Standard', desc: '168 MB · Best CPU balance', speed: '6×', quality: '★★★★☆' },
+      { key: 'core-standard', icon: '⚡', name: 'Core Standard', desc: '466 MB · GPU required', speed: '6×', quality: '★★★★☆', needsGPU: true },
+      { key: 'core-ultra', icon: '⚡', name: 'Core Ultra', desc: '2.9 GB · BEST accuracy', speed: '1×', quality: '★★★★★', needsGPU: true },
+    ];
 
-        // Mark wizard complete
-        localStorage.setItem('windy_wizardComplete', 'true');
-        localStorage.setItem('windy_lastSeenVersion', '0.4.0');
+    const recommended = hw.recommendedEngine || 'edge-standard';
+    this.choices.engine = recommended;
 
-        // Remove overlay
-        this.overlay.remove();
-        this.overlay = null;
+    engineList.innerHTML = engines.map(e => {
+      const isRec = e.key === recommended;
+      const disabled = e.needsGPU && !hw.gpu;
+      return `
+        <div class="wizard-engine ${isRec ? 'selected' : ''} ${disabled ? 'wiz-engine-disabled' : ''}" 
+             data-engine="${e.key}" ${disabled ? 'title="Requires NVIDIA GPU"' : ''}>
+          <span class="engine-icon">${e.icon}</span>
+          <div class="engine-info">
+            <strong>${e.name} ${isRec ? '<span class="wiz-rec-badge">RECOMMENDED</span>' : ''}</strong>
+            <span class="engine-tag">${e.desc} · ${e.speed} speed · ${e.quality}</span>
+          </div>
+          <span class="engine-check">✓</span>
+        </div>`;
+    }).join('');
+
+    // Bind engine clicks
+    engineList.querySelectorAll('.wizard-engine:not(.wiz-engine-disabled)').forEach(row => {
+      row.addEventListener('click', () => {
+        engineList.querySelectorAll('.wizard-engine').forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+        this.choices.engine = row.dataset.engine;
+      });
+    });
+  }
+
+  // ═══ Step 3: Account Creation ═══
+
+  async _createAccount() {
+    const name = this.overlay.querySelector('#wizAccName').value.trim();
+    const email = this.overlay.querySelector('#wizAccEmail').value.trim();
+    const password = this.overlay.querySelector('#wizAccPassword').value;
+    const status = this.overlay.querySelector('#wizAccStatus');
+    const btn = this.overlay.querySelector('#wizAccCreateBtn');
+
+    if (!email || !password) {
+      status.textContent = '⚠️ Email and password are required';
+      status.className = 'wiz-acc-status wiz-acc-error';
+      return;
     }
+    if (password.length < 8) {
+      status.textContent = '⚠️ Password must be at least 8 characters';
+      status.className = 'wiz-acc-status wiz-acc-error';
+      return;
+    }
+
+    btn.disabled = true;
+    status.textContent = '⏳ Creating account…';
+    status.className = 'wiz-acc-status';
+
+    try {
+      if (!window.windyAPI?.registerWizardAccount) throw new Error('Not available');
+      const result = await window.windyAPI.registerWizardAccount({ email, password, name });
+      if (result.ok) {
+        this.choices.accountEmail = email;
+        this.choices.accountSkipped = false;
+        status.textContent = '✅ Account created! You can sign in from any device.';
+        status.className = 'wiz-acc-status wiz-acc-ok';
+
+        // Also save to localStorage for settings panel
+        localStorage.setItem('windy_cloudEmail', email);
+        localStorage.setItem('windy_cloudPassword', password);
+
+        // Auto-advance after a moment
+        setTimeout(() => this._showStep(this.step + 1), 1500);
+      } else {
+        status.textContent = `❌ ${result.error}`;
+        status.className = 'wiz-acc-status wiz-acc-error';
+      }
+    } catch (err) {
+      status.textContent = `❌ ${err.message}`;
+      status.className = 'wiz-acc-status wiz-acc-error';
+    }
+    btn.disabled = false;
+  }
+
+  _skipAccount() {
+    this.choices.accountSkipped = true;
+    this._showStep(this.step + 1);
+  }
+
+  // ═══ Step 4: Plan Selection ═══
+
+  _initPlanStep() {
+    const container = this.overlay.querySelector('#wizPlanCards');
+    const plans = [
+      { key: 'free', name: 'Free', price: '$0', period: 'forever', color: '#6B7280', icon: '🌱', features: ['1 language', '3 engines', '5-min'], priceId: null },
+      { key: 'pro', name: 'Windy Pro', price: '$49', period: 'one-time', color: '#22C55E', icon: '⚡', features: ['All engines', '99 languages', '30-min'], priceId: 'price_1T5oYzBXIOBasDQibSlnIsPg' },
+      { key: 'translate', name: 'Translate', price: '$79', period: 'one-time', color: '#3B82F6', icon: '🌍', features: ['Pro +', 'Translation', 'Convo mode'], priceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7', recommended: true },
+      { key: 'translate_pro', name: 'Translate Pro', price: '$149', period: 'one-time', color: '#8B5CF6', icon: '👑', features: ['Everything', 'TTS', 'Glossaries'], priceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG' },
+    ];
+
+    this.choices.planTier = 'free';
+
+    container.innerHTML = plans.map(p => `
+      <div class="wiz-plan-card ${p.key === 'free' ? 'selected' : ''} ${p.recommended ? 'wiz-plan-recommended' : ''}" 
+           data-plan="${p.key}" data-price="${p.priceId || ''}" style="--plan-color: ${p.color}">
+        ${p.recommended ? '<span class="wiz-plan-rec-badge">RECOMMENDED</span>' : ''}
+        <div class="wiz-plan-icon">${p.icon}</div>
+        <div class="wiz-plan-name">${p.name}</div>
+        <div class="wiz-plan-price" style="color:${p.color}">${p.price}</div>
+        <div class="wiz-plan-period">${p.period}</div>
+        <ul class="wiz-plan-features">${p.features.map(f => `<li>✓ ${f}</li>`).join('')}</ul>
+      </div>`).join('');
+
+    container.querySelectorAll('.wiz-plan-card').forEach(card => {
+      card.addEventListener('click', () => {
+        container.querySelectorAll('.wiz-plan-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        this.choices.planTier = card.dataset.plan;
+        this.choices.planPriceId = card.dataset.price;
+      });
+    });
+  }
+
+  async _applyCoupon() {
+    const input = this.overlay.querySelector('#wizCouponInput');
+    const result = this.overlay.querySelector('#wizCouponResult');
+    const code = input.value.trim();
+    if (!code) return;
+
+    result.textContent = '⏳ Checking…';
+    try {
+      if (!window.windyAPI?.applyCoupon) throw new Error('Not available');
+      const res = await window.windyAPI.applyCoupon(code);
+      result.textContent = res.valid
+        ? `✅ ${res.discount.label} — will be applied at checkout!`
+        : `❌ ${res.error || 'Invalid code'}`;
+      result.className = `wiz-coupon-result ${res.valid ? 'coupon-valid' : 'coupon-invalid'}`;
+    } catch (_) {
+      result.textContent = '❌ Could not validate coupon';
+      result.className = 'wiz-coupon-result coupon-invalid';
+    }
+  }
+
+  // ═══ Complete ═══
+
+  async _complete() {
+    // Save engine
+    localStorage.setItem('windy_engine', this.choices.engine);
+    localStorage.setItem('windy_recordingMode', this.choices.recordingMode);
+    if (window.windyAPI?.updateSettings) {
+      window.windyAPI.updateSettings({
+        engine: this.choices.engine,
+        recordingMode: this.choices.recordingMode
+      });
+    }
+
+    // Handle plan selection — launch Stripe if paid
+    if (this.choices.planTier !== 'free' && this.choices.planPriceId) {
+      try {
+        if (window.windyAPI?.createCheckoutSession) {
+          const email = this.choices.accountEmail || localStorage.getItem('windy_cloudEmail') || '';
+          const result = await window.windyAPI.createCheckoutSession(this.choices.planPriceId, email);
+          if (result?.ok) {
+            const link = document.createElement('a');
+            link.href = result.url;
+            link.target = '_blank';
+            link.click();
+          }
+        }
+      } catch (_) { }
+    }
+
+    // Setup autostart
+    const autostart = this.overlay.querySelector('#wizAutostart');
+    if (autostart?.checked && window.windyAPI?.setupAutostart) {
+      try { await window.windyAPI.setupAutostart(true); } catch (_) { }
+    }
+
+    // Stop mic test cleanup
+    this._stopMicTest();
+
+    // Mark complete
+    localStorage.setItem('windy_wizardComplete', 'true');
+    if (window.windyAPI?.setWizardState) {
+      await window.windyAPI.setWizardState({ completed: true, currentStep: this.totalSteps - 1 });
+    }
+
+    // Animate out
+    this.overlay.style.animation = 'fadeOut 0.3s ease forwards';
+    setTimeout(() => {
+      if (this.overlay) { this.overlay.remove(); this.overlay = null; }
+    }, 300);
+  }
 }

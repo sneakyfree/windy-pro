@@ -2,7 +2,8 @@
  * Windy Pro — History Panel (Wispr Flow-style)
  *
  * Full-height panel with date grouping, search, expand/collapse,
- * stats header, and lazy loading from both localStorage + disk archives.
+ * stats header, media indicators, audio playback, and lazy loading
+ * from both localStorage + disk archives.
  */
 class HistoryPanel {
     constructor(app) {
@@ -17,6 +18,7 @@ class HistoryPanel {
         this.searchTimeout = null;
         this.totalWords = 0;
         this.totalRecordings = 0;
+        this._activeAudioUrl = null; // Track blob URL for cleanup
         this.engineIcons = {
             local: '🏠', cloud: '☁️', deepgram: '🎙️',
             groq: '⚡', openai: '🌐', stream: '📝'
@@ -48,6 +50,11 @@ class HistoryPanel {
     }
 
     close() {
+        // Cleanup audio blob URL
+        if (this._activeAudioUrl) {
+            URL.revokeObjectURL(this._activeAudioUrl);
+            this._activeAudioUrl = null;
+        }
         if (this.panel) {
             this.panel.classList.remove('open');
             setTimeout(() => {
@@ -194,11 +201,15 @@ class HistoryPanel {
                     preview = this._highlightText(preview, searchQuery);
                 }
 
+                // Media indicator badges
+                const mediaBadges = this._renderMediaBadges(item);
+
                 html += `<div class="history-entry ${isExpanded ? 'expanded' : ''}" data-id="${this._escapeHtml(String(id))}">
           <div class="history-entry-header">
             <span class="history-time">${time}</span>
             <span class="history-preview">${preview}</span>
             <span class="history-badges">
+              ${mediaBadges}
               <span class="history-wc">${item.wordCount || 0}w</span>
               <span class="history-engine">${icon}</span>
             </span>
@@ -218,11 +229,40 @@ class HistoryPanel {
 
         body.innerHTML = html;
         this._bindEntryEvents();
+
+        // If expanded entry has audio, load the audio player
+        if (this.expandedId) {
+            const item = this.filteredEntries.find(e => (e._id || e.date) === this.expandedId);
+            if (item?.hasAudio && item.audioPath) {
+                this._loadAudioPlayer(item.audioPath);
+            }
+        }
+    }
+
+    _renderMediaBadges(item) {
+        let badges = '<span class="history-media-badges">';
+        badges += '<span class="media-badge" title="Has transcript">📝</span>';
+        if (item.hasAudio) {
+            badges += '<span class="media-badge media-audio" title="Has audio recording">🎤</span>';
+        }
+        if (item.hasVideo) {
+            badges += '<span class="media-badge media-video" title="Has video recording">🎬</span>';
+        }
+        badges += '</span>';
+        return badges;
     }
 
     _renderExpanded(item) {
         const fullText = this._escapeHtml(item.text || '').replace(/\n/g, '<br>');
+        let audioSection = '';
+        if (item.hasAudio && item.audioPath) {
+            audioSection = `
+        <div class="history-audio-player" id="historyAudioPlayer">
+          <div class="audio-loading">🎤 Loading audio…</div>
+        </div>`;
+        }
         return `<div class="history-expanded">
+      ${audioSection}
       <div class="history-full-text">${fullText}</div>
       <div class="history-expanded-actions">
         <button class="history-exp-btn" data-action="copy">📋 Copy</button>
@@ -231,6 +271,51 @@ class HistoryPanel {
         <button class="history-exp-btn history-danger" data-action="delete">🗑️ Delete</button>
       </div>
     </div>`;
+    }
+
+    async _loadAudioPlayer(audioPath) {
+        const container = this.panel?.querySelector('#historyAudioPlayer');
+        if (!container) return;
+
+        try {
+            // Cleanup previous blob URL
+            if (this._activeAudioUrl) {
+                URL.revokeObjectURL(this._activeAudioUrl);
+                this._activeAudioUrl = null;
+            }
+
+            if (!window.windyAPI?.readArchiveAudio) {
+                container.innerHTML = '<div class="audio-error">Audio playback not available</div>';
+                return;
+            }
+
+            const result = await window.windyAPI.readArchiveAudio(audioPath);
+            if (!result?.ok || !result.base64) {
+                container.innerHTML = '<div class="audio-error">Failed to load audio</div>';
+                return;
+            }
+
+            // Convert base64 to blob URL
+            const binaryStr = atob(result.base64);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+            const blob = new Blob([bytes], { type: result.mimeType || 'audio/webm' });
+            this._activeAudioUrl = URL.createObjectURL(blob);
+
+            container.innerHTML = `
+        <div class="audio-player-wrapper">
+          <span class="audio-label">🎤 Recording</span>
+          <audio controls preload="metadata" class="history-audio-el">
+            <source src="${this._activeAudioUrl}" type="${result.mimeType || 'audio/webm'}">
+            Your browser does not support audio playback.
+          </audio>
+        </div>`;
+        } catch (err) {
+            console.warn('[History] Audio load error:', err.message);
+            container.innerHTML = '<div class="audio-error">Audio load error</div>';
+        }
     }
 
     _groupByDate(entries) {
@@ -319,6 +404,11 @@ class HistoryPanel {
             header.addEventListener('click', () => {
                 const entry = header.closest('.history-entry');
                 const id = entry.dataset.id;
+                // Cleanup audio when collapsing
+                if (this.expandedId === id && this._activeAudioUrl) {
+                    URL.revokeObjectURL(this._activeAudioUrl);
+                    this._activeAudioUrl = null;
+                }
                 this.expandedId = (this.expandedId === id) ? null : id;
                 this._renderEntries();
             });

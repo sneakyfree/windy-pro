@@ -1,10 +1,36 @@
 # 🧬 WINDY PRO — DNA STRAND MASTER PLAN
 
-**Version:** 1.2.0
+**Version:** 1.4.1
 **Created:** 2026-02-04
-**Last Updated:** 2026-02-20
-**Authors:** Kit 0 + Kit-0C1Veron + Antigravity + Grant Whitmer
+**Last Updated:** 2026-02-27
+**Authors:** Kit 0 + Kit-0C1Veron + Antigravity + Kit 0C3 Charlie + Grant Whitmer
 **Philosophy:** Begin with the end in mind. — Stephen R. Covey
+
+---
+
+## 🗣️ TERMINOLOGY STANDARD (27 Feb 2026)
+
+| Internal / Technical | User-Facing / Marketing |
+|---------------------|------------------------|
+| Model, LLM, weights | **Voice Engine** or **Engine** |
+| Model selection | **Engine selection** |
+| Model catalog | **Engine library** |
+| Download models | **Download engines** |
+| Model Manager | **Engine Manager** |
+| Model cocktail | **Engine cocktail** |
+
+**Rule:** Users never see the word "model" in the UI. It's always "engine" or "voice engine."
+Normal people understand engines — bigger = more power, smaller = more efficient. The car metaphor
+maps perfectly without requiring any AI/ML knowledge. Decision by Grant, 27 Feb 2026.
+
+### Additional Terminology Decisions (27 Feb 2026)
+
+| Decision | Details | By |
+|----------|---------|----|
+| "Engines" not "models" | All user-facing text uses "engine" exclusively | Grant |
+| $7.99/mo monthly option | Windy Translate: $79 one-time **OR** $7.99/mo monthly alongside one-time | Grant + Kit 0C3 |
+| Two-tier translation | Hand-translate Top 10 languages, dynamic-translate remaining 89 via Veron | Grant + Kit 0C3 |
+| Top 10 = 82% market | Top 10 languages capture ~82% of global addressable market | Kit 0C3 |
 
 ---
 
@@ -41,7 +67,7 @@
 ## 🎯 THE END STATE (What We're Building Toward)
 
 ### The Vision in One Sentence
-**Windy Pro is a push-button, TurboTax-simple voice-to-text platform that provides unlimited, real-time transcription with absolute confidence that it's recording — local-first for power users, cloud-backed for everyone else.**
+**Windy Pro is a push-button, TurboTax-simple voice platform that provides unlimited real-time transcription AND real-time offline translation — local-first for power users, cloud-backed for everyone else. Your voice, your languages, your device, your privacy.**
 
 ### The User Experience (End State)
 
@@ -436,15 +462,15 @@ CODONS:
 
 #### B4: TurboTax Installer
 ```
-FILE: installer/
-STATUS: 🔲 NOT STARTED (Phase 1.4)
+FILE: installer-v2/screens/wizard.html + wizard-main.js + wizard-preload.js
+STATUS: 🟡 MOSTLY COMPLETE (wizard UI done, packaging not started)
 PRIORITY: HIGH (required for MVP)
-BLOCKED BY: B3
+NOTE: Wizard v2 implemented 27 Feb 2026 — 9 screens, i18n, brand experience
 
 CODONS:
-├── B4.1 Hardware Detection 🔲
+├── B4.1 Hardware Detection ✅
 │   │
-│   │  MODULE: installer/hardware-detect.js
+│   │  MODULE: installer-v2/screens/wizard.html (runHardwareScan())
 │   │
 │   ├── B4.1.1 NVIDIA GPU detection 🔲
 │   │   ├── Run: nvidia-smi --query-gpu=name,memory.total --format=csv
@@ -472,7 +498,7 @@ CODONS:
 │         "arch": "x64"
 │       }
 │
-├── B4.2 Model Selection Logic 🔲
+├── B4.2 Engine Selection Logic ✅
 │   │
 │   │  DECISION TREE:
 │   │
@@ -502,7 +528,7 @@ CODONS:
 │   │
 │   └── Display recommendation with "Why this choice?" tooltip
 │
-├── B4.3 Dependency Installation 🔲
+├── B4.3 Dependency Installation 🟡
 │   │
 │   │  STRATEGY: Bundle Python via PyInstaller
 │   │
@@ -541,7 +567,7 @@ CODONS:
 │   └── B4.4.4 Linux Permissions 🔲
 │       └── Flatpak portal permissions
 │
-├── B4.5 Installer UI 🔲
+├── B4.5 Installer UI ✅
 │   │
 │   │  SCREENS:
 │   │
@@ -557,7 +583,7 @@ CODONS:
 │   │   ✓ RAM: 64 GB
 │   │   ✓ Disk: 500 GB free
 │   │
-│   ├── Screen 3: Model Recommendation 🔲
+│   ├── Screen 3: Engine Recommendation 🔲
 │   │   "We recommend: Large v3 Turbo"
 │   │   "Best quality for your hardware"
 │   │   [Why this choice?]
@@ -872,6 +898,823 @@ The organism is DONE when:
 
 ---
 
+---
+
+## 🧬 STRAND E: WINDY TRANSLATE (Real-Time Offline Translation)
+
+**Added:** 2026-02-27 by Kit 0C3 Charlie
+**Priority:** HIGH — This is a standalone product-within-a-product that doubles the addressable market.
+
+### E0: Market Context & Competitive Intelligence
+
+```
+MARKET SIZE:
+├── Global machine translation market: $978M (2022) → $2.72B (2030), 13.5% CAGR
+├── Language services industry overall: ~$65B
+├── Military/defense = 30.6% of MT market (largest segment)
+├── Healthcare = fastest growing (15.3% CAGR)
+├── Google Translate: 500M+ daily users, 100B+ words/day
+
+DIRECT COMPETITORS (Conversation Mode — speak/translate/hand-over):
+├── Google Translate — FREE, cloud-only, 249 languages, "Conversation Mode"
+├── Apple Translate — FREE (iOS only), cloud-only, 20+ languages, "Face to Face"
+├── Microsoft Translator — FREE, cloud-only, 170+ languages, multi-device group mode
+├── iTranslate — $6/mo or $50/yr, cloud
+├── Speak & Translate — $5/mo or $30/yr, cloud
+├── SayHi (Amazon) — FREE, cloud
+
+HARDWARE TRANSLATORS:
+├── Pocketalk — Enterprise pricing (was $299), 92+ languages, HIPAA compliant
+├── Timekettle earbuds — $100-$300, each person wears one
+├── Travis Touch Go — $199, handheld, 155 languages
+├── WT2 Edge earbuds — $300, simultaneous translation
+├── Vasco — $300-$500, lifetime data, no subscription
+
+ENTERPRISE ON-PREMISE:
+├── SYSTRAN — $200 desktop / $15,000+ enterprise
+├── Google Cloud Translation API — $20/million chars
+├── Amazon Translate — $15/million chars
+
+OUR KILLER DIFFERENTIATOR:
+├── 100% OFFLINE speech-to-speech translation on user's own device
+├── ZERO data collection (Google mines everything)
+├── No subscription ever (destroys $6-30/mo competitors)
+├── HIPAA/privacy compliant BY DESIGN (no cloud = no breach)
+├── Works without cell signal (field operators, rural areas, travel)
+├── Customizable engine cocktails per user's language profile
+└── Runs on hardware they already own (vs $300-500 dedicated devices)
+
+NOBODY ELSE DOES FULLY OFFLINE SPEECH-TO-SPEECH TRANSLATION ON A PHONE/LAPTOP.
+This is a genuine market gap as of Feb 2026.
+```
+
+### E1: Translation Engine Core
+```
+FILE: src/engine/translator.py
+STATUS: 🔲 NOT STARTED
+PRIORITY: HIGH
+
+CODONS:
+├── E1.1 TranslationPair dataclass 🔲
+│   ├── source_lang: str (ISO 639-1, e.g., "en")
+│   ├── target_lang: str
+│   ├── source_text: str
+│   ├── translated_text: str
+│   ├── confidence: float (0.0-1.0)
+│   ├── timestamp: float
+│   └── is_partial: bool
+│
+├── E1.2 TranslationEngine class 🔲
+│   ├── __init__(model_path, source_lang, target_lang)
+│   ├── load_model() -> bool
+│   ├── translate(text: str) -> TranslationPair
+│   ├── translate_stream(segments: Iterator) -> Iterator[TranslationPair]
+│   ├── get_supported_pairs() -> List[Tuple[str, str]]
+│   ├── swap_languages()
+│   └── unload_model()
+│
+├── E1.3 Engine Backend Options 🔲
+│   │
+│   │  PRIMARY: CTranslate2 (same library family as faster-whisper)
+│   │  - Optimized for CPU + GPU inference
+│   │  - Supports OPUS-MT models (Helsinki-NLP)
+│   │  - Supports NLLB (Meta's No Language Left Behind — 200 languages)
+│   │  - Supports M2M-100 (Meta's many-to-many — 100 languages)
+│   │  - int8 quantization for low-RAM devices
+│   │
+│   │  MODELS (by quality tier):
+│   │  ├── Tier 1 (Best): NLLB-200-3.3B (3.3B params, ~6GB, GPU recommended)
+│   │  ├── Tier 2 (Good): NLLB-200-1.3B (1.3B params, ~2.5GB, CPU ok)
+│   │  ├── Tier 3 (Fast): NLLB-200-600M (600M params, ~1.2GB, any device)
+│   │  ├── Tier 4 (Tiny): OPUS-MT bilingual pairs (~300MB per pair, fastest)
+│   │  └── Tier 5 (Cloud fallback): API call to Veron for heavy languages
+│   │
+│   │  MODEL SELECTION LOGIC (mirrors Whisper engine selection):
+│   │  ├── GPU ≥ 6GB VRAM → NLLB-3.3B + float16
+│   │  ├── GPU < 6GB or CPU + RAM ≥ 16GB → NLLB-1.3B + int8
+│   │  ├── RAM ≥ 8GB → NLLB-600M + int8
+│   │  ├── RAM < 8GB → OPUS-MT bilingual (only their language pair)
+│   │  └── Potato hardware → Cloud fallback
+│   │
+│   └── E1.3.1 Engine Encryption (.wpr format) 🔲
+│       └── Same encryption as Whisper models — account-fingerprinted
+│
+├── E1.4 Language Detection (Auto-Detect Mode) 🔲
+│   ├── Use Whisper's built-in language detection (first 30s of audio)
+│   ├── Fallback: fasttext language ID model (~1MB, instant)
+│   ├── Cache detected language per speaker turn
+│   └── Override: user can pin source language manually
+│
+└── E1.5 Translation Pipeline Integration 🔲
+    │
+    │  FLOW: Audio → Whisper STT → Translation Engine → Display
+    │
+    ├── Whisper outputs source-language text
+    ├── Translation engine converts to target language
+    ├── Both source and translated text displayed simultaneously
+    ├── Latency budget: STT (500ms) + Translation (200ms) = 700ms total
+    └── Pipeline runs in separate thread/process to avoid blocking STT
+```
+
+### E2: Conversation Mode (The "Hand-Over" Feature)
+```
+FILE: src/engine/conversation.py
+STATUS: 🔲 NOT STARTED
+PRIORITY: HIGH — This is the feature that sells Windy Translate
+
+CODONS:
+├── E2.1 ConversationSession class 🔲
+│   ├── speaker_a_lang: str (e.g., "en")
+│   ├── speaker_b_lang: str (e.g., "es")
+│   ├── current_speaker: "A" | "B"
+│   ├── turns: List[ConversationTurn]
+│   ├── auto_detect: bool (detect who's speaking by language)
+│   └── mode: "manual" | "auto" | "split-screen"
+│
+├── E2.2 ConversationTurn dataclass 🔲
+│   ├── speaker: "A" | "B"
+│   ├── original_text: str
+│   ├── translated_text: str
+│   ├── source_lang: str
+│   ├── target_lang: str
+│   ├── timestamp: float
+│   └── audio_segment: Optional[bytes]
+│
+├── E2.3 Conversation Modes 🔲
+│   │
+│   ├── MANUAL MODE (Simplest):
+│   │   ├── Big button: "I'm speaking" / "They're speaking"
+│   │   ├── Tap to switch who's talking
+│   │   ├── Screen shows translation for the LISTENER
+│   │   └── Ideal for: handing phone back and forth
+│   │
+│   ├── AUTO MODE (Smart):
+│   │   ├── Whisper detects language of incoming audio
+│   │   ├── If language = Speaker A's lang → translate to B's lang
+│   │   ├── If language = Speaker B's lang → translate to A's lang
+│   │   ├── No button needed — just talk
+│   │   └── Ideal for: phone on table between two people
+│   │
+│   └── SPLIT-SCREEN MODE (Visual):
+│       ├── Screen divided: top half = Person A's view, bottom = Person B's
+│       ├── Each half shows the OTHER person's words translated
+│       ├── Color-coded by speaker
+│       └── Ideal for: face-to-face across a table, phone laying flat
+│
+├── E2.4 Text-to-Speech Output (Optional) 🔲
+│   ├── After translation, optionally speak the translated text aloud
+│   ├── Use system TTS or bundled TTS model (Piper/Coqui)
+│   ├── Voice selection per language
+│   └── Adjustable speed (0.75x - 1.5x)
+│
+└── E2.5 Conversation Export 🔲
+    ├── Export full conversation as bilingual transcript
+    ├── Formats: .txt, .md, .pdf, .srt (for video subtitling)
+    ├── Side-by-side or interleaved format
+    └── Timestamp per turn
+```
+
+### E3: Language Profile & Model Management
+```
+FILE: src/engine/language_profile.py
+STATUS: 🔲 NOT STARTED
+
+CODONS:
+├── E3.1 UserLanguageProfile dataclass 🔲
+│   ├── languages: List[LanguageEntry]
+│   │   ├── code: str (ISO 639-1)
+│   │   ├── name: str (display name)
+│   │   ├── percentage: int (0-100, must sum to 100)
+│   │   └── is_primary: bool
+│   ├── created_at: datetime
+│   └── updated_at: datetime
+│
+├── E3.2 Engine Cocktail Generator 🔲
+│   │
+│   │  Based on language profile, determine optimal model set:
+│   │
+│   ├── IF user speaks 1 language:
+│   │   └── Whisper model optimized for that language only (smaller, faster)
+│   │
+│   ├── IF user speaks 2 languages (e.g., EN 70% / ES 30%):
+│   │   ├── Whisper multilingual model
+│   │   ├── OPUS-MT bilingual pair (en↔es) — smallest, fastest for 2 langs
+│   │   └── Total download: ~800MB
+│   │
+│   ├── IF user speaks 3-4 languages:
+│   │   ├── Whisper multilingual model
+│   │   ├── NLLB-600M (covers all pairs) — ~1.2GB
+│   │   └── Total download: ~2GB
+│   │
+│   └── IF user speaks 5+ languages:
+│       ├── Whisper large multilingual
+│       ├── NLLB-1.3B or NLLB-3.3B (depending on hardware)
+│       └── Total download: 3-7GB
+│
+├── E3.3 Supported Languages (99 Target) 🔲
+│   │
+│   │  Priority tiers for development:
+│   │
+│   ├── Tier 1 (Launch — 15 languages):
+│   │   English, Spanish, French, German, Portuguese, Italian,
+│   │   Chinese (Simplified), Chinese (Traditional), Japanese,
+│   │   Korean, Arabic, Hindi, Russian, Turkish, Vietnamese
+│   │
+│   ├── Tier 2 (Month 2 — 30 more):
+│   │   Dutch, Polish, Swedish, Norwegian, Danish, Finnish,
+│   │   Thai, Indonesian, Malay, Tagalog, Ukrainian, Czech,
+│   │   Romanian, Hungarian, Greek, Hebrew, Persian, Urdu,
+│   │   Bengali, Tamil, Telugu, Swahili, Amharic, Hausa,
+│   │   Yoruba, Igbo, Zulu, Afrikaans, Catalan, Basque
+│   │
+│   └── Tier 3 (Month 3-4 — remaining to 99):
+│       └── Fill from NLLB-200's supported list based on user demand
+│
+└── E3.4 Language Search & Selection UI Component 🔲
+    │
+    │  Reusable across installer wizard AND settings panel
+    │
+    ├── Searchable dropdown (type to filter)
+    ├── Flag icons for visual identification
+    ├── Recently used languages pinned at top
+    ├── Percentage sliders (auto-balance to 100%)
+    ├── Drag to reorder by frequency
+    └── "I don't know the percentages" → equal split option
+```
+
+### E4: Pricing & Monetization Architecture
+```
+STATUS: 🔲 DESIGN PHASE
+
+CODONS:
+├── E4.1 Tier Structure 🔲
+│   │
+│   │  ┌────────────────────────────────────────────────────────┐
+│   │  │          WINDY PRO PRICING TIERS                       │
+│   │  ├────────────────────────────────────────────────────────┤
+│   │  │                                                        │
+│   │  │  FREE TIER (Windy Pro Base)                            │
+│   │  │  ├── Voice-to-text in 1 language                       │
+│   │  │  ├── Local Whisper engine only                         │
+│   │  │  ├── Basic model (base/small)                          │
+│   │  │  └── No translation                                    │
+│   │  │                                                        │
+│   │  │  WINDY PRO — $49 one-time                              │
+│   │  │  ├── Voice-to-text in any language                     │
+│   │  │  ├── All 5 engines                                     │
+│   │  │  ├── 30-min recordings, batch mode                     │
+│   │  │  ├── LLM polish, speaker ID                            │
+│   │  │  ├── All Whisper model sizes                           │
+│   │  │  └── No translation                                    │
+│   │  │                                                        │
+│   │  │  WINDY TRANSLATE — $79 one-time OR $7.99/mo            │
+│   │  │  ├── 2-way conversation translation                    │
+│   │  │  ├── Up to 5 language pairs                            │
+│   │  │  ├── Manual + Auto conversation modes                  │
+│   │  │  ├── 100% offline                                      │
+│   │  │  └── Bilingual transcript export                       │
+│   │  │                                                        │
+│   │  │  WINDY TRANSLATE PRO — $149 one-time                   │
+│   │  │  ├── All 99 languages                                  │
+│   │  │  ├── All conversation modes (manual/auto/split-screen) │
+│   │  │  ├── TTS output (hear translations spoken)             │
+│   │  │  ├── Medical/legal glossary packs                      │
+│   │  │  ├── Priority model updates                            │
+│   │  │  └── Custom terminology support                        │
+│   │  │                                                        │
+│   │  │  WINDY ENTERPRISE — $499+ per seat                     │
+│   │  │  ├── Everything in Translate Pro                       │
+│   │  │  ├── HIPAA compliance documentation                    │
+│   │  │  ├── Custom terminology databases                      │
+│   │  │  ├── Bulk deployment tools                             │
+│   │  │  ├── Admin dashboard                                   │
+│   │  │  └── Priority support                                  │
+│   │  │                                                        │
+│   │  └────────────────────────────────────────────────────────┘
+│   │
+│   │  KEY PRICING PSYCHOLOGY:
+│   │  ├── One-time payments ONLY — this is our brand promise
+│   │  ├── $79 undercuts $300 Pocketalk by 73%
+│   │  ├── $149 undercuts $500 Vasco by 70%
+│   │  ├── "No subscription ever" destroys iTranslate's $6/mo model
+│   │  └── Enterprise at $499 undercuts SYSTRAN by 30x
+│   │
+│   └── Upgrade path: Free → Pro ($49) → Translate ($79) → Translate Pro ($149)
+│       Each tier is cumulative — Translate Pro includes everything below it
+│
+├── E4.2 License Enforcement 🔲
+│   ├── Account-based activation (same system as Windy Pro)
+│   ├── 5-device limit per account
+│   ├── Translation engines only download if tier allows
+│   ├── Model files encrypted + account-fingerprinted (.wpr)
+│   └── Offline verification (grace period: 30 days without phone-home)
+│
+└── E4.3 In-App Upgrade Flow 🔲
+    ├── Settings → "Upgrade to Translate" (if not purchased)
+    ├── Context-aware prompts (detect multilingual audio → suggest upgrade)
+    ├── Installer wizard upsell (see Strand F — Installer)
+    └── One-click purchase via account server
+```
+
+### E5: Target Verticals (Revenue Strategy)
+```
+STATUS: 🔲 PLANNING
+
+CODONS:
+├── E5.1 Healthcare 🔲
+│   ├── HIPAA compliance: data never leaves device = compliant by design
+│   ├── Medical glossary pack (terminology, drug names, procedures)
+│   ├── Patient-provider conversation mode
+│   ├── Export to EHR-compatible formats
+│   ├── Target: hospitals, clinics, urgent care (vs $150-300/hr interpreters)
+│   └── Price: $499/seat (saves $thousands/year vs human interpreters)
+│
+├── E5.2 Education 🔲
+│   ├── Pocketalk already in 500+ school districts (proof of demand)
+│   ├── Teacher-student conversation mode
+│   ├── Parent-teacher conference mode
+│   ├── Classroom-wide mode (teacher speaks, all students see translation)
+│   ├── Target: school districts, ESL programs, universities
+│   └── Price: $149/seat (district bulk: $99/seat for 50+)
+│
+├── E5.3 Military/Defense 🔲
+│   ├── 30.6% of MT market = largest segment
+│   ├── Offline-first = works in field with no cell signal
+│   ├── Air-gapped operation possible
+│   ├── Target: field interpreters, base operations, allied forces comms
+│   └── Price: Government contract pricing (GSA schedule potential)
+│
+├── E5.4 Travel/Hospitality 🔲
+│   ├── Hotels, airports, tourist services
+│   ├── No wifi needed (offline)
+│   ├── Simple UI for non-technical staff
+│   └── Price: $79-149 per device
+│
+└── E5.5 Legal 🔲
+    ├── Attorney-client privilege: nothing leaves device
+    ├── Legal glossary pack
+    ├── Deposition/interview translation
+    └── Price: $499/seat
+```
+
+---
+
+## 🧬 STRAND F: INSTALLER WIZARD v2 (Translation-Aware)
+
+**Added:** 2026-02-27 by Kit 0C3 Charlie
+**Depends on:** Strand E (Translation Engine), existing B4 (Installer)
+**Reference:** INSTALLER-WIZARD-MASTER-PLAN.md (workspace)
+
+### F1: Language Profiling Screen (All Users See This)
+```
+STATUS: 🔲 NOT STARTED
+
+CODONS:
+├── F1.1 Language Search & Selection 🔲
+│   ├── Searchable input field (type "span" → "Spanish" appears)
+│   ├── Full list of 99 supported languages
+│   ├── Flag icons + native script name (e.g., "Español 🇪🇸")
+│   ├── "Popular" section at top (top 15 languages)
+│   └── Max 10 languages per profile
+│
+├── F1.2 Percentage Sliders 🔲
+│   ├── Each selected language gets a slider (0-100%)
+│   ├── Sliders auto-balance to sum to 100%
+│   ├── Drag handle + numeric input
+│   ├── "I'm not sure" button → equal split
+│   └── Minimum 5% per language (if selected, it matters)
+│
+├── F1.3 Drag-to-Reorder 🔲
+│   ├── Primary language = top of list
+│   ├── Drag handle on left side
+│   └── Reorder updates visual priority
+│
+├── F1.4 Data Usage 🔲
+│   ├── Language profile stored locally (no cloud)
+│   ├── Informs Whisper engine selection (multilingual vs English-only)
+│   ├── Informs translation engine selection (which pairs to download)
+│   ├── Informs TTS voice pre-download
+│   └── Shown to user: "This helps us optimize your experience"
+│
+└── F1.5 UI Mockup 🔲
+
+    ┌─────────────────────────────────────────────────┐
+    │  🌐  YOUR LANGUAGES                             │
+    │                                                  │
+    │  What languages do you speak day-to-day?         │
+    │  This helps us pick the best models for you.     │
+    │                                                  │
+    │  Search: [________________] 🔍                   │
+    │                                                  │
+    │  ≡ 🇺🇸 English      ████████████████░░  75%     │
+    │  ≡ 🇪🇸 Spanish      ██████░░░░░░░░░░░░  20%     │
+    │  ≡ 🇫🇷 French       ██░░░░░░░░░░░░░░░░   5%     │
+    │                                                  │
+    │  [+ Add another language]                        │
+    │                                                  │
+    │  ⓘ Drag to reorder · Slide to adjust %          │
+    │  [ I'm not sure about percentages ]              │
+    │                                                  │
+    │                              [Continue →]        │
+    └─────────────────────────────────────────────────┘
+```
+
+### F2: Translation Upsell Screen (Only if 2+ Languages Detected)
+```
+STATUS: 🔲 NOT STARTED
+
+CODONS:
+├── F2.1 Conditional Display Logic 🔲
+│   ├── ONLY show if user selected 2+ languages in F1
+│   ├── If 1 language → skip this screen entirely
+│   └── If already purchased Translate tier → skip, show "✅ Included"
+│
+├── F2.2 Personalized Demo 🔲
+│   ├── Show example using THEIR ACTUAL language pair
+│   ├── e.g., if English + Spanish selected:
+│   │   "¿Dónde está la farmacia?" → "Where is the pharmacy?"
+│   ├── If English + Mandarin:
+│   │   "你好，请问洗手间在哪里？" → "Hello, where is the restroom?"
+│   └── Pre-built example sentences for top 15 language pairs
+│
+├── F2.3 Feature Highlights 🔲
+│   ├── ✨ Works 100% offline
+│   ├── 🔒 Conversations never leave your device
+│   ├── ⚡ Sub-second translation speed
+│   ├── 🗣️ Conversation mode — speak, translate, hand over
+│   └── 📝 Bilingual transcript export
+│
+├── F2.4 Pricing Display 🔲
+│   ├── Show tier that matches their language count:
+│   │   ├── 2-5 languages → Windy Translate ($79 one-time)
+│   │   └── 6+ languages → Windy Translate Pro ($149 one-time)
+│   ├── "One-time payment. No subscription. Ever."
+│   ├── Compare: "vs $300 for Pocketalk, $6/mo for iTranslate"
+│   └── "Maybe later" button (prominent, guilt-free)
+│
+├── F2.5 "Maybe Later" Behavior 🔲
+│   ├── Records preference (don't nag during install)
+│   ├── Shows in Settings → Translation after install
+│   ├── Gentle reminder after first multilingual audio detected
+│   └── Never more than 1 reminder per 30 days
+│
+└── F2.6 UI Mockup 🔲
+
+    ┌─────────────────────────────────────────────────┐
+    │  🎯  YOU SPEAK MULTIPLE LANGUAGES               │
+    │                                                  │
+    │  Windy Pro noticed you speak English and         │
+    │  Spanish. Unlock real-time conversation           │
+    │  translation?                                     │
+    │                                                  │
+    │  ┌───────────────────────────────────────┐       │
+    │  │  🗣️ "¿Dónde está la farmacia?"       │       │
+    │  │  📝 "Where is the pharmacy?"          │       │
+    │  │                                        │       │
+    │  │  🗣️ "Two blocks north on Main St."   │       │
+    │  │  📝 "Dos cuadras al norte en la       │       │
+    │  │      calle principal."                 │       │
+    │  └───────────────────────────────────────┘       │
+    │                                                  │
+    │  ✨ Works 100% offline                           │
+    │  🔒 Your conversations never leave your device   │
+    │  ⚡ Sub-second translation speed                 │
+    │                                                  │
+    │  ┌─────────────────────────────────────┐         │
+    │  │  Add Windy Translate — $79 one-time  │         │
+    │  │  No subscription. Ever.              │         │
+    │  └─────────────────────────────────────┘         │
+    │                                                  │
+    │  [ Maybe later ]                                 │
+    │  You can always add this from Settings           │
+    │                                                  │
+    └─────────────────────────────────────────────────┘
+```
+
+### F3: Updated Wizard Flow (Complete)
+```
+STATUS: 🔲 NOT STARTED
+
+SCREENS (in order):
+├── Screen 1: Welcome
+│   "Welcome to Windy Pro"
+│   Brand tornado animation
+│   [Get Started]
+│
+├── Screen 2: Account Login/Register
+│   Email + password (or license key)
+│   Device registration (1 of 5)
+│
+├── Screen 3: Hardware Scan
+│   "Scanning your system..."
+│   GPU, RAM, Disk, CPU detected
+│   Results displayed with checkmarks
+│
+├── Screen 4: Your Languages ← NEW (F1)
+│   Search, select, percentage sliders
+│   Informs engine cocktail selection
+│
+├── Screen 5: Translation Upgrade ← NEW (F2)
+│   Only if 2+ languages selected
+│   Personalized demo + pricing
+│   "Maybe later" prominent
+│
+├── Screen 6: Engine Recommendation
+│   Based on hardware (Screen 3) + languages (Screen 4) + tier
+│   "We recommend: [engine cocktail]"
+│   Shows total download size
+│   [Why this choice?] tooltip
+│
+├── Screen 7: Download & Install
+│   Whisper model download
+│   Translation engine download (if purchased)
+│   TTS voice download (if Translate Pro)
+│   Progress bars with ETA
+│   Brand experience during wait (feature education, tips)
+│
+├── Screen 8: Permissions
+│   Microphone access
+│   Accessibility (for cursor injection)
+│   Platform-specific guidance
+│
+├── Screen 9: Voice Sample ← NEW
+│   "Say something for 10 seconds"
+│   Calibrates their voice profile
+│   Shows live transcription as demo
+│   "Wow, it works!" moment
+│
+└── Screen 10: Complete
+    "You're ready!"
+    Quick-start guide
+    Hotkey reference card
+    [Launch Windy Pro]
+```
+
+### F4: Wizard i18n Integration ✅
+```
+FILE: installer-v2/screens/wizard-i18n.json + wizard.html
+STATUS: ✅ COMPLETE (27 Feb 2026)
+ADDED BY: Kit 0C3 Charlie + Antigravity
+
+CODONS:
+├── F4.1 Language Detection ✅
+│   ├── Wizard receives ?lang= URL parameter from website
+│   ├── Fallback: English if no param provided
+│   └── Language persists through all wizard screens
+│
+├── F4.2 Two-Tier Translation Data ✅
+│   ├── Tier 1 (Top 10): Hand-translated, bundled in wizard-i18n.json
+│   │   └── en, es, fr, zh, ar, pt, de (+ ja, ko, hi planned)
+│   ├── Tier 2 (11-99): Dynamic translation via Veron API 🔲
+│   │   └── Translated at install time (user has internet)
+│   │   └── Cached after first translation
+│   └── English is single source of truth — 138 keys across all 9 screens
+│
+├── F4.3 data-i18n HTML Attributes ✅
+│   ├── 76 data-i18n attributes on text elements
+│   ├── 7 data-i18n-placeholder attributes on input fields
+│   └── Matches website i18n pattern exactly
+│
+├── F4.4 RTL Support ✅
+│   ├── Arabic (ar) sets dir="rtl" on document root
+│   └── Layout adapts automatically via existing CSS
+│
+└── F4.5 t() Helper Function ✅
+    ├── t(key) → returns translated string for current language
+    ├── Falls back to English if key missing in target language
+    └── Available for JS-generated dynamic content
+```
+
+---
+
+## 🧬 STRAND G: INTERNATIONALIZATION (i18n)
+
+**Added:** 2026-02-27 by Kit 0C3 Charlie + Grant Whitmer
+**Priority:** HIGH — Global market requires localized experience from first touch
+**Key Decision:** Two-tier translation system (hand-translate 10, dynamic-translate 89)
+
+### G0: Architecture Decision — Two-Tier Translation System
+
+```
+KEY ARCHITECTURE DECISION (27 Feb 2026, Grant + Kit 0C3 Charlie)
+
+TWO-TIER TRANSLATION SYSTEM:
+
+  TIER 1 — TOP 10 LANGUAGES (Hand-Translated, Bundled)
+  ├── English, Chinese, Spanish, Hindi, Arabic
+  ├── Portuguese, French, Japanese, German, Korean
+  ├── Stored in i18n.json (website) and wizard-i18n.json (wizard)
+  ├── Bundled with app — no network call needed
+  ├── Human-reviewed for quality and cultural adaptation
+  └── Captures ~82% of global addressable market
+
+  TIER 2 — LANGUAGES 11-99 (Dynamically Translated via Veron)
+  ├── Translated at runtime by our own Windy Translate engine
+  ├── API call to Veron server: POST /translate {text, target_lang}
+  ├── Results cached in localStorage (website) or install cache (wizard)
+  ├── Auto-regenerates when English source content changes
+  └── DOG-FOODING: This IS our product being used to sell our product
+
+WHEN CONTENT CHANGES:
+  ├── English: edit directly (single source of truth)
+  ├── Top 10: run diff on changed strings → batch translate → human review → merge
+  └── 11-99: auto-translate from English on next user visit, cached locally
+
+MARKET COVERAGE:
+  ├── Top 10 languages  = ~82% of global internet users
+  ├── Top 30 languages  = ~95% of global internet users
+  ├── All 99 languages   = ~99.5% of global internet users
+  └── ROI: Hand-translating 10 languages covers the vast majority
+```
+
+### G1: Website i18n ✅
+```
+FILE: src/client/web/public/landing/i18n.json + index.html
+STATUS: ✅ COMPLETE (27 Feb 2026)
+
+CODONS:
+├── G1.1 Language Selector ✅
+│   ├── Dropdown in nav bar with flag + language name
+│   ├── 12 languages in selector (en, es, fr, de, pt, zh, ja, ko, ar, hi, ru, tr)
+│   └── Persists choice in localStorage
+│
+├── G1.2 Auto-Detection ✅
+│   ├── Priority: URL param (?lang=) → localStorage → navigator.language → 'en'
+│   └── Transparent to user — just works
+│
+├── G1.3 i18n.json (Tier 1 Data) ✅
+│   ├── 16 languages fully translated
+│   ├── ~55 keys per language covering all website sections
+│   └── Hand-translated, culturally adapted marketing copy
+│
+├── G1.4 Dynamic API Translation (Tier 2) 🔲
+│   ├── For languages not in i18n.json, call Veron API
+│   ├── Cache result in localStorage per language + content hash
+│   └── Show Tier 1 translation or loading shimmer while fetching
+│
+├── G1.5 RTL Support ✅
+│   ├── Arabic sets dir="rtl" on html element
+│   └── CSS adapts layout automatically
+│
+└── G1.6 Download Links Pass Language ✅
+    ├── All download/wizard links append ?lang= param
+    └── User's language selection flows to installer wizard
+```
+
+### G2: Wizard i18n ✅
+```
+FILE: installer-v2/screens/wizard-i18n.json + wizard.html
+STATUS: ✅ COMPLETE (27 Feb 2026) — See F4 for implementation details
+
+CODONS:
+├── G2.1 URL Param Detection ✅
+│   ├── Reads ?lang= from URL (passed by website G1.6)
+│   └── Falls back to English if not provided
+│
+├── G2.2 Tier 1 Bundled Translations ✅
+│   ├── 7 languages × 138 keys = 966 translations bundled
+│   ├── Languages: en, es, fr, zh, ar, pt, de
+│   └── 3 more planned: ja, ko, hi (to complete Top 10)
+│
+├── G2.3 Tier 2 Install-Time Translation 🔲
+│   ├── User has internet at download time → translate wizard text
+│   ├── Cache translated strings after first translation
+│   └── Fall back to English if Veron unreachable
+│
+└── G2.4 83 Localized Elements ✅
+    ├── 76 data-i18n text elements across all 9 wizard screens
+    └── 7 data-i18n-placeholder input fields
+```
+
+### G3: In-App i18n 🔲
+```
+FILE: TBD
+STATUS: 🔲 NOT STARTED (Future)
+PRIORITY: MEDIUM
+
+CODONS:
+├── G3.1 App UI Strings 🔲
+│   ├── All desktop app strings externalized to JSON
+│   ├── Renderer UI, settings panel, vault, tray menu
+│   └── Same two-tier pattern as website
+│
+├── G3.2 Language Auto-Selection 🔲
+│   ├── Default to language selected during install (via G6 chain)
+│   ├── User can override in Settings → Language
+│   └── Applies immediately, no restart required
+│
+└── G3.3 Contextual Language 🔲
+    ├── Engine names stay in English (product names)
+    ├── Error messages localized
+    └── Keyboard shortcuts shown with local key names
+```
+
+### G4: Dynamic Translation API (Veron) 🔲
+```
+FILE: TBD (Veron server endpoint)
+STATUS: 🔲 NOT STARTED
+PRIORITY: HIGH — Required for Tier 2 translation
+
+CODONS:
+├── G4.1 Translation Endpoint 🔲
+│   ├── POST /api/v1/translate
+│   ├── Request: { "text": "...", "source": "en", "target": "ja", "context": "marketing" }
+│   ├── Response: { "translated": "...", "confidence": 0.95, "cached": false }
+│   └── Rate limit: 100 requests/min per IP (generous for i18n use)
+│
+├── G4.2 Batch Translation 🔲
+│   ├── POST /api/v1/translate/batch
+│   ├── Request: { "texts": [...], "source": "en", "target": "ja" }
+│   ├── Response: { "translations": [...] }
+│   └── Used by website/wizard to translate all keys at once
+│
+├── G4.3 Server-Side Caching 🔲
+│   ├── Cache translations by (source_text_hash + target_lang)
+│   ├── TTL: infinite (until source content changes)
+│   ├── Invalidate when English source hash changes
+│   └── Redis or SQLite cache backend
+│
+└── G4.4 Dog-Fooding 🔲
+    ├── This IS Windy Translate being used to sell Windy Translate
+    ├── Quality of dynamic translations = live product demo
+    ├── If translations are bad, users won't buy → self-correcting incentive
+    └── Every website visitor in a Tier 2 language sees our product in action
+```
+
+### G5: Translation Maintenance Pipeline 🔲
+```
+FILE: TBD (CI/CD script or admin tool)
+STATUS: 🔲 NOT STARTED
+PRIORITY: MEDIUM — Required when English content changes
+
+CODONS:
+├── G5.1 Content Hash Tracking 🔲
+│   ├── Each English key has a content hash (SHA-256 of value)
+│   ├── When English value changes, hash changes
+│   ├── Changed hashes = strings needing re-translation
+│   └── Stored in i18n-meta.json alongside i18n.json
+│
+├── G5.2 Tier 1 Re-Translation Workflow 🔲
+│   ├── Detect changed English strings via hash diff
+│   ├── Batch-translate changed strings to all 10 Tier 1 languages
+│   ├── Human review queue (approve/edit before merge)
+│   ├── PR-based workflow: bot creates PR with updated translations
+│   └── Cadence: on each release or sprint boundary
+│
+├── G5.3 Tier 2 Cache Invalidation 🔲
+│   ├── When English content hash changes → invalidate cached translations
+│   ├── Next user visit in Tier 2 language triggers fresh API translation
+│   ├── localStorage cache keys include content hash → auto-invalidate
+│   └── Graceful: show stale translation while fetching new one
+│
+└── G5.4 Quality Monitoring 🔲
+    ├── Flag button on website: "Translation incorrect?" → report
+    ├── Reports feed into Tier 1 promotion candidates
+    ├── High-traffic Tier 2 languages may graduate to Tier 1
+    └── Metrics: error reports per language, translation latency
+```
+
+### G6: Language Chain (Continuous Experience) 🟡
+```
+STATUS: 🟡 PARTIALLY COMPLETE
+PRIORITY: HIGH — Seamless language continuity is the goal
+
+THE CHAIN:
+
+  Website Language (G1)
+       ↓ ?lang= URL param
+  Wizard Language (G2)
+       ↓ pre-selected primary language
+  Language Profile (F1)
+       ↓ stored in user preferences
+  App UI Language (G3)
+       ↓ same language everywhere
+  Continuous Experience ✅
+
+CODONS:
+├── G6.1 Website → Wizard Handoff ✅
+│   ├── Website appends ?lang= to all download/wizard links
+│   ├── Wizard reads param and displays in that language
+│   └── COMPLETE: Implemented in G1.6 and G2.1
+│
+├── G6.2 Wizard → Language Profile 🟡
+│   ├── User's selected language in wizard = pre-selected in Language screen
+│   ├── If user visited site in French → wizard in French → French pre-selected
+│   └── Needs: auto-add wizard language to language profile list
+│
+├── G6.3 Language Profile → App UI 🔲
+│   ├── Primary language from profile = app UI language
+│   ├── Applied on first launch after install
+│   └── User can override in Settings
+│
+└── G6.4 Cross-Device Sync 🔲
+    ├── Language preference synced via account server
+    ├── Login on new device → same language experience
+    └── Account stores { preferred_lang: "fr", profile: [...] }
+```
+
+---
+
 ## 📝 CHANGELOG
 
 | Date | Author | Change |
@@ -893,6 +1736,26 @@ The organism is DONE when:
 | 2026-02-20 | Antigravity | Added orphan features: Vibe, Updater, Settings, Vault panels |
 | 2026-02-20 | Antigravity | New gap analysis focused on hardening (scores 7→9+) |
 | 2026-02-20 | Antigravity | Updated Known Issues: 4 resolved, 2 new identified |
+| 2026-02-27 | Kit 0C3 Charlie | **v1.3.0**: Added Strand E — Windy Translate (full translation engine) |
+| 2026-02-27 | Kit 0C3 Charlie | Added E1-E5: Translation engine, conversation mode, language profiles, pricing, verticals |
+| 2026-02-27 | Kit 0C3 Charlie | Added Strand F: Translation-aware installer wizard v2 (F1-F3) |
+| 2026-02-27 | Kit 0C3 Charlie | Updated vision statement to include translation |
+| 2026-02-27 | Kit 0C3 Charlie | Market research: $978M→$2.72B market, competitor analysis, pricing strategy |
+| 2026-02-27 | Kit 0C3 Charlie + Grant | **v1.4.0**: Added Strand G — Internationalization (G1-G6) |
+| 2026-02-27 | Kit 0C3 Charlie + Antigravity | Added F4: Wizard i18n integration (✅ complete — 7 langs × 138 keys) |
+| 2026-02-27 | Grant | Architecture decision: Two-tier translation (hand-translate 10, dynamic 89) |
+| 2026-02-27 | Grant | Terminology standard: "engines" not "models" in all user-facing text |
+| 2026-02-27 | Grant + Kit 0C3 | Pricing update: $7.99/mo monthly option for Windy Translate |
+| 2026-02-27 | Kit 0C3 | Top 10 languages = ~82% of global addressable market |
+| 2026-02-27 | Kit 0C3 Charlie | **v1.4.1**: Full alignment audit — Website ↔ DNA ↔ Wizard |
+| 2026-02-27 | Kit 0C3 | Fixed website: "5 engines" → "15 Voice Engines", "13 Languages" → "99 Languages" |
+| 2026-02-27 | Kit 0C3 | Fixed website: version v0.4.2 → v0.5.0 everywhere (hero, download links) |
+| 2026-02-27 | Kit 0C3 | Fixed website: removed old engine names (Deepgram, Groq, OpenAI) — now proprietary messaging |
+| 2026-02-27 | Kit 0C3 | Fixed website: comparison table updated (15 engines, "Free / from $49") |
+| 2026-02-27 | Kit 0C3 | Added website: full 4-tier pricing section (Free/$49/$79/$149) + Enterprise CTA |
+| 2026-02-27 | Kit 0C3 | Added website: Pricing nav link |
+| 2026-02-27 | Kit 0C3 | Fixed DNA Plan: B4 status updated (B4.1 ✅, B4.2 ✅, B4.3 🟡, B4.5 ✅) |
+| 2026-02-27 | Kit 0C3 | Added wizard i18n: ja, ko, hi — completing Top 10 languages (10 × 138 keys) |
 
 ---
 

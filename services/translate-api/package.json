@@ -1,0 +1,23 @@
+{
+    "name": "windy-translate-api",
+    "version": "1.0.0",
+    "description": "Windy Pro Tier 2 dynamic translation API — CTranslate2 + NLLB-200-600M",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js",
+        "dev": "node server.js",
+        "setup-model": "python3 download-model.py"
+    },
+    "dependencies": {
+        "better-sqlite3": "^11.0.0",
+        "cors": "^2.8.5",
+        "express": "^4.21.0",
+        "express-rate-limit": "^7.4.0",
+        "md5": "^2.3.0"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "author": "Windy Pro Team",
+    "license": "MIT"
+}

@@ -9,6 +9,7 @@ class SettingsPanel {
     this.app = app;
     this.panel = document.getElementById('settingsPanel');
     this.isOpen = false;
+    this._upgradePanel = null;
     this.init();
   }
 
@@ -32,6 +33,15 @@ class SettingsPanel {
         <button class="settings-close" id="settingsClose">✕</button>
       </div>
       <div class="settings-body">
+        <div class="settings-section settings-plan-section" id="settingsPlanSection">
+          <h3>💎 Your Plan</h3>
+          <div class="settings-plan-row">
+            <div class="settings-tier-badge" id="settingsTierBadge">Free</div>
+            <button class="settings-upgrade-btn" id="settingsUpgradeBtn">⚡ Upgrade</button>
+          </div>
+          <p class="settings-hint" id="settingsTierHint">Unlock more engines, languages, and recording time.</p>
+        </div>
+
         <div class="settings-section">
           <h3>🧭 Simple Mode</h3>
           <div class="setting-row" title="ON: clear transcript after paste. OFF: keep it visible (lighter + italic) for scrollback.">
@@ -39,19 +49,15 @@ class SettingsPanel {
             <input type="checkbox" id="clearOnPaste">
           </div>
           <p class="settings-hint">When off, pasted text stays visible but grayed out so you can scroll back.</p>
-          <div class="setting-row" title="When OFF, only the green strobe shows during recording. This can reduce UI overhead on weaker machines.">
-            <label for="livePreview">Show live words while recording</label>
-            <input type="checkbox" id="livePreview" checked>
-          </div>
-          <p class="settings-hint">ON = words stream live. OFF = strobe-only during recording; text appears after stop.</p>
           <div class="setting-row">
             <label for="recordingModeSelect">Recording Mode</label>
             <select id="recordingModeSelect">
-              <option value="batch" selected>✨ Batch — polished text on stop (best quality)</option>
-              <option value="live">📝 Live — words appear as you speak (faster, lower quality)</option>
+              <option value="batch" selected>✨ Batch — best quality</option>
+              <option value="live">⚡ Live — real-time words</option>
+              <option value="hybrid">🔄 Hybrid — batch with preview</option>
             </select>
           </div>
-          <p class="settings-hint" id="recordingModeHint">Records audio, then processes everything at once for the best possible quality. Like Wispr Flow but with longer recordings (up to 30 min).</p>
+          <p class="settings-hint" id="recordingModeHint">Records everything, transcribes on stop. Green strobe only. Best accuracy.</p>
           <div class="setting-row" id="maxDurationRow">
             <label for="maxRecordingSelect">Max Recording</label>
             <select id="maxRecordingSelect">
@@ -66,7 +72,84 @@ class SettingsPanel {
             <label for="saveAudio">Save audio recordings</label>
             <input type="checkbox" id="saveAudio" checked>
           </div>
-          <p class="settings-hint">When on, a playback bar appears after batch processing so you can re-listen.</p>
+          <p class="settings-hint">Saves audio files locally after each recording. Re-listen anytime from History.</p>
+          <div class="setting-row" title="Record video from your camera during voice sessions.">
+            <label for="saveVideo">Save video recordings</label>
+            <input type="checkbox" id="saveVideo">
+          </div>
+          <p class="settings-hint">Records your camera during sessions. Builds data for AI avatar creation. Opt-in only — camera never activates without your permission.</p>
+          <div id="videoQualityRow" class="setting-row" style="display:none;" title="Video recording quality.">
+            <label for="videoQuality">Video quality</label>
+            <select id="videoQuality">
+              <option value="480p">480p — smallest files (~350 MB/hr)</option>
+              <option value="720p" selected>720p — balanced (~700 MB/hr)</option>
+              <option value="1080p">1080p — high quality (~1.5 GB/hr)</option>
+            </select>
+          </div>
+          <div id="audioQualityRow" class="setting-row" title="Audio recording quality.">
+            <label for="audioQuality">Audio quality</label>
+            <select id="audioQuality">
+              <option value="low">Low (32 kbps) — smallest files</option>
+              <option value="standard" selected>Standard (128 kbps) — good quality</option>
+              <option value="high">High (320 kbps) — near-lossless</option>
+              <option value="lossless">Lossless (WAV) — voice clone grade</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>📦 Archive & Storage</h3>
+          <div class="setting-row">
+            <label for="storageLocation">Storage</label>
+            <select id="storageLocation">
+              <option value="local" selected>💾 Local only — stays on this device</option>
+              <option value="windy-cloud">☁️ Windy Cloud — encrypted, syncs when on Wi-Fi</option>
+              <option value="both">🔄 Both — local + Windy Cloud backup</option>
+            </select>
+          </div>
+          <p class="settings-hint" id="storageHint">Your data stays on this machine. Nothing uploaded anywhere. Maximum privacy.</p>
+          <div class="setting-row" title="Where to save files on this device.">
+            <label for="archiveFolder">Local folder</label>
+            <div class="setting-inline">
+              <input type="text" id="archiveFolder" placeholder="/home/user/Documents/WindyProArchive" style="width:160px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;font-size:11px;">
+              <button id="browseArchive" class="settings-btn">Browse</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>🧬 Soul File — Your Digital Twin Data</h3>
+          <p class="settings-hint" style="margin-bottom:10px; color:#60A5FA;">
+            Every recording builds your Soul File — a high-fidelity dataset of your voice, vocabulary, and speech patterns.
+            Over time, this becomes everything needed for a perfect voice clone or AI avatar twin.
+            <b>"Talk today. Live forever."</b>
+          </p>
+          <div id="soulFileStats" style="background:#1a1a2e; border-radius:10px; padding:14px; margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+              <span style="color:#9CA3AF; font-size:12px;">Voice Data Collected</span>
+              <span id="soulVoiceHours" style="color:#22C55E; font-weight:700; font-size:12px;">0 hours</span>
+            </div>
+            <div style="background:#334155; border-radius:4px; height:8px; margin-bottom:10px; overflow:hidden;">
+              <div id="soulVoiceBar" style="background:linear-gradient(90deg, #22C55E, #3B82F6); height:100%; width:0%; border-radius:4px; transition:width 0.5s;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+              <span style="color:#9CA3AF; font-size:12px;">Video Data Collected</span>
+              <span id="soulVideoHours" style="color:#A855F7; font-weight:700; font-size:12px;">0 hours</span>
+            </div>
+            <div style="background:#334155; border-radius:4px; height:8px; margin-bottom:10px; overflow:hidden;">
+              <div id="soulVideoBar" style="background:linear-gradient(90deg, #A855F7, #EC4899); height:100%; width:0%; border-radius:4px; transition:width 0.5s;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <span style="color:#9CA3AF; font-size:12px;">Clone Quality Estimate</span>
+              <span id="soulCloneGrade" style="color:#F59E0B; font-weight:700; font-size:12px;">Not enough data</span>
+            </div>
+            <p style="font-size:11px; color:#64748B; margin-top:8px;">10+ hrs = Fair · 40+ hrs = Good · 100+ hrs = Excellent · 300+ hrs = Studio-Grade</p>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button id="exportSoulFile" class="settings-btn" style="flex:1; background:#3B82F6; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer;">🧬 Export Soul File Package</button>
+            <button id="exportVoiceClone" class="settings-btn" style="flex:1; background:#22C55E; color:#000; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer;">🎤 Export for Voice Cloning</button>
+          </div>
+          <p class="settings-hint" style="margin-top:6px;">Exports audio + transcripts in formats compatible with ElevenLabs, Coqui, Tortoise TTS, and other major voice cloning platforms.</p>
         </div>
 
         <div class="settings-section">
@@ -74,12 +157,22 @@ class SettingsPanel {
           <div class="setting-row">
             <label for="engineSelect">Engine</label>
             <select id="engineSelect">
-              <option value="local" selected>🏠 Local — works offline, fully private</option>
-              <option value="cloud">☁️ WindyPro Cloud — E2E encrypted</option>
-              <option value="deepgram">🎙️ Deepgram — best real-time quality</option>
-              <option value="groq">⚡ Groq — fastest cloud (whisper-large-v3)</option>
-              <option value="openai">🌐 OpenAI Whisper — reliable cloud</option>
-              <option value="smart">🧠 Smart — auto-switch local↔cloud</option>
+              <option value="local" selected>🌪️ WindyTune — auto-picks best engine</option>
+              <option value="edge-spark">🛡️ Edge Spark (42 MB) — ultra-light, 32x speed</option>
+              <option value="edge-pulse">🛡️ Edge Pulse (78 MB) — phone-friendly, 16x</option>
+              <option value="edge-standard">🛡️ Edge Standard (168 MB) — best CPU balance, 6x</option>
+              <option value="edge-global">🛡️ Edge Global (515 MB) — multilingual CPU, 2x</option>
+              <option value="edge-pro">🛡️ Edge Pro (515 MB) — best English on CPU, 4x</option>
+              <option value="core-spark">⚡ Core Spark (75 MB) — fastest GPU, 32x</option>
+              <option value="core-pulse">⚡ Core Pulse (142 MB) — reliable GPU, 16x</option>
+              <option value="core-standard">⚡ Core Standard (466 MB) — all-rounder, 6x</option>
+              <option value="core-global">⚡ Core Global (1.5 GB) — multilingual GPU, 2x</option>
+              <option value="core-pro">⚡ Core Pro (1.5 GB) — English excellence, 6x</option>
+              <option value="core-turbo">⚡ Core Turbo (1.6 GB) — near-Ultra, 4x</option>
+              <option value="core-ultra">⚡ Core Ultra (2.9 GB) — BEST accuracy, 1x</option>
+              <option value="lingua-es">🌍 Lingua Español (500 MB) — Spanish specialist</option>
+              <option value="lingua-fr">🌍 Lingua Français (500 MB) — French specialist</option>
+              <option value="lingua-hi">🌍 Lingua हिन्दी (500 MB) — Hindi specialist</option>
             </select>
           </div>
           <p class="settings-hint" id="engineHint">Audio processed on your device. Nothing sent anywhere.</p>
@@ -112,29 +205,7 @@ class SettingsPanel {
           </div>
         </div>
 
-        <div id="apiKeySection" style="display:none;">
-          <div id="apiKey_deepgram_row" style="display:none;margin:8px 0;">
-            <div class="setting-row">
-              <label for="deepgramApiKey">Deepgram Key</label>
-              <input type="password" id="deepgramApiKey" placeholder="dg_..." style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
-            </div>
-            <p class="settings-hint" style="font-size:11px;color:#888;">Real-time streaming with interim results. 12,000 free mins/month. Best for live dictation.</p>
-          </div>
-          <div id="apiKey_groq_row" style="display:none;margin:8px 0;">
-            <div class="setting-row">
-              <label for="groqApiKey">Groq Key</label>
-              <input type="password" id="groqApiKey" placeholder="gsk_..." style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
-            </div>
-            <p class="settings-hint" style="font-size:11px;color:#888;">Whisper-large-v3 on custom LPU. Blazing fast batch processing. Free tier available.</p>
-          </div>
-          <div id="apiKey_openai_row" style="display:none;margin:8px 0;">
-            <div class="setting-row">
-              <label for="openaiApiKey">OpenAI Key</label>
-              <input type="password" id="openaiApiKey" placeholder="sk-..." style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
-            </div>
-            <p class="settings-hint" style="font-size:11px;color:#888;">OpenAI Whisper-1 API. Reliable and accurate. Pay-per-use ($0.006/min).</p>
-          </div>
-        </div>
+        <!-- Third-party API keys removed — Windy Pro uses proprietary engines only -->
 
         <div class="settings-section" id="localModelSection">
           <h3>🎤 Transcription</h3>
@@ -200,66 +271,7 @@ class SettingsPanel {
           </div>
         </div>
         
-        <div class="settings-section">
-          <h3>🗄️ Archive</h3>
-          <div class="setting-row" title="Automatically save each completed dictation locally.">
-            <label for="autoArchive">Auto-archive dictations</label>
-            <input type="checkbox" id="autoArchive">
-          </div>
-          <div class="setting-row" title="Local archive destination in your filesystem.">
-            <label for="archiveFolder">Local archive folder</label>
-            <div class="setting-inline">
-              <input type="text" id="archiveFolder" readonly>
-              <button id="browseArchiveFolder" class="settings-btn">Browse</button>
-            </div>
-          </div>
-          <div class="setting-row" title="Chunk: one file per stop. Daily: one rolling file. Both: both outputs.">
-            <label for="archiveMode">Archive format</label>
-            <select id="archiveMode">
-              <option value="chunk">Per recording chunk</option>
-              <option value="daily">Daily rolling file</option>
-              <option value="both">Both</option>
-            </select>
-          </div>
-          <div class="setting-row" title="Enable Dropbox sync for routes that include Dropbox.">
-            <label for="dropboxEnabled">Enable Dropbox sync</label>
-            <input type="checkbox" id="dropboxEnabled">
-          </div>
-          <div class="setting-row" title="Dropbox API access token (stored locally on this machine).">
-            <label for="dropboxAccessToken">Dropbox token</label>
-            <input type="password" id="dropboxAccessToken" placeholder="dbx_...">
-          </div>
-          <div class="setting-row" title="Dropbox destination folder.">
-            <label for="dropboxFolder">Dropbox folder</label>
-            <input type="text" id="dropboxFolder" placeholder="/WindyProArchive">
-          </div>
-          <div class="setting-row">
-            <label>Dropbox connection</label>
-            <div class="setting-inline">
-              <button id="testDropbox" class="settings-btn">Test</button>
-              <span class="settings-meta" id="dropboxLastTest">Never tested</span>
-            </div>
-          </div>
-          <div class="setting-row" title="Enable Google Drive sync for routes that include Google.">
-            <label for="googleEnabled">Enable Google sync</label>
-            <input type="checkbox" id="googleEnabled">
-          </div>
-          <div class="setting-row" title="Google OAuth access token (stored locally on this machine).">
-            <label for="googleAccessToken">Google token</label>
-            <input type="password" id="googleAccessToken" placeholder="ya29...">
-          </div>
-          <div class="setting-row" title="Optional Drive folder ID. Leave blank for My Drive root.">
-            <label for="googleFolderId">Google folder ID</label>
-            <input type="text" id="googleFolderId" placeholder="Optional folder id">
-          </div>
-          <div class="setting-row">
-            <label>Google connection</label>
-            <div class="setting-inline">
-              <button id="testGoogle" class="settings-btn">Test</button>
-              <span class="settings-meta" id="googleLastTest">Never tested</span>
-            </div>
-          </div>
-        </div>
+        <!-- Old Archive section replaced by new Archive & Storage + Soul File sections above -->
 
         <div class="settings-section">
           <h3>⌨️ Hotkeys</h3>
@@ -322,6 +334,15 @@ class SettingsPanel {
     // Close button
     this.panel.querySelector('#settingsClose').addEventListener('click', () => this.close());
 
+    // Upgrade button
+    const upgradeBtn = this.panel.querySelector('#settingsUpgradeBtn');
+    if (upgradeBtn) {
+      upgradeBtn.addEventListener('click', () => {
+        if (!this._upgradePanel) this._upgradePanel = new UpgradePanel(this.app);
+        this._upgradePanel.toggle();
+      });
+    }
+
     // Engine selector — toggle cloud/local UI sections
     const engineSelect = this.panel.querySelector('#engineSelect');
     const cloudSettings = this.panel.querySelector('#cloudSettings');
@@ -334,12 +355,24 @@ class SettingsPanel {
       // Show/hide relevant sections based on engine
       const apiKeySection = this.panel.querySelector('#apiKeySection');
       const engineInfo = {
-        local: { hint: '🔒 <b>Fully private.</b> Audio never leaves your device. Uses faster-whisper (base model). No internet needed.', color: '#22C55E', cloud: false, local: true, api: false },
+        local: { hint: '🌪️ <b>WindyTune auto-pilot.</b> Monitors your hardware in real-time and picks the best installed engine. Fully private, fully offline.', color: '#22C55E', cloud: false, local: true, api: false },
         cloud: { hint: '🔒 <b>E2E encrypted.</b> Streamed to WindyPro servers. Large-v3 on RTX 5090 GPU. Zero data retention.', color: '#4ecdc4', cloud: true, local: false, api: false },
-        deepgram: { hint: '🎙️ <b>Best real-time quality.</b> Streaming with interim results. ★★★★★ accuracy. 12,000 free mins/month. <a href="https://console.deepgram.com/signup" style="color:#4ecdc4;">Get free key →</a>', color: '#f0f0f0', cloud: false, local: false, api: 'deepgram' },
-        groq: { hint: '⚡ <b>Fastest cloud.</b> Whisper-large-v3 on Groq LPU. ~1s per chunk. Free tier. <a href="https://console.groq.com" style="color:#4ecdc4;">Get free key →</a>', color: '#f0f0f0', cloud: false, local: false, api: 'groq' },
-        openai: { hint: '🌐 <b>Reliable cloud.</b> OpenAI Whisper API. Good accuracy. Paid. <a href="https://platform.openai.com/api-keys" style="color:#4ecdc4;">Get key →</a>', color: '#f0f0f0', cloud: false, local: false, api: 'openai' },
-        smart: { hint: '🧠 <b>Auto-switches.</b> Starts local, falls back to cloud if CPU struggles.', color: '#f7dc6f', cloud: true, local: true, api: false }
+        'edge-spark': { hint: '🛡️ <b>Ultra-light (42 MB).</b> Fits anything. Quick dictation, real-time captions.', color: '#22C55E', cloud: false, local: true, api: false },
+        'edge-pulse': { hint: '🛡️ <b>Phone-optimized.</b> Fast & light. Mobile dictation, voice memos.', color: '#22C55E', cloud: false, local: true, api: false },
+        'edge-standard': { hint: '🛡️ <b>Best size/accuracy balance.</b> Laptop users, everyday use.', color: '#22C55E', cloud: false, local: true, api: false },
+        'edge-global': { hint: '🛡️ <b>Multilingual on CPU.</b> Great for travel & translation.', color: '#22C55E', cloud: false, local: true, api: false },
+        'edge-pro': { hint: '🛡️ <b>Best English on CPU.</b> No GPU needed.', color: '#22C55E', cloud: false, local: true, api: false },
+        'core-spark': { hint: '⚡ <b>Lightning fast GPU.</b> Quick dictation, embedded systems.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'core-pulse': { hint: '⚡ <b>Fast & reliable GPU.</b> Everyday dictation, emails.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'core-standard': { hint: '⚡ <b>The workhorse.</b> Meetings, technical dictation, content creation.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'core-global': { hint: '⚡ <b>Multilingual powerhouse.</b> Non-English, code-switching.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'core-pro': { hint: '⚡ <b>English excellence.</b> Distilled flagship at 6x speed.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'core-turbo': { hint: '⚡ <b>Near-Ultra at 2x speed.</b> Best balance of accuracy & speed.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'core-ultra': { hint: '⚡ <b>BEST accuracy. Period.</b> Broadcast, legal, medical, professional.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'lingua-es': { hint: '🌍 <b>Spanish specialist.</b> All dialects — Castilian, Mexican, Caribbean.', color: '#3B82F6', cloud: false, local: true, api: false },
+        'lingua-fr': { hint: '🌍 <b>French specialist.</b> Metropolitan, Canadian, African dialects.', color: '#3B82F6', cloud: false, local: true, api: false },
+        'lingua-hi': { hint: '🌍 <b>Hindi specialist.</b> Hindi-English code-switching.', color: '#3B82F6', cloud: false, local: true, api: false },
+        cloud: { hint: '☁️ <b>WindyPro Cloud.</b> End-to-end encrypted. For when you want server-grade accuracy.', color: '#4ecdc4', cloud: true, local: false, api: false }
       };
       const info = engineInfo[engine] || engineInfo.local;
       engineHint.innerHTML = info.hint;
@@ -348,7 +381,8 @@ class SettingsPanel {
       localModelSection.style.display = info.local ? 'block' : 'none';
       if (apiKeySection) {
         apiKeySection.style.display = info.api ? 'block' : 'none';
-        ['deepgram', 'groq', 'openai'].forEach(k => {
+        /* Legacy API key visibility removed — Windy Pro engines only */
+        [].forEach(k => {
           const row = this.panel.querySelector('#apiKey_' + k + '_row');
           if (row) row.style.display = (k === info.api) ? 'block' : 'none';
         });
@@ -356,18 +390,8 @@ class SettingsPanel {
       // Update badge
       const badge = document.getElementById('modelBadge');
       if (badge) {
-        const icons = { local: '🏠', cloud: '☁️🔒', deepgram: '🎙️', groq: '⚡', openai: '🌐', smart: '🧠' };
-        badge.textContent = `${icons[engine] || '🏠'} ${engine}`;
-      }
-    });
-
-    // API key inputs
-    ['deepgram', 'groq', 'openai'].forEach(provider => {
-      const input = this.panel.querySelector('#' + provider + 'ApiKey');
-      if (input) {
-        input.addEventListener('change', (e) => {
-          this.saveSetting(provider + 'ApiKey', e.target.value.trim());
-        });
+        const icons = { local: '🌪️', cloud: '☁️', 'edge-spark': '🛡️', 'edge-pulse': '🛡️', 'edge-standard': '🛡️', 'edge-global': '🛡️', 'edge-pro': '🛡️', 'core-spark': '⚡', 'core-pulse': '⚡', 'core-standard': '⚡', 'core-global': '⚡', 'core-pro': '⚡', 'core-turbo': '⚡', 'core-ultra': '⚡', 'lingua-es': '🌍', 'lingua-fr': '🌍', 'lingua-hi': '🌍' };
+        badge.textContent = `${icons[engine] || '🌪️'} ${engine}`;
       }
     });
 
@@ -579,6 +603,74 @@ class SettingsPanel {
       }
     });
 
+    // Video recording toggle
+    const saveVideoEl = this.panel.querySelector('#saveVideo');
+    const videoQualityRow = this.panel.querySelector('#videoQualityRow');
+    if (saveVideoEl) {
+      saveVideoEl.addEventListener('change', (e) => {
+        this.saveSetting('saveVideo', e.target.checked);
+        if (videoQualityRow) videoQualityRow.style.display = e.target.checked ? 'flex' : 'none';
+      });
+    }
+
+    // Video quality
+    const videoQualityEl = this.panel.querySelector('#videoQuality');
+    if (videoQualityEl) {
+      videoQualityEl.addEventListener('change', (e) => {
+        this.saveSetting('videoQuality', e.target.value);
+      });
+    }
+
+    // Audio quality
+    const audioQualityEl = this.panel.querySelector('#audioQuality');
+    if (audioQualityEl) {
+      audioQualityEl.addEventListener('change', (e) => {
+        this.saveSetting('audioQuality', e.target.value);
+      });
+    }
+
+    // Storage location
+    const storageEl = this.panel.querySelector('#storageLocation');
+    if (storageEl) {
+      storageEl.addEventListener('change', (e) => {
+        this.saveSetting('storageLocation', e.target.value);
+        const hint = this.panel.querySelector('#storageHint');
+        const hints = {
+          local: 'Your data stays on this machine. Nothing uploaded anywhere. Maximum privacy.',
+          'windy-cloud': 'Files sync to Windy Cloud when connected to Wi-Fi. End-to-end encrypted — we can\'t read your data.',
+          both: 'Saved locally first, then backed up to Windy Cloud over Wi-Fi. Best of both worlds.'
+        };
+        if (hint) hint.textContent = hints[e.target.value] || hints.local;
+      });
+    }
+
+    // Soul File export buttons
+    const exportSoulBtn = this.panel.querySelector('#exportSoulFile');
+    if (exportSoulBtn) {
+      exportSoulBtn.addEventListener('click', async () => {
+        this.showToast('📦 Exporting Soul File package...');
+        if (window.windyAPI?.exportSoulFile) {
+          const result = await window.windyAPI.exportSoulFile();
+          this.showToast(result?.ok ? `✅ Soul File exported to ${result.path}` : '❌ Export failed — no recordings found');
+        } else {
+          this.showToast('Soul File export will be available in the next update');
+        }
+      });
+    }
+
+    const exportCloneBtn = this.panel.querySelector('#exportVoiceClone');
+    if (exportCloneBtn) {
+      exportCloneBtn.addEventListener('click', async () => {
+        this.showToast('🎤 Exporting voice clone package...');
+        if (window.windyAPI?.exportVoiceClone) {
+          const result = await window.windyAPI.exportVoiceClone();
+          this.showToast(result?.ok ? `✅ Voice clone data exported to ${result.path}` : '❌ Export failed — no audio recordings found');
+        } else {
+          this.showToast('Voice clone export will be available in the next update');
+        }
+      });
+    }
+
     // Device change (T18: propagate to server — triggers model reload)
     const deviceSelect = this.panel.querySelector('#deviceSelect');
     deviceSelect.addEventListener('change', (e) => {
@@ -609,25 +701,24 @@ class SettingsPanel {
     });
 
     // Live preview toggle
-    this.panel.querySelector('#livePreview').addEventListener('change', (e) => {
-      this.saveSetting('livePreview', e.target.checked);
-      this.app.livePreview = e.target.checked;
-    });
+    /* livePreview checkbox removed — merged into recordingMode */
 
     // Recording mode (batch / live)
     const recordingModeSelect = this.panel.querySelector('#recordingModeSelect');
     if (recordingModeSelect) {
       recordingModeSelect.addEventListener('change', (e) => {
         this.saveSetting('recordingMode', e.target.value);
+        // Also save livePreview equivalent for backward compat
+        this.saveSetting('livePreview', e.target.value === 'live' || e.target.value === 'hybrid');
         const hint = this.panel.querySelector('#recordingModeHint');
         const maxRow = this.panel.querySelector('#maxDurationRow');
-        if (e.target.value === 'batch') {
-          if (hint) hint.textContent = 'Records audio, then processes everything at once for the best possible quality. Like Wispr Flow but with longer recordings.';
-          if (maxRow) maxRow.style.display = 'flex';
-        } else {
-          if (hint) hint.textContent = 'Words appear in real-time as you speak. Faster feedback but lower quality.';
-          if (maxRow) maxRow.style.display = 'none';
-        }
+        const hints = {
+          batch: 'Records everything, transcribes on stop. Green strobe only. Best accuracy. Great for meetings, dictation, and long sessions.',
+          live: 'Words appear as you speak in real-time. Slightly lower accuracy (~5%). Great for live captions, presentations, and quick notes.',
+          hybrid: 'Shows approximate words while recording, then replaces with polished batch result on stop. Best of both worlds — minor accuracy impact (~2%).'
+        };
+        if (hint) hint.textContent = hints[e.target.value] || hints.batch;
+        if (maxRow) maxRow.style.display = e.target.value === 'live' ? 'none' : 'flex';
       });
     }
 
@@ -685,53 +776,18 @@ class SettingsPanel {
       });
     });
 
-    // Archive controls
-    this.panel.querySelector('#autoArchive').addEventListener('change', (e) => {
-      this.saveSetting('autoArchive', e.target.checked);
-    });
-    this.panel.querySelector('#archiveMode').addEventListener('change', (e) => {
-      this.saveSetting('archiveMode', e.target.value);
-    });
-    this.panel.querySelector('#browseArchiveFolder').addEventListener('click', async () => {
-      if (!window.windyAPI?.chooseArchiveFolder) return;
-      const result = await window.windyAPI.chooseArchiveFolder();
-      if (!result?.canceled && result?.path) {
-        this.panel.querySelector('#archiveFolder').value = result.path;
-        this.saveSetting('archiveFolder', result.path);
-      }
-    });
-    this.panel.querySelector('#dropboxEnabled').addEventListener('change', (e) => {
-      this.saveSetting('dropboxEnabled', e.target.checked);
-    });
-    this.panel.querySelector('#dropboxAccessToken').addEventListener('change', (e) => {
-      this.saveSetting('dropboxAccessToken', e.target.value || '');
-    });
-    this.panel.querySelector('#dropboxFolder').addEventListener('change', (e) => {
-      this.saveSetting('dropboxFolder', e.target.value || '/WindyProArchive');
-    });
-    this.panel.querySelector('#googleEnabled').addEventListener('change', (e) => {
-      this.saveSetting('googleEnabled', e.target.checked);
-    });
-    this.panel.querySelector('#googleAccessToken').addEventListener('change', (e) => {
-      this.saveSetting('googleAccessToken', e.target.value || '');
-    });
-    this.panel.querySelector('#googleFolderId').addEventListener('change', (e) => {
-      this.saveSetting('googleFolderId', e.target.value || '');
-    });
-    this.panel.querySelector('#testDropbox').addEventListener('click', async () => {
-      const res = await window.windyAPI?.testDropboxConnection?.();
-      if (res?.ok && res?.testedAt) {
-        this.updateLastTestIndicator('#dropboxLastTest', res.testedAt);
-      }
-      this.showToast(res?.ok ? 'Dropbox connection OK ✅' : `Dropbox failed: ${res?.error || 'unknown error'}`);
-    });
-    this.panel.querySelector('#testGoogle').addEventListener('click', async () => {
-      const res = await window.windyAPI?.testGoogleConnection?.();
-      if (res?.ok && res?.testedAt) {
-        this.updateLastTestIndicator('#googleLastTest', res.testedAt);
-      }
-      this.showToast(res?.ok ? 'Google connection OK ✅' : `Google failed: ${res?.error || 'unknown error'}`);
-    });
+    // Archive folder browse
+    const browseArchiveBtn = this.panel.querySelector('#browseArchive');
+    if (browseArchiveBtn) {
+      browseArchiveBtn.addEventListener('click', async () => {
+        if (!window.windyAPI?.chooseArchiveFolder) return;
+        const result = await window.windyAPI.chooseArchiveFolder();
+        if (!result?.canceled && result?.path) {
+          this.panel.querySelector('#archiveFolder').value = result.path;
+          this.saveSetting('archiveFolder', result.path);
+        }
+      });
+    }
 
     // Mic device selector (T20)
     this.panel.querySelector('#micSelect').addEventListener('change', (e) => {
@@ -835,14 +891,7 @@ class SettingsPanel {
           this.panel.querySelector('#cloudUrl').value = settings.cloudUrl;
           this.app.cloudUrl = settings.cloudUrl;
         }
-        // Restore API keys
-        ['deepgram', 'groq', 'openai'].forEach(p => {
-          const key = settings[p + 'ApiKey'];
-          if (key) {
-            const input = this.panel.querySelector('#' + p + 'ApiKey');
-            if (input) input.value = key;
-          }
-        });
+        /* Third-party API key restore removed */
         // Restore cloud login state
         if (settings.cloudToken) {
           this.app.cloudToken = settings.cloudToken;
@@ -877,8 +926,8 @@ class SettingsPanel {
         if (settings.clearOnPaste !== undefined) {
           this.panel.querySelector('#clearOnPaste').checked = settings.clearOnPaste;
         }
-        this.panel.querySelector('#livePreview').checked = settings.livePreview !== false;
-        this.app.livePreview = settings.livePreview !== false;
+        /* livePreview restore handled via recordingMode */
+        this.app.livePreview = settings.recordingMode === 'live' || settings.recordingMode === 'hybrid';
         // Recording mode restore
         if (settings.recordingMode) {
           const modeSelect = this.panel.querySelector('#recordingModeSelect');
@@ -910,17 +959,23 @@ class SettingsPanel {
             }
           }
         }
-        this.panel.querySelector('#autoArchive').checked = settings.autoArchive !== false;
-        this.panel.querySelector('#archiveMode').value = settings.archiveMode || 'both';
-        this.panel.querySelector('#archiveFolder').value = settings.archiveFolder || '';
-        this.panel.querySelector('#dropboxEnabled').checked = !!settings.dropboxEnabled;
-        this.panel.querySelector('#dropboxAccessToken').value = settings.dropboxAccessToken || '';
-        this.panel.querySelector('#dropboxFolder').value = settings.dropboxFolder || '/WindyProArchive';
-        this.updateLastTestIndicator('#dropboxLastTest', settings.dropboxLastTestAt);
-        this.panel.querySelector('#googleEnabled').checked = !!settings.googleEnabled;
-        this.panel.querySelector('#googleAccessToken').value = settings.googleAccessToken || '';
-        this.panel.querySelector('#googleFolderId').value = settings.googleFolderId || '';
-        this.updateLastTestIndicator('#googleLastTest', settings.googleLastTestAt);
+        const archiveFolderEl = this.panel.querySelector('#archiveFolder');
+        if (archiveFolderEl) archiveFolderEl.value = settings.archiveFolder || '';
+        const saveVideoEl2 = this.panel.querySelector('#saveVideo');
+        if (saveVideoEl2) saveVideoEl2.checked = !!settings.saveVideo;
+        if (saveVideoEl2?.checked) { const vqr = this.panel.querySelector('#videoQualityRow'); if (vqr) vqr.style.display = 'flex'; }
+        const videoQualityEl2 = this.panel.querySelector('#videoQuality');
+        if (videoQualityEl2 && settings.videoQuality) videoQualityEl2.value = settings.videoQuality;
+        const audioQualityEl2 = this.panel.querySelector('#audioQuality');
+        if (audioQualityEl2 && settings.audioQuality) audioQualityEl2.value = settings.audioQuality;
+        const storageEl2 = this.panel.querySelector('#storageLocation');
+        if (storageEl2 && settings.storageLocation) storageEl2.value = settings.storageLocation;
+        /* Dropbox/Google restore removed — Windy Storage only */
+        // Update Soul File stats from archive data
+        this.updateSoulFileStats();
+
+        // Load current tier
+        this._loadTierBadge();
       }
     } catch (e) {
       // Settings not available yet, use defaults
@@ -960,6 +1015,65 @@ class SettingsPanel {
     } catch (e) {
       // Devices not available until mic permission granted
     }
+  }
+
+  async updateSoulFileStats() {
+    try {
+      // Get recording count and estimate hours from history
+      const stats = window.windyAPI?.getArchiveStats ? await window.windyAPI.getArchiveStats() : null;
+      const voiceHours = stats?.audioHours || 0;
+      const videoHours = stats?.videoHours || 0;
+
+      const voiceEl = this.panel.querySelector('#soulVoiceHours');
+      const videoEl = this.panel.querySelector('#soulVideoHours');
+      const voiceBar = this.panel.querySelector('#soulVoiceBar');
+      const videoBar = this.panel.querySelector('#soulVideoBar');
+      const gradeEl = this.panel.querySelector('#soulCloneGrade');
+
+      if (voiceEl) voiceEl.textContent = voiceHours < 1 ? `${Math.round(voiceHours * 60)} minutes` : `${voiceHours.toFixed(1)} hours`;
+      if (videoEl) videoEl.textContent = videoHours < 1 ? `${Math.round(videoHours * 60)} minutes` : `${videoHours.toFixed(1)} hours`;
+
+      // Progress bars: 300 hrs = 100% for voice, 100 hrs for video
+      if (voiceBar) voiceBar.style.width = Math.min(100, (voiceHours / 300) * 100) + '%';
+      if (videoBar) videoBar.style.width = Math.min(100, (videoHours / 100) * 100) + '%';
+
+      if (gradeEl) {
+        if (voiceHours >= 300) { gradeEl.textContent = '🏆 Studio-Grade'; gradeEl.style.color = '#22C55E'; }
+        else if (voiceHours >= 100) { gradeEl.textContent = '⭐ Excellent'; gradeEl.style.color = '#3B82F6'; }
+        else if (voiceHours >= 40) { gradeEl.textContent = '👍 Good'; gradeEl.style.color = '#60A5FA'; }
+        else if (voiceHours >= 10) { gradeEl.textContent = '📊 Fair'; gradeEl.style.color = '#F59E0B'; }
+        else { gradeEl.textContent = 'Not enough data yet'; gradeEl.style.color = '#94A3B8'; }
+      }
+    } catch (e) {
+      console.warn('[Settings] Soul File stats update failed:', e.message);
+    }
+  }
+
+  async _loadTierBadge() {
+    try {
+      if (!window.windyAPI?.getCurrentTier) return;
+      const result = await window.windyAPI.getCurrentTier();
+      const tier = result?.tier || 'free';
+      const badge = this.panel.querySelector('#settingsTierBadge');
+      const hint = this.panel.querySelector('#settingsTierHint');
+      const upgradeBtn = this.panel.querySelector('#settingsUpgradeBtn');
+      const tierInfo = {
+        free: { label: '🌱 Free', color: '#6B7280', hint: 'Unlock more engines, languages, and recording time.' },
+        pro: { label: '⚡ Pro', color: '#22C55E', hint: 'All 15 engines, 99 languages, 30-min recordings.' },
+        translate: { label: '🌍 Translate', color: '#3B82F6', hint: 'Pro + real-time conversation translation.' },
+        translate_pro: { label: '👑 Translate Pro', color: '#8B5CF6', hint: 'All features unlocked. Premium support.' }
+      };
+      const info = tierInfo[tier] || tierInfo.free;
+      if (badge) {
+        badge.textContent = info.label;
+        badge.style.borderColor = info.color;
+        badge.style.color = info.color;
+      }
+      if (hint) hint.textContent = info.hint;
+      if (upgradeBtn && tier !== 'free') {
+        upgradeBtn.textContent = '💎 Manage Plan';
+      }
+    } catch (_) { }
   }
 
   showToast(message) {

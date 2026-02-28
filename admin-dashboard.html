@@ -1,0 +1,2011 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windy Pro — Super Admin Dashboard</title>
+    <meta name="description" content="Enterprise control panel for Windy Pro Cloud Storage">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        /* ═══════════════════════ RESET & TOKENS ═══════════════════════ */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --card-hover: #253449;
+            --border: #334155;
+            --text: #e2e8f0;
+            --text-dim: #94a3b8;
+            --text-muted: #64748b;
+            --green: #22C55E;
+            --blue: #3B82F6;
+            --yellow: #EAB308;
+            --red: #EF4444;
+            --purple: #8B5CF6;
+            --gold: #F59E0B;
+            --cyan: #06B6D4;
+            --radius: 10px;
+            --radius-sm: 6px;
+            --shadow: 0 4px 24px rgba(0, 0, 0, .35);
+            --font: 'Inter', system-ui, -apple-system, sans-serif;
+            --transition: all .2s ease;
+        }
+
+        html {
+            font-size: 14px
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden
+        }
+
+        a {
+            color: var(--blue);
+            text-decoration: none
+        }
+
+        button {
+            font-family: var(--font);
+            cursor: pointer;
+            border: none;
+            outline: none
+        }
+
+        input,
+        select,
+        textarea {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            outline: none;
+            transition: var(--transition)
+        }
+
+        input:focus,
+        select:focus {
+            border-color: var(--green)
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse
+        }
+
+        th {
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-dim);
+            font-size: .75rem;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border)
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(51, 65, 85, .4);
+            font-size: .85rem
+        }
+
+        tr:hover td {
+            background: rgba(34, 197, 94, .03)
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg)
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px
+        }
+
+        /* ═══════════════════════ LOGIN ═══════════════════════ */
+        #login-screen {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: radial-gradient(ellipse at 50% 0%, #1a2744 0%, var(--bg) 70%)
+        }
+
+        .login-box {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 48px 40px;
+            width: 400px;
+            max-width: 90vw;
+            box-shadow: var(--shadow);
+            text-align: center
+        }
+
+        .login-box h1 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 4px;
+            background: linear-gradient(135deg, var(--green), var(--cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text
+        }
+
+        .login-box p {
+            color: var(--text-dim);
+            margin-bottom: 28px;
+            font-size: .9rem
+        }
+
+        .login-box .field {
+            margin-bottom: 16px;
+            text-align: left
+        }
+
+        .login-box label {
+            display: block;
+            font-size: .75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: var(--text-dim);
+            margin-bottom: 6px
+        }
+
+        .login-box input {
+            width: 100%;
+            padding: 11px 14px;
+            font-size: .95rem
+        }
+
+        .login-box .btn-login {
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(135deg, var(--green), #16a34a);
+            border-radius: var(--radius);
+            margin-top: 8px;
+            transition: var(--transition)
+        }
+
+        .login-box .btn-login:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(34, 197, 94, .35)
+        }
+
+        .login-box .btn-login:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+            transform: none
+        }
+
+        .login-error {
+            color: var(--red);
+            font-size: .85rem;
+            margin-top: 10px;
+            min-height: 20px
+        }
+
+        /* ═══════════════════════ LAYOUT ═══════════════════════ */
+        #app {
+            display: none;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column
+        }
+
+        #app.active {
+            display: flex
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            height: 56px;
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px)
+        }
+
+        .topbar .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1rem;
+            font-weight: 800
+        }
+
+        .topbar .brand svg {
+            width: 28px;
+            height: 28px
+        }
+
+        .topbar nav {
+            display: flex;
+            gap: 2px
+        }
+
+        .topbar nav button {
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            font-size: .85rem;
+            font-weight: 500;
+            color: var(--text-dim);
+            background: transparent;
+            transition: var(--transition)
+        }
+
+        .topbar nav button:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, .05)
+        }
+
+        .topbar nav button.active {
+            color: var(--green);
+            background: rgba(34, 197, 94, .1)
+        }
+
+        .topbar .right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: .85rem;
+            color: var(--text-dim)
+        }
+
+        .topbar .right .admin-email {
+            color: var(--text)
+        }
+
+        .btn-signout {
+            padding: 6px 14px;
+            border-radius: var(--radius-sm);
+            font-size: .8rem;
+            font-weight: 600;
+            color: var(--red);
+            background: rgba(239, 68, 68, .1);
+            transition: var(--transition)
+        }
+
+        .btn-signout:hover {
+            background: rgba(239, 68, 68, .2)
+        }
+
+        .main {
+            flex: 1;
+            padding: 24px;
+            max-width: 1440px;
+            margin: 0 auto;
+            width: 100%
+        }
+
+        .page {
+            display: none;
+            animation: fadeIn .25s ease
+        }
+
+        .page.active {
+            display: block
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(6px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        /* ═══════════════════════ CARDS & GRID ═══════════════════════ */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 22px;
+            transition: var(--transition)
+        }
+
+        .stat-card:hover {
+            border-color: rgba(34, 197, 94, .3);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow)
+        }
+
+        .stat-card .label {
+            font-size: .75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px
+        }
+
+        .stat-card .value {
+            font-size: 1.8rem;
+            font-weight: 800;
+            line-height: 1
+        }
+
+        .stat-card .sub {
+            font-size: .75rem;
+            color: var(--text-muted);
+            margin-top: 6px
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block
+        }
+
+        .dot.green {
+            background: var(--green);
+            box-shadow: 0 0 8px rgba(34, 197, 94, .5)
+        }
+
+        .dot.yellow {
+            background: var(--yellow)
+        }
+
+        .dot.red {
+            background: var(--red)
+        }
+
+        .chart-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px
+        }
+
+        .chart-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 22px
+        }
+
+        .chart-card h3 {
+            font-size: .85rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--text)
+        }
+
+        .chart-wrap {
+            position: relative;
+            height: 240px
+        }
+
+        /* ═══════════════════════ BUTTONS ═══════════════════════ */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 16px;
+            font-size: .8rem;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            transition: var(--transition)
+        }
+
+        .btn-primary {
+            background: var(--green);
+            color: #fff
+        }
+
+        .btn-primary:hover {
+            background: #16a34a
+        }
+
+        .btn-secondary {
+            background: var(--border);
+            color: var(--text)
+        }
+
+        .btn-secondary:hover {
+            background: #475569
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, .15);
+            color: var(--red)
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, .25)
+        }
+
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: .75rem
+        }
+
+        .btn-icon {
+            padding: 6px;
+            border-radius: var(--radius-sm);
+            background: transparent;
+            color: var(--text-dim)
+        }
+
+        .btn-icon:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, .05)
+        }
+
+        /* ═══════════════════════ TABLE TOOLBAR ═══════════════════════ */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap
+        }
+
+        .toolbar .search {
+            flex: 1;
+            min-width: 200px;
+            position: relative
+        }
+
+        .toolbar .search input {
+            width: 100%;
+            padding-left: 36px
+        }
+
+        .toolbar .search svg {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            color: var(--text-muted)
+        }
+
+        .table-wrap {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden
+        }
+
+        .table-wrap table {
+            min-width: 900px
+        }
+
+        .table-scroll {
+            overflow-x: auto
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden
+        }
+
+        .progress-bar .fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width .4s ease
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 20px;
+            font-size: .7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .03em
+        }
+
+        .badge-green {
+            background: rgba(34, 197, 94, .15);
+            color: var(--green)
+        }
+
+        .badge-red {
+            background: rgba(239, 68, 68, .15);
+            color: var(--red)
+        }
+
+        .badge-blue {
+            background: rgba(59, 130, 246, .15);
+            color: var(--blue)
+        }
+
+        .badge-purple {
+            background: rgba(139, 92, 246, .15);
+            color: var(--purple)
+        }
+
+        .badge-gold {
+            background: rgba(245, 158, 11, .15);
+            color: var(--gold)
+        }
+
+        .badge-gray {
+            background: rgba(148, 163, 184, .15);
+            color: var(--text-dim)
+        }
+
+        /* ═══════════════════════ NODES ═══════════════════════ */
+        .nodes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px
+        }
+
+        .node-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 22px;
+            transition: var(--transition)
+        }
+
+        .node-card:hover {
+            border-color: rgba(34, 197, 94, .25);
+            box-shadow: var(--shadow)
+        }
+
+        .node-card .node-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px
+        }
+
+        .node-card .node-name {
+            font-size: 1rem;
+            font-weight: 700
+        }
+
+        .node-card .node-id {
+            font-size: .75rem;
+            color: var(--text-muted);
+            margin-top: 2px
+        }
+
+        .node-card .node-url {
+            font-size: .75rem;
+            color: var(--blue);
+            margin-top: 2px
+        }
+
+        .node-card .donut-wrap {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin: 16px 0
+        }
+
+        .node-card .donut-wrap canvas {
+            width: 90px !important;
+            height: 90px !important
+        }
+
+        .node-card .disk-info {
+            font-size: .8rem;
+            color: var(--text-dim)
+        }
+
+        .node-card .disk-info .val {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text)
+        }
+
+        .node-card .meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: .78rem;
+            color: var(--text-dim);
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border)
+        }
+
+        .node-card .meta span {
+            color: var(--text);
+            font-weight: 500
+        }
+
+        /* ═══════════════════════ SLIDE PANEL ═══════════════════════ */
+        .slide-panel {
+            position: fixed;
+            top: 0;
+            right: -520px;
+            width: 500px;
+            max-width: 90vw;
+            height: 100vh;
+            background: var(--card);
+            border-left: 1px solid var(--border);
+            z-index: 200;
+            transition: right .3s ease;
+            overflow-y: auto;
+            box-shadow: -8px 0 40px rgba(0, 0, 0, .4)
+        }
+
+        .slide-panel.open {
+            right: 0
+        }
+
+        .slide-panel .panel-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: var(--card);
+            z-index: 1
+        }
+
+        .slide-panel .panel-header h2 {
+            font-size: 1.1rem;
+            font-weight: 700
+        }
+
+        .slide-panel .panel-body {
+            padding: 24px
+        }
+
+        .panel-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .4);
+            z-index: 199;
+            display: none
+        }
+
+        .panel-overlay.open {
+            display: block
+        }
+
+        /* ═══════════════════════ MODAL ═══════════════════════ */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .5);
+            z-index: 300;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .2s ease
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: all
+        }
+
+        .modal {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 28px 32px;
+            width: 440px;
+            max-width: 90vw;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .5)
+        }
+
+        .modal h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 12px
+        }
+
+        .modal p {
+            color: var(--text-dim);
+            font-size: .9rem;
+            margin-bottom: 20px;
+            line-height: 1.5
+        }
+
+        .modal .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end
+        }
+
+        /* ═══════════════════════ TOAST ═══════════════════════ */
+        #toast-container {
+            position: fixed;
+            top: 68px;
+            right: 24px;
+            z-index: 400;
+            display: flex;
+            flex-direction: column;
+            gap: 8px
+        }
+
+        .toast {
+            padding: 12px 20px;
+            border-radius: var(--radius-sm);
+            font-size: .85rem;
+            font-weight: 500;
+            color: #fff;
+            box-shadow: var(--shadow);
+            animation: toastIn .3s ease, toastOut .3s ease 3.7s forwards;
+            max-width: 380px
+        }
+
+        .toast-success {
+            background: linear-gradient(135deg, #16a34a, #15803d)
+        }
+
+        .toast-error {
+            background: linear-gradient(135deg, #dc2626, #b91c1c)
+        }
+
+        .toast-warning {
+            background: linear-gradient(135deg, #d97706, #b45309)
+        }
+
+        .toast-info {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8)
+        }
+
+        @keyframes toastIn {
+            from {
+                opacity: 0;
+                transform: translateX(60px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0)
+            }
+        }
+
+        @keyframes toastOut {
+            from {
+                opacity: 1
+            }
+
+            to {
+                opacity: 0;
+                transform: translateX(60px)
+            }
+        }
+
+        /* ═══════════════════════ SPINNER ═══════════════════════ */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2.5px solid var(--border);
+            border-top-color: var(--green);
+            border-radius: 50%;
+            animation: spin .6s linear infinite;
+            display: inline-block
+        }
+
+        .page-loader {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            gap: 12px;
+            color: var(--text-dim)
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        /* ═══════════════════════ AUDIT & BILLING ═══════════════════════ */
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            align-items: center
+        }
+
+        .filter-bar select,
+        .filter-bar input {
+            font-size: .82rem
+        }
+
+        .row-green td {
+            border-left: 3px solid var(--green)
+        }
+
+        .row-yellow td {
+            border-left: 3px solid var(--yellow)
+        }
+
+        .row-red td {
+            border-left: 3px solid var(--red)
+        }
+
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 16px;
+            font-size: .85rem;
+            color: var(--text-dim)
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px
+        }
+
+        .settings-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 22px
+        }
+
+        .settings-card h3 {
+            font-size: .9rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--green)
+        }
+
+        .settings-card .field {
+            margin-bottom: 14px
+        }
+
+        .settings-card label {
+            display: block;
+            font-size: .75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            color: var(--text-dim);
+            margin-bottom: 5px
+        }
+
+        .settings-card input,
+        .settings-card select {
+            width: 100%
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: .85rem;
+            cursor: pointer
+        }
+
+        .checkbox-row input[type="checkbox"] {
+            accent-color: var(--green);
+            width: 16px;
+            height: 16px
+        }
+
+        @media(max-width:900px) {
+
+            .chart-row,
+            .settings-grid {
+                grid-template-columns: 1fr
+            }
+
+            .topbar nav {
+                display: none
+            }
+
+            .topbar .right .datetime {
+                display: none
+            }
+        }
+
+        /* ═══════════════════════ NOTIFICATION BELL ═══════════════════════ */
+        .bell-wrap {
+            position: relative;
+            cursor: pointer
+        }
+
+        .bell-wrap svg {
+            width: 20px;
+            height: 20px;
+            color: var(--text-dim);
+            transition: var(--transition)
+        }
+
+        .bell-wrap:hover svg {
+            color: var(--text)
+        }
+
+        .bell-badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: var(--red);
+            color: #fff;
+            font-size: .6rem;
+            font-weight: 700;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--card)
+        }
+
+        .bell-dropdown {
+            position: absolute;
+            top: 32px;
+            right: 0;
+            width: 360px;
+            max-height: 400px;
+            overflow-y: auto;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
+            z-index: 150;
+            display: none
+        }
+
+        .bell-dropdown.open {
+            display: block
+        }
+
+        .bell-dropdown .alert-item {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            font-size: .8rem;
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            transition: var(--transition)
+        }
+
+        .bell-dropdown .alert-item:hover {
+            background: rgba(255, 255, 255, .03)
+        }
+
+        .bell-dropdown .alert-item .alert-icon {
+            font-size: 1.1rem;
+            flex-shrink: 0;
+            margin-top: 1px
+        }
+
+        .bell-dropdown .alert-item .alert-body {
+            flex: 1
+        }
+
+        .bell-dropdown .alert-item .alert-time {
+            font-size: .7rem;
+            color: var(--text-muted)
+        }
+
+        .bell-dropdown .alert-item .alert-dismiss {
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: .9rem;
+            flex-shrink: 0
+        }
+
+        .bell-dropdown .alert-item .alert-dismiss:hover {
+            color: var(--red)
+        }
+
+        .bell-dropdown .alert-header {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: .8rem;
+            font-weight: 600
+        }
+
+        .alert-warn {
+            border-left: 3px solid var(--yellow)
+        }
+
+        .alert-crit {
+            border-left: 3px solid var(--red)
+        }
+
+        .alert-info {
+            border-left: 3px solid var(--blue)
+        }
+
+        .alert-success {
+            border-left: 3px solid var(--green)
+        }
+
+        /* ═══════════════════════ ACTIVITY FEED ═══════════════════════ */
+        .activity-feed {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 90;
+            background: var(--card);
+            border-top: 1px solid var(--border);
+            transition: transform .3s ease;
+            transform: translateY(calc(100% - 36px))
+        }
+
+        .activity-feed.expanded {
+            transform: translateY(0)
+        }
+
+        .activity-feed .feed-toggle {
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            cursor: pointer;
+            font-size: .8rem;
+            font-weight: 600;
+            color: var(--text-dim);
+            border-bottom: 1px solid var(--border);
+            user-select: none
+        }
+
+        .activity-feed .feed-toggle:hover {
+            color: var(--text)
+        }
+
+        .activity-feed .feed-toggle .feed-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--green);
+            display: inline-block;
+            margin-right: 6px;
+            animation: pulse 2s infinite
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: .3
+            }
+        }
+
+        .activity-feed .feed-body {
+            max-height: 220px;
+            overflow-y: auto;
+            padding: 0
+        }
+
+        .feed-entry {
+            padding: 8px 20px;
+            font-size: .78rem;
+            border-bottom: 1px solid rgba(51, 65, 85, .3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: var(--transition);
+            animation: feedSlide .3s ease
+        }
+
+        .feed-entry:hover {
+            background: rgba(255, 255, 255, .03)
+        }
+
+        .feed-entry.feed-green {
+            border-left: 3px solid var(--green)
+        }
+
+        .feed-entry.feed-yellow {
+            border-left: 3px solid var(--yellow)
+        }
+
+        .feed-entry.feed-red {
+            border-left: 3px solid var(--red)
+        }
+
+        .feed-entry .feed-detail {
+            display: none;
+            margin-top: 6px;
+            padding: 6px 10px;
+            background: var(--bg);
+            border-radius: var(--radius-sm);
+            font-size: .75rem;
+            color: var(--text-dim)
+        }
+
+        .feed-entry.feed-expanded .feed-detail {
+            display: block
+        }
+
+        @keyframes feedSlide {
+            from {
+                opacity: 0;
+                transform: translateY(-8px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        /* ═══════════════════════ MIGRATION PANEL ═══════════════════════ */
+        .migration-progress {
+            width: 100%;
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 12px 0
+        }
+
+        .migration-progress .mig-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--green), var(--cyan));
+            border-radius: 4px;
+            transition: width .3s ease
+        }
+
+        .migration-log {
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: .78rem;
+            color: var(--text-dim);
+            margin-top: 10px;
+            padding: 8px;
+            background: var(--bg);
+            border-radius: var(--radius-sm)
+        }
+
+        .migration-log div {
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(51, 65, 85, .3)
+        }
+
+        /* ═══════════════════════ LATENCY BADGE ═══════════════════════ */
+        .latency-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: .7rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 12px
+        }
+
+        .latency-green {
+            background: rgba(34, 197, 94, .15);
+            color: var(--green)
+        }
+
+        .latency-yellow {
+            background: rgba(234, 179, 8, .15);
+            color: var(--yellow)
+        }
+
+        .latency-red {
+            background: rgba(239, 68, 68, .15);
+            color: var(--red)
+        }
+
+        /* ═══════════════════════ FILE MANAGER ═══════════════════════ */
+        .file-group-header {
+            font-size: .78rem;
+            font-weight: 700;
+            color: var(--green);
+            padding: 10px 0 4px;
+            border-bottom: 1px solid var(--border);
+            margin-top: 10px
+        }
+
+        .file-item {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(51, 65, 85, .3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: .82rem
+        }
+
+        .file-item .file-icon {
+            font-size: 1.1rem;
+            flex-shrink: 0
+        }
+
+        .file-item .file-info {
+            flex: 1;
+            min-width: 0
+        }
+
+        .file-item .file-name {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .file-item .file-meta {
+            font-size: .72rem;
+            color: var(--text-muted)
+        }
+
+        .file-item .file-actions {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ═══════════════════════ LOGIN SCREEN ═══════════════════════ -->
+    <div id="login-screen">
+        <div class="login-box">
+            <h1>☁ Windy Pro</h1>
+            <p>Super Admin Dashboard</p>
+            <div class="field">
+                <label>Email Address</label>
+                <input type="email" id="login-email" placeholder="admin@windypro.com" autocomplete="email">
+            </div>
+            <div class="field">
+                <label>Password</label>
+                <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
+            </div>
+            <button class="btn-login" id="btn-login" onclick="doLogin()">Sign In</button>
+            <div class="login-error" id="login-error"></div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════ MAIN APP ═══════════════════════ -->
+    <div id="app">
+        <!-- TOPBAR -->
+        <div class="topbar">
+            <div class="brand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="var(--green)" />
+                    <path d="M2 17l10 5 10-5" stroke="var(--green)" opacity=".5" />
+                    <path d="M2 12l10 5 10-5" stroke="var(--green)" opacity=".75" />
+                </svg>
+                Windy Pro Admin
+            </div>
+            <nav id="main-nav"></nav>
+            <div class="right">
+                <span class="datetime" id="datetime"></span>
+                <div class="bell-wrap" id="bell-wrap" onclick="toggleAlerts()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                    </svg>
+                    <span class="bell-badge" id="bell-badge" style="display:none">0</span>
+                    <div class="bell-dropdown" id="bell-dropdown">
+                        <div class="alert-header"><span>Alerts</span><button class="btn btn-sm btn-secondary"
+                                onclick="event.stopPropagation();clearAllAlerts()">Clear All</button></div>
+                        <div id="alert-list"></div>
+                    </div>
+                </div>
+                <span class="admin-email" id="admin-email"></span>
+                <button class="btn-signout" onclick="signOut()">Sign Out</button>
+            </div>
+        </div>
+        <div class="main" id="main-content"></div>
+    </div>
+
+    <!-- ═══════════════════════ MODAL ═══════════════════════ -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal" id="modal-box"></div>
+    </div>
+
+    <!-- ═══════════════════════ SLIDE PANEL ═══════════════════════ -->
+    <div class="panel-overlay" id="panel-overlay" onclick="closePanel()"></div>
+    <div class="slide-panel" id="slide-panel">
+        <div class="panel-header">
+            <h2 id="panel-title">Details</h2><button class="btn-icon" onclick="closePanel()">✕</button>
+        </div>
+        <div class="panel-body" id="panel-body"></div>
+    </div>
+
+    <!-- ═══════════════════════ ACTIVITY FEED ═══════════════════════ -->
+    <div class="activity-feed" id="activity-feed">
+        <div class="feed-toggle" onclick="toggleFeed()">
+            <div><span class="feed-dot"></span>Live Activity Feed</div><span id="feed-arrow">▲</span>
+        </div>
+        <div class="feed-body" id="feed-body"></div>
+    </div>
+
+    <!-- ═══════════════════════ TOAST ═══════════════════════ -->
+    <div id="toast-container"></div>
+
+    <script>
+        // ═══════════════════════ CONFIG ═══════════════════════
+        const BASE_URL = localStorage.getItem('wp_base_url') || window.location.origin || 'http://192.168.4.126:8099';
+        const TIERS = ['free', 'pro', 'translate', 'translate-pro', 'unlimited'];
+        const TIER_LIMITS = { free: '500 MB', pro: '5 GB', translate: '10 GB', 'translate-pro': '50 GB', unlimited: 'Unlimited' };
+        const TIER_COLORS = { free: 'var(--text-dim)', pro: 'var(--blue)', translate: 'var(--purple)', 'translate-pro': 'var(--gold)', unlimited: 'var(--green)' };
+        const PAGES = ['overview', 'users', 'nodes', 'billing', 'audit', 'settings'];
+        const PAGE_LABELS = { overview: 'Overview', users: 'Users', nodes: 'Storage Nodes', billing: 'Billing', audit: 'Audit Log', settings: 'Settings' };
+        let TOKEN = localStorage.getItem('wp_token');
+        let ADMIN_EMAIL = localStorage.getItem('wp_email') || '';
+        let currentPage = 'overview';
+        let refreshTimer = null;
+        let allUsers = [];
+        let allNodes = [];
+
+        // ═══════════════════════ UTILITIES ═══════════════════════
+        function formatBytes(b) { if (!b || b === 0) return '0 B'; const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; let v = +b; while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; } return v.toFixed(i > 0 ? 1 : 0) + ' ' + u[i]; }
+        function timeAgo(d) { if (!d) return 'Never'; const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000); if (s < 60) return s + 's ago'; if (s < 3600) return Math.floor(s / 60) + 'm ago'; if (s < 86400) return Math.floor(s / 3600) + 'h ago'; return Math.floor(s / 86400) + 'd ago'; }
+        function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleString(); }
+        function pct(a, b) { if (!b || b === 0) return 0; return Math.min(100, Math.round((a / b) * 100)); }
+        function tierBadge(t) { const c = { free: 'badge-gray', pro: 'badge-blue', translate: 'badge-purple', 'translate-pro': 'badge-gold', unlimited: 'badge-green' }; return `<span class="badge ${c[t] || 'badge-gray'}">${t}</span>`; }
+        function statusDot(ok) { return `<span class="dot ${ok ? 'green' : 'red'}"></span>`; }
+        function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        // ═══════════════════════ API ═══════════════════════
+        async function api(method, path, body, customBase) {
+            const url = (customBase || BASE_URL) + path;
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (TOKEN) opts.headers['Authorization'] = 'Bearer ' + TOKEN;
+            if (body) opts.body = JSON.stringify(body);
+            const r = await fetch(url, opts);
+            if (r.status === 401) { signOut(); throw new Error('Unauthorized'); }
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(j.error || j.message || `HTTP ${r.status}`);
+            return j;
+        }
+
+        // ═══════════════════════ TOAST ═══════════════════════
+        function toast(msg, type = 'success') {
+            const el = document.createElement('div');
+            el.className = 'toast toast-' + type;
+            el.textContent = msg;
+            document.getElementById('toast-container').appendChild(el);
+            setTimeout(() => el.remove(), 4000);
+        }
+
+        // ═══════════════════════ MODAL ═══════════════════════
+        function showModal(title, text, actions) {
+            const m = document.getElementById('modal-box');
+            m.innerHTML = `<h3>${escHtml(title)}</h3><p>${text}</p><div class="modal-actions">${actions}</div>`;
+            document.getElementById('modal-overlay').classList.add('open');
+        }
+        function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+        function confirmAction(title, text, onConfirm) {
+            showModal(title, text, `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-danger" id="modal-confirm">Confirm</button>`);
+            document.getElementById('modal-confirm').onclick = () => { closeModal(); onConfirm(); };
+        }
+
+        // ═══════════════════════ PANEL ═══════════════════════
+        function openPanel(title, html) {
+            document.getElementById('panel-title').textContent = title;
+            document.getElementById('panel-body').innerHTML = html;
+            document.getElementById('slide-panel').classList.add('open');
+            document.getElementById('panel-overlay').classList.add('open');
+        }
+        function closePanel() {
+            document.getElementById('slide-panel').classList.remove('open');
+            document.getElementById('panel-overlay').classList.remove('open');
+        }
+
+        // ═══════════════════════ AUTH ═══════════════════════
+        async function doLogin() {
+            const email = document.getElementById('login-email').value.trim();
+            const pass = document.getElementById('login-pass').value;
+            const errEl = document.getElementById('login-error');
+            const btn = document.getElementById('btn-login');
+            if (!email || !pass) { errEl.textContent = 'Please enter email and password'; return; }
+            btn.disabled = true; btn.textContent = 'Signing in…'; errEl.textContent = '';
+            try {
+                const r = await api('POST', '/auth/login', { email, password: pass });
+                if (r.token) { TOKEN = r.token; localStorage.setItem('wp_token', TOKEN); localStorage.setItem('wp_email', email); ADMIN_EMAIL = email; showApp(); }
+                else { errEl.textContent = r.error || 'Login failed'; }
+            } catch (e) { errEl.textContent = e.message || 'Connection failed'; }
+            finally { btn.disabled = false; btn.textContent = 'Sign In'; }
+        }
+        function signOut() { TOKEN = null; localStorage.removeItem('wp_token'); localStorage.removeItem('wp_email'); clearInterval(refreshTimer); location.reload(); }
+
+        // ═══════════════════════ NAVIGATION ═══════════════════════
+        function buildNav() {
+            const nav = document.getElementById('main-nav');
+            nav.innerHTML = PAGES.map(p => `<button data-p="${p}" onclick="goTo('${p}')">${PAGE_LABELS[p]}</button>`).join('');
+        }
+        function goTo(page) {
+            currentPage = page;
+            document.querySelectorAll('#main-nav button').forEach(b => b.classList.toggle('active', b.dataset.p === page));
+            renderPage();
+        }
+        function renderPage() {
+            const c = document.getElementById('main-content');
+            c.innerHTML = '<div class="page-loader"><div class="spinner"></div>Loading…</div>';
+            switch (currentPage) {
+                case 'overview': loadOverview(); break;
+                case 'users': loadUsers(); break;
+                case 'nodes': loadNodes(); break;
+                case 'billing': loadBilling(); break;
+                case 'audit': loadAudit(); break;
+                case 'settings': loadSettings(); break;
+            }
+        }
+        function updateClock() { document.getElementById('datetime').textContent = new Date().toLocaleString(); }
+
+        // ═══════════════════════ SHOW APP ═══════════════════════
+        function showApp() {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app').classList.add('active');
+            document.getElementById('admin-email').textContent = ADMIN_EMAIL;
+            buildNav();
+            goTo('overview');
+            updateClock(); setInterval(updateClock, 1000);
+            refreshTimer = setInterval(() => { if (currentPage === 'overview') loadOverview(); }, 30000);
+            renderAlerts();
+            pollFeed(); feedTimer = setInterval(pollFeed, 10000);
+            setTimeout(checkAlerts, 3000);
+        }
+
+        // ═══════════════════════ PAGE RENDERERS (stubs — filled next) ═══════════════════════
+        async function loadOverview() {
+            const c = document.getElementById('main-content');
+            try {
+                const [ov, auditRes] = await Promise.all([api('GET', '/admin/overview'), api('GET', '/admin/audit?limit=10')]);
+                const s = ov.summary || {}; const d = ov.disk || {};
+                const entries = (auditRes.entries || []).slice(0, 10);
+                c.innerHTML = `
+    <div class="page active" id="pg-overview">
+      <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center">Dashboard Overview <button class="btn btn-secondary" onclick="generateReport()" style="font-size:.8rem">📊 Generate Report</button></h2>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="label">Total Users</div><div class="value">${s.totalUsers || 0}</div><div class="sub">Registered accounts</div></div>
+        <div class="stat-card"><div class="label">Total Files</div><div class="value">${s.totalFiles || 0}</div><div class="sub">Across all nodes</div></div>
+        <div class="stat-card"><div class="label">Storage Used</div><div class="value">${s.totalStorageHuman || formatBytes(s.totalStorage)}</div><div class="sub">${d.usedPercent || 0}% of ${d.totalHuman || '—'}</div></div>
+        <div class="stat-card"><div class="label">${statusDot(s.activeNodes > 0)} Active Nodes</div><div class="value">${s.activeNodes || 0}<span style="font-size:.9rem;font-weight:400;color:var(--text-dim)">/${s.totalNodes || 0}</span></div><div class="sub">Online right now</div></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card"><h3>Storage by Node</h3><div id="chart-nodes"></div></div>
+        <div class="chart-card"><h3>Users by Tier</h3><div class="chart-wrap"><canvas id="chart-tiers"></canvas></div></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card"><h3>Storage by Type</h3><div class="chart-wrap"><canvas id="chart-types"></canvas></div></div>
+        <div class="chart-card"><h3>Recent Activity</h3><div id="recent-activity" style="max-height:260px;overflow-y:auto"></div></div>
+      </div>
+    </div>`;
+                // Storage by Node — horizontal bars
+                const sbn = s.storageByNode || {};
+                const nodeEl = document.getElementById('chart-nodes');
+                let nodeHtml = '';
+                for (const [nid, bytes] of Object.entries(sbn)) {
+                    const p = d.total ? pct(bytes, d.total) : 0;
+                    const col = p < 50 ? 'var(--green)' : p < 80 ? 'var(--yellow)' : 'var(--red)';
+                    nodeHtml += `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px"><span>${escHtml(nid)}</span><span>${formatBytes(bytes)}</span></div><div class="progress-bar" style="height:10px"><div class="fill" style="width:${p}%;background:${col}"></div></div></div>`;
+                }
+                nodeEl.innerHTML = nodeHtml || '<div style="color:var(--text-muted)">No node data</div>';
+                // Users by Tier — donut
+                const ubt = s.usersByTier || {};
+                const tierLabels = Object.keys(ubt); const tierVals = Object.values(ubt);
+                if (tierLabels.length) {
+                    new Chart(document.getElementById('chart-tiers'), { type: 'doughnut', data: { labels: tierLabels, datasets: [{ data: tierVals, backgroundColor: ['#94a3b8', '#3B82F6', '#8B5CF6', '#F59E0B', '#22C55E'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 12, font: { size: 11 } } } } } });
+                }
+                // Storage by Type — bar
+                const sbt = s.storageByType || {};
+                const typeLabels = Object.keys(sbt); const typeVals = Object.values(sbt).map(v => +(v || 0));
+                if (typeLabels.length) {
+                    new Chart(document.getElementById('chart-types'), { type: 'bar', data: { labels: typeLabels, datasets: [{ data: typeVals, backgroundColor: ['#3B82F6', '#8B5CF6', '#22C55E', '#EAB308', '#EF4444'], borderRadius: 4, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: '#64748b', font: { size: 10 }, callback: v => formatBytes(v) }, grid: { color: 'rgba(51,65,85,.3)' } } } } });
+                }
+                // Recent Activity
+                const actEl = document.getElementById('recent-activity');
+                actEl.innerHTML = entries.length ? entries.map(e => `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:.8rem;display:flex;justify-content:space-between"><div><span style="font-weight:600;color:var(--green)">${escHtml(e.action || '')}</span> <span style="color:var(--text-dim)">${escHtml(e.userId || '')}</span></div><div style="color:var(--text-muted)">${timeAgo(e.timestamp)}</div></div>`).join('') : '<div style="color:var(--text-muted);padding:20px;text-align:center">No recent activity</div>';
+            } catch (e) { c.innerHTML = `<div style="color:var(--red);padding:40px;text-align:center">Failed to load overview: ${escHtml(e.message)}</div>`; }
+        }
+        async function loadUsers() {
+            const c = document.getElementById('main-content');
+            try {
+                const [ur, nr] = await Promise.all([api('GET', '/admin/users'), api('GET', '/admin/nodes')]);
+                allUsers = ur.users || []; allNodes = nr.nodes || [];
+                let sortKey = 'email', sortDir = 1, search = '', selected = new Set();
+                function filtered() { let f = allUsers; if (search) f = f.filter(u => u.email.toLowerCase().includes(search.toLowerCase())); f.sort((a, b) => { let va = a[sortKey] || '', vb = b[sortKey] || ''; if (typeof va === 'number') return (va - vb) * sortDir; return String(va).localeCompare(String(vb)) * sortDir; }); return f; }
+                function render() {
+                    const users = filtered();
+                    c.innerHTML = `<div class="page active"><h2 style="font-size:1.3rem;font-weight:800;margin-bottom:20px">User Management</h2>
+      <div class="toolbar">
+        <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="user-search" placeholder="Search users…" value="${escHtml(search)}"></div>
+        <button class="btn btn-secondary" onclick="exportUsersCSV()">⬇ Export CSV</button>
+        <span style="font-size:.8rem;color:var(--text-dim)">${users.length} users</span>
+      </div>
+      ${selected.size ? `<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center"><span style="font-size:.82rem;font-weight:600">${selected.size} selected</span>
+        <select id="bulk-tier" style="font-size:.8rem"><option value="">Change Tier…</option>${TIERS.map(t => `<option value="${t}">${t}</option>`).join('')}</select>
+        <button class="btn btn-sm btn-secondary" onclick="bulkTier()">Apply</button>
+        <button class="btn btn-sm btn-danger" onclick="bulkFreeze(true)">Freeze</button>
+        <button class="btn btn-sm btn-secondary" onclick="bulkFreeze(false)">Unfreeze</button></div>`: ''}
+      <div class="table-wrap"><div class="table-scroll"><table>
+        <thead><tr><th><input type="checkbox" id="sel-all" ${selected.size === users.length && users.length ? 'checked' : ''}></th><th class="sortable" data-k="email">Email</th><th data-k="tier">Tier</th><th>Storage</th><th data-k="assignedNode">Node</th><th data-k="fileCount">Files</th><th data-k="lastActive">Last Active</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>${users.map(u => {
+                        const p = u.storageLimit ? pct(u.storageUsed, u.storageLimit) : 0; const col = p < 60 ? 'var(--green)' : p < 85 ? 'var(--yellow)' : 'var(--red)'; return `<tr class="user-row" data-uid="${u.id}">
+          <td><input type="checkbox" class="sel-cb" data-uid="${u.id}" ${selected.has(u.id) ? 'checked' : ''}></td>
+          <td style="font-weight:600;cursor:pointer" class="user-email-cell">${escHtml(u.email)}</td>
+          <td>${tierBadge(u.tier || 'free')}</td>
+          <td style="min-width:140px"><div style="font-size:.75rem;margin-bottom:3px">${formatBytes(u.storageUsed)} / ${u.tier === 'unlimited' ? '∞' : formatBytes(u.storageLimit)}</div><div class="progress-bar"><div class="fill" style="width:${p}%;background:${col}"></div></div></td>
+          <td style="font-size:.8rem">${escHtml(u.assignedNode || '—')}</td>
+          <td>${u.fileCount || 0}</td>
+          <td style="font-size:.8rem">${timeAgo(u.lastActive)}</td>
+          <td>${u.frozen ? '<span class="badge badge-red">Frozen</span>' : '<span class="badge badge-green">Active</span>'}</td>
+          <td><button class="btn btn-sm btn-secondary user-action-btn" data-uid="${u.id}">⋯</button></td>
+        </tr>`;
+                    }).join('')}</tbody></table></div></div></div>`;
+                    document.getElementById('user-search').addEventListener('input', e => { search = e.target.value; render(); });
+                    document.getElementById('sel-all')?.addEventListener('change', e => { if (e.target.checked) filtered().forEach(u => selected.add(u.id)); else selected.clear(); render(); });
+                    document.querySelectorAll('.sel-cb').forEach(cb => cb.addEventListener('change', e => { if (e.target.checked) selected.add(e.target.dataset.uid); else selected.delete(e.target.dataset.uid); render(); }));
+                    document.querySelectorAll('.user-email-cell').forEach(el => el.addEventListener('click', e => { const uid = e.target.closest('tr').dataset.uid; showUserDetail(uid); }));
+                    document.querySelectorAll('.user-action-btn').forEach(el => el.addEventListener('click', e => { const uid = e.target.dataset.uid; showUserActions(uid); }));
+                    document.querySelectorAll('th[data-k]').forEach(th => th.style.cursor = 'pointer');
+                    document.querySelectorAll('th[data-k]').forEach(th => th.addEventListener('click', () => { const k = th.dataset.k; if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = 1; } render(); }));
+                }
+                window.exportUsersCSV = () => { const h = ['Email', 'Tier', 'StorageUsed', 'StorageLimit', 'Node', 'Files', 'LastActive', 'Frozen']; const rows = allUsers.map(u => [u.email, u.tier, u.storageUsed, u.storageLimit, u.assignedNode, u.fileCount, u.lastActive, u.frozen]); const csv = [h.join(','), ...rows.map(r => r.join(','))].join('\n'); const b = new Blob([csv], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'users.csv'; a.click(); toast('CSV exported'); };
+                window.bulkTier = async () => { const t = document.getElementById('bulk-tier')?.value; if (!t) return; for (const uid of selected) { try { await api('POST', `/admin/users/${uid}/tier`, { tier: t }); } catch (e) { } } toast(`Tier updated for ${selected.size} users`); selected.clear(); const r = await api('GET', '/admin/users'); allUsers = r.users || []; render(); };
+                window.bulkFreeze = async (frozen) => { for (const uid of selected) { try { await api('POST', `/admin/users/${uid}/freeze`, { frozen }); } catch (e) { } } toast(`${frozen ? 'Frozen' : 'Unfrozen'} ${selected.size} users`); selected.clear(); const r = await api('GET', '/admin/users'); allUsers = r.users || []; render(); };
+                window.showUserDetail = async (uid) => {
+                    try {
+                        const r = await api('GET', `/admin/users/${uid}`); const u = r.user || {}; const files = r.files || []; const p = u.storageLimit ? pct(u.storageUsed, u.storageLimit) : 0;
+                        const pCol = p < 60 ? 'var(--green)' : p < 85 ? 'var(--yellow)' : 'var(--red)';
+                        // Group files by date
+                        const grouped = {};
+                        files.forEach(f => { const d = (f.createdAt || f.uploadedAt || '').substring(0, 10) || 'Unknown'; if (!grouped[d]) grouped[d] = []; grouped[d].push(f); });
+                        const fileIcon = (f) => { const n = (f.originalName || f.filename || '').toLowerCase(); const t = (f.type || f.mimeType || '').toLowerCase(); if (t.includes('audio') || n.match(/\.(mp3|wav|m4a|ogg|flac)$/)) return '🎤'; if (t.includes('video') || n.match(/\.(mp4|webm|mov|avi)$/)) return '🎬'; return '📝'; };
+                        let fileHtml = '';
+                        for (const [date, dateFiles] of Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0]))) {
+                            fileHtml += `<div class="file-group-header">${date} (${dateFiles.length} files)</div>`;
+                            dateFiles.forEach(f => {
+                                const fid = f.id || f.filename;
+                                fileHtml += `<div class="file-item"><input type="checkbox" class="file-sel" data-fid="${fid}" style="accent-color:var(--green)"><span class="file-icon">${fileIcon(f)}</span><div class="file-info"><div class="file-name">${escHtml(f.originalName || f.filename || fid)}</div><div class="file-meta">${formatBytes(f.size)} · ${timeAgo(f.createdAt || f.uploadedAt)}</div></div><div class="file-actions"><button class="btn btn-sm btn-secondary" onclick="downloadFile('${fid}')">⬇</button><button class="btn btn-sm btn-danger" onclick="deleteFile('${uid}','${fid}','${escHtml(f.originalName || f.filename || '')}')">✕</button></div></div>`;
+                            });
+                        }
+                        // Quota alert
+                        if (p >= 90) addAlert('warn', '📊', escHtml(u.email) + ' at ' + p + '% storage quota');
+                        openPanel(u.email || 'User', `<div style="margin-bottom:20px">
+        <div style="display:flex;gap:8px;margin-bottom:12px">${tierBadge(u.tier || 'free')} ${u.frozen ? '<span class="badge badge-red">Frozen</span>' : '<span class="badge badge-green">Active</span>'}</div>
+        <div style="font-size:.82rem;color:var(--text-dim);margin-bottom:4px">ID: ${u.id}</div>
+        <div style="font-size:.82rem;color:var(--text-dim);margin-bottom:4px">Node: ${u.assignedNode || '—'}</div>
+        <div style="font-size:.82rem;color:var(--text-dim);margin-bottom:4px">Created: ${fmtDate(u.createdAt)}</div>
+        <div style="font-size:.82rem;color:var(--text-dim);margin-bottom:12px">Last Active: ${timeAgo(u.lastActive)}</div>
+        <div style="margin-bottom:4px;font-size:.82rem">Storage: ${formatBytes(u.storageUsed)} / ${u.tier === 'unlimited' ? '∞' : formatBytes(u.storageLimit)} (${p}%)</div>
+        <div class="progress-bar" style="height:8px;margin-bottom:16px"><div class="fill" style="width:${p}%;background:${pCol}"></div></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3 style="font-size:.9rem;font-weight:700">Files (${files.length})</h3><div style="display:flex;gap:6px"><button class="btn btn-sm btn-secondary" onclick="downloadAllFiles('${uid}')">⬇ All</button><button class="btn btn-sm btn-danger" id="bulk-del-files" style="display:none" onclick="bulkDeleteFiles('${uid}')">🗑 Delete Selected</button></div></div>
+      <div style="max-height:340px;overflow-y:auto" id="file-list-panel">${files.length ? fileHtml : '<div style="color:var(--text-muted);font-size:.85rem;padding:12px 0">No files</div>'}</div>
+      <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap">
+        <select id="panel-tier" style="font-size:.8rem">${TIERS.map(t => `<option value="${t}" ${t === u.tier ? 'selected' : ''}>${t}</option>`).join('')}</select>
+        <button class="btn btn-sm btn-primary" onclick="changeTier('${u.id}')">Change Tier</button>
+        <button class="btn btn-sm ${u.frozen ? 'btn-secondary' : 'btn-danger'}" onclick="toggleFreeze('${u.id}',${!u.frozen})">${u.frozen ? 'Unfreeze' : 'Freeze'}</button>
+        <select id="panel-node" style="font-size:.8rem"><option value="">Reassign Node…</option>${allNodes.map(n => `<option value="${n.id}">${n.name || n.id}</option>`).join('')}</select>
+        <button class="btn btn-sm btn-secondary" onclick="reassignNode('${u.id}')">Reassign</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}','${escHtml(u.email)}')">Delete</button>
+      </div>`);
+                        // Wire bulk checkbox listener
+                        document.querySelectorAll('.file-sel').forEach(cb => cb.addEventListener('change', () => {
+                            const cnt = document.querySelectorAll('.file-sel:checked').length;
+                            const btn = document.getElementById('bulk-del-files');
+                            if (btn) btn.style.display = cnt > 0 ? 'inline-flex' : 'none';
+                        }));
+                    } catch (e) { toast(e.message, 'error'); }
+                };
+                window.downloadFile = (fid) => { window.open(BASE_URL + '/files/' + fid + '?token=' + TOKEN, '_blank'); };
+                window.deleteFile = (uid, fid, name) => { confirmAction('Delete File', `Delete <strong>${name}</strong>? This cannot be undone.`, async () => { try { await api('DELETE', '/files/' + fid); toast('File deleted'); showUserDetail(uid); } catch (e) { toast(e.message, 'error'); } }); };
+                window.bulkDeleteFiles = async (uid) => { const checked = [...document.querySelectorAll('.file-sel:checked')]; if (!checked.length) return; confirmAction('Bulk Delete', `Delete ${checked.length} selected files?`, async () => { for (const cb of checked) { try { await api('DELETE', '/files/' + cb.dataset.fid); } catch (e) { } } toast(checked.length + ' files deleted'); showUserDetail(uid); }); };
+                window.downloadAllFiles = (uid) => { const cbs = document.querySelectorAll('.file-sel'); cbs.forEach(cb => { window.open(BASE_URL + '/files/' + cb.dataset.fid + '?token=' + TOKEN, '_blank'); }); toast('Downloading ' + cbs.length + ' files'); };
+                window.showUserActions = window.showUserDetail;
+                window.changeTier = async (uid) => { const t = document.getElementById('panel-tier')?.value; if (!t) return; try { await api('POST', `/admin/users/${uid}/tier`, { tier: t }); toast('Tier updated'); closePanel(); const r = await api('GET', '/admin/users'); allUsers = r.users || []; render(); } catch (e) { toast(e.message, 'error'); } };
+                window.toggleFreeze = async (uid, frozen) => { try { await api('POST', `/admin/users/${uid}/freeze`, { frozen }); toast(frozen ? 'User frozen' : 'User unfrozen'); closePanel(); const r = await api('GET', '/admin/users'); allUsers = r.users || []; render(); } catch (e) { toast(e.message, 'error'); } };
+                window.reassignNode = async (uid) => { const nid = document.getElementById('panel-node')?.value; if (!nid) return; try { await api('POST', `/admin/users/${uid}/reassign`, { nodeId: nid }); toast('User reassigned'); closePanel(); const r = await api('GET', '/admin/users'); allUsers = r.users || []; render(); } catch (e) { toast(e.message, 'error'); } };
+                window.deleteUser = (uid, email) => { confirmAction('Delete User', `Permanently delete <strong>${email}</strong> and all their data? This cannot be undone.`, async () => { try { await api('DELETE', `/admin/users/${uid}`); toast('User deleted'); closePanel(); const r = await api('GET', '/admin/users'); allUsers = r.users || []; render(); } catch (e) { toast(e.message, 'error'); } }); };
+                render();
+            } catch (e) { c.innerHTML = `<div style="color:var(--red);padding:40px;text-align:center">Failed to load users: ${escHtml(e.message)}</div>`; }
+        }
+        let nodeRefreshTimer = null;
+        async function loadNodes() {
+            const c = document.getElementById('main-content');
+            if (nodeRefreshTimer) { clearInterval(nodeRefreshTimer); nodeRefreshTimer = null; }
+            try {
+                const nr = await api('GET', '/admin/nodes');
+                allNodes = nr.nodes || [];
+                c.innerHTML = `<div class="page active"><h2 style="font-size:1.3rem;font-weight:800;margin-bottom:20px">Storage Nodes</h2>
+      <div style="margin-bottom:16px;display:flex;gap:8px"><button class="btn btn-primary" onclick="showAddNode()">+ Add Node</button><button class="btn btn-secondary" onclick="showMigration()">🔄 Migrate Data</button></div>
+      <div class="nodes-grid" id="nodes-grid"></div>
+      <div style="font-size:.72rem;color:var(--text-muted);margin-top:12px;text-align:center">Auto-refreshing every 15s</div></div>`;
+                function renderNodes() {
+                    const grid = document.getElementById('nodes-grid'); if (!grid) return; grid.innerHTML = '';
+                    for (const n of allNodes) {
+                        const card = document.createElement('div'); card.className = 'node-card'; card.id = 'node-card-' + n.id;
+                        card.innerHTML = `<div class="node-header"><div><div class="node-name">${escHtml(n.name || n.id)}</div><div class="node-id">ID: ${escHtml(n.id)}</div><div class="node-url">${escHtml(n.url || '')}</div></div><span class="dot" id="ndot-${n.id}"></span></div>
+          <div class="donut-wrap"><canvas id="donut-${n.id}" width="90" height="90"></canvas><div class="disk-info" id="dinfo-${n.id}"><div>Pinging…</div></div></div>
+          <div class="meta"><div>Latency: <span id="nlat-${n.id}">—</span></div><div>Uptime: <span id="nup-${n.id}">—</span></div><div>Heartbeat: <span>${timeAgo(n.lastHeartbeat)}</span></div><div>Status: <span id="nst-${n.id}">${n.status || 'checking'}</span></div></div>
+          <div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-sm btn-secondary" onclick="checkHealth('${n.id}','${escHtml(n.url || '')}')">🔍 Details</button><button class="btn btn-sm btn-danger" onclick="removeNode('${n.id}','${escHtml(n.name || n.id)}')">Remove</button></div>`;
+                        grid.appendChild(card);
+                        pingNode(n);
+                    }
+                }
+                function fmtUptime(s) { if (!s) return '—'; const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60); let r = ''; if (d) r += d + 'd '; if (h) r += h + 'h '; r += m + 'm'; return r; }
+                async function pingNode(n) {
+                    if (!n.url) return;
+                    const t0 = performance.now();
+                    try {
+                        const r = await fetch(n.url + '/health', { signal: AbortSignal.timeout(5000) });
+                        const latency = Math.round(performance.now() - t0);
+                        const h = await r.json(); const di = h.disk || {}; const p = di.usedPercent || 0;
+                        const col = p < 50 ? '#22C55E' : p < 80 ? '#EAB308' : '#EF4444';
+                        const latClass = latency < 500 ? 'latency-green' : latency < 2000 ? 'latency-yellow' : 'latency-red';
+                        const dotEl = document.getElementById('ndot-' + n.id); if (dotEl) dotEl.className = 'dot ' + (latency < 500 ? 'green' : latency < 2000 ? 'yellow' : 'red');
+                        // Destroy old chart and recreate
+                        const canvas = document.getElementById('donut-' + n.id);
+                        if (canvas) {
+                            const existing = Chart.getChart(canvas); if (existing) existing.destroy();
+                            new Chart(canvas, { type: 'doughnut', data: { labels: ['Used', 'Free'], datasets: [{ data: [di.used || 0, di.available || 0], backgroundColor: [col, '#334155'], borderWidth: 0 }] }, options: { responsive: false, cutout: '70%', plugins: { legend: { display: false } }, animation: { duration: 800 } } });
+                        }
+                        const info = document.getElementById('dinfo-' + n.id); if (info) info.innerHTML = `<div class="val">${di.usedHuman || '?'} used</div><div>${di.availableHuman || '?'} free of ${di.totalHuman || '?'}</div><div>${p}% used</div>`;
+                        const latEl = document.getElementById('nlat-' + n.id); if (latEl) latEl.innerHTML = `<span class="latency-badge ${latClass}">${latency}ms</span>`;
+                        const upEl = document.getElementById('nup-' + n.id); if (upEl) upEl.textContent = fmtUptime(h.uptime);
+                        const stEl = document.getElementById('nst-' + n.id); if (stEl) { stEl.textContent = h.status || 'online'; stEl.style.color = 'var(--green)'; }
+                        // Generate disk alerts
+                        if (p >= 90) addAlert('crit', '💾', 'Node ' + escHtml(n.name || n.id) + ' at ' + p + '% disk — CRITICAL');
+                        else if (p >= 80) addAlert('warn', '💾', 'Node ' + escHtml(n.name || n.id) + ' at ' + p + '% disk — Warning');
+                    } catch (e) {
+                        const dotEl = document.getElementById('ndot-' + n.id); if (dotEl) dotEl.className = 'dot red';
+                        const info = document.getElementById('dinfo-' + n.id); if (info) info.innerHTML = '<div style="color:var(--red)">Offline</div>';
+                        const latEl = document.getElementById('nlat-' + n.id); if (latEl) latEl.innerHTML = '<span class="latency-badge latency-red">Fail</span>';
+                        const stEl = document.getElementById('nst-' + n.id); if (stEl) { stEl.textContent = 'offline'; stEl.style.color = 'var(--red)'; }
+                        addAlert('crit', '🔴', 'Node ' + escHtml(n.name || n.id) + ' is unreachable');
+                    }
+                }
+                function refreshAllNodes() { allNodes.forEach(n => pingNode(n)); }
+                renderNodes();
+                nodeRefreshTimer = setInterval(refreshAllNodes, 15000);
+                window.showAddNode = () => { showModal('Add Storage Node', `<div class="field"><label>Node ID</label><input id="new-node-id" placeholder="e.g. oc5-imac"></div><div class="field"><label>Name</label><input id="new-node-name" placeholder="e.g. OC5 iMac"></div><div class="field"><label>URL</label><input id="new-node-url" placeholder="http://192.168.4.126:8099"></div>`, `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="addNode()">Add Node</button>`); };
+                window.addNode = async () => { const id = document.getElementById('new-node-id')?.value; const name = document.getElementById('new-node-name')?.value; const url = document.getElementById('new-node-url')?.value; if (!id || !name || !url) { toast('All fields required', 'error'); return; } try { await api('POST', '/admin/nodes', { id, name, url }); toast('Node added'); closeModal(); loadNodes(); } catch (e) { toast(e.message, 'error'); } };
+                window.removeNode = (id, name) => { confirmAction('Remove Node', `Remove <strong>${name}</strong> from the cluster?`, async () => { try { await api('DELETE', `/admin/nodes/${id}`); toast('Node removed'); loadNodes(); } catch (e) { toast(e.message, 'error'); } }); };
+                window.checkHealth = async (id, url) => { if (!url) { toast('No URL', 'error'); return; } try { const t0 = performance.now(); const h = await fetch(url + '/health', { signal: AbortSignal.timeout(5000) }).then(r => r.json()); const lat = Math.round(performance.now() - t0); const d = h.disk || {}; openPanel(h.nodeName || id, `<div style="font-size:.85rem"><div style="margin-bottom:8px"><strong>Status:</strong> ${h.status}</div><div style="margin-bottom:8px"><strong>Version:</strong> ${h.version || '—'}</div><div style="margin-bottom:8px"><strong>Uptime:</strong> ${fmtUptime(h.uptime)}</div><div style="margin-bottom:8px"><strong>Latency:</strong> ${lat}ms</div><div style="margin-bottom:8px"><strong>Disk Used:</strong> ${d.usedHuman || '—'} / ${d.totalHuman || '—'} (${d.usedPercent || 0}%)</div><div style="margin-bottom:8px"><strong>Available:</strong> ${d.availableHuman || '—'}</div><div style="margin-bottom:8px"><strong>Node ID:</strong> ${h.nodeId || '—'}</div><div><strong>Timestamp:</strong> ${fmtDate(h.timestamp)}</div></div>`); } catch (e) { toast('Unreachable: ' + e.message, 'error'); } };
+                // Migration panel
+                window.showMigration = () => {
+                    const nodeOpts = allNodes.map(n => `<option value="${n.id}">${escHtml(n.name || n.id)}</option>`).join('');
+                    const userOpts = allUsers.map(u => `<option value="${u.id}">${escHtml(u.email)} (${u.assignedNode || '?'})</option>`).join('');
+                    showModal('Data Migration', `<div style="font-size:.82rem;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:var(--radius-sm);padding:10px;margin-bottom:14px;color:var(--blue)">ℹ File transfer between nodes coming soon — currently reassigns routing only.</div>
+        <div class="field"><label>Source Node</label><select id="mig-src">${nodeOpts}</select></div>
+        <div class="field"><label>Destination Node</label><select id="mig-dst">${nodeOpts}</select></div>
+        <div class="field"><label>Migration Scope</label><select id="mig-scope"><option value="user">Migrate Specific User</option><option value="all">Migrate All Users from Source</option></select></div>
+        <div class="field" id="mig-user-field"><label>Select User</label><select id="mig-user">${userOpts}</select></div>
+        <div class="migration-progress" style="display:none" id="mig-progress"><div class="mig-fill" id="mig-fill" style="width:0%"></div></div>
+        <div class="migration-log" style="display:none" id="mig-log"></div>`, `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" id="mig-start" onclick="startMigration()">Start Migration</button>`);
+                    document.getElementById('mig-scope').addEventListener('change', e => { document.getElementById('mig-user-field').style.display = e.target.value === 'user' ? 'block' : 'none'; });
+                };
+                window.startMigration = async () => {
+                    const src = document.getElementById('mig-src')?.value; const dst = document.getElementById('mig-dst')?.value; const scope = document.getElementById('mig-scope')?.value;
+                    if (src === dst) { toast('Source and destination must differ', 'error'); return; }
+                    const bar = document.getElementById('mig-progress'); const fill = document.getElementById('mig-fill'); const log = document.getElementById('mig-log'); const btn = document.getElementById('mig-start');
+                    bar.style.display = 'block'; log.style.display = 'block'; log.innerHTML = ''; btn.disabled = true; btn.textContent = 'Migrating…';
+                    let users = [];
+                    if (scope === 'user') { const uid = document.getElementById('mig-user')?.value; if (uid) users = [{ id: uid, email: allUsers.find(u => u.id === uid)?.email || uid }]; }
+                    else { users = allUsers.filter(u => u.assignedNode === src); }
+                    if (!users.length) { log.innerHTML = '<div>No users to migrate from source node.</div>'; btn.disabled = false; btn.textContent = 'Start Migration'; return; }
+                    for (let i = 0; i < users.length; i++) {
+                        const u = users[i]; const pctDone = Math.round(((i + 1) / users.length) * 100);
+                        try { await api('POST', `/admin/users/${u.id}/reassign`, { nodeId: dst }); log.innerHTML += `<div style="color:var(--green)">✓ ${escHtml(u.email)} → ${dst}</div>`; }
+                        catch (e) { log.innerHTML += `<div style="color:var(--red)">✗ ${escHtml(u.email)}: ${e.message}</div>`; }
+                        fill.style.width = pctDone + '%';
+                        await new Promise(r => setTimeout(r, 200));
+                    }
+                    btn.textContent = 'Done'; toast(`Migrated ${users.length} user(s) to ${dst}`);
+                    const r = await api('GET', '/admin/users'); allUsers = r.users || [];
+                };
+            } catch (e) { c.innerHTML = `<div style="color:var(--red);padding:40px;text-align:center">Failed to load nodes: ${escHtml(e.message)}</div>`; }
+        }
+        async function loadBilling() {
+            const c = document.getElementById('main-content');
+            const mockSummary = { mrr: '$1,247', totalRevenue: '$8,940', activeSubs: 142, churn: '3.2%' };
+            const mockTx = [
+                { id: 'tx1', createdAt: '2026-02-28', email: 'alice@example.com', amount: 999, currency: 'usd', type: 'subscription', status: 'paid', stripePaymentId: 'pi_mock1' },
+                { id: 'tx2', createdAt: '2026-02-27', email: 'bob@example.com', amount: 4999, currency: 'usd', type: 'one_time', status: 'paid', stripePaymentId: 'pi_mock2' },
+                { id: 'tx3', createdAt: '2026-02-26', email: 'carol@example.com', amount: 999, currency: 'usd', type: 'subscription', status: 'failed', stripePaymentId: 'pi_mock3' },
+                { id: 'tx4', createdAt: '2026-02-25', email: 'dave@example.com', amount: 999, currency: 'usd', type: 'subscription', status: 'refunded', stripePaymentId: 'pi_mock4' },
+                { id: 'tx5', createdAt: '2026-02-24', email: 'eve@example.com', amount: 9999, currency: 'usd', type: 'one_time', status: 'paid', stripePaymentId: 'pi_mock5' },
+            ];
+            let summary = mockSummary, transactions = mockTx, isLive = false;
+            try { const s = await api('GET', '/admin/billing/summary'); summary = { mrr: '$' + ((s.mrr || 0) / 100).toFixed(0), totalRevenue: '$' + ((s.totalRevenue || 0) / 100).toFixed(0), activeSubs: s.activeSubscriptions || 0, churn: (s.churnRate || 0).toFixed(1) + '%' }; isLive = true; } catch (e) { }
+            try { const t = await api('GET', '/admin/billing/transactions?limit=50&offset=0'); if (t.transactions) transactions = t.transactions; isLive = true; } catch (e) { }
+            const stripeKey = localStorage.getItem('wp_stripe_key') || '';
+            const fmtAmt = (a, cur) => { const v = ((a || 0) / 100).toFixed(2); return (cur === 'eur' ? '€' : '$') + v; };
+            c.innerHTML = `<div class="page active"><h2 style="font-size:1.3rem;font-weight:800;margin-bottom:20px">Billing & Revenue</h2>
+    ${isLive ? '' : '<div style="background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:var(--radius);padding:12px 16px;font-size:.82rem;color:var(--yellow);margin-bottom:20px">⚠ Using mock data — connect Stripe webhooks for live billing.</div>'}
+    <div class="stats-grid">
+      <div class="stat-card"><div class="label">Monthly Recurring Revenue</div><div class="value" style="color:var(--green)">${summary.mrr}</div><div class="sub">↑ 12% from last month</div></div>
+      <div class="stat-card"><div class="label">Total Revenue</div><div class="value">${summary.totalRevenue}</div><div class="sub">All time</div></div>
+      <div class="stat-card"><div class="label">Active Subscriptions</div><div class="value">${summary.activeSubs}</div><div class="sub">Pro + Translate tiers</div></div>
+      <div class="stat-card"><div class="label">Churn Rate</div><div class="value" style="color:var(--yellow)">${summary.churn}</div><div class="sub">Last 30 days</div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>Revenue Over Time</h3><div class="chart-wrap"><canvas id="chart-revenue"></canvas></div></div>
+      <div class="chart-card"><h3>Transactions</h3><div style="max-height:260px;overflow-y:auto"><table><thead><tr><th>Date</th><th>User</th><th>Amount</th><th>Type</th><th>Status</th><th></th></tr></thead><tbody>${transactions.map(t => { const sc = t.status === 'paid' ? 'badge-green' : t.status === 'failed' ? 'badge-red' : 'badge-gold'; const amt = typeof t.amount === 'number' ? fmtAmt(t.amount, t.currency) : (t.amount || ''); return `<tr><td style="font-size:.8rem">${(t.createdAt || t.date || '').substring(0, 10)}</td><td style="font-size:.8rem">${escHtml(t.email || t.user || '')}</td><td style="font-weight:600">${amt}</td><td style="font-size:.8rem">${t.type}</td><td><span class="badge ${sc}">${t.status}</span></td><td>${t.status === 'paid' ? `<button class="btn btn-sm btn-danger" onclick="refundTx('${t.id}')">Refund</button>` : t.status === 'failed' ? `<button class="btn btn-sm btn-secondary" onclick="retryTx('${t.id}')">Retry</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>Webhook Configuration</h3>
+        <div class="field"><label>Stripe Webhook URL</label><input value="${escHtml(BASE_URL)}/stripe/webhook" readonly style="opacity:.8;cursor:text" onclick="this.select()"></div>
+        <div class="field"><label>Stripe API Key</label><input id="stripe-key" type="password" placeholder="sk_live_…" value="${escHtml(stripeKey)}"></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-sm btn-primary" onclick="saveStripeKey()">Save Key</button><button class="btn btn-sm btn-secondary" onclick="testStripe()">Test Connection</button></div>
+        <div style="margin-top:12px;font-size:.75rem;color:var(--text-muted)">Endpoints: GET /admin/billing/summary · GET /admin/billing/transactions · POST /admin/billing/refund</div>
+      </div>
+      <div class="chart-card"><h3>Coupon Codes</h3>
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:.85rem;display:flex;justify-content:space-between;align-items:center"><span><strong>LAUNCH50</strong> — 50% off, 23 uses</span><span class="badge badge-green">Active</span></div>
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:.85rem;display:flex;justify-content:space-between;align-items:center"><span><strong>BETA20</strong> — 20% off, 89 uses</span><span class="badge badge-red">Expired</span></div>
+        <div style="margin-top:12px"><button class="btn btn-sm btn-primary">+ Create Coupon</button></div>
+      </div>
+    </div></div>`;
+            new Chart(document.getElementById('chart-revenue'), { type: 'line', data: { labels: ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb'], datasets: [{ label: 'Revenue', data: [620, 780, 890, 1050, 1120, 1247], borderColor: '#22C55E', backgroundColor: 'rgba(34,197,94,.1)', fill: true, tension: .4, pointRadius: 4, pointBackgroundColor: '#22C55E' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { display: false } }, y: { ticks: { color: '#64748b', callback: v => '$' + v }, grid: { color: 'rgba(51,65,85,.3)' } } } } });
+            window.saveStripeKey = () => { const k = document.getElementById('stripe-key')?.value; if (k) localStorage.setItem('wp_stripe_key', k); toast('Stripe key saved'); };
+            window.testStripe = async () => { toast('Testing Stripe connection…', 'info'); try { await api('GET', '/admin/billing/summary'); toast('Stripe connected!'); } catch (e) { toast('Stripe not configured: ' + e.message, 'warning'); } };
+            window.refundTx = async (id) => { confirmAction('Refund', 'Issue a refund for this transaction?', async () => { try { await api('POST', '/admin/billing/refund', { transactionId: id }); toast('Refund issued'); loadBilling(); } catch (e) { toast(e.message, 'error'); } }); };
+            window.retryTx = (id) => { toast('Retry not implemented yet', 'info'); };
+        }
+        async function loadAudit() {
+            const c = document.getElementById('main-content');
+            try {
+                const r = await api('GET', '/admin/audit?limit=200');
+                let entries = r.entries || [];
+                let filterAction = '', filterSearch = '', page = 0; const perPage = 50;
+                const actions = [...new Set(entries.map(e => e.action).filter(Boolean))];
+                const destructive = ['delete', 'remove', 'purge']; const warnings = ['freeze', 'reassign', 'tier'];
+                function rowClass(action) { if (!action) return ''; const a = action.toLowerCase(); if (destructive.some(d => a.includes(d))) return 'row-red'; if (warnings.some(w => a.includes(w))) return 'row-yellow'; return 'row-green'; }
+                function render() {
+                    let f = entries;
+                    if (filterAction) f = f.filter(e => e.action === filterAction);
+                    if (filterSearch) f = f.filter(e => JSON.stringify(e).toLowerCase().includes(filterSearch.toLowerCase()));
+                    const totalPages = Math.ceil(f.length / perPage);
+                    const slice = f.slice(page * perPage, (page + 1) * perPage);
+                    c.innerHTML = `<div class="page active"><h2 style="font-size:1.3rem;font-weight:800;margin-bottom:20px">Audit Log</h2>
+        <div class="filter-bar">
+          <select id="audit-action"><option value="">All Actions</option>${actions.map(a => `<option value="${a}" ${a === filterAction ? 'selected' : ''}>${a}</option>`).join('')}</select>
+          <input type="text" id="audit-search" placeholder="Search…" value="${escHtml(filterSearch)}" style="min-width:200px">
+          <button class="btn btn-secondary btn-sm" onclick="exportAuditCSV()">⬇ Export CSV</button>
+          <span style="font-size:.8rem;color:var(--text-dim)">${f.length} entries</span>
+        </div>
+        <div class="table-wrap"><div class="table-scroll"><table>
+          <thead><tr><th>Timestamp</th><th>Action</th><th>User</th><th>Details</th></tr></thead>
+          <tbody>${slice.map(e => { const details = Object.entries(e).filter(([k]) => !['id', 'action', 'userId', 'timestamp'].includes(k)).map(([k, v]) => `${k}: ${v}`).join(', '); return `<tr class="${rowClass(e.action)}"><td style="font-size:.8rem;white-space:nowrap">${fmtDate(e.timestamp)}</td><td><span style="font-weight:600">${escHtml(e.action || '')}</span></td><td style="font-size:.8rem">${escHtml(e.userId || '—')}</td><td style="font-size:.78rem;color:var(--text-dim);max-width:300px;overflow:hidden;text-overflow:ellipsis">${escHtml(details)}</td></tr>`; }).join('')}</tbody>
+        </table></div></div>
+        <div class="pagination">
+          <button class="btn btn-sm btn-secondary" onclick="auditPage(-1)" ${page === 0 ? 'disabled' : ''}>← Prev</button>
+          <span>Page ${page + 1} of ${totalPages || 1}</span>
+          <button class="btn btn-sm btn-secondary" onclick="auditPage(1)" ${page >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+        </div></div>`;
+                    document.getElementById('audit-action').addEventListener('change', e => { filterAction = e.target.value; page = 0; render(); });
+                    document.getElementById('audit-search').addEventListener('input', e => { filterSearch = e.target.value; page = 0; render(); });
+                }
+                window.auditPage = (d) => { page += d; render(); };
+                window.exportAuditCSV = () => { const h = ['Timestamp', 'Action', 'UserId', 'Details']; const rows = entries.map(e => [e.timestamp, e.action, e.userId, JSON.stringify(e)]); const csv = [h.join(','), ...rows.map(r => r.map(v => `"${String(v || '').replace(/"/g, '""')}"`).join(','))].join('\n'); const b = new Blob([csv], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'audit-log.csv'; a.click(); toast('Audit log exported'); };
+                render();
+            } catch (e) { c.innerHTML = `<div style="color:var(--red);padding:40px;text-align:center">Failed to load audit log: ${escHtml(e.message)}</div>`; }
+        }
+        function loadSettings() {
+            const c = document.getElementById('main-content');
+            const savedUrl = localStorage.getItem('wp_base_url') || BASE_URL;
+            const warnPct = localStorage.getItem('wp_warn_pct') || '80';
+            const critPct = localStorage.getItem('wp_crit_pct') || '90';
+            const defTier = localStorage.getItem('wp_def_tier') || 'free';
+            c.innerHTML = `<div class="page active"><h2 style="font-size:1.3rem;font-weight:800;margin-bottom:20px">Settings</h2>
+    <div class="settings-grid">
+      <div class="settings-card"><h3>API Configuration</h3>
+        <div class="field"><label>Cloud Storage Base URL</label><input id="set-url" value="${escHtml(savedUrl)}"></div>
+        <div class="field"><label>Admin Secret (for bootstrap)</label><input id="set-secret" type="password" placeholder="••••••••"></div>
+        <button class="btn btn-primary" onclick="saveSettings()">Save API Settings</button>
+      </div>
+      <div class="settings-card"><h3>Alert Thresholds</h3>
+        <div class="field"><label>Disk Warning Threshold (%)</label><input id="set-warn" type="number" min="1" max="99" value="${warnPct}"></div>
+        <div class="field"><label>Disk Critical Threshold (%)</label><input id="set-crit" type="number" min="1" max="99" value="${critPct}"></div>
+      </div>
+      <div class="settings-card"><h3>Default Settings</h3>
+        <div class="field"><label>Default Tier for New Users</label><select id="set-tier">${TIERS.map(t => `<option value="${t}" ${t === defTier ? 'selected' : ''}>${t} (${TIER_LIMITS[t]})</option>`).join('')}</select></div>
+        <div class="field"><label>JWT Token Expiry</label><input value="7 days" disabled style="opacity:.6"></div>
+      </div>
+      <div class="settings-card"><h3>System Info</h3>
+        <div style="font-size:.85rem;color:var(--text-dim);line-height:2">
+          <div>API Base URL: <span style="color:var(--text)">${escHtml(BASE_URL)}</span></div>
+          <div>Auth Token: <span style="color:var(--text)">${TOKEN ? TOKEN.substring(0, 20) + '…' : 'None'}</span></div>
+          <div>Active Nodes: <span style="color:var(--text)">${allNodes.length}</span></div>
+          <div>Total Users: <span style="color:var(--text)">${allUsers.length}</span></div>
+          <div>Dashboard Version: <span style="color:var(--green)">1.0.0</span></div>
+        </div>
+      </div>
+    </div></div>`;
+            window.saveSettings = () => {
+                const url = document.getElementById('set-url')?.value;
+                const warn = document.getElementById('set-warn')?.value;
+                const crit = document.getElementById('set-crit')?.value;
+                const tier = document.getElementById('set-tier')?.value;
+                if (url) localStorage.setItem('wp_base_url', url);
+                if (warn) localStorage.setItem('wp_warn_pct', warn);
+                if (crit) localStorage.setItem('wp_crit_pct', crit);
+                if (tier) localStorage.setItem('wp_def_tier', tier);
+                toast('Settings saved');
+            };
+        }
+        // ═══════════════════════ ALERT SYSTEM ═══════════════════════
+        let alerts = JSON.parse(localStorage.getItem('wp_alerts') || '[]');
+        const MAX_ALERTS = 50;
+        function addAlert(type, icon, message) {
+            const id = Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+            const existing = alerts.find(a => a.message === message && Date.now() - a.ts < 300000);
+            if (existing) return; // dedupe within 5 min
+            alerts.unshift({ id, type, icon, message, ts: Date.now(), read: false });
+            if (alerts.length > MAX_ALERTS) alerts = alerts.slice(0, MAX_ALERTS);
+            localStorage.setItem('wp_alerts', JSON.stringify(alerts));
+            renderAlerts();
+        }
+        function renderAlerts() {
+            const list = document.getElementById('alert-list');
+            const badge = document.getElementById('bell-badge');
+            if (!list || !badge) return;
+            const unread = alerts.filter(a => !a.read).length;
+            badge.textContent = unread;
+            badge.style.display = unread > 0 ? 'flex' : 'none';
+            list.innerHTML = alerts.length ? alerts.map(a => {
+                const cls = a.type === 'crit' ? 'alert-crit' : a.type === 'warn' ? 'alert-warn' : a.type === 'info' ? 'alert-info' : 'alert-success';
+                return `<div class="alert-item ${cls}"><span class="alert-icon">${a.icon}</span><div class="alert-body"><div>${a.message}</div><div class="alert-time">${timeAgo(a.ts)}</div></div><span class="alert-dismiss" onclick="event.stopPropagation();dismissAlert('${a.id}')">✕</span></div>`;
+            }).join('') : '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:.85rem">No alerts</div>';
+        }
+        function toggleAlerts() {
+            const dd = document.getElementById('bell-dropdown');
+            dd.classList.toggle('open');
+            alerts.forEach(a => a.read = true);
+            localStorage.setItem('wp_alerts', JSON.stringify(alerts));
+            renderAlerts();
+        }
+        function dismissAlert(id) {
+            alerts = alerts.filter(a => a.id !== id);
+            localStorage.setItem('wp_alerts', JSON.stringify(alerts));
+            renderAlerts();
+        }
+        function clearAllAlerts() {
+            alerts = [];
+            localStorage.setItem('wp_alerts', '[]');
+            renderAlerts();
+        }
+        // Close bell dropdown on outside click
+        document.addEventListener('click', e => {
+            const bw = document.getElementById('bell-wrap');
+            const dd = document.getElementById('bell-dropdown');
+            if (bw && dd && !bw.contains(e.target)) dd.classList.remove('open');
+        });
+        // Auto-generate alerts from data
+        async function checkAlerts() {
+            try {
+                const audit = await api('GET', '/admin/audit?limit=30');
+                const entries = audit.entries || [];
+                entries.forEach(e => {
+                    if (e.action === 'user.register' || e.action === 'user.created') addAlert('info', '👤', 'New user: ' + (e.email || e.userId || ''));
+                    if (e.action === 'file.upload' && e.error) addAlert('warn', '⚠', 'Upload failed for ' + (e.userId || ''));
+                });
+                // Check user quotas
+                allUsers.forEach(u => {
+                    if (u.storageLimit && u.storageUsed) {
+                        const p = pct(u.storageUsed, u.storageLimit);
+                        if (p >= 90) addAlert('warn', '📊', escHtml(u.email) + ' at ' + p + '% storage');
+                    }
+                });
+            } catch (e) { }
+        }
+
+        // ═══════════════════════ ACTIVITY FEED ═══════════════════════
+        let feedTimer = null;
+        let lastFeedIds = new Set();
+        function toggleFeed() {
+            document.getElementById('activity-feed').classList.toggle('expanded');
+            const arrow = document.getElementById('feed-arrow');
+            if (arrow) arrow.textContent = document.getElementById('activity-feed').classList.contains('expanded') ? '▼' : '▲';
+        }
+        async function pollFeed() {
+            try {
+                const r = await api('GET', '/admin/audit?limit=20');
+                const entries = r.entries || [];
+                const body = document.getElementById('feed-body');
+                if (!body) return;
+                const destructive = ['delete', 'remove', 'purge'];
+                const warnings = ['freeze', 'reassign', 'tier'];
+                let html = '';
+                entries.forEach(e => {
+                    const isNew = !lastFeedIds.has(e.id);
+                    const a = (e.action || '').toLowerCase();
+                    const cls = destructive.some(d => a.includes(d)) ? 'feed-red' : warnings.some(w => a.includes(w)) ? 'feed-yellow' : 'feed-green';
+                    const details = Object.entries(e).filter(([k]) => !['id', 'action', 'userId', 'timestamp'].includes(k)).map(([k, v]) => `${k}: ${v}`).join(', ');
+                    html += `<div class="feed-entry ${cls} ${isNew ? '' : ''}" onclick="this.classList.toggle('feed-expanded')"><div><span style="font-weight:600;color:var(--text)">${escHtml(e.action || '')}</span> <span style="color:var(--text-dim)">${escHtml(e.userId || '')}</span></div><div style="color:var(--text-muted);font-size:.72rem">${timeAgo(e.timestamp)}</div><div class="feed-detail">${escHtml(details)}</div></div>`;
+                });
+                body.innerHTML = html || '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:.82rem">No activity</div>';
+                lastFeedIds = new Set(entries.map(e => e.id));
+            } catch (e) { }
+        }
+
+        // ═══════════════════════ REPORT GENERATOR ═══════════════════════
+        async function generateReport() {
+            toast('Generating report…', 'info');
+            try {
+                const [ov, audit] = await Promise.all([api('GET', '/admin/overview'), api('GET', '/admin/audit?limit=20')]);
+                const s = ov.summary || {};
+                const d = ov.disk || {};
+                const now = new Date().toLocaleString();
+                const nodeRows = allNodes.map(n => `<tr><td>${escHtml(n.name || n.id)}</td><td>${n.status || '—'}</td><td>${escHtml(n.url || '')}</td></tr>`).join('');
+                const tierRows = Object.entries(s.usersByTier || {}).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+                const recentRows = (audit.entries || []).slice(0, 10).map(e => `<tr><td>${fmtDate(e.timestamp)}</td><td>${escHtml(e.action || '')}</td><td>${escHtml(e.userId || '')}</td></tr>`).join('');
+                const html = `<!DOCTYPE html><html><head><title>Windy Pro Report — ${now}</title><style>body{font-family:Inter,system-ui,sans-serif;max-width:800px;margin:40px auto;color:#1e293b;font-size:13px}h1{color:#0f172a;border-bottom:2px solid #22C55E;padding-bottom:8px}h2{color:#334155;margin-top:24px;font-size:1rem}table{width:100%;border-collapse:collapse;margin:8px 0}th,td{padding:6px 10px;border:1px solid #e2e8f0;text-align:left;font-size:12px}th{background:#f8fafc;font-weight:600}.stat{display:inline-block;background:#f1f5f9;border-radius:8px;padding:12px 20px;margin:4px;text-align:center}.stat .v{font-size:1.4rem;font-weight:800;color:#0f172a}.stat .l{font-size:.7rem;color:#64748b;text-transform:uppercase}@media print{body{margin:20px}}</style></head><body>
+<h1>☁ Windy Pro — Admin Report</h1><p>Generated: ${now}</p>
+<div><div class="stat"><div class="v">${s.totalUsers || 0}</div><div class="l">Users</div></div><div class="stat"><div class="v">${s.totalFiles || 0}</div><div class="l">Files</div></div><div class="stat"><div class="v">${s.totalStorageHuman || formatBytes(s.totalStorage)}</div><div class="l">Storage Used</div></div><div class="stat"><div class="v">${s.activeNodes || 0}/${s.totalNodes || 0}</div><div class="l">Nodes Online</div></div><div class="stat"><div class="v">${d.usedPercent || 0}%</div><div class="l">Disk Used</div></div></div>
+<h2>Storage Nodes</h2><table><tr><th>Node</th><th>Status</th><th>URL</th></tr>${nodeRows}</table>
+<h2>Users by Tier</h2><table><tr><th>Tier</th><th>Count</th></tr>${tierRows}</table>
+<h2>Recent Activity</h2><table><tr><th>Time</th><th>Action</th><th>User</th></tr>${recentRows}</table>
+<p style="margin-top:30px;color:#94a3b8;font-size:11px">Windy Pro Super Admin Dashboard · Report auto-generated</p></body></html>`;
+                const w = window.open('', '_blank');
+                w.document.write(html);
+                w.document.close();
+                toast('Report opened in new tab');
+            } catch (e) { toast('Failed to generate report: ' + e.message, 'error'); }
+        }
+
+        // ═══════════════════════ INIT ═══════════════════════
+        document.addEventListener('DOMContentLoaded', () => {
+            if (TOKEN) { showApp(); } else { document.getElementById('login-screen').style.display = 'flex'; document.getElementById('app').style.display = 'none'; }
+            document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+        });
+    </script>
+</body>
+
+</html>

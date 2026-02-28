@@ -16,9 +16,18 @@ contextBridge.exposeInMainWorld('wizardAPI', {
   register: (name, email, password) => ipcRenderer.invoke('wizard-register', name, email, password),
   createFreeAccount: () => ipcRenderer.invoke('wizard-free-account'),
 
+  // Language Profile
+  saveLanguageProfile: (languages) => ipcRenderer.invoke('wizard-save-language-profile', languages),
+
+  // Translation
+  purchaseTranslate: (tier) => ipcRenderer.invoke('wizard-purchase-translate', tier),
+
   // Install
   install: () => ipcRenderer.invoke('wizard-install'),
   complete: () => ipcRenderer.invoke('wizard-complete'),
+
+  // Open URL in system browser (for Stripe checkout)
+  openExternal: (url) => ipcRenderer.invoke('wizard-open-external', url),
 
   // Progress listener
   onProgress: (callback) => {

@@ -1,6 +1,6 @@
 {
   "name": "windy-pro",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Voice-to-text desktop app powered by faster-whisper",
   "main": "src/client/desktop/main.js",
   "author": {
@@ -20,7 +20,9 @@
   },
   "dependencies": {
     "electron-store": "^8.1.0",
-    "electron-updater": "^6.1.0"
+    "electron-updater": "^6.1.0",
+    "form-data": "^4.0.5",
+    "stripe": "^20.4.0"
   },
   "devDependencies": {
     "electron": "^28.0.0",
@@ -30,9 +32,23 @@
     "appId": "pro.windy.app",
     "extraResources": [
       {
+        "from": "src/engine",
+        "to": "engine",
+        "filter": [
+          "**/*.py",
+          "requirements.txt"
+        ]
+      },
+      {
+        "from": "installer-v2",
+        "to": "installer-v2"
+      },
+      {
         "from": "extraResources/",
         "to": "bundled",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "productName": "Windy Pro",
@@ -48,28 +64,9 @@
     ],
     "files": [
       "src/**/*",
-      "installer/**/*",
+      "installer-v2/**/*",
       "!**/*.pyc",
       "!**/__pycache__"
-    ],
-    "extraResources": [
-      {
-        "from": "src/engine",
-        "to": "engine",
-        "filter": [
-          "**/*.py",
-          "requirements.txt"
-        ]
-      },
-      {
-        "from": "installer",
-        "to": "installer"
-      },
-      {
-        "from": "extraResources/",
-        "to": "bundled",
-        "filter": ["**/*"]
-      }
     ],
     "mac": {
       "category": "public.app-category.productivity",

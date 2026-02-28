@@ -5,1042 +5,491 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description"
-        content="Windy Pro — 15 proprietary voice-to-text models. Local-first. Private. No internet required. One download, a partner for life.">
-    <title>Windy Pro — No Internet, No Problem.</title>
+        content="Windy Pro — Voice to text that just works. 15 voice engines, batch mode, 99 languages, privacy-first.">
+    <title>Windy Pro — Voice to Text, Your Way</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="landing.css?v=2.0.8">
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="landing.css">
 </head>
 
 <body>
     <!-- Nav -->
-    <nav class="nav" id="nav">
+    <nav class="nav">
         <div class="container nav-inner">
             <a href="#" class="logo">🌪️ <span>Windy Pro</span></a>
             <div class="nav-links">
-                <a href="#models">Models</a>
-                <a href="#windytune">WindyTune</a>
-                <a href="#moboloco">MoboLoco</a>
-                <a href="#traveler">Traveler</a>
-                <a href="#privacy">Privacy</a>
-                <a href="#soulfile">Soul File</a>
+                <a href="#features" data-i18n="nav.features">Features</a>
+                <a href="#translate" data-i18n="nav.translate">Translate</a>
+                <a href="#compare" data-i18n="nav.compare">Compare</a>
                 <a href="#pricing">Pricing</a>
-                <a href="#download" class="btn btn-sm btn-primary">Download</a>
+                <!-- Language Selector -->
+                <div class="lang-selector" id="lang-selector">
+                    <button class="lang-toggle" id="lang-toggle" onclick="toggleLangDropdown()">
+                        <span id="lang-current-flag">🇺🇸</span>
+                        <span id="lang-current-name">EN</span>
+                        <span style="font-size:10px;">▼</span>
+                    </button>
+                    <div class="lang-dropdown" id="lang-dropdown">
+                        <div class="lang-option" onclick="setLanguage('en')">🇺🇸 English</div>
+                        <div class="lang-option" onclick="setLanguage('es')">🇪🇸 Español</div>
+                        <div class="lang-option" onclick="setLanguage('fr')">🇫🇷 Français</div>
+                        <div class="lang-option" onclick="setLanguage('de')">🇩🇪 Deutsch</div>
+                        <div class="lang-option" onclick="setLanguage('pt')">🇧🇷 Português</div>
+                        <div class="lang-option" onclick="setLanguage('zh')">🇨🇳 中文</div>
+                        <div class="lang-option" onclick="setLanguage('ja')">🇯🇵 日本語</div>
+                        <div class="lang-option" onclick="setLanguage('ko')">🇰🇷 한국어</div>
+                        <div class="lang-option" onclick="setLanguage('ar')">🇸🇦 العربية</div>
+                        <div class="lang-option" onclick="setLanguage('hi')">🇮🇳 हिन्दी</div>
+                        <div class="lang-option" onclick="setLanguage('ru')">🇷🇺 Русский</div>
+                        <div class="lang-option" onclick="setLanguage('tr')">🇹🇷 Türkçe</div>
+                    </div>
+                </div>
+                <a href="#download" class="btn btn-sm" data-i18n="nav.download">Download</a>
             </div>
-            <button class="nav-toggle" aria-label="Menu" onclick="document.querySelector('.nav-links').classList.toggle('open')">☰</button>
         </div>
     </nav>
 
     <!-- Hero -->
-    <section class="hero" id="hero">
-        <div class="hero-strobe"></div>
-        <div class="hero-tornado-bg">
-            <div class="tornado">
-                <div class="tornado-segment t1"></div>
-                <div class="tornado-segment t2"></div>
-                <div class="tornado-segment t3"></div>
-                <div class="tornado-segment t4"></div>
-                <div class="tornado-segment t5"></div>
-            </div>
-        </div>
-        <!-- Monikers handled by the marquee below the hero content -->
+    <section class="hero">
         <div class="container hero-inner">
-            <div class="hero-logo-tornado">🌪️</div>
-            <div class="hero-badge">🎯 15 Proprietary Models · Developed In Our Lab · Continually Refined</div>
-            <h1>And God Said,<br><span class="gradient-text">"Let There Be Light."</span></h1>
-            <p class="hero-genesis">And there was <strong>Windy Pro.</strong></p>
-            <p class="hero-sub">Your voice creates worlds. 15 proprietary speech models. From a 42MB model on your phone
-                to a flagship powerhouse on your desktop. Your words never leave your device.</p>
-            <div class="hero-platforms">
-                <span>🪟 Windows</span>
-                <span>🍎 macOS</span>
-                <span>🐧 Linux</span>
-                <span>📱 iOS <small>(coming soon)</small></span>
-                <span>🤖 Android <small>(coming soon)</small></span>
-            </div>
+            <div class="hero-badge" data-i18n="hero.badge">✨ v0.5.0 — All Platforms: Windows, macOS, Linux</div>
+            <h1>Voice to Text,<br><span class="gradient-text">Your Way</span></h1>
+            <p class="hero-sub" data-i18n="hero.subtitle">Record your voice, get polished text. Choose from 15 voice engines, record up to 30 minutes,
+                with LLM cleanup that makes every transcript perfect.</p>
             <div class="hero-actions">
-                <a href="#download" class="btn btn-primary btn-lg pulse-glow">🌪️ Download Free</a>
-                <a href="#models" class="btn btn-ghost btn-lg">Explore Models →</a>
+                <a href="#download" class="btn btn-primary btn-lg">Download for Linux</a>
+                <a href="#features" class="btn btn-ghost btn-lg">See Features →</a>
             </div>
-            <div class="hero-marquee">
-                <span class="marquee-item active">No Internet, No Problem. 🌪️</span>
-                <span class="marquee-item">Stay Local. Stay Private.</span>
-                <span class="marquee-item">Get Voice-Pilled. 💊</span>
-                <span class="marquee-item">"WindyPro make me go mobo loco!" 🐕📱</span>
-                <span class="marquee-item">Pay Once. Use Forever.</span>
-                <span class="marquee-item">The Green Strobe Never Lies. 🟢</span>
-                <span class="marquee-item">Talk Today. Live Forever. 🧬</span>
-                <span class="marquee-item">Never Touch a Keyboard Again.</span>
-                <span class="marquee-item">99 Languages. Zero Internet. 🌍</span>
-                <span class="marquee-item">By the Words of His Mouth, the Heavens Were Created.</span>
-                <span class="marquee-item">Your Voice Never Leaves Your Device.</span>
-                <span class="marquee-item">Build Your Soul File. 🧬</span>
-                <span class="marquee-item">Go Private. Go Personal.</span>
-                <span class="marquee-item">It Learns Your Voice.</span>
-                <span class="marquee-item">WindyTune: It Adapts So You Don't Have To. 🌪️</span>
-                <span class="marquee-item">Airplane Mode? No Problem. ✈️</span>
-                <span class="marquee-item">One Download. A Partner for Life.</span>
-                <span class="marquee-item">15 Models. One Mission. Your Words, Perfectly.</span>
+            <div class="hero-screenshot">
+                <div class="app-mock">
+                    <div class="mock-titlebar">
+                        <div class="mock-dots"><span></span><span></span><span></span></div>
+                        <span class="mock-title">Windy Pro</span>
+                    </div>
+                    <div class="mock-body">
+                        <div class="mock-state">
+                            <div class="mock-glow"></div><span>● Listening</span>
+                        </div>
+                        <div class="mock-transcript">
+                            <p>The new batch mode processes your entire recording at once, using GPU-accelerated Whisper
+                                with LLM cleanup for perfect punctuation and paragraph breaks.</p>
+                            <p class="mock-partial">Speaking now...</p>
+                        </div>
+                        <div class="mock-controls">
+                            <div class="mock-btn-rec">⏹ Stop</div>
+                            <div class="mock-timer">02:34</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
 
-    <!-- The Green Strobe Promise -->
-    <section class="section strobe-section">
-        <div class="container text-center">
-            <div class="strobe-indicator">
-                <div class="strobe-dot"></div>
-            </div>
-            <h2>🌪️ The Green Strobe Never Lies.</h2>
-            <p class="section-sub">If it's green, your words are being captured. No anxiety. No guessing. No "was it
-                recording?" Just talk — for as long as you want. No time limits. Ever.</p>
-            <p class="creation-quote">"By the words of your mouth, worlds are created."</p>
-            <p class="creation-sub">Your voice is the most powerful creation tool you own. Windy Pro makes sure every word counts.</p>
-            <p class="creation-sub" style="margin-top:12px"><strong>🐧 Yes, we support Linux.</strong> Windows, macOS, AND Linux. Every major operating system. No one gets left out.</p>
-        </div>
-    </section>
-
-    <!-- Models -->
-    <section class="section" id="models">
+    <!-- Features -->
+    <section id="features" class="features">
         <div class="container">
-            <div class="section-header">
-                <h2>🌪️ 15 Models. One Mission.<br><span class="gradient-text">Your Words, Perfectly.</span></h2>
-                <p class="section-sub">Our engineers developed, fine-tuned, and certified every model in our laboratory.
-                    We benchmark obsessively. We regression-test relentlessly. And we never stop improving them.</p>
-                <p class="section-sub" style="margin-top:1rem; opacity: 0.8">No other voice-to-text platform in history
-                    has ever shipped 15 proprietary models spanning mobile to desktop. Nobody has come close.</p>
-            </div>
-
-            <div class="model-families">
-                <!-- Core -->
-                <div class="family-card" id="family-core">
-                    <div class="family-icon">⚡</div>
-                    <h3>Windy Core</h3>
-                    <p class="family-tagline">GPU-Accelerated Power</p>
-                    <p class="family-desc">Seven models for desktops and workstations with dedicated GPUs. When you have
-                        the hardware, unleash the full experience. Maximum speed. Maximum accuracy.</p>
-                    <button class="btn btn-ghost btn-sm toggle-models" data-family="core">View 7 Models ↓</button>
-                    <div class="model-grid hidden" id="models-core">
-                        <div class="model-card">
-                            <div class="model-badge badge-fast">Fastest</div>
-                            <h4>Windy Core Spark</h4>
-                            <div class="model-size">149 MB</div>
-                            <p>Lightning-fast English transcription. Ultra-low latency for quick dictation.</p>
-                            <div class="model-meta">
-                                <span>🇺🇸 English</span>
-                                <span>⚡ 32x speed</span>
-                            </div>
-                        </div>
-                        <div class="model-card">
-                            <h4>Windy Core Pulse</h4>
-                            <div class="model-size">282 MB</div>
-                            <p>Quick, reliable English with better accuracy than Spark. Great everyday model.</p>
-                            <div class="model-meta">
-                                <span>🇺🇸 English</span>
-                                <span>⚡ 16x speed</span>
-                            </div>
-                        </div>
-                        <div class="model-card">
-                            <div class="model-badge badge-popular">Most Popular</div>
-                            <h4>Windy Core Standard</h4>
-                            <div class="model-size">927 MB</div>
-                            <p>The everyday workhorse. Strong accuracy across 99 languages. The one most people love.</p>
-                            <div class="model-meta">
-                                <span>🌍 99 Languages</span>
-                                <span>⚡ 6x speed</span>
-                            </div>
-                        </div>
-                        <div class="model-card">
-                            <h4>Windy Core Global</h4>
-                            <div class="model-size">2.9 GB</div>
-                            <p>Multilingual powerhouse. Excels at non-English languages and code-switching between
-                                languages mid-sentence.</p>
-                            <div class="model-meta">
-                                <span>🌍 99 Languages</span>
-                                <span>⚡ 2x speed</span>
-                            </div>
-                        </div>
-                        <div class="model-card">
-                            <div class="model-badge badge-flagship">Flagship</div>
-                            <h4>Windy Core Ultra</h4>
-                            <div class="model-size">2.9 GB</div>
-                            <p>Maximum accuracy. The best we have. For professionals who accept nothing less than
-                                perfection.</p>
-                            <div class="model-meta">
-                                <span>🌍 99 Languages</span>
-                                <span>🎯 Highest Accuracy</span>
-                            </div>
-                        </div>
-                        <div class="model-card">
-                            <h4>Windy Core Turbo</h4>
-                            <div class="model-size">1.6 GB</div>
-                            <p>Flagship speed with near-flagship accuracy. For when every millisecond matters.</p>
-                            <div class="model-meta">
-                                <span>🌍 99 Languages</span>
-                                <span>⚡ Fast + Accurate</span>
-                            </div>
-                        </div>
-                        <div class="model-card">
-                            <div class="model-badge badge-sweet">Sweet Spot</div>
-                            <h4>Windy Core Pro</h4>
-                            <div class="model-size">1.5 GB</div>
-                            <p>The sweet spot. Fast, accurate, efficient. Our engineers' personal favorite for English
-                                power users.</p>
-                            <div class="model-meta">
-                                <span>🌍 99 Languages</span>
-                                <span>⚡ 6x speed</span>
-                            </div>
-                        </div>
-                    </div>
+            <h2 class="section-title">Everything You Need</h2>
+            <p class="section-sub">Built for developers, writers, and anyone who talks faster than they type.</p>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🎬</div>
+                    <h3>Batch Mode</h3>
+                    <p>Record first, process later. GPU transcription with LLM cleanup for best quality.</p>
                 </div>
-
-                <!-- Edge -->
-                <div class="family-card" id="family-edge">
-                    <div class="family-icon">🛡️</div>
-                    <h3>Windy Edge</h3>
-                    <p class="family-tagline">Runs Anywhere. No GPU Required.</p>
-                    <p class="family-desc">Five models optimized for laptops, phones, tablets, and older hardware. Fully
-                        local, fully private, fully offline. This is the MoboLoco lineup.</p>
-                    <button class="btn btn-ghost btn-sm toggle-models" data-family="edge">View 5 Models ↓</button>
-                    <div class="model-grid hidden" id="models-edge">
-                        <div class="model-card">
-                            <div class="model-badge badge-tiny">Tiniest</div>
-                            <h4>Windy Edge Spark</h4>
-                            <div class="model-size">42 MB</div>
-                            <p>The smallest model in existence. Runs on literally anything. Your phone, your old laptop,
-                                your tablet.</p>
-                            <div class="model-meta">
-                                <span>🇺🇸 English</span>
-                                <span>📱 42 MB!</span>
-                            </div>
-                        </div>
-                        <div class="model-card">
-                            <h4>Windy Edge Pulse</h4>
-                            <div class="model-size">78 MB</div>
-                            <p>Better quality, still tiny. Fits in your phone's pocket with room to spare.</p>
-                            <div class="model-meta">
-                                <span>🇺🇸 English</span>
-                                <span>📱 78 MB</span>
-                            </div>
-                        </div>
-                        <div class="model-card">
-                            <div class="model-badge badge-popular">Best for Mobile</div>
-                            <h4>Windy Edge Standard</h4>
-                            <div class="model-size">168 MB</div>
-                            <p>Multilingual on your phone. 99 languages in 168 megabytes. Perfect for travelers.</p>
-                            <div class="model-meta">
-                                <span>🌍 99 Languages</span>
-                                <span>📱 168 MB</span>
-                            </div>
-                        </div>
-                        <div class="model-card">
-                            <h4>Windy Edge Global</h4>
-                            <div class="model-size">515 MB</div>
-                            <p>Serious multilingual quality without a GPU. For laptops and tablets that need accuracy.
-                            </p>
-                            <div class="model-meta">
-                                <span>🌍 99 Languages</span>
-                                <span>💻 515 MB</span>
-                            </div>
-                        </div>
-                        <div class="model-card">
-                            <div class="model-badge badge-flagship">Edge Flagship</div>
-                            <h4>Windy Edge Ultra</h4>
-                            <div class="model-size">1.1 GB</div>
-                            <p>Desktop-class accuracy on CPU. The most powerful model that runs without a GPU.</p>
-                            <div class="model-meta">
-                                <span>🌍 99 Languages</span>
-                                <span>💻 1.1 GB</span>
-                            </div>
-                        </div>
-                    </div>
+                <div class="feature-card highlight">
+                    <div class="feature-icon">⚡</div>
+                    <h3 data-i18n="features.engines.title">15 Voice Engines</h3>
+                    <p data-i18n="features.engines.desc">From 42 MB to 2.9 GB. WindyTune auto-selects the best engine for your hardware, moment by moment.</p>
                 </div>
-
-                <!-- Lingua -->
-                <div class="family-card" id="family-lingua">
-                    <div class="family-icon">🌍</div>
-                    <h3>Windy Lingua</h3>
-                    <p class="family-tagline">Dedicated Language Excellence</p>
-                    <p class="family-desc">Purpose-built models optimized for specific languages. When you need the
-                        absolute best for your language — not a generalist, a specialist. More languages coming.</p>
-                    <button class="btn btn-ghost btn-sm toggle-models" data-family="lingua">View 3 Models ↓</button>
-                    <div class="model-grid hidden" id="models-lingua">
-                        <div class="model-card">
-                            <h4>Windy Lingua Español</h4>
-                            <div class="model-size">927 MB</div>
-                            <p>Built for Spanish. Optimized for Latin American and Castilian dialects. 🇪🇸🇲🇽🇦🇷🇨🇴</p>
-                            <div class="model-meta">
-                                <span>🇪🇸 Spanish</span>
-                                <span>🎯 Specialist</span>
-                            </div>
-                        </div>
-                        <div class="model-card">
-                            <h4>Windy Lingua Français</h4>
-                            <div class="model-size">927 MB</div>
-                            <p>Built for French. Metropolitan, Canadian, and African French dialects. 🇫🇷🇨🇦🇧🇪🇨🇭</p>
-                            <div class="model-meta">
-                                <span>🇫🇷 French</span>
-                                <span>🎯 Specialist</span>
-                            </div>
-                        </div>
-                        <div class="model-card">
-                            <h4>Windy Lingua हिन्दी</h4>
-                            <div class="model-size">927 MB</div>
-                            <p>Built for Hindi. Optimized for Devanagari script and Hindi-English code-switching. 🇮🇳</p>
-                            <div class="model-meta">
-                                <span>🇮🇳 Hindi</span>
-                                <span>🎯 Specialist</span>
-                            </div>
-                        </div>
-                    </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⏱️</div>
+                    <h3>30-Min Recordings</h3>
+                    <p>Record lectures, meetings, or long dictations. 5 to 30 min configurable.</p>
                 </div>
-            </div>
-
-            <!-- 99 Languages -->
-            <div class="languages-section">
-                <h3>99 Languages. One App. Zero Internet.</h3>
-                <p class="section-sub">Our multilingual models understand 99 languages — all processed locally on your
-                    device.</p>
-                <div class="language-flags" id="language-flags">
-                    <span>🇿🇦 Afrikaans</span><span>🇦🇱 Albanian</span><span>🇪🇹 Amharic</span><span>🇸🇦 Arabic</span><span>🇦🇲 Armenian</span><span>🇮🇳 Assamese</span><span>🇦🇿 Azerbaijani</span><span>🏳️ Bashkir</span><span>🇪🇸 Basque</span><span>🇧🇾 Belarusian</span><span>🇧🇩 Bengali</span><span>🇧🇦 Bosnian</span><span>🇫🇷 Breton</span><span>🇧🇬 Bulgarian</span><span>🇲🇲 Burmese</span><span>🇭🇰 Cantonese</span><span>🇪🇸 Catalan</span><span>🇨🇳 Chinese</span><span>🇭🇷 Croatian</span><span>🇨🇿 Czech</span><span>🇩🇰 Danish</span><span>🇳🇱 Dutch</span><span>🇺🇸 English</span><span>🇪🇪 Estonian</span><span>🇫🇴 Faroese</span><span>🇫🇮 Finnish</span><span>🇫🇷 French</span><span>🇪🇸 Galician</span><span>🇬🇪 Georgian</span><span>🇩🇪 German</span><span>🇬🇷 Greek</span><span>🇮🇳 Gujarati</span><span>🇭🇹 Haitian Creole</span><span>🇳🇬 Hausa</span><span>🇺🇸 Hawaiian</span><span>🇮🇱 Hebrew</span><span>🇮🇳 Hindi</span><span>🇭🇺 Hungarian</span><span>🇮🇸 Icelandic</span><span>🇮🇩 Indonesian</span><span>🇮🇹 Italian</span><span>🇯🇵 Japanese</span><span>🇮🇩 Javanese</span><span>🇮🇳 Kannada</span><span>🇰🇿 Kazakh</span><span>🇰🇭 Khmer</span><span>🇰🇷 Korean</span><span>🇱🇦 Lao</span><span>🏛️ Latin</span><span>🇱🇻 Latvian</span><span>🇨🇩 Lingala</span><span>🇱🇹 Lithuanian</span><span>🇱🇺 Luxembourgish</span><span>🇲🇰 Macedonian</span><span>🇲🇬 Malagasy</span><span>🇲🇾 Malay</span><span>🇮🇳 Malayalam</span><span>🇲🇹 Maltese</span><span>🇳🇿 Māori</span><span>🇮🇳 Marathi</span><span>🇲🇳 Mongolian</span><span>🇳🇵 Nepali</span><span>🇳🇴 Norwegian</span><span>🇳🇴 Nynorsk</span><span>🇫🇷 Occitan</span><span>🇦🇫 Pashto</span><span>🇮🇷 Persian</span><span>🇵🇱 Polish</span><span>🇧🇷 Portuguese</span><span>🇮🇳 Punjabi</span><span>🇷🇴 Romanian</span><span>🇷🇺 Russian</span><span>🇮🇳 Sanskrit</span><span>🇷🇸 Serbian</span><span>🇿🇼 Shona</span><span>🇵🇰 Sindhi</span><span>🇱🇰 Sinhala</span><span>🇸🇰 Slovak</span><span>🇸🇮 Slovenian</span><span>🇸🇴 Somali</span><span>🇪🇸 Spanish</span><span>🇮🇩 Sundanese</span><span>🇰🇪 Swahili</span><span>🇸🇪 Swedish</span><span>🇵🇭 Tagalog</span><span>🇹🇯 Tajik</span><span>🇮🇳 Tamil</span><span>🇷🇺 Tatar</span><span>🇮🇳 Telugu</span><span>🇹🇭 Thai</span><span>🇨🇳 Tibetan</span><span>🇹🇷 Turkish</span><span>🇹🇲 Turkmen</span><span>🇺🇦 Ukrainian</span><span>🇵🇰 Urdu</span><span>🇺🇿 Uzbek</span><span>🇻🇳 Vietnamese</span><span>🏴󠁧󠁢󠁷󠁬󠁳󠁿 Welsh</span><span>🕎 Yiddish</span><span>🇳🇬 Yoruba</span>
+                <div class="feature-card">
+                    <div class="feature-icon">🌍</div>
+                    <h3 data-i18n="features.languages.title">99 Languages</h3>
+                    <p data-i18n="features.languages.desc">English, Spanish, French, Mandarin, Arabic, Hindi — and 93 more. All running locally.</p>
                 </div>
-            </div>
-
-            <div class="text-center" style="margin-top:3rem">
-                <p class="quiet-text">Our engineers are continually refining every model with the latest techniques.
-                    When we improve a model, you get the update automatically.</p>
+                <div class="feature-card">
+                    <div class="feature-icon">👥</div>
+                    <h3>Speaker ID</h3>
+                    <p>Identify different speakers. Labels as Speaker 1, Speaker 2, etc.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">✨</div>
+                    <h3>LLM Polish</h3>
+                    <p>AI removes filler words, fixes grammar, adds punctuation and paragraphs.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Privacy First</h3>
+                    <p>Run 100% locally. Your audio never leaves your machine.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📥</div>
+                    <h3>Export Anywhere</h3>
+                    <p>Copy, .txt, .md, or .srt subtitles. Paste into any app with one hotkey.</p>
+                </div>
             </div>
         </div>
     </section>
 
-    <!-- WindyTune -->
-    <section class="section section-alt" id="windytune">
+    <!-- Windy Translate -->
+    <section id="translate" class="translate">
         <div class="container">
-            <div class="section-header">
-                <h2>🌪️ WindyTune<br><span class="gradient-text">It Adapts So You Don't Have To.</span></h2>
-                <p class="section-sub">15 models is a lot. That's the point — we have one for every scenario. But you'll
-                    never have to choose.</p>
-            </div>
-
-            <div class="windytune-flow">
-                <div class="flow-card">
-                    <div class="flow-icon">☕</div>
-                    <h4>Coffee Shop</h4>
-                    <p>On your laptop, WindyTune selects a model perfectly optimized for your specific CPU and RAM.
-                        Efficient. Silent. Private.</p>
-                    <div class="flow-model">→ Windy Edge Standard</div>
-                </div>
-                <div class="flow-arrow">→</div>
-                <div class="flow-card">
-                    <div class="flow-icon">🚗</div>
-                    <h4>On the Road</h4>
-                    <p>Phone call in the car. Your phone picks up seamlessly with a mobile-optimized model. No
-                        interruption. No setup.</p>
-                    <div class="flow-model">→ Windy Edge Pulse</div>
-                </div>
-                <div class="flow-arrow">→</div>
-                <div class="flow-card">
-                    <div class="flow-icon">🖥️</div>
-                    <h4>The Office</h4>
-                    <p>Desktop with a powerful GPU. WindyTune upgrades you to the flagship experience. No expense spared.
-                        Maximum everything.</p>
-                    <div class="flow-model">→ Windy Core Ultra</div>
-                </div>
-            </div>
-
-            <div class="windytune-details">
-                <div class="detail-card">
-                    <h4>🔍 Continuous Monitoring</h4>
-                    <p>WindyTune measures your hardware, connection quality, speaking patterns, and environment — then
-                        automatically selects the optimal model in real-time. Every 30 seconds.</p>
-                </div>
-                <div class="detail-card">
-                    <h4>🔄 Seamless Switching</h4>
-                    <p>Laptop overheating? WindyTune drops to a lighter model. Plugged into power? It upgrades. GPU
-                        freed up? Full flagship mode. You never notice. You just keep talking.</p>
-                </div>
-                <div class="detail-card">
-                    <h4>🎛️ Power Users Welcome</h4>
-                    <p>Love manual control? Lock any model from the system tray. WindyTune shows you exactly WHY it
-                        chose what it chose. Override anytime. Your call.</p>
+            <div class="translate-badge" data-i18n="translate.badge">🌐 NEW — Windy Translate</div>
+            <h2 class="section-title"><span data-i18n="translate.title1">Real-Time Translation.</span><br><span class="gradient-text" data-i18n="translate.title2">100% Offline.</span></h2>
+            <p class="section-sub" data-i18n="translate.subtitle">Speak in your language. See it translated instantly. Hand your phone over — they speak back. No internet required. No data collected. Ever.</p>
+            
+            <div class="translate-demo">
+                <div class="translate-mock">
+                    <div class="translate-header">
+                        <div class="translate-lang">
+                            <span class="lang-badge lang-a">🇺🇸 English</span>
+                            <span class="lang-swap">⇄</span>
+                            <span class="lang-badge lang-b">🇪🇸 Español</span>
+                        </div>
+                    </div>
+                    <div class="translate-conversation">
+                        <div class="translate-turn turn-a">
+                            <div class="turn-speaker">You</div>
+                            <div class="turn-original">"Where is the nearest pharmacy?"</div>
+                            <div class="turn-translated">→ "¿Dónde está la farmacia más cercana?"</div>
+                        </div>
+                        <div class="translate-turn turn-b">
+                            <div class="turn-speaker">Them</div>
+                            <div class="turn-original">"Dos cuadras al norte, en la calle principal."</div>
+                            <div class="turn-translated">→ "Two blocks north, on the main street."</div>
+                        </div>
+                        <div class="translate-turn turn-a">
+                            <div class="turn-speaker">You</div>
+                            <div class="turn-original">"Thank you, is it open now?"</div>
+                            <div class="turn-translated">→ "Gracias, ¿está abierta ahora?"</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="text-center" style="margin-top:2rem">
-                <p class="highlight-text">No other voice-to-text platform in history has ever attempted anything like
-                    this.</p>
+            <div class="translate-features">
+                <div class="tf-card">
+                    <div class="tf-icon">📡</div>
+                    <h3>No Internet Needed</h3>
+                    <p>Translation engines run entirely on your device. Works in airplane mode, rural areas, or anywhere without signal.</p>
+                </div>
+                <div class="tf-card">
+                    <div class="tf-icon">🔒</div>
+                    <h3>HIPAA-Ready Privacy</h3>
+                    <p>Your conversations never leave your device. Period. No cloud servers, no data mining, no third parties.</p>
+                </div>
+                <div class="tf-card">
+                    <div class="tf-icon">⚡</div>
+                    <h3>Sub-Second Speed</h3>
+                    <p>Speak naturally. See the translation appear in under a second. No awkward pauses, no waiting.</p>
+                </div>
+                <div class="tf-card">
+                    <div class="tf-icon">🗣️</div>
+                    <h3>Conversation Mode</h3>
+                    <p>Two people, two languages, one device. Speak, translate, hand over. Auto-detects who's speaking.</p>
+                </div>
+                <div class="tf-card">
+                    <div class="tf-icon">🌍</div>
+                    <h3>99 Languages</h3>
+                    <p>From English to Zulu. Major world languages at launch, expanding to 99 with community-driven priorities.</p>
+                </div>
+                <div class="tf-card">
+                    <div class="tf-icon">💰</div>
+                    <h3>One-Time Payment</h3>
+                    <p>No subscription. No monthly fees. Pay once, translate forever. Starting at $79.</p>
+                </div>
+            </div>
+
+            <div class="translate-comparison">
+                <h3 class="tc-title">Why Windy Translate?</h3>
+                <div class="tc-grid">
+                    <div class="tc-item">
+                        <div class="tc-them">Google Translate</div>
+                        <div class="tc-vs">Requires internet. Sends your conversations to Google's servers. Free but you're the product.</div>
+                    </div>
+                    <div class="tc-item">
+                        <div class="tc-them">Pocketalk ($299)</div>
+                        <div class="tc-vs">Separate device to carry. Mostly cloud-based. Windy Translate runs on your existing phone for $79.</div>
+                    </div>
+                    <div class="tc-item">
+                        <div class="tc-them">iTranslate ($6/mo)</div>
+                        <div class="tc-vs">$72/year, $360 over 5 years. Windy Translate: $79 once. Math speaks for itself.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="translate-cta">
+                <a href="#download" class="btn btn-primary btn-lg">Get Windy Pro + Translate</a>
+                <p class="translate-cta-sub">Translation add-on available during installation</p>
             </div>
         </div>
     </section>
 
-    <!-- Smart Install -->
-    <section class="section" id="install">
+    <!-- Comparison -->
+    <section id="compare" class="compare">
         <div class="container">
-            <div class="section-header">
-                <h2>🌪️ One Account. Any Device.<br><span class="gradient-text">Perfectly Tuned For Each.</span></h2>
-                <p class="section-sub">You don't download all 15 models. You don't need to. WindyTune scans your
-                    hardware and recommends the perfect selection for THAT specific device.</p>
-            </div>
-
-            <div class="install-demos">
-                <div class="install-card">
-                    <div class="install-icon">📱</div>
-                    <h4>Any Phone</h4>
-                    <div class="install-specs">
-                        <span>iPhone or Android</span>
-                        <span>4-8 GB RAM</span>
-                    </div>
-                    <div class="install-rec">
-                        <div class="rec-label">WindyTune recommends:</div>
-                        <div class="rec-model">★ Windy Edge Spark <span class="rec-size">42 MB</span></div>
-                        <div class="rec-model">★ Windy Edge Pulse <span class="rec-size">78 MB</span></div>
-                        <div class="rec-model">★ Windy Edge Standard <span class="rec-size">168 MB</span></div>
-                        <div class="rec-total">Total: under 300 MB — fits any phone</div>
-                    </div>
-                    <div class="install-btn">[Install Recommended]</div>
-                </div>
-
-                <div class="install-card">
-                    <div class="install-icon">💻</div>
-                    <h4>Any Laptop</h4>
-                    <div class="install-specs">
-                        <span>Windows, Mac, or Linux</span>
-                        <span>8-16+ GB RAM</span>
-                    </div>
-                    <div class="install-rec">
-                        <div class="rec-label">WindyTune recommends:</div>
-                        <div class="rec-model">★ Windy Edge Standard <span class="rec-size">168 MB</span></div>
-                        <div class="rec-model">★ Windy Edge Global <span class="rec-size">515 MB</span></div>
-                        <div class="rec-model">★ Windy Core Pro <span class="rec-size">1.5 GB</span></div>
-                        <div class="rec-note">WindyTune picks the right ones for YOUR specs</div>
-                        <div class="rec-total">Total: under 2.2 GB</div>
-                    </div>
-                    <div class="install-btn">[Install Recommended]</div>
-                </div>
-
-                <div class="install-card install-card-highlight">
-                    <div class="install-icon">🖥️</div>
-                    <h4>Desktop with GPU</h4>
-                    <div class="install-specs">
-                        <span>16+ GB RAM</span>
-                        <span>NVIDIA or Apple Silicon GPU</span>
-                    </div>
-                    <div class="install-rec">
-                        <div class="rec-label">WindyTune recommends:</div>
-                        <div class="rec-model">★ Windy Core Ultra <span class="rec-size">2.9 GB</span></div>
-                        <div class="rec-model">★ Windy Core Turbo <span class="rec-size">1.6 GB</span></div>
-                        <div class="rec-model">★ Windy Core Pro <span class="rec-size">1.5 GB</span></div>
-                        <div class="rec-model">★ Plus more based on your hardware</div>
-                        <div class="rec-total">The full flagship experience</div>
-                    </div>
-                    <div class="install-btn">[Install Recommended]</div>
-                </div>
-            </div>
-
-            <div class="text-center" style="margin-top:2rem">
-                <p class="quiet-text"><strong>Every device gets a great experience.</strong> Whether you're on a budget phone or a high-end workstation,
-                    WindyTune finds the perfect models for YOUR hardware. No device left behind.<br><br>
-                    Buy once, install on all your devices. No per-device fees. Add or remove models
-                    anytime. Most people tap <strong>"Install Recommended"</strong> and never think about it again.
-                </p>
-            </div>
-        </div>
-    </section>
-
-    <!-- MoboLoco -->
-    <section class="section section-moboloco" id="moboloco">
-        <div class="container">
-            <div class="section-header">
-                <div class="moboloco-mascot">🐕</div>
-                <div class="moboloco-chihuahua">🐕📱🕶️</div>
-                <h2>"WindyPro make me go<br><span class="gradient-text">mobo loco!"</span></h2>
-                <p class="section-sub">Voice-to-text that NEVER leaves your phone. No internet required. Airplane mode,
-                    zero signal, middle of nowhere — doesn't matter. Your words. Your phone. Nobody else's business.</p>
-            </div>
-
-            <div class="moboloco-grid">
-                <div class="mobo-card">
-                    <div class="mobo-icon">✈️</div>
-                    <h4>Airplane Mode? No Internet, No Problem.</h4>
-                    <p>Flying at 35,000 feet with no Wi-Fi? No internet, no problem. Windy Pro works perfectly. Dictate notes, transcribe
-                        thoughts, capture ideas. Fully offline. Always.</p>
-                </div>
-                <div class="mobo-card">
-                    <div class="mobo-icon">🏔️</div>
-                    <h4>Zero Bars? No Internet, No Problem.</h4>
-                    <p>Hiking in the mountains. Driving through rural country. Camping off-grid. No internet, no problem. Your transcription
-                        doesn't need a cell tower. Ever.</p>
-                </div>
-                <div class="mobo-card">
-                    <div class="mobo-icon">🔒</div>
-                    <h4>Private. Truly Private.</h4>
-                    <p>Every competitor sends your words to the cloud. They "assure" you it's private. We all know what
-                        they really do with your data. Windy Pro? Your words stay on YOUR phone. Period.</p>
-                </div>
-                <div class="mobo-card">
-                    <div class="mobo-icon">📱</div>
-                    <h4>42 MB. That's It.</h4>
-                    <p>Our smallest model is 42 megabytes. That's smaller than most selfies. Install it and forget it.
-                        It's always there when you need it.</p>
-                </div>
-            </div>
-
-            <div class="text-center" style="margin-top:2rem">
-                <p class="highlight-text">Go MoboLoco! Stay Local. Stay Private. 🐕</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- Traveler Mode -->
-    <section class="section section-alt" id="traveler">
-        <div class="container">
-            <div class="section-header">
-                <h2>🌍 Windy Translate<br><span class="gradient-text">The World Speaks Your Language.</span></h2>
-                <p class="section-sub">You don't need to learn 99 languages. You just need Windy Pro on your phone. Offline. Local. No internet required — no internet, no problem.</p>
-                <div class="translate-premium-badge">✨ Premium Feature — Available on Pro Max or as an add-on ($7.99/mo)</div>
-            </div>
-
-            <div class="traveler-story">
-                <div class="story-scene">
-                    <div class="scene-emoji">🗼</div>
-                    <div class="scene-text">
-                        <p class="scene-setting"><em>Paris. Evening. A café terrace with string lights.</em></p>
-                        <p>He's American. She's French. He doesn't speak a word of French.</p>
-                        <p>He holds up his phone. Speaks: <strong>"I just moved here. I don't know anyone. But this is
-                                the most beautiful city I've ever seen."</strong></p>
-                        <p>The phone shows her: <em>"Je viens d'emménager ici. Je ne connais personne. Mais c'est la
-                                plus belle ville que j'aie jamais vue."</em></p>
-                        <p>She smiles. Speaks French into the phone.</p>
-                        <p>His screen: <strong>"Then let me show you the parts the tourists never see."</strong></p>
-                        <p class="scene-end">They both blush. He puts the phone away. They walk off together.</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="traveler-how">
-                <div class="how-step">
-                    <div class="step-num">1</div>
-                    <p>Hold up your phone</p>
-                </div>
-                <div class="how-step">
-                    <div class="step-num">2</div>
-                    <p>They speak their language</p>
-                </div>
-                <div class="how-step">
-                    <div class="step-num">3</div>
-                    <p>You read yours</p>
-                </div>
-                <div class="how-step">
-                    <div class="step-num">4</div>
-                    <p>You speak yours</p>
-                </div>
-                <div class="how-step">
-                    <div class="step-num">5</div>
-                    <p>They read theirs</p>
-                </div>
-            </div>
-
-            <div class="text-center" style="margin-top:2rem">
-                <p class="quiet-text">No internet. No cloud. No third-party server processing your conversation.<br>Just
-                    two people connecting — in any language.</p>
-                <p class="highlight-text" style="margin-top:1rem">No Internet, No Problem. In 99 Languages.</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- Privacy -->
-    <section class="section" id="privacy">
-        <div class="container">
-            <div class="section-header">
-                <h2>🌪️ Stay Local.<br><span class="gradient-text">Stay Private.</span></h2>
-                <p class="section-sub">This is the one that matters most.</p>
-            </div>
-
-            <div class="privacy-comparison">
-                <div class="privacy-card privacy-them">
-                    <h4>🚫 Other Platforms</h4>
-                    <ul>
-                        <li>Every word uploaded to their cloud</li>
-                        <li>Processed on servers you don't control</li>
-                        <li>Stored in databases you can't audit</li>
-                        <li>They "promise" it's private</li>
-                        <li>Data about your data — mined, analyzed, monetized</li>
-                        <li>No internet = no transcription</li>
-                        <li>Monthly subscription forever</li>
-                    </ul>
-                </div>
-                <div class="privacy-card privacy-us">
-                    <h4>✅ Windy Pro</h4>
-                    <ul>
-                        <li>Your words NEVER leave your device</li>
-                        <li>Processed locally, on YOUR hardware</li>
-                        <li>Nothing to audit — it's all on your machine</li>
-                        <li>We don't promise privacy. We engineered it.</li>
-                        <li>Zero telemetry. Zero data collection. Zero.</li>
-                        <li>No internet? No problem.</li>
-                        <li>Pay once. Use forever.</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="text-center" style="margin-top:3rem">
-                <h3>Even Our Cloud Mode Is Private</h3>
-                <p class="section-sub">Sometimes you want the extra horsepower of our GPU servers. Even then:</p>
-                <div class="privacy-cloud-features">
-                    <div class="cloud-feat">
-                        <span class="feat-icon">🔐</span>
-                        <span>End-to-end encrypted</span>
-                    </div>
-                    <div class="cloud-feat">
-                        <span class="feat-icon">🗑️</span>
-                        <span>Audio deleted immediately after processing</span>
-                    </div>
-                    <div class="cloud-feat">
-                        <span class="feat-icon">🚫</span>
-                        <span>Never used for training. Never sold. Never mined.</span>
-                    </div>
-                    <div class="cloud-feat">
-                        <span class="feat-icon">✅</span>
-                        <span>Open-source client encryption — audit it yourself</span>
-                    </div>
-                </div>
-                <p class="quiet-text" style="margin-top:1.5rem">Even when you choose the cloud — your privacy doesn't
-                    change. Only the processing location does.</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- Cloud Storage & Auto-Sync -->
-    <section class="section section-alt" id="cloud">
-        <div class="container">
-            <div class="section-header">
-                <h2>☁️ Auto-Sync<br><span class="gradient-text">Like iCloud Photos, But For Your Voice.</span></h2>
-                <p class="section-sub">Record all day on your phone. When you get back to Wi-Fi, everything syncs
-                    automatically.</p>
-            </div>
-
-            <div class="sync-flow">
-                <div class="sync-step">
-                    <div class="sync-icon">🎙️</div>
-                    <h4>Record All Day</h4>
-                    <p>Meetings, notes, ideas — everything stays on your phone while you're out.</p>
-                </div>
-                <div class="sync-arrow">📶</div>
-                <div class="sync-step">
-                    <div class="sync-icon">📡</div>
-                    <h4>Hit Wi-Fi</h4>
-                    <p>Walk into your home, office, or coffee shop. Windy Pro detects the connection.</p>
-                </div>
-                <div class="sync-arrow">→</div>
-                <div class="sync-step">
-                    <div class="sync-icon">☁️</div>
-                    <h4>Auto-Sync</h4>
-                    <p>Transcripts, audio, video — silently uploaded to your personal vault. Phone storage freed up.</p>
-                </div>
-            </div>
-
-            <div class="storage-options">
-                <h3>🌪️ WindyPro Cloud — Power to the People</h3>
-                <div class="privacy-paramount">
-                    <p class="paramount-headline">Your privacy is paramount!</p>
-                    <p>At WindyPro, we never use your data — or data about your data — for anything. Period. End of story. Your files, your recordings, your Soul File — they belong to YOU. We don't mine it. We don't analyze it. We don't sell it. We don't even look at it.</p>
-                    <p style="margin-top:12px">Switch to WindyPro Cloud for all your storage needs. Cancel Dropbox. Cancel Google storage. Cancel iCloud. Store everything — not just your voice files, but all your documents, photos, and files — in a vault built by people who actually respect your privacy.</p>
-                </div>
-            </div>
-
-            <div class="cloud-plans">
-                <h3>Windy Pro Cloud Storage</h3>
-                <div class="plan-grid">
-                    <div class="plan-card">
-                        <h4>Free</h4>
-                        <div class="plan-price">$0</div>
-                        <div class="plan-storage">5 GB</div>
-                        <p>~100 hours of transcripts</p>
-                    </div>
-                    <div class="plan-card">
-                        <h4>Starter</h4>
-                        <div class="plan-price">$2<small>/mo</small></div>
-                        <div class="plan-storage">50 GB</div>
-                        <p>Audio archives included</p>
-                    </div>
-                    <div class="plan-card plan-card-popular">
-                        <div class="plan-badge">Popular</div>
-                        <h4>Builder</h4>
-                        <div class="plan-price">$8<small>/mo</small></div>
-                        <div class="plan-storage">500 GB</div>
-                        <p>Audio + video. Build your Soul File.</p>
-                    </div>
-                    <div class="plan-card">
-                        <h4>Unlimited</h4>
-                        <div class="plan-price">$15<small>/mo</small></div>
-                        <div class="plan-storage">Unlimited</div>
-                        <p>For serious archivists and professionals</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Voice as Creation -->
-    <section class="section section-creation">
-        <div class="container text-center">
-            <div class="creation-tornado">🌪️</div>
-            <h2 class="creation-headline">"In the beginning was the Word."</h2>
-            <p class="creation-body">Every sacred text across every culture tells the same story: creation begins with
-                the spoken word. Your voice isn't just sound — it's the most ancient and powerful tool of creation.</p>
-            <p class="creation-body">When you speak into Windy Pro, you're not just dictating text. You're painting
-                visions. Architecting ideas. Breathing worlds into existence — the same way it's always been done.</p>
-            <p class="creation-tagline">Speak, and let there be. 🌪️</p>
-        </div>
-    </section>
-
-    <!-- Soul File -->
-    <section class="section section-soulfile" id="soulfile">
-        <div class="container">
-            <div class="section-header">
-                <h2>🧬 Build Your Soul File.<br><span class="gradient-text">Talk Today. Live Forever.</span></h2>
-                <p class="section-sub">Here's what nobody else is offering — and what you'll thank yourself for starting
-                    today.</p>
-            </div>
-
-            <div class="soul-explanation">
-                <div class="soul-card">
-                    <h4>🎙️ Voice Clone Data</h4>
-                    <p>Every time you use Windy Pro, you're building a dataset of your voice — pitch, timbre, rhythm,
-                        accent, emotional range. After enough hours, you have everything needed for a <strong>perfect
-                            voice clone</strong> that speaks exactly like you.</p>
-                </div>
-                <div class="soul-card">
-                    <h4>📹 Avatar Data</h4>
-                    <p>Turn on video archiving and your laptop camera or phone captures your face, expressions, and
-                        mannerisms. Over time, this becomes the foundation for a <strong>digital avatar twin</strong>
-                        that looks and moves like you.</p>
-                </div>
-                <div class="soul-card">
-                    <h4>🧠 Your Personality</h4>
-                    <p>Your vocabulary, sentence patterns, topics you care about, how you explain things — all captured
-                        naturally. This is the data that makes a digital twin feel <em>real</em>.</p>
-                </div>
-            </div>
-
-            <div class="soul-timeline">
-                <h3>Your Journey</h3>
-                <div class="timeline">
-                    <div class="timeline-item">
-                        <div class="timeline-hours">5 hours</div>
-                        <div class="timeline-label">Basic voice profile</div>
-                    </div>
-                    <div class="timeline-item">
-                        <div class="timeline-hours">20 hours</div>
-                        <div class="timeline-label">Good voice clone quality</div>
-                    </div>
-                    <div class="timeline-item">
-                        <div class="timeline-hours">50 hours</div>
-                        <div class="timeline-label">Excellent — studio-grade clone ready</div>
-                    </div>
-                    <div class="timeline-item">
-                        <div class="timeline-hours">200 hours</div>
-                        <div class="timeline-label">Full digital twin: voice + avatar + personality</div>
-                    </div>
-                    <div class="timeline-item timeline-forever">
-                        <div class="timeline-hours">♾️</div>
-                        <div class="timeline-label">Your legacy. Preserved forever.</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="soul-pitch">
-                <blockquote>
-                    <p>Imagine: a thousand years from now, your descendants put on a headset and have a conversation
-                        with you. Not a recording — a responsive, interactive version of you that speaks with your
-                        voice, uses your vocabulary, and structures sentences the way you do.</p>
-                    <p>Built from data you gathered effortlessly, just by talking into Windy Pro during your normal day.
-                    </p>
-                </blockquote>
-                <p class="soul-cta">Some people download Windy Pro for the transcription. Some download it because they
-                    saw their friend's perfect voice clone and thought: <strong>"I need to start archiving
-                        NOW."</strong> Both are right.</p>
+            <h2 class="section-title">How We Compare</h2>
+            <p class="section-sub">Feature-by-feature against the top voice-to-text tools.</p>
+            <div class="table-wrap">
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>Feature</th>
+                            <th class="hl">🌪️ Windy Pro</th>
+                            <th>Wispr Flow</th>
+                            <th>Otter.ai</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Linux Support</td>
+                            <td class="hl">✅ Native</td>
+                            <td>❌</td>
+                            <td>❌ Web only</td>
+                        </tr>
+                        <tr>
+                            <td>Engine Choice</td>
+                            <td class="hl">✅ 15 engines</td>
+                            <td>1 engine</td>
+                            <td>1 engine</td>
+                        </tr>
+                        <tr>
+                            <td>Max Recording</td>
+                            <td class="hl">✅ 30 min</td>
+                            <td>~5 min</td>
+                            <td>40 min (paid)</td>
+                        </tr>
+                        <tr>
+                            <td>Offline Mode</td>
+                            <td class="hl">✅ 100% Local</td>
+                            <td>❌</td>
+                            <td>❌</td>
+                        </tr>
+                        <tr>
+                            <td>LLM Cleanup</td>
+                            <td class="hl">✅ Built-in</td>
+                            <td>✅</td>
+                            <td>❌</td>
+                        </tr>
+                        <tr>
+                            <td>Speaker ID</td>
+                            <td class="hl">✅</td>
+                            <td>❌</td>
+                            <td>✅</td>
+                        </tr>
+                        <tr>
+                            <td>Multi-language</td>
+                            <td class="hl">✅ 99 langs</td>
+                            <td>Limited</td>
+                            <td>Limited</td>
+                        </tr>
+                        <tr>
+                            <td>Offline Translation</td>
+                            <td class="hl">✅ Conversation mode</td>
+                            <td>❌</td>
+                            <td>❌</td>
+                        </tr>
+                        <tr>
+                            <td>Open Source</td>
+                            <td class="hl">✅</td>
+                            <td>❌</td>
+                            <td>❌</td>
+                        </tr>
+                        <tr>
+                            <td>Price</td>
+                            <td class="hl">✅ Free / from $49</td>
+                            <td>$10/mo</td>
+                            <td>$17/mo</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </section>
 
     <!-- Pricing -->
-    <section class="section section-alt" id="pricing">
+    <section id="pricing" class="pricing">
         <div class="container">
-            <div class="section-header">
-                <h2>Your Voice, Your Way.<br><span class="gradient-text">Choose Your Plan.</span></h2>
-                <p class="section-sub">Start free. Go monthly. Or pay once and own it forever. Your call.</p>
-            </div>
-
-            <!-- Free -->
-            <div class="free-tier-banner">
-                <div class="free-tier-inner">
-                    <div>
-                        <h3>🎁 Windy Free</h3>
-                        <p>WindyTune scans your device and gives you the perfect model for YOUR hardware. One model. Yours. Merry Christmas.</p>
-                    </div>
-                    <a href="#download" class="btn btn-ghost">Download Free</a>
+            <h2 class="section-title" data-i18n="pricing.title">Simple Pricing</h2>
+            <p class="section-sub" data-i18n="pricing.subtitle">Pay once. Use forever. No subscriptions, no tricks.</p>
+            <div class="pricing-grid" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:1.2rem; margin-top:2rem;">
+                <!-- Free -->
+                <div class="pricing-card" style="background:var(--card); border:1px solid var(--border); border-radius:16px; padding:2rem 1.5rem; text-align:center;">
+                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">🌪️</div>
+                    <h3 style="font-size:1.1rem; margin-bottom:0.25rem;">Free</h3>
+                    <div style="font-size:2rem; font-weight:800; color:var(--green); margin:0.5rem 0;">$0</div>
+                    <p style="font-size:0.85rem; color:var(--dim); line-height:1.6; min-height:5rem;">Voice-to-text in 1 language. 3 engines included. 100% offline. No account needed.</p>
+                    <a href="#download" class="btn btn-ghost" style="width:100%; margin-top:1rem;">Download Free</a>
+                </div>
+                <!-- Pro -->
+                <div class="pricing-card" style="background:var(--card); border:1px solid var(--border); border-radius:16px; padding:2rem 1.5rem; text-align:center;">
+                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">⚡</div>
+                    <h3 style="font-size:1.1rem; margin-bottom:0.25rem;">Windy Pro</h3>
+                    <div style="font-size:2rem; font-weight:800; color:var(--green); margin:0.5rem 0;">$49</div>
+                    <p style="font-size:0.75rem; color:var(--muted);">one-time payment</p>
+                    <p style="font-size:0.85rem; color:var(--dim); line-height:1.6; min-height:5rem;">All 15 engines. All 99 languages. 30-min recordings. Batch mode. LLM polish. Speaker ID.</p>
+                    <a href="#download" class="btn btn-primary" style="width:100%; margin-top:1rem;">Get Pro</a>
+                </div>
+                <!-- Translate -->
+                <div class="pricing-card" style="background:var(--card); border:2px solid var(--green); border-radius:16px; padding:2rem 1.5rem; text-align:center; position:relative;">
+                    <div style="position:absolute; top:-0.75rem; left:50%; transform:translateX(-50%); background:var(--green); color:#0a0e1a; font-size:0.7rem; font-weight:800; padding:0.2rem 0.8rem; border-radius:10px;">★ MOST POPULAR</div>
+                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">🌍</div>
+                    <h3 style="font-size:1.1rem; margin-bottom:0.25rem;">Windy Translate</h3>
+                    <div style="font-size:2rem; font-weight:800; color:var(--green); margin:0.5rem 0;">$79</div>
+                    <p style="font-size:0.75rem; color:var(--muted);">one-time · or $7.99/mo</p>
+                    <p style="font-size:0.85rem; color:var(--dim); line-height:1.6; min-height:5rem;">Everything in Pro + real-time conversation translation. 5 language pairs. Manual + auto modes. 100% offline.</p>
+                    <a href="#download" class="btn btn-primary" style="width:100%; margin-top:1rem;">Get Translate</a>
+                </div>
+                <!-- Translate Pro -->
+                <div class="pricing-card" style="background:var(--card); border:1px solid var(--border); border-radius:16px; padding:2rem 1.5rem; text-align:center;">
+                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">👑</div>
+                    <h3 style="font-size:1.1rem; margin-bottom:0.25rem;">Translate Pro</h3>
+                    <div style="font-size:2rem; font-weight:800; color:var(--green); margin:0.5rem 0;">$149</div>
+                    <p style="font-size:0.75rem; color:var(--muted);">one-time payment</p>
+                    <p style="font-size:0.85rem; color:var(--dim); line-height:1.6; min-height:5rem;">All 99 languages. All conversation modes. TTS output. Medical & legal glossaries. Priority engine updates.</p>
+                    <a href="#download" class="btn btn-primary" style="width:100%; margin-top:1rem;">Get Translate Pro</a>
                 </div>
             </div>
-
-            <!-- Monthly Plans -->
-            <h3 class="pricing-section-title">Monthly Plans</h3>
-            <div class="pricing-grid">
-                <div class="price-card">
-                    <h4>Windy Plus</h4>
-                    <div class="price">$4.99<small>/mo</small></div>
-                    <div class="price-type">cancel anytime</div>
-                    <ul>
-                        <li>3 models + WindyTune switching</li>
-                        <li>Local archive</li>
-                        <li>Unlimited recording</li>
-                        <li>The Green Strobe</li>
-                        <li>Windows, macOS &amp; Linux</li>
-                    </ul>
-                    <a href="#download" class="btn btn-ghost">Get Plus</a>
-                </div>
-                <div class="price-card price-card-featured">
-                    <div class="price-badge">Most Popular</div>
-                    <h4>Windy Pro</h4>
-                    <div class="price">$9.99<small>/mo</small></div>
-                    <div class="price-type">cancel anytime</div>
-                    <ul>
-                        <li><strong>All 15 models</strong></li>
-                        <li>WindyTune + voice fingerprinting</li>
-                        <li>50 GB WindyPro Cloud storage</li>
-                        <li>Soul File + voice clone export</li>
-                        <li>Audio &amp; video archive</li>
-                        <li>Windows, macOS &amp; Linux</li>
-                    </ul>
-                    <a href="#download" class="btn btn-primary">Get Pro</a>
-                </div>
-                <div class="price-card">
-                    <div class="price-badge" style="background:var(--purple)">Translator</div>
-                    <h4>Windy Pro Max</h4>
-                    <div class="price">$19.99<small>/mo</small></div>
-                    <div class="price-type">cancel anytime</div>
-                    <ul>
-                        <li>Everything in Pro</li>
-                        <li><strong>🌍 Windy Translate — 99 languages offline</strong></li>
-                        <li>Unlimited WindyPro Cloud storage</li>
-                        <li>Avatar data export</li>
-                        <li>Priority model updates</li>
-                        <li>All future features included</li>
-                    </ul>
-                    <a href="#download" class="btn btn-ghost">Get Pro Max</a>
-                </div>
-            </div>
-
-            <!-- Translate Add-on -->
-            <div class="translate-addon">
-                <div class="addon-inner">
-                    <div>
-                        <h4>🌍 Windy Translate — Add to Any Plan</h4>
-                        <p>Don't need Pro Max? Add Windy Translate à la carte to Plus or Pro. 99 languages. Offline. On your phone. No internet, no problem.</p>
-                    </div>
-                    <div class="addon-price">$7.99<small>/mo</small></div>
-                </div>
-            </div>
-
-            <!-- Lifetime Plans -->
-            <h3 class="pricing-section-title" style="margin-top:60px">Lifetime Plans — Pay Once, Own Forever</h3>
-            <div class="pricing-grid pricing-grid-2">
-                <div class="price-card">
-                    <h4>Windy Lifetime</h4>
-                    <div class="price">$149</div>
-                    <div class="price-type">one-time, yours for life</div>
-                    <ul>
-                        <li>All 15 models forever</li>
-                        <li>WindyTune + voice fingerprinting</li>
-                        <li>All features, all updates</li>
-                        <li>Windows, macOS &amp; Linux</li>
-                        <li>Local storage (cloud separate)</li>
-                    </ul>
-                    <a href="#download" class="btn btn-ghost">Get Lifetime</a>
-                </div>
-                <div class="price-card">
-                    <h4>Windy Lifetime+</h4>
-                    <div class="price">$249</div>
-                    <div class="price-type">one-time, yours for life</div>
-                    <ul>
-                        <li>Everything in Lifetime</li>
-                        <li><strong>🌍 Windy Translate included</strong></li>
-                        <li>50 GB WindyPro Cloud for Year 1</li>
-                        <li>Soul File + avatar export</li>
-                        <li>Priority everything</li>
-                    </ul>
-                    <a href="#download" class="btn btn-ghost">Get Lifetime+</a>
-                </div>
-            </div>
-
-            <!-- Cloud Storage Add-on -->
-            <div class="cloud-addon">
-                <h3 class="pricing-section-title" style="margin-top:60px">☁️ Windy Cloud Storage</h3>
-                <p class="section-sub" style="margin-bottom:24px">For archivists, Soul File builders, and anyone who wants cloud backup. Add to any plan.</p>
-                <div class="plan-grid">
-                    <div class="plan-card">
-                        <h4>50 GB</h4>
-                        <div class="plan-price">$1.99<small>/mo</small></div>
-                        <p>or <strong>$19/year</strong> (save 20%)</p>
-                    </div>
-                    <div class="plan-card plan-card-popular">
-                        <div class="plan-badge">Best Value</div>
-                        <h4>500 GB</h4>
-                        <div class="plan-price">$7.99<small>/mo</small></div>
-                        <p>or <strong>$79/year</strong></p>
-                    </div>
-                    <div class="plan-card">
-                        <h4>Unlimited</h4>
-                        <div class="plan-price">$14.99<small>/mo</small></div>
-                        <p>or <strong>$149/year</strong></p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="text-center" style="margin-top:2rem">
-                <p class="quiet-text">Pricing adjusted automatically for your region. Upgrade anytime — pay only the difference.<br>Monthly subscribers can switch to Lifetime anytime (credit applied).</p>
-            </div>
+            <p style="text-align:center; margin-top:1.5rem; font-size:0.85rem; color:var(--muted);">Enterprise pricing available for healthcare, education & government. <a href="mailto:grant@thewindstorm.uk" style="color:var(--green);">Contact us →</a></p>
         </div>
     </section>
 
     <!-- Download -->
-    <section class="section section-download" id="download">
-        <div class="container text-center">
-            <h2>Get Voice-Pilled.</h2>
-            <p class="section-sub">One download. A partner for life. Choose your platform.</p>
-
-            <div class="download-grid">
-                <a href="#" class="download-card">
-                    <span class="dl-icon">🪟</span>
-                    <span class="dl-platform">Windows</span>
-                    <span class="dl-format">.exe installer</span>
-                </a>
-                <a href="#" class="download-card">
-                    <span class="dl-icon">🍎</span>
-                    <span class="dl-platform">macOS</span>
-                    <span class="dl-format">.dmg installer</span>
-                </a>
-                <a href="#" class="download-card">
-                    <span class="dl-icon">🐧</span>
-                    <span class="dl-platform">Linux</span>
-                    <span class="dl-format">.deb / .AppImage</span>
-                </a>
-                <a href="#" class="download-card download-coming">
-                    <span class="dl-icon">📱</span>
-                    <span class="dl-platform">iOS</span>
-                    <span class="dl-format">Coming Soon</span>
-                </a>
-                <a href="#" class="download-card download-coming">
-                    <span class="dl-icon">🤖</span>
-                    <span class="dl-platform">Android</span>
-                    <span class="dl-format">Coming Soon</span>
-                </a>
-            </div>
-
-            <div class="download-email">
-                <p>Want to know when mobile drops? Join the list.</p>
-                <div class="email-form">
-                    <input type="email" placeholder="your@email.com" class="email-input">
-                    <button class="btn btn-primary">Notify Me</button>
+    <section id="download" class="download">
+        <div class="container download-inner">
+            <h2 class="section-title">Get Windy Pro</h2>
+            <p class="section-sub">Free to start. Pro from $49 one-time. No subscriptions.</p>
+            <div class="download-cards">
+                <div class="download-card active">
+                    <div class="dl-icon">🪟</div>
+                    <h3>Windows</h3>
+                    <p>Windows 10/11</p>
+                    <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.5.0/Windy-Pro-Setup-0.5.0.exe" class="btn btn-primary">Download .exe</a>
+                    <span class="dl-meta">v0.5.0 · 73 MB</span>
+                </div>
+                <div class="download-card">
+                    <div class="dl-icon">🍎</div>
+                    <h3>macOS</h3>
+                    <p>Apple Silicon & Intel (Universal)</p>
+                    <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.5.0/Windy-Pro-0.5.0.dmg" class="btn btn-primary">Download .dmg</a>
+                    <span class="dl-meta">v0.5.0 · 165 MB</span>
+                </div>
+                <div class="download-card">
+                    <div class="dl-icon">🐧</div>
+                    <h3>Linux</h3>
+                    <p>Ubuntu, Debian (deb) + Universal (AppImage)</p>
+                    <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.5.0/windy-pro_0.5.0_amd64.deb" class="btn btn-primary">Download .deb</a>
+                    <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.5.0/Windy-Pro-0.5.0.AppImage" class="btn btn-ghost" style="margin-top:0.5rem">AppImage</a>
+                    <span class="dl-meta">v0.5.0 · 70-100 MB</span>
                 </div>
             </div>
-        </div>
-    </section>
-
-    <!-- Final CTA -->
-    <section class="section section-final">
-        <div class="container text-center">
-            <div class="final-tornado">🌪️</div>
-            <h2 class="final-headline">Never Touch a Keyboard Again.</h2>
-            <p class="final-sub">15 proprietary models. WindyTune adaptive intelligence. MoboLoco mobile local. Traveler
-                Mode in 99 languages. Soul File for your digital legacy. All private. All local. All yours.</p>
-            <p class="final-creation">And God said, "Let there be light." And there was Windy Pro.</p>
-            <div class="final-monikers">
-                <span>No Internet, No Problem.</span>
-                <span>Stay Local. Stay Private.</span>
-                <span>"WindyPro make me go mobo loco!" 🐕</span>
-                <span>Pay Once. Use Forever.</span>
-                <span>Talk Today. Live Forever.</span>
-            </div>
-            <a href="#download" class="btn btn-primary btn-xl pulse-glow">🌪️ Get Voice-Pilled</a>
         </div>
     </section>
 
     <!-- Footer -->
     <footer class="footer">
         <div class="container footer-inner">
-            <div class="footer-brand">
-                <span class="logo">🌪️ <span>Windy Pro</span></span>
-                <p>The Green Strobe Never Lies.</p>
-            </div>
+            <div class="footer-brand">🌪️ Windy Pro</div>
             <div class="footer-links">
-                <a href="#">Privacy Policy</a>
-                <a href="#">Terms of Service</a>
-                <a href="#">About</a>
-                <a href="#">Contact</a>
+                <a href="https://github.com/sneakyfree/windy-pro">GitHub</a>
+                <a href="https://github.com/sneakyfree/windy-pro/issues">Support</a>
+                <a href="#">Privacy</a>
             </div>
-            <div class="footer-copy">
-                <p>© 2026 Windy Pro. All rights reserved.</p>
-            </div>
+            <div class="footer-copy">© 2026 Windy Pro. Open source under MIT license.</div>
         </div>
     </footer>
 
+    <!-- i18n (Internationalization) -->
     <script>
-        // Toggle model families
-        document.querySelectorAll('.toggle-models').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const family = btn.dataset.family;
-                const grid = document.getElementById('models-' + family);
-                grid.classList.toggle('hidden');
-                btn.textContent = grid.classList.contains('hidden')
-                    ? `View ${grid.children.length} Models ↓`
-                    : 'Hide Models ↑';
-            });
-        });
+    const LANG_FLAGS = { en:'🇺🇸', es:'🇪🇸', fr:'🇫🇷', de:'🇩🇪', pt:'🇧🇷', zh:'🇨🇳', ja:'🇯🇵', ko:'🇰🇷', ar:'🇸🇦', hi:'🇮🇳', ru:'🇷🇺', tr:'🇹🇷' };
+    const LANG_NAMES = { en:'EN', es:'ES', fr:'FR', de:'DE', pt:'PT', zh:'中文', ja:'JP', ko:'KR', ar:'AR', hi:'HI', ru:'RU', tr:'TR' };
+    let i18nData = {};
+    let currentLang = 'en';
 
-        // Smooth scroll
-        document.querySelectorAll('a[href^="#"]').forEach(a => {
-            a.addEventListener('click', e => {
-                e.preventDefault();
-                const target = document.querySelector(a.getAttribute('href'));
-                if (target) {
-                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    document.querySelector('.nav-links').classList.remove('open');
-                }
-            });
-        });
+    // Auto-detect language from browser
+    function detectLanguage() {
+        // Check URL param first (?lang=fr)
+        const urlParam = new URLSearchParams(window.location.search).get('lang');
+        if (urlParam && LANG_FLAGS[urlParam]) return urlParam;
 
-        // Nav background on scroll
-        window.addEventListener('scroll', () => {
-            document.getElementById('nav').classList.toggle('nav-scrolled', window.scrollY > 50);
-        });
+        // Check localStorage (user's previous choice)
+        const saved = localStorage.getItem('windy-lang');
+        if (saved && LANG_FLAGS[saved]) return saved;
 
-        // Moniker marquee rotator
-        const marqueeItems = document.querySelectorAll('.marquee-item');
-        let currentMarquee = 0;
-        if (marqueeItems.length > 0) {
-            setInterval(() => {
-                marqueeItems[currentMarquee].classList.remove('active');
-                currentMarquee = (currentMarquee + 1) % marqueeItems.length;
-                marqueeItems[currentMarquee].classList.add('active');
-            }, 3000);
+        // Auto-detect from browser
+        const browserLang = (navigator.language || navigator.userLanguage || 'en').split('-')[0].toLowerCase();
+        if (LANG_FLAGS[browserLang]) return browserLang;
+
+        return 'en';
+    }
+
+    async function initI18n() {
+        try {
+            const resp = await fetch('i18n.json');
+            i18nData = await resp.json();
+        } catch (e) {
+            console.warn('i18n load failed, using English:', e);
+            return;
         }
+        const lang = detectLanguage();
+        setLanguage(lang, false);
+    }
 
-        // Fade in on scroll
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('visible');
-                }
-            });
-        }, { threshold: 0.1 });
+    function setLanguage(lang, save = true) {
+        currentLang = lang;
+        if (save) localStorage.setItem('windy-lang', lang);
 
-        document.querySelectorAll('.section').forEach(s => {
-            s.classList.add('fade-in');
-            observer.observe(s);
+        // Update HTML lang attribute
+        document.documentElement.lang = lang;
+        // RTL support for Arabic
+        document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+
+        // Update all data-i18n elements
+        const strings = i18nData[lang] || i18nData['en'] || {};
+        const fallback = i18nData['en'] || {};
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            const text = strings[key] || fallback[key];
+            if (text) el.textContent = text;
         });
+
+        // Update selector display
+        document.getElementById('lang-current-flag').textContent = LANG_FLAGS[lang] || '🌐';
+        document.getElementById('lang-current-name').textContent = LANG_NAMES[lang] || lang.toUpperCase();
+
+        // Close dropdown
+        document.getElementById('lang-dropdown').classList.remove('open');
+
+        // Highlight active option
+        document.querySelectorAll('.lang-option').forEach(opt => {
+            opt.classList.toggle('active', opt.onclick.toString().includes("'" + lang + "'"));
+        });
+
+        // Update download links to pass lang to wizard
+        document.querySelectorAll('a[href*="wizard"]').forEach(a => {
+            const url = new URL(a.href, window.location);
+            url.searchParams.set('lang', lang);
+            a.href = url.toString();
+        });
+    }
+
+    function toggleLangDropdown() {
+        document.getElementById('lang-dropdown').classList.toggle('open');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.lang-selector')) {
+            document.getElementById('lang-dropdown').classList.remove('open');
+        }
+    });
+
+    // Init on load
+    initI18n();
     </script>
 </body>
 

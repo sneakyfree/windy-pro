@@ -42,7 +42,7 @@ process.on('unhandledRejection', (reason) => {
  * DNA Strand: B1.1
  */
 
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog, Notification } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog, Notification, shell } = require('electron');
 
 // Fix: bake in --no-sandbox for Linux AppImage (chrome-sandbox SUID issue)
 if (process.platform === 'linux') {
@@ -99,15 +99,19 @@ const store = new Store({
       archiveLocalEnabled: true,
       archiveMode: 'both',
       archiveRouteToday: 'local',
-      archiveFolder: path.join(os.homedir(), 'Documents', 'WindyProArchive'),
-      dropboxEnabled: false,
-      dropboxAccessToken: '',
-      dropboxFolder: '/WindyProArchive',
-      dropboxLastTestAt: '',
-      googleEnabled: false,
-      googleAccessToken: '',
-      googleFolderId: '',
-      googleLastTestAt: ''
+      archiveFolder: path.join(os.homedir(), 'Documents', 'WindyProArchive')
+    },
+    license: {
+      tier: 'free',
+      email: '',
+      stripeSessionId: '',
+      purchasedAt: '',
+      expiresAt: null
+    },
+    wizard: {
+      completed: false,
+      currentStep: 0,
+      completedSteps: []
     }
   }
 });
@@ -120,86 +124,37 @@ let pythonProcess = null;
 let pythonRestartCount = 0;
 const MAX_PYTHON_RESTARTS = 3;
 
-async function uploadFileToDropbox(localPath, remotePath, accessToken) {
-  const https = require('https');
-  const content = fs.readFileSync(localPath);
-  return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: 'content.dropboxapi.com',
-      path: '/2/files/upload',
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Dropbox-API-Arg': JSON.stringify({
-          path: remotePath,
-          mode: 'overwrite',
-          autorename: false,
-          mute: true,
-          strict_conflict: false
-        }),
-        'Content-Type': 'application/octet-stream',
-        'Content-Length': content.length
-      }
-    }, (res) => {
-      let body = '';
-      res.on('data', (d) => { body += d.toString(); });
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve({ ok: true, status: res.statusCode, body });
-        } else {
-          reject(new Error(`Dropbox upload failed ${res.statusCode}: ${body}`));
-        }
-      });
-    });
-    req.on('error', reject);
-    req.write(content);
-    req.end();
-  });
+// ═══ Stripe Payment Integration ═══
+// Secret key loaded from environment or electron-store (NEVER hardcode in source)
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || store.get('stripe.secretKey', '');
+const STRIPE_PRICES = {
+  pro: { id: 'price_1T5oYzBXIOBasDQibSlnIsPg', mode: 'payment', tier: 'pro', amount: 4900 },
+  translate: { id: 'price_1T5oZJBXIOBasDQiHO0MtYS7', mode: 'payment', tier: 'translate', amount: 7900 },
+  translate_monthly: { id: 'price_1T5oZJBXIOBasDQijBW23Gow', mode: 'subscription', tier: 'translate', amount: 799 },
+  translate_pro: { id: 'price_1T5oZ1BXIOBasDQinrz3VdvG', mode: 'payment', tier: 'translate_pro', amount: 14900 }
+};
+
+let stripeClient = null;
+function getStripe() {
+  if (!stripeClient) {
+    if (!STRIPE_SECRET_KEY) {
+      console.warn('[Stripe] No secret key configured. Set STRIPE_SECRET_KEY env var or stripe.secretKey in settings.');
+      return null;
+    }
+    const Stripe = require('stripe');
+    stripeClient = new Stripe(STRIPE_SECRET_KEY);
+  }
+  return stripeClient;
 }
 
-async function uploadFileToGoogleDrive(localPath, filename, accessToken, folderId = '') {
-  const https = require('https');
-  const content = fs.readFileSync(localPath);
-  const boundary = 'windypro_' + Date.now();
-  const metadata = {
-    name: filename,
-    ...(folderId ? { parents: [folderId] } : {})
+function getTierLimits(tier) {
+  const tiers = {
+    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
+    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
+    translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
+    translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
   };
-  const preamble = Buffer.from(
-    `--${boundary}\r\n` +
-    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
-    `${JSON.stringify(metadata)}\r\n` +
-    `--${boundary}\r\n` +
-    `Content-Type: text/markdown\r\n\r\n`
-  );
-  const ending = Buffer.from(`\r\n--${boundary}--\r\n`);
-  const body = Buffer.concat([preamble, content, ending]);
-
-  return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: 'www.googleapis.com',
-      path: '/upload/drive/v3/files?uploadType=multipart',
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': `multipart/related; boundary=${boundary}`,
-        'Content-Length': body.length
-      }
-    }, (res) => {
-      let resp = '';
-      res.on('data', (d) => { resp += d.toString(); });
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve({ ok: true, status: res.statusCode, body: resp });
-        } else {
-          reject(new Error(`Google upload failed ${res.statusCode}: ${resp}`));
-        }
-      });
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
+  return tiers[tier] || tiers.free;
 }
 
 function getArchiveFolder() {
@@ -745,7 +700,7 @@ function toggleRecording() {
   // Update mini widget state if it's visible (don't force-show it)
   updateMiniState(isRecording ? 'recording' : 'idle');
 
-    // Update tray icon color based on state
+  // Update tray icon color based on state
   if (tray) {
     tray.setToolTip(isRecording ? 'Windy Pro - Recording...' : 'Windy Pro');
   }
@@ -849,42 +804,10 @@ ipcMain.handle('choose-archive-folder', async () => {
   return { canceled: false, path: selected };
 });
 
-ipcMain.handle('test-dropbox-connection', async () => {
-  try {
-    const engine = store.get('engine', {});
-    if (!engine.dropboxAccessToken) return { ok: false, error: 'Missing Dropbox token' };
-    const tmp = path.join(os.tmpdir(), `windy_dropbox_test_${Date.now()}.txt`);
-    fs.writeFileSync(tmp, 'Windy Pro Dropbox connection test', 'utf-8');
-    const base = (engine.dropboxFolder || '/WindyProArchive').replace(/\/$/, '');
-    await uploadFileToDropbox(tmp, `${base}/_connection_test.txt`, engine.dropboxAccessToken);
-    try { fs.unlinkSync(tmp); } catch (_) { }
-    const ts = new Date().toISOString();
-    store.set('engine.dropboxLastTestAt', ts);
-    return { ok: true, testedAt: ts };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
-});
-
-ipcMain.handle('test-google-connection', async () => {
-  try {
-    const engine = store.get('engine', {});
-    if (!engine.googleAccessToken) return { ok: false, error: 'Missing Google token' };
-    const tmp = path.join(os.tmpdir(), `windy_google_test_${Date.now()}.md`);
-    fs.writeFileSync(tmp, '# Windy Pro Google Drive connection test\n', 'utf-8');
-    await uploadFileToGoogleDrive(
-      tmp,
-      '_connection_test.md',
-      engine.googleAccessToken,
-      engine.googleFolderId || ''
-    );
-    try { fs.unlinkSync(tmp); } catch (_) { }
-    const ts = new Date().toISOString();
-    store.set('engine.googleLastTestAt', ts);
-    return { ok: true, testedAt: ts };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
+ipcMain.on('open-archive-folder', () => {
+  const folder = getArchiveFolder();
+  if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
+  shell.openPath(folder);
 });
 
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
@@ -928,17 +851,17 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     const appRoot = path.resolve(__dirname, '..', '..', '..');
     const venvPaths = process.platform === 'win32'
       ? [
-          path.join(os.homedir(), '.windy-pro', 'venv', 'Scripts', 'python.exe'),
-          path.join(appDataDir, 'venv', 'Scripts', 'python.exe'),
-          path.join(appRoot, 'venv', 'Scripts', 'python.exe'),
-          'python'
-        ]
+        path.join(os.homedir(), '.windy-pro', 'venv', 'Scripts', 'python.exe'),
+        path.join(appDataDir, 'venv', 'Scripts', 'python.exe'),
+        path.join(appRoot, 'venv', 'Scripts', 'python.exe'),
+        'python'
+      ]
       : [
-          path.join(os.homedir(), '.windy-pro', 'venv', 'bin', 'python3'),
-          path.join(appRoot, 'venv', 'bin', 'python3'),
-          path.join(appDataDir, 'venv', 'bin', 'python3'),
-          '/usr/bin/python3'
-        ];
+        path.join(os.homedir(), '.windy-pro', 'venv', 'bin', 'python3'),
+        path.join(appRoot, 'venv', 'bin', 'python3'),
+        path.join(appDataDir, 'venv', 'bin', 'python3'),
+        '/usr/bin/python3'
+      ];
     const pythonPath = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
     console.log('[Batch] Using python:', pythonPath);
 
@@ -1023,12 +946,25 @@ ipcMain.handle('get-archive-history', async () => {
       const stat = fs.statSync(dirPath);
       if (!stat.isDirectory()) continue;
 
-      const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.md')).sort().reverse();
-      for (const file of files) {
+      // Gather all files in this day directory for media matching
+      const allFiles = fs.readdirSync(dirPath);
+      const mdFiles = allFiles.filter(f => f.endsWith('.md') && f !== `${dateDir}.md`).sort().reverse();
+      const audioFiles = allFiles.filter(f => f.endsWith('.webm') && !f.includes('-video'));
+      const videoFiles = allFiles.filter(f => f.endsWith('.webm') && f.includes('-video'));
+
+      // Helper: parse HHMMSS from filename to seconds-since-midnight
+      const parseTimeKey = (fname) => {
+        const base = fname.replace('.md', '').replace('.webm', '').replace('-video', '');
+        if (!/^\d{6}$/.test(base)) return -1;
+        return parseInt(base.substring(0, 2)) * 3600 +
+          parseInt(base.substring(2, 4)) * 60 +
+          parseInt(base.substring(4, 6));
+      };
+
+      for (const file of mdFiles) {
         const filePath = path.join(dirPath, file);
         try {
           const content = fs.readFileSync(filePath, 'utf-8');
-          // Parse the .md file: title line, metadata, then text
           const lines = content.split('\n');
           let text = '';
           let wordCount = 0;
@@ -1038,7 +974,7 @@ ipcMain.handle('get-archive-history', async () => {
           // Extract metadata from frontmatter-like lines
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
-            if (line.startsWith('# ')) continue; // title
+            if (line.startsWith('# ')) continue;
             if (line.startsWith('**') && line.includes(':')) {
               if (line.includes('Words:')) {
                 const m = line.match(/Words:\s*(\d+)/);
@@ -1055,7 +991,6 @@ ipcMain.handle('get-archive-history', async () => {
               continue;
             }
             if (line === '---' || line.trim() === '') continue;
-            // Everything after metadata is transcript text
             text = lines.slice(i).join('\n').trim();
             break;
           }
@@ -1070,11 +1005,36 @@ ipcMain.handle('get-archive-history', async () => {
             wordCount = text.split(/\s+/).filter(Boolean).length;
           }
 
+          // Match media files by timestamp proximity (±30 seconds)
+          const mdTime = parseTimeKey(file);
+          let hasAudio = false, hasVideo = false, audioPath = '', videoPath = '';
+
+          for (const af of audioFiles) {
+            const afTime = parseTimeKey(af);
+            if (afTime >= 0 && Math.abs(afTime - mdTime) <= 30) {
+              hasAudio = true;
+              audioPath = path.join(dirPath, af);
+              break;
+            }
+          }
+          for (const vf of videoFiles) {
+            const vfTime = parseTimeKey(vf.replace('-video', ''));
+            if (vfTime >= 0 && Math.abs(vfTime - mdTime) <= 30) {
+              hasVideo = true;
+              videoPath = path.join(dirPath, vf);
+              break;
+            }
+          }
+
           entries.push({
             date: dateStr,
             text,
             wordCount,
             engine,
+            hasAudio,
+            hasVideo,
+            audioPath,
+            videoPath,
             _source: 'archive',
             _archivePath: filePath,
             _id: `archive-${dateDir}-${file}`
@@ -1109,63 +1069,134 @@ ipcMain.handle('delete-archive-entry', async (event, filePath) => {
   }
 });
 
+// ── Windy Pro Cloud Storage helpers ──────────────────────────────
+const CLOUD_STORAGE_DEFAULT_URL = 'http://192.168.4.126:8099'; // OC5 iMac
+
+async function getCloudStorageToken() {
+  const engine = store.get('engine', {});
+  if (engine.cloudStorageToken) return engine.cloudStorageToken;
+
+  // Auto-register/login with storage API using existing cloud credentials
+  const email = engine.cloudEmail;
+  const password = engine.cloudPassword;
+  if (!email || !password) return null;
+
+  const baseUrl = engine.cloudStorageUrl || CLOUD_STORAGE_DEFAULT_URL;
+  const http = baseUrl.startsWith('https') ? require('https') : require('http');
+
+  // Try login first, then register
+  for (const endpoint of ['/auth/login', '/auth/register']) {
+    try {
+      const body = JSON.stringify({ email, password, deviceId: `windy-pro-${os.hostname()}` });
+      const token = await new Promise((resolve, reject) => {
+        const url = new URL(endpoint, baseUrl);
+        const req = http.request({
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+        }, (resp) => {
+          let data = '';
+          resp.on('data', chunk => data += chunk);
+          resp.on('end', () => {
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.ok && parsed.token) resolve(parsed.token);
+              else reject(new Error(parsed.error || 'Auth failed'));
+            } catch (e) { reject(e); }
+          });
+        });
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+      });
+      store.set('engine.cloudStorageToken', token);
+      console.log(`[CloudStorage] Authenticated via ${endpoint}`);
+      return token;
+    } catch (e) {
+      if (endpoint === '/auth/register') console.error('[CloudStorage] Auth failed:', e.message);
+    }
+  }
+  return null;
+}
+
 ipcMain.on('archive-transcript', async (event, payload) => {
   try {
     const route = payload?.route || store.get('engine.archiveRouteToday') || 'local';
-    const res = appendArchiveEntry(payload || {});
-    if (!res.archived) {
-      event.reply('archive-result', { ok: false, reason: 'skipped' });
-      return;
+    const cloud = { attempted: false, ok: false, error: null };
+
+    // Local archive (for 'local', 'local_cloud', and as fallback)
+    let res = { archived: false, files: [] };
+    if (route !== 'cloud') {
+      res = appendArchiveEntry(payload || {});
+      if (!res.archived && route === 'local') {
+        event.reply('archive-result', { ok: false, reason: 'skipped' });
+        return;
+      }
     }
 
-    const cloud = {
-      dropbox: { attempted: false, ok: false, error: null },
-      google: { attempted: false, ok: false, error: null }
-    };
-    const engine = store.get('engine', {});
+    // Windy Pro Cloud upload
+    if (route === 'cloud' || route === 'local_cloud') {
+      cloud.attempted = true;
+      const engine = store.get('engine', {});
+      const cloudToken = await getCloudStorageToken();
+      const cloudUrl = engine.cloudStorageUrl || CLOUD_STORAGE_DEFAULT_URL;
 
-    if (route === 'local_dropbox') {
-      cloud.dropbox.attempted = true;
-      if (!engine.dropboxEnabled || !engine.dropboxAccessToken) {
-        cloud.dropbox.error = 'Dropbox not configured';
+      if (!cloudToken) {
+        cloud.error = 'Not logged in to Windy Pro Cloud (set email/password in Settings)';
       } else {
         try {
-          const base = (engine.dropboxFolder || '/WindyProArchive').replace(/\/$/, '');
-          for (const f of res.files) {
-            const rel = path.relative(getArchiveFolder(), f).replace(/\\/g, '/');
-            const remotePath = `${base}/${rel}`;
-            await uploadFileToDropbox(f, remotePath, engine.dropboxAccessToken);
+          const filesToUpload = res.files && res.files.length > 0 ? res.files : [];
+
+          // If cloud-only and no local archive was done, create temp files from payload
+          if (route === 'cloud' && filesToUpload.length === 0) {
+            res = appendArchiveEntry(payload || {});
           }
-          cloud.dropbox.ok = true;
+
+          for (const f of res.files || []) {
+            const FormData = require('form-data');
+            const form = new FormData();
+            form.append('file', fs.createReadStream(f));
+            form.append('type', f.endsWith('.webm') || f.endsWith('.wav') ? 'audio' : 'transcript');
+            form.append('sessionDate', new Date().toISOString().slice(0, 10));
+
+            const http = cloudUrl.startsWith('https') ? require('https') : require('http');
+            await new Promise((resolve, reject) => {
+              const url = new URL('/files/upload', cloudUrl);
+              const req = http.request({
+                hostname: url.hostname,
+                port: url.port,
+                path: url.pathname,
+                method: 'POST',
+                headers: {
+                  ...form.getHeaders(),
+                  'Authorization': `Bearer ${cloudToken}`
+                }
+              }, (resp) => {
+                let data = '';
+                resp.on('data', chunk => data += chunk);
+                resp.on('end', () => {
+                  try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.ok) resolve(parsed);
+                    else reject(new Error(parsed.error || 'Upload failed'));
+                  } catch (e) { reject(new Error(`HTTP ${resp.statusCode}: ${data.slice(0, 200)}`)); }
+                });
+              });
+              req.on('error', reject);
+              form.pipe(req);
+            });
+          }
+          cloud.ok = true;
         } catch (e) {
-          cloud.dropbox.error = e.message;
+          cloud.error = e.message;
+          console.error('[Archive] Cloud upload failed:', e.message);
         }
       }
     }
 
-    if (route === 'local_google') {
-      cloud.google.attempted = true;
-      if (!engine.googleEnabled || !engine.googleAccessToken) {
-        cloud.google.error = 'Google Drive not configured';
-      } else {
-        try {
-          for (const f of res.files) {
-            const rel = path.relative(getArchiveFolder(), f).replace(/\\/g, '_');
-            await uploadFileToGoogleDrive(
-              f,
-              `WindyPro_${rel}`,
-              engine.googleAccessToken,
-              engine.googleFolderId || ''
-            );
-          }
-          cloud.google.ok = true;
-        } catch (e) {
-          cloud.google.error = e.message;
-        }
-      }
-    }
-
-    console.log('[Archive] Saved:', res.files.join(', '));
+    console.log('[Archive] Saved:', (res.files || []).join(', '), route, cloud.ok ? '+ cloud ✓' : '');
     event.reply('archive-result', { ok: true, ...res, route, cloud });
   } catch (err) {
     console.error('[Archive] Failed:', err.message);
@@ -1174,22 +1205,322 @@ ipcMain.on('archive-transcript', async (event, payload) => {
 });
 
 // Save audio recording to archive folder
-ipcMain.handle('archive-audio', async (event, base64) => {
+ipcMain.handle('archive-audio', async (event, base64, timestamp) => {
   try {
     const archiveRoot = getArchiveFolder();
-    const now = new Date();
-    const dateKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    const timeKey = `${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+    // Use the recording's actual start timestamp if provided, otherwise fall back to now
+    const now = timestamp ? new Date(timestamp) : new Date();
+    if (isNaN(now.getTime())) throw new Error('Invalid timestamp');
+    const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const timeKey = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
     const dayDir = path.join(archiveRoot, dateKey);
     ensureDir(dayDir);
     const audioPath = path.join(dayDir, `${timeKey}.webm`);
     const buffer = Buffer.from(base64, 'base64');
     fs.writeFileSync(audioPath, buffer);
-    console.log(`[Archive] Audio saved: ${audioPath} (${(buffer.length/1024).toFixed(0)}KB)`);
+    console.log(`[Archive] Audio saved: ${audioPath} (${(buffer.length / 1024).toFixed(0)}KB)`);
     return { ok: true, path: audioPath };
   } catch (err) {
     console.error('[Archive] Audio save failed:', err.message);
     return { ok: false, error: err.message };
+  }
+});
+
+// Save video recording to archive folder
+ipcMain.handle('archive-video', async (event, base64, timestamp) => {
+  try {
+    const archiveRoot = getArchiveFolder();
+    const now = timestamp ? new Date(timestamp) : new Date();
+    if (isNaN(now.getTime())) throw new Error('Invalid timestamp');
+    const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const timeKey = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+    const dayDir = path.join(archiveRoot, dateKey);
+    ensureDir(dayDir);
+    const videoPath = path.join(dayDir, `${timeKey}-video.webm`);
+    const buffer = Buffer.from(base64, 'base64');
+    fs.writeFileSync(videoPath, buffer);
+    console.log(`[Archive] Video saved: ${videoPath} (${(buffer.length / 1024).toFixed(0)}KB)`);
+    return { ok: true, path: videoPath };
+  } catch (err) {
+    console.error('[Archive] Video save failed:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+// Read audio file from archive for playback
+ipcMain.handle('read-archive-audio', async (event, filePath) => {
+  try {
+    const archiveRoot = getArchiveFolder();
+    // Security: path must be inside the archive folder
+    const resolved = path.resolve(filePath);
+    if (!resolved.startsWith(path.resolve(archiveRoot))) {
+      throw new Error('Path is outside archive folder');
+    }
+    if (!fs.existsSync(resolved)) {
+      throw new Error('File not found');
+    }
+    const buffer = fs.readFileSync(resolved);
+    return { ok: true, base64: buffer.toString('base64'), mimeType: 'audio/webm' };
+  } catch (err) {
+    console.error('[Archive] Audio read failed:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+// ═══ Archive Stats & Export IPC Handlers ═══
+
+ipcMain.handle('get-archive-stats', async () => {
+  try {
+    const archiveRoot = getArchiveFolder();
+    if (!fs.existsSync(archiveRoot)) return { totalFiles: 0, totalSizeMB: 0, days: 0 };
+    let totalFiles = 0, totalSize = 0, days = new Set();
+    const items = fs.readdirSync(archiveRoot);
+    for (const item of items) {
+      const itemPath = path.join(archiveRoot, item);
+      const stat = fs.statSync(itemPath);
+      if (stat.isDirectory()) {
+        days.add(item);
+        const files = fs.readdirSync(itemPath);
+        for (const file of files) {
+          totalFiles++;
+          try { totalSize += fs.statSync(path.join(itemPath, file)).size; } catch (_) { }
+        }
+      }
+    }
+    return { totalFiles, totalSizeMB: Math.round(totalSize / (1024 * 1024) * 10) / 10, days: days.size };
+  } catch (err) {
+    return { totalFiles: 0, totalSizeMB: 0, days: 0, error: err.message };
+  }
+});
+
+ipcMain.handle('export-soul-file', async () => {
+  // TODO: Full soul file export (transcripts + voice data + metadata)
+  return { ok: false, error: 'Soul File Export coming in v0.7.0' };
+});
+
+ipcMain.handle('export-voice-clone', async () => {
+  // TODO: Export audio recordings formatted for voice cloning services
+  return { ok: false, error: 'Voice Clone Export coming in v0.7.0' };
+});
+
+// ═══ Wizard IPC Handlers ═══
+
+ipcMain.handle('get-wizard-state', async () => {
+  return store.get('wizard') || { completed: false, currentStep: 0, completedSteps: [] };
+});
+
+ipcMain.handle('set-wizard-state', async (event, state) => {
+  const current = store.get('wizard') || {};
+  store.set('wizard', { ...current, ...state });
+  return { ok: true };
+});
+
+ipcMain.handle('detect-hardware', async () => {
+  const result = {
+    totalRAM: Math.round(os.totalmem() / (1024 * 1024 * 1024)),
+    freeRAM: Math.round(os.freemem() / (1024 * 1024 * 1024)),
+    cpuModel: os.cpus()[0]?.model || 'Unknown',
+    cpuCores: os.cpus().length,
+    platform: process.platform,
+    arch: process.arch,
+    gpu: null,
+    diskFreeGB: null
+  };
+
+  // Detect NVIDIA GPU
+  try {
+    const { execSync } = require('child_process');
+    const gpuInfo = execSync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits', { timeout: 5000 }).toString().trim();
+    if (gpuInfo) {
+      const [name, vramMB] = gpuInfo.split(', ');
+      result.gpu = { name: name.trim(), vramMB: parseInt(vramMB) || 0, type: 'cuda' };
+    }
+  } catch (_) {
+    // No NVIDIA GPU or nvidia-smi not available
+  }
+
+  // Check disk space
+  try {
+    const { execSync } = require('child_process');
+    const homeDir = os.homedir();
+    if (process.platform === 'win32') {
+      const drive = homeDir.charAt(0);
+      const out = execSync(`wmic logicaldisk where "DeviceID='${drive}:'" get FreeSpace /value`, { timeout: 3000 }).toString();
+      const match = out.match(/FreeSpace=(\d+)/);
+      if (match) result.diskFreeGB = Math.round(parseInt(match[1]) / (1024 * 1024 * 1024));
+    } else {
+      const out = execSync(`df -BG "${homeDir}" | tail -1 | awk '{print $4}'`, { timeout: 3000 }).toString().trim();
+      result.diskFreeGB = parseInt(out) || null;
+    }
+  } catch (_) { }
+
+  // Engine recommendation
+  if (result.gpu && result.gpu.vramMB >= 6000) {
+    result.recommendedEngine = 'core-ultra';
+    result.recommendation = `Your ${result.gpu.name} (${Math.round(result.gpu.vramMB / 1024)}GB VRAM) can run the best model. We recommend Core Ultra for maximum accuracy.`;
+  } else if (result.gpu && result.gpu.vramMB >= 2000) {
+    result.recommendedEngine = 'core-standard';
+    result.recommendation = `Your ${result.gpu.name} has ${Math.round(result.gpu.vramMB / 1024)}GB VRAM. We recommend Core Standard for a great balance of speed and quality.`;
+  } else if (result.totalRAM >= 16) {
+    result.recommendedEngine = 'edge-standard';
+    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Edge Standard — great accuracy on CPU, no GPU needed.`;
+  } else if (result.totalRAM >= 8) {
+    result.recommendedEngine = 'edge-pulse';
+    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Edge Pulse — fast and light, perfect for your hardware.`;
+  } else {
+    result.recommendedEngine = 'edge-spark';
+    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Edge Spark — ultra-light, runs great on any hardware.`;
+  }
+
+  return result;
+});
+
+ipcMain.handle('register-wizard-account', async (event, { email, password, name }) => {
+  try {
+    const https = require('http');
+    const data = JSON.stringify({ email, password, name });
+    return new Promise((resolve) => {
+      const req = https.request({
+        hostname: '192.168.4.126',
+        port: 8099,
+        path: '/auth/register',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': data.length },
+        timeout: 10000
+      }, (res) => {
+        let body = '';
+        res.on('data', (chunk) => body += chunk);
+        res.on('end', () => {
+          try {
+            const result = JSON.parse(body);
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              // Store credentials
+              store.set('engine.cloudStorageToken', result.token || '');
+              store.set('engine.cloudEmail', email);
+              store.set('engine.cloudPassword', password);
+              resolve({ ok: true, token: result.token, user: result.user });
+            } else {
+              resolve({ ok: false, error: result.detail || result.message || 'Registration failed' });
+            }
+          } catch (e) {
+            resolve({ ok: false, error: 'Invalid server response' });
+          }
+        });
+      });
+      req.on('error', (e) => resolve({ ok: false, error: e.message }));
+      req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'Connection timed out' }); });
+      req.write(data);
+      req.end();
+    });
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('setup-autostart', async (event, enable) => {
+  try {
+    if (process.platform === 'linux') {
+      const autostartDir = path.join(os.homedir(), '.config', 'autostart');
+      const desktopFile = path.join(autostartDir, 'windy-pro.desktop');
+      if (enable) {
+        if (!fs.existsSync(autostartDir)) fs.mkdirSync(autostartDir, { recursive: true });
+        const appPath = process.execPath;
+        const content = `[Desktop Entry]\nType=Application\nName=Windy Pro\nExec=${appPath}\nIcon=windy-pro\nComment=Voice-to-text transcription\nX-GNOME-Autostart-enabled=true\nStartupNotify=false\n`;
+        fs.writeFileSync(desktopFile, content);
+        return { ok: true };
+      } else {
+        if (fs.existsSync(desktopFile)) fs.unlinkSync(desktopFile);
+        return { ok: true };
+      }
+    }
+    return { ok: false, error: 'Autostart only supported on Linux' };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// ═══ Stripe Payment IPC Handlers ═══
+
+ipcMain.handle('create-checkout-session', async (event, priceId, email) => {
+  try {
+    const stripe = getStripe();
+    // Find the price config
+    const priceConfig = Object.values(STRIPE_PRICES).find(p => p.id === priceId);
+    if (!priceConfig) throw new Error('Invalid price ID');
+
+    const machineId = os.hostname() + '-' + os.userInfo().username;
+    const sessionParams = {
+      payment_method_types: ['card'],
+      line_items: [{ price: priceId, quantity: 1 }],
+      mode: priceConfig.mode,
+      success_url: 'https://windypro.thewindstorm.uk/payment-success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: 'https://windypro.thewindstorm.uk/payment-cancel',
+      allow_promotion_codes: true,
+      metadata: { deviceId: machineId, tier: priceConfig.tier }
+    };
+    if (email) sessionParams.customer_email = email;
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
+    console.log(`[Stripe] Checkout session created: ${session.id} for tier=${priceConfig.tier}`);
+    return { ok: true, url: session.url, sessionId: session.id };
+  } catch (err) {
+    console.error('[Stripe] Checkout session error:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('check-payment-status', async (event, sessionId) => {
+  try {
+    const stripe = getStripe();
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const paid = session.payment_status === 'paid';
+    const tier = session.metadata?.tier || 'pro';
+
+    if (paid) {
+      // Update license in store
+      store.set('license', {
+        tier,
+        email: session.customer_email || session.customer_details?.email || '',
+        stripeSessionId: sessionId,
+        purchasedAt: new Date().toISOString(),
+        expiresAt: session.mode === 'subscription' ? null : null // one-time = never expires
+      });
+      console.log(`[Stripe] Payment confirmed! Tier upgraded to: ${tier}`);
+    }
+
+    return { ok: true, paid, tier, status: session.payment_status };
+  } catch (err) {
+    console.error('[Stripe] Payment check error:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-current-tier', async () => {
+  const license = store.get('license') || { tier: 'free' };
+  const limits = getTierLimits(license.tier);
+  return { tier: license.tier, limits, license };
+});
+
+ipcMain.handle('apply-coupon', async (event, code) => {
+  try {
+    const stripe = getStripe();
+    // Search for active promotion codes matching this code
+    const promos = await stripe.promotionCodes.list({ code, active: true, limit: 1 });
+    if (!promos.data.length) {
+      return { ok: false, valid: false, error: 'Invalid or expired coupon code' };
+    }
+    const promo = promos.data[0];
+    const coupon = promo.coupon;
+    let discount = {};
+    if (coupon.percent_off) {
+      discount = { type: 'percent', value: coupon.percent_off, label: `${coupon.percent_off}% off` };
+    } else if (coupon.amount_off) {
+      discount = { type: 'amount', value: coupon.amount_off, label: `$${(coupon.amount_off / 100).toFixed(2)} off` };
+    }
+    return { ok: true, valid: true, discount, promoId: promo.id };
+  } catch (err) {
+    console.error('[Stripe] Coupon validation error:', err.message);
+    return { ok: false, valid: false, error: err.message };
   }
 });
 
@@ -1279,16 +1610,36 @@ ipcMain.handle('dismiss-crash-recovery', async () => {
 // App lifecycle
 
 app.whenReady().then(async () => {
-  // First-run setup wizard (Phase 3: B4)
-  const installerPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'installer', 'installer-wizard')
-    : path.join(__dirname, '..', '..', '..', 'installer', 'installer-wizard');
-  const { InstallerWizard } = require(installerPath);
-  if (InstallerWizard.needsSetup()) {
-    const wizard = new InstallerWizard();
-    const installed = await wizard.show();
-    if (!installed) {
-      // User closed wizard without completing — quit
+  // ═══════════════════════════════════════════════════════════════════
+  // INSTALLATION WIZARD v2.0 — TurboTax-style 9-screen setup
+  // Source: installer-v2/ (the ONLY wizard — there is no other)
+  // WARNING: Do NOT load from installer/ — that is the DEPRECATED v1.
+  //          v1 was archived on 27 Feb 2026. See DEPRECATED-installer-v1/
+  // ═══════════════════════════════════════════════════════════════════
+  const wizardPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'installer-v2', 'wizard-main')
+    : path.join(__dirname, '..', '..', '..', 'installer-v2', 'wizard-main');
+  const { InstallWizard } = require(wizardPath);
+  const APP_DATA_DIR = path.join(os.homedir(), '.windy-pro');
+  console.log('[Main] needsSetup:', InstallWizard.needsSetup(APP_DATA_DIR));
+  if (InstallWizard.needsSetup(APP_DATA_DIR)) {
+    console.log('[Main] Wizard needed — launching setup wizard');
+    // Load platform adapter for this OS
+    let platformAdapter = null;
+    try {
+      const adapterPath = app.isPackaged
+        ? path.join(process.resourcesPath, 'installer-v2', 'adapters')
+        : path.join(__dirname, '..', '..', '..', 'installer-v2', 'adapters');
+      const { getAdapter } = require(adapterPath);
+      platformAdapter = getAdapter();
+    } catch (e) {
+      console.log('[Main] Platform adapter not loaded:', e.message);
+    }
+    const wizard = new InstallWizard({ platformAdapter });
+    console.log('[Main] Wizard created, showing...');
+    const completed = await wizard.show();
+    console.log('[Main] Wizard completed:', completed);
+    if (!completed) {
       app.quit();
       return;
     }

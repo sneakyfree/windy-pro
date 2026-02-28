@@ -78,13 +78,18 @@
       <button class="control-btn" id="pasteBtn" title="Paste to Cursor" aria-label="Paste transcript at cursor">
         <span class="icon">📝</span>
       </button>
-      <select class="archive-route" id="archiveRouteSelect" title="Today route: where dictations archive today"
-        aria-label="Archive route">
-        <option value="local">📁 Local</option>
-        <option value="local_dropbox">📁+☁ Dropbox</option>
-        <option value="local_google">📁+☁ Google</option>
-        <option value="off">🚫 Off</option>
-      </select>
+      <div class="archive-route-group" id="archiveRouteGroup">
+        <select class="archive-route" id="archiveRouteSelect" title="Today route: where dictations archive today"
+          aria-label="Archive route">
+          <option value="local">📁 Local</option>
+          <option value="cloud">☁️ Windy Pro Cloud</option>
+          <option value="local_cloud">📁+☁️ Local + Cloud</option>
+          <option value="off">🚫 Off</option>
+        </select>
+        <button class="archive-path-btn" id="archiveOpenBtn" title="Open archive folder">📂</button>
+        <button class="archive-path-btn" id="archiveChangeBtn" title="Change archive folder">⚙️</button>
+        <span class="archive-path-label" id="archivePathLabel" title="Click to open"></span>
+      </div>
     </div>
 
     <!-- Connection Status -->
@@ -101,6 +106,7 @@
   <script src="wizard.js"></script>
   <script src="changelog.js"></script>
   <script src="history.js"></script>
+  <script src="upgrade.js"></script>
   <script src="settings.js"></script>
   <script src="app.js"></script>
 </body>

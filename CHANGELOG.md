@@ -1,55 +1,54 @@
 # Changelog
 
-All notable changes to Windy Pro will be documented in this file.
+## v0.6.0 (2026-02-28)
 
-## [0.4.0] — 2026-02-23
+### 🆕 New Features
+- **Windy Pro Cloud Storage** — Archive recordings to Windy Pro's distributed cloud (replacing Dropbox/Google Drive)
+- **Stripe Payment Integration** — Upgrade to Pro/Translate/Translate Pro directly from the app
+- **First-Run Setup Wizard** — Premium 6-step onboarding: mic test, engine selection, account creation, plan selection
+- **History Media Badges** — See at a glance which recordings have 📝 text, 🎤 audio, 🎬 video
+- **Inline Audio Playback** — Play back recordings directly from the History panel
+- **Video Recording** — Webcam capture during recordings (opt-in, for AI avatar/voice clone data)
+- **Coupon Code Support** — Enter promo codes during checkout for discounts
+- **Feature Gating by Tier** — Free/Pro/Translate/Translate Pro feature limits enforced
 
-### Added
-- **Batch Mode:** Record up to 30 minutes, process with GPU-accelerated Whisper + LLM cleanup
-- **Multi-Engine Support:** Choose from Local Whisper, WindyPro Cloud, Deepgram, Groq, or OpenAI
-- **Multi-Language:** 13 languages + auto-detect (English, Spanish, French, German, Portuguese, Italian, Japanese, Chinese, Korean, Arabic, Hindi, Russian)
-- **Speaker Diarization:** Identify speakers (Cloud & Deepgram engines)
-- **Setup Wizard:** Guided first-run wizard for mode, engine, and API key configuration
-- **What's New Popup:** Changelog shown once per version update
-- **Customizable Keyboard Shortcuts:** Rebind toggle recording and paste transcript hotkeys
-- **Transcript History:** Last 20 transcripts with click-to-load, export, and clear
-- **Audio Playback:** Re-listen to batch recordings with built-in playback bar
-- **Export Options:** Save transcripts as .txt, .md, or .srt subtitles
-- **System Tray Enhancements:** Color-coded tray icon (green/red/gray), OS notifications on batch complete
-- **Auto-Update Checking:** Checks GitHub releases once per day, "Check for Updates" in settings
-- **Opt-In Analytics:** Anonymous usage stats (engine, mode, language, duration) — never transcript content
-- **.deb Package Build:** `scripts/build-deb.sh` for Debian/Ubuntu distribution
-- **Landing Page:** Marketing website at `src/client/web/public/landing/`
+### 🔧 Improvements
+- Removed Dropbox and Google Drive integration (replaced by Windy Pro Cloud)
+- New archive folder UI with 📂 Open and ⚙️ Change buttons
+- Archive path displayed in the main UI
+- Audio save consistency fixes
+- Improved recording mode handling for batch sessions
 
-### Changed
-- Processing indicator now uses animated spinner with breathing effect
-- State transitions use smooth 0.4s CSS animations
-- Version watermark displayed subtly in bottom-right corner
+### 🐛 Bug Fixes
+- Fixed null reference crashes from removed Dropbox/Google elements
+- Fixed audio timestamp mismatches between .md and .webm files
+- Fixed stack overflow on large audio blob base64 encoding
 
-### Fixed
-- Cloud transcription WebSocket reconnection stability
-- Batch recording timer accuracy with session timer
-- Settings panel scroll behavior on smaller screens
+---
 
-## [0.3.0] — 2026-02-20
+## v0.5.0 (2026-02-24)
 
-### Added
-- Cloud transcription via WindyPro server
-- Vault system for transcript archival
-- Crash recovery for interrupted sessions
-- Settings persistence via electron-store
+### 🆕 New Features
+- Mini tornado widget with transparent background and voice-reactive animation
+- Tornado widget size slider in settings
+- Cloud transcription engine support
 
-## [0.2.0] — 2026-02-18
+### 🔧 Improvements
+- Hardened IPC security across all handlers
+- Full-spectrum smoke test pass
 
-### Added
-- Basic Whisper transcription (local)
-- Live streaming mode
-- Copy to clipboard
-- System tray integration
+---
 
-## [0.1.0] — 2026-02-15
+## v0.4.0 (2026-02-20)
 
-### Added
-- Initial Electron app shell
-- Python FastAPI backend
-- Basic recording and playback
+### 🆕 New Features
+- Batch recording mode with LLM-polished output
+- Tornado floating widget
+- Audio archive with date-organized folders
+- History panel with search
+- Global hotkey support (Ctrl+Shift+Space, Ctrl+Shift+V)
+
+### 🔧 Improvements
+- TurboTax-style installation wizard
+- 5 transcription engine options
+- Cursor injection for direct paste

@@ -1,0 +1,34 @@
+[Unit]
+Description=Windy Translate API — Dynamic Translation Service
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=windy
+Group=windy
+WorkingDirectory=/opt/windy-translate-api
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+# Environment
+Environment=NODE_ENV=production
+Environment=PORT=8099
+Environment=MODEL_PATH=/opt/windy-translate-api/models/nllb-200-600M
+Environment=DB_PATH=/var/lib/windy-translate/cache.db
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=windy-translate
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/windy-translate
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

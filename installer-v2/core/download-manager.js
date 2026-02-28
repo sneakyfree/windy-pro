@@ -20,6 +20,52 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 const CHUNK_LOG_INTERVAL = 500; // Report progress every 500ms
 
+// ═══════════════════════════════════════════════════════════════════
+// LOCAL MODEL CACHE — Map engine IDs to HuggingFace faster-whisper models
+// When a model exists in ~/.cache/huggingface, use it instead of CDN.
+// This is how it works in dev AND for users who pre-downloaded models.
+// ═══════════════════════════════════════════════════════════════════
+const os = require('os');
+const HF_CACHE = path.join(os.homedir(), '.cache', 'huggingface', 'hub');
+const ENGINE_TO_HF = {
+  'edge-spark':    'models--Systran--faster-whisper-tiny',
+  'edge-pulse':    'models--Systran--faster-whisper-base',
+  'edge-standard': 'models--Systran--faster-whisper-small',
+  'edge-global':   'models--Systran--faster-whisper-medium',
+  'edge-pro':      'models--Systran--faster-whisper-medium.en',
+  'core-spark':    'models--Systran--faster-whisper-tiny',
+  'core-pulse':    'models--Systran--faster-whisper-base',
+  'core-standard': 'models--Systran--faster-whisper-small',
+  'core-global':   'models--Systran--faster-whisper-large-v3',
+  'core-pro':      'models--Systran--faster-whisper-large-v3',
+  'core-turbo':    'models--Systran--faster-whisper-large-v3-turbo',
+  'core-ultra':    'models--Systran--faster-whisper-large-v3',
+  'lingua-es':     'models--Systran--faster-whisper-medium',
+  'lingua-fr':     'models--Systran--faster-whisper-medium',
+  'lingua-hi':     'models--Systran--faster-whisper-medium',
+};
+
+/**
+ * Check if a model is already available in the HuggingFace cache
+ * @returns {string|null} Path to cached model dir, or null
+ */
+function findCachedModel(modelId) {
+  const hfName = ENGINE_TO_HF[modelId];
+  if (!hfName) return null;
+  const hfDir = path.join(HF_CACHE, hfName, 'snapshots');
+  try {
+    if (!fs.existsSync(hfDir)) return null;
+    const snapshots = fs.readdirSync(hfDir);
+    if (snapshots.length === 0) return null;
+    const snapPath = path.join(hfDir, snapshots[0]);
+    // Verify it has at least a config.json
+    if (fs.existsSync(path.join(snapPath, 'config.json'))) {
+      return snapPath;
+    }
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
 class DownloadManager {
   constructor(modelsDir) {
     this.modelsDir = modelsDir;
@@ -41,13 +87,39 @@ class DownloadManager {
     const tempPath = `${filePath}.partial`;
     const expectedBytes = expectedSizeMB * 1024 * 1024;
 
-    // Check if already downloaded and valid
+    // Check if already downloaded as .wpr
     if (fs.existsSync(filePath)) {
       const stat = fs.statSync(filePath);
-      if (stat.size >= expectedBytes * 0.95) { // Within 5% of expected
+      if (stat.size >= expectedBytes * 0.95) {
         onProgress(100, expectedSizeMB, 0);
         return filePath;
       }
+    }
+
+    // ═══ Check HuggingFace cache (local models) ═══
+    const cachedPath = findCachedModel(modelId);
+    if (cachedPath) {
+      console.log(`[DownloadManager] Found cached model for ${modelId}: ${cachedPath}`);
+      // Create a symlink or marker so the app knows where the model is
+      const linkPath = path.join(this.modelsDir, `${modelId}.local`);
+      try {
+        // Write a JSON pointer to the cached model
+        fs.writeFileSync(linkPath, JSON.stringify({
+          type: 'huggingface-cache',
+          modelId: modelId,
+          path: cachedPath,
+          detectedAt: new Date().toISOString()
+        }, null, 2));
+      } catch (e) { /* ignore */ }
+
+      // Simulate download progress for UI satisfaction (fast — 50ms per tick)
+      const steps = 10;
+      for (let i = 1; i <= steps; i++) {
+        await new Promise(r => setTimeout(r, 50));
+        onProgress((i / steps) * 100, expectedSizeMB * (i / steps), 999);
+      }
+      onProgress(100, expectedSizeMB, 0);
+      return cachedPath;
     }
 
     // Check for partial download (resume support)

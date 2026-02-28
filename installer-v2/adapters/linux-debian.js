@@ -36,12 +36,30 @@ class LinuxDebianAdapter {
     fs.mkdirSync(MODELS_DIR, { recursive: true });
     fs.mkdirSync(BIN_DIR, { recursive: true });
 
+    // ═══ FAST PATH: Skip if venv + key packages already installed ═══
+    const venvPython = path.join(VENV_DIR, 'bin', 'python3');
+    if (fs.existsSync(venvPython)) {
+      try {
+        const check = execSync(
+          `"${venvPython}" -c "import faster_whisper, torch, sounddevice, websockets; print('OK')"`,
+          { timeout: 15000, stdio: 'pipe' }
+        ).toString().trim();
+        if (check === 'OK') {
+          console.log('[LinuxDebianAdapter] Python deps already installed — skipping');
+          onProgress(100);
+          return;
+        }
+      } catch (e) {
+        console.log('[LinuxDebianAdapter] Some Python deps missing — installing');
+      }
+    }
+
     // Step 1: Find or install Python 3.9+
     const pythonBin = await this._findOrInstallPython();
     onProgress(30);
 
     // Step 2: Create venv
-    if (!fs.existsSync(path.join(VENV_DIR, 'bin', 'python3'))) {
+    if (!fs.existsSync(venvPython)) {
       await this._exec(`"${pythonBin}" -m venv "${VENV_DIR}"`, 120000);
     }
     onProgress(50);
@@ -155,6 +173,14 @@ class LinuxDebianAdapter {
    */
   async installFfmpeg(onProgress) {
     onProgress(0);
+
+    // ═══ FAST PATH: Skip if ffmpeg already available ═══
+    try {
+      execSync('ffmpeg -version', { timeout: 5000, stdio: 'pipe' });
+      console.log('[LinuxDebianAdapter] ffmpeg already installed — skipping');
+      onProgress(100);
+      return;
+    } catch (e) { /* not found, install it */ }
 
     const audioPackages = [
       'ffmpeg',

@@ -56,6 +56,9 @@ class WindyApp {
     this.copyBtn = document.getElementById('copyBtn');
     this.pasteBtn = document.getElementById('pasteBtn');
     this.archiveRouteSelect = document.getElementById('archiveRouteSelect');
+    this.archiveOpenBtn = document.getElementById('archiveOpenBtn');
+    this.archiveChangeBtn = document.getElementById('archiveChangeBtn');
+    this.archivePathLabel = document.getElementById('archivePathLabel');
     this.connectionDot = document.getElementById('connectionDot');
     this.connectionText = document.getElementById('connectionText');
     this.archiveStatus = document.getElementById('archiveStatus');
@@ -91,12 +94,9 @@ class WindyApp {
     this.bindEvents();
     this.bindIPCEvents();
 
-    // First-run wizard
+    // First-run wizard (v2 — 6-step onboarding)
     const wizard = new SetupWizard(this);
-    if (wizard.shouldShow()) {
-      wizard.show();
-      return; // Don't connect until wizard is done — user will reload or recording will trigger connect
-    }
+    wizard.show();  // Will no-op if already completed
 
     // What's New popup (shows once per version)
     const changelog = new ChangelogPopup();
@@ -110,15 +110,11 @@ class WindyApp {
       this.livePreview = settings?.livePreview !== false;
       const route = settings?.archiveRouteToday || 'local';
       if (this.archiveRouteSelect) this.archiveRouteSelect.value = route;
-      if (route === 'off') {
-        this.setArchiveStatus('Archive off (today)', 'warn');
-      } else if (route === 'local_dropbox') {
-        this.setArchiveStatus('Route: Local + Dropbox', 'ok');
-      } else if (route === 'local_google') {
-        this.setArchiveStatus('Route: Local + Google', 'ok');
-      } else {
-        this.setArchiveStatus('Archive route: Local', 'ok');
-      }
+      this._setArchiveRouteStatus(route);
+
+      // Show archive path
+      this._archiveFolder = settings?.archiveFolder || null;
+      this._updateArchivePathLabel();
 
       // Load cloud transcription settings at startup
       // Key is 'engine' not 'transcriptionEngine' (matches saveSetting('engine', val))
@@ -186,14 +182,29 @@ class WindyApp {
       if (window.windyAPI?.updateSettings) {
         window.windyAPI.updateSettings({ archiveRouteToday: route });
       }
-      if (route === 'off') {
-        this.setArchiveStatus('Archive off (today)', 'warn');
-      } else if (route === 'local_dropbox') {
-        this.setArchiveStatus('Route: Local + Dropbox', 'ok');
-      } else if (route === 'local_google') {
-        this.setArchiveStatus('Route: Local + Google', 'ok');
-      } else {
-        this.setArchiveStatus('Archive route: Local', 'ok');
+      this._setArchiveRouteStatus(route);
+    });
+
+    // Archive folder buttons
+    this.archiveOpenBtn?.addEventListener('click', () => {
+      if (window.windyAPI?.openArchiveFolder) {
+        window.windyAPI.openArchiveFolder();
+      }
+    });
+
+    this.archiveChangeBtn?.addEventListener('click', async () => {
+      if (window.windyAPI?.chooseArchiveFolder) {
+        const result = await window.windyAPI.chooseArchiveFolder();
+        if (result && !result.canceled && result.path) {
+          this._archiveFolder = result.path;
+          this._updateArchivePathLabel();
+        }
+      }
+    });
+
+    this.archivePathLabel?.addEventListener('click', () => {
+      if (window.windyAPI?.openArchiveFolder) {
+        window.windyAPI.openArchiveFolder();
       }
     });
 
@@ -240,22 +251,20 @@ class WindyApp {
       this.historyPanel.toggle();
     });
 
+    // Auto-update toast (non-intrusive)
+    window.windyAPI.onUpdateToast?.((payload) => {
+      this.showReconnectToast(payload.message);
+    });
+
     // Archive result badge updates
     window.windyAPI.onArchiveResult?.((res) => {
       const route = this.archiveRouteSelect?.value || 'local';
       if (res?.ok) {
-        if (route === 'local_dropbox') {
-          if (res?.cloud?.dropbox?.ok) {
-            this.setArchiveStatus('Archived local ✓ · Dropbox ✓', 'ok');
-          } else {
-            this.setArchiveStatus('Archived local ✓ · Dropbox failed', 'warn');
-          }
-        } else if (route === 'local_google') {
-          if (res?.cloud?.google?.ok) {
-            this.setArchiveStatus('Archived local ✓ · Google ✓', 'ok');
-          } else {
-            this.setArchiveStatus('Archived local ✓ · Google failed', 'warn');
-          }
+        if (route === 'cloud') {
+          this.setArchiveStatus(res?.cloud?.ok ? 'Cloud ✓' : 'Cloud upload failed', res?.cloud?.ok ? 'ok' : 'warn');
+        } else if (route === 'local_cloud') {
+          const cloudOk = res?.cloud?.ok;
+          this.setArchiveStatus(cloudOk ? 'Archived local ✓ · Cloud ✓' : 'Archived local ✓ · Cloud failed', cloudOk ? 'ok' : 'warn');
         } else {
           this.setArchiveStatus('Archived local ✓', 'ok');
         }
@@ -438,6 +447,13 @@ class WindyApp {
     // Add current state class
     this.stateIndicator.classList.add(state);
 
+    // Reset voice-driven strobe overrides when leaving listening state
+    if (state !== 'listening' && this.stateGlow) {
+      this.stateGlow.style.animation = '';
+      this.stateGlow.style.transform = '';
+      this.stateGlow.style.opacity = '';
+    }
+
     // Update label
     const labels = {
       idle: 'Ready',
@@ -544,6 +560,32 @@ class WindyApp {
     this.archiveStatus.textContent = text;
     this.archiveStatus.classList.remove('ok', 'warn', 'error');
     this.archiveStatus.classList.add(level);
+  }
+
+  _setArchiveRouteStatus(route) {
+    if (route === 'off') {
+      this.setArchiveStatus('Archive off (today)', 'warn');
+    } else if (route === 'cloud') {
+      this.setArchiveStatus('Route: Windy Pro Cloud', 'ok');
+    } else if (route === 'local_cloud') {
+      this.setArchiveStatus('Route: Local + Cloud', 'ok');
+    } else {
+      this.setArchiveStatus('Archive route: Local', 'ok');
+    }
+  }
+
+  _updateArchivePathLabel() {
+    if (!this.archivePathLabel) return;
+    if (this._archiveFolder) {
+      // Show shortened path (last 2 segments)
+      const parts = this._archiveFolder.replace(/\\/g, '/').split('/');
+      const short = parts.length > 2 ? '…/' + parts.slice(-2).join('/') : this._archiveFolder;
+      this.archivePathLabel.textContent = short;
+      this.archivePathLabel.title = this._archiveFolder;
+    } else {
+      this.archivePathLabel.textContent = '~/Documents/WindyProArchive';
+      this.archivePathLabel.title = 'Default: ~/Documents/WindyProArchive';
+    }
   }
 
   /**
@@ -987,6 +1029,27 @@ class WindyApp {
    */
   async startBatchRecording() {
     try {
+      // 0. Feature gating — check tier limits
+      let tierLimits = null;
+      try {
+        if (window.windyAPI?.getCurrentTier) {
+          const tierInfo = await window.windyAPI.getCurrentTier();
+          tierLimits = tierInfo?.limits;
+          if (tierLimits && !tierLimits.batchMode) {
+            this.showReconnectToast('⚡ Batch mode requires Pro. Upgrade in Settings → Your Plan.');
+            // Fall through anyway — allow basic recording but with shorter limit
+          }
+          // Override max recording with tier limit
+          if (tierLimits?.maxMinutes) {
+            const currentMax = parseInt(localStorage.getItem('windy_maxRecordingMin') || '10');
+            if (currentMax > tierLimits.maxMinutes) {
+              localStorage.setItem('windy_maxRecordingMin', String(tierLimits.maxMinutes));
+              this.showReconnectToast(`⚡ Free plan: max ${tierLimits.maxMinutes} min. Upgrade for 30 min.`);
+            }
+          }
+        }
+      } catch (_) { }
+
       // 1. Get mic access
       const audioConstraints = {
         channelCount: 1,
@@ -1015,6 +1078,50 @@ class WindyApp {
 
       // 3. Record continuously (timeslice = 1000ms for smooth data flow)
       this._batchRecorder.start(1000);
+
+      // 3b. Video capture (if enabled in settings)
+      this._videoRecorder = null;
+      this._videoChunks = [];
+      this._videoStream = null;
+      try {
+        let videoEnabled = false;
+        if (window.windyAPI) {
+          const settings = await window.windyAPI.getSettings();
+          videoEnabled = !!settings?.saveVideo;
+        }
+        if (videoEnabled) {
+          const qualityMap = { '480p': { width: 640, height: 480 }, '720p': { width: 1280, height: 720 }, '1080p': { width: 1920, height: 1080 } };
+          let videoQuality = '720p';
+          if (window.windyAPI) {
+            const settings = await window.windyAPI.getSettings();
+            videoQuality = settings?.videoQuality || '720p';
+          }
+          const vq = qualityMap[videoQuality] || qualityMap['720p'];
+          this._videoStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: vq.width }, height: { ideal: vq.height }, frameRate: { ideal: 30 } }
+          });
+          const videoMime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+            ? 'video/webm;codecs=vp9'
+            : MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+              ? 'video/webm;codecs=vp8'
+              : 'video/webm';
+          this._videoRecorder = new MediaRecorder(this._videoStream, { mimeType: videoMime });
+          this._videoRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) this._videoChunks.push(e.data);
+          };
+          this._videoRecorder.start(1000);
+          console.log('[Batch] Video recording started (' + videoQuality + ', ' + videoMime + ')');
+        }
+      } catch (videoErr) {
+        console.warn('[Batch] Video capture not available:', videoErr.message);
+        // Video failure is non-fatal — audio recording continues
+        this._videoRecorder = null;
+        this._videoChunks = [];
+        if (this._videoStream) {
+          this._videoStream.getTracks().forEach(t => t.stop());
+          this._videoStream = null;
+        }
+      }
 
       // 4. Set up max duration auto-stop
       const maxMin = parseInt(localStorage.getItem('windy_maxRecordingMin') || '10');
@@ -1055,7 +1162,14 @@ class WindyApp {
           // Send to main process for mini widget
           if (window.windyAPI?.sendVoiceLevel) {
             window.windyAPI.sendVoiceLevel(level);
-            if (level > 0.05) console.log('[VoiceLevel] sent:', level.toFixed(3));
+          }
+          // Apply voice level to main app green strobe
+          if (this.stateGlow && this.currentState === 'listening') {
+            const glowOpacity = 0.15 + level * 0.7; // 0.15 base → up to 0.85 at peak
+            const glowScale = 1.0 + level * 0.15;   // subtle size pulse
+            this.stateGlow.style.opacity = glowOpacity;
+            this.stateGlow.style.transform = `scale(${glowScale})`;
+            this.stateGlow.style.animation = 'none'; // override CSS strobe — we're driving it live
           }
         }, 50); // 20 updates/sec for smooth strobe
       } catch (e) {
@@ -1141,6 +1255,26 @@ class WindyApp {
         const audioBlob = new Blob(this._batchChunks, { type: this._batchRecorder.mimeType });
         this._batchChunks = [];
         this._lastBatchBlob = audioBlob;  // Save for audio playback
+
+        // Build video blob if video was captured
+        let videoBlob = null;
+        if (this._videoRecorder && this._videoChunks.length > 0) {
+          try {
+            if (this._videoRecorder.state !== 'inactive') {
+              this._videoRecorder.stop();
+            }
+          } catch (_) { }
+          videoBlob = new Blob(this._videoChunks, { type: this._videoRecorder?.mimeType || 'video/webm' });
+          this._videoChunks = [];
+          console.log(`[Batch] Video blob: ${(videoBlob.size / 1024).toFixed(0)}KB`);
+        }
+        // Stop video stream tracks
+        if (this._videoStream) {
+          this._videoStream.getTracks().forEach(t => t.stop());
+          this._videoStream = null;
+        }
+        this._videoRecorder = null;
+        this._lastVideoBlob = videoBlob;
 
         // Show processing state
         this.setState('buffering');
@@ -1338,6 +1472,12 @@ class WindyApp {
       this._saveAudioRecording(this._lastBatchBlob);
     }
 
+    // Save video recording if captured
+    if (this._lastVideoBlob) {
+      this._saveVideoRecording(this._lastVideoBlob);
+      this._lastVideoBlob = null;
+    }
+
     // Archive
     if (window.windyAPI?.archiveTranscript) {
       const route = this.archiveRouteSelect?.value || 'local';
@@ -1414,12 +1554,48 @@ class WindyApp {
     // Save to disk archive alongside transcripts
     try {
       const arrayBuffer = await blob.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      const uint8 = new Uint8Array(arrayBuffer);
+      // Chunked base64 conversion to avoid stack overflow on large recordings
+      let base64 = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < uint8.length; i += chunkSize) {
+        const chunk = uint8.subarray(i, Math.min(i + chunkSize, uint8.length));
+        base64 += String.fromCharCode.apply(null, chunk);
+      }
+      base64 = btoa(base64);
       if (window.windyAPI?.archiveAudio) {
-        await window.windyAPI.archiveAudio(base64);
+        await window.windyAPI.archiveAudio(base64, this.recordingStartedAt);
       }
     } catch (e) {
       console.warn('[Audio] Failed to save recording:', e.message);
+    }
+  }
+
+  /**
+   * Save video recording blob to archive.
+   */
+  async _saveVideoRecording(blob) {
+    if (!blob || blob.size === 0) return;
+
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuffer);
+      // Chunked base64 conversion
+      let base64 = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < uint8.length; i += chunkSize) {
+        const chunk = uint8.subarray(i, Math.min(i + chunkSize, uint8.length));
+        base64 += String.fromCharCode.apply(null, chunk);
+      }
+      base64 = btoa(base64);
+      if (window.windyAPI?.archiveVideo) {
+        const result = await window.windyAPI.archiveVideo(base64, this.recordingStartedAt);
+        if (result?.ok) {
+          console.log(`[Video] Saved: ${result.path}`);
+        }
+      }
+    } catch (e) {
+      console.warn('[Video] Failed to save recording:', e.message);
     }
   }
 

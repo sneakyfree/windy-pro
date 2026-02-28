@@ -12,15 +12,19 @@ contextBridge.exposeInMainWorld('windyAPI', {
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),
   chooseArchiveFolder: () => ipcRenderer.invoke('choose-archive-folder'),
   archiveTranscript: (payload) => ipcRenderer.send('archive-transcript', payload),
-  archiveAudio: (base64) => ipcRenderer.invoke('archive-audio', base64),
+  archiveAudio: (base64, timestamp) => ipcRenderer.invoke('archive-audio', base64, timestamp),
+  archiveVideo: (base64, timestamp) => ipcRenderer.invoke('archive-video', base64, timestamp),
+  readArchiveAudio: (filePath) => ipcRenderer.invoke('read-archive-audio', filePath),
   batchTranscribeLocal: (base64Audio) => ipcRenderer.invoke('batch-transcribe-local', base64Audio),
   autoPasteText: (text) => ipcRenderer.invoke('auto-paste-text', text),
   sendVoiceLevel: (level) => ipcRenderer.send('voice-level', level),
   onArchiveResult: (callback) => {
     ipcRenderer.on('archive-result', (event, payload) => callback(payload));
   },
-  testDropboxConnection: () => ipcRenderer.invoke('test-dropbox-connection'),
-  testGoogleConnection: () => ipcRenderer.invoke('test-google-connection'),
+  onUpdateToast: (callback) => {
+    ipcRenderer.on('update-toast', (event, payload) => callback(payload));
+  },
+  openArchiveFolder: () => ipcRenderer.send('open-archive-folder'),
   minimize: () => ipcRenderer.send('minimize-window'),
 
   // Recording control
@@ -82,4 +86,20 @@ contextBridge.exposeInMainWorld('windyAPI', {
   updateTornadoSize: (size) => ipcRenderer.send('update-tornado-size', size),
   getArchiveHistory: () => ipcRenderer.invoke('get-archive-history'),
   deleteArchiveEntry: (filePath) => ipcRenderer.invoke('delete-archive-entry', filePath),
+  getArchiveStats: () => ipcRenderer.invoke('get-archive-stats'),
+  exportSoulFile: () => ipcRenderer.invoke('export-soul-file'),
+  exportVoiceClone: () => ipcRenderer.invoke('export-voice-clone'),
+
+  // Stripe payment
+  createCheckoutSession: (priceId, email) => ipcRenderer.invoke('create-checkout-session', priceId, email),
+  checkPaymentStatus: (sessionId) => ipcRenderer.invoke('check-payment-status', sessionId),
+  getCurrentTier: () => ipcRenderer.invoke('get-current-tier'),
+  applyCoupon: (code) => ipcRenderer.invoke('apply-coupon', code),
+
+  // Wizard
+  getWizardState: () => ipcRenderer.invoke('get-wizard-state'),
+  setWizardState: (state) => ipcRenderer.invoke('set-wizard-state', state),
+  detectHardware: () => ipcRenderer.invoke('detect-hardware'),
+  registerWizardAccount: (data) => ipcRenderer.invoke('register-wizard-account', data),
+  setupAutostart: (enable) => ipcRenderer.invoke('setup-autostart', enable),
 });

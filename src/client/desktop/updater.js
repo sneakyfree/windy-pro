@@ -20,9 +20,16 @@ class WindyUpdater {
     }
 
     configure() {
-        // Don't auto-download — let user choose
-        autoUpdater.autoDownload = false;
+        // Auto-download and install on quit
+        autoUpdater.autoDownload = true;
         autoUpdater.autoInstallOnAppQuit = true;
+
+        // GitHub releases feed
+        autoUpdater.setFeedURL({
+            provider: 'github',
+            owner: 'sneakyfree',
+            repo: 'windy-pro'
+        });
 
         // Update events
         autoUpdater.on('checking-for-update', () => {
@@ -32,7 +39,8 @@ class WindyUpdater {
         autoUpdater.on('update-available', (info) => {
             console.log(`[Updater] Update available: ${info.version}`);
             this.updateAvailable = true;
-            this.promptUpdate(info);
+            // Non-intrusive toast — send to renderer
+            this._sendToast(`🔄 Windy Pro v${info.version} is downloading in the background…`);
         });
 
         autoUpdater.on('update-not-available', () => {
@@ -46,12 +54,22 @@ class WindyUpdater {
 
         autoUpdater.on('update-downloaded', (info) => {
             console.log(`[Updater] Update downloaded: ${info.version}`);
-            this.promptRestart(info);
+            this._sendToast(`✅ Windy Pro v${info.version} is ready. Restart to update.`, true);
         });
 
         autoUpdater.on('error', (error) => {
             console.error('[Updater] Error:', error.message);
         });
+    }
+
+    /**
+     * Send non-intrusive toast to renderer
+     */
+    _sendToast(message, canRestart = false) {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('update-toast', { message, canRestart });
+        }
     }
 
     /**

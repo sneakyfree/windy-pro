@@ -23,14 +23,14 @@ export default function Landing() {
             {/* Hero Section */}
             <header className="hero">
                 <div className="container hero-inner">
-                    <div className="hero-badge">🌪️ v0.4.0 — Tornado Widget, Audio Archive, Batch Mode</div>
+                    <div className="hero-badge">🌪️ v0.6.0 — Cloud Storage, Stripe Payments, Setup Wizard</div>
                     <h1 className="hero-title">
                         Voice to Text,<br />
                         <span className="hero-gradient">Unlimited.</span>
                     </h1>
                     <p className="hero-subtitle">
                         Windy Pro transforms your speech into text at the speed of thought.
-                        No time limits, no subscriptions, no data leaving your machine.
+                        No time limits, no data leaving your machine. Guided setup gets you recording in 60 seconds.
                     </p>
                     <div className="hero-actions">
                         <a href="#download" className="btn btn-primary btn-large">
@@ -73,6 +73,43 @@ export default function Landing() {
                 </div>
             </section>
 
+            {/* What's New in v0.6.0 */}
+            <section className="whats-new">
+                <div className="container">
+                    <h2 className="section-title">What's New in v0.6.0</h2>
+                    <div className="whats-new-grid">
+                        <div className="whats-new-item">
+                            <span className="whats-new-icon">☁️</span>
+                            <div>
+                                <strong>Windy Pro Cloud Storage</strong>
+                                <p>Archive recordings to our distributed cloud — no third-party accounts needed.</p>
+                            </div>
+                        </div>
+                        <div className="whats-new-item">
+                            <span className="whats-new-icon">💳</span>
+                            <div>
+                                <strong>In-App Payments</strong>
+                                <p>Upgrade to Pro or Translate directly from Settings via Stripe.</p>
+                            </div>
+                        </div>
+                        <div className="whats-new-item">
+                            <span className="whats-new-icon">🧙</span>
+                            <div>
+                                <strong>Setup Wizard</strong>
+                                <p>6-step guided onboarding: mic test, engine selection, account creation.</p>
+                            </div>
+                        </div>
+                        <div className="whats-new-item">
+                            <span className="whats-new-icon">🎬</span>
+                            <div>
+                                <strong>Video Recording & Media Badges</strong>
+                                <p>Record webcam alongside voice. History shows 📝🎤🎬 badges per entry.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             {/* Features */}
             <section className="features" id="features">
                 <div className="container">
@@ -100,9 +137,9 @@ export default function Landing() {
                             <p>Paste text directly into any app — Word, Slack, your terminal. No copy-paste needed.</p>
                         </div>
                         <div className="feature-card">
-                            <div className="feature-icon">✨</div>
-                            <h3>Batch Mode</h3>
-                            <p>Record everything, process once. Like Wispr Flow — best quality transcription with zero interruptions.</p>
+                            <div className="feature-icon">☁️</div>
+                            <h3>Windy Pro Cloud</h3>
+                            <p>Archive recordings to Windy Pro's distributed cloud. Sync across devices, access from anywhere.</p>
                         </div>
                         <div className="feature-card">
                             <div className="feature-icon">🌪️</div>
@@ -111,13 +148,13 @@ export default function Landing() {
                         </div>
                         <div className="feature-card">
                             <div className="feature-icon">📜</div>
-                            <h3>History & Search</h3>
-                            <p>Every transcript searchable and organized by date. Export to .txt, .md, or .srt. Your entire voice archive at your fingertips.</p>
+                            <h3>History & Media Badges</h3>
+                            <p>Every transcript searchable and organized by date. See 📝🎤🎬 badges showing what media each recording includes.</p>
                         </div>
                         <div className="feature-card">
-                            <div className="feature-icon">🎵</div>
-                            <h3>Audio Archive</h3>
-                            <p>Save recordings alongside transcripts. Build a voice library for avatar training, voice cloning, or personal AI development.</p>
+                            <div className="feature-icon">🧙</div>
+                            <h3>Easy Setup</h3>
+                            <p>Guided 6-step wizard detects your hardware, tests your mic, picks the right engine. Recording in 60 seconds.</p>
                         </div>
                     </div>
                 </div>
@@ -131,7 +168,7 @@ export default function Landing() {
                         <div className="step">
                             <div className="step-number">1</div>
                             <h3>Install</h3>
-                            <p>TurboTax-style wizard detects your hardware, picks the right model, downloads everything.</p>
+                            <p>Guided wizard detects your hardware, picks the right model, downloads everything.</p>
                         </div>
                         <div className="step-arrow">→</div>
                         <div className="step">
@@ -153,36 +190,61 @@ export default function Landing() {
             <section className="pricing" id="pricing">
                 <div className="container">
                     <h2 className="section-title">Simple Pricing</h2>
-                    <p className="section-subtitle">Free forever for local use. Cloud for when you need it.</p>
-                    <div className="pricing-grid">
+                    <p className="section-subtitle">Start free. Upgrade when you're ready.</p>
+                    <div className="pricing-grid pricing-grid-4">
                         <div className="pricing-card">
-                            <div className="pricing-badge">LOCAL</div>
+                            <div className="pricing-badge">FREE</div>
                             <div className="pricing-price">$0</div>
                             <div className="pricing-period">forever</div>
                             <ul className="pricing-features">
-                                <li>✓ Unlimited recording time</li>
-                                <li>✓ All Whisper models</li>
-                                <li>✓ Auto-paste at cursor</li>
+                                <li>✓ 1 language</li>
+                                <li>✓ 3 transcription engines</li>
+                                <li>✓ 5-minute recordings</li>
+                                <li>✓ Local transcription</li>
                                 <li>✓ Tornado widget</li>
-                                <li>✓ History & search</li>
-                                <li>✓ Audio archive</li>
                                 <li>✓ 100% offline & private</li>
                             </ul>
                             <a href="#download" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>Download</a>
                         </div>
-                        <div className="pricing-card pricing-card-pro">
-                            <div className="pricing-badge pro">CLOUD PRO</div>
-                            <div className="pricing-price">$9<span>/mo</span></div>
-                            <div className="pricing-period">cancel anytime</div>
+                        <div className="pricing-card">
+                            <div className="pricing-badge pro">PRO</div>
+                            <div className="pricing-price">$49</div>
+                            <div className="pricing-period">one-time</div>
                             <ul className="pricing-features">
-                                <li>✓ Everything in Local</li>
-                                <li>✓ Cloud transcription (large-v3)</li>
-                                <li>✓ Mobile web access</li>
-                                <li>✓ Sync across devices</li>
-                                <li>✓ Voice clone-ready exports</li>
-                                <li>✓ Priority support</li>
+                                <li>✓ All 15 engines</li>
+                                <li>✓ 99 languages</li>
+                                <li>✓ 30-min recordings</li>
+                                <li>✓ Batch mode</li>
+                                <li>✓ LLM polish</li>
+                                <li>✓ Audio archive</li>
                             </ul>
-                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Free Trial</Link>
+                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Upgrade →</Link>
+                        </div>
+                        <div className="pricing-card pricing-card-pro">
+                            <div className="pricing-badge pro">TRANSLATE</div>
+                            <div className="pricing-price">$79<span> or $7.99/mo</span></div>
+                            <div className="pricing-period">one-time or monthly</div>
+                            <ul className="pricing-features">
+                                <li>✓ Everything in Pro</li>
+                                <li>✓ Real-time translation</li>
+                                <li>✓ Conversation mode</li>
+                                <li>✓ 99 language pairs</li>
+                                <li>✓ Cloud sync</li>
+                            </ul>
+                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Upgrade →</Link>
+                        </div>
+                        <div className="pricing-card">
+                            <div className="pricing-badge pro">TRANSLATE PRO</div>
+                            <div className="pricing-price">$149</div>
+                            <div className="pricing-period">one-time</div>
+                            <ul className="pricing-features">
+                                <li>✓ Everything in Translate</li>
+                                <li>✓ Text-to-speech</li>
+                                <li>✓ Medical/legal glossaries</li>
+                                <li>✓ Priority support</li>
+                                <li>✓ Voice clone-ready exports</li>
+                            </ul>
+                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Upgrade →</Link>
                         </div>
                     </div>
                 </div>
@@ -192,24 +254,24 @@ export default function Landing() {
             <section className="download" id="download">
                 <div className="container download-inner">
                     <h2 className="section-title">Download Windy Pro</h2>
-                    <p className="section-subtitle">Available for all major platforms.</p>
+                    <p className="section-subtitle">v0.6.0 · Available for all major platforms.</p>
                     <div className="download-grid">
-                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.4.0/Windy-Pro-0.4.0.dmg" className="download-card">
+                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/Windy-Pro-0.6.0.dmg" className="download-card">
                             <div className="download-icon">🍎</div>
                             <div className="download-platform">macOS</div>
                             <div className="download-detail">Intel Mac (.dmg)</div>
                         </a>
-                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.4.0/Windy-Pro-Setup-0.4.0.exe" className="download-card">
+                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/Windy-Pro-Setup-0.6.0.exe" className="download-card">
                             <div className="download-icon">🪟</div>
                             <div className="download-platform">Windows</div>
                             <div className="download-detail">Windows 10+</div>
                         </a>
-                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.4.0/Windy-Pro-0.4.0.AppImage" className="download-card">
+                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/Windy-Pro-0.6.0.AppImage" className="download-card">
                             <div className="download-icon">🐧</div>
                             <div className="download-platform">Linux AppImage</div>
                             <div className="download-detail">Universal — just run it</div>
                         </a>
-                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.4.0/windy-pro_0.4.0_amd64.deb" className="download-card">
+                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/windy-pro_0.6.0_amd64.deb" className="download-card">
                             <div className="download-icon">🐧</div>
                             <div className="download-platform">Linux .deb</div>
                             <div className="download-detail">Ubuntu / Debian</div>
