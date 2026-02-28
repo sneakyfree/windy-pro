@@ -83,6 +83,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   // App version (reads from package.json via main process)
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  installDebUpdate: () => ipcRenderer.invoke('install-deb-update'),
   updateTornadoSize: (size) => ipcRenderer.send('update-tornado-size', size),
   getArchiveHistory: () => ipcRenderer.invoke('get-archive-history'),
   deleteArchiveEntry: (filePath) => ipcRenderer.invoke('delete-archive-entry', filePath),

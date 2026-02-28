@@ -20,6 +20,29 @@ const { AccountManager } = require('./core/account-manager');
 const APP_DIR = path.join(os.homedir(), '.windy-pro');
 const MODELS_DIR = path.join(APP_DIR, 'models');
 
+/**
+ * Auto-detect Linux distro and return the appropriate platform adapter
+ */
+function getLinuxAdapter() {
+  if (process.platform !== 'linux') return null;
+  let osRelease = '';
+  try { osRelease = fs.readFileSync('/etc/os-release', 'utf-8'); } catch (_) { }
+
+  if (/debian|ubuntu|mint|pop|elementary|zorin|kali|raspbian/i.test(osRelease)) {
+    const { LinuxDebianAdapter } = require('./adapters/linux-debian');
+    return new LinuxDebianAdapter();
+  } else if (/fedora|rhel|centos|rocky|alma|amazon|oracle/i.test(osRelease)) {
+    const { LinuxFedoraAdapter } = require('./adapters/linux-fedora');
+    return new LinuxFedoraAdapter();
+  } else if (/arch|manjaro|endeavour|garuda|artix/i.test(osRelease)) {
+    const { LinuxArchAdapter } = require('./adapters/linux-arch');
+    return new LinuxArchAdapter();
+  } else {
+    const { LinuxUniversalAdapter } = require('./adapters/linux-universal');
+    return new LinuxUniversalAdapter();
+  }
+}
+
 class InstallWizard {
   constructor(opts = {}) {
     this.window = null;
@@ -27,7 +50,7 @@ class InstallWizard {
     this.hardware = null;
     this.recommendation = null;
     this.selectedModels = [];
-    this.platformAdapter = opts.platformAdapter || null;
+    this.platformAdapter = opts.platformAdapter || (process.platform === 'linux' ? getLinuxAdapter() : null);
     this.downloadManager = new DownloadManager(MODELS_DIR);
     this.accountManager = new AccountManager(APP_DIR);
   }
@@ -157,37 +180,37 @@ class InstallWizard {
         if (this.platformAdapter) {
           console.log('[InstallWizard] Platform adapter found, installing deps...');
           try {
-          // Install Python environment
-          this.sendProgress({
-            percent: 5,
-            message: INSTALL_STEP_MESSAGES['install-python'].title,
-            detail: INSTALL_STEP_MESSAGES['install-python'].detail
-          });
-          await this.platformAdapter.installPython((pct) => {
-            this.sendProgress({ percent: 5 + pct * 0.1 });
-          });
-
-          // Install ffmpeg
-          this.sendProgress({
-            percent: 15,
-            message: INSTALL_STEP_MESSAGES['install-ffmpeg'].title,
-            detail: INSTALL_STEP_MESSAGES['install-ffmpeg'].detail
-          });
-          await this.platformAdapter.installFfmpeg((pct) => {
-            this.sendProgress({ percent: 15 + pct * 0.05 });
-          });
-
-          // Install CUDA if NVIDIA GPU
-          if (this.hardware?.gpu?.nvidia) {
+            // Install Python environment
             this.sendProgress({
-              percent: 20,
-              message: INSTALL_STEP_MESSAGES['install-cuda'].title,
-              detail: INSTALL_STEP_MESSAGES['install-cuda'].detail
+              percent: 5,
+              message: INSTALL_STEP_MESSAGES['install-python'].title,
+              detail: INSTALL_STEP_MESSAGES['install-python'].detail
             });
-            await this.platformAdapter.installCuda((pct) => {
-              this.sendProgress({ percent: 20 + pct * 0.05 });
+            await this.platformAdapter.installPython((pct) => {
+              this.sendProgress({ percent: 5 + pct * 0.1 });
             });
-          }
+
+            // Install ffmpeg
+            this.sendProgress({
+              percent: 15,
+              message: INSTALL_STEP_MESSAGES['install-ffmpeg'].title,
+              detail: INSTALL_STEP_MESSAGES['install-ffmpeg'].detail
+            });
+            await this.platformAdapter.installFfmpeg((pct) => {
+              this.sendProgress({ percent: 15 + pct * 0.05 });
+            });
+
+            // Install CUDA if NVIDIA GPU
+            if (this.hardware?.gpu?.nvidia) {
+              this.sendProgress({
+                percent: 20,
+                message: INSTALL_STEP_MESSAGES['install-cuda'].title,
+                detail: INSTALL_STEP_MESSAGES['install-cuda'].detail
+              });
+              await this.platformAdapter.installCuda((pct) => {
+                this.sendProgress({ percent: 20 + pct * 0.05 });
+              });
+            }
           } catch (adapterErr) {
             console.log('[InstallWizard] Platform adapter error (skipping deps):', adapterErr.message);
             this.sendProgress({ percent: 24, message: '🌪️ Dependencies already installed — moving to engines!' });
@@ -351,4 +374,4 @@ class InstallWizard {
   }
 }
 
-module.exports = { InstallWizard };
+module.exports = { InstallWizard, getLinuxAdapter };

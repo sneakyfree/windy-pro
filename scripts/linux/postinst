@@ -1,0 +1,63 @@
+#!/bin/sh
+# Windy Pro — Post-Installation Script (postinst)
+# Runs after the new version is unpacked.
+# Sets up desktop integration, permissions, and system caches.
+set -e
+
+LOG="/tmp/windy-pro-install.log"
+INSTALL_DIR="/opt/Windy Pro"
+DESKTOP_FILE="/usr/share/applications/windy-pro.desktop"
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') [postinst] Starting post-installation..." >> "$LOG"
+
+# Fix file permissions
+if [ -d "$INSTALL_DIR" ]; then
+  chmod -R a+rX "$INSTALL_DIR" 2>/dev/null || true
+  chmod a+x "$INSTALL_DIR/windy-pro" 2>/dev/null || true
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [postinst] Fixed permissions" >> "$LOG"
+fi
+
+# Create/update .desktop launcher
+cat > "$DESKTOP_FILE" << 'DESKTOP'
+[Desktop Entry]
+Name=Windy Pro
+Comment=Voice-to-text transcription — 100% local, 100% private
+GenericName=Voice Transcription
+Exec="/opt/Windy Pro/windy-pro" %U
+Icon=windy-pro
+Type=Application
+StartupNotify=true
+StartupWMClass=windy-pro
+Categories=Utility;Audio;Accessibility;
+MimeType=
+Keywords=voice;transcription;speech;text;whisper;dictation;
+DESKTOP
+chmod 644 "$DESKTOP_FILE" 2>/dev/null || true
+echo "$(date '+%Y-%m-%d %H:%M:%S') [postinst] Created desktop launcher" >> "$LOG"
+
+# Update desktop database
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database /usr/share/applications/ 2>/dev/null || true
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [postinst] Updated desktop database" >> "$LOG"
+fi
+
+# Update icon cache
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache /usr/share/icons/hicolor 2>/dev/null || true
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [postinst] Updated icon cache" >> "$LOG"
+fi
+
+# Update MIME database
+if command -v update-mime-database >/dev/null 2>&1; then
+  update-mime-database /usr/share/mime 2>/dev/null || true
+fi
+
+# Clean up old temp files from previous versions
+rm -f /tmp/windy-pro-update.deb 2>/dev/null || true
+rm -f /tmp/windy-pro-*.tmp 2>/dev/null || true
+
+# Create symlink for CLI access
+ln -sf "$INSTALL_DIR/windy-pro" /usr/local/bin/windy-pro 2>/dev/null || true
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') [postinst] Installation complete — Windy Pro v$(cat "$INSTALL_DIR/resources/app/package.json" 2>/dev/null | grep '"version"' | head -1 | sed 's/.*: "//;s/".*//' || echo 'unknown')" >> "$LOG"
+exit 0

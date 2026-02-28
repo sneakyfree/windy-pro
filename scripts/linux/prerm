@@ -1,0 +1,32 @@
+#!/bin/sh
+# Windy Pro — Pre-Removal Script (prerm)
+# Runs before the package is removed.
+# Stops running processes and cleans up system integrations.
+set -e
+
+LOG="/tmp/windy-pro-install.log"
+echo "$(date '+%Y-%m-%d %H:%M:%S') [prerm] Starting pre-removal..." >> "$LOG"
+
+# Kill running Windy Pro processes
+pkill -f "windy-pro" 2>/dev/null || true
+pkill -f "Windy Pro" 2>/dev/null || true
+pkill -f "/opt/Windy Pro/windy-pro" 2>/dev/null || true
+sleep 1
+
+# Remove autostart entry for all users
+for user_home in /home/*; do
+  autostart_file="$user_home/.config/autostart/windy-pro.desktop"
+  if [ -f "$autostart_file" ]; then
+    rm -f "$autostart_file" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [prerm] Removed autostart: $autostart_file" >> "$LOG"
+  fi
+done
+
+# Remove root autostart if exists
+rm -f /root/.config/autostart/windy-pro.desktop 2>/dev/null || true
+
+# Remove CLI symlink
+rm -f /usr/local/bin/windy-pro 2>/dev/null || true
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') [prerm] Pre-removal complete" >> "$LOG"
+exit 0

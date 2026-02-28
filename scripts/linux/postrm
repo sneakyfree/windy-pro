@@ -1,0 +1,58 @@
+#!/bin/sh
+# Windy Pro — Post-Removal Script (postrm)
+# Runs after the package is removed.
+# Cleans up desktop caches. Purges user data only with --purge flag.
+set -e
+
+LOG="/tmp/windy-pro-install.log"
+echo "$(date '+%Y-%m-%d %H:%M:%S') [postrm] Starting post-removal (action: $1)..." >> "$LOG"
+
+# Remove desktop launcher
+rm -f /usr/share/applications/windy-pro.desktop 2>/dev/null || true
+
+# Update desktop database
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database /usr/share/applications/ 2>/dev/null || true
+fi
+
+# Update icon cache
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache /usr/share/icons/hicolor 2>/dev/null || true
+fi
+
+# Clean up temp files
+rm -f /tmp/windy-pro-*.log 2>/dev/null || true
+rm -f /tmp/windy-pro-*.lock 2>/dev/null || true
+rm -f /tmp/windy-pro-update.deb 2>/dev/null || true
+
+# PURGE: Remove user data directories (only with dpkg --purge or apt purge)
+case "$1" in
+  purge)
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [postrm] Purging user data..." >> "$LOG"
+    for user_home in /home/*; do
+      # Remove app config
+      rm -rf "$user_home/.config/Windy Pro" 2>/dev/null || true
+      rm -rf "$user_home/.config/windy-pro" 2>/dev/null || true
+      # Remove local data (electron-store, crash reports)
+      rm -rf "$user_home/.local/share/Windy Pro" 2>/dev/null || true
+      rm -rf "$user_home/.local/share/windy-pro" 2>/dev/null || true
+      # Remove cache
+      rm -rf "$user_home/.cache/Windy Pro" 2>/dev/null || true
+      rm -rf "$user_home/.cache/windy-pro" 2>/dev/null || true
+      # Remove windy-pro data dir
+      rm -rf "$user_home/.windy-pro" 2>/dev/null || true
+      echo "$(date '+%Y-%m-%d %H:%M:%S') [postrm] Purged data for: $user_home" >> "$LOG"
+    done
+
+    # NOTE: We do NOT delete ~/Documents/WindyProArchive on purge.
+    # That's user-created content (recordings/transcripts) and should
+    # never be removed automatically. The user must delete it manually.
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [postrm] NOTE: ~/Documents/WindyProArchive was preserved (user data)" >> "$LOG"
+    ;;
+  remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+    # Standard removal — don't touch user data
+    ;;
+esac
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') [postrm] Post-removal complete" >> "$LOG"
+exit 0

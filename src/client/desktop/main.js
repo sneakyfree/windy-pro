@@ -1668,6 +1668,73 @@ app.whenReady().then(async () => {
     return { ok: false, error: 'Updater not available' };
   });
 
+  // Linux .deb in-app update: download + pkexec dpkg -i + restart
+  ipcMain.handle('install-deb-update', async () => {
+    const version = app.getVersion();
+    const platform = process.platform;
+
+    // Non-Linux: use electron-updater's built-in install
+    if (platform !== 'linux') {
+      const { autoUpdater } = require('electron-updater');
+      autoUpdater.quitAndInstall();
+      return { ok: true };
+    }
+
+    try {
+      const https = require('https');
+      const debUrl = `https://github.com/sneakyfree/windy-pro/releases/latest/download/windy-pro_${version}_amd64.deb`;
+      const debPath = '/tmp/windy-pro-update.deb';
+
+      console.log(`[Updater] Downloading .deb from ${debUrl}...`);
+      safeSend('update-toast', { message: '⬇️ Downloading update…', canRestart: false });
+
+      // Download the .deb — follow redirects (GitHub returns 302)
+      await new Promise((resolve, reject) => {
+        const downloadWithRedirect = (url, depth = 0) => {
+          if (depth > 5) return reject(new Error('Too many redirects'));
+          const proto = url.startsWith('https') ? https : require('http');
+          proto.get(url, (res) => {
+            if (res.statusCode === 302 || res.statusCode === 301) {
+              return downloadWithRedirect(res.headers.location, depth + 1);
+            }
+            if (res.statusCode !== 200) {
+              return reject(new Error(`Download failed: HTTP ${res.statusCode}`));
+            }
+            const file = fs.createWriteStream(debPath);
+            res.pipe(file);
+            file.on('finish', () => { file.close(); resolve(); });
+            file.on('error', reject);
+          }).on('error', reject);
+        };
+        downloadWithRedirect(debUrl);
+      });
+
+      console.log(`[Updater] Downloaded to ${debPath}, installing with pkexec...`);
+      safeSend('update-toast', { message: '🔐 Installing update (admin password required)…', canRestart: false });
+
+      // Install with pkexec (graphical sudo prompt)
+      const { execSync } = require('child_process');
+      execSync(`pkexec dpkg -i "${debPath}"`, { timeout: 60000 });
+
+      // Clean up and restart
+      fs.unlinkSync(debPath);
+      console.log('[Updater] .deb installed, restarting...');
+      app.relaunch();
+      app.exit(0);
+      return { ok: true };
+    } catch (err) {
+      console.error('[Updater] .deb install failed:', err.message);
+      // Fallback: try electron-updater's built-in
+      try {
+        const { autoUpdater } = require('electron-updater');
+        autoUpdater.quitAndInstall();
+        return { ok: true, fallback: true };
+      } catch (e) {
+        return { ok: false, error: err.message };
+      }
+    }
+  });
+
   app.on('activate', () => {
     // macOS: re-create window if dock icon clicked
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -277,6 +277,17 @@ export default function Landing() {
                             <div className="download-detail">Ubuntu / Debian</div>
                         </a>
                     </div>
+                    <div className="download-oneliner">
+                        <p className="download-helper">
+                            <strong>🐧 Linux one-liner install:</strong>
+                        </p>
+                        <code className="download-command">
+                            curl -fsSL https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/install-windy-pro.sh | bash
+                        </code>
+                        <p className="download-helper-sub">
+                            Or download the .deb, then: <code>sudo dpkg -i windy-pro_0.6.0_amd64.deb</code>
+                        </p>
+                    </div>
                 </div>
             </section>
 

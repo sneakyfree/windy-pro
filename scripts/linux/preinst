@@ -1,0 +1,40 @@
+#!/bin/sh
+# Windy Pro — Pre-Installation Script (preinst)
+# Runs before the new version is unpacked.
+# Handles graceful shutdown of running instances during upgrades.
+set -e
+
+LOG="/tmp/windy-pro-install.log"
+echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Starting pre-installation..." >> "$LOG"
+
+# Detect upgrade vs fresh install
+case "$1" in
+  upgrade|install)
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Mode: $1" >> "$LOG"
+    ;;
+esac
+
+# Kill any running Windy Pro processes for clean upgrade
+echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Stopping running instances..." >> "$LOG"
+pkill -f "windy-pro" 2>/dev/null || true
+pkill -f "Windy Pro" 2>/dev/null || true
+pkill -f "windy_pro" 2>/dev/null || true
+# Don't kill ALL electron — only ours
+pkill -f "/opt/Windy Pro/windy-pro" 2>/dev/null || true
+
+# Wait for processes to exit cleanly
+sleep 2
+
+# Remove old autostart entries that may conflict
+OLD_AUTOSTART="$HOME/.config/autostart/windy-pro.desktop"
+if [ -f "$OLD_AUTOSTART" ]; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Removing old autostart entry" >> "$LOG"
+  rm -f "$OLD_AUTOSTART" 2>/dev/null || true
+fi
+
+# Clean up stale lock files
+rm -f /tmp/windy-pro-*.lock 2>/dev/null || true
+rm -f /tmp/.windy-pro-* 2>/dev/null || true
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Pre-installation complete" >> "$LOG"
+exit 0

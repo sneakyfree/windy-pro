@@ -49,6 +49,10 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "scripts/linux/install-windy-pro.sh",
+        "to": "install-windy-pro.sh"
       }
     ],
     "productName": "Windy Pro",
@@ -119,7 +123,15 @@
       "include": "build/installer.nsh"
     },
     "deb": {
-      "depends": []
+      "depends": [],
+      "afterInstall": "scripts/linux/postinst",
+      "afterRemove": "scripts/linux/postrm",
+      "fpm": [
+        "--before-install",
+        "scripts/linux/preinst",
+        "--before-remove",
+        "scripts/linux/prerm"
+      ]
     }
   }
 }
