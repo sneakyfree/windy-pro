@@ -12,7 +12,10 @@ export default defineConfig({
         proxy: {
             '/api/v1/auth': 'http://localhost:8098',
             '/api/v1/recordings': 'http://localhost:8098',
+            '/api/v1/analytics': 'http://localhost:8098',
+            '/api/v1/admin': 'http://localhost:8098',
             '/translate': 'http://localhost:8099',
+            '/health': 'http://localhost:8099',
             '/api': 'http://localhost:8000',
             '/ws': {
                 target: 'ws://localhost:8000',
