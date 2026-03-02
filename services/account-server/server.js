@@ -167,6 +167,24 @@ const authLimiter = rateLimit({
     legacyHeaders: false,
 });
 
+// General rate limiter for read endpoints (100 req/min)
+const generalLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 100,
+    message: { error: 'Too many requests. Please slow down.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Stricter rate limiter for write operations (30 req/min)
+const writeLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: { error: 'Too many write requests. Please slow down.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 // Auth middleware
 function authenticate(req, res, next) {
     const auth = req.headers.authorization;
@@ -470,7 +488,7 @@ app.delete('/api/v1/auth/devices/:id', authenticate, (req, res) => {
 const RECORDINGS_PER_PAGE = 50;
 
 // GET /api/v1/recordings — list all (paginated, searchable)
-app.get('/api/v1/recordings', authenticate, (req, res) => {
+app.get('/api/v1/recordings', generalLimiter, authenticate, (req, res) => {
     try {
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const search = req.query.search || '';
@@ -539,7 +557,7 @@ app.get('/api/v1/recordings/:id', authenticate, (req, res) => {
 });
 
 // POST /api/v1/recordings — create (from desktop sync)
-app.post('/api/v1/recordings', authenticate, (req, res) => {
+app.post('/api/v1/recordings', writeLimiter, authenticate, (req, res) => {
     try {
         const { transcript, wordCount, durationSeconds, engine, mode, recordedAt } = req.body;
         if (!transcript && !recordedAt) {
@@ -581,7 +599,7 @@ app.patch('/api/v1/recordings/:id', authenticate, (req, res) => {
 });
 
 // DELETE /api/v1/recordings/:id
-app.delete('/api/v1/recordings/:id', authenticate, (req, res) => {
+app.delete('/api/v1/recordings/:id', writeLimiter, authenticate, (req, res) => {
     try {
         const rec = db.prepare('SELECT audio_path, video_path FROM recordings WHERE id = ? AND user_id = ?')
             .get(req.params.id, req.user.sub);
@@ -601,7 +619,7 @@ app.delete('/api/v1/recordings/:id', authenticate, (req, res) => {
 });
 
 // DELETE /api/v1/recordings/bulk — delete multiple
-app.delete('/api/v1/recordings/bulk', authenticate, (req, res) => {
+app.delete('/api/v1/recordings/bulk', writeLimiter, authenticate, (req, res) => {
     try {
         const { ids } = req.body;
         if (!Array.isArray(ids) || ids.length === 0) {
@@ -720,7 +738,7 @@ db.exec(`
 `);
 
 // POST /api/v1/analytics — batch event ingestion (no auth required)
-app.post('/api/v1/analytics', (req, res) => {
+app.post('/api/v1/analytics', writeLimiter, (req, res) => {
     try {
         const { events = [] } = req.body;
         if (!Array.isArray(events) || events.length === 0) {
@@ -845,6 +863,19 @@ app.get('/api/v1/updates/check', (req, res) => {
         version: latestVersion,
         releaseNotes: 'Translation strand, i18n system, sync hardening, analytics, and bug fixes.',
         downloadUrl: available ? 'https://windypro.thewindstorm.uk/download' : null
+    });
+});
+
+// ═══════════════════════════════════════════════
+// Global Error Handler
+// ═══════════════════════════════════════════════
+app.use((err, req, res, next) => {
+    console.error('[GlobalError]', err.stack || err.message);
+    if (res.headersSent) return next(err);
+    res.status(err.status || 500).json({
+        error: process.env.NODE_ENV === 'production'
+            ? 'Internal server error'
+            : err.message || 'Internal server error'
     });
 });
 
