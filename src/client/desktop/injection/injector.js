@@ -67,13 +67,27 @@ class CursorInjector {
                 await this.sleep(300);
                 return this.inject(text, retryCount + 1);
             }
-            throw err;
+            // Clipboard fallback — text is already on clipboard
+            console.error('[Injector] All paste attempts failed, text remains on clipboard');
+            return {
+                success: false,
+                method: 'clipboard_fallback',
+                message: 'Paste failed — text copied to clipboard. Use Ctrl+V to paste manually.',
+                error: err.message
+            };
         }
 
         // Step 4: Restore previous clipboard after paste completes (2s wait)
         setTimeout(() => {
             clipboard.writeText(previousClipboard);
         }, 2000);
+
+        return {
+            success: true,
+            method: 'auto_inject',
+            message: `✓ Injected ${text.split(/\s+/).length} words`,
+            charCount: text.length
+        };
     }
 
     /**

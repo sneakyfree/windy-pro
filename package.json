@@ -1,6 +1,6 @@
 {
   "name": "windy-pro",
-  "version": "0.6.0",
+  "version": "1.5.1",
   "description": "Voice-to-text desktop app powered by faster-whisper",
   "main": "src/client/desktop/main.js",
   "author": {
@@ -16,7 +16,9 @@
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux",
     "server": "python -m src.engine.server",
-    "test": "python -m pytest tests/ -v"
+    "test": "python -m pytest tests/ -v",
+    "dist:all": "npm run build:linux && npm run build:win && npm run build:mac",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "electron-store": "^8.1.0",

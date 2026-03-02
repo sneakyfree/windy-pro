@@ -127,6 +127,30 @@
       display: flex;
     }
 
+    @keyframes slideInRight {
+      from {
+        opacity: 0;
+        transform: translateX(30px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes slideInLeft {
+      from {
+        opacity: 0;
+        transform: translateX(-30px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
     /* ─── BUTTONS ─── */
     .btn-row {
       display: flex;
@@ -2057,7 +2081,15 @@
 
     // ─── NAVIGATION ───
     function goToScreen(n) {
-      document.querySelectorAll('.screen').forEach((s, i) => s.classList.toggle('active', i === n));
+      const direction = n > currentScreen ? 1 : -1;
+      document.querySelectorAll('.screen').forEach((s, i) => {
+        if (i === n) {
+          s.classList.add('active');
+          s.style.animation = `slideIn${direction > 0 ? 'Right' : 'Left'} 0.3s ease-out`;
+        } else {
+          s.classList.remove('active');
+        }
+      });
       document.querySelectorAll('.progress-seg').forEach((s, i) => {
         s.classList.toggle('done', i < n);
         s.classList.toggle('active', i === n);
@@ -2076,6 +2108,18 @@
       if (n === 7) startBrandRotations();
       if (n !== 7) stopBrandRotations();
     }
+
+    // Keyboard navigation: ← Back, → Forward
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'ArrowRight' || e.key === 'Enter') {
+        const nextBtn = document.querySelector('.screen.active .btn-primary:not(:disabled)');
+        if (nextBtn) nextBtn.click();
+      } else if (e.key === 'ArrowLeft') {
+        const backBtn = document.querySelector('.screen.active .btn-ghost');
+        if (backBtn) backBtn.click();
+      }
+    });
 
     // ─── SCREEN 1: HARDWARE SCAN ───
     async function runHardwareScan() {
