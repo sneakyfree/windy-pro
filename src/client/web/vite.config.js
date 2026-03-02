@@ -14,8 +14,20 @@ export default defineConfig({
             '/api/v1/recordings': 'http://localhost:8098',
             '/api/v1/analytics': 'http://localhost:8098',
             '/api/v1/admin': 'http://localhost:8098',
-            '/translate': 'http://localhost:8099',
-            '/health': 'http://localhost:8099',
+            '/translate': {
+                target: 'http://localhost:8099',
+                bypass(req) {
+                    // Only proxy POST (API calls), let GET fall through to React Router
+                    if (req.method !== 'POST') return req.url;
+                }
+            },
+            '/health': {
+                target: 'http://localhost:8099',
+                bypass(req) {
+                    // Only proxy if Accept is JSON (API call), not browser navigation
+                    if (req.headers.accept && req.headers.accept.includes('text/html')) return req.url;
+                }
+            },
             '/api': 'http://localhost:8000',
             '/ws': {
                 target: 'ws://localhost:8000',
