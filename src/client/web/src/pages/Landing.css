@@ -1,4 +1,7 @@
 /* Landing Page Styles */
+html {
+    scroll-behavior: smooth;
+}
 
 .nav {
     position: fixed;
@@ -63,6 +66,16 @@
 .nav-cta {
     padding: 10px 20px !important;
     font-size: 13px !important;
+}
+
+.nav-signin {
+    color: var(--text-secondary) !important;
+    font-weight: 600 !important;
+    transition: color 0.2s;
+}
+
+.nav-signin:hover {
+    color: var(--green) !important;
 }
 
 /* Hero */
@@ -578,14 +591,80 @@
     color: var(--text-muted);
 }
 
+/* Hamburger button (hidden on desktop) */
+.nav-hamburger {
+    display: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    z-index: 1001;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.nav-hamburger span {
+    display: block;
+    width: 24px;
+    height: 2px;
+    background: var(--text-primary);
+    border-radius: 2px;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.nav-hamburger.open span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+
+.nav-hamburger.open span:nth-child(2) {
+    opacity: 0;
+}
+
+.nav-hamburger.open span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
-    .nav-links {
-        gap: 16px;
+    .nav-hamburger {
+        display: flex;
     }
 
-    .nav-links a:not(.nav-cta) {
+    .nav-links {
         display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        background: rgba(15, 23, 42, 0.97);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        padding: 24px 32px;
+        gap: 8px;
+        border-bottom: 1px solid rgba(34, 197, 94, 0.15);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+    }
+
+    .nav-links.open {
+        display: flex;
+    }
+
+    .nav-links a {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        font-size: 16px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-links a:last-child {
+        border-bottom: none;
+    }
+
+    .nav-inner {
+        position: relative;
     }
 
     .hero {

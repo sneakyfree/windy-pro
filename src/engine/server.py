@@ -143,7 +143,9 @@ class WindyServer:
             "end": segment.end_time,
             "confidence": segment.confidence,
             "partial": segment.is_partial,
-            "words": segment.words
+            "words": segment.words,
+            "detected_language": getattr(segment, 'detected_language', ''),
+            "language_probability": getattr(segment, 'language_probability', 0.0)
         })
         if self._loop and self._loop.is_running():
             future = asyncio.run_coroutine_threadsafe(coro, self._loop)
@@ -445,8 +447,7 @@ class WindyServer:
         self.transcriber.on_transcript(self._on_transcript)
         self.transcriber.on_performance_warning(self._on_performance_warning)
 
-        # Optional test/CI bypass for model loading to keep integration tests
-        # deterministic when whisper dependencies are intentionally absent.
+        # Optional test/CI bypass for model loading
         skip_model_load = os.environ.get("WINDY_SKIP_MODEL_LOAD", "0") in ("1", "true", "yes")
         
         # Load model
@@ -457,24 +458,76 @@ class WindyServer:
             if not self.transcriber.load_model():
                 print("Failed to load model", file=sys.stderr)
                 return False
-        
-        # Start server
+
+        # Kill any existing process on our port before binding
+        self._kill_port_holder()
+
+        # Start server with retry for port-in-use
         print(f"\n{'='*50}")
         print(f"  Windy Pro Server v{SERVER_VERSION}")
         print(f"  ws://{self.host}:{self.port}")
         print(f"  Model: {config.model_size} | Device: {config.device}")
         print(f"{'='*50}\n")
-        self._server = await websockets.serve(
-            self._handle_client,
-            self.host,
-            self.port
-        )
+
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                self._server = await websockets.serve(
+                    self._handle_client,
+                    self.host,
+                    self.port,
+                    reuse_address=True
+                )
+                break  # Success
+            except OSError as e:
+                if attempt < max_retries - 1:
+                    print(f"[Server] Port {self.port} busy (attempt {attempt+1}/{max_retries}): {e}")
+                    self._kill_port_holder()
+                    await asyncio.sleep(2)
+                else:
+                    print(f"[Server] Cannot bind to port {self.port} after {max_retries} attempts: {e}",
+                          file=sys.stderr)
+                    return False
         
         # Start heartbeat task to detect zombie connections
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         
         print(f"Server running. Waiting for connections...")
         return True
+
+    def _kill_port_holder(self):
+        """Kill any process holding our port (handles stale previous instances)."""
+        import subprocess
+        try:
+            # Try lsof (Linux/macOS)
+            result = subprocess.run(
+                ['lsof', '-ti', f':{self.port}'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.stdout.strip():
+                pids = result.stdout.strip().split('\n')
+                my_pid = str(os.getpid())
+                for pid in pids:
+                    pid = pid.strip()
+                    if pid and pid != my_pid:
+                        print(f"[Server] Killing stale process {pid} on port {self.port}")
+                        try:
+                            os.kill(int(pid), 9)
+                        except (ProcessLookupError, PermissionError):
+                            pass
+                import time
+                time.sleep(0.5)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            # lsof not available — try fuser
+            try:
+                subprocess.run(
+                    ['fuser', '-k', f'{self.port}/tcp'],
+                    capture_output=True, timeout=5
+                )
+                import time
+                time.sleep(0.5)
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass  # No port cleanup tools available
     
     async def _heartbeat_loop(self):
         """Send heartbeat ping every 15s to detect zombie connections."""

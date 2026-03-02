@@ -83,15 +83,18 @@ class HistoryPanel {
             console.warn('[History] Archive load failed:', e.message);
         }
 
-        // 3. Merge + deduplicate (by timestamp within 2s)
-        const merged = [...local];
-        const localTimes = new Set(local.map(e => Math.floor(new Date(e.date).getTime() / 2000)));
-        for (const a of archive) {
-            const key = Math.floor(new Date(a.date).getTime() / 2000);
-            if (!localTimes.has(key)) {
-                merged.push(a);
+        // 3. Merge BOTH sources — archive entries enrich with media links,
+        //    localStorage fills in sessions not yet archived or from a different folder.
+        //    Deduplicate by timestamp proximity (within 30s = same session).
+        const archiveDates = new Set(archive.map(e => new Date(e.date).getTime()));
+        const uniqueLocal = local.filter(l => {
+            const lt = new Date(l.date).getTime();
+            for (const at of archiveDates) {
+                if (Math.abs(lt - at) < 30000) return false; // duplicate
             }
-        }
+            return true;
+        });
+        const merged = [...archive, ...uniqueLocal];
 
         // 4. Sort newest first
         merged.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -132,11 +135,10 @@ class HistoryPanel {
         </div>
         <div class="history-search-row">
           <input type="text" class="history-search" id="historySearch"
-                 placeholder="Search transcripts…" aria-label="Search transcripts">
+                 placeholder="Search transcripts…" aria-label="Search transcripts" title="Search through all your transcripts by keyword">
         </div>
         <div class="history-actions-row">
-          <button class="history-action-btn" id="historyExportAll">📥 Export All</button>
-          <button class="history-action-btn history-danger" id="historyClearAll">🗑️ Clear Local</button>
+          <button class="history-action-btn" id="historyExportAll" title="Export all transcripts as a single text file">📥 Export All</button>
         </div>
       </div>
       <div class="history-body" id="historyBody">
@@ -191,9 +193,12 @@ class HistoryPanel {
             for (const item of items) {
                 const id = item._id || item.date;
                 const isExpanded = this.expandedId === id;
-                const time = new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const d = new Date(item.date);
+                const time = this._formatDate(d);
                 const icon = this.engineIcons[item.engine] || '📝';
-                let preview = (item.text || '').replace(/\n/g, ' ').substring(0, 80);
+                // Strip metadata lines (Start:/End:/Words:) from preview
+                let cleanText = (item.text || '').replace(/^(Start|End|Words|Recording):.*$/gm, '').trim();
+                let preview = cleanText.replace(/\n/g, ' ').substring(0, 80);
                 if (preview.length >= 80) preview += '…';
 
                 // Highlight search matches
@@ -206,12 +211,12 @@ class HistoryPanel {
 
                 html += `<div class="history-entry ${isExpanded ? 'expanded' : ''}" data-id="${this._escapeHtml(String(id))}">
           <div class="history-entry-header">
-            <span class="history-time">${time}</span>
-            <span class="history-preview">${preview}</span>
+            <span class="history-time" title="Recording date & time">${time}</span>
+            <span class="history-preview" title="Click to expand/collapse this session">${preview}</span>
             <span class="history-badges">
               ${mediaBadges}
-              <span class="history-wc">${item.wordCount || 0}w</span>
-              <span class="history-engine">${icon}</span>
+              <span class="history-wc" title="Word count for this session">${item.wordCount || 0}w</span>
+              <span class="history-engine" title="Transcription engine used">${icon}</span>
             </span>
           </div>
           ${isExpanded ? this._renderExpanded(item) : ''}
@@ -230,10 +235,14 @@ class HistoryPanel {
         body.innerHTML = html;
         this._bindEntryEvents();
 
-        // If expanded entry has audio, load the audio player
+        // If expanded entry has audio/video, load the players
         if (this.expandedId) {
             const item = this.filteredEntries.find(e => (e._id || e.date) === this.expandedId);
-            if (item?.hasAudio && item.audioPath) {
+            if (item?.hasVideo && item.videoPath) {
+                // Video has muxed audio — just play the video
+                this._loadVideoPlayer(item.videoPath);
+            } else if (item?.hasAudio && item.audioPath) {
+                // Audio only — play separate audio
                 this._loadAudioPlayer(item.audioPath);
             }
         }
@@ -241,7 +250,7 @@ class HistoryPanel {
 
     _renderMediaBadges(item) {
         let badges = '<span class="history-media-badges">';
-        badges += '<span class="media-badge" title="Has transcript">📝</span>';
+        badges += '<span class="media-badge media-text" title="Has transcript">📝</span>';
         if (item.hasAudio) {
             badges += '<span class="media-badge media-audio" title="Has audio recording">🎤</span>';
         }
@@ -254,23 +263,51 @@ class HistoryPanel {
 
     _renderExpanded(item) {
         const fullText = this._escapeHtml(item.text || '').replace(/\n/g, '<br>');
+
+        // Readable date header at top
+        const d = new Date(item.date);
+        const dateHeader = this._formatDate(d, true);
+
         let audioSection = '';
-        if (item.hasAudio && item.audioPath) {
+        // Only show separate audio player if there's no video
+        // (video files now contain muxed audio for perfect lip sync)
+        if (item.hasAudio && item.audioPath && !(item.hasVideo && item.videoPath)) {
             audioSection = `
-        <div class="history-audio-player" id="historyAudioPlayer">
-          <div class="audio-loading">🎤 Loading audio…</div>
-        </div>`;
-        }
-        return `<div class="history-expanded">
-      ${audioSection}
-      <div class="history-full-text">${fullText}</div>
-      <div class="history-expanded-actions">
-        <button class="history-exp-btn" data-action="copy">📋 Copy</button>
-        <button class="history-exp-btn" data-action="export-txt">💾 .txt</button>
-        <button class="history-exp-btn" data-action="export-md">📝 .md</button>
-        <button class="history-exp-btn history-danger" data-action="delete">🗑️ Delete</button>
-      </div>
+    <div class="history-audio-player" id="historyAudioPlayer">
+      <div class="audio-loading">\ud83c\udfa4 Loading audio\u2026</div>
     </div>`;
+        }
+        let videoSection = '';
+        if (item.hasVideo && item.videoPath) {
+            videoSection = `
+    <div class="history-video-player" id="historyVideoPlayer" title="Video recording with muxed audio — click play to watch">
+      <div class="audio-loading">\ud83c\udfac Loading video\u2026</div>
+    </div>`;
+        }
+        // Per-asset delete buttons (only show what exists)
+        let deleteButtons = '';
+        if (item._archivePath) deleteButtons += '\n    <button class="history-exp-btn history-danger" data-action="delete-text" title="Permanently delete the transcript text file for this session">🗑️ Text</button>';
+        if (item.hasAudio && item.audioPath) deleteButtons += '\n    <button class="history-exp-btn history-danger" data-action="delete-audio" title="Permanently delete the audio recording for this session">🗑️ Audio</button>';
+        if (item.hasVideo && item.videoPath) deleteButtons += '\n    <button class="history-exp-btn history-danger" data-action="delete-video" title="Permanently delete the video recording for this session">🗑️ Video</button>';
+        deleteButtons += '\n    <button class="history-exp-btn history-danger-all" data-action="delete-all" title="Permanently delete ALL files (text, audio, video) for this session">🗑️ Delete All</button>';
+
+        return `<div class="history-expanded">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+    <div class="history-date-header" style="font-size:12px;color:#888;padding:4px 0;" title="Date and time this session was recorded">\ud83d\udcc5 ${this._escapeHtml(dateHeader)}</div>
+    <button class="history-exp-btn" data-action="collapse" title="Collapse this session" style="padding:2px 10px;font-size:11px;">▲ Close</button>
+  </div>
+  ${videoSection}
+  ${audioSection}
+  <div class="history-full-text" title="Full transcript text — select to copy portions"> ${fullText}</div>
+  <div class="history-expanded-actions">
+    <button class="history-exp-btn" data-action="copy" title="Copy transcript text to clipboard">\ud83d\udccb Copy</button>
+    <button class="history-exp-btn" data-action="export-txt" title="Download transcript as a plain text file">\ud83d\udcbe .txt</button>
+    <button class="history-exp-btn" data-action="export-md" title="Download transcript as a Markdown file">\ud83d\udcdd .md</button>
+  </div>
+  <div class="history-expanded-actions" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.06);padding-top:6px;">
+    ${deleteButtons}
+  </div>
+</div>`;
     }
 
     async _loadAudioPlayer(audioPath) {
@@ -305,16 +342,111 @@ class HistoryPanel {
             this._activeAudioUrl = URL.createObjectURL(blob);
 
             container.innerHTML = `
-        <div class="audio-player-wrapper">
-          <span class="audio-label">🎤 Recording</span>
-          <audio controls preload="metadata" class="history-audio-el">
-            <source src="${this._activeAudioUrl}" type="${result.mimeType || 'audio/webm'}">
-            Your browser does not support audio playback.
-          </audio>
-        </div>`;
+    <div class="audio-player-wrapper">
+      <span class="audio-label">🎤 Recording</span>
+      <audio controls preload="metadata" class="history-audio-el">
+        <source src="${this._activeAudioUrl}" type="${result.mimeType || 'audio/webm'}">
+        Your browser does not support audio playback.
+      </audio>
+    </div>`;
         } catch (err) {
             console.warn('[History] Audio load error:', err.message);
             container.innerHTML = '<div class="audio-error">Audio load error</div>';
+        }
+    }
+
+    async _loadVideoPlayer(videoPath) {
+        const container = this.panel?.querySelector('#historyVideoPlayer');
+        if (!container) return;
+
+        try {
+            if (this._activeVideoUrl) {
+                URL.revokeObjectURL(this._activeVideoUrl);
+                this._activeVideoUrl = null;
+            }
+
+            if (!window.windyAPI?.readArchiveVideo) {
+                container.innerHTML = '<div class="audio-error">Video playback not available</div>';
+                return;
+            }
+
+            const result = await window.windyAPI.readArchiveVideo(videoPath);
+            if (!result?.ok || !result.base64) {
+                container.innerHTML = '<div class="audio-error">Failed to load video</div>';
+                return;
+            }
+
+            const binaryStr = atob(result.base64);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+            const blob = new Blob([bytes], { type: result.mimeType || 'video/webm' });
+            this._activeVideoUrl = URL.createObjectURL(blob);
+
+            container.innerHTML = `
+    <div class="video-player-wrapper">
+      <span class="video-label">🎬 Recording</span>
+      <video controls preload="metadata" class="history-video-el">
+        <source src="${this._activeVideoUrl}" type="${result.mimeType || 'video/webm'}">
+        Your browser does not support video playback.
+      </video>
+    </div>`;
+        } catch (err) {
+            console.warn('[History] Video load error:', err.message);
+            container.innerHTML = '<div class="audio-error">Video load error</div>';
+        }
+    }
+
+    /**
+     * Link audio and video player playback — play/pause/seek one mirrors the other.
+     * Video plays muted; audio comes from the audio player.
+     * Uses a lock timeout to prevent infinite event loops from programmatic play/pause.
+     */
+    _syncAVPlayers() {
+        const audio = this.panel?.querySelector('.history-audio-el');
+        const video = this.panel?.querySelector('.history-video-el');
+        if (!audio || !video) return;
+
+        // Mute video — audio player provides the sound
+        video.muted = true;
+
+        let locked = false;
+        const withLock = (fn) => {
+            if (locked) return;
+            locked = true;
+            fn();
+            // Hold lock for 150ms to let async events settle
+            setTimeout(() => { locked = false; }, 150);
+        };
+
+        audio.addEventListener('play', () => withLock(() => {
+            video.currentTime = audio.currentTime;
+            video.play().catch(() => { });
+        }));
+        audio.addEventListener('pause', () => withLock(() => {
+            video.pause();
+        }));
+        audio.addEventListener('seeked', () => withLock(() => {
+            video.currentTime = audio.currentTime;
+        }));
+
+        video.addEventListener('play', () => withLock(() => {
+            audio.currentTime = video.currentTime;
+            audio.play().catch(() => { });
+        }));
+        video.addEventListener('pause', () => withLock(() => {
+            audio.pause();
+        }));
+        video.addEventListener('seeked', () => withLock(() => {
+            audio.currentTime = video.currentTime;
+        }));
+
+        // Add a small label indicating sync
+        const wrapper = video.closest('.video-player-wrapper');
+        if (wrapper) {
+            const label = wrapper.querySelector('.video-label');
+            if (label) label.textContent = '🎬 Recording (synced with audio)';
         }
     }
 
@@ -355,6 +487,24 @@ class HistoryPanel {
         return div.innerHTML;
     }
 
+    /**
+     * Format date like: Feb 28, 2026 5:07pm EST
+     * @param {Date} d
+     * @param {boolean} long - if true, use full month name
+     */
+    _formatDate(d, long = false) {
+        const month = d.toLocaleString([], { month: long ? 'long' : 'short' });
+        const day = d.getDate();
+        const year = d.getFullYear();
+        let hours = d.getHours();
+        const mins = d.getMinutes().toString().padStart(2, '0');
+        const ampm = hours >= 12 ? 'pm' : 'am';
+        hours = hours % 12 || 12;
+        // Get timezone abbreviation
+        const tz = d.toLocaleTimeString([], { timeZoneName: 'short' }).split(' ').pop();
+        return `${month} ${day}, ${year} ${hours}:${mins}${ampm} ${tz}`;
+    }
+
     /* ═══════════════════════════
        Events
        ═══════════════════════════ */
@@ -373,19 +523,8 @@ class HistoryPanel {
         // Export all
         this.panel.querySelector('#historyExportAll').addEventListener('click', () => this._exportAll());
 
-        // Clear local
-        this.panel.querySelector('#historyClearAll').addEventListener('click', () => {
-            if (confirm('Clear local transcript history? Archive files on disk will not be affected.')) {
-                localStorage.removeItem('windy_history');
-                this.allEntries = this.allEntries.filter(e => e._source === 'archive');
-                this.filteredEntries = [...this.allEntries];
-                this.totalRecordings = this.allEntries.length;
-                this.totalWords = this.allEntries.reduce((s, e) => s + (e.wordCount || 0), 0);
-                this._updateStats();
-                this.displayedCount = 0;
-                this._renderEntries();
-            }
-        });
+
+
 
         // Scroll for lazy load
         const body = this.panel.querySelector('#historyBody');
@@ -404,10 +543,16 @@ class HistoryPanel {
             header.addEventListener('click', () => {
                 const entry = header.closest('.history-entry');
                 const id = entry.dataset.id;
-                // Cleanup audio when collapsing
-                if (this.expandedId === id && this._activeAudioUrl) {
-                    URL.revokeObjectURL(this._activeAudioUrl);
-                    this._activeAudioUrl = null;
+                // Cleanup audio/video when collapsing
+                if (this.expandedId === id) {
+                    if (this._activeAudioUrl) {
+                        URL.revokeObjectURL(this._activeAudioUrl);
+                        this._activeAudioUrl = null;
+                    }
+                    if (this._activeVideoUrl) {
+                        URL.revokeObjectURL(this._activeVideoUrl);
+                        this._activeVideoUrl = null;
+                    }
                 }
                 this.expandedId = (this.expandedId === id) ? null : id;
                 this._renderEntries();
@@ -422,13 +567,23 @@ class HistoryPanel {
 
         // Expanded action buttons
         this.panel.querySelectorAll('.history-exp-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const action = btn.dataset.action;
                 const entryEl = btn.closest('.history-entry');
                 const id = entryEl.dataset.id;
                 const item = this.filteredEntries.find(e => (e._id || e.date) === id);
                 if (!item) return;
+
+                if (action === 'collapse') {
+                    // Clean up media blob URLs
+                    if (this._activeAudioUrl) { URL.revokeObjectURL(this._activeAudioUrl); this._activeAudioUrl = null; }
+                    if (this._activeVideoUrl) { URL.revokeObjectURL(this._activeVideoUrl); this._activeVideoUrl = null; }
+                    this.expandedId = null;
+                    this.displayedCount = 0;
+                    this._renderEntries();
+                    return;
+                }
 
                 if (action === 'copy') {
                     navigator.clipboard.writeText(item.text || '');
@@ -439,8 +594,26 @@ class HistoryPanel {
                 } else if (action === 'export-md') {
                     const md = `# Transcript\n\n${item.text}\n`;
                     this._downloadFile(md, 'transcript.md', 'text/markdown');
+                } else if (action === 'delete-text') {
+                    if (confirm('Delete the transcript text for this session? This cannot be undone.')) {
+                        await this._deleteAsset(item, 'text', btn);
+                    }
+                } else if (action === 'delete-audio') {
+                    if (confirm('Delete the audio recording for this session? This cannot be undone.')) {
+                        await this._deleteAsset(item, 'audio', btn);
+                    }
+                } else if (action === 'delete-video') {
+                    if (confirm('Delete the video recording for this session? This cannot be undone.')) {
+                        await this._deleteAsset(item, 'video', btn);
+                    }
+                } else if (action === 'delete-all') {
+                    if (confirm('Delete this ENTIRE session (text + audio + video)? This cannot be undone.')) {
+                        this._deleteEntry(item, entryEl);
+                    }
                 } else if (action === 'delete') {
-                    this._deleteEntry(item, entryEl);
+                    if (confirm('Delete this entry? This cannot be undone.')) {
+                        this._deleteEntry(item, entryEl);
+                    }
                 }
             });
         });
@@ -473,13 +646,15 @@ class HistoryPanel {
             localStorage.setItem('windy_history', JSON.stringify(filtered));
         } catch (_) { }
 
-        // Remove from disk archive if applicable
+        // Remove text, audio, video files from disk
         if (item._archivePath && window.windyAPI?.deleteArchiveEntry) {
-            try {
-                await window.windyAPI.deleteArchiveEntry(item._archivePath);
-            } catch (e) {
-                console.warn('[History] Failed to delete archive file:', e.message);
-            }
+            try { await window.windyAPI.deleteArchiveEntry(item._archivePath); } catch (_) { }
+        }
+        if (item.audioPath && window.windyAPI?.deleteArchiveEntry) {
+            try { await window.windyAPI.deleteArchiveEntry(item.audioPath); } catch (_) { }
+        }
+        if (item.videoPath && window.windyAPI?.deleteArchiveEntry) {
+            try { await window.windyAPI.deleteArchiveEntry(item.videoPath); } catch (_) { }
         }
 
         // Remove from in-memory lists
@@ -491,6 +666,40 @@ class HistoryPanel {
         this.expandedId = null;
         this.displayedCount = 0;
         this._renderEntries();
+    }
+
+    async _deleteAsset(item, type, btn) {
+        let filePath = null;
+        if (type === 'text') filePath = item._archivePath;
+        else if (type === 'audio') filePath = item.audioPath;
+        else if (type === 'video') filePath = item.videoPath;
+
+        if (!filePath || !window.windyAPI?.deleteArchiveEntry) return;
+
+        try {
+            await window.windyAPI.deleteArchiveEntry(filePath);
+            btn.textContent = '✅ Deleted';
+            btn.disabled = true;
+
+            // Update item flags
+            if (type === 'text') {
+                item._archivePath = null;
+                item.text = '[Transcript deleted]';
+            } else if (type === 'audio') {
+                item.hasAudio = false;
+                item.audioPath = '';
+            } else if (type === 'video') {
+                item.hasVideo = false;
+                item.videoPath = '';
+            }
+
+            // Re-render to update badges
+            this.displayedCount = 0;
+            this._renderEntries();
+        } catch (e) {
+            btn.textContent = '❌ Failed';
+            console.warn('[History] Delete asset failed:', e.message);
+        }
     }
 
     _exportAll() {

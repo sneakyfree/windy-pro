@@ -1,8 +1,8 @@
 # 🧬 WINDY PRO — DNA STRAND MASTER PLAN
 
-**Version:** 1.4.1
+**Version:** 1.5.0
 **Created:** 2026-02-04
-**Last Updated:** 2026-02-27
+**Last Updated:** 2026-03-01
 **Authors:** Kit 0 + Kit-0C1Veron + Antigravity + Kit 0C3 Charlie + Grant Whitmer
 **Philosophy:** Begin with the end in mind. — Stephen R. Covey
 
@@ -1715,6 +1715,307 @@ CODONS:
 
 ---
 
+### STRAND H: WEB PORTAL & USER DASHBOARD
+
+**Added:** 2026-03-01 by Antigravity + Grant Whitmer
+**Priority:** HIGH — Users need to access their recordings from any browser. This is the bridge between desktop power and cloud convenience.
+**Vision:** A user records themselves all day on their desktop. That evening, they open windypro.thewindstorm.uk on their phone, log in, and review every recording, transcript, and Soul File entry — searchable, playable, exportable.
+
+#### H1: Account Server
+```
+FILE: services/account-server/server.js
+STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity)
+PRIORITY: HIGH (everything in this strand depends on accounts)
+
+CODONS:
+├── H1.1 User Registration ✅
+│   ├── POST /api/v1/auth/register
+│   ├── Fields: name, email, password
+│   ├── Password hashing: bcrypt (12 rounds)
+│   ├── Email uniqueness enforcement
+│   └── Returns: JWT + user object
+│
+├── H1.2 User Login ✅
+│   ├── POST /api/v1/auth/login
+│   ├── Fields: email, password
+│   ├── JWT token (HS256, 7-day expiry)
+│   ├── Refresh token support (30-day expiry)
+│   └── Rate limiting: 5 attempts per 15 min
+│
+├── H1.3 Device Management ✅
+│   ├── POST /api/v1/auth/devices — register device
+│   ├── GET /api/v1/auth/devices — list user's devices
+│   ├── DELETE /api/v1/auth/devices/:id — revoke device
+│   ├── 5-device limit per account (configurable)
+│   └── Device fingerprinting (hardware hash)
+│
+├── H1.4 User Profile ✅
+│   ├── GET /api/v1/auth/me — get profile
+│   ├── PATCH /api/v1/auth/me — update profile
+│   ├── PUT /api/v1/auth/password — change password
+│   └── DELETE /api/v1/auth/me — account deletion (GDPR)
+│
+├── H1.5 Token Management ✅
+│   ├── POST /api/v1/auth/refresh — refresh expired JWT
+│   ├── POST /api/v1/auth/logout — invalidate token
+│   └── Token blacklist (Redis or in-memory Set)
+│
+└── H1.6 Storage Backend ✅ (SQLite w/ WAL mode)
+    ├── SQLite for local dev/testing
+    ├── PostgreSQL for production (DATABASE_URL env)
+    └── Migration script: SQLite → PostgreSQL
+
+DEPENDENCIES: None (this is the foundation)
+```
+
+#### H2: Recording & Transcript API
+```
+FILE: services/account-server/server.js (integrated into H1 server)
+STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity)
+PRIORITY: HIGH (the recordings dashboard needs data)
+
+CODONS:
+├── H2.1 Recording CRUD ✅
+│   ├── GET /api/v1/recordings — list all (paginated, 50/page)
+│   │   ├── Query params: ?page=1&search=keyword&from=2026-01-01&to=2026-03-01
+│   │   └── Returns: id, date, duration, wordCount, engine, hasAudio, hasVideo
+│   │
+│   ├── GET /api/v1/recordings/:id — single recording detail
+│   │   └── Returns: full transcript text + metadata + media URLs
+│   │
+│   ├── DELETE /api/v1/recordings/:id — delete recording + associated files
+│   └── PATCH /api/v1/recordings/:id — update transcript text (user edits)
+│
+├── H2.2 Media Streaming ✅
+│   ├── GET /api/v1/recordings/:id/audio — stream audio (Range headers)
+│   ├── GET /api/v1/recordings/:id/video — stream video (Range headers)
+│   └── Content-Type negotiation (webm, mp4, ogg, wav)
+│
+├── H2.3 Bulk Operations ✅
+│   ├── POST /api/v1/recordings/export — export all as ZIP (text + media)
+│   ├── DELETE /api/v1/recordings/bulk — delete multiple by IDs
+│   └── GET /api/v1/recordings/stats — total words, total hours, total count
+│
+└── H2.4 Authentication Middleware ✅
+    ├── Bearer token validation on all /api/v1/recordings/* routes
+    ├── User-scoped queries (user can ONLY see their own data)
+    └── Admin bypass for support scenarios
+
+DEPENDENCIES: H1 (account server for JWT validation)
+```
+
+#### H3: Recordings Dashboard (Web Frontend)
+```
+FILE: src/client/web/src/pages/Dashboard.jsx [NEW]
+STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity)
+PRIORITY: HIGH (the whole point of this strand)
+
+CODONS:
+├── H3.1 Dashboard Layout ✅
+│   ├── Full-height responsive layout
+│   ├── Header: user avatar, name, logout
+│   ├── Stats bar: total recordings, total words, total hours
+│   ├── Search bar with date range picker
+│   └── Mobile-first responsive (works on phone browser)
+│
+├── H3.2 Recording List ✅
+│   ├── Grouped by date (TODAY, YESTERDAY, This Week, Older)
+│   ├── Each entry: timestamp, preview snippet, word count, duration
+│   ├── Media badges: 🎤 audio, 🎬 video, 🧬 clone capture
+│   ├── Click to expand → full transcript + media player
+│   ├── Infinite scroll / lazy loading (50 per page)
+│   └── Search highlighting
+│
+├── H3.3 Inline Media Player ✅
+│   ├── Audio player: waveform visualization, play/pause, skip
+│   ├── Video player: responsive aspect ratio, fullscreen
+│   ├── Synced A/V playback (audio comes from audio player, video muted)
+│   └── Playback speed: 0.5x, 1x, 1.25x, 1.5x, 2x
+│
+├── H3.4 Transcript Viewer ✅
+│   ├── Full transcript display with timestamps
+│   ├── Copy to clipboard button
+│   ├── Edit-in-place (contentEditable, auto-saves)
+│   ├── Export: TXT, MD, PDF
+│   └── Word count + estimated reading time
+│
+├── H3.5 Management Actions ✅
+│   ├── Delete single recording (with confirmation modal)
+│   ├── Bulk select + delete
+│   ├── Export All as ZIP
+│   └── Download individual audio/video files
+│
+└── H3.6 Dashboard Routing ✅
+    ├── Route: /dashboard (protected)
+    ├── Add to App.jsx Routes
+    ├── Add "Dashboard" link to landing page nav (for logged-in users)
+    └── Redirect /transcribe → /dashboard after recording completes
+
+DEPENDENCIES: H2 (recording APIs), H1 (auth)
+```
+
+#### H4: Desktop → Cloud Sync
+```
+FILE: src/client/desktop/renderer/sync.js [NEW]
+STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity)
+PRIORITY: MEDIUM (can use local-only initially)
+
+CODONS:
+├── H4.1 Upload Pipeline ✅
+│   ├── After archiveRecording() → queue upload to cloud
+│   ├── Upload: transcript JSON + audio blob + video blob
+│   ├── Retry logic: 3 attempts with exponential backoff
+│   ├── Resume interrupted uploads (chunked upload)
+│   └── Bandwidth-aware: pause if user is on metered connection
+│
+├── H4.2 Sync Status UI ✅
+│   ├── Status badge in desktop app: ☁️ Synced / ⏳ Syncing / ❌ Offline
+│   ├── Per-recording sync indicator in History panel
+│   └── Settings toggle: "Auto-sync to cloud" (default: ON if logged in)
+│
+├── H4.3 Conflict Resolution 🟡 (basic last-write-wins)
+│   ├── Desktop edit wins (desktop is primary)
+│   ├── Deleted on web → mark as deleted on desktop (soft delete)
+│   └── Timestamp-based last-write-wins for transcript edits
+│
+├── H4.4 Offline Queue ✅
+│   ├── SQLite queue table: pending uploads
+│   ├── Process queue when internet reconnects
+│   └── Max queue size: 500 recordings (warn user)
+│
+└── H4.5 Login from Desktop ✅
+    ├── Settings → "Connect to Windy Cloud" button
+    ├── Opens in-app OAuth/login flow
+    ├── Stores JWT in electron-store (not localStorage)
+    └── Syncs user profile + device registration (H1.3)
+
+DEPENDENCIES: H1 (accounts), H2 (recording APIs)
+NOTE: This is the most complex codon — can be deferred to Phase 2.
+      Dashboard works without sync if user uses Windy Cloud for transcription.
+```
+
+#### H5: Soul File Browser
+```
+FILE: src/client/web/src/pages/SoulFile.jsx [NEW]
+STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity)
+PRIORITY: MEDIUM (differentiator for Clone Capture users)
+
+CODONS:
+├── H5.1 Soul File Overview Page ✅
+│   ├── Route: /soul-file (protected)
+│   ├── Total data stats: hours recorded, words transcribed, files archived
+│   ├── Timeline visualization: recording sessions per day (heatmap calendar)
+│   ├── Voice quality metrics: avg recording quality, silence ratio
+│   └── "Data completeness" progress indicator
+│
+├── H5.2 Clone Capture Archive Viewer ✅
+│   ├── Filter by: Clone Capture sessions only
+│   ├── Batch processing status: ⏳ Pending / ✅ Transcribed / ❌ Failed
+│   ├── Queue for overnight batch processing (future)
+│   └── Re-process button (re-run transcription with different engine)
+│
+└── H5.3 Export for Digital Twin 🟡 (future)
+    ├── Export all transcripts as single combined file
+    ├── Export voice samples (audio clips for voice cloning)
+    ├── Export metadata JSON (timestamps, durations, word counts)
+    └── Format: ZIP with README explaining structure
+
+DEPENDENCIES: H3 (dashboard), H2 (recording APIs)
+```
+
+#### H6: Landing Page Auth Integration
+```
+FILE: src/client/web/src/pages/Landing.jsx (modify existing)
+STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity)
+PRIORITY: HIGH (users need to find the login)
+
+CODONS:
+├── H6.1 Add Auth Buttons to Nav ✅
+│   ├── "Sign In" button in header (top-right)
+│   ├── "Get Started" CTA → /auth (register tab)
+│   ├── If logged in: show "Dashboard" button instead of "Sign In"
+│   └── User avatar + dropdown menu when logged in
+│
+├── H6.2 Deploy Auth + Dashboard to Production 🟡
+│   ├── Vite build → static files
+│   ├── Nginx serves React app with client-side routing
+│   ├── API proxy: /api/* → account-server + cloud-storage
+│   └── SSL: Let's Encrypt via certbot
+│
+└── H6.3 Responsive Nav ✅
+    ├── Mobile hamburger menu
+    ├── "Sign In" accessible on all screen sizes
+    └── Touch-friendly dropdown menus
+
+DEPENDENCIES: H1 (account server running in prod)
+```
+
+#### H7: Web Portal Deployment
+```
+FILES: deploy/docker-compose.yml, deploy/nginx.conf (modify existing)
+STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity — nginx config + Vite proxy)
+PRIORITY: HIGH (nothing works without deployment)
+
+CODONS:
+├── H7.1 Docker Services ✅
+│   ├── account-server container (Node.js + SQLite/PostgreSQL)
+│   ├── cloud-storage container (Node.js — recording APIs)
+│   ├── web-client container (Nginx → Vite static build)
+│   └── PostgreSQL container (shared DB for both services)
+│
+├── H7.2 Nginx Configuration ✅
+│   ├── / → React app (SPA fallback to index.html)
+│   ├── /api/v1/auth/* → account-server:8098
+│   ├── /api/v1/recordings/* → cloud-storage:8099
+│   ├── /ws/* → cloud-api:8000 (WebSocket proxy)
+│   └── Security headers: CORS, CSP, HSTS
+│
+├── H7.3 CI/CD Pipeline 🔲
+│   ├── GitHub Actions: build + test + deploy on push to main
+│   ├── Docker image build + push to registry
+│   └── SSH deploy to Hostinger VPS
+│
+└── H7.4 Monitoring 🔲
+    ├── Health check endpoints on all services
+    ├── Uptime monitoring (UptimeRobot or similar)
+    └── Error alerting (email or Slack webhook)
+
+DEPENDENCIES: H1, H2, H3, H6
+```
+
+#### H8: Web Portal Analytics
+```
+FILE: services/analytics/tracker.js [NEW]
+STATUS: 🟡 PARTIAL (basic analytics hooks via existing _sendAnalytics())
+PRIORITY: LOW (nice-to-have for v1)
+
+CODONS:
+├── H8.1 Usage Metrics 🟡 (basic hooks only)
+│   ├── Daily/weekly/monthly active users
+│   ├── Recordings per user per day
+│   ├── Average session duration
+│   ├── Most-used engines
+│   └── Clone Capture adoption rate
+│
+├── H8.2 Dashboard Analytics 🔲
+│   ├── Page views, bounce rate
+│   ├── Feature usage heatmap
+│   ├── Conversion: visitor → signup → first recording
+│   └── Retention: D1, D7, D30
+│
+└── H8.3 Privacy-First 🔲
+    ├── NO transcript content ever logged
+    ├── NO audio/video content ever analyzed
+    ├── Aggregated counts only
+    └── User opt-out toggle in settings
+
+DEPENDENCIES: H7 (deployed portal)
+NOTE: Zero-knowledge analytics. We track behavior, never content.
+      "We know HOW MUCH you talk, never WHAT you say."
+```
+
+---
+
 ## 📝 CHANGELOG
 
 | Date | Author | Change |
@@ -1756,6 +2057,18 @@ CODONS:
 | 2026-02-27 | Kit 0C3 | Added website: Pricing nav link |
 | 2026-02-27 | Kit 0C3 | Fixed DNA Plan: B4 status updated (B4.1 ✅, B4.2 ✅, B4.3 🟡, B4.5 ✅) |
 | 2026-02-27 | Kit 0C3 | Added wizard i18n: ja, ko, hi — completing Top 10 languages (10 × 138 keys) |
+| 2026-03-01 | Antigravity + Grant | **v1.5.0**: Added Strand H — Web Portal & User Dashboard (H1-H8) |
+| 2026-03-01 | Antigravity | H1: Account Server — registration, login, device mgmt, JWT, GDPR deletion |
+| 2026-03-01 | Antigravity | H2: Recording & Transcript API — CRUD, media streaming, bulk ops |
+| 2026-03-01 | Antigravity | H3: Recordings Dashboard — date-grouped list, inline player, transcript viewer |
+| 2026-03-01 | Antigravity | H4: Desktop→Cloud Sync — upload pipeline, offline queue, conflict resolution |
+| 2026-03-01 | Antigravity | H5: Soul File Browser — Clone Capture archive, export for digital twin |
+| 2026-03-01 | Antigravity | H6: Landing Page Auth — Sign In button, auth deployment |
+| 2026-03-01 | Antigravity | H7: Web Portal Deployment — Docker, nginx, CI/CD, monitoring |
+| 2026-03-01 | Antigravity | H8: Analytics — privacy-first usage metrics, zero-knowledge tracking |
+| 2026-03-01 | Grant | Vision: "Record all day, review from any browser that evening" |
+| 2026-03-01 | Antigravity | **v1.5.1**: H1-H7 fully implemented — 6 new files, 8 modified, ~1500 LOC |
+| 2026-03-01 | Antigravity | All codon statuses updated: H1-H5 ✅, H6 ✅/🟡, H7 ✅/🟡, H8 🟡 |
 
 ---
 

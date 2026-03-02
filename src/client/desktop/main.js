@@ -228,6 +228,24 @@ function startPythonServer() {
   console.log(`[Python] Starting server with: ${pythonPath}`);
   console.log(`[Python] cwd: ${projectRoot}, module: ${serverModule}`);
 
+  // Kill any stale process on the server port before spawning
+  const port = serverConfig.port || 9876;
+  try {
+    if (process.platform === 'win32') {
+      execSync(`for /f "tokens=5" %a in ('netstat -aon ^| findstr :${port} ^| findstr LISTENING') do taskkill /PID %a /F 2>nul`, { stdio: 'pipe', timeout: 5000 });
+    } else {
+      const pids = execSync(`lsof -ti :${port} 2>/dev/null || true`, { timeout: 5000 }).toString().trim();
+      if (pids) {
+        for (const pid of pids.split('\n')) {
+          if (pid.trim()) {
+            console.log(`[Python] Killing stale process ${pid} on port ${port}`);
+            try { process.kill(parseInt(pid), 'SIGKILL'); } catch (e) { }
+          }
+        }
+      }
+    }
+  } catch (e) { /* port cleanup is best-effort */ }
+
   // Notify renderer that Python is loading
   if (mainWindow) {
     safeSend('python-loading', true);
@@ -271,11 +289,12 @@ function startPythonServer() {
     console.log(`[Python] Server exited with code ${code}`);
     pythonProcess = null;
 
-    // Auto-restart on unexpected exit (code != 0 and not quitting)
+    // Auto-restart on unexpected exit with exponential backoff
     if (code !== 0 && !app.isQuitting && pythonRestartCount < MAX_PYTHON_RESTARTS) {
       pythonRestartCount++;
-      console.log(`[Python] Auto-restarting (attempt ${pythonRestartCount}/${MAX_PYTHON_RESTARTS})...`);
-      setTimeout(() => startPythonServer(), 1000);
+      const delay = 3000 * pythonRestartCount; // 3s, 6s, 9s...
+      console.log(`[Python] Auto-restarting in ${delay}ms (attempt ${pythonRestartCount}/${MAX_PYTHON_RESTARTS})...`);
+      setTimeout(() => startPythonServer(), delay);
     } else if (code !== 0 && pythonRestartCount >= MAX_PYTHON_RESTARTS) {
       console.error('[Python] Max restarts reached. Server will not restart.');
       if (mainWindow) {
@@ -648,6 +667,213 @@ ipcMain.on('update-tornado-size', (event, size) => {
   }
 });
 
+// ═══════════════════════════════════════════
+//  VIDEO PREVIEW WINDOW (independent, draggable)
+// ═══════════════════════════════════════════
+
+let videoWindow = null;
+
+function createVideoWindow() {
+  if (videoWindow && !videoWindow.isDestroyed()) {
+    videoWindow.show();
+    return videoWindow;
+  }
+
+  const saved = store.get('videoWindow') || {};
+  const w = saved.width || 240;
+  const h = saved.height || 180;
+
+  videoWindow = new BrowserWindow({
+    width: w,
+    height: h,
+    x: saved.x != null ? saved.x : undefined,
+    y: saved.y != null ? saved.y : undefined,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false, // We handle resize manually via IPC
+    skipTaskbar: true,
+    hasShadow: false,
+    focusable: true,
+    backgroundColor: '#00000000',
+    minWidth: 120,
+    minHeight: 90,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'renderer', 'video-preload.js'),
+      partition: 'persist:videopreview' // Own session so permissions don't conflict
+    }
+  });
+
+  videoWindow.loadFile(path.join(__dirname, 'renderer', 'video-preview.html'));
+  videoWindow.setVisibleOnAllWorkspaces(true);
+
+  // Auto-grant camera permission for the video preview window's own session
+  const videoSes = videoWindow.webContents.session;
+  videoSes.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'media' || permission === 'mediaKeySystem') {
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+  // Also needed for newer Electron: permission check handler
+  videoSes.setPermissionCheckHandler((webContents, permission) => {
+    if (permission === 'media' || permission === 'mediaKeySystem') {
+      return true;
+    }
+    return false;
+  });
+
+  // Save bounds on move/resize
+  const saveBounds = () => {
+    if (videoWindow && !videoWindow.isDestroyed()) {
+      const bounds = videoWindow.getBounds();
+      store.set('videoWindow', bounds);
+    }
+  };
+  videoWindow.on('move', saveBounds);
+  videoWindow.on('resize', saveBounds);
+  videoWindow.on('closed', () => { videoWindow = null; });
+
+  return videoWindow;
+}
+
+// Show video preview
+ipcMain.handle('show-video-preview', async () => {
+  const win = createVideoWindow();
+  win.show();
+  return { ok: true };
+});
+
+// Relay video frames from main renderer to video preview window
+ipcMain.on('video-frame-to-preview', (event, dataUrl) => {
+  if (videoWindow && !videoWindow.isDestroyed() && !videoWindow.webContents.isDestroyed()) {
+    videoWindow.webContents.send('video-frame', dataUrl);
+  }
+});
+
+// Relay recording state to video preview window
+ipcMain.on('recording-state-to-preview', (event, state) => {
+  if (videoWindow && !videoWindow.isDestroyed() && !videoWindow.webContents.isDestroyed()) {
+    videoWindow.webContents.send('recording-state', state);
+  }
+});
+
+// Hide video preview (only on close button or explicit dismiss)
+ipcMain.handle('hide-video-preview', async () => {
+  if (videoWindow && !videoWindow.isDestroyed()) {
+    videoWindow.webContents.send('stop-camera');
+    videoWindow.hide();
+  }
+  return { ok: true };
+});
+
+// Resize video preview
+ipcMain.on('resize-video-preview', (event, w, h) => {
+  if (videoWindow && !videoWindow.isDestroyed()) {
+    videoWindow.setSize(Math.round(w), Math.round(h));
+  }
+});
+
+// Resize + reposition (for corners that need position adjustment)
+ipcMain.on('resize-move-video-preview', (event, w, h, x, y) => {
+  if (videoWindow && !videoWindow.isDestroyed()) {
+    const rw = Math.round(w);
+    const rh = Math.round(h);
+    if (x !== null && y !== null) {
+      videoWindow.setBounds({ x: Math.round(x), y: Math.round(y), width: rw, height: rh });
+    } else if (x !== null) {
+      const bounds = videoWindow.getBounds();
+      videoWindow.setBounds({ x: Math.round(x), y: bounds.y, width: rw, height: rh });
+    } else if (y !== null) {
+      const bounds = videoWindow.getBounds();
+      videoWindow.setBounds({ x: bounds.x, y: Math.round(y), width: rw, height: rh });
+    } else {
+      videoWindow.setSize(rw, rh);
+    }
+  }
+});
+
+// ═══ Main-process mouse polling for resize (bypasses Electron pointer capture limits) ═══
+let resizeInterval = null;
+ipcMain.on('start-resize-video', (event, corner, startScreenX, startScreenY, startW, startH, startWinX, startWinY) => {
+  if (resizeInterval) clearInterval(resizeInterval);
+  const { screen } = require('electron');
+  resizeInterval = setInterval(() => {
+    if (!videoWindow || videoWindow.isDestroyed()) { clearInterval(resizeInterval); resizeInterval = null; return; }
+    const cursor = screen.getCursorScreenPoint();
+    const dx = cursor.x - startScreenX;
+    let newW, newX, newY;
+    switch (corner) {
+      case 'br':
+        newW = Math.max(160, Math.min(800, startW + dx));
+        break;
+      case 'bl':
+        newW = Math.max(160, Math.min(800, startW - dx));
+        newX = startWinX + (startW - newW);
+        break;
+      case 'tr':
+        newW = Math.max(160, Math.min(800, startW + dx));
+        break;
+      case 'tl':
+        newW = Math.max(160, Math.min(800, startW - dx));
+        newX = startWinX + (startW - newW);
+        break;
+    }
+    const newH = Math.round(newW * 9 / 16);
+    if (corner === 'tr' || corner === 'tl') {
+      newY = startWinY + (startH - newH);
+    }
+    const rw = Math.round(newW);
+    const rh = Math.round(newH);
+    if (newX !== undefined && newY !== undefined) {
+      videoWindow.setBounds({ x: Math.round(newX), y: Math.round(newY), width: rw, height: rh });
+    } else if (newX !== undefined) {
+      const b = videoWindow.getBounds();
+      videoWindow.setBounds({ x: Math.round(newX), y: b.y, width: rw, height: rh });
+    } else if (newY !== undefined) {
+      const b = videoWindow.getBounds();
+      videoWindow.setBounds({ x: b.x, y: Math.round(newY), width: rw, height: rh });
+    } else {
+      videoWindow.setSize(rw, rh);
+    }
+    // Send size back to renderer for label
+    try { videoWindow.webContents.send('resize-feedback', rw, rh); } catch (_) { }
+  }, 16); // ~60fps
+});
+
+ipcMain.on('stop-resize-video', () => {
+  if (resizeInterval) { clearInterval(resizeInterval); resizeInterval = null; }
+});
+
+// Close video preview
+ipcMain.on('close-video-preview', () => {
+  if (videoWindow && !videoWindow.isDestroyed()) {
+    videoWindow.webContents.send('stop-camera');
+    videoWindow.hide();
+  }
+});
+
+// ═══════════════════════════════════════════
+//  FONT SIZE CONTROL
+// ═══════════════════════════════════════════
+
+ipcMain.handle('get-font-size', async () => {
+  return store.get('appearance.fontSize') || 100;
+});
+
+ipcMain.handle('set-font-size', async (event, percent) => {
+  const clamped = Math.max(70, Math.min(150, percent));
+  store.set('appearance.fontSize', clamped);
+  // Notify renderer
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('font-size-changed', clamped);
+  }
+  return clamped;
+});
+
 /**
  * Register global hotkeys
  */
@@ -794,12 +1020,68 @@ ipcMain.handle('get-settings', () => {
 });
 
 ipcMain.handle('choose-archive-folder', async () => {
+  const oldFolder = getArchiveFolder();
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory', 'createDirectory'],
-    defaultPath: getArchiveFolder()
+    defaultPath: oldFolder
   });
   if (result.canceled || !result.filePaths?.length) return { canceled: true };
   const selected = result.filePaths[0];
+
+  // Check if old folder has existing archive data to migrate
+  let hasExistingData = false;
+  try {
+    if (fs.existsSync(oldFolder)) {
+      const dirs = fs.readdirSync(oldFolder).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+      hasExistingData = dirs.length > 0;
+    }
+  } catch (_) { }
+
+  if (hasExistingData && selected !== oldFolder) {
+    const { response } = await dialog.showMessageBox({
+      type: 'question',
+      buttons: ['Copy files to new folder', 'Start fresh (keep old files where they are)', 'Cancel'],
+      defaultId: 0,
+      cancelId: 2,
+      title: 'Migrate Archive?',
+      message: `You have existing recordings in:\n${oldFolder}\n\nWould you like to copy them to the new folder?`,
+      detail: 'Copying ensures all your recordings, audio, and video stay accessible in the new location. If you start fresh, old recordings remain in the original folder.'
+    });
+
+    if (response === 2) return { canceled: true }; // Cancel
+
+    if (response === 0) {
+      // Copy existing archive data to new folder
+      try {
+        const dirs = fs.readdirSync(oldFolder).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+        let copied = 0;
+        for (const dir of dirs) {
+          const srcDir = path.join(oldFolder, dir);
+          const destDir = path.join(selected, dir);
+          if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+          const files = fs.readdirSync(srcDir);
+          for (const file of files) {
+            const srcFile = path.join(srcDir, file);
+            const destFile = path.join(destDir, file);
+            if (!fs.existsSync(destFile)) {
+              fs.copyFileSync(srcFile, destFile);
+              copied++;
+            }
+          }
+        }
+        console.log(`[Archive] Migrated ${copied} files from ${oldFolder} to ${selected}`);
+      } catch (err) {
+        console.error('[Archive] Migration error:', err.message);
+        await dialog.showMessageBox({
+          type: 'warning',
+          title: 'Migration Warning',
+          message: `Some files may not have been copied: ${err.message}\n\nYour original files are still safe in: ${oldFolder}`
+        });
+      }
+    }
+    // response === 1: Start fresh, just change the folder
+  }
+
   store.set('engine.archiveFolder', selected);
   return { canceled: false, path: selected };
 });
@@ -808,6 +1090,46 @@ ipcMain.on('open-archive-folder', () => {
   const folder = getArchiveFolder();
   if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
   shell.openPath(folder);
+});
+
+ipcMain.handle('open-external-url', async (event, url) => {
+  console.log('[Main] open-external-url called with:', url);
+  if (typeof url !== 'string' || !url.startsWith('https://')) {
+    console.warn('[Main] Blocked non-https external URL:', url);
+    return { ok: false, error: 'URL must start with https://' };
+  }
+
+  const { execSync, spawn } = require('child_process');
+
+  // Try real browser binaries (Stripe won't render in Electron BrowserWindow)
+  const browsers = [
+    'google-chrome',
+    'google-chrome-stable',
+    'firefox',
+    'chromium',
+    'chromium-browser',
+    'brave-browser'
+  ];
+
+  for (const browser of browsers) {
+    try {
+      execSync(`which ${browser}`, { stdio: 'ignore' });
+      console.log(`[Main] Found: ${browser}, opening URL`);
+      // Open as new tab in existing browser (not --new-window)
+      const child = spawn(browser, [url], {
+        detached: true,
+        stdio: 'ignore'
+      });
+      child.unref();
+      console.log(`[Main] ✅ Opened with: ${browser}`);
+      return { ok: true };
+    } catch (_) {
+      // Browser not found, try next
+    }
+  }
+
+  console.error('[Main] ❌ No browser found');
+  return { ok: false, error: 'No browser found', url };
 });
 
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
@@ -912,9 +1234,16 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
   try {
     const { clipboard } = require('electron');
     clipboard.writeText(text.trim());
-    // Small delay to let the app window hide, then paste at cursor
-    await new Promise(r => setTimeout(r, 200));
-    // Simulate Ctrl+V at current cursor position
+
+    // Hide the main window first so paste goes to the previously active app
+    const wasVisible = mainWindow && mainWindow.isVisible();
+    if (mainWindow && mainWindow.isVisible()) {
+      mainWindow.hide();
+    }
+    // Wait for window to fully hide and the previous app to regain focus
+    await new Promise(r => setTimeout(r, 400));
+
+    // Simulate Ctrl+V at current cursor position in the now-active app
     if (process.platform === 'linux') {
       require('child_process').execSync('xdotool key --clearmodifiers ctrl+v', { timeout: 5000 });
     } else if (process.platform === 'darwin') {
@@ -933,117 +1262,150 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
 // ═══ History: Read archive files from disk ═══
 ipcMain.handle('get-archive-history', async () => {
   const fs = require('fs');
-  const archiveDir = store.get('engine.archiveFolder') || path.join(os.homedir(), 'Documents', 'WindyProArchive');
+  const configuredDir = store.get('engine.archiveFolder');
+  const defaultDir = path.join(os.homedir(), 'Documents', 'WindyProArchive');
   const entries = [];
 
+  // Scan both configured and default directories (if different)
+  const dirsToScan = [configuredDir || defaultDir];
+  if (configuredDir && configuredDir !== defaultDir && fs.existsSync(defaultDir)) {
+    dirsToScan.push(defaultDir); // Also check default for un-migrated files
+  }
+  const seenIds = new Set(); // Dedup across folders
+
   try {
-    if (!fs.existsSync(archiveDir)) return entries;
+    for (const archiveDir of dirsToScan) {
+      if (!fs.existsSync(archiveDir)) continue;
 
-    // Walk {archiveDir}/{YYYY-MM-DD}/{HHMMSS}.md
-    const dateDirs = fs.readdirSync(archiveDir).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
-    for (const dateDir of dateDirs.sort().reverse()) {
-      const dirPath = path.join(archiveDir, dateDir);
-      const stat = fs.statSync(dirPath);
-      if (!stat.isDirectory()) continue;
+      // Walk {archiveDir}/{YYYY-MM-DD}/{HHMMSS}.md
+      const dateDirs = fs.readdirSync(archiveDir).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+      for (const dateDir of dateDirs.sort().reverse()) {
+        const dirPath = path.join(archiveDir, dateDir);
+        const stat = fs.statSync(dirPath);
+        if (!stat.isDirectory()) continue;
 
-      // Gather all files in this day directory for media matching
-      const allFiles = fs.readdirSync(dirPath);
-      const mdFiles = allFiles.filter(f => f.endsWith('.md') && f !== `${dateDir}.md`).sort().reverse();
-      const audioFiles = allFiles.filter(f => f.endsWith('.webm') && !f.includes('-video'));
-      const videoFiles = allFiles.filter(f => f.endsWith('.webm') && f.includes('-video'));
+        // Gather all files in this day directory for media matching
+        const allFiles = fs.readdirSync(dirPath);
+        const mdFiles = allFiles.filter(f => f.endsWith('.md') && f !== `${dateDir}.md`).sort().reverse();
+        const audioFiles = allFiles.filter(f => f.endsWith('.webm') && !f.includes('-video'));
+        const videoFiles = allFiles.filter(f => f.endsWith('.webm') && f.includes('-video'));
+        const consumedAudio = new Set(); // Track matched audio files
+        const consumedVideo = new Set(); // Track matched video files
 
-      // Helper: parse HHMMSS from filename to seconds-since-midnight
-      const parseTimeKey = (fname) => {
-        const base = fname.replace('.md', '').replace('.webm', '').replace('-video', '');
-        if (!/^\d{6}$/.test(base)) return -1;
-        return parseInt(base.substring(0, 2)) * 3600 +
-          parseInt(base.substring(2, 4)) * 60 +
-          parseInt(base.substring(4, 6));
-      };
+        // Helper: parse HHMMSS from filename to seconds-since-midnight
+        const parseTimeKey = (fname) => {
+          const base = fname.replace('.md', '').replace('.webm', '').replace('-video', '');
+          if (!/^\d{6}$/.test(base)) return -1;
+          return parseInt(base.substring(0, 2)) * 3600 +
+            parseInt(base.substring(2, 4)) * 60 +
+            parseInt(base.substring(4, 6));
+        };
 
-      for (const file of mdFiles) {
-        const filePath = path.join(dirPath, file);
-        try {
-          const content = fs.readFileSync(filePath, 'utf-8');
-          const lines = content.split('\n');
-          let text = '';
-          let wordCount = 0;
-          let engine = 'local';
-          let dateStr = '';
+        for (const file of mdFiles) {
+          const entryId = `archive-${dateDir}-${file}`;
+          if (seenIds.has(entryId)) continue; // Skip duplicates from another scanned folder
+          seenIds.add(entryId);
 
-          // Extract metadata from frontmatter-like lines
-          for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            if (line.startsWith('# ')) continue;
-            if (line.startsWith('**') && line.includes(':')) {
-              if (line.includes('Words:')) {
-                const m = line.match(/Words:\s*(\d+)/);
-                if (m) wordCount = parseInt(m[1]);
+          const filePath = path.join(dirPath, file);
+          try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const lines = content.split('\n');
+            let text = '';
+            let wordCount = 0;
+            let engine = 'local';
+            let dateStr = '';
+
+            // Extract metadata from frontmatter-like lines
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i];
+              if (line.startsWith('# ')) continue;
+              if (line.startsWith('**') && line.includes(':')) {
+                if (line.includes('Words:')) {
+                  const m = line.match(/Words:\s*(\d+)/);
+                  if (m) wordCount = parseInt(m[1]);
+                }
+                if (line.includes('Start:') || line.includes('Time:')) {
+                  const m = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/);
+                  if (m) dateStr = m[1];
+                }
+                if (line.includes('Engine:')) {
+                  const m = line.match(/Engine:\s*(\w+)/);
+                  if (m) engine = m[1].toLowerCase();
+                }
+                continue;
               }
-              if (line.includes('Start:') || line.includes('Time:')) {
-                const m = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/);
-                if (m) dateStr = m[1];
-              }
-              if (line.includes('Engine:')) {
-                const m = line.match(/Engine:\s*(\w+)/);
-                if (m) engine = m[1].toLowerCase();
-              }
-              continue;
+              if (line === '---' || line.trim() === '') continue;
+              text = lines.slice(i).join('\n').trim();
+              break;
             }
-            if (line === '---' || line.trim() === '') continue;
-            text = lines.slice(i).join('\n').trim();
-            break;
-          }
 
-          // Fallback date from dir/file name
-          if (!dateStr) {
-            const timePart = file.replace('.md', '');
-            dateStr = `${dateDir}T${timePart.substring(0, 2)}:${timePart.substring(2, 4)}:${timePart.substring(4, 6)}`;
-          }
+            // Fallback date from dir/file name
+            if (!dateStr) {
+              const timePart = file.replace('.md', '');
+              dateStr = `${dateDir}T${timePart.substring(0, 2)}:${timePart.substring(2, 4)}:${timePart.substring(4, 6)}`;
+            }
 
-          if (!wordCount && text) {
-            wordCount = text.split(/\s+/).filter(Boolean).length;
-          }
+            if (!wordCount && text) {
+              wordCount = text.split(/\s+/).filter(Boolean).length;
+            }
 
-          // Match media files by timestamp proximity (±30 seconds)
-          const mdTime = parseTimeKey(file);
-          let hasAudio = false, hasVideo = false, audioPath = '', videoPath = '';
+            // Match media files by timestamp — nearest within ±120s
+            const mdTime = parseTimeKey(file);
+            let hasAudio = false, hasVideo = false, audioPath = '', videoPath = '';
 
-          for (const af of audioFiles) {
-            const afTime = parseTimeKey(af);
-            if (afTime >= 0 && Math.abs(afTime - mdTime) <= 30) {
+            // Find closest audio file within window
+            let bestAudioDist = Infinity, bestAudioIdx = -1;
+            for (let ai = 0; ai < audioFiles.length; ai++) {
+              if (consumedAudio.has(ai)) continue;
+              const afTime = parseTimeKey(audioFiles[ai]);
+              const dist = Math.abs(afTime - mdTime);
+              if (afTime >= 0 && dist <= 120 && dist < bestAudioDist) {
+                bestAudioDist = dist;
+                bestAudioIdx = ai;
+              }
+            }
+            if (bestAudioIdx !== -1) {
               hasAudio = true;
-              audioPath = path.join(dirPath, af);
-              break;
+              audioPath = path.join(dirPath, audioFiles[bestAudioIdx]);
+              consumedAudio.add(bestAudioIdx);
             }
-          }
-          for (const vf of videoFiles) {
-            const vfTime = parseTimeKey(vf.replace('-video', ''));
-            if (vfTime >= 0 && Math.abs(vfTime - mdTime) <= 30) {
-              hasVideo = true;
-              videoPath = path.join(dirPath, vf);
-              break;
-            }
-          }
 
-          entries.push({
-            date: dateStr,
-            text,
-            wordCount,
-            engine,
-            hasAudio,
-            hasVideo,
-            audioPath,
-            videoPath,
-            _source: 'archive',
-            _archivePath: filePath,
-            _id: `archive-${dateDir}-${file}`
-          });
-        } catch (e) {
-          console.warn('[History] Failed to parse:', filePath, e.message);
+            // Find closest video file within window
+            let bestVideoDist = Infinity, bestVideoIdx = -1;
+            for (let vi = 0; vi < videoFiles.length; vi++) {
+              if (consumedVideo.has(vi)) continue;
+              const vfTime = parseTimeKey(videoFiles[vi].replace('-video', ''));
+              const dist = Math.abs(vfTime - mdTime);
+              if (vfTime >= 0 && dist <= 120 && dist < bestVideoDist) {
+                bestVideoDist = dist;
+                bestVideoIdx = vi;
+              }
+            }
+            if (bestVideoIdx !== -1) {
+              hasVideo = true;
+              videoPath = path.join(dirPath, videoFiles[bestVideoIdx]);
+              consumedVideo.add(bestVideoIdx);
+            }
+
+            entries.push({
+              date: dateStr,
+              text,
+              wordCount,
+              engine,
+              hasAudio,
+              hasVideo,
+              audioPath,
+              videoPath,
+              _source: 'archive',
+              _archivePath: filePath,
+              _id: entryId
+            });
+          } catch (e) {
+            console.warn('[History] Failed to parse:', filePath, e.message);
+          }
         }
       }
-    }
+    } // end dirsToScan loop
   } catch (e) {
     console.error('[History] Archive scan error:', e.message);
   }
@@ -1054,7 +1416,7 @@ ipcMain.handle('get-archive-history', async () => {
 // ═══ History: Delete archive entry ═══
 ipcMain.handle('delete-archive-entry', async (event, filePath) => {
   const fs = require('fs');
-  if (!filePath || !filePath.includes('WindyProArchive')) {
+  if (!filePath || typeof filePath !== 'string') {
     throw new Error('Invalid archive path');
   }
   try {
@@ -1251,9 +1613,10 @@ ipcMain.handle('archive-video', async (event, base64, timestamp) => {
 ipcMain.handle('read-archive-audio', async (event, filePath) => {
   try {
     const archiveRoot = getArchiveFolder();
-    // Security: path must be inside the archive folder
+    const defaultRoot = path.join(os.homedir(), 'Documents', 'WindyProArchive');
+    // Security: path must be inside an archive folder (configured or default)
     const resolved = path.resolve(filePath);
-    if (!resolved.startsWith(path.resolve(archiveRoot))) {
+    if (!resolved.startsWith(path.resolve(archiveRoot)) && !resolved.startsWith(path.resolve(defaultRoot))) {
       throw new Error('Path is outside archive folder');
     }
     if (!fs.existsSync(resolved)) {
@@ -1267,13 +1630,33 @@ ipcMain.handle('read-archive-audio', async (event, filePath) => {
   }
 });
 
+ipcMain.handle('read-archive-video', async (event, filePath) => {
+  try {
+    const archiveRoot = getArchiveFolder();
+    const defaultRoot = path.join(os.homedir(), 'Documents', 'WindyProArchive');
+    const resolved = path.resolve(filePath);
+    if (!resolved.startsWith(path.resolve(archiveRoot)) && !resolved.startsWith(path.resolve(defaultRoot))) {
+      throw new Error('Path is outside archive folder');
+    }
+    if (!fs.existsSync(resolved)) {
+      throw new Error('File not found');
+    }
+    const buffer = fs.readFileSync(resolved);
+    return { ok: true, base64: buffer.toString('base64'), mimeType: 'video/webm' };
+  } catch (err) {
+    console.error('[Archive] Video read failed:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
 // ═══ Archive Stats & Export IPC Handlers ═══
 
 ipcMain.handle('get-archive-stats', async () => {
   try {
     const archiveRoot = getArchiveFolder();
-    if (!fs.existsSync(archiveRoot)) return { totalFiles: 0, totalSizeMB: 0, days: 0 };
+    if (!fs.existsSync(archiveRoot)) return { totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0 };
     let totalFiles = 0, totalSize = 0, days = new Set();
+    let audioBytes = 0, videoBytes = 0, totalWords = 0, totalSessions = 0, totalChars = 0;
     const items = fs.readdirSync(archiveRoot);
     for (const item of items) {
       const itemPath = path.join(archiveRoot, item);
@@ -1283,13 +1666,41 @@ ipcMain.handle('get-archive-stats', async () => {
         const files = fs.readdirSync(itemPath);
         for (const file of files) {
           totalFiles++;
-          try { totalSize += fs.statSync(path.join(itemPath, file)).size; } catch (_) { }
+          try {
+            const fSize = fs.statSync(path.join(itemPath, file)).size;
+            totalSize += fSize;
+            if (file.endsWith('.webm') && file.includes('-video')) {
+              videoBytes += fSize;
+            } else if (file.endsWith('.webm') || file.endsWith('.wav')) {
+              audioBytes += fSize;
+            } else if (file.endsWith('.md') && file !== `${item}.md`) {
+              totalSessions++;
+              try {
+                const content = fs.readFileSync(path.join(itemPath, file), 'utf-8');
+                // Strip frontmatter lines (starting with #, **, ---)
+                const textLines = content.split('\n').filter(l => !l.startsWith('#') && !l.startsWith('**') && l.trim() !== '---' && l.trim() !== '');
+                const text = textLines.join(' ').trim();
+                const words = text.split(/\s+/).filter(Boolean).length;
+                totalWords += words;
+                totalChars += text.length;
+              } catch (_) { }
+            }
+          } catch (_) { }
         }
       }
     }
-    return { totalFiles, totalSizeMB: Math.round(totalSize / (1024 * 1024) * 10) / 10, days: days.size };
+    // Estimate hours from file sizes (opus webm ~16KB/s, video ~100KB/s)
+    const audioHours = (audioBytes / 1024 / 16) / 3600;
+    const videoHours = (videoBytes / 1024 / 100) / 3600;
+    return {
+      totalFiles, totalSizeMB: Math.round(totalSize / (1024 * 1024) * 10) / 10,
+      days: days.size,
+      audioHours: Math.round(audioHours * 100) / 100,
+      videoHours: Math.round(videoHours * 100) / 100,
+      totalWords, totalSessions, totalChars
+    };
   } catch (err) {
-    return { totalFiles: 0, totalSizeMB: 0, days: 0, error: err.message };
+    return { totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0, error: err.message };
   }
 });
 
@@ -1444,6 +1855,7 @@ ipcMain.handle('setup-autostart', async (event, enable) => {
 ipcMain.handle('create-checkout-session', async (event, priceId, email) => {
   try {
     const stripe = getStripe();
+    if (!stripe) throw new Error('Payment system not configured. Please check Stripe API key in settings.');
     // Find the price config
     const priceConfig = Object.values(STRIPE_PRICES).find(p => p.id === priceId);
     if (!priceConfig) throw new Error('Invalid price ID');
@@ -1472,6 +1884,7 @@ ipcMain.handle('create-checkout-session', async (event, priceId, email) => {
 ipcMain.handle('check-payment-status', async (event, sessionId) => {
   try {
     const stripe = getStripe();
+    if (!stripe) throw new Error('Payment system not configured.');
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     const paid = session.payment_status === 'paid';
     const tier = session.metadata?.tier || 'pro';
@@ -1504,6 +1917,7 @@ ipcMain.handle('get-current-tier', async () => {
 ipcMain.handle('apply-coupon', async (event, code) => {
   try {
     const stripe = getStripe();
+    if (!stripe) throw new Error('Payment system not configured.');
     // Search for active promotion codes matching this code
     const promos = await stripe.promotionCodes.list({ code, active: true, limit: 1 });
     if (!promos.data.length) {

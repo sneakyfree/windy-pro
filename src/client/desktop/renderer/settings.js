@@ -50,14 +50,16 @@ class SettingsPanel {
           </div>
           <p class="settings-hint">When off, pasted text stays visible but grayed out so you can scroll back.</p>
           <div class="setting-row">
-            <label for="recordingModeSelect">Recording Mode</label>
+            <label for="recordingModeSelect">Transcription Mode</label>
             <select id="recordingModeSelect">
-              <option value="batch" selected>✨ Batch — best quality</option>
-              <option value="live">⚡ Live — real-time words</option>
-              <option value="hybrid">🔄 Hybrid — batch with preview</option>
+              <option value="batch" selected>✨ Batch — record first, transcribe on stop</option>
+              <option value="live">⚡ Live — see words as you speak</option>
+              <option value="hybrid">🔄 Hybrid — live preview + final polish</option>
+              <option value="clone_capture">🧬 Clone Capture — record only, no transcription</option>
             </select>
           </div>
-          <p class="settings-hint" id="recordingModeHint">Records everything, transcribes on stop. Green strobe only. Best accuracy.</p>
+          <p class="settings-hint" id="recordingModeHint">Records everything, transcribes on stop. Best accuracy. Works with any engine above.</p>
+          <p class="settings-hint" style="font-size:11px; margin-top:4px;">💡 <b>Engine</b> = which AI model runs. <b>Mode</b> = when it transcribes (during or after recording).</p>
           <div class="setting-row" id="maxDurationRow">
             <label for="maxRecordingSelect">Max Recording</label>
             <select id="maxRecordingSelect">
@@ -73,6 +75,11 @@ class SettingsPanel {
             <input type="checkbox" id="saveAudio" checked>
           </div>
           <p class="settings-hint">Saves audio files locally after each recording. Re-listen anytime from History.</p>
+          <div class="setting-row" title="Save transcript text to archive.">
+            <label for="saveText">Save text recordings</label>
+            <input type="checkbox" id="saveText" checked>
+          </div>
+          <p class="settings-hint">Saves transcript text to your archive. Uncheck for "Snapchat mode" — text pastes to cursor then disappears forever.</p>
           <div class="setting-row" title="Record video from your camera during voice sessions.">
             <label for="saveVideo">Save video recordings</label>
             <input type="checkbox" id="saveVideo">
@@ -86,6 +93,7 @@ class SettingsPanel {
               <option value="1080p">1080p — high quality (~1.5 GB/hr)</option>
             </select>
           </div>
+          <p id="cameraCapHint" class="settings-hint" style="display:none; font-size:11px;"></p>
           <div id="audioQualityRow" class="setting-row" title="Audio recording quality.">
             <label for="audioQuality">Audio quality</label>
             <select id="audioQuality">
@@ -119,31 +127,40 @@ class SettingsPanel {
 
         <div class="settings-section">
           <h3>🧬 Soul File — Your Digital Twin Data</h3>
-          <p class="settings-hint" style="margin-bottom:10px; color:#60A5FA;">
+          <p style="margin-bottom:10px; color:#E2E8F0; font-size:13px; line-height:1.5;">
             Every recording builds your Soul File — a high-fidelity dataset of your voice, vocabulary, and speech patterns.
             Over time, this becomes everything needed for a perfect voice clone or AI avatar twin.
-            <b>"Talk today. Live forever."</b>
+            <b style="color:#F59E0B;">"Talk today. Live forever."</b>
           </p>
           <div id="soulFileStats" style="background:#1a1a2e; border-radius:10px; padding:14px; margin-bottom:10px;">
             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-              <span style="color:#9CA3AF; font-size:12px;">Voice Data Collected</span>
+              <span style="color:#D1D5DB; font-size:12px;">Voice Data Collected</span>
               <span id="soulVoiceHours" style="color:#22C55E; font-weight:700; font-size:12px;">0 hours</span>
             </div>
             <div style="background:#334155; border-radius:4px; height:8px; margin-bottom:10px; overflow:hidden;">
               <div id="soulVoiceBar" style="background:linear-gradient(90deg, #22C55E, #3B82F6); height:100%; width:0%; border-radius:4px; transition:width 0.5s;"></div>
             </div>
             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-              <span style="color:#9CA3AF; font-size:12px;">Video Data Collected</span>
+              <span style="color:#D1D5DB; font-size:12px;">Video Data Collected</span>
               <span id="soulVideoHours" style="color:#A855F7; font-weight:700; font-size:12px;">0 hours</span>
             </div>
             <div style="background:#334155; border-radius:4px; height:8px; margin-bottom:10px; overflow:hidden;">
               <div id="soulVideoBar" style="background:linear-gradient(90deg, #A855F7, #EC4899); height:100%; width:0%; border-radius:4px; transition:width 0.5s;"></div>
             </div>
             <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-              <span style="color:#9CA3AF; font-size:12px;">Clone Quality Estimate</span>
+              <span style="color:#D1D5DB; font-size:12px;">Clone Quality Estimate</span>
               <span id="soulCloneGrade" style="color:#F59E0B; font-weight:700; font-size:12px;">Not enough data</span>
             </div>
-            <p style="font-size:11px; color:#64748B; margin-top:8px;">10+ hrs = Fair · 40+ hrs = Good · 100+ hrs = Excellent · 300+ hrs = Studio-Grade</p>
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px; margin-top:12px;">
+              <span style="color:#D1D5DB; font-size:12px;">📝 Text Data Collected</span>
+              <span id="soulTextWords" style="color:#60A5FA; font-weight:700; font-size:12px;">0 words</span>
+            </div>
+            <div style="background:#334155; border-radius:4px; height:8px; margin-bottom:10px; overflow:hidden;">
+              <div id="soulTextBar" style="background:linear-gradient(90deg, #60A5FA, #38BDF8); height:100%; width:0%; border-radius:4px; transition:width 0.5s;"></div>
+            </div>
+            <div id="soulRequirements" style="margin-top:8px;">
+              <span style="color:#6B7280;font-size:11px;">Loading progress…</span>
+            </div>
           </div>
           <div style="display:flex; gap:8px;">
             <button id="exportSoulFile" class="settings-btn" style="flex:1; background:#3B82F6; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer;">🧬 Export Soul File Package</button>
@@ -157,7 +174,8 @@ class SettingsPanel {
           <div class="setting-row">
             <label for="engineSelect">Engine</label>
             <select id="engineSelect">
-              <option value="local" selected>🌪️ WindyTune — auto-picks best engine</option>
+              <option value="windytune" selected>🌪️ WindyTune — auto-pilot, monitors & optimizes</option>
+              <option value="local">🏠 Local — manual model selection</option>
               <option value="edge-spark">🛡️ Edge Spark (42 MB) — ultra-light, 32x speed</option>
               <option value="edge-pulse">🛡️ Edge Pulse (78 MB) — phone-friendly, 16x</option>
               <option value="edge-standard">🛡️ Edge Standard (168 MB) — best CPU balance, 6x</option>
@@ -209,7 +227,7 @@ class SettingsPanel {
 
         <div class="settings-section" id="localModelSection">
           <h3>🎤 Transcription</h3>
-          <div class="setting-row">
+          <div class="setting-row" id="modelSizeRow">
             <label for="modelSelect">Model Size</label>
             <select id="modelSelect">
               <option value="tiny" selected>Tiny (75MB — fastest, CPU ✅)</option>
@@ -288,6 +306,10 @@ class SettingsPanel {
             <label>Show/Hide Window</label>
             <div class="shortcut-capture" id="shortcutShowHide" tabindex="0" data-key="showHide">Ctrl+Shift+W</div>
           </div>
+          <div class="setting-row" style="opacity:0.7;">
+            <label>Zoom In / Out</label>
+            <span style="color:#A78BFA; font-size:12px; font-weight:600;">Ctrl + / − &nbsp; Ctrl+0 Reset</span>
+          </div>
         </div>
         
         <div class="settings-section">
@@ -300,6 +322,13 @@ class SettingsPanel {
           <div class="setting-row">
             <label for="alwaysOnTop">Always on Top</label>
             <input type="checkbox" id="alwaysOnTop" checked>
+          </div>
+          <div class="setting-row">
+            <label for="themeToggle">Theme</label>
+            <select id="themeToggle">
+              <option value="dark" selected>🌙 Dark</option>
+              <option value="light">☀️ Light</option>
+            </select>
           </div>
         </div>
 
@@ -355,7 +384,8 @@ class SettingsPanel {
       // Show/hide relevant sections based on engine
       const apiKeySection = this.panel.querySelector('#apiKeySection');
       const engineInfo = {
-        local: { hint: '🌪️ <b>WindyTune auto-pilot.</b> Monitors your hardware in real-time and picks the best installed engine. Fully private, fully offline.', color: '#22C55E', cloud: false, local: true, api: false },
+        local: { hint: '🏠 <b>Manual mode.</b> Select your model below. Full control over which whisper model runs.', color: '#22C55E', cloud: false, local: true, api: false },
+        windytune: { hint: '🌪️ <b>Auto-pilot.</b> Monitors your performance in real-time. Auto-switches to the best model for your hardware. Logs every change to the status bar.', color: '#22C55E', cloud: false, local: true, api: false },
         cloud: { hint: '🔒 <b>E2E encrypted.</b> Streamed to WindyPro servers. Large-v3 on RTX 5090 GPU. Zero data retention.', color: '#4ecdc4', cloud: true, local: false, api: false },
         'edge-spark': { hint: '🛡️ <b>Ultra-light (42 MB).</b> Fits anything. Quick dictation, real-time captions.', color: '#22C55E', cloud: false, local: true, api: false },
         'edge-pulse': { hint: '🛡️ <b>Phone-optimized.</b> Fast & light. Mobile dictation, voice memos.', color: '#22C55E', cloud: false, local: true, api: false },
@@ -379,6 +409,12 @@ class SettingsPanel {
       engineHint.style.color = info.color;
       cloudSettings.style.display = info.cloud ? 'block' : 'none';
       localModelSection.style.display = info.local ? 'block' : 'none';
+      // Hide Model Size row for named engines (they auto-map to a model)
+      const modelSizeRow = this.panel.querySelector('#modelSizeRow');
+      if (modelSizeRow) {
+        const isNamedEngine = engine !== 'local' && engine !== 'cloud';
+        modelSizeRow.style.display = (info.local && !isNamedEngine) ? '' : 'none';
+      }
       if (apiKeySection) {
         apiKeySection.style.display = info.api ? 'block' : 'none';
         /* Legacy API key visibility removed — Windy Pro engines only */
@@ -387,11 +423,35 @@ class SettingsPanel {
           if (row) row.style.display = (k === info.api) ? 'block' : 'none';
         });
       }
-      // Update badge
-      const badge = document.getElementById('modelBadge');
-      if (badge) {
-        const icons = { local: '🌪️', cloud: '☁️', 'edge-spark': '🛡️', 'edge-pulse': '🛡️', 'edge-standard': '🛡️', 'edge-global': '🛡️', 'edge-pro': '🛡️', 'core-spark': '⚡', 'core-pulse': '⚡', 'core-standard': '⚡', 'core-global': '⚡', 'core-pro': '⚡', 'core-turbo': '⚡', 'core-ultra': '⚡', 'lingua-es': '🌍', 'lingua-fr': '🌍', 'lingua-hi': '🌍' };
-        badge.textContent = `${icons[engine] || '🌪️'} ${engine}`;
+      // Update badge with model size info
+      if (this.app && this.app.updateModelBadge) {
+        this.app.updateModelBadge(engine);
+      } else {
+        const badge = document.getElementById('modelBadge');
+        if (badge) {
+          const icons = { local: '🌪️', cloud: '☁️', 'edge-spark': '🛡️', 'edge-pulse': '🛡️', 'edge-standard': '🛡️', 'edge-global': '🛡️', 'edge-pro': '🛡️', 'core-spark': '⚡', 'core-pulse': '⚡', 'core-standard': '⚡', 'core-global': '⚡', 'core-pro': '⚡', 'core-turbo': '⚡', 'core-ultra': '⚡', 'lingua-es': '🌍', 'lingua-fr': '🌍', 'lingua-hi': '🌍' };
+          badge.textContent = `${icons[engine] || '🌪️'} ${engine}`;
+        }
+      }
+      // Auto-sync Model Size dropdown to match engine selection
+      const modelMap = this.app?._engineModelMap;
+      if (modelMap && engine in modelMap && modelMap[engine]) {
+        const whisperModel = modelMap[engine];
+        this.saveSetting('model', whisperModel);
+        const modelSelect = this.panel.querySelector('#modelSelect');
+        if (modelSelect) {
+          // Find the option that starts with the model name
+          for (const opt of modelSelect.options) {
+            if (opt.value === whisperModel || opt.value.startsWith(whisperModel)) {
+              modelSelect.value = opt.value;
+              break;
+            }
+          }
+        }
+        // Also tell the Python server to switch models now
+        if (this.app?.ws?.readyState === WebSocket.OPEN) {
+          this.app.ws.send(JSON.stringify({ type: 'config', model: whisperModel }));
+        }
       }
     });
 
@@ -463,13 +523,23 @@ class SettingsPanel {
           });
           const data = await res.json();
           if (!res.ok) {
-            throw new Error(data.detail || 'Login failed');
+            throw new Error(data.detail || data.error || 'Login failed');
           }
 
           // Success — store token
           this.app.cloudToken = data.token;
           this.saveSetting('cloudToken', data.token);
           this.saveSetting('cloudUser', data.user?.email || email);
+
+          // Sync with WindySync (H4)
+          if (this.app.cloudSync) {
+            this.app.cloudSync.token = data.token;
+            this.app.cloudSync.refreshToken = data.refreshToken || null;
+            this.app.cloudSync.user = data.user;
+            this.app.cloudSync.baseUrl = apiBase;
+            this.app.cloudSync._saveCredentials();
+            localStorage.setItem('windy_cloud_api_url', apiBase);
+          }
 
           cloudLoginForm.style.display = 'none';
           cloudAccountStatus.style.display = 'block';
@@ -606,10 +676,13 @@ class SettingsPanel {
     // Video recording toggle
     const saveVideoEl = this.panel.querySelector('#saveVideo');
     const videoQualityRow = this.panel.querySelector('#videoQualityRow');
+    const cameraCapHint = this.panel.querySelector('#cameraCapHint');
     if (saveVideoEl) {
       saveVideoEl.addEventListener('change', (e) => {
         this.saveSetting('saveVideo', e.target.checked);
         if (videoQualityRow) videoQualityRow.style.display = e.target.checked ? 'flex' : 'none';
+        if (cameraCapHint) cameraCapHint.style.display = e.target.checked ? 'block' : 'none';
+        if (e.target.checked) this._probeCameraResolution();
       });
     }
 
@@ -618,6 +691,7 @@ class SettingsPanel {
     if (videoQualityEl) {
       videoQualityEl.addEventListener('change', (e) => {
         this.saveSetting('videoQuality', e.target.value);
+        this._probeCameraResolution();
       });
     }
 
@@ -715,10 +789,12 @@ class SettingsPanel {
         const hints = {
           batch: 'Records everything, transcribes on stop. Green strobe only. Best accuracy. Great for meetings, dictation, and long sessions.',
           live: 'Words appear as you speak in real-time. Slightly lower accuracy (~5%). Great for live captions, presentations, and quick notes.',
-          hybrid: 'Shows approximate words while recording, then replaces with polished batch result on stop. Best of both worlds — minor accuracy impact (~2%).'
+          hybrid: 'Shows approximate words while recording, then replaces with polished batch result on stop. Best of both worlds — minor accuracy impact (~2%).',
+          clone_capture: '🧬 Records audio + video for digital twin archives. No transcription model loaded — near-zero CPU. Perfect for all-day recording at your desk. Archives are processed later with higher-quality models.'
         };
         if (hint) hint.textContent = hints[e.target.value] || hints.batch;
-        if (maxRow) maxRow.style.display = e.target.value === 'live' ? 'none' : 'flex';
+        // Hide max duration for clone_capture (unlimited) and live (streaming)
+        if (maxRow) maxRow.style.display = (e.target.value === 'live' || e.target.value === 'clone_capture') ? 'none' : 'flex';
       });
     }
 
@@ -735,6 +811,14 @@ class SettingsPanel {
     if (saveAudioEl) {
       saveAudioEl.addEventListener('change', (e) => {
         localStorage.setItem('windy_saveAudio', e.target.checked ? 'true' : 'false');
+      });
+    }
+
+    // Save text recordings toggle
+    const saveTextEl = this.panel.querySelector('#saveText');
+    if (saveTextEl) {
+      saveTextEl.addEventListener('change', (e) => {
+        localStorage.setItem('windy_saveText', e.target.checked ? 'true' : 'false');
       });
     }
 
@@ -873,6 +957,21 @@ class SettingsPanel {
         window.windyAPI.updateSettings({ alwaysOnTop: e.target.checked });
       }
     });
+
+    // Theme toggle (Light / Dark)
+    const themeToggle = this.panel.querySelector('#themeToggle');
+    if (themeToggle) {
+      // Restore saved theme
+      const savedTheme = localStorage.getItem('windy_theme') || 'dark';
+      themeToggle.value = savedTheme;
+      document.body.classList.toggle('light-theme', savedTheme === 'light');
+
+      themeToggle.addEventListener('change', (e) => {
+        const theme = e.target.value;
+        localStorage.setItem('windy_theme', theme);
+        document.body.classList.toggle('light-theme', theme === 'light');
+      });
+    }
   }
 
   async loadSettings() {
@@ -963,7 +1062,11 @@ class SettingsPanel {
         if (archiveFolderEl) archiveFolderEl.value = settings.archiveFolder || '';
         const saveVideoEl2 = this.panel.querySelector('#saveVideo');
         if (saveVideoEl2) saveVideoEl2.checked = !!settings.saveVideo;
-        if (saveVideoEl2?.checked) { const vqr = this.panel.querySelector('#videoQualityRow'); if (vqr) vqr.style.display = 'flex'; }
+        if (saveVideoEl2?.checked) {
+          const vqr = this.panel.querySelector('#videoQualityRow'); if (vqr) vqr.style.display = 'flex';
+          const camHint = this.panel.querySelector('#cameraCapHint'); if (camHint) camHint.style.display = 'block';
+          this._probeCameraResolution();
+        }
         const videoQualityEl2 = this.panel.querySelector('#videoQuality');
         if (videoQualityEl2 && settings.videoQuality) videoQualityEl2.value = settings.videoQuality;
         const audioQualityEl2 = this.panel.querySelector('#audioQuality');
@@ -1023,26 +1126,63 @@ class SettingsPanel {
       const stats = window.windyAPI?.getArchiveStats ? await window.windyAPI.getArchiveStats() : null;
       const voiceHours = stats?.audioHours || 0;
       const videoHours = stats?.videoHours || 0;
+      const totalWords = stats?.totalWords || 0;
+      const totalSessions = stats?.totalSessions || 0;
 
       const voiceEl = this.panel.querySelector('#soulVoiceHours');
       const videoEl = this.panel.querySelector('#soulVideoHours');
       const voiceBar = this.panel.querySelector('#soulVoiceBar');
       const videoBar = this.panel.querySelector('#soulVideoBar');
       const gradeEl = this.panel.querySelector('#soulCloneGrade');
+      const textEl = this.panel.querySelector('#soulTextWords');
+      const textBar = this.panel.querySelector('#soulTextBar');
 
       if (voiceEl) voiceEl.textContent = voiceHours < 1 ? `${Math.round(voiceHours * 60)} minutes` : `${voiceHours.toFixed(1)} hours`;
       if (videoEl) videoEl.textContent = videoHours < 1 ? `${Math.round(videoHours * 60)} minutes` : `${videoHours.toFixed(1)} hours`;
+      if (textEl) textEl.textContent = `${totalWords.toLocaleString()} words across ${totalSessions} sessions`;
 
-      // Progress bars: 300 hrs = 100% for voice, 100 hrs for video
-      if (voiceBar) voiceBar.style.width = Math.min(100, (voiceHours / 300) * 100) + '%';
-      if (videoBar) videoBar.style.width = Math.min(100, (videoHours / 100) * 100) + '%';
+      // Progress bars: use 10hr target for voice, 5hr for video, 10K for text
+      // Minimum 5% when > 0 so something always shows
+      const voicePct = voiceHours > 0 ? Math.max(5, Math.min(100, (voiceHours / 10) * 100)) : 0;
+      const videoPct = videoHours > 0 ? Math.max(5, Math.min(100, (videoHours / 5) * 100)) : 0;
+      const textPct = totalWords > 0 ? Math.max(5, Math.min(100, (totalWords / 10000) * 100)) : 0;
 
+      if (voiceBar) voiceBar.style.width = voicePct + '%';
+      if (videoBar) videoBar.style.width = videoPct + '%';
+      if (textBar) textBar.style.width = textPct + '%';
+
+      // Clone quality grade
       if (gradeEl) {
         if (voiceHours >= 300) { gradeEl.textContent = '🏆 Studio-Grade'; gradeEl.style.color = '#22C55E'; }
         else if (voiceHours >= 100) { gradeEl.textContent = '⭐ Excellent'; gradeEl.style.color = '#3B82F6'; }
         else if (voiceHours >= 40) { gradeEl.textContent = '👍 Good'; gradeEl.style.color = '#60A5FA'; }
         else if (voiceHours >= 10) { gradeEl.textContent = '📊 Fair'; gradeEl.style.color = '#F59E0B'; }
+        else if (totalWords >= 5000) { gradeEl.textContent = '📝 Building (text data growing)'; gradeEl.style.color = '#60A5FA'; }
         else { gradeEl.textContent = 'Not enough data yet'; gradeEl.style.color = '#94A3B8'; }
+      }
+
+      // Update requirements legend with percentage progress
+      const legendEl = this.panel.querySelector('#soulRequirements');
+      if (legendEl) {
+        const tiers = [
+          { label: 'Fair', hours: 10, icon: '📊', color: '#F59E0B' },
+          { label: 'Good', hours: 40, icon: '👍', color: '#60A5FA' },
+          { label: 'Excellent', hours: 100, icon: '⭐', color: '#3B82F6' },
+          { label: 'Studio-Grade', hours: 300, icon: '🏆', color: '#22C55E' }
+        ];
+        legendEl.innerHTML = tiers.map(t => {
+          const pct = Math.min(100, Math.round((voiceHours / t.hours) * 100));
+          const done = pct >= 100;
+          const barColor = done ? t.color : t.color + '99';
+          return `<div style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+            <span style="font-size:13px;width:20px;text-align:center;">${done ? '✅' : t.icon}</span>
+            <span style="color:${done ? t.color : '#D1D5DB'};font-size:12px;font-weight:${done ? '700' : '500'};width:90px;">${t.label} (${t.hours}h)</span>
+            <div style="flex:1;background:#334155;border-radius:4px;height:6px;overflow:hidden;">
+              <div style="background:${barColor};height:100%;width:${pct}%;border-radius:4px;transition:width 0.5s;"></div>
+            </div>
+            <span style="color:${done ? t.color : '#9CA3AF'};font-size:12px;font-weight:700;width:38px;text-align:right;">${pct}%</span>
+          </div>`;
+        }).join('');
       }
     } catch (e) {
       console.warn('[Settings] Soul File stats update failed:', e.message);
@@ -1138,5 +1278,44 @@ class SettingsPanel {
   close() {
     this.panel.classList.remove('open');
     this.isOpen = false;
+  }
+
+  /**
+   * Probe the camera hardware to detect actual max resolution.
+   * Shows a hint below the video quality dropdown with the real capability.
+   */
+  async _probeCameraResolution() {
+    const hint = this.panel?.querySelector('#cameraCapHint');
+    if (!hint) return;
+    hint.textContent = '📷 Checking camera…';
+    hint.style.display = 'block';
+    try {
+      // Request max resolution to see what the camera actually delivers
+      const probe = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }
+      });
+      const track = probe.getVideoTracks()[0];
+      const s = track?.getSettings();
+      const camW = s?.width || 0;
+      const camH = s?.height || 0;
+      // Release immediately
+      probe.getTracks().forEach(t => t.stop());
+
+      if (camH > 0) {
+        const label = camH >= 2160 ? '4K' : camH >= 1080 ? '1080p' : camH >= 720 ? '720p' : camH >= 480 ? '480p' : camH + 'p';
+        const selectedQ = this.panel.querySelector('#videoQuality')?.value || '720p';
+        const selectedH = selectedQ === '1080p' ? 1080 : selectedQ === '720p' ? 720 : 480;
+
+        if (camH < selectedH) {
+          hint.innerHTML = `⚠️ <strong style="color:#D97706;">Your camera max: ${label} (${camW}×${camH})</strong> — selected ${selectedQ} exceeds hardware. Recordings will be ${label}.`;
+        } else {
+          hint.innerHTML = `📷 Your camera: <strong>${label}</strong> (${camW}×${camH}) — ✅ supports your selected quality.`;
+        }
+      } else {
+        hint.textContent = '📷 Camera detected but resolution unknown.';
+      }
+    } catch (err) {
+      hint.textContent = '📷 Camera not available — check permissions.';
+    }
   }
 }

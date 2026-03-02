@@ -19,6 +19,8 @@
         <span class="title">Windy Pro</span>
       </div>
       <div class="title-bar-right">
+        <button class="title-btn" id="themeQuickToggle" title="Toggle light/dark mode" aria-label="Toggle theme"
+          style="font-size:14px;">🌙</button>
         <button class="title-btn" id="settingsBtn" title="Settings" aria-label="Open settings">⚙️</button>
         <button class="title-btn" id="minimizeBtn" title="Minimize" aria-label="Minimize window">─</button>
         <button class="title-btn close" id="closeBtn" title="Close" aria-label="Close window">×</button>
@@ -35,6 +37,18 @@
     <!-- Reconnect Toast -->
     <div class="reconnect-toast" id="reconnectToast" style="display:none;"></div>
 
+    <!-- Recording Status Badges (visible during active recording) -->
+    <div class="recording-status" id="recordingStatus" style="display:none;">
+      <span class="rec-badge audio-badge active" id="audioBadge">🎤 Audio ✓</span>
+      <span class="rec-badge video-badge" id="videoBadge" style="display:none;">🎬 Video ✓</span>
+    </div>
+
+    <!-- Webcam Thumbnail (visible during video recording) -->
+    <div class="webcam-thumb" id="webcamThumb" style="display:none;">
+      <video id="webcamVideo" autoplay muted playsinline></video>
+      <span class="rec-indicator">● REC</span>
+    </div>
+
     <!-- Audio Level Meter -->
     <div class="audio-meter-container" id="audioMeterContainer" style="display: none;">
       <div class="audio-meter-bar" id="audioMeterBar"></div>
@@ -46,7 +60,7 @@
         <div class="transcript-content" id="transcriptContent">
           <!-- Transcript segments will appear here -->
           <div class="placeholder">
-            <div style="margin-bottom:8px;font-weight:600;opacity:0.9;">⌨️ Keyboard Shortcuts</div>
+            <div style="margin-bottom:8px;font-weight:600;">⌨️ Keyboard Shortcuts</div>
             <div style="margin:4px 0;"><kbd>Ctrl+Shift+Space</kbd> — <span
                 style="color:#22C55E;font-weight:600;">Start</span> recording</div>
             <div style="margin:4px 0;"><kbd>Ctrl+Shift+Space</kbd> — <span
@@ -55,45 +69,52 @@
                 style="color:#4ECDC4;font-weight:600;">Paste</span> transcript to cursor</div>
             <div style="margin:4px 0;"><kbd>Ctrl+Shift+W</kbd> — <span style="color:#F7DC6F;font-weight:600;">Show /
                 Hide</span> app window</div>
+            <div style="margin:4px 0;"><kbd>Ctrl + / −</kbd> — <span style="color:#A78BFA;font-weight:600;">Zoom</span>
+              in / out &nbsp; <kbd>Ctrl+0</kbd> Reset</div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Control Bar -->
-    <div class="control-bar" role="toolbar" aria-label="Recording controls">
-      <button class="control-btn primary" id="recordBtn" title="Start/Stop Recording" aria-label="Toggle recording">
-        <span class="icon">🎤</span>
-        <span class="label">Record</span>
-      </button>
-      <button class="control-btn" id="clearBtn" title="Clear Transcript" aria-label="Clear transcript">
-        <span class="icon">🗑️</span>
-      </button>
-      <button class="control-btn" id="copyBtn" title="Copy All" aria-label="Copy transcript to clipboard">
-        <span class="icon">📋</span>
-      </button>
-      <button class="control-btn" id="historyBtn" title="History" aria-label="Toggle history panel">
-        <span class="icon">📜</span>
-      </button>
-      <button class="control-btn" id="pasteBtn" title="Paste to Cursor" aria-label="Paste transcript at cursor">
-        <span class="icon">📝</span>
-      </button>
-      <div class="archive-route-group" id="archiveRouteGroup">
-        <select class="archive-route" id="archiveRouteSelect" title="Today route: where dictations archive today"
-          aria-label="Archive route">
-          <option value="local">📁 Local</option>
-          <option value="cloud">☁️ Windy Pro Cloud</option>
-          <option value="local_cloud">📁+☁️ Local + Cloud</option>
-          <option value="off">🚫 Off</option>
-        </select>
-        <button class="archive-path-btn" id="archiveOpenBtn" title="Open archive folder">📂</button>
-        <button class="archive-path-btn" id="archiveChangeBtn" title="Change archive folder">⚙️</button>
-        <span class="archive-path-label" id="archivePathLabel" title="Click to open"></span>
+    <!-- Collapsible control bar (wrapped by status bar chevron) -->
+    <div class="controls-collapsible" id="controlsCollapsible">
+      <!-- Control Bar -->
+      <div class="control-bar" role="toolbar" aria-label="Recording controls">
+        <button class="control-btn primary" id="recordBtn" title="Start/Stop Recording" aria-label="Toggle recording">
+          <span class="icon">🎤</span>
+          <span class="label">Record</span>
+        </button>
+        <button class="control-btn" id="clearBtn" title="Clear Transcript" aria-label="Clear transcript">
+          <span class="icon">🗑️</span>
+        </button>
+        <button class="control-btn" id="copyBtn" title="Copy All" aria-label="Copy transcript to clipboard">
+          <span class="icon">📋</span>
+        </button>
+        <button class="control-btn" id="historyBtn" title="History" aria-label="Toggle history panel">
+          <span class="icon">📜</span>
+        </button>
+        <button class="control-btn" id="pasteBtn" title="Paste to Cursor" aria-label="Paste transcript at cursor">
+          <span class="icon">📝</span>
+        </button>
+        <div class="archive-route-group" id="archiveRouteGroup">
+          <select class="archive-route" id="archiveRouteSelect" title="Today route: where dictations archive today"
+            aria-label="Archive route">
+            <option value="local">📁 Local</option>
+            <option value="cloud">☁️ Windy Pro Cloud</option>
+            <option value="local_cloud">📁+☁️ Local + Cloud</option>
+            <option value="off">🚫 Off</option>
+          </select>
+          <button class="archive-path-btn" id="archiveOpenBtn" title="Open archive folder">📂</button>
+          <button class="archive-path-btn" id="archiveChangeBtn" title="Change archive folder">⚙️</button>
+          <span class="archive-path-label" id="archivePathLabel" title="Click to open"></span>
+        </div>
       </div>
     </div>
 
-    <!-- Connection Status -->
+    <!-- Connection Status (always visible — chevron here collapses controls above) -->
     <div class="status-bar" id="statusBar">
+      <span class="controls-chevron" id="controlsChevron" title="Show/hide controls">▾</span>
+      <button class="mini-record-btn" id="miniRecordBtn" style="display:none;" title="Start/Stop Recording">🎤</button>
       <span class="status-dot" id="connectionDot"></span>
       <span class="status-text" id="connectionText">Connecting...</span>
       <span class="word-count" id="wordCount"></span>
@@ -108,6 +129,7 @@
   <script src="history.js"></script>
   <script src="upgrade.js"></script>
   <script src="settings.js"></script>
+  <script src="sync.js"></script>
   <script src="app.js"></script>
 </body>
 

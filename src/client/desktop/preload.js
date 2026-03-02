@@ -3,9 +3,12 @@
  * Exposes safe APIs to the renderer process
  */
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 contextBridge.exposeInMainWorld('windyAPI', {
+  // Zoom
+  setZoomFactor: (factor) => webFrame.setZoomFactor(factor),
+
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (settings) => ipcRenderer.send('update-settings', settings),
@@ -15,6 +18,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   archiveAudio: (base64, timestamp) => ipcRenderer.invoke('archive-audio', base64, timestamp),
   archiveVideo: (base64, timestamp) => ipcRenderer.invoke('archive-video', base64, timestamp),
   readArchiveAudio: (filePath) => ipcRenderer.invoke('read-archive-audio', filePath),
+  readArchiveVideo: (filePath) => ipcRenderer.invoke('read-archive-video', filePath),
   batchTranscribeLocal: (base64Audio) => ipcRenderer.invoke('batch-transcribe-local', base64Audio),
   autoPasteText: (text) => ipcRenderer.invoke('auto-paste-text', text),
   sendVoiceLevel: (level) => ipcRenderer.send('voice-level', level),
@@ -25,7 +29,19 @@ contextBridge.exposeInMainWorld('windyAPI', {
     ipcRenderer.on('update-toast', (event, payload) => callback(payload));
   },
   openArchiveFolder: () => ipcRenderer.send('open-archive-folder'),
+  openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
   minimize: () => ipcRenderer.send('minimize-window'),
+
+  // Video preview window (independent)
+  showVideoPreview: () => ipcRenderer.invoke('show-video-preview'),
+  hideVideoPreview: () => ipcRenderer.invoke('hide-video-preview'),
+  sendVideoFrame: (dataUrl) => ipcRenderer.send('video-frame-to-preview', dataUrl),
+  sendRecordingState: (state) => ipcRenderer.send('recording-state-to-preview', state),
+
+  // Font size control
+  getFontSize: () => ipcRenderer.invoke('get-font-size'),
+  setFontSize: (percent) => ipcRenderer.invoke('set-font-size', percent),
+  onFontSizeChange: (cb) => ipcRenderer.on('font-size-changed', (_e, percent) => cb(percent)),
 
   // Recording control
   onToggleRecording: (callback) => {

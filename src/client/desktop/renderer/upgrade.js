@@ -28,8 +28,10 @@ class UpgradePanel {
                 key: 'pro',
                 name: 'Windy Pro',
                 price: '$49',
+                altPrice: '$4.99/mo',
                 period: 'one-time',
                 priceId: 'price_1T5oYzBXIOBasDQibSlnIsPg',
+                altPriceId: 'price_1T60GeBXIOBasDQi4aitcq8O',
                 features: ['All 15 engines', '99 languages', '30-min recordings', 'Batch mode', 'LLM polish'],
                 color: '#22C55E',
                 icon: '⚡'
@@ -51,8 +53,10 @@ class UpgradePanel {
                 key: 'translate_pro',
                 name: 'Windy Translate Pro',
                 price: '$149',
+                altPrice: '$14.99/mo',
                 period: 'one-time',
                 priceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG',
+                altPriceId: 'price_1T60H8BXIOBasDQiy5eorTWR',
                 features: ['Everything in Translate', 'Text-to-speech', 'Medical/legal glossaries', 'Priority support'],
                 color: '#8B5CF6',
                 icon: '👑'
@@ -210,6 +214,9 @@ class UpgradePanel {
     }
 
     async _startCheckout(priceId, tier) {
+        // Initialize session tracking array if needed
+        if (!this._activeSessions) this._activeSessions = [];
+
         const status = this.panel.querySelector('#upgradeStatus');
         status.innerHTML = '⏳ Creating checkout session…';
         status.className = 'upgrade-status upgrade-status-pending';
@@ -229,26 +236,36 @@ class UpgradePanel {
             const result = await window.windyAPI.createCheckoutSession(priceId, email);
             if (!result?.ok) throw new Error(result?.error || 'Session creation failed');
 
+            // Track this session (keep all for multi-tab support)
+            this._activeSessions.push({ sessionId: result.sessionId, tier });
+
             // Open checkout in browser
             status.innerHTML = '🌐 Opening Stripe checkout in your browser…<br><span style="font-size:11px;color:#9CA3AF;">Complete payment there, then come back here</span>';
 
-            // Use Electron shell to open external URL
-            const link = document.createElement('a');
-            link.href = result.url;
-            link.target = '_blank';
-            link.click();
+            // Open checkout in system browser (not Electron window)
+            if (window.windyAPI?.openExternalUrl) {
+                const openResult = await window.windyAPI.openExternalUrl(result.url);
+                if (!openResult?.ok) {
+                    console.warn('[Upgrade] shell.openExternal failed, showing link');
+                    status.innerHTML = `🔗 <a href="#" onclick="navigator.clipboard.writeText('${result.url}');this.textContent='Copied!';return false" style="color:#60A5FA;text-decoration:underline;cursor:pointer;">Click to copy checkout URL</a><br><span style="font-size:11px;color:#9CA3AF;">Paste in your browser to complete payment</span>`;
+                }
+            } else {
+                window.open(result.url, '_blank');
+            }
 
-            // Start polling for payment completion
-            this._startPolling(result.sessionId, tier);
+            // Start polling if not already running (polls ALL sessions)
+            if (!this._pollTimer) {
+                this._startPolling();
+            }
         } catch (err) {
             status.innerHTML = `❌ ${err.message}`;
             status.className = 'upgrade-status upgrade-status-error';
         }
     }
 
-    _startPolling(sessionId, tier) {
+    _startPolling() {
         this._pollCount = 0;
-        const maxPolls = 100; // 3s × 100 = 5 minutes
+        const maxPolls = 600; // 3s × 600 = 30 minutes
         const status = this.panel?.querySelector('#upgradeStatus');
 
         this._pollTimer = setInterval(async () => {
@@ -264,14 +281,40 @@ class UpgradePanel {
 
             try {
                 if (!window.windyAPI?.checkPaymentStatus) return;
-                const result = await window.windyAPI.checkPaymentStatus(sessionId);
-                if (result?.paid) {
-                    this._stopPolling();
-                    this._currentTier = result.tier;
-                    this._onPaymentSuccess(result.tier);
-                } else if (status) {
+
+                // Poll ALL active sessions in parallel
+                const sessions = this._activeSessions || [];
+                const results = await Promise.all(
+                    sessions.map(s => window.windyAPI.checkPaymentStatus(s.sessionId).catch(() => null))
+                );
+
+                // Check if ANY session was paid
+                for (let i = 0; i < results.length; i++) {
+                    if (results[i]?.paid) {
+                        this._stopPolling();
+                        this._activeSessions = [];
+                        this._currentTier = results[i].tier || sessions[i].tier;
+                        this._onPaymentSuccess(this._currentTier);
+                        return;
+                    }
+                }
+
+                // No payment yet — update status
+                if (status) {
+                    const tabCount = sessions.length;
                     const dots = '.'.repeat((this._pollCount % 3) + 1);
-                    status.innerHTML = `⏳ Waiting for payment${dots}<br><span style="font-size:11px;color:#9CA3AF;">Complete checkout in your browser (${Math.ceil((maxPolls - this._pollCount) * 3 / 60)} min remaining)</span>`;
+                    const tabNote = tabCount > 1 ? `<br><span style="font-size:10px;color:#6B7280;">Watching ${tabCount} checkout tabs — pay on any one</span>` : '';
+                    status.innerHTML = `⏳ Waiting for payment${dots}<br><span style="font-size:11px;color:#9CA3AF;">Complete checkout in your browser, then come back here</span>${tabNote}<br><a href="#" id="cancelCheckout" style="font-size:11px;color:#60A5FA;cursor:pointer;">Changed your mind? Pick a different plan</a>`;
+                    const cancelLink = status.querySelector('#cancelCheckout');
+                    if (cancelLink) {
+                        cancelLink.onclick = (ev) => {
+                            ev.preventDefault();
+                            this._stopPolling();
+                            this._activeSessions = [];
+                            status.innerHTML = '👆 Select a plan above to continue';
+                            status.className = 'upgrade-status';
+                        };
+                    }
                 }
             } catch (_) { }
         }, 3000);

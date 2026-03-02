@@ -1,7 +1,21 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import './Landing.css'
 
+function isLoggedIn() {
+    const token = localStorage.getItem('windy_token')
+    if (!token) return false
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+        return payload.exp && payload.exp > Date.now() / 1000
+    } catch { return false }
+}
+
 export default function Landing() {
+    const loggedIn = isLoggedIn()
+    const [menuOpen, setMenuOpen] = useState(false)
+    const closeMenu = () => setMenuOpen(false)
+
     return (
         <div className="landing">
             {/* Navigation */}
@@ -11,14 +25,30 @@ export default function Landing() {
                         <div className="logo-icon"></div>
                         <span className="logo-text">Windy Pro</span>
                     </div>
-                    <div className="nav-links">
-                        <a href="#features">Features</a>
-                        <a href="#pricing">Pricing</a>
-                        <a href="#download">Download</a>
-                        <Link to="/auth" className="btn btn-primary nav-cta">Get Started</Link>
+                    <button
+                        className={`nav-hamburger ${menuOpen ? 'open' : ''}`}
+                        onClick={() => setMenuOpen(!menuOpen)}
+                        aria-label="Toggle menu"
+                        aria-expanded={menuOpen}
+                    >
+                        <span></span><span></span><span></span>
+                    </button>
+                    <div className={`nav-links ${menuOpen ? 'open' : ''}`}>
+                        <a href="#features" onClick={closeMenu}>Features</a>
+                        <a href="#pricing" onClick={closeMenu}>Pricing</a>
+                        <a href="#download" onClick={closeMenu}>Download</a>
+                        {loggedIn ? (
+                            <Link to="/dashboard" className="btn btn-primary nav-cta" onClick={closeMenu}>Dashboard</Link>
+                        ) : (
+                            <>
+                                <Link to="/auth" className="nav-signin" onClick={closeMenu}>Sign In</Link>
+                                <Link to="/auth" className="btn btn-primary nav-cta" onClick={closeMenu}>Get Started</Link>
+                            </>
+                        )}
                     </div>
                 </div>
             </nav>
+
 
             {/* Hero Section */}
             <header className="hero">

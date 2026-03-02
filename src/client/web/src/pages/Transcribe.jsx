@@ -68,8 +68,12 @@ export default function Transcribe() {
 
         ws.onclose = () => {
             setConnected(false)
-            setReconnectCount(prev => prev + 1)
-            setTimeout(connect, 3000)
+            setReconnectCount(prev => {
+                const next = prev + 1
+                const delay = Math.min(1000 * Math.pow(2, next), 30000)
+                setTimeout(connect, delay)
+                return next
+            })
         }
 
         wsRef.current = ws
@@ -182,6 +186,18 @@ export default function Transcribe() {
         setTimeout(() => setCopyMsg(''), 2000)
     }
 
+    const downloadTranscript = () => {
+        const text = segments.map(s => s.text).join(' ').trim()
+        if (!text) return
+        const blob = new Blob([text], { type: 'text/plain' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `windy-transcript-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`
+        a.click()
+        URL.revokeObjectURL(url)
+    }
+
     const wordCount = segments.filter(s => !s.isPartial).reduce((n, s) => n + (s.text?.trim().split(/\s+/).length || 0), 0)
 
     const formatTime = (seconds) => {
@@ -204,6 +220,10 @@ export default function Transcribe() {
                 <Link to="/" className="transcribe-back">← Windy Pro</Link>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div className={`connection-dot ${connected ? 'connected' : ''}`}></div>
+                    <span style={{ fontSize: '12px', color: connected ? '#22C55E' : '#EF4444' }}>
+                        {connected ? 'Connected' : `Reconnecting${'.'.repeat((reconnectCount % 3) + 1)}`}
+                    </span>
+                    <Link to="/dashboard" style={{ color: '#94A3B8', fontSize: '12px', textDecoration: 'none' }}>Dashboard</Link>
                     <button onClick={handleLogout} className="btn-logout">Logout</button>
                 </div>
             </nav>
@@ -255,6 +275,9 @@ export default function Transcribe() {
                 </button>
                 <button className="ctrl-btn" onClick={copyTranscript} title="Copy All">
                     📋
+                </button>
+                <button className="ctrl-btn" onClick={downloadTranscript} title="Download as .txt">
+                    📥
                 </button>
             </div>
 

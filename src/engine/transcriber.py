@@ -54,6 +54,8 @@ class TranscriptionSegment:
     confidence: float = 1.0
     is_partial: bool = False  # True if this may be revised
     words: List[dict] = field(default_factory=list)
+    detected_language: str = ''  # ISO 639-1 code from Whisper
+    language_probability: float = 0.0
 
 
 @dataclass
@@ -104,6 +106,8 @@ class StreamingTranscriber:
         self._full_transcript = []
         self._on_performance_warning_cb = None
         self._perf_ratios = []
+        self._detected_language = ''  # Last detected language code
+        self._language_probability = 0.0
     
     @property
     def model_loaded(self) -> bool:
@@ -400,6 +404,13 @@ class StreamingTranscriber:
                 log_prob_threshold=-1.0
             )
             
+            # Capture detected language from transcription info
+            detected_lang = getattr(info, 'language', '') or ''
+            lang_prob = getattr(info, 'language_probability', 0.0) or 0.0
+            if detected_lang:
+                self._detected_language = detected_lang
+                self._language_probability = lang_prob
+            
             # Emit each segment
             for segment in segments:
                 text = segment.text.strip()
@@ -422,7 +433,9 @@ class StreamingTranscriber:
                     words=[
                         {"word": w.word, "start": w.start, "end": w.end, "prob": w.probability}
                         for w in (getattr(segment, 'words', None) or [])
-                    ]
+                    ],
+                    detected_language=detected_lang,
+                    language_probability=lang_prob
                 )
                 if ts.text:
                     self._emit_segment(ts)

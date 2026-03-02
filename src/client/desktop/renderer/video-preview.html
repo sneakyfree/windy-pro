@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Video Preview</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+            user-select: none;
+        }
+
+        .video-container {
+            width: 100%;
+            height: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #22c55e;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+            position: relative;
+            background: #000;
+            -webkit-app-region: drag;
+        }
+
+        .video-container.standby {
+            border-color: #6B7280;
+        }
+
+        img#videoEl {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transform: scaleX(-1);
+            display: block;
+            background: #000;
+        }
+
+        /* Green LIVE strobe */
+        .live-strobe {
+            position: absolute;
+            top: 6px;
+            left: 8px;
+            background: rgba(34, 197, 94, 0.9);
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-family: 'Inter', system-ui, sans-serif;
+            animation: strobe-green 1s infinite;
+            -webkit-app-region: no-drag;
+            display: none;
+        }
+
+        .live-strobe.active {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .live-strobe .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #fff;
+            display: inline-block;
+        }
+
+        @keyframes strobe-green {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        /* Resolution badge */
+        .res-badge {
+            position: absolute;
+            top: 6px;
+            right: 28px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #A78BFA;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Inter', system-ui, sans-serif;
+            -webkit-app-region: no-drag;
+            letter-spacing: 0.5px;
+        }
+
+        /* Standby label */
+        .standby-label {
+            position: absolute;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(107, 114, 128, 0.75);
+            color: #D1D5DB;
+            font-size: 9px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Inter', system-ui, sans-serif;
+            display: none;
+            -webkit-app-region: no-drag;
+        }
+
+        .standby-label.active {
+            display: inline-block;
+        }
+
+        /* Resize handles — all four corners */
+        .resize-handle {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            -webkit-app-region: no-drag;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .video-container:hover .resize-handle {
+            opacity: 1;
+        }
+
+        .resize-handle::after {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 10px;
+        }
+
+        /* Bottom-right */
+        .resize-br {
+            bottom: 0;
+            right: 0;
+            cursor: nwse-resize;
+        }
+
+        .resize-br::after {
+            bottom: 4px;
+            right: 4px;
+            border-right: 2px solid rgba(255, 255, 255, 0.5);
+            border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+        }
+
+        /* Bottom-left */
+        .resize-bl {
+            bottom: 0;
+            left: 0;
+            cursor: nesw-resize;
+        }
+
+        .resize-bl::after {
+            bottom: 4px;
+            left: 4px;
+            border-left: 2px solid rgba(255, 255, 255, 0.5);
+            border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+        }
+
+        /* Top-right */
+        .resize-tr {
+            top: 0;
+            right: 0;
+            cursor: nesw-resize;
+        }
+
+        .resize-tr::after {
+            top: 4px;
+            right: 4px;
+            border-right: 2px solid rgba(255, 255, 255, 0.5);
+            border-top: 2px solid rgba(255, 255, 255, 0.5);
+        }
+
+        /* Top-left */
+        .resize-tl {
+            top: 0;
+            left: 0;
+            cursor: nwse-resize;
+        }
+
+        .resize-tl::after {
+            top: 4px;
+            left: 4px;
+            border-left: 2px solid rgba(255, 255, 255, 0.5);
+            border-top: 2px solid rgba(255, 255, 255, 0.5);
+        }
+
+        /* Size indicator */
+        .size-label {
+            position: absolute;
+            bottom: 6px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: #ccc;
+            font-size: 9px;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-family: 'Inter', system-ui, sans-serif;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .size-label.visible {
+            opacity: 1;
+        }
+
+        /* Close button */
+        .close-btn {
+            position: absolute;
+            top: 4px;
+            right: 6px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #ddd;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.4;
+            transition: opacity 0.2s, background 0.2s;
+            -webkit-app-region: no-drag;
+            z-index: 20;
+        }
+
+        .video-container:hover .close-btn {
+            opacity: 0.8;
+        }
+
+        .close-btn:hover {
+            opacity: 1 !important;
+            color: #ffffff;
+            background: #ef4444;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="video-container" id="container">
+        <img id="videoEl" />
+        <span class="live-strobe" id="liveStrobe"><span class="dot"></span> LIVE</span>
+        <span class="res-badge" id="resBadge">—</span>
+        <span class="standby-label" id="standbyLabel">⏸ Standby</span>
+        <span class="size-label" id="sizeLabel"></span>
+        <button class="close-btn" id="closeBtn" title="Close preview for this session">✕</button>
+        <!-- Four corner resize handles -->
+        <div class="resize-handle resize-br" data-corner="br"></div>
+        <div class="resize-handle resize-bl" data-corner="bl"></div>
+        <div class="resize-handle resize-tr" data-corner="tr"></div>
+        <div class="resize-handle resize-tl" data-corner="tl"></div>
+    </div>
+
+    <script>
+        const videoEl = document.getElementById('videoEl');
+        const sizeLabel = document.getElementById('sizeLabel');
+        const liveStrobe = document.getElementById('liveStrobe');
+        const standbyLabel = document.getElementById('standbyLabel');
+        const resBadge = document.getElementById('resBadge');
+        const container = document.getElementById('container');
+        let sizeTimeout;
+
+        // ═══ IPC: Receive frames ═══
+        if (window.videoPreviewAPI) {
+            window.videoPreviewAPI.onFrame((data) => {
+                // Check for resolution metadata message
+                if (typeof data === 'string' && data.startsWith('resolution:')) {
+                    const parts = data.replace('resolution:', '').split('x');
+                    const w = parseInt(parts[0], 10);
+                    const h = parseInt(parts[1], 10);
+                    updateResolutionBadge(w, h);
+                    return;
+                }
+                videoEl.src = data;
+            });
+
+            window.videoPreviewAPI.onRecordingState((state) => {
+                if (state === 'recording') {
+                    liveStrobe.classList.add('active');
+                    standbyLabel.classList.remove('active');
+                    container.classList.remove('standby');
+                    container.style.borderColor = '#22c55e';
+                } else {
+                    liveStrobe.classList.remove('active');
+                    standbyLabel.classList.add('active');
+                    container.classList.add('standby');
+                    container.style.borderColor = '#6B7280';
+                }
+            });
+
+            window.videoPreviewAPI.onStopCamera(() => {
+                videoEl.src = '';
+                liveStrobe.classList.remove('active');
+                standbyLabel.classList.remove('active');
+            });
+        }
+
+        function updateResolutionBadge(w, h) {
+            const dim = Math.min(w, h);
+            let label;
+            if (dim >= 2160) label = '4K';
+            else if (dim >= 1440) label = '1440p';
+            else if (dim >= 1080) label = '1080p';
+            else if (dim >= 720) label = '720p';
+            else if (dim >= 480) label = '480p';
+            else label = dim + 'p';
+            resBadge.textContent = label;
+        }
+
+        // ═══ Close ═══
+        document.getElementById('closeBtn').addEventListener('click', () => {
+            if (window.videoPreviewAPI) window.videoPreviewAPI.closeWindow();
+        });
+
+        // ═══ Double-click: cycle presets ═══
+        const sizes = [
+            { w: 240, h: 135 },
+            { w: 320, h: 180 },
+            { w: 480, h: 270 },
+            { w: 640, h: 360 }
+        ];
+        let sizeIdx = 1;
+        container.addEventListener('dblclick', () => {
+            sizeIdx = (sizeIdx + 1) % sizes.length;
+            const s = sizes[sizeIdx];
+            if (window.videoPreviewAPI) window.videoPreviewAPI.resizeWindow(s.w, s.h);
+            showSizeLabel(`${s.w}×${s.h}`);
+        });
+
+        // ═══ Scroll wheel: smooth resize ═══
+        document.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const step = e.deltaY < 0 ? 20 : -20;
+            const w = Math.max(160, Math.min(800, window.innerWidth + step));
+            const h = Math.round(w * 9 / 16);
+            if (window.videoPreviewAPI) window.videoPreviewAPI.resizeWindow(w, h);
+            showSizeLabel(`${w}×${h}`);
+        }, { passive: false });
+
+        // ═══ Four-corner resize via main-process mouse polling ═══
+        // Main process tracks cursor position even when outside the window
+        document.querySelectorAll('.resize-handle').forEach(handle => {
+            handle.addEventListener('pointerdown', (e) => {
+                const corner = handle.dataset.corner;
+                if (window.videoPreviewAPI) {
+                    window.videoPreviewAPI.startResize(
+                        corner,
+                        e.screenX, e.screenY,
+                        window.innerWidth, window.innerHeight,
+                        window.screenX, window.screenY
+                    );
+                }
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        // Listen for resize feedback from main process
+        if (window.videoPreviewAPI) {
+            window.videoPreviewAPI.onResizeFeedback((w, h) => {
+                showSizeLabel(`${w}×${h}`);
+            });
+        }
+
+        // Stop resize on any mouseup (even outside window via main process)
+        window.addEventListener('mouseup', () => {
+            if (window.videoPreviewAPI) window.videoPreviewAPI.stopResize();
+        });
+        // Also stop on pointerup for safety
+        document.addEventListener('pointerup', () => {
+            if (window.videoPreviewAPI) window.videoPreviewAPI.stopResize();
+        });
+
+        function showSizeLabel(text) {
+            sizeLabel.textContent = text;
+            sizeLabel.classList.add('visible');
+            clearTimeout(sizeTimeout);
+            sizeTimeout = setTimeout(() => sizeLabel.classList.remove('visible'), 1500);
+        }
+    </script>
+</body>
+
+</html>

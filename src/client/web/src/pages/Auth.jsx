@@ -39,8 +39,8 @@ export default function Auth() {
             localStorage.setItem('windy_token', data.token)
             localStorage.setItem('windy_user', JSON.stringify(data.user))
 
-            // Redirect to transcription
-            navigate('/transcribe')
+            // Redirect to dashboard
+            navigate('/dashboard')
         } catch (err) {
             setError('Unable to connect to server')
         } finally {
@@ -126,6 +126,28 @@ export default function Auth() {
                             />
                         </div>
 
+                        {isLogin && (
+                            <div style={{ textAlign: 'right', marginTop: '-8px', marginBottom: '8px' }}>
+                                <button type="button" className="auth-switch" style={{ fontSize: '13px', color: '#64748B' }}>Forgot password?</button>
+                            </div>
+                        )}
+
+                        {!isLogin && password.length > 0 && (
+                            <div style={{ marginBottom: '12px' }}>
+                                <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                                    {[1, 2, 3, 4].map(i => (
+                                        <div key={i} style={{
+                                            flex: 1, height: '3px', borderRadius: '2px',
+                                            background: password.length >= i * 3 ? (password.length >= 12 ? '#22C55E' : password.length >= 8 ? '#F59E0B' : '#EF4444') : '#1E293B'
+                                        }} />
+                                    ))}
+                                </div>
+                                <span style={{ fontSize: '11px', color: password.length >= 12 ? '#22C55E' : password.length >= 8 ? '#F59E0B' : '#EF4444' }}>
+                                    {password.length >= 12 ? 'Strong' : password.length >= 8 ? 'Good' : 'Too short'}
+                                </span>
+                            </div>
+                        )}
+
                         {error && <div className="auth-error">{error}</div>}
 
                         <button
@@ -133,9 +155,32 @@ export default function Auth() {
                             className="btn btn-primary auth-submit"
                             disabled={loading}
                         >
-                            {loading ? 'Please wait...' : isLogin ? 'Sign In' : 'Create Account'}
+                            {loading ? (
+                                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                    <span style={{ width: '16px', height: '16px', border: '2px solid rgba(0,0,0,0.2)', borderTopColor: '#000', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
+                                    Please wait...
+                                </span>
+                            ) : isLogin ? 'Sign In' : 'Create Account'}
                         </button>
                     </form>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '16px 0' }}>
+                        <div style={{ flex: 1, height: '1px', background: '#334155' }} />
+                        <span style={{ color: '#64748B', fontSize: '12px' }}>or continue with</span>
+                        <div style={{ flex: 1, height: '1px', background: '#334155' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                        <button type="button" style={{
+                            flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #334155',
+                            background: '#1E293B', color: '#E2E8F0', cursor: 'pointer', fontSize: '14px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                        }}>🔵 Google</button>
+                        <button type="button" style={{
+                            flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #334155',
+                            background: '#1E293B', color: '#E2E8F0', cursor: 'pointer', fontSize: '14px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                        }}>⚫ GitHub</button>
+                    </div>
 
                     <div className="auth-footer">
                         {isLogin ? (

@@ -93,7 +93,7 @@ class HardwareDetector {
           result.type = 'intel-mac';
           result.intelIntegrated = true;
         }
-      } catch (e) {}
+      } catch (e) { }
       return result;
     }
 
@@ -112,7 +112,7 @@ class HardwareDetector {
         result.driverVersion = parts[2] || 'Unknown';
         return result;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // AMD ROCm (Linux)
     try {
@@ -125,10 +125,10 @@ class HardwareDetector {
           const vramOut = await this.execAsync('rocm-smi --showmeminfo vram 2>/dev/null');
           const match = vramOut.match(/Total Memory \(B\): (\d+)/);
           if (match) result.vramGB = Math.round(parseInt(match[1]) / (1024 ** 3));
-        } catch (e2) {}
+        } catch (e2) { }
         return result;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Intel integrated (Linux)
     try {
@@ -155,7 +155,7 @@ class HardwareDetector {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Windows — WMIC fallback
     if (process.platform === 'win32') {
@@ -178,7 +178,7 @@ class HardwareDetector {
             }
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     return result;
@@ -238,7 +238,7 @@ class HardwareDetector {
           result.level = parseInt(match[1]);
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return result;
   }
 
@@ -316,9 +316,53 @@ class HardwareDetector {
         const ver = await this.execAsync('ver 2>NUL');
         info.version = ver.trim();
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return info;
+  }
+
+  /**
+   * Recommend optimal engine based on detected hardware
+   * Returns { engine, model, reason, canRunLocal }
+   */
+  recommendEngine(profile = this.result) {
+    if (!profile) return { engine: 'edge-standard', model: 'small', reason: 'No hardware data', canRunLocal: true };
+
+    const ramGB = profile.ram?.totalGB || 0;
+    const vramGB = profile.gpu?.vramGB || 0;
+    const cores = profile.cpu?.cores || 2;
+    const hasNvidia = profile.gpu?.nvidia || false;
+    const hasApple = profile.gpu?.appleSilicon || false;
+
+    // NVIDIA GPU with ≥6GB VRAM → large models
+    if (hasNvidia && vramGB >= 8) {
+      return { engine: 'core-ultra', model: 'large-v3', reason: `NVIDIA ${profile.gpu.name} with ${vramGB}GB VRAM — maximum accuracy`, canRunLocal: true };
+    }
+    if (hasNvidia && vramGB >= 4) {
+      return { engine: 'core-pro', model: 'medium.en', reason: `NVIDIA GPU with ${vramGB}GB VRAM — great accuracy`, canRunLocal: true };
+    }
+
+    // Apple Silicon → Metal acceleration
+    if (hasApple && ramGB >= 16) {
+      return { engine: 'core-turbo', model: 'turbo', reason: `${profile.gpu.name} with ${ramGB}GB unified — fast Metal acceleration`, canRunLocal: true };
+    }
+    if (hasApple) {
+      return { engine: 'core-standard', model: 'small', reason: `${profile.gpu.name} — balanced accuracy + speed`, canRunLocal: true };
+    }
+
+    // CPU-only: use RAM + core count
+    if (ramGB >= 16 && cores >= 8) {
+      return { engine: 'core-standard', model: 'small', reason: `${cores} cores, ${ramGB}GB RAM — CPU transcription`, canRunLocal: true };
+    }
+    if (ramGB >= 8) {
+      return { engine: 'edge-pulse', model: 'base', reason: `${ramGB}GB RAM — lightweight local engine`, canRunLocal: true };
+    }
+    if (ramGB >= 4) {
+      return { engine: 'edge-spark', model: 'tiny', reason: `${ramGB}GB RAM — minimal model for low-memory systems`, canRunLocal: true };
+    }
+
+    // Very low-end → cloud recommended
+    return { engine: 'cloud', model: null, reason: `Only ${ramGB}GB RAM — cloud transcription recommended`, canRunLocal: false };
   }
 
   execAsync(cmd) {

@@ -26,6 +26,18 @@ class WindyApp {
     // Cloud transcription state
     this.transcriptionEngine = 'local';  // 'local' | 'cloud' | 'deepgram' | 'groq' | 'openai' | 'smart'
 
+    // Engine name → Whisper model mapping (UI names → actual models)
+    this._engineModelMap = {
+      'local': null, // auto-detect
+      'windytune': 'small', // auto-pilot: starts with small, auto-adjusts
+      'edge-spark': 'tiny', 'edge-pulse': 'base', 'edge-standard': 'small',
+      'edge-global': 'small', 'edge-pro': 'medium.en',
+      'core-spark': 'tiny', 'core-pulse': 'base', 'core-standard': 'small',
+      'core-global': 'small', 'core-pro': 'medium.en',
+      'core-turbo': 'turbo', 'core-ultra': 'large-v3',
+      'lingua-es': 'small', 'lingua-fr': 'small', 'lingua-hi': 'small'
+    };
+
     // Web Speech API state (kept for future Chrome-tab relay)
     this.speechRecognition = null;
     this._streamingText = '';
@@ -83,6 +95,9 @@ class WindyApp {
       document.body.appendChild(this._srAnnouncer);
     }
 
+    // Cloud Sync (H4)
+    this.cloudSync = typeof WindySync !== 'undefined' ? new WindySync(this) : null;
+
     // Initialize
     this.init();
   }
@@ -93,6 +108,19 @@ class WindyApp {
     this.historyPanel = new HistoryPanel(this);
     this.bindEvents();
     this.bindIPCEvents();
+
+    // ── Crash Recovery Detection (Repair 1.1) ──
+    if (window.windyAPI?.checkCrashRecovery) {
+      try {
+        const recovery = await window.windyAPI.checkCrashRecovery();
+        if (recovery.found && recovery.content) {
+          const wordCount = recovery.content.trim().split(/\s+/).length;
+          this._showRecoveryBanner(recovery.content, wordCount);
+        }
+      } catch (e) {
+        console.warn('[CrashRecovery] Check failed:', e.message);
+      }
+    }
 
     // First-run wizard (v2 — 6-step onboarding)
     const wizard = new SetupWizard(this);
@@ -125,6 +153,48 @@ class WindyApp {
       if (settings?.cloudPassword) this.cloudPassword = settings.cloudPassword;
       console.log(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
     }
+
+    // Font size: apply saved preference
+    if (window.windyAPI?.getFontSize) {
+      const fontSize = await window.windyAPI.getFontSize();
+      this._applyFontSize(fontSize);
+    }
+
+    // Restore saved theme
+    const savedTheme = localStorage.getItem('windy_theme') || 'dark';
+    document.body.classList.toggle('light-theme', savedTheme === 'light');
+
+    // Quick theme toggle button in title bar
+    const themeBtn = document.getElementById('themeQuickToggle');
+    if (themeBtn) {
+      themeBtn.textContent = savedTheme === 'light' ? '\u2600\ufe0f' : '\ud83c\udf19';
+      themeBtn.addEventListener('click', () => {
+        const isLight = document.body.classList.toggle('light-theme');
+        const newTheme = isLight ? 'light' : 'dark';
+        localStorage.setItem('windy_theme', newTheme);
+        themeBtn.textContent = isLight ? '\u2600\ufe0f' : '\ud83c\udf19';
+        // Sync settings dropdown if open
+        const themeSelect = document.querySelector('#themeToggle');
+        if (themeSelect) themeSelect.value = newTheme;
+      });
+    }
+    if (window.windyAPI?.onFontSizeChange) {
+      window.windyAPI.onFontSizeChange((percent) => this._applyFontSize(percent));
+    }
+
+    // Keyboard shortcuts: Ctrl+= (zoom in), Ctrl+- (zoom out), Ctrl+0 (reset)
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        this._changeFontSize(10);
+      } else if (e.ctrlKey && e.key === '-') {
+        e.preventDefault();
+        this._changeFontSize(-10);
+      } else if (e.ctrlKey && e.key === '0') {
+        e.preventDefault();
+        this._setFontSize(100);
+      }
+    });
 
     // Fallback: also check localStorage for cloud settings (always available)
     // localStorage ALWAYS overrides defaults since it reflects user's most recent Settings choice
@@ -218,6 +288,36 @@ class WindyApp {
     this.settingsBtn.addEventListener('click', () => {
       this.settingsPanel.toggle();
     });
+
+    // Controls collapse toggle — chevron is in the status bar
+    const collapsible = document.getElementById('controlsCollapsible');
+    const chevron = document.getElementById('controlsChevron');
+    const miniRec = document.getElementById('miniRecordBtn');
+    if (chevron && collapsible) {
+      // Restore saved state
+      const saved = localStorage.getItem('windy_controlsCollapsed') === 'true';
+      if (saved) {
+        collapsible.classList.add('collapsed');
+        chevron.classList.add('collapsed');
+        if (miniRec) miniRec.style.display = '';
+      }
+
+      chevron.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isCollapsed = collapsible.classList.toggle('collapsed');
+        chevron.classList.toggle('collapsed', isCollapsed);
+        if (miniRec) miniRec.style.display = isCollapsed ? '' : 'none';
+        localStorage.setItem('windy_controlsCollapsed', isCollapsed);
+      });
+
+      // Mini record button
+      if (miniRec) {
+        miniRec.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.toggleRecording();
+        });
+      }
+    }
   }
 
   /**
@@ -376,9 +476,11 @@ class WindyApp {
 
       case 'ack':
         console.log('Ack:', msg.action, msg.success);
-        // Update model badge from start ack
+        // Update model badge from start ack — but preserve engine name if custom engine selected
         if (msg.action === 'start' && msg.model) {
-          this.updateModelBadge(msg.model);
+          const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine;
+          const isCustomEngine = this._engineModelMap && engine in this._engineModelMap && engine !== 'local';
+          this.updateModelBadge(isCustomEngine ? engine : msg.model);
         }
         // Update model badge from config ack
         if (msg.action === 'config' && msg.applied?.model_reloaded) {
@@ -489,12 +591,15 @@ class WindyApp {
     }
 
     // Update record button
+    const miniRec = document.getElementById('miniRecordBtn');
     if (state === 'listening') {
       this.recordBtn.classList.add('recording');
       this.recordBtn.querySelector('.label').textContent = 'Stop';
+      if (miniRec) { miniRec.classList.add('recording'); miniRec.textContent = '⏹️'; }
     } else {
       this.recordBtn.classList.remove('recording');
       this.recordBtn.querySelector('.label').textContent = 'Record';
+      if (miniRec) { miniRec.classList.remove('recording'); miniRec.textContent = '🎤'; }
     }
   }
 
@@ -562,6 +667,67 @@ class WindyApp {
     this.archiveStatus.classList.add(level);
   }
 
+  /**
+   * Crash Recovery Banner — shown when orphaned windy_session.txt is found
+   * Offers Restore (loads text into transcript) or Dismiss (deletes file)
+   */
+  _showRecoveryBanner(content, wordCount) {
+    const banner = document.createElement('div');
+    banner.id = 'crashRecoveryBanner';
+    banner.style.cssText = `
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+      background: linear-gradient(135deg, #0f172a 0%, #1a2332 100%);
+      border-bottom: 2px solid #22C55E;
+      padding: 14px 20px; display: flex; align-items: center;
+      gap: 12px; animation: slideDown 0.3s ease-out;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    `;
+    banner.innerHTML = `
+      <span style="font-size:20px">🔄</span>
+      <span style="flex:1;color:#E2E8F0;font-size:13px">
+        <strong>Previous session recovered</strong> — ${wordCount.toLocaleString()} words found
+      </span>
+      <button id="recoveryRestore" style="
+        background:#22C55E; color:#0B0F1A; border:none; padding:6px 14px;
+        border-radius:6px; font-weight:600; font-size:12px; cursor:pointer;
+      ">Restore</button>
+      <button id="recoveryDismiss" style="
+        background:transparent; color:#94A3B8; border:1px solid #334155;
+        padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer;
+      ">Dismiss</button>
+    `;
+
+    // Add slide animation
+    const style = document.createElement('style');
+    style.textContent = `@keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }`;
+    document.head.appendChild(style);
+    document.body.appendChild(banner);
+
+    // Restore: load recovered text into transcript
+    document.getElementById('recoveryRestore').addEventListener('click', () => {
+      if (this.transcriptContent) {
+        const pre = document.createElement('div');
+        pre.className = 'transcript-segment recovered';
+        pre.innerHTML = `<span style="color:#22C55E;font-size:11px;opacity:0.7">🔄 Recovered session:</span><br>${content.replace(/\n/g, '<br>')}`;
+        this.transcriptContent.appendChild(pre);
+        this.transcriptContent.scrollTop = this.transcriptContent.scrollHeight;
+      }
+      this.transcript.push({ text: content, recovered: true, timestamp: Date.now() });
+      banner.remove();
+      // Don't delete the file yet — let the user copy/save first
+      console.log('[CrashRecovery] Text restored to transcript area');
+    });
+
+    // Dismiss: delete recovery file and remove banner
+    document.getElementById('recoveryDismiss').addEventListener('click', async () => {
+      if (window.windyAPI?.dismissCrashRecovery) {
+        await window.windyAPI.dismissCrashRecovery();
+      }
+      banner.remove();
+      console.log('[CrashRecovery] Dismissed and file deleted');
+    });
+  }
+
   _setArchiveRouteStatus(route) {
     if (route === 'off') {
       this.setArchiveStatus('Archive off (today)', 'warn');
@@ -595,25 +761,91 @@ class WindyApp {
     const badge = document.getElementById('modelBadge');
     if (!badge) return;
 
-    // When non-local engine is active, show that engine's badge — ignore local server updates
-    const nonLocalEngines = ['stream', 'deepgram', 'groq', 'openai'];
-    if (nonLocalEngines.includes(this.transcriptionEngine) && !nonLocalEngines.includes(modelName) && !loading) {
-      const icons = { stream: '🎙️', deepgram: '🎙️', groq: '⚡', openai: '🌐' };
-      badge.textContent = `${icons[this.transcriptionEngine] || '🏠'} ${this.transcriptionEngine}`;
+    // Whisper model sizes for user reference
+    const modelSizes = {
+      'tiny': '0.07GB', 'tiny.en': '0.07GB',
+      'base': '0.14GB', 'base.en': '0.14GB',
+      'small': '0.5GB', 'small.en': '0.5GB',
+      'medium': '1.5GB', 'medium.en': '1.5GB',
+      'large': '3.1GB', 'large-v1': '3.1GB', 'large-v2': '3.1GB', 'large-v3': '3.1GB',
+      'turbo': '1.6GB'
+    };
+
+    // Determine the active engine (from localStorage or instance)
+    const activeEngine = localStorage.getItem('windy_engine') || this.transcriptionEngine || 'local';
+
+    // Check if a custom named engine is selected (not 'local', 'cloud', or cloud API engines)
+    const cloudEngines = ['stream', 'deepgram', 'groq', 'openai', 'cloud', 'smart'];
+    const isCustomEngine = this._engineModelMap && activeEngine in this._engineModelMap && activeEngine !== 'local';
+    const isCloudEngine = cloudEngines.includes(activeEngine);
+
+    // Engine-specific icons
+    const engineIcons = {
+      stream: '🎙️', deepgram: '🎙️', groq: '⚡', openai: '🌐', cloud: '☁️🔒', smart: '🧠',
+      'edge-spark': '🛡️', 'edge-pulse': '🛡️', 'edge-standard': '🛡️', 'edge-global': '🛡️', 'edge-pro': '🛡️',
+      'core-spark': '⚡', 'core-pulse': '⚡', 'core-standard': '⚡', 'core-global': '⚡', 'core-pro': '⚡', 'core-turbo': '⚡', 'core-ultra': '⚡',
+      'lingua-es': '🌍', 'lingua-fr': '🌍', 'lingua-hi': '🌍'
+    };
+
+    if (loading) {
+      const icon = engineIcons[activeEngine] || '🏠';
+      badge.textContent = `${icon} ${message || 'Loading...'}`;
+      badge.classList.add('loading');
+      return;
+    }
+
+    // Cloud API engines — always show engine name
+    if (isCloudEngine && !isCustomEngine) {
+      const icon = engineIcons[activeEngine] || '☁️';
+      badge.textContent = `${icon} ${activeEngine}`;
+      badge.title = `Engine: ${activeEngine}`;
       badge.classList.remove('loading');
       return;
     }
 
-    // Use engine-aware icon
-    const iconMap = { stream: '🎙️', deepgram: '🎙️', groq: '⚡', openai: '🌐', cloud: '☁️🔒', smart: '🧠' };
-    const icon = this._usingCloud ? '☁️🔒' : iconMap[this.transcriptionEngine] || '🏠';
-    if (loading) {
-      badge.textContent = `${icon} ${message || 'Loading...'}`;
-      badge.classList.add('loading');
-    } else {
-      badge.textContent = `${icon} ${modelName || 'unknown'}`;
+    // Custom named engine (core-pro, edge-standard, etc.) — ALWAYS show engine name, never raw model
+    if (isCustomEngine) {
+      const icon = engineIcons[activeEngine] || '⚡';
+      const whisperModel = this._engineModelMap[activeEngine];
+      const size = modelSizes[whisperModel] || '';
+      badge.textContent = size ? `${icon} ${activeEngine} (${size})` : `${icon} ${activeEngine}`;
+      badge.title = size ? `Engine: ${activeEngine} → Model: ${whisperModel} (${size})` : `Engine: ${activeEngine}`;
       badge.classList.remove('loading');
+      return;
     }
+
+    // 'local' auto-detect — show whatever the Python server reports
+    const icon = '🏠';
+    const name = modelName || 'unknown';
+    const size = modelSizes[name.toLowerCase()];
+    badge.textContent = size ? `${icon} ${name} (${size})` : `${icon} ${name}`;
+    badge.title = size ? `Model: ${name} (${size})` : `Model: ${name}`;
+    badge.classList.remove('loading');
+  }
+
+  // ═══ Font Size Control ═══
+
+  _applyFontSize(percent) {
+    this._currentFontSize = percent;
+    // Use Electron webFrame zoom for proper layout scaling (no cutoff)
+    if (window.windyAPI?.setZoomFactor) {
+      window.windyAPI.setZoomFactor(percent / 100);
+    } else {
+      // Fallback for non-Electron
+      document.body.style.fontSize = `${percent}%`;
+    }
+  }
+
+  _changeFontSize(delta) {
+    const current = this._currentFontSize || 100;
+    this._setFontSize(current + delta);
+  }
+
+  _setFontSize(percent) {
+    const clamped = Math.max(70, Math.min(150, percent));
+    this._applyFontSize(clamped);
+    if (window.windyAPI?.setFontSize) window.windyAPI.setFontSize(clamped);
+    this.showReconnectToast(`🔤 Font size: ${clamped}%`);
   }
 
   /**
@@ -630,12 +862,41 @@ class WindyApp {
       return;
     }
 
-    const engineIcon = '🏠';
+    // Use engine name if a custom engine is selected
+    const activeEngine = localStorage.getItem('windy_engine') || this.transcriptionEngine || 'local';
+    const isCustomEngine = this._engineModelMap && activeEngine in this._engineModelMap && activeEngine !== 'local';
+    const displayName = isCustomEngine ? activeEngine : msg.model;
+    const engineIcons = {
+      'edge-spark': '🛡️', 'edge-pulse': '🛡️', 'edge-standard': '🛡️', 'edge-global': '🛡️', 'edge-pro': '🛡️',
+      'core-spark': '⚡', 'core-pulse': '⚡', 'core-standard': '⚡', 'core-global': '⚡', 'core-pro': '⚡', 'core-turbo': '⚡', 'core-ultra': '⚡',
+      'lingua-es': '🌍', 'lingua-fr': '🌍', 'lingua-hi': '🌍'
+    };
+    const engineIcon = engineIcons[activeEngine] || '🏠';
 
     if (msg.status === 'slow') {
-      badge.textContent = `${engineIcon} ${msg.model} ⚠️ slow`;
+      badge.textContent = `${engineIcon} ${displayName} ⚠️ slow`;
       badge.classList.add('loading');
       badge.title = `Performance ratio: ${msg.ratio}x (>1.0 = too slow)`;
+
+      // Track slow streaks for WindyTune auto-pilot
+      this._slowStreak = (this._slowStreak || 0) + 1;
+
+      // WindyTune auto-pilot: auto-downgrade after 3 consecutive slow chunks
+      if (activeEngine === 'windytune' && this._slowStreak >= 3) {
+        const modelOrder = ['large-v3', 'turbo', 'medium.en', 'medium', 'small', 'base', 'tiny'];
+        const currentModel = this._engineModelMap?.[activeEngine] || msg.model;
+        const idx = modelOrder.indexOf(currentModel);
+        if (idx >= 0 && idx < modelOrder.length - 1) {
+          const nextModel = modelOrder[idx + 1];
+          this._engineModelMap['windytune'] = nextModel;
+          localStorage.setItem('windy_model', nextModel);
+          if (this.ws?.readyState === WebSocket.OPEN) {
+            this.send('config', { model: nextModel });
+          }
+          this.showReconnectToast(`🌪️ WindyTune: Auto-switched to ${nextModel} for better speed`);
+          this._slowStreak = 0;
+        }
+      }
 
       // Smart mode: auto-switch to cloud if struggling for 2+ chunks
       if (this.transcriptionEngine === 'smart' && !this._usingCloud && this.cloudUrl) {
@@ -648,13 +909,28 @@ class WindyApp {
           this._usingCloud = false;
           this.showReconnectToast('⚠️ Cloud unavailable. Continuing local.');
         });
-      } else if (msg.recommend) {
-        this.showReconnectToast(`⚠️ "${msg.model}" is too slow for real-time. Try switching to "${msg.recommend}" in Settings.`);
+      } else {
+        // Actionable performance suggestions
+        const suggestions = [];
+        const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
+        if (recordingMode !== 'batch') {
+          suggestions.push('Switch to Batch mode for best accuracy');
+        }
+        const modelSizeMB = { 'large-v3': 3100, 'turbo': 1600, 'medium.en': 1500, 'medium': 1500, 'small': 500, 'base': 150, 'tiny': 75 };
+        const currentModelSize = modelSizeMB[msg.model] || 0;
+        if (currentModelSize > 500) {
+          suggestions.push('Try Edge Standard (500MB, CPU-friendly)');
+        } else if (currentModelSize > 150) {
+          suggestions.push('Try Edge Pulse (150MB) for faster dictation');
+        }
+        const tip = suggestions.length > 0 ? ` 💡 ${suggestions[0]}` : '';
+        this.showReconnectToast(`⚠️ ${displayName} is struggling.${tip}`);
       }
     } else {
-      badge.textContent = `${engineIcon} ${msg.model} ✅`;
+      badge.textContent = `${engineIcon} ${displayName} ✅`;
       badge.classList.remove('loading');
       badge.title = `Performance ratio: ${msg.ratio}x (keeping up)`;
+      this._slowStreak = 0; // Reset slow streak on good performance
     }
   }
 
@@ -1078,11 +1354,20 @@ class WindyApp {
 
       // 3. Record continuously (timeslice = 1000ms for smooth data flow)
       this._batchRecorder.start(1000);
+      this._batchStartTime = Date.now();
 
       // 3b. Video capture (if enabled in settings)
       this._videoRecorder = null;
       this._videoChunks = [];
       this._videoStream = null;
+
+      // Show recording status badges
+      const recStatus = document.getElementById('recordingStatus');
+      const audioBadge = document.getElementById('audioBadge');
+      const videoBadge = document.getElementById('videoBadge');
+      if (recStatus) recStatus.style.display = 'flex';
+      if (audioBadge) { audioBadge.classList.add('active'); audioBadge.textContent = '🎤 Audio ✓'; }
+
       try {
         let videoEnabled = false;
         if (window.windyAPI) {
@@ -1090,6 +1375,7 @@ class WindyApp {
           videoEnabled = !!settings?.saveVideo;
         }
         if (videoEnabled) {
+          if (videoBadge) { videoBadge.style.display = 'inline-flex'; videoBadge.textContent = '🎬 Video…'; }
           const qualityMap = { '480p': { width: 640, height: 480 }, '720p': { width: 1280, height: 720 }, '1080p': { width: 1920, height: 1080 } };
           let videoQuality = '720p';
           if (window.windyAPI) {
@@ -1100,21 +1386,64 @@ class WindyApp {
           this._videoStream = await navigator.mediaDevices.getUserMedia({
             video: { width: { ideal: vq.width }, height: { ideal: vq.height }, frameRate: { ideal: 30 } }
           });
-          const videoMime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-            ? 'video/webm;codecs=vp9'
-            : MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
-              ? 'video/webm;codecs=vp8'
+
+          // ═══ Camera resolution check: warn if hardware < requested ═══
+          const vTrack = this._videoStream.getVideoTracks()[0];
+          const actualSettings = vTrack?.getSettings();
+          const actualW = actualSettings?.width || 0;
+          const actualH = actualSettings?.height || 0;
+          const requestedH = vq.height;
+          if (actualH > 0 && actualH < requestedH) {
+            // Camera hardware can't deliver what user selected
+            const actualLabel = actualH >= 1080 ? '1080p' : actualH >= 720 ? '720p' : actualH >= 480 ? '480p' : actualH + 'p';
+            console.warn(`[Video] Camera actual: ${actualW}x${actualH} (${actualLabel}), requested: ${videoQuality}`);
+            this._showToast(`⚠️ Camera max: ${actualLabel} — recording at ${actualLabel} (you selected ${videoQuality})`, 'warning', 8000);
+          } else if (actualH > 0) {
+            const actualLabel = actualH >= 2160 ? '4K' : actualH >= 1080 ? '1080p' : actualH >= 720 ? '720p' : actualH >= 480 ? '480p' : actualH + 'p';
+            console.log(`[Video] Camera confirmed: ${actualW}x${actualH} (${actualLabel})`);
+          }
+
+          // Mux audio tracks into video stream for perfect lip sync
+          const combinedStream = new MediaStream([
+            ...this._videoStream.getVideoTracks(),
+            ...stream.getAudioTracks() // audio from mic stream captured earlier
+          ]);
+          const videoMime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+            ? 'video/webm;codecs=vp9,opus'
+            : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+              ? 'video/webm;codecs=vp8,opus'
               : 'video/webm';
-          this._videoRecorder = new MediaRecorder(this._videoStream, { mimeType: videoMime });
+          this._videoRecorder = new MediaRecorder(combinedStream, { mimeType: videoMime });
           this._videoRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) this._videoChunks.push(e.data);
           };
           this._videoRecorder.start(1000);
           console.log('[Batch] Video recording started (' + videoQuality + ', ' + videoMime + ')');
+
+          // Show independent video preview window and start frame forwarding
+          if (window.windyAPI?.showVideoPreview) {
+            window.windyAPI.showVideoPreview();
+            this._startVideoFrameForwarding(this._videoStream);
+            // Tell the preview we're recording
+            if (window.windyAPI.sendRecordingState) {
+              window.windyAPI.sendRecordingState('recording');
+            }
+          }
+
+          // Update video badge to active
+          if (videoBadge) { videoBadge.classList.add('active'); videoBadge.textContent = '🎬 Video ✓'; }
         }
       } catch (videoErr) {
         console.warn('[Batch] Video capture not available:', videoErr.message);
-        // Video failure is non-fatal — audio recording continues
+        // Show camera denial toast
+        this.showReconnectToast('📹 Camera access denied — video won\'t be saved for this recording');
+        // Mark video badge as failed
+        if (videoBadge) {
+          videoBadge.style.display = 'inline-flex';
+          videoBadge.classList.add('failed');
+          videoBadge.textContent = '🎬 Video ✗';
+          videoBadge.title = videoErr.message;
+        }
         this._videoRecorder = null;
         this._videoChunks = [];
         if (this._videoStream) {
@@ -1123,18 +1452,21 @@ class WindyApp {
         }
       }
 
-      // 4. Set up max duration auto-stop
-      const maxMin = parseInt(localStorage.getItem('windy_maxRecordingMin') || '10');
-      this._batchMaxTimer = setTimeout(() => {
-        this.showReconnectToast('⏰ Max recording time reached. Processing...');
-        this.stopBatchRecording();
-      }, maxMin * 60 * 1000);
+      // 4. Set up max duration auto-stop (skip for clone_capture — unlimited)
+      const currentRecMode = localStorage.getItem('windy_recordingMode') || 'batch';
+      if (currentRecMode !== 'clone_capture') {
+        const maxMin = parseInt(localStorage.getItem('windy_maxRecordingMin') || '10');
+        this._batchMaxTimer = setTimeout(() => {
+          this.showReconnectToast('⏰ Max recording time reached. Processing...');
+          this.stopBatchRecording();
+        }, maxMin * 60 * 1000);
 
-      // 5. Warning at 30s before max
-      if (maxMin * 60 > 30) {
-        this._batchWarnTimer = setTimeout(() => {
-          this.showReconnectToast(`⏰ ${maxMin} min limit in 30 seconds...`);
-        }, (maxMin * 60 - 30) * 1000);
+        // 5. Warning at 30s before max
+        if (maxMin * 60 > 30) {
+          this._batchWarnTimer = setTimeout(() => {
+            this.showReconnectToast(`⏰ ${maxMin} min limit in 30 seconds...`);
+          }, (maxMin * 60 - 30) * 1000);
+        }
       }
 
       // 5b. Voice level monitoring for mini widget strobe
@@ -1187,9 +1519,20 @@ class WindyApp {
       const placeholder = this.transcriptContent.querySelector('.placeholder');
       if (placeholder) placeholder.remove();
 
-      this.transcriptContent.innerHTML = '<p class="batch-recording-hint" style="color:#888;text-align:center;padding:20px;">🎙️ Recording... text will appear when you stop</p>';
+      // Show appropriate recording hint based on mode
+      const recMode = localStorage.getItem('windy_recordingMode') || 'batch';
+      if (recMode === 'clone_capture') {
+        this.transcriptContent.innerHTML = '<p class="batch-recording-hint" style="text-align:center;padding:20px;">' +
+          '<span style="font-size:24px;">🧬</span><br>' +
+          '<span style="color:#22C55E;font-weight:700;">Clone Capture Active</span><br>' +
+          '<span style="color:#888;font-size:12px;">Recording audio + video for digital twin archive<br>' +
+          'No transcription model loaded — near-zero CPU<br>Unlimited recording</span></p>';
+        this.updateModelBadge('🧬 clone capture', false);
+      } else {
+        this.transcriptContent.innerHTML = '<p class="batch-recording-hint" style="color:#888;text-align:center;padding:20px;">🎙️ Recording... text will appear when you stop</p>';
+        this.updateModelBadge('batch', false);
+      }
       this.startSessionTimer();
-      this.updateModelBadge('batch', false);
       console.log('[Batch] Recording started');
     } catch (err) {
       console.warn('[Batch] Failed to start:', err.message || err);
@@ -1276,7 +1619,56 @@ class WindyApp {
         this._videoRecorder = null;
         this._lastVideoBlob = videoBlob;
 
+        // Switch video preview to standby mode (don't hide — user may want it persistent)
+        this._stopVideoFrameForwarding();
+        if (window.windyAPI?.sendRecordingState) {
+          window.windyAPI.sendRecordingState('standby');
+        }
+
+        // Hide recording status badges
+        const recStatus = document.getElementById('recordingStatus');
+        const audioBadge = document.getElementById('audioBadge');
+        const videoBadge = document.getElementById('videoBadge');
+        if (recStatus) recStatus.style.display = 'none';
+        if (audioBadge) audioBadge.classList.remove('active', 'failed');
+        if (videoBadge) { videoBadge.style.display = 'none'; videoBadge.classList.remove('active', 'failed'); }
+
         // Show processing state
+        // ═══ Clone Capture mode: skip transcription, just archive ═══
+        const currentMode = localStorage.getItem('windy_recordingMode') || 'batch';
+        if (currentMode === 'clone_capture') {
+          const durationSec = Math.round((Date.now() - (this._batchStartTime || Date.now())) / 1000);
+          const durationStr = durationSec >= 3600
+            ? `${Math.floor(durationSec / 3600)}h ${Math.floor((durationSec % 3600) / 60)}m`
+            : `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`;
+          this.setState('idle');
+          this.transcriptContent.innerHTML = `<div class="placeholder" style="text-align:center;">
+            <div style="font-size:24px;margin-bottom:8px;">🧬</div>
+            <div style="font-weight:700;margin-bottom:6px;">Clone Capture Complete</div>
+            <div style="font-size:12px;opacity:0.8;">${durationStr} of audio${videoBlob ? ' + video' : ''} archived</div>
+            <div style="font-size:11px;opacity:0.6;margin-top:4px;">Data saved to your Soul File archive for future processing</div>
+          </div>`;
+          // Archive the audio + video
+          if (window.windyAPI?.archiveRecording) {
+            try {
+              const audioArr = await audioBlob.arrayBuffer();
+              const payload = { audio: Array.from(new Uint8Array(audioArr)), mimeType: audioBlob.type };
+              if (videoBlob) {
+                const videoArr = await videoBlob.arrayBuffer();
+                payload.video = Array.from(new Uint8Array(videoArr));
+                payload.videoMimeType = videoBlob.type;
+              }
+              payload.mode = 'clone_capture';
+              await window.windyAPI.archiveRecording(payload);
+              console.log('[CloneCapture] Archived successfully:', durationStr);
+            } catch (archErr) {
+              console.warn('[CloneCapture] Archive error:', archErr.message);
+            }
+          }
+          return;
+        }
+
+        // Show processing state (batch modes only)
         this.setState('buffering');
         this.transcriptContent.innerHTML = '<p class="batch-processing-indicator"><span class="processing-spinner"></span> Processing your recording...<br><span style="font-size:12px;color:#888;">This may take a moment for longer recordings</span></p>';
 
@@ -1290,8 +1682,11 @@ class WindyApp {
           const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine;
           let result;
 
-          if (engine === 'local') {
-            // Process locally via the Python WebSocket server
+          // ═══ WindyTune: Time batch transcription for auto-tuning ═══
+          const batchStartMs = Date.now();
+
+          if (engine === 'local' || (this._engineModelMap && engine in this._engineModelMap)) {
+            // Process locally via the Python WebSocket server (includes all named engines)
             result = await this._batchTranscribeLocal(audioBlob);
           } else if (engine === 'cloud') {
             // Use WindyPro Cloud batch endpoint
@@ -1301,8 +1696,27 @@ class WindyApp {
           } else if (engine === 'openai') {
             result = await this._transcribeWithApi('openai', localStorage.getItem('windy_openaiApiKey'), audioBlob);
           } else {
-            // Default to cloud
-            result = await this._batchTranscribeCloud(audioBlob);
+            // Unknown engine — default to local
+            result = await this._batchTranscribeLocal(audioBlob);
+          }
+
+          // ═══ WindyTune: Auto-downgrade if batch took > 10s ═══
+          const batchDuration = (Date.now() - batchStartMs) / 1000;
+          console.log(`[Batch] Transcription completed in ${batchDuration.toFixed(1)}s`);
+
+          if (engine === 'windytune' && batchDuration > 10) {
+            const modelOrder = ['large-v3', 'turbo', 'medium.en', 'medium', 'small', 'base', 'tiny'];
+            const currentModel = this._engineModelMap?.[engine] || localStorage.getItem('windy_model') || 'small';
+            const idx = modelOrder.indexOf(currentModel);
+            if (idx >= 0 && idx < modelOrder.length - 1) {
+              const nextModel = modelOrder[idx + 1];
+              this._engineModelMap['windytune'] = nextModel;
+              localStorage.setItem('windy_model', nextModel);
+              if (this.ws?.readyState === WebSocket.OPEN) {
+                this.send('config', { model: nextModel });
+              }
+              this.showReconnectToast(`🌪️ WindyTune: ${batchDuration.toFixed(1)}s latency → switching from ${currentModel} to ${nextModel} for speed`);
+            }
           }
 
           // Display polished result
@@ -1319,6 +1733,79 @@ class WindyApp {
 
       this._batchRecorder.stop();
     });
+  }
+
+  /**
+   * Start forwarding video frames from the camera stream to the preview window.
+   * Uses a hidden video + canvas to capture frames at low FPS (avoiding opening camera twice).
+   */
+  _startVideoFrameForwarding(videoStream) {
+    this._stopVideoFrameForwarding(); // cleanup any existing
+
+    const video = document.createElement('video');
+    video.srcObject = videoStream;
+    video.muted = true;
+    video.playsInline = true;
+    video.style.position = 'fixed';
+    video.style.top = '-9999px';
+    document.body.appendChild(video);
+    video.play().catch(() => { });
+
+    // Wait for video metadata so we know the actual camera dimensions
+    const startCapture = () => {
+      const vw = video.videoWidth || 640;
+      const vh = video.videoHeight || 480;
+
+      // Send the real camera resolution to the preview window
+      if (window.windyAPI?.sendVideoFrame) {
+        // Use a special 'resolution' message
+        window.windyAPI.sendVideoFrame('resolution:' + vw + 'x' + vh);
+      }
+
+      // Scale down to max 320px wide while preserving aspect ratio
+      const scale = Math.min(320 / vw, 1);
+      const cw = Math.round(vw * scale);
+      const ch = Math.round(vh * scale);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
+      const ctx = canvas.getContext('2d');
+
+      this._frameCanvas = canvas;
+
+      // Capture and send frames at ~10fps
+      this._frameInterval = setInterval(() => {
+        if (video.readyState >= video.HAVE_CURRENT_DATA) {
+          ctx.drawImage(video, 0, 0, cw, ch);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          if (window.windyAPI?.sendVideoFrame) {
+            window.windyAPI.sendVideoFrame(dataUrl);
+          }
+        }
+      }, 100);
+    };
+
+    this._frameVideo = video;
+
+    if (video.readyState >= video.HAVE_METADATA) {
+      startCapture();
+    } else {
+      video.addEventListener('loadedmetadata', startCapture, { once: true });
+    }
+  }
+
+  _stopVideoFrameForwarding() {
+    if (this._frameInterval) {
+      clearInterval(this._frameInterval);
+      this._frameInterval = null;
+    }
+    if (this._frameVideo) {
+      this._frameVideo.srcObject = null;
+      this._frameVideo.remove();
+      this._frameVideo = null;
+    }
+    this._frameCanvas = null;
   }
 
   /**
@@ -1383,8 +1870,15 @@ class WindyApp {
       });
 
       if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`Cloud error ${response.status}: ${err}`);
+        const errRaw = await response.text();
+        // Strip HTML error pages — show only meaningful message
+        let errMsg = errRaw;
+        if (errRaw.includes('<html') || errRaw.includes('<!DOCTYPE')) {
+          const titleMatch = errRaw.match(/<title>([^<]+)<\/title>/i);
+          errMsg = titleMatch ? titleMatch[1] : `HTTP ${response.status}`;
+        }
+        if (errMsg.length > 120) errMsg = errMsg.substring(0, 120) + '...';
+        throw new Error(`Cloud error ${response.status}: ${errMsg}`);
       }
 
       const data = await response.json();
@@ -1402,7 +1896,7 @@ class WindyApp {
   /**
    * Display the polished batch transcription result.
    */
-  _displayBatchResult(text) {
+  async _displayBatchResult(text) {
     if (!text || !text.trim()) {
       this.transcriptContent.innerHTML = '<p style="color:#888;text-align:center;">No speech detected in recording.</p>';
       this.setState('idle');
@@ -1445,9 +1939,7 @@ class WindyApp {
             } catch (_) { }
           }
           if (clearAfterPaste) {
-            this.transcriptContent.innerHTML = '';
-            this.transcript = [];
-            this.updateWordCount();
+            this.clearTranscript();
           }
         } catch (err) {
           console.warn('[AutoPaste] Failed, use Ctrl+Shift+V to paste manually');
@@ -1461,34 +1953,53 @@ class WindyApp {
       try { window.windyAPI.notifyBatchComplete(wordCount); } catch (_) { }
     }
 
+    // Capture timestamp NOW before async saves — it gets nulled later
+    const savedStartedAt = this.recordingStartedAt;
+
     // Save to history
-    this._saveToHistory(text.trim(), wordCount);
+    this._saveToHistory(text.trim(), wordCount, savedStartedAt);
 
     // Opt-in analytics (never transcript content)
     this._sendAnalytics({ wordCount });
 
     // Save audio recording if enabled
     if (this._lastBatchBlob) {
-      this._saveAudioRecording(this._lastBatchBlob);
+      await this._saveAudioRecording(this._lastBatchBlob, savedStartedAt);
     }
 
     // Save video recording if captured
     if (this._lastVideoBlob) {
-      this._saveVideoRecording(this._lastVideoBlob);
+      await this._saveVideoRecording(this._lastVideoBlob, savedStartedAt);
       this._lastVideoBlob = null;
     }
 
-    // Archive
-    if (window.windyAPI?.archiveTranscript) {
+    // Archive transcript text (unless "Snapchat mode" — save text disabled)
+    const saveText = localStorage.getItem('windy_saveText') !== 'false';
+    if (saveText && window.windyAPI?.archiveTranscript) {
       const route = this.archiveRouteSelect?.value || 'local';
       if (route !== 'off') {
         window.windyAPI.archiveTranscript({
           text: text.trim(),
-          startedAt: this.recordingStartedAt,
+          startedAt: savedStartedAt,
           endedAt: new Date().toISOString(),
           route
         });
       }
+    }
+    // ═══ H4: Cloud Sync — upload recording to account server ═══
+    const archiveRoute = this.archiveRouteSelect?.value || 'local';
+    if (this.cloudSync && (archiveRoute === 'windy-cloud' || archiveRoute === 'both')) {
+      const durationSec = savedStartedAt
+        ? Math.round((Date.now() - new Date(savedStartedAt).getTime()) / 1000)
+        : 0;
+      this.cloudSync.uploadRecording({
+        transcript: text.trim(),
+        wordCount,
+        durationSeconds: durationSec,
+        engine: localStorage.getItem('windy_engine') || 'local',
+        mode: localStorage.getItem('windy_recordingMode') || 'batch',
+        recordedAt: savedStartedAt || new Date().toISOString()
+      }).catch(err => console.warn('[CloudSync] Upload failed:', err.message));
     }
     this.recordingStartedAt = null;
   }
@@ -1496,7 +2007,7 @@ class WindyApp {
   /**
    * Save transcript to local history (localStorage, last 20).
    */
-  _saveToHistory(text, wordCount) {
+  _saveToHistory(text, wordCount, startedAt) {
     try {
       const history = JSON.parse(localStorage.getItem('windy_history') || '[]');
       const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine || 'local';
@@ -1505,7 +2016,7 @@ class WindyApp {
         text,
         wordCount,
         engine,
-        date: new Date().toISOString()
+        date: startedAt || new Date().toISOString()
       });
       // Keep last 20
       while (history.length > 20) history.pop();
@@ -1543,7 +2054,7 @@ class WindyApp {
   /**
    * Save audio recording blob for playback.
    */
-  async _saveAudioRecording(blob) {
+  async _saveAudioRecording(blob, timestamp) {
     const saveAudio = localStorage.getItem('windy_saveAudio') !== 'false';
     if (!saveAudio || !blob) return;
 
@@ -1564,7 +2075,7 @@ class WindyApp {
       }
       base64 = btoa(base64);
       if (window.windyAPI?.archiveAudio) {
-        await window.windyAPI.archiveAudio(base64, this.recordingStartedAt);
+        await window.windyAPI.archiveAudio(base64, timestamp);
       }
     } catch (e) {
       console.warn('[Audio] Failed to save recording:', e.message);
@@ -1574,7 +2085,7 @@ class WindyApp {
   /**
    * Save video recording blob to archive.
    */
-  async _saveVideoRecording(blob) {
+  async _saveVideoRecording(blob, timestamp) {
     if (!blob || blob.size === 0) return;
 
     try {
@@ -1589,7 +2100,7 @@ class WindyApp {
       }
       base64 = btoa(base64);
       if (window.windyAPI?.archiveVideo) {
-        const result = await window.windyAPI.archiveVideo(base64, this.recordingStartedAt);
+        const result = await window.windyAPI.archiveVideo(base64, timestamp);
         if (result?.ok) {
           console.log(`[Video] Saved: ${result.path}`);
         }
@@ -2066,7 +2577,7 @@ class WindyApp {
     } else {
       // Start — high blip
       this._playBlip(880, 0.08);
-      if (recordingMode === 'batch') {
+      if (recordingMode === 'batch' || recordingMode === 'clone_capture') {
         this.startBatchRecording();
       } else if (['deepgram', 'groq', 'openai'].includes(engine)) {
         this.startApiRecording(engine);
@@ -2138,6 +2649,11 @@ class WindyApp {
           this.send('start');
         }
       } else {
+        // Send resolved whisper model config to Python server for custom engines
+        const engineModel = this._engineModelMap?.[this.transcriptionEngine];
+        if (engineModel) {
+          this.send('config', { model: engineModel });
+        }
         this.send('start');
       }
       this.setState('listening');
@@ -2320,8 +2836,13 @@ class WindyApp {
    * Rebuild transcript paragraph from stored final segments.
    */
   renderStoredTranscript() {
-    const placeholder = this.transcriptContent.querySelector('.placeholder');
-    if (placeholder) placeholder.remove();
+    // Only remove hotkey placeholder if there's actual content to show
+    if (this.transcript.length > 0) {
+      const placeholder = this.transcriptContent.querySelector('.placeholder');
+      if (placeholder) placeholder.remove();
+    } else {
+      return; // Nothing to render — keep placeholder visible
+    }
 
     // Remove transient partial text
     const existingPartial = this.transcriptContent.querySelector('.partial-text');
@@ -2437,6 +2958,7 @@ class WindyApp {
       <div style="margin:4px 0;"><kbd>Ctrl+Shift+Space</kbd> — <span style="color:#EF4444;font-weight:600;">Stop</span> recording</div>
       <div style="margin:4px 0;"><kbd>Ctrl+Shift+V</kbd> — <span style="color:#4ECDC4;font-weight:600;">Paste</span> transcript to cursor</div>
       <div style="margin:4px 0;"><kbd>Ctrl+Shift+W</kbd> — <span style="color:#F7DC6F;font-weight:600;">Show / Hide</span> app window</div>
+      <div style="margin:4px 0;"><kbd>Ctrl + / −</kbd> — <span style="color:#A78BFA;font-weight:600;">Zoom</span> in / out &nbsp; <kbd>Ctrl+0</kbd> Reset</div>
     </div>`;
     this.transcriptContent.contentEditable = 'false';
     this.updateWordCount();
