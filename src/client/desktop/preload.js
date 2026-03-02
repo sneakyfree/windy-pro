@@ -107,6 +107,9 @@ contextBridge.exposeInMainWorld('windyAPI', {
   exportSoulFile: () => ipcRenderer.invoke('export-soul-file'),
   exportVoiceClone: () => ipcRenderer.invoke('export-voice-clone'),
 
+  // Translation (offline fallback + mini-translate)
+  translateOffline: (text, sourceLang, targetLang) => ipcRenderer.invoke('translate-offline', text, sourceLang, targetLang),
+
   // Stripe payment
   createCheckoutSession: (priceId, email) => ipcRenderer.invoke('create-checkout-session', priceId, email),
   checkPaymentStatus: (sessionId) => ipcRenderer.invoke('check-payment-status', sessionId),

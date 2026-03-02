@@ -106,6 +106,7 @@ class WindyApp {
     this.settingsPanel = new SettingsPanel(this);
     this.vaultPanel = new VaultPanel(this);
     this.historyPanel = new HistoryPanel(this);
+    this.translatePanel = typeof TranslatePanel !== 'undefined' ? new TranslatePanel(this) : null;
     this.bindEvents();
     this.bindIPCEvents();
 
@@ -240,6 +241,14 @@ class WindyApp {
       histBtn.addEventListener('click', () => {
         if (!this.historyPanel) this.historyPanel = new HistoryPanel(this);
         this.historyPanel.toggle();
+      });
+    }
+
+    // Translate button
+    const translateBtn = document.getElementById('translateBtn');
+    if (translateBtn) {
+      translateBtn.addEventListener('click', () => {
+        if (this.translatePanel) this.translatePanel.toggle();
       });
     }
 
@@ -392,6 +401,7 @@ class WindyApp {
         console.log('WebSocket connected');
         this.reconnectAttempts = 0;
         this.setConnectionStatus('connected');
+        this.hideBackendErrorOverlay();
       };
 
       this.ws.onmessage = (event) => {
@@ -429,8 +439,43 @@ class WindyApp {
       this.showReconnectToast(`Reconnecting (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
       setTimeout(() => this.connect(), delay);
     } else {
-      this.showReconnectToast('Connection lost. Please restart.', true);
+      this.showBackendErrorOverlay();
     }
+  }
+
+  /**
+   * Show full-screen error overlay when backend is unreachable
+   */
+  showBackendErrorOverlay() {
+    // Don't create duplicates
+    if (document.querySelector('.backend-error-overlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'backend-error-overlay';
+    overlay.innerHTML = `
+      <div class="backend-error-card">
+        <span class="error-icon">⚠️</span>
+        <h2>AI Engine Not Available</h2>
+        <p>The Python AI backend could not be reached.<br>
+           Run the installer again to set up the engine, or check that the backend is running.</p>
+        <button class="retry-btn" id="backendRetryBtn">Retry Connection</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#backendRetryBtn').addEventListener('click', () => {
+      this.reconnectAttempts = 0;
+      this.hideBackendErrorOverlay();
+      this.connect();
+    });
+  }
+
+  /**
+   * Remove the backend error overlay (e.g. on successful reconnection)
+   */
+  hideBackendErrorOverlay() {
+    const overlay = document.querySelector('.backend-error-overlay');
+    if (overlay) overlay.remove();
   }
 
   showReconnectToast(message, persistent = false) {
