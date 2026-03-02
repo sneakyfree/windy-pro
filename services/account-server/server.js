@@ -17,6 +17,12 @@
  *   GET    /api/v1/auth/devices    — List devices
  *   DELETE /api/v1/auth/devices/:id — Revoke device
  *   GET    /health                 — Health check
+ *   POST   /api/v1/translations    — Create translation
+ *   GET    /api/v1/translations    — List translations
+ *   GET    /api/v1/translations/:id — Get translation
+ *   DELETE /api/v1/translations/:id — Delete translation
+ *   POST   /api/v1/translations/:id/favorite — Favorite translation
+ *   DELETE /api/v1/translations/:id/favorite — Unfavorite translation
  */
 
 const express = require('express');
@@ -26,6 +32,8 @@ const crypto = require('crypto');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
@@ -104,6 +112,32 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_recordings_user ON recordings(user_id, recorded_at DESC);
+
+  CREATE TABLE IF NOT EXISTS translations (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    source_text TEXT NOT NULL,
+    translated_text TEXT NOT NULL,
+    source_lang TEXT DEFAULT 'auto',
+    target_lang TEXT NOT NULL,
+    confidence REAL DEFAULT 0,
+    audio_path TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_translations_user ON translations(user_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS favorites (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    translation_id TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (translation_id) REFERENCES translations(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id, created_at DESC);
 `);
 
 // ═══════════════════════════════════════════════
@@ -790,6 +824,187 @@ app.get('/api/v1/analytics/stats', authenticate, (req, res) => {
         res.json(stats);
     } catch (err) {
         res.status(500).json({ error: 'Stats error' });
+    }
+});
+
+// ═══════════════════════════════════════════════
+// Translation Endpoints
+// ═══════════════════════════════════════════════
+
+// Supported NLLB language map
+const SUPPORTED_LANGUAGES = [
+    { code: 'en', name: 'English' }, { code: 'es', name: 'Spanish' },
+    { code: 'fr', name: 'French' }, { code: 'de', name: 'German' },
+    { code: 'pt', name: 'Portuguese' }, { code: 'it', name: 'Italian' },
+    { code: 'zh', name: 'Chinese (Simplified)' }, { code: 'ja', name: 'Japanese' },
+    { code: 'ko', name: 'Korean' }, { code: 'ar', name: 'Arabic' },
+    { code: 'hi', name: 'Hindi' }, { code: 'ru', name: 'Russian' },
+    { code: 'nl', name: 'Dutch' }, { code: 'pl', name: 'Polish' },
+    { code: 'sv', name: 'Swedish' }, { code: 'da', name: 'Danish' },
+    { code: 'no', name: 'Norwegian' }, { code: 'fi', name: 'Finnish' },
+    { code: 'tr', name: 'Turkish' }, { code: 'th', name: 'Thai' },
+    { code: 'vi', name: 'Vietnamese' }, { code: 'id', name: 'Indonesian' },
+    { code: 'uk', name: 'Ukrainian' }, { code: 'cs', name: 'Czech' },
+    { code: 'ro', name: 'Romanian' }, { code: 'hu', name: 'Hungarian' },
+    { code: 'el', name: 'Greek' }, { code: 'he', name: 'Hebrew' },
+    { code: 'bg', name: 'Bulgarian' }, { code: 'ms', name: 'Malay' },
+    { code: 'bn', name: 'Bengali' }, { code: 'ta', name: 'Tamil' },
+    { code: 'te', name: 'Telugu' }, { code: 'ur', name: 'Urdu' },
+    { code: 'fa', name: 'Persian' }, { code: 'sw', name: 'Swahili' },
+];
+
+// GET /api/v1/translate/languages — supported language list
+app.get('/api/v1/translate/languages', generalLimiter, (req, res) => {
+    res.json({ languages: SUPPORTED_LANGUAGES });
+});
+
+// POST /api/v1/translate/text — text translation
+app.post('/api/v1/translate/text', writeLimiter, authenticate, async (req, res) => {
+    try {
+        const { text, sourceLang = 'auto', targetLang } = req.body;
+        if (!text || !targetLang) {
+            return res.status(400).json({ error: 'text and targetLang are required' });
+        }
+        if (text.length > 5000) {
+            return res.status(400).json({ error: 'Text too long (max 5000 chars)' });
+        }
+
+        // Forward to translate-api service
+        const translateResp = await fetch('http://localhost:3100/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, sourceLang, targetLang })
+        });
+
+        if (!translateResp.ok) {
+            const err = await translateResp.json().catch(() => ({}));
+            throw new Error(err.error || `Translate service error: ${translateResp.status}`);
+        }
+
+        const result = await translateResp.json();
+        const translatedText = result.translated || result.translation || '';
+        const confidence = result.confidence || 0.85;
+
+        // Store in DB
+        const id = uuidv4();
+        db.prepare(
+            `INSERT INTO translations (id, user_id, source_text, translated_text, source_lang, target_lang, confidence)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+        ).run(id, req.user.sub, text, translatedText, sourceLang, targetLang, confidence);
+
+        res.json({ id, text, translatedText, sourceLang, targetLang, confidence });
+    } catch (err) {
+        console.error('[TranslateText]', err.message);
+        res.status(503).json({ error: err.message });
+    }
+});
+
+// POST /api/v1/translate/speech — speech translation (audio upload)
+app.post('/api/v1/translate/speech', writeLimiter, authenticate, upload.single('audio'), async (req, res) => {
+    try {
+        const { sourceLang = 'auto', targetLang = 'es' } = req.body;
+        if (!req.file) {
+            return res.status(400).json({ error: 'audio file is required' });
+        }
+
+        // Save audio to disk
+        const audioFilename = `speech_${Date.now()}_${req.user.sub.slice(0, 8)}.webm`;
+        const audioPath = path.join(MEDIA_PATH, audioFilename);
+        fs.writeFileSync(audioPath, req.file.buffer);
+
+        // TODO: In production, forward to STT service (e.g. faster-whisper)
+        // For now, acknowledge receipt and return a placeholder
+        const sourceText = '[Speech transcription - processing]';
+        const translatedText = '[Translation pending]';
+        const confidence = 0.0;
+
+        const id = uuidv4();
+        db.prepare(
+            `INSERT INTO translations (id, user_id, source_text, translated_text, source_lang, target_lang, confidence, audio_path)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(id, req.user.sub, sourceText, translatedText, sourceLang, targetLang, confidence, audioPath);
+
+        res.json({
+            id,
+            text: sourceText,
+            translatedText,
+            sourceLang,
+            targetLang,
+            confidence,
+            audioUrl: `/api/v1/translate/${id}/audio`
+        });
+    } catch (err) {
+        console.error('[TranslateSpeech]', err.message);
+        res.status(503).json({ error: err.message });
+    }
+});
+
+// GET /api/v1/translate/:id/audio — stream translation audio
+app.get('/api/v1/translate/:id/audio', authenticate, (req, res) => {
+    const row = db.prepare('SELECT audio_path FROM translations WHERE id = ? AND user_id = ?')
+        .get(req.params.id, req.user.sub);
+    if (!row || !row.audio_path || !fs.existsSync(row.audio_path)) {
+        return res.status(404).json({ error: 'Audio not found' });
+    }
+    const stat = fs.statSync(row.audio_path);
+    res.writeHead(200, { 'Content-Length': stat.size, 'Content-Type': 'audio/webm' });
+    fs.createReadStream(row.audio_path).pipe(res);
+});
+
+// GET /api/v1/user/history — translation history (paginated)
+app.get('/api/v1/user/history', generalLimiter, authenticate, (req, res) => {
+    try {
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+        const offset = (page - 1) * limit;
+
+        const total = db.prepare('SELECT COUNT(*) as count FROM translations WHERE user_id = ?')
+            .get(req.user.sub).count;
+        const translations = db.prepare(
+            `SELECT id, source_text, translated_text, source_lang, target_lang, confidence, created_at
+             FROM translations WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
+        ).all(req.user.sub, limit, offset);
+
+        res.json({
+            translations,
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+        });
+    } catch (err) {
+        console.error('[UserHistory]', err.message);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// POST /api/v1/user/favorites — save translation to favorites
+app.post('/api/v1/user/favorites', writeLimiter, authenticate, (req, res) => {
+    try {
+        const { translationId } = req.body;
+        if (!translationId) {
+            return res.status(400).json({ error: 'translationId is required' });
+        }
+
+        // Verify translation belongs to user
+        const translation = db.prepare('SELECT id FROM translations WHERE id = ? AND user_id = ?')
+            .get(translationId, req.user.sub);
+        if (!translation) {
+            return res.status(404).json({ error: 'Translation not found' });
+        }
+
+        // Check for duplicate
+        const existing = db.prepare('SELECT id FROM favorites WHERE user_id = ? AND translation_id = ?')
+            .get(req.user.sub, translationId);
+        if (existing) {
+            return res.json({ message: 'Already in favorites', id: existing.id });
+        }
+
+        const id = uuidv4();
+        db.prepare('INSERT INTO favorites (id, user_id, translation_id) VALUES (?, ?, ?)')
+            .run(id, req.user.sub, translationId);
+
+        res.status(201).json({ id, message: 'Added to favorites' });
+    } catch (err) {
+        console.error('[SaveFavorite]', err.message);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

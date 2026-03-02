@@ -337,10 +337,16 @@ setup_python_env() {
     fi
   fi
 
+  # Ensure python3-venv is available (bulk dep install may have silently failed)
+  if [ "$DISTRO_FAMILY" = "debian" ]; then
+    log "Ensuring python3-venv is installed..."
+    run_sudo "apt-get install -y python3-venv" 2>/dev/null || true
+  fi
+
   log "Creating Python environment..."
   "$PYTHON_BIN" -m venv "$VENV_DIR" 2>/dev/null || \
     "$PYTHON_BIN" -m virtualenv "$VENV_DIR" 2>/dev/null || \
-    die "Cannot create Python virtual environment.\n\nTry: $PYTHON_BIN -m pip install virtualenv"
+    die "Cannot create Python virtual environment.\n\nTry: sudo apt-get install -y python3-venv"
 
   PIP="$VENV_DIR/bin/pip"
   "$PIP" install --upgrade pip setuptools wheel 2>&1 | tail -1 || true
@@ -433,7 +439,7 @@ install_deb() {
     log "✅ .deb installed successfully."
   else
     warn "Installation may have failed. Falling back to AppImage..."
-    DEB_PATH="/tmp/Windy-Pro-${VERSION}.AppImage"
+    DEB_PATH="/tmp/Windy-Pro-${WP_VERSION}.AppImage"
     download_file "$APPIMAGE_URL" "$DEB_PATH"
     install_appimage
   fi
@@ -658,6 +664,13 @@ main() {
     find_or_download_package "$1"
     install_app
     verify_install
+  fi
+
+  # Guard: if venv creation failed (e.g. in Zenity subshell where die/exit
+  # only kills the subshell), stop here instead of launching a broken app
+  VENV_PYTHON_CHECK="$APP_DIR/venv/bin/python3"
+  if [ ! -x "$VENV_PYTHON_CHECK" ]; then
+    die "Python AI backend failed to install.\n\nThe virtual environment at $APP_DIR/venv was not created.\nRe-run the installer or try: sudo apt-get install -y python3-venv\n\nFull log: $LOG"
   fi
 
   show_success

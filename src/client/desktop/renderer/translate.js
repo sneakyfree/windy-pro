@@ -306,29 +306,36 @@ class TranslatePanel {
 
         const bufLen = this._analyser.frequencyBinCount;
         const data = new Uint8Array(bufLen);
-        this._analyser.getByteTimeDomainData(data);
+        this._analyser.getByteFrequencyData(data);
 
         const w = this._canvas.width;
         const h = this._canvas.height;
         const ctx = this._canvasCtx;
 
-        ctx.fillStyle = 'rgba(31, 41, 55, 0.3)';
+        // Clear with fading trail
+        ctx.fillStyle = 'rgba(31, 41, 55, 0.4)';
         ctx.fillRect(0, 0, w, h);
 
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#22C55E';
-        ctx.beginPath();
+        // Draw frequency bars
+        const barCount = 32;
+        const barGap = 2;
+        const barW = (w - barGap * (barCount - 1)) / barCount;
+        const step = Math.floor(bufLen / barCount);
 
-        const sliceW = w / bufLen;
-        let x = 0;
-        for (let i = 0; i < bufLen; i++) {
-            const v = data[i] / 128.0;
-            const y = (v * h) / 2;
-            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-            x += sliceW;
+        for (let i = 0; i < barCount; i++) {
+            const val = data[i * step] / 255;
+            const barH = Math.max(2, val * h * 0.9);
+
+            // Green gradient based on intensity
+            const intensity = Math.round(120 + val * 135);
+            ctx.fillStyle = `rgba(34, ${intensity}, 94, ${0.6 + val * 0.4})`;
+
+            const x = i * (barW + barGap);
+            const y = (h - barH) / 2;
+            ctx.beginPath();
+            ctx.roundRect(x, y, barW, barH, 2);
+            ctx.fill();
         }
-        ctx.lineTo(w, h / 2);
-        ctx.stroke();
 
         this._animFrame = requestAnimationFrame(() => this._drawWaveform());
     }
@@ -428,6 +435,9 @@ class TranslatePanel {
         this._targetText.textContent = data.translatedText || '';
         this._resultArea.classList.add('visible');
 
+        // Track translation ID for favorites
+        this._lastTranslationId = data.id || null;
+
         // Confidence badge
         const conf = data.confidence || 0;
         if (conf > 0) {
@@ -443,8 +453,15 @@ class TranslatePanel {
       `;
         }
 
-        // Audio
-        if (data.audioUrl) {
+        // Audio playback — support base64 audio data from API or direct URL
+        if (data.audioData) {
+            const audioBytes = atob(data.audioData);
+            const arr = new Uint8Array(audioBytes.length);
+            for (let i = 0; i < audioBytes.length; i++) arr[i] = audioBytes.charCodeAt(i);
+            const blob = new Blob([arr], { type: 'audio/mp3' });
+            this._audioEl.src = URL.createObjectURL(blob);
+            this._audioEl.play().catch(() => { });
+        } else if (data.audioUrl) {
             this._audioEl.src = data.audioUrl;
         }
 

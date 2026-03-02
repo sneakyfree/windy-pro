@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Quick Translate</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1F2937;
+            color: #F9FAFB;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 12px;
+            gap: 10px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            -webkit-app-region: drag;
+        }
+
+        .header h1 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #D1D5DB;
+        }
+
+        .close-btn {
+            -webkit-app-region: no-drag;
+            background: #374151;
+            border: 1px solid #4B5563;
+            color: #9CA3AF;
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.15s;
+        }
+
+        .close-btn:hover {
+            background: #EF4444;
+            color: #fff;
+        }
+
+        .lang-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .lang-select {
+            flex: 1;
+            background: #374151;
+            color: #F9FAFB;
+            border: 1px solid #4B5563;
+            border-radius: 6px;
+            padding: 6px 8px;
+            font-size: 12px;
+        }
+
+        .swap-btn {
+            background: #374151;
+            border: 1px solid #4B5563;
+            color: #9CA3AF;
+            border-radius: 6px;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.15s;
+        }
+
+        .swap-btn:hover {
+            background: rgba(99, 102, 241, 0.2);
+            color: #F9FAFB;
+        }
+
+        .input-area {
+            flex: 1;
+            display: flex;
+            gap: 6px;
+        }
+
+        .text-input {
+            flex: 1;
+            background: #374151;
+            color: #F9FAFB;
+            border: 1px solid #4B5563;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+            resize: none;
+            font-family: inherit;
+        }
+
+        .text-input::placeholder {
+            color: #6B7280;
+        }
+
+        .translate-btn {
+            background: #22C55E;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            width: 36px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: filter 0.15s;
+        }
+
+        .translate-btn:hover {
+            filter: brightness(1.15);
+        }
+
+        .result {
+            background: #374151;
+            border-radius: 8px;
+            padding: 10px;
+            min-height: 60px;
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.5;
+            display: none;
+        }
+
+        .result.visible {
+            display: block;
+        }
+
+        .result .source {
+            font-size: 11px;
+            color: #9CA3AF;
+            margin-bottom: 4px;
+        }
+
+        .result .translation {
+            color: #F9FAFB;
+        }
+
+        .result .confidence {
+            display: inline-block;
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            margin-top: 4px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 Quick Translate</h1>
+            <button class="close-btn" id="closeBtn">×</button>
+        </div>
+
+        <div class="lang-row">
+            <select id="sourceLang" class="lang-select">
+                <option value="auto">🔍 Auto</option>
+                <option value="en">English</option>
+                <option value="es">Spanish</option>
+                <option value="fr">French</option>
+                <option value="de">German</option>
+                <option value="it">Italian</option>
+                <option value="pt">Portuguese</option>
+                <option value="zh">Chinese</option>
+                <option value="ja">Japanese</option>
+                <option value="ko">Korean</option>
+                <option value="ar">Arabic</option>
+                <option value="ru">Russian</option>
+                <option value="pl">Polish</option>
+            </select>
+            <button class="swap-btn" id="swapBtn">⇄</button>
+            <select id="targetLang" class="lang-select">
+                <option value="es">Spanish</option>
+                <option value="en">English</option>
+                <option value="fr">French</option>
+                <option value="de">German</option>
+                <option value="it">Italian</option>
+                <option value="pt">Portuguese</option>
+                <option value="zh">Chinese</option>
+                <option value="ja">Japanese</option>
+                <option value="ko">Korean</option>
+                <option value="ar">Arabic</option>
+                <option value="ru">Russian</option>
+                <option value="pl">Polish</option>
+            </select>
+        </div>
+
+        <div class="input-area">
+            <textarea id="textInput" class="text-input" placeholder="Type text to translate…" rows="3"></textarea>
+            <button class="translate-btn" id="translateBtn">→</button>
+        </div>
+
+        <div class="result" id="resultArea">
+            <div class="source" id="sourceText"></div>
+            <div class="translation" id="translationText"></div>
+            <span class="confidence" id="confidenceBadge"></span>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://windypro.thewindstorm.uk';
+
+        document.getElementById('closeBtn').addEventListener('click', () => {
+            window.miniTranslateAPI.close();
+        });
+
+        document.getElementById('swapBtn').addEventListener('click', () => {
+            const s = document.getElementById('sourceLang');
+            const t = document.getElementById('targetLang');
+            if (s.value !== 'auto') {
+                const tmp = s.value;
+                s.value = t.value;
+                t.value = tmp;
+            }
+        });
+
+        async function doTranslate() {
+            const text = document.getElementById('textInput').value.trim();
+            if (!text) return;
+
+            const sourceLang = document.getElementById('sourceLang').value;
+            const targetLang = document.getElementById('targetLang').value;
+            const resultArea = document.getElementById('resultArea');
+            const sourceEl = document.getElementById('sourceText');
+            const transEl = document.getElementById('translationText');
+            const confEl = document.getElementById('confidenceBadge');
+
+            sourceEl.textContent = text;
+            transEl.textContent = 'Translating…';
+            confEl.textContent = '';
+            resultArea.classList.add('visible');
+
+            try {
+                const result = await window.miniTranslateAPI.translate(text, sourceLang, targetLang);
+                transEl.textContent = result.translatedText || '';
+                const conf = result.confidence || 0;
+                if (conf > 0) {
+                    const pct = Math.round(conf * 100);
+                    let bg = 'rgba(34,197,94,0.15)'; let fg = '#22C55E';
+                    if (conf < 0.7) { bg = 'rgba(239,68,68,0.15)'; fg = '#EF4444'; }
+                    else if (conf < 0.9) { bg = 'rgba(234,179,8,0.15)'; fg = '#EAB308'; }
+                    confEl.style.background = bg;
+                    confEl.style.color = fg;
+                    confEl.textContent = `${pct}%`;
+                }
+            } catch (err) {
+                transEl.textContent = `⚠️ ${err.message}`;
+            }
+        }
+
+        document.getElementById('translateBtn').addEventListener('click', doTranslate);
+        document.getElementById('textInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doTranslate(); }
+        });
+    </script>
+</body>
+
+</html>

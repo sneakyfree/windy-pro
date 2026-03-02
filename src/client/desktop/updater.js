@@ -80,9 +80,9 @@ class WindyUpdater {
         try {
             const store = new Store();
             const lastCheck = store.get('lastUpdateCheck', 0);
-            const oneDayMs = 24 * 60 * 60 * 1000;
-            if (Date.now() - lastCheck < oneDayMs) {
-                console.log('[Updater] Skipping — checked within last 24h');
+            const sixHoursMs = 6 * 60 * 60 * 1000;
+            if (Date.now() - lastCheck < sixHoursMs) {
+                console.log('[Updater] Skipping — checked within last 6h');
                 return;
             }
             store.set('lastUpdateCheck', Date.now());
@@ -143,6 +143,14 @@ class WindyUpdater {
         if (result.response === 0) {
             autoUpdater.quitAndInstall();
         }
+    }
+
+    /**
+     * Install downloaded update immediately (quit and install)
+     */
+    installUpdate() {
+        console.log('[Updater] Installing update and restarting...');
+        autoUpdater.quitAndInstall();
     }
 }
 

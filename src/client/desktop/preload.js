@@ -109,6 +109,12 @@ contextBridge.exposeInMainWorld('windyAPI', {
 
   // Translation (offline fallback + mini-translate)
   translateOffline: (text, sourceLang, targetLang) => ipcRenderer.invoke('translate-offline', text, sourceLang, targetLang),
+  onOpenTranslate: (callback) => {
+    ipcRenderer.on('open-translate', () => callback());
+  },
+
+  // Auto-update
+  installUpdate: () => ipcRenderer.invoke('install-update'),
 
   // Stripe payment
   createCheckoutSession: (priceId, email) => ipcRenderer.invoke('create-checkout-session', priceId, email),

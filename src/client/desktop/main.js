@@ -118,6 +118,7 @@ const store = new Store({
 
 let mainWindow = null;
 let miniWindow = null;
+let miniTranslateWindow = null;
 let tray = null;
 let isRecording = false;
 let pythonProcess = null;
@@ -487,6 +488,10 @@ function updateTrayMenu() {
         mainWindow.show();
         safeSend('open-vault');
       }
+    },
+    {
+      label: '🌐 Quick Translate',
+      click: () => showMiniTranslateWindow()
     },
     {
       label: '📜 History',
@@ -874,6 +879,77 @@ ipcMain.handle('set-font-size', async (event, percent) => {
   return clamped;
 });
 
+// ═══════════════════════════════════════════
+//  MINI TRANSLATE WINDOW (floating quick-translate)
+// ═══════════════════════════════════════════
+
+function showMiniTranslateWindow() {
+  if (miniTranslateWindow && !miniTranslateWindow.isDestroyed()) {
+    miniTranslateWindow.show();
+    miniTranslateWindow.focus();
+    return;
+  }
+
+  miniTranslateWindow = new BrowserWindow({
+    width: 400,
+    height: 300,
+    frame: false,
+    transparent: false,
+    alwaysOnTop: true,
+    resizable: true,
+    skipTaskbar: true,
+    backgroundColor: '#1F2937',
+    minWidth: 300,
+    minHeight: 200,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'mini-translate-preload.js')
+    }
+  });
+
+  miniTranslateWindow.loadFile(path.join(__dirname, 'renderer', 'mini-translate.html'));
+  miniTranslateWindow.on('closed', () => { miniTranslateWindow = null; });
+}
+
+// Mini-translate IPC close
+ipcMain.on('mini-translate-close', () => {
+  if (miniTranslateWindow && !miniTranslateWindow.isDestroyed()) {
+    miniTranslateWindow.hide();
+  }
+});
+
+// Mini-translate IPC text translation
+ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang) => {
+  const https = require('https');
+  const token = store.get('license.cloudToken') || '';
+  const postData = JSON.stringify({ text, sourceLang, targetLang });
+
+  return new Promise((resolve, reject) => {
+    const req = https.request('https://windypro.thewindstorm.uk/api/v1/translate/text', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      }
+    }, (res) => {
+      let body = '';
+      res.on('data', (chunk) => body += chunk);
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch (e) {
+          reject(new Error('Invalid response'));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(postData);
+    req.end();
+  });
+});
+
 /**
  * Register global hotkeys
  */
@@ -912,6 +988,12 @@ function registerHotkeys() {
     }
   });
   console.log(`[Hotkey] Show/Hide (${hotkeys.showHide}): ${regShow ? 'OK' : 'FAILED'}`);
+
+  // Quick Translate hotkey (Ctrl+Shift+T)
+  const regTranslate = globalShortcut.register('CommandOrControl+Shift+T', () => {
+    showMiniTranslateWindow();
+  });
+  console.log(`[Hotkey] Quick Translate (Ctrl+Shift+T): ${regTranslate ? 'OK' : 'FAILED'}`);
 }
 
 /**
@@ -2001,6 +2083,14 @@ ipcMain.handle('save-file', async (event, { content, defaultName, filters }) => 
   return { ok: false };
 });
 
+ipcMain.handle('install-update', async () => {
+  if (updaterInstance) {
+    updaterInstance.installUpdate();
+    return { ok: true };
+  }
+  return { ok: false, error: 'Updater not available' };
+});
+
 // Crash recovery — check for orphaned temp file
 ipcMain.handle('check-crash-recovery', async () => {
   const tempFile = path.join(os.tmpdir(), 'windy_session.txt');
@@ -2069,6 +2159,10 @@ app.whenReady().then(async () => {
   try {
     updaterInstance = new WindyUpdater();
     updaterInstance.checkForUpdates();
+    // Periodic update check every 6 hours
+    setInterval(() => {
+      try { updaterInstance.checkForUpdates(); } catch (e) { /* silent */ }
+    }, 6 * 60 * 60 * 1000);
   } catch (e) {
     console.log('[Main] Auto-updater skipped:', e.message);
   }

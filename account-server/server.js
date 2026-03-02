@@ -26,8 +26,11 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const morgan = require('morgan');
 const cors = require('cors');
+const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const app = express();
 const PORT = process.env.PORT || 8098;
@@ -74,6 +77,29 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS translations (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    source_lang TEXT NOT NULL,
+    target_lang TEXT NOT NULL,
+    source_text TEXT NOT NULL,
+    translated_text TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 0.85,
+    type TEXT NOT NULL DEFAULT 'text',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS favorites (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    translation_id TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (translation_id) REFERENCES translations(id) ON DELETE CASCADE,
+    UNIQUE(user_id, translation_id)
+  );
 `);
 
 // ─── Prepared Statements ───
@@ -96,6 +122,14 @@ const stmts = {
     deleteRefreshToken: db.prepare('DELETE FROM refresh_tokens WHERE token = ?'),
     deleteUserRefreshTokens: db.prepare('DELETE FROM refresh_tokens WHERE user_id = ? AND device_id = ?'),
     cleanExpiredTokens: db.prepare("DELETE FROM refresh_tokens WHERE expires_at < datetime('now')"),
+
+    // Translation statements
+    insertTranslation: db.prepare('INSERT INTO translations (id, user_id, source_lang, target_lang, source_text, translated_text, confidence, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
+    getTranslationHistory: db.prepare('SELECT t.*, CASE WHEN f.id IS NOT NULL THEN 1 ELSE 0 END as is_favorite FROM translations t LEFT JOIN favorites f ON t.id = f.translation_id AND f.user_id = t.user_id WHERE t.user_id = ? ORDER BY t.created_at DESC LIMIT ? OFFSET ?'),
+    countTranslations: db.prepare('SELECT COUNT(*) as count FROM translations WHERE user_id = ?'),
+    insertFavorite: db.prepare('INSERT OR IGNORE INTO favorites (id, user_id, translation_id) VALUES (?, ?, ?)'),
+    removeFavorite: db.prepare('DELETE FROM favorites WHERE user_id = ? AND translation_id = ?'),
+    findTranslation: db.prepare('SELECT * FROM translations WHERE id = ? AND user_id = ?'),
 };
 
 // ─── Middleware ───
@@ -433,6 +467,160 @@ app.post('/v1/auth/refresh', (req, res) => {
     });
 });
 
+// ─── Translation API Routes ───
+
+const SUPPORTED_LANGUAGES = [
+    { code: 'en', name: 'English' },
+    { code: 'es', name: 'Spanish' },
+    { code: 'fr', name: 'French' },
+    { code: 'de', name: 'German' },
+    { code: 'it', name: 'Italian' },
+    { code: 'pt', name: 'Portuguese' },
+    { code: 'zh', name: 'Chinese' },
+    { code: 'ja', name: 'Japanese' },
+    { code: 'ko', name: 'Korean' },
+    { code: 'ar', name: 'Arabic' },
+    { code: 'ru', name: 'Russian' },
+    { code: 'pl', name: 'Polish' }
+];
+
+// POST /api/v1/translate/speech — Accept audio blob + source/target lang, return translation
+app.post('/api/v1/translate/speech', authenticateToken, upload.single('audio'), (req, res) => {
+    try {
+        const { sourceLang, targetLang } = req.body;
+
+        if (!req.file) {
+            return res.status(400).json({ error: 'Audio file is required' });
+        }
+        if (!sourceLang || !targetLang) {
+            return res.status(400).json({ error: 'sourceLang and targetLang are required' });
+        }
+
+        // Stub translation — in production this would call a real translation engine
+        const detectedText = `[Detected speech in ${sourceLang}]`;
+        const translatedText = `[Translation to ${targetLang}]`;
+        const confidence = 0.82 + Math.random() * 0.15;
+        const translationId = uuidv4();
+
+        stmts.insertTranslation.run(
+            translationId, req.user.userId,
+            sourceLang, targetLang,
+            detectedText, translatedText,
+            Math.round(confidence * 100) / 100, 'speech'
+        );
+
+        console.log(`🗣️  Speech translation: ${sourceLang}→${targetLang} for user ${req.user.userId.slice(0, 8)}`);
+
+        res.json({
+            id: translationId,
+            sourceText: detectedText,
+            translatedText,
+            sourceLang,
+            targetLang,
+            confidence: Math.round(confidence * 100) / 100,
+            type: 'speech',
+            audioData: null // Base64 audio would go here from a real TTS engine
+        });
+    } catch (err) {
+        console.error('Speech translation error:', err);
+        res.status(500).json({ error: 'Speech translation failed: ' + err.message });
+    }
+});
+
+// POST /api/v1/translate/text — Accept JSON {text, sourceLang, targetLang}
+app.post('/api/v1/translate/text', authenticateToken, (req, res) => {
+    try {
+        const { text, sourceLang, targetLang } = req.body;
+
+        if (!text || !sourceLang || !targetLang) {
+            return res.status(400).json({ error: 'text, sourceLang, and targetLang are required' });
+        }
+
+        // Stub translation
+        const translatedText = `[${targetLang}] ${text}`;
+        const confidence = 0.88 + Math.random() * 0.10;
+        const translationId = uuidv4();
+
+        stmts.insertTranslation.run(
+            translationId, req.user.userId,
+            sourceLang, targetLang,
+            text, translatedText,
+            Math.round(confidence * 100) / 100, 'text'
+        );
+
+        console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${req.user.userId.slice(0, 8)}`);
+
+        res.json({
+            id: translationId,
+            sourceText: text,
+            translatedText,
+            sourceLang,
+            targetLang,
+            confidence: Math.round(confidence * 100) / 100,
+            type: 'text'
+        });
+    } catch (err) {
+        console.error('Text translation error:', err);
+        res.status(500).json({ error: 'Text translation failed: ' + err.message });
+    }
+});
+
+// GET /api/v1/translate/languages — Return supported languages
+app.get('/api/v1/translate/languages', authenticateToken, (req, res) => {
+    res.json({ languages: SUPPORTED_LANGUAGES });
+});
+
+// GET /api/v1/user/history — Paginated translation history
+app.get('/api/v1/user/history', authenticateToken, (req, res) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+        const offset = parseInt(req.query.offset) || 0;
+
+        const history = stmts.getTranslationHistory.all(req.user.userId, limit, offset);
+        const total = stmts.countTranslations.get(req.user.userId).count;
+
+        res.json({
+            history,
+            pagination: { limit, offset, total, hasMore: offset + limit < total }
+        });
+    } catch (err) {
+        console.error('History error:', err);
+        res.status(500).json({ error: 'Failed to fetch history: ' + err.message });
+    }
+});
+
+// POST /api/v1/user/favorites — Toggle favorite on a translation
+app.post('/api/v1/user/favorites', authenticateToken, (req, res) => {
+    try {
+        const { translationId } = req.body;
+
+        if (!translationId) {
+            return res.status(400).json({ error: 'translationId is required' });
+        }
+
+        const translation = stmts.findTranslation.get(translationId, req.user.userId);
+        if (!translation) {
+            return res.status(404).json({ error: 'Translation not found' });
+        }
+
+        const favoriteId = uuidv4();
+        const result = stmts.insertFavorite.run(favoriteId, req.user.userId, translationId);
+
+        if (result.changes === 0) {
+            // Already favorited — remove it (toggle behavior)
+            stmts.removeFavorite.run(req.user.userId, translationId);
+            console.log(`💔 Unfavorited: ${translationId.slice(0, 8)} by ${req.user.userId.slice(0, 8)}`);
+            return res.json({ favorited: false, translationId });
+        }
+
+        console.log(`⭐ Favorited: ${translationId.slice(0, 8)} by ${req.user.userId.slice(0, 8)}`);
+        res.json({ favorited: true, translationId, favoriteId });
+    } catch (err) {
+        console.error('Favorite error:', err);
+        res.status(500).json({ error: 'Failed to save favorite: ' + err.message });
+    }
+});
+
 // ─── Error Handler ───
 
 app.use((err, req, res, next) => {
@@ -453,14 +641,19 @@ app.listen(PORT, () => {
     console.log(`   Devices:  ${MAX_DEVICES} per account`);
     console.log('');
     console.log('   Endpoints:');
-    console.log(`   POST /v1/auth/register          — Create account`);
-    console.log(`   POST /v1/auth/login             — Login`);
-    console.log(`   GET  /v1/auth/me                — Current user info`);
-    console.log(`   GET  /v1/auth/devices           — List devices`);
-    console.log(`   POST /v1/auth/devices/register  — Register device (${MAX_DEVICES} max)`);
-    console.log(`   POST /v1/auth/devices/remove    — Remove device`);
-    console.log(`   POST /v1/auth/refresh           — Refresh token`);
-    console.log(`   GET  /health                    — Health check`);
+    console.log(`   POST /v1/auth/register              — Create account`);
+    console.log(`   POST /v1/auth/login                 — Login`);
+    console.log(`   GET  /v1/auth/me                    — Current user info`);
+    console.log(`   GET  /v1/auth/devices               — List devices`);
+    console.log(`   POST /v1/auth/devices/register      — Register device (${MAX_DEVICES} max)`);
+    console.log(`   POST /v1/auth/devices/remove        — Remove device`);
+    console.log(`   POST /v1/auth/refresh               — Refresh token`);
+    console.log(`   POST /api/v1/translate/speech        — Speech translation`);
+    console.log(`   POST /api/v1/translate/text          — Text translation`);
+    console.log(`   GET  /api/v1/translate/languages     — Supported languages`);
+    console.log(`   GET  /api/v1/user/history            — Translation history`);
+    console.log(`   POST /api/v1/user/favorites          — Toggle favorite`);
+    console.log(`   GET  /health                        — Health check`);
     console.log('');
 });
 
