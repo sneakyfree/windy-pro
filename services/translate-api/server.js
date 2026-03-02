@@ -324,6 +324,48 @@ app.post('/translate/batch', async (req, res) => {
     }
 });
 
+// ─── POST /detect — Language auto-detection via script analysis ───
+app.post('/detect', (req, res) => {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: 'Missing text' });
+
+    // Simple script-based detection (fast, no ML needed)
+    const sample = text.slice(0, 200);
+    const scripts = {
+        cyrillic: /[\u0400-\u04FF]/g,
+        arabic: /[\u0600-\u06FF]/g,
+        devanagari: /[\u0900-\u097F]/g,
+        cjk: /[\u4E00-\u9FFF]/g,
+        hangul: /[\uAC00-\uD7AF]/g,
+        kana: /[\u3040-\u30FF]/g,
+        thai: /[\u0E00-\u0E7F]/g,
+        greek: /[\u0370-\u03FF]/g,
+        hebrew: /[\u0590-\u05FF]/g,
+        georgian: /[\u10A0-\u10FF]/g,
+        armenian: /[\u0530-\u058F]/g,
+        bengali: /[\u0980-\u09FF]/g,
+        tamil: /[\u0B80-\u0BFF]/g,
+    };
+
+    const scriptMap = {
+        cyrillic: 'ru', arabic: 'ar', devanagari: 'hi', cjk: 'zh',
+        hangul: 'ko', kana: 'ja', thai: 'th', greek: 'el',
+        hebrew: 'he', georgian: 'ka', armenian: 'hy', bengali: 'bn', tamil: 'ta'
+    };
+
+    let detected = 'en';
+    let maxCount = 0;
+    for (const [script, regex] of Object.entries(scripts)) {
+        const matches = sample.match(regex);
+        if (matches && matches.length > maxCount) {
+            maxCount = matches.length;
+            detected = scriptMap[script] || 'en';
+        }
+    }
+
+    res.json({ detected, confidence: maxCount > 10 ? 'high' : maxCount > 3 ? 'medium' : 'low' });
+});
+
 // ─── GET /languages ───
 app.get('/languages', (req, res) => {
     res.json({

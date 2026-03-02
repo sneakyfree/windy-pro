@@ -117,6 +117,31 @@ export default function Translate() {
         await navigator.clipboard.writeText(text)
     }
 
+    const exportConversation = () => {
+        if (messages.length === 0) return
+        const text = messages.map(m => {
+            const lang = POPULAR_LANGS.find(l => l.code === m.lang)?.name || m.lang
+            return `[${lang}] ${m.text}`
+        }).join('\n\n')
+        const blob = new Blob([text], { type: 'text/plain' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `windy-translate-${new Date().toISOString().slice(0, 10)}.txt`
+        a.click()
+        URL.revokeObjectURL(url)
+    }
+
+    const speakText = (text, langCode) => {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel()
+            const u = new SpeechSynthesisUtterance(text)
+            u.lang = langCode
+            u.rate = 0.9
+            window.speechSynthesis.speak(u)
+        }
+    }
+
     const handleSignOut = () => {
         localStorage.removeItem('windy_token')
         localStorage.removeItem('windy_user')
@@ -232,9 +257,14 @@ export default function Translate() {
                                         transition: 'opacity 0.2s'
                                     }}
                                 >
-                                    <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>
-                                        {msg.flag} {POPULAR_LANGS.find(l => l.code === msg.lang)?.name || msg.lang}
-                                        {msg.cached && <span style={{ marginLeft: '6px', color: '#6366F1' }}>⚡ cached</span>}
+                                    <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span>{msg.flag} {POPULAR_LANGS.find(l => l.code === msg.lang)?.name || msg.lang}</span>
+                                        {msg.cached && <span style={{ color: '#6366F1' }}>⚡ cached</span>}
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); speakText(msg.text, msg.lang); }}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: '0', marginLeft: 'auto' }}
+                                            title="Listen"
+                                        >🔊</button>
                                     </div>
                                     <div style={{ color: '#E2E8F0', fontSize: '15px', lineHeight: '1.5' }}>
                                         {msg.text}
@@ -294,6 +324,19 @@ export default function Translate() {
                     >
                         🗑️
                     </button>
+                    {messages.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={exportConversation}
+                            style={{
+                                background: 'transparent', color: '#64748B', border: '1px solid #334155',
+                                borderRadius: '12px', padding: '12px', cursor: 'pointer', fontSize: '14px'
+                            }}
+                            title="Export conversation"
+                        >
+                            📥
+                        </button>
+                    )}
                 </form>
             </div>
         </div>
