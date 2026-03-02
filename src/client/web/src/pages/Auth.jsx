@@ -31,7 +31,7 @@ export default function Auth() {
             const data = await res.json()
 
             if (!res.ok) {
-                setError(data.detail || 'Something went wrong')
+                setError(data.error || 'Something went wrong')
                 return
             }
 

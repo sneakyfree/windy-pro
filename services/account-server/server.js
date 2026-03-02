@@ -752,7 +752,7 @@ app.post('/api/v1/analytics', (req, res) => {
 });
 
 // GET /api/v1/analytics/stats — aggregated overview (admin only)
-app.get('/api/v1/analytics/stats', authenticateToken, (req, res) => {
+app.get('/api/v1/analytics/stats', authenticate, (req, res) => {
     try {
         const stats = {
             total_events: db.prepare('SELECT COUNT(*) as c FROM analytics_events').get().c,
@@ -790,7 +790,7 @@ try {
 // ═══════════════════════════════════════════════
 // Admin Dashboard (Ghost Feature 2)
 // ═══════════════════════════════════════════════
-app.get('/api/v1/admin/dashboard', authenticateToken, (req, res) => {
+app.get('/api/v1/admin/dashboard', authenticate, (req, res) => {
     try {
         const users = db.prepare('SELECT COUNT(*) as total FROM users').get();
         const usersToday = db.prepare("SELECT COUNT(*) as c FROM users WHERE created_at >= date('now')").get();
