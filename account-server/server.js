@@ -958,6 +958,29 @@ app.post('/api/v1/clone/start-training', authenticateToken, (req, res) => {
     }
 });
 
+// ─── Add device_id column (safe for existing tables) ───
+try { db.exec('ALTER TABLE recordings ADD COLUMN device_id TEXT'); } catch { /* column exists */ }
+try { db.exec('ALTER TABLE recordings ADD COLUMN device_name TEXT'); } catch { /* column exists */ }
+
+// ─── GET /api/v1/recordings/list — List bundles since timestamp ───
+app.get('/api/v1/recordings/list', authenticateToken, (req, res) => {
+    try {
+        const since = req.query.since || '1970-01-01T00:00:00Z';
+        const recordings = db.prepare(
+            `SELECT id, bundle_id, duration_seconds, has_video, video_resolution,
+                    camera_source, transcript_text, file_size, device_platform,
+                    device_id, device_name, clone_training_ready, sync_status,
+                    created_at
+             FROM recordings
+             WHERE user_id = ? AND created_at > ?
+             ORDER BY created_at DESC
+             LIMIT 100`
+        ).all(req.user.userId, since);
+        res.json({ bundles: recordings, total: recordings.length, since });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 
 app.use((err, req, res, next) => {

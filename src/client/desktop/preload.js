@@ -148,4 +148,22 @@ contextBridge.exposeInMainWorld('windyAPI', {
   // Document Translation
   extractDocumentText: (base64, ext) => ipcRenderer.invoke('extract-document-text', base64, ext),
   browseDocumentFile: () => ipcRenderer.invoke('browse-document-file'),
+
+  // Clone Data Bundles
+  saveCloneBundle: (data) => ipcRenderer.invoke('save-clone-bundle', data),
+  getCloneBundles: () => ipcRenderer.invoke('get-clone-bundles'),
+  deleteCloneBundle: (id) => ipcRenderer.invoke('delete-clone-bundle', id),
+  playCloneBundle: (id) => ipcRenderer.invoke('play-clone-bundle', id),
+  exportCloneBundles: (ids) => ipcRenderer.invoke('export-clone-bundles', ids),
+  startCloneTraining: (ids) => ipcRenderer.invoke('start-clone-training', ids),
+
+  // Auto-Sync
+  getSyncState: () => ipcRenderer.invoke('get-sync-state'),
+  saveSyncState: (state) => ipcRenderer.invoke('save-sync-state', state),
+  fetchRemoteBundles: (since) => ipcRenderer.invoke('fetch-remote-bundles', since),
+  downloadRemoteBundle: (id) => ipcRenderer.invoke('download-remote-bundle', id),
+  uploadBundleToCloud: (data) => ipcRenderer.invoke('upload-bundle-to-cloud', data),
+  showSyncNotification: (msg) => ipcRenderer.invoke('show-sync-notification', msg),
+  getStorageStats: () => ipcRenderer.invoke('get-storage-stats'),
+  deleteLocalBundleCopy: (id) => ipcRenderer.invoke('delete-local-bundle-copy', id),
 });

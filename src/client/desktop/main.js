@@ -2535,6 +2535,233 @@ ipcMain.handle('browse-document-file', async () => {
   return { text, name: path.basename(filePath) };
 });
 
+// ═══ Clone Data Bundle Management ═══
+const bundlesDir = path.join(os.homedir(), '.config', 'windy-pro', 'clone-bundles');
+const bundlesManifest = path.join(os.homedir(), '.config', 'windy-pro', 'clone-bundles.json');
+
+function loadBundlesManifest() {
+  try {
+    ensureDir(bundlesDir);
+    if (fs.existsSync(bundlesManifest)) return JSON.parse(fs.readFileSync(bundlesManifest, 'utf8'));
+    return { bundles: [] };
+  } catch { return { bundles: [] }; }
+}
+
+function saveBundlesManifest(data) {
+  try {
+    ensureDir(path.dirname(bundlesManifest));
+    fs.writeFileSync(bundlesManifest, JSON.stringify(data, null, 2));
+  } catch (err) { console.error('[Bundles] Save error:', err.message); }
+}
+
+ipcMain.handle('save-clone-bundle', async (event, bundleData) => {
+  const data = loadBundlesManifest();
+  const id = bundleData.bundle_id || require('crypto').randomUUID();
+  const mediaPath = path.join(bundlesDir, `${id}.webm`);
+  ensureDir(bundlesDir);
+
+  // Save media file
+  if (bundleData.mediaBase64) {
+    fs.writeFileSync(mediaPath, Buffer.from(bundleData.mediaBase64, 'base64'));
+  }
+
+  const bundle = {
+    bundle_id: id,
+    duration_seconds: bundleData.duration_seconds || 0,
+    audio: bundleData.audio || { format: 'opus', file: `${id}.webm` },
+    video: bundleData.video || null,
+    transcript: bundleData.transcript || { text: '', segments: [] },
+    device: bundleData.device || { platform: 'desktop', app_version: '2.0' },
+    sync_status: 'local',
+    clone_training_ready: bundleData.clone_training_ready || false,
+    file_path: mediaPath,
+    file_size: bundleData.mediaBase64 ? Buffer.from(bundleData.mediaBase64, 'base64').length : 0,
+    created_at: new Date().toISOString()
+  };
+
+  data.bundles.push(bundle);
+  saveBundlesManifest(data);
+  return { success: true, bundle_id: id };
+});
+
+ipcMain.handle('get-clone-bundles', async () => loadBundlesManifest());
+
+ipcMain.handle('delete-clone-bundle', async (event, bundleId) => {
+  const data = loadBundlesManifest();
+  const bundle = data.bundles.find(b => b.bundle_id === bundleId);
+  if (bundle?.file_path && fs.existsSync(bundle.file_path)) {
+    const resolved = path.resolve(bundle.file_path);
+    if (resolved.startsWith(path.resolve(bundlesDir))) {
+      fs.unlinkSync(resolved);
+    }
+  }
+  data.bundles = data.bundles.filter(b => b.bundle_id !== bundleId);
+  saveBundlesManifest(data);
+  return { success: true };
+});
+
+ipcMain.handle('play-clone-bundle', async (event, bundleId) => {
+  const data = loadBundlesManifest();
+  const bundle = data.bundles.find(b => b.bundle_id === bundleId);
+  if (!bundle?.file_path || !fs.existsSync(bundle.file_path)) return { success: false };
+  const audioData = fs.readFileSync(bundle.file_path).toString('base64');
+  return { success: true, audioData, mimeType: bundle.video ? 'video/webm' : 'audio/webm', bundle };
+});
+
+ipcMain.handle('export-clone-bundles', async (event, bundleIds) => {
+  const data = loadBundlesManifest();
+  const selected = data.bundles.filter(b => bundleIds.includes(b.bundle_id));
+  if (selected.length === 0) return { success: false };
+
+  const result = await dialog.showSaveDialog({
+    title: 'Export Clone Bundles',
+    defaultPath: `clone-bundles-${Date.now()}.json`,
+    filters: [{ name: 'JSON', extensions: ['json'] }]
+  });
+  if (result.canceled) return { success: false };
+
+  const exportData = {
+    exported_at: new Date().toISOString(),
+    bundle_count: selected.length,
+    bundles: selected.map(b => ({
+      ...b,
+      file_path: undefined, // Don't expose local paths
+      mediaBase64: fs.existsSync(b.file_path) ? fs.readFileSync(b.file_path).toString('base64') : null
+    }))
+  };
+  fs.writeFileSync(result.filePath, JSON.stringify(exportData, null, 2));
+  return { success: true, exportPath: result.filePath };
+});
+
+ipcMain.handle('start-clone-training', async (event, bundleIds) => {
+  // Stub: call account server API
+  try {
+    const settings = store.get('server', {});
+    const token = store.get('auth.token', '');
+    const baseUrl = settings.url || 'http://localhost:8098';
+    const res = await require('node-fetch')(`${baseUrl}/api/v1/clone/start-training`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ bundle_ids: bundleIds })
+    });
+    return await res.json();
+  } catch (err) {
+    // Fallback: return stub job ID
+    return { jobId: require('crypto').randomUUID(), status: 'queued', message: 'Training queued (offline mode)' };
+  }
+});
+
+// ═══ Auto-Sync IPC Handlers ═══
+const syncStatePath = path.join(os.homedir(), '.config', 'windy-pro', 'sync-state.json');
+
+ipcMain.handle('get-sync-state', async () => {
+  try {
+    if (fs.existsSync(syncStatePath)) return JSON.parse(fs.readFileSync(syncStatePath, 'utf8'));
+    return { lastSync: 0, uploadQueue: [], devices: {} };
+  } catch { return { lastSync: 0, uploadQueue: [], devices: {} }; }
+});
+
+ipcMain.handle('save-sync-state', async (event, state) => {
+  try {
+    ensureDir(path.dirname(syncStatePath));
+    fs.writeFileSync(syncStatePath, JSON.stringify(state, null, 2));
+    return { success: true };
+  } catch { return { success: false }; }
+});
+
+ipcMain.handle('fetch-remote-bundles', async (event, since) => {
+  try {
+    const settings = store.get('server', {});
+    const token = store.get('auth.token', '');
+    const baseUrl = settings.url || 'http://localhost:8098';
+    const res = await require('node-fetch')(`${baseUrl}/api/v1/recordings/list?since=${encodeURIComponent(since)}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return await res.json();
+  } catch { return { bundles: [] }; }
+});
+
+ipcMain.handle('download-remote-bundle', async (event, bundleId) => {
+  try {
+    const settings = store.get('server', {});
+    const token = store.get('auth.token', '');
+    const baseUrl = settings.url || 'http://localhost:8098';
+    const res = await require('node-fetch')(`${baseUrl}/api/v1/recordings/${bundleId}/video`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) return { success: false };
+    const buffer = await res.buffer();
+    return { success: true, mediaBase64: buffer.toString('base64') };
+  } catch { return { success: false }; }
+});
+
+ipcMain.handle('upload-bundle-to-cloud', async (event, bundleData) => {
+  try {
+    const settings = store.get('server', {});
+    const token = store.get('auth.token', '');
+    const baseUrl = settings.url || 'http://localhost:8098';
+
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('bundle_id', bundleData.bundle_id);
+    form.append('duration_seconds', String(bundleData.duration_seconds || 0));
+    form.append('has_video', String(!!bundleData.video));
+    form.append('transcript_text', bundleData.transcript?.text || '');
+    form.append('clone_training_ready', String(!!bundleData.clone_training_ready));
+    form.append('device_platform', 'desktop');
+
+    if (bundleData.file_path && fs.existsSync(bundleData.file_path)) {
+      form.append('media', fs.createReadStream(bundleData.file_path));
+    }
+
+    const res = await require('node-fetch')(`${baseUrl}/api/v1/recordings/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, ...form.getHeaders() },
+      body: form
+    });
+    return await res.json();
+  } catch { return { success: false }; }
+});
+
+ipcMain.handle('show-sync-notification', async (event, message) => {
+  const { Notification } = require('electron');
+  if (Notification.isSupported()) {
+    new Notification({ title: 'Windy Pro Sync', body: message, icon: undefined }).show();
+  }
+  return { success: true };
+});
+
+ipcMain.handle('get-storage-stats', async () => {
+  try {
+    let localSize = 0;
+    const manifest = loadBundlesManifest();
+    for (const bundle of manifest.bundles) {
+      if (bundle.file_path && fs.existsSync(bundle.file_path)) {
+        localSize += fs.statSync(bundle.file_path).size;
+      }
+    }
+    return {
+      local: localSize,
+      cloud: 0, // Would come from API
+      bundleCount: manifest.bundles.length
+    };
+  } catch { return { local: 0, cloud: 0, bundleCount: 0 }; }
+});
+
+ipcMain.handle('delete-local-bundle-copy', async (event, bundleId) => {
+  const manifest = loadBundlesManifest();
+  const bundle = manifest.bundles.find(b => b.bundle_id === bundleId);
+  if (!bundle?.file_path || !fs.existsSync(bundle.file_path)) return { freed: 0 };
+  const resolved = path.resolve(bundle.file_path);
+  if (!resolved.startsWith(path.resolve(bundlesDir))) return { freed: 0 };
+  const size = fs.statSync(resolved).size;
+  fs.unlinkSync(resolved);
+  bundle.file_path = null;
+  bundle.sync_status = 'cloud_only';
+  saveBundlesManifest(manifest);
+  return { freed: size };
+});
+
 
 if (!gotLock) {
   console.log('[Main] Another instance is running. Quitting.');

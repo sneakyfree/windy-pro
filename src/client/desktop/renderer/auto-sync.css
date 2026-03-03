@@ -1,0 +1,149 @@
+/* ══════════════════════════════════════
+   Windy Pro — Auto-Sync Dashboard CSS
+   ══════════════════════════════════════ */
+
+.sync-dashboard {
+    background: #0B0F1A;
+    border-radius: 12px;
+    padding: 24px;
+}
+
+.sync-header {
+    position: relative;
+    margin-bottom: 16px;
+}
+
+.sync-header h2 {
+    font-size: 20px;
+    color: #E2E8F0;
+    margin: 0 0 8px;
+}
+
+.sync-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #94A3B8;
+}
+
+.sync-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.sync-online {
+    background: #22C55E;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+}
+
+.sync-offline {
+    background: #F59E0B;
+    animation: vrRecPulse 1.5s infinite;
+}
+
+.sync-last {
+    margin-left: auto;
+    font-size: 11px;
+    color: #475569;
+}
+
+.sync-storage {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.sync-section {
+    background: #111827;
+    border: 1px solid #1E293B;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+}
+
+.sync-section h3 {
+    font-size: 14px;
+    color: #CBD5E1;
+    margin: 0 0 10px;
+    font-weight: 600;
+}
+
+.sync-device-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.sync-device-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    background: #0B0F1A;
+    border: 1px solid #1E293B;
+    border-radius: 8px;
+    margin-bottom: 6px;
+}
+
+.sync-device-icon {
+    font-size: 24px;
+}
+
+.sync-device-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sync-device-name {
+    color: #E2E8F0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.sync-device-meta {
+    color: #475569;
+    font-size: 11px;
+}
+
+.sync-progress-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #94A3B8;
+}
+
+.sync-progress-item .doc-progress-bar {
+    flex: 1;
+}
+
+.sync-queue-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid #1E293B0A;
+    font-size: 12px;
+    color: #94A3B8;
+}
+
+.sync-queue-meta {
+    color: #F59E0B;
+}
+
+.sync-storage-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sync-empty {
+    color: #475569;
+    text-align: center;
+    padding: 12px;
+    font-size: 13px;
+}
