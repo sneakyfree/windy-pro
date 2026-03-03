@@ -42,7 +42,7 @@ process.on('unhandledRejection', (reason) => {
  * DNA Strand: B1.1
  */
 
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog, Notification, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog, Notification, shell, session } = require('electron');
 
 // Fix: bake in --no-sandbox for Linux AppImage (chrome-sandbox SUID issue)
 if (process.platform === 'linux') {
@@ -344,6 +344,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.js')
     },
 
@@ -589,6 +590,7 @@ function showMiniWidget() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       preload: path.join(__dirname, 'mini-preload.js')
     }
   };
@@ -706,6 +708,7 @@ function createVideoWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       preload: path.join(__dirname, 'renderer', 'video-preload.js'),
       partition: 'persist:videopreview' // Own session so permissions don't conflict
     }
@@ -904,6 +907,7 @@ function showMiniTranslateWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       preload: path.join(__dirname, 'mini-translate-preload.js')
     }
   });
@@ -1176,42 +1180,27 @@ ipcMain.on('open-archive-folder', () => {
 
 ipcMain.handle('open-external-url', async (event, url) => {
   console.log('[Main] open-external-url called with:', url);
-  if (typeof url !== 'string' || !url.startsWith('https://')) {
-    console.warn('[Main] Blocked non-https external URL:', url);
-    return { ok: false, error: 'URL must start with https://' };
-  }
-
-  const { execSync, spawn } = require('child_process');
-
-  // Try real browser binaries (Stripe won't render in Electron BrowserWindow)
-  const browsers = [
-    'google-chrome',
-    'google-chrome-stable',
-    'firefox',
-    'chromium',
-    'chromium-browser',
-    'brave-browser'
-  ];
-
-  for (const browser of browsers) {
-    try {
-      execSync(`which ${browser}`, { stdio: 'ignore' });
-      console.log(`[Main] Found: ${browser}, opening URL`);
-      // Open as new tab in existing browser (not --new-window)
-      const child = spawn(browser, [url], {
-        detached: true,
-        stdio: 'ignore'
-      });
-      child.unref();
-      console.log(`[Main] ✅ Opened with: ${browser}`);
-      return { ok: true };
-    } catch (_) {
-      // Browser not found, try next
+  // Security: validate URL with URL parser — reject non-https schemes
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') {
+      console.warn('[Main] Blocked non-https external URL:', url);
+      return { ok: false, error: 'Only HTTPS URLs are allowed' };
     }
+  } catch (e) {
+    console.warn('[Main] Invalid URL:', url);
+    return { ok: false, error: 'Invalid URL' };
   }
 
-  console.error('[Main] ❌ No browser found');
-  return { ok: false, error: 'No browser found', url };
+  // Use Electron's shell.openExternal — avoids spawn/exec injection risk
+  try {
+    await shell.openExternal(url);
+    console.log('[Main] ✅ Opened URL via shell.openExternal');
+    return { ok: true };
+  } catch (e) {
+    console.error('[Main] ❌ shell.openExternal failed:', e.message);
+    return { ok: false, error: e.message };
+  }
 });
 
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
@@ -1501,12 +1490,24 @@ ipcMain.handle('delete-archive-entry', async (event, filePath) => {
   if (!filePath || typeof filePath !== 'string') {
     throw new Error('Invalid archive path');
   }
+
+  // Security: path traversal guard — only allow deletion within archive folder
+  const archiveBase = store.get('archiveFolder') || path.join(os.homedir(), 'Windy Pro');
+  const resolvedPath = path.resolve(filePath);
+  const resolvedBase = path.resolve(archiveBase);
+  if (!resolvedPath.startsWith(resolvedBase + path.sep) && resolvedPath !== resolvedBase) {
+    console.warn('[Main] Blocked path traversal attempt:', filePath);
+    throw new Error('Access denied: path outside archive folder');
+  }
+
   try {
-    fs.unlinkSync(filePath);
-    // Remove empty parent dir
-    const dir = path.dirname(filePath);
-    const remaining = fs.readdirSync(dir);
-    if (remaining.length === 0) fs.rmdirSync(dir);
+    fs.unlinkSync(resolvedPath);
+    // Remove empty parent dir (only if still within archive base)
+    const dir = path.dirname(resolvedPath);
+    if (dir.startsWith(resolvedBase) && dir !== resolvedBase) {
+      const remaining = fs.readdirSync(dir);
+      if (remaining.length === 0) fs.rmdirSync(dir);
+    }
     return { deleted: true };
   } catch (e) {
     throw new Error(`Delete failed: ${e.message}`);
@@ -2112,6 +2113,42 @@ ipcMain.handle('dismiss-crash-recovery', async () => {
 });
 
 // App lifecycle
+
+// ─── Global Security: Enforce navigation + permission policies on ALL webContents ───
+app.on('web-contents-created', (event, contents) => {
+  // Block navigation to non-local URLs
+  contents.on('will-navigate', (navEvent, navigationUrl) => {
+    const parsed = new URL(navigationUrl);
+    if (parsed.protocol !== 'file:') {
+      console.warn('[Security] Blocked navigation to:', navigationUrl);
+      navEvent.preventDefault();
+    }
+  });
+
+  // Block new window creation (popups)
+  contents.setWindowOpenHandler(({ url }) => {
+    // Allow https links via shell.openExternal instead
+    if (url.startsWith('https://')) {
+      shell.openExternal(url);
+    } else {
+      console.warn('[Security] Blocked window open:', url);
+    }
+    return { action: 'deny' };
+  });
+});
+
+// Default permission handler — whitelist media + clipboard only
+app.on('ready', () => {
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const ALLOWED = ['media', 'clipboard-read', 'clipboard-sanitized-write'];
+    if (ALLOWED.includes(permission)) {
+      callback(true);
+    } else {
+      console.warn('[Security] Denied permission:', permission);
+      callback(false);
+    }
+  });
+});
 
 app.whenReady().then(async () => {
   // ═══════════════════════════════════════════════════════════════════
