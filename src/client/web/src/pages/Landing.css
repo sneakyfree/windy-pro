@@ -888,3 +888,60 @@ html {
         align-items: center;
     }
 }
+
+/* ═══ US-Based Trust Signals ═══ */
+
+.hero-trust-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 16px;
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.55);
+    letter-spacing: 0.3px;
+    font-weight: 400;
+}
+
+.hero-trust-badge span {
+    opacity: 0.85;
+}
+
+.feature-card--trust {
+    border: 1px solid rgba(59, 130, 246, 0.15);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.04), rgba(60, 59, 110, 0.06));
+}
+
+.feature-card--trust h3 {
+    color: #93C5FD;
+}
+
+.download-trust {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    margin-top: 20px;
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.45);
+    letter-spacing: 0.2px;
+}
+
+.download-trust span {
+    opacity: 0.8;
+}
+
+.footer-location {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 8px;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.35);
+    letter-spacing: 0.2px;
+}
+
+.footer-location span {
+    opacity: 0.7;
+}

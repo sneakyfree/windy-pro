@@ -2,6 +2,23 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import './Landing.css'
 
+// Tasteful inline SVG US flag icon — small, polished, not emoji
+const USFlag = ({ size = 16 }) => (
+    <svg width={size} height={Math.round(size * 0.7)} viewBox="0 0 24 17" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }}>
+        <rect width="24" height="17" rx="2" fill="#B22234" />
+        <rect y="1.3" width="24" height="1.3" fill="white" />
+        <rect y="3.9" width="24" height="1.3" fill="white" />
+        <rect y="6.5" width="24" height="1.3" fill="white" />
+        <rect y="9.1" width="24" height="1.3" fill="white" />
+        <rect y="11.7" width="24" height="1.3" fill="white" />
+        <rect y="14.3" width="24" height="1.3" fill="white" />
+        <rect width="10" height="9.1" rx="1" fill="#3C3B6E" />
+        {[...Array(5)].map((_, r) => [...Array(r % 2 === 0 ? 6 : 5)].map((_, c) => (
+            <circle key={`${r}-${c}`} cx={r % 2 === 0 ? 0.8 + c * 1.7 : 1.6 + c * 1.7} cy={0.7 + r * 1.8} r="0.45" fill="white" />
+        )))}
+    </svg>
+)
+
 function isLoggedIn() {
     const token = localStorage.getItem('windy_token')
     if (!token) return false
@@ -78,6 +95,10 @@ export default function Landing() {
                         <Link to="/transcribe" className="btn btn-secondary btn-large">
                             ☁ Try Cloud Version
                         </Link>
+                    </div>
+                    <div className="hero-trust-badge">
+                        <USFlag size={14} />
+                        <span>Built in the USA · Privacy-First</span>
                     </div>
                     <div className="hero-stats">
                         <div className="stat">
@@ -194,6 +215,11 @@ export default function Landing() {
                             <div className="feature-icon">🧙</div>
                             <h3>Easy Setup</h3>
                             <p>Guided 6-step wizard detects your hardware, tests your mic, picks the right engine. Recording in 60 seconds.</p>
+                        </div>
+                        <div className="feature-card feature-card--trust">
+                            <div className="feature-icon"><USFlag size={24} /></div>
+                            <h3>US-Based & Privacy-First</h3>
+                            <p>Built in New York, hosted on US infrastructure, subject to US privacy law. Your recordings are processed locally on your device and never sent to external servers.</p>
                         </div>
                     </div>
                 </div>
@@ -416,6 +442,14 @@ export default function Landing() {
                             Or download the .deb, then: <code>sudo dpkg -i windy-pro_*.deb</code>
                         </p>
                     </div>
+                    <div className="download-trust">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 6, opacity: 0.7 }}>
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0110 0v4" />
+                        </svg>
+                        <USFlag size={12} />
+                        <span>Secure download from US-hosted servers</span>
+                    </div>
                 </div>
             </section>
 
@@ -433,6 +467,10 @@ export default function Landing() {
                         <Link to="/terms">Terms</Link>
                     </div>
                     <div className="footer-copy">© 2026 Windy Pro. The Green Strobe Never Lies.</div>
+                    <div className="footer-location">
+                        <USFlag size={12} />
+                        <span>Built and hosted in the United States · New York, NY</span>
+                    </div>
                 </div>
             </footer>
         </div>
