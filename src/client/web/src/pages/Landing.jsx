@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import './Landing.css'
 
@@ -14,7 +14,16 @@ function isLoggedIn() {
 export default function Landing() {
     const loggedIn = isLoggedIn()
     const [menuOpen, setMenuOpen] = useState(false)
+    const [latestVersion, setLatestVersion] = useState('v0.6.0')
     const closeMenu = () => setMenuOpen(false)
+
+    // Fetch latest version from cache-proof download API
+    useEffect(() => {
+        fetch('/download/version')
+            .then(r => r.json())
+            .then(data => { if (data.version) setLatestVersion(data.version) })
+            .catch(() => { }) // Fallback to default version
+    }, [])
 
     return (
         <div className="landing">
@@ -367,28 +376,30 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* Download */}
+            {/* Download — Cache-proof: all links use /download/latest/:platform redirect */}
             <section className="download" id="download">
                 <div className="container download-inner">
                     <h2 className="section-title">Download Windy Pro</h2>
-                    <p className="section-subtitle">v0.6.0 · Available for all major platforms.</p>
+                    <p className="section-subtitle">
+                        {latestVersion ? `${latestVersion}` : 'Loading...'} · Available for all major platforms.
+                    </p>
                     <div className="download-grid">
-                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/Windy-Pro-0.6.0.dmg" className="download-card">
+                        <a href="/download/latest/macos" className="download-card">
                             <div className="download-icon">🍎</div>
                             <div className="download-platform">macOS</div>
                             <div className="download-detail">Intel Mac (.dmg)</div>
                         </a>
-                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/Windy-Pro-Setup-0.6.0.exe" className="download-card">
+                        <a href="/download/latest/windows" className="download-card">
                             <div className="download-icon">🪟</div>
                             <div className="download-platform">Windows</div>
                             <div className="download-detail">Windows 10+</div>
                         </a>
-                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/Windy-Pro-0.6.0.AppImage" className="download-card">
+                        <a href="/download/latest/linux-appimage" className="download-card">
                             <div className="download-icon">🐧</div>
                             <div className="download-platform">Linux AppImage</div>
                             <div className="download-detail">Universal — just run it</div>
                         </a>
-                        <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/windy-pro_0.6.0_amd64.deb" className="download-card">
+                        <a href="/download/latest/linux-deb" className="download-card">
                             <div className="download-icon">🐧</div>
                             <div className="download-platform">Linux .deb</div>
                             <div className="download-detail">Ubuntu / Debian</div>
@@ -399,10 +410,10 @@ export default function Landing() {
                             <strong>🐧 Linux one-liner install:</strong>
                         </p>
                         <code className="download-command">
-                            curl -fsSL https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/install-windy-pro.sh | bash
+                            curl -fsSL https://windypro.thewindstorm.uk/download/latest/linux-install.sh | bash
                         </code>
                         <p className="download-helper-sub">
-                            Or download the .deb, then: <code>sudo dpkg -i windy-pro_0.6.0_amd64.deb</code>
+                            Or download the .deb, then: <code>sudo dpkg -i windy-pro_*.deb</code>
                         </p>
                     </div>
                 </div>
