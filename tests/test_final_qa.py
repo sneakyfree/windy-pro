@@ -219,7 +219,7 @@ print('\n═══ 12. BUNDLE FORMAT ═══')
 check('bundle_id', 'bundle_id' in vr)
 check('bundle_created_at', 'created_at' in vr)
 check('bundle_duration', 'duration_seconds' in vr)
-check('bundle_audio_format', "format: 'aac'" in vr or "format: 'wav'" in vr)
+check('bundle_audio_format', "'aac'" in vr and "'wav'" in vr)
 check('bundle_audio_size', 'size_bytes' in vr)
 check('bundle_video_format', "format: 'h264'" in vr)
 check('bundle_transcript_language', "language: 'en'" in vr)
@@ -229,6 +229,24 @@ check('bundle_device_platform', "platform: 'desktop'" in vr)
 check('bundle_sync_status', "sync_status: 'pending'" in vr)
 check('bundle_training_ready', 'clone_training_ready' in vr)
 check('bundle_tags', 'tags: []' in vr)
+
+print('\n═══ 13. CROSS-PLATFORM FIELD MAPPING ═══')
+# Upload handler accepts mobile field names
+check('upload_accepts_transcript', 'req.body.transcript_text || req.body.transcript' in s)
+check('upload_accepts_segments_json', 'req.body.transcript_segments || req.body.segments_json' in s)
+check('upload_accepts_id_as_bundle', 'req.body.bundle_id || req.body.id' in s)
+
+# Sync handler accepts both naming conventions
+check('sync_accepts_mobile_fields', 'b.transcript_text || b.transcript' in s or "b.transcript?.text || b.transcript_text || b.transcript" in s)
+check('sync_accepts_segments_json', 'b.segments_json' in s)
+
+# List handler returns mobile-friendly field names
+check('list_returns_transcript', "transcript: r.transcript_text" in s)
+check('list_returns_segments_json', "segments_json: r.transcript_segments" in s)
+check('list_returns_duration', "duration: r.duration_seconds" in s)
+
+# Field mapping comment block
+check('field_mapping_comment', 'CROSS-PLATFORM FIELD MAPPING' in s)
 
 # ═══ Summary ═══
 passed = sum(1 for _, ok in results if ok)

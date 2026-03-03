@@ -873,6 +873,13 @@ db.exec(`
     );
 `);
 
+// ─── CROSS-PLATFORM FIELD MAPPING ───
+// Mobile (Android/iOS) uses: transcript, segments_json, table "sessions"
+// Server (Desktop) uses: transcript_text, transcript_segments, table "recordings"
+// All handlers must accept both naming conventions and map accordingly.
+// Mobile → Server: transcript → transcript_text, segments_json → transcript_segments, id → bundle_id
+// Server → Mobile: transcript_text → transcript, transcript_segments → segments_json
+
 // ─── POST /api/v1/recordings/upload — Upload recording bundle ───
 /**
  * @route POST /api/v1/recordings/upload
@@ -888,8 +895,13 @@ db.exec(`
  */
 app.post('/api/v1/recordings/upload', authenticateToken, videoUpload.single('media'), (req, res) => {
     try {
-        const { bundle_id, duration_seconds, has_video, video_resolution, camera_source,
-            transcript_text, transcript_segments, device_platform, app_version, clone_training_ready } = req.body;
+        const { duration_seconds, has_video, video_resolution, camera_source,
+            device_platform, app_version, clone_training_ready } = req.body;
+
+        // Cross-platform field mapping: accept both mobile and desktop field names
+        const bundleId = req.body.bundle_id || req.body.id || crypto.randomUUID();
+        const transcriptText = req.body.transcript_text || req.body.transcript || null;
+        const transcriptSegments = req.body.transcript_segments || req.body.segments_json || null;
 
         const id = crypto.randomUUID();
         const filePath = req.file ? req.file.path : null;
@@ -900,10 +912,10 @@ app.post('/api/v1/recordings/upload', authenticateToken, videoUpload.single('med
              transcript_text, transcript_segments, file_path, file_size, device_platform, app_version,
              sync_status, clone_training_ready)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'uploaded', ?)`).run(
-            id, req.user.userId, bundle_id || id, parseInt(duration_seconds) || 0,
+            id, req.user.userId, bundleId, parseInt(duration_seconds) || 0,
             has_video === 'true' || has_video === true ? 1 : 0,
             video_resolution || null, camera_source || null,
-            transcript_text || null, transcript_segments || null,
+            transcriptText, transcriptSegments,
             filePath, fileSize, device_platform || 'desktop', app_version || '2.0',
             clone_training_ready === 'true' || clone_training_ready === true ? 1 : 0
         );
@@ -1101,7 +1113,14 @@ app.post('/api/v1/recordings/sync', authenticateToken, (req, res) => {
         const errors = [];
         for (const b of bundles) {
             try {
-                const exists = db.prepare('SELECT id FROM recordings WHERE bundle_id = ? AND user_id = ?').get(b.bundle_id, req.user.userId);
+                // Cross-platform field mapping: accept both mobile and desktop field names
+                const bundleId = b.bundle_id || b.id;
+                const transcriptText = b.transcript?.text || b.transcript_text || b.transcript || '';
+                const transcriptSegments = b.transcript?.segments
+                    ? JSON.stringify(b.transcript.segments)
+                    : (b.transcript_segments || b.segments_json || '[]');
+
+                const exists = db.prepare('SELECT id FROM recordings WHERE bundle_id = ? AND user_id = ?').get(bundleId, req.user.userId);
                 if (exists) { skipped++; continue; }
                 db.prepare(`INSERT INTO recordings (id, user_id, bundle_id, created_at, duration_seconds,
                     transcript_text, transcript_segments, source, languages_json, media_audio, media_video,
@@ -1110,17 +1129,23 @@ app.post('/api/v1/recordings/sync', authenticateToken, (req, res) => {
                     has_video, video_resolution, camera_source, sync_status)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced')`
                 ).run(
-                    crypto.randomUUID(), req.user.userId, b.bundle_id, b.created_at, b.duration_seconds || 0,
-                    b.transcript?.text || '', JSON.stringify(b.transcript?.segments || []),
-                    b.source || 'record', JSON.stringify(b.languages || ['en']),
-                    b.audio ? 1 : 0, b.video ? 1 : 0,
-                    (b.audio?.size_bytes || 0) + (b.video?.size_bytes || 0),
+                    crypto.randomUUID(), req.user.userId, bundleId, b.created_at, b.duration_seconds || b.duration || 0,
+                    transcriptText, transcriptSegments,
+                    b.source || 'record', JSON.stringify(b.languages || b.languages_json || ['en']),
+                    b.audio ? 1 : (b.media_audio || 0), b.video ? 1 : (b.media_video || 0),
+                    (b.audio?.size_bytes || 0) + (b.video?.size_bytes || 0) + (b.file_size || 0),
                     new Date().toISOString(),
-                    b.clone_training_ready ? 1 : 0, b.clone_training_ready ? 1 : 0,
-                    JSON.stringify(b.tags || []),
-                    b.device?.platform || 'desktop', b.device?.device_id || null,
-                    b.device?.device_name || null, b.device?.model || null, b.device?.app_version || '2.0.0',
-                    b.video ? 1 : 0, b.video?.resolution || null, b.video?.camera || null
+                    b.clone_training_ready || b.clone_usable ? 1 : 0,
+                    b.clone_training_ready || b.clone_usable ? 1 : 0,
+                    JSON.stringify(b.tags || b.tags_json || []),
+                    b.device?.platform || b.device_platform || 'desktop',
+                    b.device?.device_id || b.device_id || null,
+                    b.device?.device_name || b.device_name || null,
+                    b.device?.model || b.device_model || null,
+                    b.device?.app_version || b.app_version || '2.0.0',
+                    b.video ? 1 : (b.has_video || b.media_video || 0),
+                    b.video?.resolution || b.video_resolution || null,
+                    b.video?.camera || b.camera_source || null
                 );
                 synced++;
             } catch (err) {
@@ -1146,15 +1171,25 @@ app.get('/api/v1/recordings/list', authenticateToken, (req, res) => {
         const since = req.query.since || '1970-01-01T00:00:00Z';
         const recordings = db.prepare(
             `SELECT id, bundle_id, duration_seconds, has_video, video_resolution,
-                    camera_source, transcript_text, file_size, device_platform,
-                    device_id, device_name, clone_training_ready, sync_status,
-                    created_at
+                    camera_source, transcript_text, transcript_segments, file_size,
+                    device_platform, device_id, device_name, clone_training_ready,
+                    sync_status, created_at
              FROM recordings
              WHERE user_id = ? AND created_at > ?
              ORDER BY created_at DESC
              LIMIT 100`
         ).all(req.user.userId, since);
-        res.json({ bundles: recordings, total: recordings.length, since });
+
+        // Cross-platform field mapping: return both naming conventions
+        // so mobile (transcript, segments_json) and desktop (transcript_text, transcript_segments) both work
+        const mapped = recordings.map(r => ({
+            ...r,
+            transcript: r.transcript_text,
+            segments_json: r.transcript_segments,
+            duration: r.duration_seconds
+        }));
+
+        res.json({ bundles: mapped, total: mapped.length, since });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
