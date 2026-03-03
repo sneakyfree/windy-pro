@@ -147,6 +147,15 @@ app.use(express.json());
 
 // ─── Auth Middleware ───
 
+/**
+ * Authenticate a request using JWT Bearer token.
+ * Extracts token from Authorization header, verifies signature,
+ * and attaches user info to req.user.
+ * @param {import('express').Request} req - Express request
+ * @param {import('express').Response} res - Express response
+ * @param {import('express').NextFunction} next - Express next
+ * @returns {void} Sets req.user = { userId, email, role, tier }
+ */
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -192,7 +201,12 @@ function getDeviceList(userId) {
 
 // ─── Routes ───
 
-// Health check
+/**
+ * @route GET /health
+ * @description System health check. Returns server status, user/device counts.
+ * @access Public
+ * @returns {{ status: string, service: string, version: string, users: number, devices: number }}
+ */
 app.get('/health', (req, res) => {
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
     const deviceCount = db.prepare('SELECT COUNT(*) as count FROM devices').get().count;
@@ -208,8 +222,18 @@ app.get('/health', (req, res) => {
     });
 });
 
-// ─── POST /v1/auth/register ───
-
+/**
+ * @route POST /api/v1/auth/register
+ * @description Create a new user account. Returns JWT token on success.
+ * @access Public
+ * @param {string} req.body.name - Display name
+ * @param {string} req.body.email - Email address (unique)
+ * @param {string} req.body.password - Password (min 8 chars, hashed with bcrypt)
+ * @param {string} [req.body.deviceId] - Optional device ID to auto-register
+ * @param {string} [req.body.deviceName] - Optional device name
+ * @param {string} [req.body.platform] - Optional platform (desktop/ios/android)
+ * @returns {{ token: string, user: object }} JWT token and user profile
+ */
 app.post('/api/v1/auth/register', async (req, res) => {
     try {
         const { name, email, password, deviceId, deviceName, platform } = req.body;
@@ -265,6 +289,14 @@ app.post('/api/v1/auth/register', async (req, res) => {
 
 // ─── POST /v1/auth/login ───
 
+/**
+ * @route POST /api/v1/auth/login
+ * @description Authenticate user and return JWT token.
+ * @access Public
+ * @param {string} req.body.email - Email address
+ * @param {string} req.body.password - Password
+ * @returns {{ token: string, user: object }} JWT token and user profile
+ */
 app.post('/api/v1/auth/login', async (req, res) => {
     try {
         const { email, password, deviceId, deviceName, platform } = req.body;
@@ -535,6 +567,15 @@ app.post('/api/v1/translate/speech', authenticateToken, upload.single('audio'), 
 });
 
 // POST /api/v1/translate/text — Accept JSON {text, sourceLang, targetLang}
+/**
+ * @route POST /api/v1/translate/text
+ * @description Translate text between languages using AI backend.
+ * @access Authenticated
+ * @param {string} req.body.text - Text to translate (max 5000 chars)
+ * @param {string} req.body.source - Source language code (ISO 639-1)
+ * @param {string} req.body.target - Target language code
+ * @returns {{ translation: string, source: string, target: string }}
+ */
 app.post('/api/v1/translate/text', authenticateToken, (req, res) => {
     try {
         const { text, sourceLang, targetLang } = req.body;
@@ -802,6 +843,18 @@ db.exec(`
 `);
 
 // ─── POST /api/v1/recordings/upload — Upload recording bundle ───
+/**
+ * @route POST /api/v1/recordings/upload
+ * @description Upload a recording bundle (video/audio + metadata). Max 500MB.
+ * @access Authenticated
+ * @param {File} req.file - Media file (WebM, MP4)
+ * @param {string} req.body.bundle_id - Client-generated UUID
+ * @param {number} req.body.duration_seconds - Recording duration
+ * @param {boolean} req.body.has_video - Whether bundle includes video
+ * @param {string} req.body.transcript_text - Full transcript
+ * @param {boolean} req.body.clone_training_ready - Marked for training
+ * @returns {{ id: string, bundle_id: string, file_size: number }}
+ */
 app.post('/api/v1/recordings/upload', authenticateToken, videoUpload.single('media'), (req, res) => {
     try {
         const { bundle_id, duration_seconds, has_video, video_resolution, camera_source,
@@ -872,6 +925,16 @@ app.get('/api/v1/recordings/:id/video', authenticateToken, (req, res) => {
 // ─── WebRTC Signaling (in-memory store) ───
 const rtcSessions = new Map(); // token -> { offer, answer, candidates }
 
+/**
+ * @route POST /api/v1/rtc/signal
+ * @description WebRTC signaling relay. Stores offer/answer/ICE candidates.
+ * @access Public (token-based session isolation)
+ * @param {string} req.body.type - Signal type: offer|answer|ice-candidate|switch-camera
+ * @param {string} req.body.token - Session token
+ * @param {string} [req.body.sdp] - SDP for offer/answer
+ * @param {object} [req.body.candidate] - ICE candidate
+ * @returns {{ success: boolean }}
+ */
 app.post('/api/v1/rtc/signal', (req, res) => {
     const { type, token, sdp, candidate } = req.body;
     if (!token) return res.status(400).json({ error: 'Token required' });
@@ -963,6 +1026,13 @@ try { db.exec('ALTER TABLE recordings ADD COLUMN device_id TEXT'); } catch { /* 
 try { db.exec('ALTER TABLE recordings ADD COLUMN device_name TEXT'); } catch { /* column exists */ }
 
 // ─── GET /api/v1/recordings/list — List bundles since timestamp ───
+/**
+ * @route GET /api/v1/recordings/list
+ * @description List recordings since a given timestamp. Used by auto-sync.
+ * @access Authenticated
+ * @param {string} req.query.since - ISO 8601 timestamp (default: epoch)
+ * @returns {{ bundles: object[], total: number, since: string }}
+ */
 app.get('/api/v1/recordings/list', authenticateToken, (req, res) => {
     try {
         const since = req.query.since || '1970-01-01T00:00:00Z';

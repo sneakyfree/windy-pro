@@ -1,0 +1,586 @@
+{
+    "info": {
+        "name": "Windy Pro API",
+        "description": "Complete REST API collection for Windy Pro v2.0",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        "_postman_id": "windy-pro-api-v2"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8098"
+        },
+        {
+            "key": "token",
+            "value": ""
+        }
+    ],
+    "item": [
+        {
+            "name": "Health",
+            "item": [
+                {
+                    "name": "Health Check",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/health"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Authentication",
+            "item": [
+                {
+                    "name": "Register",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/auth/register",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"testuser@example.com\",\n  \"password\": \"TestPass123!\",\n  \"name\": \"Test User\"\n}"
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const res = pm.response.json();",
+                                    "if (res.token) pm.collectionVariables.set('token', res.token);"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Login",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/auth/login",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"testuser@example.com\",\n  \"password\": \"TestPass123!\"\n}"
+                        }
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "const res = pm.response.json();",
+                                    "if (res.token) pm.collectionVariables.set('token', res.token);"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Current User",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v1/auth/me",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "List Devices",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v1/auth/devices",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "Register Device",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/auth/devices/register",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"device_id\": \"POSTMAN-TEST\",\n  \"device_name\": \"Postman\",\n  \"platform\": \"desktop\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Remove Device",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/auth/devices/remove",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{ \"device_id\": \"POSTMAN-TEST\" }"
+                        }
+                    }
+                },
+                {
+                    "name": "Refresh Token",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/auth/refresh",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{ \"token\": \"{{token}}\" }"
+                        }
+                    }
+                },
+                {
+                    "name": "Change Password",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/auth/change-password",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"currentPassword\": \"TestPass123!\",\n  \"newPassword\": \"NewPass456!\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get Billing Info",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v1/auth/billing",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Translation",
+            "item": [
+                {
+                    "name": "Translate Text",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/translate/text",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"text\": \"Hello, how are you?\",\n  \"source\": \"en\",\n  \"target\": \"es\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Translate Speech",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/translate/speech",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": ""
+                                },
+                                {
+                                    "key": "source",
+                                    "value": "en",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "target",
+                                    "value": "es",
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "List Languages",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v1/translate/languages",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "User Data",
+            "item": [
+                {
+                    "name": "Translation History",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v1/user/history",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "Toggle Favorite",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/user/favorites",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{ \"translation_id\": \"uuid-here\" }"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Recordings & Clone",
+            "item": [
+                {
+                    "name": "Upload Recording",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/recordings/upload",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "media",
+                                    "type": "file",
+                                    "src": ""
+                                },
+                                {
+                                    "key": "bundle_id",
+                                    "value": "test-bundle-001",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "duration_seconds",
+                                    "value": "10",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "has_video",
+                                    "value": "false",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "transcript_text",
+                                    "value": "Hello world",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "device_platform",
+                                    "value": "desktop",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "clone_training_ready",
+                                    "value": "true",
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Stream Video",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v1/recordings/RECORDING_ID/video",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "List Recordings (since timestamp)",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/recordings/list?since=2020-01-01T00:00:00Z",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "recordings",
+                                "list"
+                            ],
+                            "query": [
+                                {
+                                    "key": "since",
+                                    "value": "2020-01-01T00:00:00Z"
+                                }
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "Get Training Data",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v1/clone/training-data",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "Start Clone Training",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/clone/start-training",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"bundle_ids\": [\"uuid1\", \"uuid2\", \"uuid3\"]\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "WebRTC Signaling",
+            "item": [
+                {
+                    "name": "Send Offer",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/rtc/signal",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"type\": \"offer\",\n  \"token\": \"test-session-123\",\n  \"sdp\": \"v=0\\r\\no=- test\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Send Answer",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/rtc/signal",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"type\": \"answer\",\n  \"token\": \"test-session-123\",\n  \"sdp\": \"v=0\\r\\no=- answer\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Send ICE Candidate",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v1/rtc/signal",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"type\": \"ice-candidate\",\n  \"token\": \"test-session-123\",\n  \"candidate\": { \"candidate\": \"a=candidate:1 1 UDP 2013266431 1.2.3.4 12345 typ host\" }\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Poll Signal (Offer)",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/rtc/signal?token=test-session-123&type=offer",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "rtc",
+                                "signal"
+                            ],
+                            "query": [
+                                {
+                                    "key": "token",
+                                    "value": "test-session-123"
+                                },
+                                {
+                                    "key": "type",
+                                    "value": "offer"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Admin",
+            "item": [
+                {
+                    "name": "List Users",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v1/admin/users",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "System Stats",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v1/admin/stats",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "Revenue",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v1/admin/revenue",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}
