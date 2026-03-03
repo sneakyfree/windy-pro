@@ -1,11 +1,16 @@
-// Windy Pro — Service Worker for PWA offline shell v2
-const CACHE_NAME = 'windy-pro-v2';
+// Windy Pro — Service Worker for PWA offline shell v3
+const CACHE_NAME = 'windy-pro-v3';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
     '/manifest.json',
-    '/favicon.svg'
+    '/favicon.svg',
+    '/icon-192.png',
+    '/icon-512.png'
 ];
+
+const API_CACHE_NAME = 'windy-api-v1';
+const API_CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
 const OFFLINE_PAGE = `<!DOCTYPE html>
 <html lang="en">
@@ -20,6 +25,7 @@ const OFFLINE_PAGE = `<!DOCTYPE html>
     button{background:#22C55E;color:#000;border:none;padding:12px 32px;border-radius:10px;font-size:15px;
         font-weight:700;cursor:pointer;transition:opacity 0.2s}
     button:hover{opacity:0.9}
+    .cached-info{margin-top:24px;font-size:13px;color:#475569}
     @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 </style></head>
 <body>
@@ -27,6 +33,7 @@ const OFFLINE_PAGE = `<!DOCTYPE html>
     <h1>You're Offline</h1>
     <p>Windy Pro needs an internet connection for cloud features. Your local desktop app works offline!</p>
     <button onclick="location.reload()">Try Again</button>
+    <div class="cached-info">Some cached pages may still be available.</div>
 </body></html>`;
 
 // Install: cache static assets
@@ -41,7 +48,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((keys) =>
-            Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+            Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== API_CACHE_NAME).map((k) => caches.delete(k)))
         )
     );
     self.clients.claim();
@@ -50,9 +57,48 @@ self.addEventListener('activate', (event) => {
 // Fetch: network-first for API, stale-while-revalidate for static
 self.addEventListener('fetch', (event) => {
     const { request } = event;
+    const url = new URL(request.url);
 
-    // Skip WebSocket, non-GET, and API calls
-    if (request.method !== 'GET' || request.url.includes('/ws/') || request.url.includes('/api/')) {
+    // Skip WebSocket and non-GET
+    if (request.method !== 'GET' || url.pathname.startsWith('/ws/')) {
+        return;
+    }
+
+    // API responses — cache with expiry for dashboard offline
+    if (url.pathname.startsWith('/api/v1/recordings') || url.pathname.startsWith('/api/v1/user/history')) {
+        event.respondWith(
+            fetch(request).then((response) => {
+                if (response.ok) {
+                    const clone = response.clone();
+                    caches.open(API_CACHE_NAME).then((cache) => {
+                        // Store with timestamp header for expiry check
+                        const headers = new Headers(clone.headers);
+                        headers.set('sw-cached-at', Date.now().toString());
+                        cache.put(request, new Response(clone.body, { status: clone.status, headers }));
+                    });
+                }
+                return response;
+            }).catch(() => {
+                // Serve cached API response if offline
+                return caches.match(request).then((cached) => {
+                    if (cached) {
+                        const cachedAt = parseInt(cached.headers.get('sw-cached-at') || '0');
+                        if (Date.now() - cachedAt < API_CACHE_MAX_AGE) {
+                            return cached;
+                        }
+                    }
+                    return new Response(JSON.stringify({ error: 'Offline', offline: true }), {
+                        status: 503,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                });
+            })
+        );
+        return;
+    }
+
+    // Skip other API calls
+    if (url.pathname.startsWith('/api/')) {
         return;
     }
 

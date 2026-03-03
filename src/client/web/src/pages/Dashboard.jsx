@@ -63,6 +63,7 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true)
     const [expanded, setExpanded] = useState(null)
     const [expandedData, setExpandedData] = useState(null)
+    const [translationStats, setTranslationStats] = useState(null)
     const navigate = useNavigate()
     const user = getUser()
 
@@ -85,6 +86,15 @@ export default function Dashboard() {
 
     useEffect(() => { loadRecordings() }, [loadRecordings])
     useEffect(() => { loadStats() }, [loadStats])
+    useEffect(() => {
+        apiFetch('/user/history?limit=1').then(data => {
+            if (data) setTranslationStats({
+                total: data.total || 0,
+                languages: data.languages || [],
+                favorites: data.favoriteCount || 0
+            })
+        }).catch(() => { })
+    }, [])
 
     const handleExpand = async (id) => {
         if (expanded === id) { setExpanded(null); setExpandedData(null); return }
@@ -141,6 +151,8 @@ export default function Dashboard() {
                     <Link to="/soul-file" className="dash-btn" style={{ textDecoration: 'none' }}>🧬 Soul File</Link>
                     <Link to="/vault" className="dash-btn" style={{ textDecoration: 'none', borderColor: '#3B82F6', color: '#3B82F6' }}>📝 Vault</Link>
                     <Link to="/translate" className="dash-btn" style={{ textDecoration: 'none', borderColor: '#F59E0B', color: '#F59E0B' }}>🌍 Translate</Link>
+                    <Link to="/profile" className="dash-btn" style={{ textDecoration: 'none', borderColor: '#8B5CF6', color: '#8B5CF6' }}>👤 Profile</Link>
+                    <Link to="/settings" className="dash-btn" style={{ textDecoration: 'none', borderColor: '#64748B', color: '#94A3B8' }}>⚙️</Link>
                     <div className="dash-user">
                         <span className="dash-avatar">{user?.name?.[0] || '?'}</span>
                         <span className="dash-username">{user?.name || 'User'}</span>
@@ -172,6 +184,18 @@ export default function Dashboard() {
                         <span className="dash-stat-value">{stats.videoCount}</span>
                         <span className="dash-stat-label">🎬 Video</span>
                     </div>
+                    {translationStats && (
+                        <>
+                            <div className="dash-stat">
+                                <span className="dash-stat-value" style={{ color: '#3B82F6' }}>{translationStats.total}</span>
+                                <span className="dash-stat-label">🌍 Translations</span>
+                            </div>
+                            <div className="dash-stat">
+                                <span className="dash-stat-value" style={{ color: '#F59E0B' }}>{translationStats.favorites}</span>
+                                <span className="dash-stat-label">⭐ Favorites</span>
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
 

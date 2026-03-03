@@ -9,6 +9,9 @@ import Translate from './pages/Translate'
 import Auth from './pages/Auth'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
+import Settings from './pages/Settings'
+import Admin from './pages/Admin'
+import Profile from './pages/Profile'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function NotFound() {
@@ -76,6 +79,15 @@ export default function App() {
                 } />
                 <Route path="/translate" element={
                     <ProtectedRoute><Translate /></ProtectedRoute>
+                } />
+                <Route path="/settings" element={
+                    <ProtectedRoute><Settings /></ProtectedRoute>
+                } />
+                <Route path="/admin" element={
+                    <ProtectedRoute><Admin /></ProtectedRoute>
+                } />
+                <Route path="/profile" element={
+                    <ProtectedRoute><Profile /></ProtectedRoute>
                 } />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/privacy" element={<Privacy />} />

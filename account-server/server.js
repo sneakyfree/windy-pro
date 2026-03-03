@@ -58,6 +58,13 @@ db.exec(`
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Migrations: add columns if they don't exist
+`);
+
+try { db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"); } catch (e) { /* column exists */ }
+try { db.exec("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT"); } catch (e) { /* column exists */ }
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS devices (
     id TEXT NOT NULL,
     user_id TEXT NOT NULL,
@@ -618,6 +625,135 @@ app.post('/api/v1/user/favorites', authenticateToken, (req, res) => {
     } catch (err) {
         console.error('Favorite error:', err);
         res.status(500).json({ error: 'Failed to save favorite: ' + err.message });
+    }
+});
+
+// ─── Billing Endpoints ───
+
+app.get('/api/v1/auth/billing', authenticateToken, (req, res) => {
+    try {
+        const user = db.prepare('SELECT email, tier, created_at, stripe_customer_id FROM users WHERE id = ?').get(req.user.userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        res.json({
+            email: user.email,
+            tier: user.tier || 'free',
+            createdAt: user.created_at,
+            stripeCustomerId: user.stripe_customer_id || null,
+            payments: [] // Stub — would come from Stripe API
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/v1/auth/create-portal-session', authenticateToken, (req, res) => {
+    // Stub — would create a Stripe Customer Portal session
+    res.json({ url: null, message: 'Stripe portal not configured. Set STRIPE_SECRET_KEY in environment.' });
+});
+
+app.post('/api/v1/auth/change-password', authenticateToken, (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Both passwords required' });
+        if (newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+        const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const bcrypt = require('bcryptjs');
+        if (!bcrypt.compareSync(currentPassword, user.password_hash)) {
+            return res.status(401).json({ error: 'Current password is incorrect' });
+        }
+        const newHash = bcrypt.hashSync(newPassword, 10);
+        db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, req.user.userId);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Admin Endpoints ───
+
+function adminOnly(req, res, next) {
+    const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.userId);
+    if (!user || user.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+}
+
+app.get('/api/v1/admin/users', authenticateToken, adminOnly, (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+        const offset = (page - 1) * limit;
+        const search = req.query.search || '';
+
+        let users, total;
+        if (search) {
+            const like = `%${search}%`;
+            users = db.prepare('SELECT id, name, email, tier, role, created_at FROM users WHERE name LIKE ? OR email LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?').all(like, like, limit, offset);
+            total = db.prepare('SELECT COUNT(*) as count FROM users WHERE name LIKE ? OR email LIKE ?').get(like, like).count;
+        } else {
+            users = db.prepare('SELECT id, name, email, tier, role, created_at FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset);
+            total = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+        }
+
+        // Add recording counts
+        const stmtCount = db.prepare('SELECT COUNT(*) as count FROM recordings WHERE user_id = ?');
+        users = users.map(u => ({ ...u, recording_count: stmtCount.get(u.id)?.count || 0 }));
+
+        res.json({ users, total, page, limit });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/v1/admin/stats', authenticateToken, adminOnly, (req, res) => {
+    try {
+        const totalUsers = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+        const totalRecordings = db.prepare('SELECT COUNT(*) as count FROM recordings').get().count;
+        let totalTranslations = 0;
+        try {
+            totalTranslations = db.prepare('SELECT COUNT(*) as count FROM translations').get().count;
+        } catch { /* table may not exist */ }
+
+        const uptime = process.uptime();
+        const hours = Math.floor(uptime / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+
+        res.json({
+            totalUsers,
+            totalRecordings,
+            totalTranslations,
+            serverStatus: 'OK',
+            uptime: `${hours}h ${minutes}m`,
+            dbSize: '~' + Math.round(require('fs').statSync(DB_PATH).size / 1024) + ' KB',
+            memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
+            apiLatency: '<5ms',
+            dailyTranslations: [12, 8, 15, 22, 18, 25, 31] // Stub
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/v1/admin/revenue', authenticateToken, adminOnly, (req, res) => {
+    try {
+        const planCounts = {};
+        for (const tier of ['free', 'pro', 'translate', 'translate_pro']) {
+            planCounts[tier] = db.prepare('SELECT COUNT(*) as count FROM users WHERE tier = ?').get(tier)?.count || 0;
+        }
+        // Free users have no tier set
+        planCounts.free += db.prepare("SELECT COUNT(*) as count FROM users WHERE tier IS NULL OR tier = ''").get().count;
+
+        res.json({
+            total: (planCounts.pro * 4900) + (planCounts.translate * 7900) + (planCounts.translate_pro * 14900),
+            mrr: planCounts.translate * 799, // Monthly translate plans
+            planCounts
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

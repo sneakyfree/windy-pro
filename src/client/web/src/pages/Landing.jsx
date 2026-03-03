@@ -280,6 +280,93 @@ export default function Landing() {
                 </div>
             </section>
 
+            {/* Feature Comparison Table */}
+            <section className="comparison" id="comparison">
+                <div className="container">
+                    <h2 className="section-title">Feature Comparison</h2>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="comparison-table">
+                            <thead>
+                                <tr>
+                                    <th>Feature</th>
+                                    <th>Free</th>
+                                    <th>Pro</th>
+                                    <th className="highlight-col">Translate</th>
+                                    <th>Translate Pro</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {[
+                                    ['Languages', '1', '99', '99', '99'],
+                                    ['Engines', '3', '15', '15', '15'],
+                                    ['Max Recording', '5 min', '30 min', '30 min', '30 min'],
+                                    ['Batch Mode', '✕', '✓', '✓', '✓'],
+                                    ['LLM Polish', '✕', '✓', '✓', '✓'],
+                                    ['Cloud Sync', '✕', '✕', '✓', '✓'],
+                                    ['Translation', '✕', '✕', '✓', '✓'],
+                                    ['Conversation Mode', '✕', '✕', '✓', '✓'],
+                                    ['Text-to-Speech', '✕', '✕', '✕', '✓'],
+                                    ['Medical Glossaries', '✕', '✕', '✕', '✓'],
+                                    ['Voice Clone Export', '✕', '✕', '✕', '✓'],
+                                    ['Priority Support', '✕', '✕', '✕', '✓'],
+                                ].map(([feature, ...vals], i) => (
+                                    <tr key={i}>
+                                        <td>{feature}</td>
+                                        {vals.map((v, j) => (
+                                            <td key={j} className={j === 2 ? 'highlight-col' : ''}>
+                                                <span className={v === '✓' ? 'check' : v === '✕' ? 'cross' : ''}>{v}</span>
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            {/* Testimonials */}
+            <section className="testimonials">
+                <div className="container">
+                    <h2 className="section-title">What Users Say</h2>
+                    <div className="testimonial-grid">
+                        {[
+                            { name: 'James M.', role: 'Podcast Creator', text: 'Windy Pro replaced three different tools for me. The local transcription is incredibly fast and I never worry about my content leaking.', avatar: '🎙️' },
+                            { name: 'Dr. Sarah K.', role: 'Medical Researcher', text: 'The medical glossary support in Translate Pro is a game-changer. Accurate transcription of clinical terms that other tools butcher.', avatar: '🩺' },
+                            { name: 'Carlos R.', role: 'Freelance Translator', text: 'Conversation mode lets me conduct bilingual interviews effortlessly. The real-time translation is surprisingly accurate.', avatar: '🌍' },
+                            { name: 'Priya D.', role: 'Software Engineer', text: 'I use the cursor injection feature daily for voice-coding comments and documentation. Saves me hours every week.', avatar: '💻' }
+                        ].map((t, i) => (
+                            <div key={i} className="testimonial-card">
+                                <div className="testimonial-text">"{t.text}"</div>
+                                <div className="testimonial-author">
+                                    <span className="testimonial-avatar">{t.avatar}</span>
+                                    <div>
+                                        <div className="testimonial-name">{t.name}</div>
+                                        <div className="testimonial-role">{t.role}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* CTA Banner */}
+            <section className="cta-banner">
+                <div className="container" style={{ textAlign: 'center' }}>
+                    <h2 style={{ fontSize: '32px', fontWeight: 800, marginBottom: '12px', color: '#F8FAFC' }}>
+                        Ready to transform your voice into text?
+                    </h2>
+                    <p style={{ fontSize: '18px', color: '#94A3B8', maxWidth: '500px', margin: '0 auto 24px' }}>
+                        Free forever. No credit card required. Download now and start recording in 60 seconds.
+                    </p>
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        <a href="#download" className="btn btn-primary btn-large">⬇ Download Free</a>
+                        <Link to="/auth" className="btn btn-secondary btn-large">Create Account →</Link>
+                    </div>
+                </div>
+            </section>
+
             {/* Download */}
             <section className="download" id="download">
                 <div className="container download-inner">
