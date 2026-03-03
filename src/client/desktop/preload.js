@@ -128,4 +128,24 @@ contextBridge.exposeInMainWorld('windyAPI', {
   detectHardware: () => ipcRenderer.invoke('detect-hardware'),
   registerWizardAccount: (data) => ipcRenderer.invoke('register-wizard-account', data),
   setupAutostart: (enable) => ipcRenderer.invoke('setup-autostart', enable),
+
+  // ─── Premium Features ───
+
+  // Translation Memory
+  saveTranslationMemory: (data) => ipcRenderer.invoke('save-translation-memory', data),
+  lookupTranslationMemory: (text, sourceLang, targetLang) => ipcRenderer.invoke('lookup-translation-memory', text, sourceLang, targetLang),
+  getTranslationMemoryStats: () => ipcRenderer.invoke('get-translation-memory-stats'),
+  clearTranslationMemory: () => ipcRenderer.invoke('clear-translation-memory'),
+
+  // Voice Clone Management
+  getVoiceClones: () => ipcRenderer.invoke('get-voice-clones'),
+  createVoiceClone: (name, base64, duration) => ipcRenderer.invoke('create-voice-clone', name, base64, duration),
+  deleteVoiceClone: (id) => ipcRenderer.invoke('delete-voice-clone', id),
+  setActiveVoiceClone: (id) => ipcRenderer.invoke('set-active-voice-clone', id),
+  previewVoiceClone: (id) => ipcRenderer.invoke('preview-voice-clone', id),
+  uploadVoiceCloneFile: (name) => ipcRenderer.invoke('upload-voice-clone-file', name),
+
+  // Document Translation
+  extractDocumentText: (base64, ext) => ipcRenderer.invoke('extract-document-text', base64, ext),
+  browseDocumentFile: () => ipcRenderer.invoke('browse-document-file'),
 });

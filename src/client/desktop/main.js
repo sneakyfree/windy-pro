@@ -2322,9 +2322,220 @@ app.on('will-quit', () => {
     globalShortcut.unregisterAll();
   }
 });
-
 // Prevent multiple instances (with stale lock cleanup)
 const gotLock = app.requestSingleInstanceLock();
+
+// ═══════════════════════════════════════════
+//  PREMIUM FEATURES — IPC Handlers
+// ═══════════════════════════════════════════
+
+// ─── Translation Memory (SQLite-backed) ───
+const tmDbPath = path.join(os.homedir(), '.config', 'windy-pro', 'translation-memory.db');
+let tmDb = null;
+
+function getTMDb() {
+  if (tmDb) return tmDb;
+  try {
+    const Database = require('better-sqlite3');
+    ensureDir(path.dirname(tmDbPath));
+    tmDb = new Database(tmDbPath);
+    tmDb.exec(`
+      CREATE TABLE IF NOT EXISTS translations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT NOT NULL,
+        target TEXT NOT NULL,
+        source_lang TEXT NOT NULL,
+        target_lang TEXT NOT NULL,
+        hits INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_tm_lookup ON translations(source_lang, target_lang, source);
+    `);
+    return tmDb;
+  } catch (err) {
+    console.error('[TM] Database init error:', err.message);
+    return null;
+  }
+}
+
+ipcMain.handle('save-translation-memory', async (event, { source, target, sourceLang, targetLang }) => {
+  const db = getTMDb();
+  if (!db) return { success: false };
+  try {
+    const existing = db.prepare('SELECT id, hits FROM translations WHERE source = ? AND source_lang = ? AND target_lang = ?')
+      .get(source.substring(0, 500), sourceLang, targetLang);
+    if (existing) {
+      db.prepare('UPDATE translations SET target = ?, hits = hits + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(target.substring(0, 2000), existing.id);
+    } else {
+      db.prepare('INSERT INTO translations (source, target, source_lang, target_lang) VALUES (?, ?, ?, ?)')
+        .run(source.substring(0, 500), target.substring(0, 2000), sourceLang, targetLang);
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('[TM] Save error:', err.message);
+    return { success: false };
+  }
+});
+
+ipcMain.handle('lookup-translation-memory', async (event, text, sourceLang, targetLang) => {
+  const db = getTMDb();
+  if (!db) return null;
+  try {
+    const row = db.prepare('SELECT target AS translation, hits FROM translations WHERE source = ? AND source_lang = ? AND target_lang = ?')
+      .get(text.substring(0, 500), sourceLang, targetLang);
+    return row || null;
+  } catch { return null; }
+});
+
+ipcMain.handle('get-translation-memory-stats', async () => {
+  const db = getTMDb();
+  if (!db) return { totalEntries: 0, topPairs: [], recentEntries: [] };
+  try {
+    const total = db.prepare('SELECT COUNT(*) as count FROM translations').get().count;
+    const topPairs = db.prepare('SELECT source_lang, target_lang, COUNT(*) as count FROM translations GROUP BY source_lang, target_lang ORDER BY count DESC LIMIT 10').all();
+    const recent = db.prepare('SELECT source, target, source_lang AS sourceLang, target_lang AS targetLang, hits, created_at FROM translations ORDER BY updated_at DESC LIMIT 50').all();
+    return { totalEntries: total, topPairs, recentEntries: recent };
+  } catch { return { totalEntries: 0, topPairs: [], recentEntries: [] }; }
+});
+
+ipcMain.handle('clear-translation-memory', async () => {
+  const db = getTMDb();
+  if (!db) return;
+  try { db.prepare('DELETE FROM translations').run(); } catch { }
+});
+
+// ─── Voice Clone Management ───
+const vcDbPath = path.join(os.homedir(), '.config', 'windy-pro', 'voice-clones.json');
+const vcAudioDir = path.join(os.homedir(), '.config', 'windy-pro', 'voice-samples');
+
+function loadVoiceClones() {
+  try {
+    ensureDir(vcAudioDir);
+    if (fs.existsSync(vcDbPath)) return JSON.parse(fs.readFileSync(vcDbPath, 'utf8'));
+    return { clones: [], activeId: null };
+  } catch { return { clones: [], activeId: null }; }
+}
+
+function saveVoiceClones(data) {
+  try {
+    ensureDir(path.dirname(vcDbPath));
+    fs.writeFileSync(vcDbPath, JSON.stringify(data, null, 2));
+  } catch (err) { console.error('[VC] Save error:', err.message); }
+}
+
+ipcMain.handle('get-voice-clones', async () => loadVoiceClones());
+
+ipcMain.handle('create-voice-clone', async (event, name, base64Audio, duration) => {
+  const data = loadVoiceClones();
+  const id = require('crypto').randomUUID();
+  const audioPath = path.join(vcAudioDir, `${id}.webm`);
+  ensureDir(vcAudioDir);
+  fs.writeFileSync(audioPath, Buffer.from(base64Audio, 'base64'));
+  const clone = { id, name, duration, audioPath, status: 'ready', created_at: new Date().toISOString() };
+  data.clones.push(clone);
+  saveVoiceClones(data);
+  return { success: true, clone };
+});
+
+ipcMain.handle('delete-voice-clone', async (event, id) => {
+  const data = loadVoiceClones();
+  const clone = data.clones.find(c => c.id === id);
+  if (clone?.audioPath && fs.existsSync(clone.audioPath)) {
+    const resolved = path.resolve(clone.audioPath);
+    if (resolved.startsWith(path.resolve(vcAudioDir))) {
+      fs.unlinkSync(resolved);
+    }
+  }
+  data.clones = data.clones.filter(c => c.id !== id);
+  if (data.activeId === id) data.activeId = null;
+  saveVoiceClones(data);
+  return { success: true };
+});
+
+ipcMain.handle('set-active-voice-clone', async (event, id) => {
+  const data = loadVoiceClones();
+  data.activeId = id;
+  saveVoiceClones(data);
+  return { success: true };
+});
+
+ipcMain.handle('preview-voice-clone', async (event, id) => {
+  const data = loadVoiceClones();
+  const clone = data.clones.find(c => c.id === id);
+  if (!clone?.audioPath || !fs.existsSync(clone.audioPath)) return { success: false };
+  const audioData = fs.readFileSync(clone.audioPath).toString('base64');
+  return { success: true, audioData, mimeType: 'audio/webm' };
+});
+
+ipcMain.handle('upload-voice-clone-file', async (event, name) => {
+  const result = await dialog.showOpenDialog({
+    title: 'Select Voice Sample',
+    filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'webm', 'ogg', 'm4a'] }],
+    properties: ['openFile']
+  });
+  if (result.canceled || !result.filePaths[0]) return { success: false };
+  const srcPath = result.filePaths[0];
+  const data = loadVoiceClones();
+  const id = require('crypto').randomUUID();
+  const ext = path.extname(srcPath);
+  const destPath = path.join(vcAudioDir, `${id}${ext}`);
+  ensureDir(vcAudioDir);
+  fs.copyFileSync(srcPath, destPath);
+  const clone = { id, name, audioPath: destPath, status: 'ready', created_at: new Date().toISOString() };
+  data.clones.push(clone);
+  saveVoiceClones(data);
+  return { success: true, clone };
+});
+
+// ─── Document Text Extraction ───
+ipcMain.handle('extract-document-text', async (event, base64, ext) => {
+  try {
+    const buf = Buffer.from(base64, 'base64');
+    if (ext === 'txt' || ext === 'md') {
+      return { text: buf.toString('utf8') };
+    }
+    if (ext === 'html') {
+      return { text: buf.toString('utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() };
+    }
+    if (ext === 'pdf') {
+      const str = buf.toString('latin1');
+      const textParts = [];
+      const regex = /\(([^)]+)\)/g;
+      let match;
+      while ((match = regex.exec(str)) !== null) {
+        if (match[1].length > 2 && /[a-zA-Z]/.test(match[1])) textParts.push(match[1]);
+      }
+      return { text: textParts.join(' ') || '[PDF text extraction — for best results, copy text from PDF]' };
+    }
+    if (ext === 'docx') {
+      try {
+        const AdmZip = require('adm-zip');
+        const zip = new AdmZip(buf);
+        const docXml = zip.readAsText('word/document.xml');
+        return { text: docXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() };
+      } catch { return { text: '[DOCX extraction requires adm-zip package]' }; }
+    }
+    return { text: '' };
+  } catch (err) {
+    return { text: `[Error: ${err.message}]` };
+  }
+});
+
+ipcMain.handle('browse-document-file', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Select Document',
+    filters: [{ name: 'Documents', extensions: ['txt', 'md', 'html', 'pdf', 'docx', 'csv'] }],
+    properties: ['openFile']
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  const filePath = result.filePaths[0];
+  const text = fs.readFileSync(filePath, 'utf8');
+  return { text, name: path.basename(filePath) };
+});
+
+
 if (!gotLock) {
   console.log('[Main] Another instance is running. Quitting.');
   app.quit();
