@@ -13,47 +13,40 @@ Every recording produces a standardized bundle:
 ```json
 {
   "bundle_id": "550e8400-e29b-41d4-a716-446655440000",
+  "created_at": "2026-03-02T20:00:00.000Z",
   "duration_seconds": 127,
   "audio": {
-    "format": "opus",
-    "sample_rate": 48000,
-    "channels": 1,
-    "bitrate": 128000,
-    "file": "550e8400.webm"
+    "format": "aac",
+    "file": "550e8400.aac",
+    "size_bytes": 524288
   },
   "video": {
-    "format": "vp9",
+    "format": "h264",
     "resolution": "1080p",
-    "fps": 30,
-    "bitrate": 2500000,
-    "camera": "front",
-    "file": "550e8400.webm"
+    "file": "550e8400.mp4",
+    "size_bytes": 5242880,
+    "camera": "front"
   },
   "transcript": {
-    "language": "en",
     "text": "Full transcript text here",
     "segments": [
       {
         "start": 0.0,
         "end": 2.5,
         "text": "Hello, this is a test",
-        "confidence": 0.97,
-        "speaker": null
+        "confidence": 0.97
       }
     ],
-    "word_count": 150,
-    "engine": "whisper-large-v3"
+    "language": "en"
   },
   "device": {
-    "device_id": "IPHONE-ABC123",
-    "device_name": "iPhone 15 Pro",
-    "platform": "ios",
-    "os_version": "17.3",
+    "platform": "android",
+    "model": "Pixel 8 Pro",
     "app_version": "2.0.0"
   },
-  "sync_status": "local",
+  "sync_status": "pending",
   "clone_training_ready": true,
-  "created_at": "2026-03-02T20:00:00.000Z"
+  "tags": []
 }
 ```
 
@@ -61,12 +54,10 @@ Every recording produces a standardized bundle:
 
 | State | Description |
 |-------|-------------|
-| `local` | Saved on device only |
+| `pending` | Saved on device, not yet uploaded |
 | `uploading` | Currently being uploaded |
-| `uploaded` | Successfully uploaded to cloud |
-| `cloud_synced` | Downloaded from cloud to local |
-| `cloud_only` | Local copy deleted, exists in cloud |
-| `upload_failed` | Upload failed, in retry queue |
+| `synced` | Successfully uploaded to cloud |
+| `failed` | Upload failed, in retry queue |
 
 ---
 

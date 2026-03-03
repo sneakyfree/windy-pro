@@ -477,6 +477,55 @@ curl "http://localhost:8098/api/v1/recordings/list?since=2026-03-01T00:00:00Z" \
 |-------|------|----------|-------------|
 | `since` | string | ❌ | ISO 8601 timestamp (default: epoch) |
 
+---
+
+### `GET /api/v1/recordings/check` 🔒
+
+Check if a specific bundle already exists on the cloud (deduplication).
+
+```bash
+curl "http://localhost:8098/api/v1/recordings/check?bundle_id=UUID" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response (200):**
+```json
+{ "exists": true, "bundle_id": "UUID" }
+```
+
+---
+
+### `POST /api/v1/recordings/sync` 🔒
+
+Legacy bulk sync endpoint — upload multiple bundle metadata objects at once.
+
+```bash
+curl -X POST http://localhost:8098/api/v1/recordings/sync \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bundles": [
+      {
+        "bundle_id": "uuid1",
+        "created_at": "2026-03-02T20:00:00Z",
+        "duration_seconds": 127,
+        "audio": {"format": "aac", "file": "rec.aac", "size_bytes": 524288},
+        "video": null,
+        "transcript": {"text": "Hello", "segments": [], "language": "en"},
+        "device": {"platform": "android", "model": "Pixel 8", "app_version": "2.0.0"},
+        "sync_status": "pending",
+        "clone_training_ready": true,
+        "tags": []
+      }
+    ]
+  }'
+```
+
+**Response (200):**
+```json
+{ "synced": 1, "skipped": 0, "errors": [] }
+```
+
 **Response (200):**
 ```json
 {

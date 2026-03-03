@@ -267,27 +267,37 @@ class VideoRecordingManager {
         const blob = new Blob(this.recordedChunks, { type: mimeType });
         const url = URL.createObjectURL(blob);
 
-        // Build bundle data
+        // Build bundle data — canonical cross-platform format
         this.currentBundle = {
             bundle_id: crypto.randomUUID(),
+            created_at: new Date().toISOString(),
             duration_seconds: this.duration,
-            audio: { format: 'opus', file: 'recording.webm' },
+            audio: {
+                format: hasVideo ? 'aac' : 'wav',
+                file: 'recording.webm',
+                size_bytes: blob.size
+            },
             video: hasVideo ? {
-                format: 'vp9',
+                format: 'h264',
                 resolution: this.videoQuality,
                 file: 'recording.webm',
-                camera: this.selectedCamera === 'phone' ? 'phone' : 'webcam'
+                size_bytes: blob.size,
+                camera: this.selectedCamera === 'phone' ? 'front' : 'front'
             } : null,
             transcript: {
                 text: this.transcriptSegments.map(s => s.text).join(' '),
-                segments: this.transcriptSegments
+                segments: this.transcriptSegments,
+                language: 'en'
             },
             device: {
                 platform: 'desktop',
-                app_version: '2.0'
+                model: navigator.userAgent.includes('Linux') ? 'Linux Desktop' :
+                    navigator.userAgent.includes('Mac') ? 'macOS Desktop' : 'Windows Desktop',
+                app_version: '2.0.0'
             },
-            sync_status: 'local',
+            sync_status: 'pending',
             clone_training_ready: this.transcriptSegments.length > 0 && this.duration > 10,
+            tags: [],
             blob,
             url
         };

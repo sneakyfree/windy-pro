@@ -818,28 +818,59 @@ const videoUpload = multer({
     limits: { fileSize: 500 * 1024 * 1024 }
 });
 
-// Create recordings table
+// Create recordings table — canonical cross-platform schema
 db.exec(`
     CREATE TABLE IF NOT EXISTS recordings (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         bundle_id TEXT UNIQUE,
-        duration_seconds INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        duration_seconds REAL NOT NULL DEFAULT 0,
+        transcript_text TEXT NOT NULL DEFAULT '',
+        transcript_segments TEXT NOT NULL DEFAULT '[]',
+        audio_path TEXT,
+        video_path TEXT,
+        quality_score INTEGER NOT NULL DEFAULT 0,
+        quality_json TEXT NOT NULL DEFAULT '{}',
+        engine_used TEXT NOT NULL DEFAULT 'cloud-standard',
+        source TEXT NOT NULL DEFAULT 'record',
+        languages_json TEXT NOT NULL DEFAULT '["en"]',
+        media_audio INTEGER NOT NULL DEFAULT 1,
+        media_video INTEGER NOT NULL DEFAULT 0,
+        file_path TEXT,
+        file_size INTEGER NOT NULL DEFAULT 0,
+        synced INTEGER NOT NULL DEFAULT 0,
+        synced_at TEXT,
+        clone_usable INTEGER NOT NULL DEFAULT 0,
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        latitude REAL,
+        longitude REAL,
+        device_model TEXT,
+        device_platform TEXT DEFAULT 'desktop',
+        device_id TEXT,
+        device_name TEXT,
+        app_version TEXT,
         has_video INTEGER DEFAULT 0,
         video_resolution TEXT,
         camera_source TEXT,
-        transcript_text TEXT,
-        transcript_segments TEXT,
-        file_path TEXT,
-        file_size INTEGER DEFAULT 0,
-        device_platform TEXT DEFAULT 'desktop',
-        app_version TEXT,
-        sync_status TEXT DEFAULT 'local',
-        clone_training_ready INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        sync_status TEXT DEFAULT 'pending',
+        clone_training_ready INTEGER DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_recordings_user ON recordings(user_id);
     CREATE INDEX IF NOT EXISTS idx_recordings_training ON recordings(clone_training_ready);
+    CREATE INDEX IF NOT EXISTS idx_recordings_synced ON recordings(synced);
+    CREATE INDEX IF NOT EXISTS idx_recordings_bundle ON recordings(bundle_id);
+`);
+
+// Create sync_queue table — canonical cross-platform schema
+db.exec(`
+    CREATE TABLE IF NOT EXISTS sync_queue (
+        session_id TEXT PRIMARY KEY,
+        queued_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        error TEXT
+    );
 `);
 
 // ─── POST /api/v1/recordings/upload — Upload recording bundle ───
@@ -1021,9 +1052,86 @@ app.post('/api/v1/clone/start-training', authenticateToken, (req, res) => {
     }
 });
 
-// ─── Add device_id column (safe for existing tables) ───
-try { db.exec('ALTER TABLE recordings ADD COLUMN device_id TEXT'); } catch { /* column exists */ }
-try { db.exec('ALTER TABLE recordings ADD COLUMN device_name TEXT'); } catch { /* column exists */ }
+// ─── Add missing columns (safe for existing tables) ───
+const canonicalColumns = [
+    'device_id TEXT', 'device_name TEXT', 'source TEXT DEFAULT \'record\'',
+    'languages_json TEXT DEFAULT \'["en"]\'', 'media_audio INTEGER DEFAULT 1',
+    'media_video INTEGER DEFAULT 0', 'quality_score INTEGER DEFAULT 0',
+    'quality_json TEXT DEFAULT \'{}\'', 'engine_used TEXT DEFAULT \'cloud-standard\'',
+    'synced INTEGER DEFAULT 0', 'synced_at TEXT', 'clone_usable INTEGER DEFAULT 0',
+    'tags_json TEXT DEFAULT \'[]\'', 'latitude REAL', 'longitude REAL',
+    'device_model TEXT', 'audio_path TEXT', 'video_path TEXT'
+];
+for (const col of canonicalColumns) {
+    try { db.exec(`ALTER TABLE recordings ADD COLUMN ${col}`); } catch { /* column exists */ }
+}
+
+// ─── GET /api/v1/recordings/check — Check if bundle exists ───
+/**
+ * @route GET /api/v1/recordings/check
+ * @description Check if a specific bundle exists on the cloud.
+ * @access Authenticated
+ * @param {string} req.query.bundle_id - Bundle ID to check
+ * @returns {{ exists: boolean, bundle_id: string }}
+ */
+app.get('/api/v1/recordings/check', authenticateToken, (req, res) => {
+    try {
+        const { bundle_id } = req.query;
+        if (!bundle_id) return res.status(400).json({ error: 'bundle_id parameter required' });
+        const row = db.prepare('SELECT id FROM recordings WHERE bundle_id = ? AND user_id = ?').get(bundle_id, req.user.userId);
+        res.json({ exists: !!row, bundle_id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/v1/recordings/sync — Legacy sync endpoint ───
+/**
+ * @route POST /api/v1/recordings/sync
+ * @description Legacy sync endpoint for bulk metadata sync.
+ * @access Authenticated
+ * @param {Array} req.body.bundles - Array of bundle metadata objects
+ * @returns {{ synced: number, skipped: number, errors: string[] }}
+ */
+app.post('/api/v1/recordings/sync', authenticateToken, (req, res) => {
+    try {
+        const { bundles } = req.body;
+        if (!bundles || !Array.isArray(bundles)) return res.status(400).json({ error: 'bundles array required' });
+        let synced = 0, skipped = 0;
+        const errors = [];
+        for (const b of bundles) {
+            try {
+                const exists = db.prepare('SELECT id FROM recordings WHERE bundle_id = ? AND user_id = ?').get(b.bundle_id, req.user.userId);
+                if (exists) { skipped++; continue; }
+                db.prepare(`INSERT INTO recordings (id, user_id, bundle_id, created_at, duration_seconds,
+                    transcript_text, transcript_segments, source, languages_json, media_audio, media_video,
+                    file_size, synced, synced_at, clone_usable, clone_training_ready, tags_json,
+                    device_platform, device_id, device_name, device_model, app_version,
+                    has_video, video_resolution, camera_source, sync_status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced')`
+                ).run(
+                    crypto.randomUUID(), req.user.userId, b.bundle_id, b.created_at, b.duration_seconds || 0,
+                    b.transcript?.text || '', JSON.stringify(b.transcript?.segments || []),
+                    b.source || 'record', JSON.stringify(b.languages || ['en']),
+                    b.audio ? 1 : 0, b.video ? 1 : 0,
+                    (b.audio?.size_bytes || 0) + (b.video?.size_bytes || 0),
+                    new Date().toISOString(),
+                    b.clone_training_ready ? 1 : 0, b.clone_training_ready ? 1 : 0,
+                    JSON.stringify(b.tags || []),
+                    b.device?.platform || 'desktop', b.device?.device_id || null,
+                    b.device?.device_name || null, b.device?.model || null, b.device?.app_version || '2.0.0',
+                    b.video ? 1 : 0, b.video?.resolution || null, b.video?.camera || null
+                );
+                synced++;
+            } catch (err) {
+                errors.push(`${b.bundle_id}: ${err.message}`);
+            }
+        }
+        res.json({ synced, skipped, errors });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // ─── GET /api/v1/recordings/list — List bundles since timestamp ───
 /**
