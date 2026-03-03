@@ -210,7 +210,7 @@ app.get('/health', (req, res) => {
 
 // ─── POST /v1/auth/register ───
 
-app.post('/v1/auth/register', async (req, res) => {
+app.post('/api/v1/auth/register', async (req, res) => {
     try {
         const { name, email, password, deviceId, deviceName, platform } = req.body;
 
@@ -265,7 +265,7 @@ app.post('/v1/auth/register', async (req, res) => {
 
 // ─── POST /v1/auth/login ───
 
-app.post('/v1/auth/login', async (req, res) => {
+app.post('/api/v1/auth/login', async (req, res) => {
     try {
         const { email, password, deviceId, deviceName, platform } = req.body;
 
@@ -321,7 +321,7 @@ app.post('/v1/auth/login', async (req, res) => {
 
 // ─── GET /v1/auth/me ───
 
-app.get('/v1/auth/me', authenticateToken, (req, res) => {
+app.get('/api/v1/auth/me', authenticateToken, (req, res) => {
     const user = stmts.findUserById.get(req.user.userId);
     if (!user) {
         return res.status(404).json({ error: 'User not found' });
@@ -342,7 +342,7 @@ app.get('/v1/auth/me', authenticateToken, (req, res) => {
 
 // ─── GET /v1/auth/devices ───
 
-app.get('/v1/auth/devices', authenticateToken, (req, res) => {
+app.get('/api/v1/auth/devices', authenticateToken, (req, res) => {
     const devices = getDeviceList(req.user.userId);
     res.json({
         devices,
@@ -354,7 +354,7 @@ app.get('/v1/auth/devices', authenticateToken, (req, res) => {
 
 // ─── POST /v1/auth/devices/register ───
 
-app.post('/v1/auth/devices/register', authenticateToken, (req, res) => {
+app.post('/api/v1/auth/devices/register', authenticateToken, (req, res) => {
     const { deviceId, deviceName, platform } = req.body;
 
     if (!deviceId) {
@@ -397,7 +397,7 @@ app.post('/v1/auth/devices/register', authenticateToken, (req, res) => {
 
 // ─── POST /v1/auth/devices/remove ───
 
-app.post('/v1/auth/devices/remove', authenticateToken, (req, res) => {
+app.post('/api/v1/auth/devices/remove', authenticateToken, (req, res) => {
     const { deviceId } = req.body;
 
     if (!deviceId) {
@@ -425,7 +425,7 @@ app.post('/v1/auth/devices/remove', authenticateToken, (req, res) => {
 
 // ─── POST /v1/auth/refresh ───
 
-app.post('/v1/auth/refresh', (req, res) => {
+app.post('/api/v1/auth/refresh', (req, res) => {
     const { refreshToken, deviceId } = req.body;
 
     if (!refreshToken) {
