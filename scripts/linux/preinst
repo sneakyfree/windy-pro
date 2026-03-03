@@ -1,40 +1,108 @@
 #!/bin/sh
+# ═══════════════════════════════════════════════════════════════════
 # Windy Pro — Pre-Installation Script (preinst)
-# Runs before the new version is unpacked.
-# Handles graceful shutdown of running instances during upgrades.
+# SCORCHED EARTH: Kill ALL old processes, remove ALL old app files.
+# NEVER delete user data (~/.config/windy-pro/).
+# ═══════════════════════════════════════════════════════════════════
 set -e
 
 LOG="/tmp/windy-pro-install.log"
-echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Starting pre-installation..." >> "$LOG"
+echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] ═══ SCORCHED EARTH PRE-INSTALL ═══" >> "$LOG"
 
-# Detect upgrade vs fresh install
-case "$1" in
-  upgrade|install)
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Mode: $1" >> "$LOG"
-    ;;
-esac
-
-# Kill any running Windy Pro processes for clean upgrade
-echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Stopping running instances..." >> "$LOG"
-pkill -f "windy-pro" 2>/dev/null || true
-pkill -f "Windy Pro" 2>/dev/null || true
-pkill -f "windy_pro" 2>/dev/null || true
-# Don't kill ALL electron — only ours
-pkill -f "/opt/Windy Pro/windy-pro" 2>/dev/null || true
-
-# Wait for processes to exit cleanly
+# ─── 1. Force-kill ALL running Windy Pro processes ───
+echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Killing ALL Windy Pro processes (SIGKILL)..." >> "$LOG"
+pkill -9 -f "windy-pro" 2>/dev/null || true
+pkill -9 -f "Windy Pro" 2>/dev/null || true
+pkill -9 -f "windy_pro" 2>/dev/null || true
+pkill -9 -f "WindyPro" 2>/dev/null || true
+pkill -9 -f "/opt/Windy Pro/" 2>/dev/null || true
+pkill -9 -f "/opt/windy-pro/" 2>/dev/null || true
 sleep 2
 
-# Remove old autostart entries that may conflict
-OLD_AUTOSTART="$HOME/.config/autostart/windy-pro.desktop"
-if [ -f "$OLD_AUTOSTART" ]; then
-  echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Removing old autostart entry" >> "$LOG"
-  rm -f "$OLD_AUTOSTART" 2>/dev/null || true
+# Verify nothing survived
+if pgrep -f "windy-pro\|Windy Pro\|windy_pro\|WindyPro" >/dev/null 2>&1; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] WARNING: Zombie processes detected, sending SIGKILL again" >> "$LOG"
+  pkill -9 -f "windy-pro\|Windy Pro\|windy_pro\|WindyPro" 2>/dev/null || true
+  sleep 1
 fi
 
-# Clean up stale lock files
+# ─── 2. Remove ALL old application directories ───
+echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Removing old app directories..." >> "$LOG"
+
+# /opt installations (both naming conventions)
+for dir in "/opt/Windy Pro" "/opt/windy-pro" "/opt/Windy-Pro" "/opt/windypro"; do
+  if [ -d "$dir" ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Removing: $dir" >> "$LOG"
+    rm -rf "$dir" 2>/dev/null || true
+  fi
+done
+
+# ─── 3. dpkg --purge old package (if installed via .deb) ───
+if command -v dpkg >/dev/null 2>&1; then
+  if dpkg -l windy-pro 2>/dev/null | grep -q '^ii\|^rc'; then
+    OLD_VER=$(dpkg-query -W -f='${Version}' windy-pro 2>/dev/null || echo "unknown")
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Purging old .deb package v$OLD_VER..." >> "$LOG"
+    dpkg --purge --force-all windy-pro 2>/dev/null || true
+  fi
+fi
+
+# ─── 4. Remove old .desktop files ───
+echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Removing old .desktop files..." >> "$LOG"
+rm -f /usr/share/applications/windy-pro.desktop 2>/dev/null || true
+rm -f /usr/share/applications/windy_pro.desktop 2>/dev/null || true
+rm -f /usr/share/applications/WindyPro.desktop 2>/dev/null || true
+for user_home in /home/*; do
+  rm -f "$user_home/.local/share/applications/windy-pro.desktop" 2>/dev/null || true
+  rm -f "$user_home/.local/share/applications/WindyPro.desktop" 2>/dev/null || true
+  rm -f "$user_home/.config/autostart/windy-pro.desktop" 2>/dev/null || true
+done
+rm -f /root/.config/autostart/windy-pro.desktop 2>/dev/null || true
+
+# ─── 5. Remove old CLI symlinks ───
+rm -f /usr/local/bin/windy-pro 2>/dev/null || true
+rm -f /usr/bin/windy-pro 2>/dev/null || true
+
+# ─── 6. Remove old Python venvs (but NOT user config!) ───
+echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Removing old Python venvs..." >> "$LOG"
+for user_home in /home/*; do
+  # Old venv locations
+  rm -rf "$user_home/.windy-pro/venv" 2>/dev/null || true
+  rm -rf "$user_home/.windy-pro/python" 2>/dev/null || true
+  # NEVER delete ~/.config/windy-pro/ — that's user data!
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] PRESERVED: $user_home/.config/windy-pro/" >> "$LOG"
+done
+
+# ─── 7. Clean up stale temp/lock files ───
 rm -f /tmp/windy-pro-*.lock 2>/dev/null || true
 rm -f /tmp/.windy-pro-* 2>/dev/null || true
+rm -f /tmp/windy-pro-update.deb 2>/dev/null || true
+
+# ─── 8. Remove old AppImages ───
+for user_home in /home/*; do
+  rm -f "$user_home/.local/bin/windy-pro.AppImage" 2>/dev/null || true
+  rm -f "$user_home/.local/bin/windy-pro" 2>/dev/null || true
+done
+
+# ─── 9. Verify old installation is GONE ───
+REMNANTS=0
+for check_dir in "/opt/Windy Pro" "/opt/windy-pro"; do
+  if [ -d "$check_dir" ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] REMNANT DETECTED: $check_dir (will retry removal)" >> "$LOG"
+    rm -rf "$check_dir" 2>/dev/null || true
+    REMNANTS=$((REMNANTS + 1))
+  fi
+done
+if pgrep -f "windy-pro\|Windy Pro" >/dev/null 2>&1; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] REMNANT PROCESS DETECTED (force killing)" >> "$LOG"
+  pkill -9 -f "windy-pro\|Windy Pro" 2>/dev/null || true
+  REMNANTS=$((REMNANTS + 1))
+fi
+
+if [ "$REMNANTS" -eq 0 ]; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] ✅ Old installation completely removed" >> "$LOG"
+else
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] ⚠️ Had to retry removal for $REMNANTS remnants" >> "$LOG"
+fi
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') [preinst] Pre-installation complete" >> "$LOG"
 exit 0

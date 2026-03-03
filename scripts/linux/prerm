@@ -1,32 +1,66 @@
 #!/bin/sh
+# ═══════════════════════════════════════════════════════════════════
 # Windy Pro — Pre-Removal Script (prerm)
-# Runs before the package is removed.
-# Stops running processes and cleans up system integrations.
+# SCORCHED EARTH: Stop ALL processes, clean ALL system integrations.
+# NEVER delete user data (~/.config/windy-pro/).
+# ═══════════════════════════════════════════════════════════════════
 set -e
 
 LOG="/tmp/windy-pro-install.log"
-echo "$(date '+%Y-%m-%d %H:%M:%S') [prerm] Starting pre-removal..." >> "$LOG"
+echo "$(date '+%Y-%m-%d %H:%M:%S') [prerm] ═══ SCORCHED EARTH PRE-REMOVAL ═══" >> "$LOG"
 
-# Kill running Windy Pro processes
-pkill -f "windy-pro" 2>/dev/null || true
-pkill -f "Windy Pro" 2>/dev/null || true
-pkill -f "/opt/Windy Pro/windy-pro" 2>/dev/null || true
-sleep 1
+# ─── 1. Force-kill ALL running Windy Pro processes ───
+echo "$(date '+%Y-%m-%d %H:%M:%S') [prerm] Killing ALL Windy Pro processes (SIGKILL)..." >> "$LOG"
+pkill -9 -f "windy-pro" 2>/dev/null || true
+pkill -9 -f "Windy Pro" 2>/dev/null || true
+pkill -9 -f "windy_pro" 2>/dev/null || true
+pkill -9 -f "WindyPro" 2>/dev/null || true
+pkill -9 -f "/opt/Windy Pro/" 2>/dev/null || true
+pkill -9 -f "/opt/windy-pro/" 2>/dev/null || true
+sleep 2
 
-# Remove autostart entry for all users
+# Double-tap: if anything survived
+pkill -9 -f "windy-pro\|Windy Pro\|windy_pro\|WindyPro" 2>/dev/null || true
+
+# ─── 2. Remove autostart entries for ALL users ───
+echo "$(date '+%Y-%m-%d %H:%M:%S') [prerm] Removing autostart entries..." >> "$LOG"
 for user_home in /home/*; do
-  autostart_file="$user_home/.config/autostart/windy-pro.desktop"
-  if [ -f "$autostart_file" ]; then
-    rm -f "$autostart_file" 2>/dev/null || true
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [prerm] Removed autostart: $autostart_file" >> "$LOG"
-  fi
+  rm -f "$user_home/.config/autostart/windy-pro.desktop" 2>/dev/null || true
+  rm -f "$user_home/.config/autostart/WindyPro.desktop" 2>/dev/null || true
 done
-
-# Remove root autostart if exists
 rm -f /root/.config/autostart/windy-pro.desktop 2>/dev/null || true
 
-# Remove CLI symlink
+# ─── 3. Remove CLI symlinks ───
 rm -f /usr/local/bin/windy-pro 2>/dev/null || true
+rm -f /usr/bin/windy-pro 2>/dev/null || true
+
+# ─── 4. Remove ALL .desktop files ───
+rm -f /usr/share/applications/windy-pro.desktop 2>/dev/null || true
+rm -f /usr/share/applications/windy_pro.desktop 2>/dev/null || true
+rm -f /usr/share/applications/WindyPro.desktop 2>/dev/null || true
+for user_home in /home/*; do
+  rm -f "$user_home/.local/share/applications/windy-pro.desktop" 2>/dev/null || true
+  rm -f "$user_home/.local/share/applications/WindyPro.desktop" 2>/dev/null || true
+done
+
+# ─── 5. Remove old AppImages ───
+for user_home in /home/*; do
+  rm -f "$user_home/.local/bin/windy-pro.AppImage" 2>/dev/null || true
+  rm -f "$user_home/.local/bin/windy-pro" 2>/dev/null || true
+done
+
+# ─── 6. Remove old Python venvs (NOT user config!) ───
+for user_home in /home/*; do
+  rm -rf "$user_home/.windy-pro/venv" 2>/dev/null || true
+  rm -rf "$user_home/.windy-pro/python" 2>/dev/null || true
+  # NEVER delete ~/.config/windy-pro/
+done
+
+# ─── 7. Remove ALL /opt directories ───
+rm -rf "/opt/Windy Pro" 2>/dev/null || true
+rm -rf "/opt/windy-pro" 2>/dev/null || true
+rm -rf "/opt/Windy-Pro" 2>/dev/null || true
+rm -rf "/opt/windypro" 2>/dev/null || true
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') [prerm] Pre-removal complete" >> "$LOG"
 exit 0

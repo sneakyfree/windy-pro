@@ -152,7 +152,7 @@ cleanup_old_versions() {
   OLD=""
 
   # Check dpkg (Debian-based)
-  if command -v dpkg >/dev/null 2>&1 && dpkg -l windy-pro 2>/dev/null | grep -q '^ii'; then
+  if command -v dpkg >/dev/null 2>&1 && dpkg -l windy-pro 2>/dev/null | grep -q '^ii\|^rc'; then
     OLD=$(dpkg-query -W -f='${Version}' windy-pro 2>/dev/null || echo "unknown")
     log "Found existing .deb installation: v$OLD"
   fi
@@ -168,40 +168,136 @@ cleanup_old_versions() {
   done
 
   # Check /opt installs
-  for d in /opt/Windy* /opt/windy* "$HOME/.local/share/windy-pro"; do
-    [ -d "$d" ] && log "Found old installation directory: $d"
+  OLD_OPT=""
+  for d in "/opt/Windy Pro" "/opt/windy-pro" "/opt/Windy-Pro" "/opt/windypro" "$HOME/.local/share/windy-pro"; do
+    if [ -d "$d" ]; then
+      OLD_OPT="$d"
+      log "Found old installation directory: $d"
+    fi
   done
 
-  # Show upgrade dialog
-  if [ -n "$OLD" ]; then
+  # ═══ PRE-INSTALL WARNING WITH CONFIRMATION ═══
+  # Only show if we found an existing installation
+  if [ -n "$OLD" ] || [ -n "$OLD_APPIMAGE" ] || [ -n "$OLD_OPT" ]; then
     if [ "$HAS_ZENITY" = "1" ]; then
+      zenity --warning \
+        --title="⚠️ EXISTING INSTALLATION DETECTED" \
+        --text="<b>Windy Pro will be completely removed before installing v${WP_VERSION}.</b>\n\n<b>WILL BE DELETED:</b>\n• All old application files in /opt/\n• Old .deb packages (dpkg --purge)\n• Old AppImages\n• Old Python environments\n• Desktop shortcuts\n\n<b>WILL BE PRESERVED:</b>\n✅ Your recordings (~/.config/windy-pro/)\n✅ Your settings and preferences\n✅ ~/Documents/WindyProArchive/\n\n<b>Old version found:</b> ${OLD:-unknown}" \
+        --width=520 --height=360 2>/dev/null || true
+
       zenity --question \
-        --title="⬆️ Upgrade Detected" \
-        --text="<b>Windy Pro v$OLD</b> is currently installed.\nUpgrading to <b>v${WP_VERSION}</b>.\n\n✅ Your recordings will NOT be deleted\n✅ Settings are preserved\n\nYour data: <tt>~/Documents/WindyProArchive/</tt>" \
-        --ok-label="Upgrade Now" --cancel-label="Cancel" \
-        --width=480 --height=260 2>/dev/null || exit 0
+        --title="⚠️ Confirm Old Version Removal" \
+        --text="Are you sure you want to remove the old version and install v${WP_VERSION}?\n\nThis cannot be undone." \
+        --ok-label="Remove Old & Install New" --cancel-label="Cancel" \
+        --width=450 --height=180 2>/dev/null || exit 0
     else
-      log "Upgrading from v$OLD to v$WP_VERSION"
-      log "✅ Your recordings in ~/Documents/WindyProArchive/ are safe."
+      echo ""
+      echo "  ⚠️  ════════════════════════════════════════════════"
+      echo "  ⚠️  EXISTING INSTALLATION DETECTED"
+      echo "  ⚠️  ════════════════════════════════════════════════"
+      echo ""
+      echo "  The old version will be COMPLETELY REMOVED before"
+      echo "  installing v${WP_VERSION}."
+      echo ""
+      echo "  WILL BE DELETED:"
+      echo "    • All old app files in /opt/"
+      echo "    • Old .deb packages (dpkg --purge)"
+      echo "    • Old AppImages and Python venvs"
+      echo ""
+      echo "  WILL BE PRESERVED:"
+      echo "    ✅ ~/.config/windy-pro/ (your data)"
+      echo "    ✅ ~/Documents/WindyProArchive/"
+      echo ""
+      printf "  Continue with removal + install? [y/N] "
+      read -r ans
+      case "$ans" in y*|Y*) ;; *) exit 0 ;; esac
     fi
   fi
 
-  # Kill running instances
-  if pgrep -f "windy-pro\|Windy Pro\|WindyPro" >/dev/null 2>&1; then
-    log "Stopping running Windy Pro instances..."
-    if [ "$HAS_ZENITY" = "1" ]; then
-      zenity --question \
-        --title="⚠️ Windy Pro is Running" \
-        --text="We need to close the running instance.\nUnsaved work will be saved automatically." \
-        --ok-label="Close & Continue" --cancel-label="Cancel" \
-        --width=400 --height=160 2>/dev/null || exit 0
+  # ═══ SCORCHED EARTH: KILL ALL PROCESSES ═══
+  log "SCORCHED EARTH: Killing ALL Windy Pro processes..."
+  pkill -9 -f "windy-pro" 2>/dev/null || true
+  pkill -9 -f "Windy Pro" 2>/dev/null || true
+  pkill -9 -f "windy_pro" 2>/dev/null || true
+  pkill -9 -f "WindyPro" 2>/dev/null || true
+  pkill -9 -f "/opt/Windy Pro/" 2>/dev/null || true
+  pkill -9 -f "/opt/windy-pro/" 2>/dev/null || true
+  sleep 2
+  # Double-tap
+  pkill -9 -f "windy-pro\|Windy Pro\|windy_pro\|WindyPro" 2>/dev/null || true
+
+  # ═══ SCORCHED EARTH: dpkg --purge ═══
+  if command -v dpkg >/dev/null 2>&1; then
+    if dpkg -l windy-pro 2>/dev/null | grep -q '^ii\|^rc'; then
+      log "Purging old .deb package..."
+      run_sudo "dpkg --purge --force-all windy-pro" 2>/dev/null || true
     fi
-    pkill -f "windy-pro" 2>/dev/null || true
-    pkill -f "Windy Pro" 2>/dev/null || true
-    pkill -f "WindyPro" 2>/dev/null || true
-    sleep 2
-    pkill -9 -f "windy-pro" 2>/dev/null || true
-    pkill -9 -f "Windy Pro" 2>/dev/null || true
+  fi
+
+  # ═══ SCORCHED EARTH: REMOVE ALL /opt DIRECTORIES ═══
+  log "Removing ALL /opt installation directories..."
+  for dir in "/opt/Windy Pro" "/opt/windy-pro" "/opt/Windy-Pro" "/opt/windypro"; do
+    if [ -d "$dir" ]; then
+      log "  Removing: $dir"
+      run_sudo "rm -rf \"$dir\"" 2>/dev/null || true
+    fi
+  done
+
+  # ═══ SCORCHED EARTH: REMOVE .desktop FILES ═══
+  log "Removing ALL .desktop launcher files..."
+  run_sudo "rm -f /usr/share/applications/windy-pro.desktop" 2>/dev/null || true
+  run_sudo "rm -f /usr/share/applications/windy_pro.desktop" 2>/dev/null || true
+  run_sudo "rm -f /usr/share/applications/WindyPro.desktop" 2>/dev/null || true
+  for user_home in /home/*; do
+    rm -f "$user_home/.local/share/applications/windy-pro.desktop" 2>/dev/null || true
+    rm -f "$user_home/.local/share/applications/WindyPro.desktop" 2>/dev/null || true
+    rm -f "$user_home/.config/autostart/windy-pro.desktop" 2>/dev/null || true
+  done
+
+  # ═══ SCORCHED EARTH: REMOVE OLD VENVS ═══
+  log "Removing old Python venvs..."
+  for user_home in /home/*; do
+    rm -rf "$user_home/.windy-pro/venv" 2>/dev/null || true
+    rm -rf "$user_home/.windy-pro/python" 2>/dev/null || true
+    # NEVER delete ~/.config/windy-pro/ — USER DATA!
+    log "  PRESERVED: $user_home/.config/windy-pro/"
+  done
+
+  # ═══ SCORCHED EARTH: REMOVE OLD APPIMAGES ═══
+  log "Removing old AppImages..."
+  for user_home in /home/*; do
+    rm -f "$user_home/.local/bin/windy-pro.AppImage" 2>/dev/null || true
+    rm -f "$user_home/.local/bin/windy-pro" 2>/dev/null || true
+  done
+  if [ -n "$OLD_APPIMAGE" ] && [ -f "$OLD_APPIMAGE" ]; then
+    rm -f "$OLD_APPIMAGE" 2>/dev/null || true
+    log "  Removed: $OLD_APPIMAGE"
+  fi
+
+  # ═══ SCORCHED EARTH: REMOVE CLI SYMLINKS ═══
+  run_sudo "rm -f /usr/local/bin/windy-pro" 2>/dev/null || true
+  run_sudo "rm -f /usr/bin/windy-pro" 2>/dev/null || true
+
+  # ═══ VERIFY OLD INSTALLATION IS COMPLETELY GONE ═══
+  log "Verifying old installation is completely removed..."
+  REMNANTS=0
+  for check_dir in "/opt/Windy Pro" "/opt/windy-pro" "/opt/Windy-Pro"; do
+    if [ -d "$check_dir" ]; then
+      warn "REMNANT DETECTED: $check_dir — force removing..."
+      run_sudo "rm -rf \"$check_dir\"" 2>/dev/null || true
+      REMNANTS=$((REMNANTS + 1))
+    fi
+  done
+  if pgrep -f "windy-pro\|Windy Pro" >/dev/null 2>&1; then
+    warn "REMNANT PROCESS DETECTED — force killing..."
+    pkill -9 -f "windy-pro\|Windy Pro" 2>/dev/null || true
+    REMNANTS=$((REMNANTS + 1))
+  fi
+
+  if [ "$REMNANTS" -eq 0 ]; then
+    log "✅ Old installation completely removed. Safe to proceed."
+  else
+    warn "⚠️ Had to retry removal for $REMNANTS remnants. Proceeding anyway."
   fi
 }
 
