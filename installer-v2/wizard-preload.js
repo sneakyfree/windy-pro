@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('wizardAPI', {
 
   // Models
   selectModels: (ids) => ipcRenderer.invoke('wizard-select-models', ids),
+  toggleModel: (modelId, selected) => ipcRenderer.invoke('wizard-toggle-model', modelId, selected),
 
   // Account
   login: (email, password) => ipcRenderer.invoke('wizard-login', email, password),

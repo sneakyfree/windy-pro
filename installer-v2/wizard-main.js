@@ -12,6 +12,7 @@ const os = require('os');
 const fs = require('fs');
 const { HardwareDetector } = require('./core/hardware-detect');
 const { MODEL_CATALOG, MODEL_FAMILIES, getTotalSize, formatSize } = require('./core/models');
+const { StorageAwareModels } = require('./core/storage-aware-models');
 const { recommend, estimateDownloadTime } = require('./core/windytune');
 const { INSTALL_STEP_MESSAGES, getRandomLoadingMessage } = require('./core/brand-content');
 const { DownloadManager } = require('./core/download-manager');
@@ -50,6 +51,7 @@ class InstallWizard {
     this.hardware = null;
     this.recommendation = null;
     this.selectedModels = [];
+    this.storageModels = new StorageAwareModels();
     this.platformAdapter = opts.platformAdapter || (process.platform === 'linux' ? getLinuxAdapter() : null);
     this.downloadManager = new DownloadManager(MODELS_DIR);
     this.accountManager = new AccountManager(APP_DIR);
@@ -119,6 +121,13 @@ class InstallWizard {
       this.hardware = await this.detector.detect();
       this.recommendation = recommend(this.hardware);
 
+      // Initialize storage-aware model system with detected hardware
+      this.storageModels.loadHardwareProfile(this.hardware);
+      const storageState = this.storageModels.getInitialState();
+
+      // Auto-select recommended models based on storage/RAM
+      this.selectedModels = storageState.recommendedModels;
+
       // Annotate models with hardware compatibility
       const annotatedModels = MODEL_CATALOG.map(m => ({
         ...m,
@@ -129,14 +138,23 @@ class InstallWizard {
       return {
         hardware: this.hardware,
         recommendation: this.recommendation,
-        models: annotatedModels
+        models: annotatedModels,
+        storageState // includes freeStorage, recommendedModels, modelStatuses, downloadEstimate
       };
     });
 
-    // ─── Model Selection ───
+    // ─── Model Selection (set all) ───
     ipcMain.handle('wizard-select-models', async (event, modelIds) => {
       this.selectedModels = Array.isArray(modelIds) ? modelIds : [modelIds];
-      return { selected: this.selectedModels };
+      const result = this.storageModels.setSelectedModels(this.selectedModels);
+      return { selected: this.selectedModels, ...result };
+    });
+
+    // ─── Model Toggle (check/uncheck individual model) ───
+    ipcMain.handle('wizard-toggle-model', async (event, modelId, selected) => {
+      const result = this.storageModels.toggleModel(modelId, selected);
+      this.selectedModels = [...this.storageModels.selectedModelIds];
+      return { selected: this.selectedModels, ...result };
     });
 
     // ─── Account ───
