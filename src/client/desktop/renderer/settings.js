@@ -263,11 +263,11 @@ class SettingsPanel {
               <option value="auto">Auto-detect</option>
             </select>
           </div>
-          <div class="setting-row" title="Identify different speakers in the transcript. Only available with Cloud and Deepgram engines.">
+          <div class="setting-row" title="Identify different speakers in the transcript. Available with Cloud and Windy Pro Stream engines.">
             <label for="diarizeEnabled">Identify speakers</label>
             <input type="checkbox" id="diarizeEnabled">
           </div>
-          <p class="settings-hint">Labels speakers as Speaker 1, Speaker 2, etc. Cloud &amp; Deepgram only.</p>
+          <p class="settings-hint">Labels speakers as Speaker 1, Speaker 2, etc. Cloud &amp; Stream engines only.</p>
         </div>
         
         <div class="settings-section">
@@ -384,7 +384,7 @@ class SettingsPanel {
       // Show/hide relevant sections based on engine
       const apiKeySection = this.panel.querySelector('#apiKeySection');
       const engineInfo = {
-        local: { hint: '🏠 <b>Manual mode.</b> Select your model below. Full control over which whisper model runs.', color: '#22C55E', cloud: false, local: true, api: false },
+        local: { hint: '🏠 <b>Manual mode.</b> Select your model below. Full control over which engine model runs.', color: '#22C55E', cloud: false, local: true, api: false },
         windytune: { hint: '🌪️ <b>Auto-pilot.</b> Monitors your performance in real-time. Auto-switches to the best model for your hardware. Logs every change to the status bar.', color: '#22C55E', cloud: false, local: true, api: false },
         cloud: { hint: '🔒 <b>E2E encrypted.</b> Streamed to WindyPro servers. Large-v3 on RTX 5090 GPU. Zero data retention.', color: '#4ecdc4', cloud: true, local: false, api: false },
         'edge-spark': { hint: '🛡️ <b>Ultra-light (42 MB).</b> Fits anything. Quick dictation, real-time captions.', color: '#22C55E', cloud: false, local: true, api: false },

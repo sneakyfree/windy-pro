@@ -3,22 +3,22 @@
  * Shows once per version on first launch after update.
  */
 class ChangelogPopup {
-    constructor() {
-        this.currentVersion = '0.4.0';
-        this.overlay = null;
-    }
+  constructor() {
+    this.currentVersion = '0.4.0';
+    this.overlay = null;
+  }
 
-    shouldShow() {
-        const lastSeen = localStorage.getItem('windy_lastSeenVersion') || '0.0.0';
-        return lastSeen !== this.currentVersion;
-    }
+  shouldShow() {
+    const lastSeen = localStorage.getItem('windy_lastSeenVersion') || '0.0.0';
+    return lastSeen !== this.currentVersion;
+  }
 
-    show() {
-        if (!this.shouldShow()) return;
+  show() {
+    if (!this.shouldShow()) return;
 
-        this.overlay = document.createElement('div');
-        this.overlay.className = 'wizard-overlay';
-        this.overlay.innerHTML = `
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'wizard-overlay';
+    this.overlay.innerHTML = `
       <div class="wizard-container changelog-container">
         <div class="wizard-emoji">🌪️</div>
         <h2 class="wizard-title">What's New in v${this.currentVersion}</h2>
@@ -35,7 +35,7 @@ class ChangelogPopup {
             <span class="changelog-icon">🔧</span>
             <div>
               <strong>Multi-Engine Support</strong>
-              <p>Choose from 5 engines: Local, WindyPro Cloud, Deepgram, Groq, and OpenAI. Each with different strengths.</p>
+              <p>Choose from 15 Windy Pro engines: Core (GPU), Edge (CPU), and Lingua (language specialists). Each with different strengths.</p>
             </div>
           </div>
           <div class="changelog-item">
@@ -58,13 +58,13 @@ class ChangelogPopup {
       </div>
     `;
 
-        document.body.appendChild(this.overlay);
-        this.overlay.querySelector('#changelogDismiss').addEventListener('click', () => this._dismiss());
-    }
+    document.body.appendChild(this.overlay);
+    this.overlay.querySelector('#changelogDismiss').addEventListener('click', () => this._dismiss());
+  }
 
-    _dismiss() {
-        localStorage.setItem('windy_lastSeenVersion', this.currentVersion);
-        this.overlay.remove();
-        this.overlay = null;
-    }
+  _dismiss() {
+    localStorage.setItem('windy_lastSeenVersion', this.currentVersion);
+    this.overlay.remove();
+    this.overlay = null;
+  }
 }

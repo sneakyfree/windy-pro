@@ -20,8 +20,8 @@ class HistoryPanel {
         this.totalRecordings = 0;
         this._activeAudioUrl = null; // Track blob URL for cleanup
         this.engineIcons = {
-            local: '🏠', cloud: '☁️', deepgram: '🎙️',
-            groq: '⚡', openai: '🌐', stream: '📝'
+            local: '🏠', cloud: '☁️', stream: '🎙️',
+            smart: '🧠'
         };
     }
 

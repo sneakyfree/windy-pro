@@ -24,9 +24,9 @@ class WindyApp {
     this._sessionStartTime = null;
 
     // Cloud transcription state
-    this.transcriptionEngine = 'local';  // 'local' | 'cloud' | 'deepgram' | 'groq' | 'openai' | 'smart'
+    this.transcriptionEngine = 'local';  // 'local' | 'cloud' | 'stream' | 'smart'
 
-    // Engine name → Whisper model mapping (UI names → actual models)
+    // Engine name → model mapping (UI names → actual models)
     this._engineModelMap = {
       'local': null, // auto-detect
       'windytune': 'small', // auto-pilot: starts with small, auto-adjusts
@@ -806,7 +806,7 @@ class WindyApp {
     const badge = document.getElementById('modelBadge');
     if (!badge) return;
 
-    // Whisper model sizes for user reference
+    // Model sizes for user reference
     const modelSizes = {
       'tiny': '0.07GB', 'tiny.en': '0.07GB',
       'base': '0.14GB', 'base.en': '0.14GB',
@@ -820,13 +820,13 @@ class WindyApp {
     const activeEngine = localStorage.getItem('windy_engine') || this.transcriptionEngine || 'local';
 
     // Check if a custom named engine is selected (not 'local', 'cloud', or cloud API engines)
-    const cloudEngines = ['stream', 'deepgram', 'groq', 'openai', 'cloud', 'smart'];
+    const cloudEngines = ['stream', 'cloud', 'smart'];
     const isCustomEngine = this._engineModelMap && activeEngine in this._engineModelMap && activeEngine !== 'local';
     const isCloudEngine = cloudEngines.includes(activeEngine);
 
     // Engine-specific icons
     const engineIcons = {
-      stream: '🎙️', deepgram: '🎙️', groq: '⚡', openai: '🌐', cloud: '☁️🔒', smart: '🧠',
+      stream: '🎙️', cloud: '☁️🔒', smart: '🧠',
       'edge-spark': '🛡️', 'edge-pulse': '🛡️', 'edge-standard': '🛡️', 'edge-global': '🛡️', 'edge-pro': '🛡️',
       'core-spark': '⚡', 'core-pulse': '⚡', 'core-standard': '⚡', 'core-global': '⚡', 'core-pro': '⚡', 'core-turbo': '⚡', 'core-ultra': '⚡',
       'lingua-es': '🌍', 'lingua-fr': '🌍', 'lingua-hi': '🌍'
@@ -851,10 +851,10 @@ class WindyApp {
     // Custom named engine (core-pro, edge-standard, etc.) — ALWAYS show engine name, never raw model
     if (isCustomEngine) {
       const icon = engineIcons[activeEngine] || '⚡';
-      const whisperModel = this._engineModelMap[activeEngine];
-      const size = modelSizes[whisperModel] || '';
+      const engineModel = this._engineModelMap[activeEngine];
+      const size = modelSizes[engineModel] || '';
       badge.textContent = size ? `${icon} ${activeEngine} (${size})` : `${icon} ${activeEngine}`;
-      badge.title = size ? `Engine: ${activeEngine} → Model: ${whisperModel} (${size})` : `Engine: ${activeEngine}`;
+      badge.title = size ? `Engine: ${activeEngine} (${size})` : `Engine: ${activeEngine}`;
       badge.classList.remove('loading');
       return;
     }
@@ -2544,7 +2544,7 @@ class WindyApp {
 
     this._deepgramWs.onerror = (err) => {
       console.error('[Deepgram] WebSocket error:', err);
-      this.showReconnectToast('⚠️ Deepgram connection error. Check API key.');
+      this.showReconnectToast('⚠️ Stream engine connection error. Check API key.');
     };
 
     this._deepgramWs.onclose = () => {

@@ -34,7 +34,7 @@ export default function Privacy() {
 
                 <h2 id="local-mode">Local Mode (Desktop App)</h2>
                 <ul>
-                    <li><strong>Audio data</strong> is processed entirely on your device using Whisper.</li>
+                    <li><strong>Audio data</strong> is processed entirely on your device by the Windy Pro engine.</li>
                     <li><strong>Transcriptions</strong> are stored locally in an encrypted SQLite database (Prompt Vault).</li>
                     <li><strong>No data is sent</strong> to any server, API, or third party.</li>
                     <li><strong>No telemetry</strong> or analytics are collected.</li>

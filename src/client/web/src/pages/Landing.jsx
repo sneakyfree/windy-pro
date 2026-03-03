@@ -184,7 +184,7 @@ export default function Landing() {
                         <div className="feature-card">
                             <div className="feature-icon">🔒</div>
                             <h3>100% Local</h3>
-                            <p>Whisper runs on YOUR hardware. Audio never leaves your machine. Zero cloud dependency.</p>
+                            <p>Windy Pro runs on YOUR hardware. Audio never leaves your machine. Zero cloud dependency.</p>
                         </div>
                         <div className="feature-card">
                             <div className="feature-icon">⚡</div>

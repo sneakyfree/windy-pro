@@ -59,7 +59,7 @@ export default function Auth() {
                     </Link>
                     <h2 className="auth-tagline">Voice to text,<br />in the cloud.</h2>
                     <p className="auth-desc">
-                        Stream audio from any device. Get real-time transcription powered by Whisper.
+                        Stream audio from any device. Get real-time transcription powered by the Windy Pro Engine.
                         No downloads, no installs.
                     </p>
                     <div className="auth-features">
