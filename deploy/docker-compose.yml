@@ -1,7 +1,46 @@
 version: '3.8'
 
 services:
-  # FastAPI Cloud Transcription API
+  # ── Web Frontend (Vite built static files served by Nginx) ──
+  web:
+    image: nginx:1.25-alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ./src/client/web/dist:/usr/share/nginx/html:ro
+      - ./deploy/nginx-spa.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      account-server:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:80/" ]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+  # ── Account Server (Auth, recordings, translations, admin) ──
+  account-server:
+    build: ./account-server
+    ports:
+      - "8098:8098"
+    environment:
+      - PORT=8098
+      - JWT_SECRET=${WINDY_JWT_SECRET:?Set WINDY_JWT_SECRET in .env}
+      - DATABASE_PATH=/data/accounts.db
+      - MEDIA_PATH=/data/media
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - NODE_ENV=production
+    volumes:
+      - account_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8098/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Transcription API (FastAPI + faster-whisper) ──
   api:
     build: .
     ports:
@@ -32,26 +71,11 @@ services:
               count: all
               capabilities: [ gpu ]
 
-  # Account Server (H1 + H2 — auth, recordings, media)
-  account-server:
-    build: ../services/account-server
-    environment:
-      - PORT=8098
-      - JWT_SECRET=${WINDY_JWT_SECRET:?Set WINDY_JWT_SECRET in .env}
-      - DATABASE_PATH=/data/accounts.db
-      - MEDIA_PATH=/data/media
-    volumes:
-      - account_data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: [ "CMD", "wget", "-qO-", "http://localhost:8098/health" ]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-
-  # Translate API (E1 — NLLB-200 CTranslate2 dynamic translation)
+  # ── Translate API (NLLB-200 CTranslate2) ──
   translate-api:
-    build: ../services/translate-api
+    build: ./services/translate-api
+    ports:
+      - "8099:8099"
     environment:
       - PORT=8099
       - MODEL_PATH=/app/models/nllb-200-600M
@@ -68,23 +92,23 @@ services:
       start_period: 120s
       retries: 3
 
-  # Nginx reverse proxy (SSL termination, WS proxy, rate limiting)
+  # ── Nginx Reverse Proxy (SSL, WS, rate limiting) ──
   nginx:
     image: nginx:1.25-alpine
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./certs:/etc/nginx/certs:ro
-      - web_static:/usr/share/nginx/html
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/certs:/etc/nginx/certs:ro
     depends_on:
+      - web
       - api
       - account-server
       - translate-api
     restart: unless-stopped
 
-  # PostgreSQL for cloud vault storage
+  # ── PostgreSQL ──
   postgres:
     image: postgres:16-alpine
     environment:
@@ -99,7 +123,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis for rate limiting and session cache
+  # ── Redis (rate limiting + session cache) ──
   redis:
     image: redis:7-alpine
     healthcheck:
@@ -114,7 +138,6 @@ volumes:
   pgdata:
   redisdata:
   model_cache:
-  web_static:
   account_data:
   translate_models:
   translate_data:

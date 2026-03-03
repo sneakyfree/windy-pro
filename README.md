@@ -1,164 +1,204 @@
 # Windy Pro
 
-**Voice-to-text with a trustable state machine.**
+> Voice to text, unlimited. No subscriptions, no time limits.
 
-> "The Green Strobe Never Lies."
+Real-time speech transcription, translation, and dictation for desktop, web, and mobile. Powered by faster-whisper (local) and Deepgram (cloud).
 
-## What is Windy Pro?
+---
 
-A local-first voice-to-text platform that eliminates the anxiety of "Is it recording?" with clear visual feedback — plus a powerful cloud option with GPU acceleration for the highest quality output.
+## Architecture
 
-### Key Features
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                         Windy Pro Platform                             │
+├──────────────────┬──────────────────┬──────────────────────────────────┤
+│   Desktop App    │    Web Portal    │       Mobile App                 │
+│   (Electron)     │   (React/Vite)   │   (React Native/Expo)           │
+│                  │                  │                                  │
+│  • Frameless UI  │  • Dashboard     │  • iOS + Android                │
+│  • System tray   │  • Translate     │  • Speech translation           │
+│  • Global hotkey │  • Admin panel   │  • Voice clone                  │
+│  • Auto-paste    │  • Settings      │  • Offline packs                │
+│  • Video capture │  • PWA support   │  • Push notifications           │
+└────────┬─────────┴────────┬─────────┴────────────┬────────────────────┘
+         │                  │                      │
+         └──────────────────┼──────────────────────┘
+                            │
+              ┌─────────────┴─────────────┐
+              │      Account Server       │
+              │  (Node.js + SQLite)       │
+              │                           │
+              │  • Auth (JWT + refresh)   │
+              │  • Recording storage      │
+              │  • Translation history    │
+              │  • Admin / billing APIs   │
+              │  • Stripe integration     │
+              └─────────┬─────────────────┘
+                        │
+         ┌──────────────┼──────────────┐
+         │              │              │
+  ┌──────┴──────┐ ┌─────┴─────┐ ┌─────┴──────┐
+  │ Transcribe  │ │ Translate │ │  Storage   │
+  │ (Whisper)   │ │ (NLLB)    │ │ (Postgres) │
+  │  Port 8000  │ │ Port 8099 │ │  Port 5432 │
+  └─────────────┘ └───────────┘ └────────────┘
+```
 
-| Feature | Details |
-|---------|---------|
-| **Batch Mode** ✨ | Record first, get polished text on stop. LLM-cleaned punctuation, paragraphs, and formatting. Best quality. |
-| **Live Mode** | Words stream in real-time as you speak. Faster feedback, lower quality. |
-| **5 Engines** | Local (offline), WindyPro Cloud (GPU), Deepgram, Groq, OpenAI |
-| **Configurable Duration** | 5/10/15/30 minute recordings |
-| **Green Strobe** | Trustable visual feedback — if it's green, your words are being captured |
-| **Privacy-first** | Local mode: nothing leaves your device. Cloud: E2E encrypted, zero retention. |
-| **Auto-archive** | Local, Dropbox, and Google Drive sync |
+## Features
 
-### vs Wispr Flow
-
-| Feature | Wispr Flow | Windy Pro |
-|---------|------------|-----------:|
-| Session Limit | ~5 minutes | **Up to 30 min** |
-| Feedback | Opaque | **Green Strobe** |
-| Privacy | Cloud only | **Local-first** |
-| Batch Mode | ✅ | **✅ + LLM cleanup** |
-| Engines | 1 | **5** |
-| Cost | ~$17/mo | **Free (local) / $5 (cloud)** |
+| Feature | Desktop | Web | Mobile |
+|---------|---------|-----|--------|
+| Real-time transcription | ✅ | ✅ | ✅ |
+| Speech-to-speech translation | ✅ | ✅ | ✅ |
+| Text translation (200+ languages) | ✅ | ✅ | ✅ |
+| Offline transcription (Whisper) | ✅ | ❌ | ✅ |
+| Auto-paste to active window | ✅ | ❌ | ❌ |
+| System tray + global hotkeys | ✅ | ❌ | ❌ |
+| Video recording | ✅ | ❌ | ✅ |
+| Admin dashboard | ❌ | ✅ | ❌ |
+| PWA (install as app) | ❌ | ✅ | ❌ |
+| Push notifications | ❌ | ❌ | ✅ |
+| Voice clone | ❌ | ❌ | ✅ |
 
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+ (Electron client)
-- Python 3.10+ (local transcription engine)
-- CUDA 11.7+ (optional, for GPU acceleration)
+- **Node.js** 20+ and **npm**
+- **Python** 3.10+ with **pip**
+- **FFmpeg** (for audio processing)
 
-### Installation
+### Desktop App (Development)
 
 ```bash
+# Clone and install
+git clone https://github.com/sneakyfree/windy-pro.git
 cd windy-pro
-
-# Python backend
-python -m venv venv
-source venv/bin/activate
+npm install
 pip install -r requirements.txt
 
-# Electron client
-npm install
-```
+# Start the Python transcription backend
+python -m src.engine.server &
 
-### Run the App
-
-```bash
-# Start local transcription server
-python -m src.engine.server --model base --port 9876
-
-# Start Electron app (in another terminal)
+# Start the Electron app
 npm start
 ```
 
-### Run the Cloud API (Veron server)
+### Web Portal (Development)
 
 ```bash
-# Set required env vars
-export WINDY_JWT_SECRET="your-secret"
-export WINDY_API_KEY="your-api-key"
+# Start the account server
+cd account-server && npm install && node server.js &
 
-# Start cloud API
-uvicorn src.cloud.api:app --host 0.0.0.0 --port 8000
+# Start the web frontend
+cd src/client/web && npm install && npm run dev
+# Open http://localhost:5173
 ```
 
-## Transcription Engines
-
-| Engine | Type | Quality | Speed | Setup |
-|--------|------|---------|-------|-------|
-| 🏠 **Local** | Offline | ★★★☆☆ | Real-time | Works out of the box |
-| ☁️ **WindyPro Cloud** | GPU (RTX 5090) | ★★★★★ | Batch | Sign up in Settings |
-| 🎙️ **Deepgram** | Streaming | ★★★★★ | Real-time | API key |
-| ⚡ **Groq** | LPU | ★★★★☆ | Fastest | API key |
-| 🌐 **OpenAI** | Cloud | ★★★★☆ | Batch | API key |
-
-## Recording Modes
-
-### ✨ Batch Mode (Default)
-Record audio, then process everything at once for the best quality:
-1. Press **Ctrl+Shift+Space** — green strobe activates
-2. Speak naturally — no text appears yet
-3. Press **Ctrl+Shift+Space** again — "✨ Processing..." state
-4. Polished text appears with proper punctuation and paragraphs
-
-The cloud batch endpoint uses GPU transcription (Whisper large-v3) + LLM cleanup (Ollama) for formatting.
-
-### 📝 Live Mode
-Words stream in real-time as you speak. Lower quality but immediate feedback.
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────┐
-│              Electron Client                     │
-│  ┌──────────┐  ┌───────────┐  ┌──────────────┐  │
-│  │Green     │  │Transcript │  │Settings      │  │
-│  │Strobe    │  │Display    │  │Panel         │  │
-│  └──────────┘  └───────────┘  └──────────────┘  │
-│                 │                                 │
-│        WebSocket / REST (batch)                   │
-└─────────────────┬───────────────────────────────┘
-                  │
-  ┌───────────────┼──────────────────────┐
-  │               │                      │
-  ▼               ▼                      ▼
-Local Server   Cloud API            Third-party APIs
-(Python WS)    (FastAPI/GPU)        (Deepgram/Groq/OpenAI)
-```
-
-## Hotkeys
-
-| Hotkey | Action |
-|--------|--------|
-| **Ctrl+Shift+Space** | Toggle Recording |
-| **Ctrl+Shift+V** | Paste Transcript |
-| **Ctrl+Shift+W** | Show/Hide Window |
-
-## Testing
+### Docker (Production)
 
 ```bash
-source venv/bin/activate
-python -m pytest tests/ -v
+# Copy and configure environment
+cp .env.example .env
+# Edit .env with your secrets
+
+# Build and start all services
+cd deploy
+docker compose up -d --build
+
+# Services:
+#   Web:           http://localhost:3000
+#   Account API:   http://localhost:8098
+#   Transcription: http://localhost:8000
+#   Translate:     http://localhost:8099
 ```
+
+## Building Desktop Installers
+
+```bash
+# All platforms
+npm run dist:all
+
+# Individual platforms
+npm run build:linux    # → dist/*.AppImage, dist/*.deb
+npm run build:mac      # → dist/*.dmg
+npm run build:win      # → dist/*.exe (NSIS)
+```
+
+Auto-update is configured via GitHub Releases. Tag a version to trigger:
+
+```bash
+git tag v1.5.2
+git push --tags
+```
+
+## API Reference
+
+### Account Server (`localhost:8098`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/v1/auth/register` | ❌ | Create account |
+| POST | `/api/v1/auth/login` | ❌ | Login → JWT |
+| POST | `/api/v1/auth/refresh` | 🔄 | Refresh token |
+| GET | `/api/v1/auth/me` | ✅ | Current user |
+| POST | `/api/v1/auth/change-password` | ✅ | Change password |
+| GET | `/api/v1/auth/billing` | ✅ | Subscription info |
+| POST | `/api/v1/auth/create-portal-session` | ✅ | Stripe portal |
+| GET | `/api/v1/recordings` | ✅ | List recordings |
+| POST | `/api/v1/recordings` | ✅ | Upload recording |
+| POST | `/translate/text` | ✅ | Text translation |
+| POST | `/translate/speech` | ✅ | Speech translation |
+| GET | `/user/history` | ✅ | Translation history |
+| GET | `/api/v1/admin/users` | 🔐 | User management |
+| GET | `/api/v1/admin/stats` | 🔐 | System stats |
+| GET | `/api/v1/admin/revenue` | 🔐 | Revenue dashboard |
+
+Auth: ✅ = JWT required, 🔐 = Admin role required, 🔄 = Refresh token
+
+### Transcription API (`localhost:8000`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/transcribe` | Transcribe audio (base64 or file) |
+| GET | `/health` | Service health |
+| GET | `/models` | Available Whisper models |
+
+## Environment Variables
+
+See [`.env.example`](.env.example) for all variables with descriptions.
+
+## Security
+
+- **Electron**: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`
+- **CSP**: Strict Content Security Policy on all windows
+- **IPC**: Path traversal guards, input validation, `shell.openExternal` for URLs
+- **Navigation**: `will-navigate` blocks non-local origins, popup creation denied
+- **Permissions**: Whitelist-only (media, clipboard)
+- **Auth**: bcrypt passwords, JWT + refresh tokens, device limits
 
 ## Project Structure
 
 ```
 windy-pro/
 ├── src/
-│   ├── engine/              # Local Python transcription
-│   │   ├── transcriber.py
-│   │   └── server.py
 │   ├── client/
-│   │   ├── desktop/         # Electron app
-│   │   │   ├── main.js
-│   │   │   └── renderer/
-│   │   │       ├── app.js
-│   │   │       ├── settings.js
-│   │   │       └── index.html
-│   │   └── web/             # React web client
-│   └── cloud/
-│       └── api.py           # FastAPI cloud server
-└── tests/
+│   │   ├── desktop/        # Electron main + renderer
+│   │   ├── web/            # React/Vite web portal
+│   │   └── mobile/         # React Native/Expo
+│   ├── engine/             # Python transcription engine
+│   └── cloud/              # FastAPI cloud API
+├── account-server/         # Node.js auth + storage server
+├── services/
+│   └── translate-api/      # NLLB-200 translation service
+├── installer-v2/           # TurboTax-style setup wizard
+├── deploy/                 # Docker, nginx, compose configs
+├── tests/                  # Python structural + security tests
+├── scripts/                # Linux install/post-install scripts
+├── assets/                 # App icons
+└── .github/workflows/      # CI/CD pipelines
 ```
 
 ## License
 
-MIT
-
----
-
-*Built with the collective wisdom of Gemini, ChatGPT, Perplexity, and Grok.*
-*Executed by Kit 0.*
+MIT License — see [LICENSE](LICENSE)

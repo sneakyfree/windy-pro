@@ -1,54 +1,62 @@
 # Changelog
 
-## v0.6.0 (2026-02-28)
+All notable changes to Windy Pro are documented here.
 
-### 🆕 New Features
-- **Windy Pro Cloud Storage** — Archive recordings to Windy Pro's distributed cloud (replacing Dropbox/Google Drive)
-- **Stripe Payment Integration** — Upgrade to Pro/Translate/Translate Pro directly from the app
-- **First-Run Setup Wizard** — Premium 6-step onboarding: mic test, engine selection, account creation, plan selection
-- **History Media Badges** — See at a glance which recordings have 📝 text, 🎤 audio, 🎬 video
-- **Inline Audio Playback** — Play back recordings directly from the History panel
-- **Video Recording** — Webcam capture during recordings (opt-in, for AI avatar/voice clone data)
-- **Coupon Code Support** — Enter promo codes during checkout for discounts
-- **Feature Gating by Tier** — Free/Pro/Translate/Translate Pro feature limits enforced
+## [1.5.1] — 2026-03-02
 
-### 🔧 Improvements
-- Removed Dropbox and Google Drive integration (replaced by Windy Pro Cloud)
-- New archive folder UI with 📂 Open and ⚙️ Change buttons
-- Archive path displayed in the main UI
-- Audio save consistency fixes
-- Improved recording mode handling for batch sessions
+### Phase 4: Docker, CI/CD & Launch Prep
+- **Docker**: Multi-stage production Dockerfile (web builder → API deps → runtime)
+- **Docker Compose**: 7-service stack with health checks (web, account, transcription, translate, nginx, postgres, redis)
+- **CI/CD**: GitHub Actions pipeline — lint, test, web build, Electron cross-platform, Docker deploy
+- **Config**: `.env.example` with 20+ documented variables
+- **Docs**: Comprehensive README.md with architecture diagram, API reference, security overview
+- **Packaging**: electron-builder config verified (DMG, AppImage, DEB, NSIS) with auto-update channel
 
-### 🐛 Bug Fixes
-- Fixed null reference crashes from removed Dropbox/Google elements
-- Fixed audio timestamp mismatches between .md and .webm files
-- Fixed stack overflow on large audio blob base64 encoding
+### Phase 3: Desktop Security & Production Hardening
+- **P0 Fix**: Path traversal guard on `delete-archive-entry` — validates paths within archive folder
+- **P1 Fix**: `open-external-url` now uses `shell.openExternal` instead of `spawn(browser)`
+- **P1 Fix**: `will-navigate` handler blocks navigation away from `file://` origins
+- **P2 Fix**: `sandbox: true` enabled on all 4 BrowserWindows
+- **P2 Fix**: Permission handler whitelists only `media` + `clipboard-read`
+- **P2 Fix**: CSP tightened — removed wildcard `wss:`/`https:`, added exact API origins
+- **Tests**: 29 structural security tests (`test_desktop_security.py`)
 
----
+### Phase 2: Web Portal & Dashboard
+- **SPA Fix**: `appType: 'spa'` in Vite config, removed broken `/translate` proxy
+- **Dashboard**: Translation stats (total translations, favorites), profile/settings links
+- **Settings Page**: Current plan display, upgrade buttons, password change, Stripe billing portal
+- **Admin Panel**: Stats grid, translation volume chart, plan breakdown, user management table
+- **Profile Page**: User card, translation history, account deletion with triple confirmation
+- **Landing Page**: Feature comparison table (4 tiers), testimonials (4 cards), CTA banner
+- **Backend**: Admin endpoints (`/admin/users`, `/admin/stats`, `/admin/revenue`), billing endpoints
+- **PWA**: Service worker v3 with API response caching (24h expiry), manifest shortcuts
+- **Tests**: 42 structural tests (`test_web_portal.py`)
 
-## v0.5.0 (2026-02-24)
+### Phase 1: Desktop Core Features
+- **Speech Translation UI**: Press-and-hold mic button, animated waveform, language dropdowns
+- **Translation Backend**: `/translate/speech`, `/translate/text`, `/translate/languages` endpoints
+- **System Tray**: Quick-translate menu, restore/quit actions
+- **Global Hotkeys**: `Ctrl+Shift+T` floating mini-translate, `Ctrl+Shift+Space` record, `Ctrl+Shift+V` paste
+- **Auto-Update**: electron-updater with GitHub Releases, DEB update fallback for Linux
+- **Mini-Translate Window**: Always-on-top floating translation panel with offline fallback
+- **Video Preview**: Detached webcam preview window with camera permission auto-grant
 
-### 🆕 New Features
-- Mini tornado widget with transparent background and voice-reactive animation
-- Tornado widget size slider in settings
-- Cloud transcription engine support
+### Pre-Phase: Foundation
+- **Electron App**: Frameless, always-on-top, transparent window with green strobe indicator
+- **WebSocket**: Real-time connection to Python faster-whisper backend
+- **Transcription**: Local Whisper models (base/small/medium) with batch processing
+- **Archive System**: Local + cloud archiving with timestamped folders
+- **History Panel**: Full session history with playback and export
+- **Installation Wizard**: TurboTax-style 9-screen setup (hardware detection, account creation)
+- **Cloud Sync**: Encrypted recording upload to Windy Pro Cloud
+- **Crash Recovery**: Automatic transcript recovery from orphaned sessions
+- **Zoom/Font Controls**: Ctrl+/-, font size persistence
+- **Offline Mode**: Full transcription without internet via local Whisper models
 
-### 🔧 Improvements
-- Hardened IPC security across all handlers
-- Full-spectrum smoke test pass
+## [1.0.0] — 2026-02-01
 
----
-
-## v0.4.0 (2026-02-20)
-
-### 🆕 New Features
-- Batch recording mode with LLM-polished output
-- Tornado floating widget
-- Audio archive with date-organized folders
-- History panel with search
-- Global hotkey support (Ctrl+Shift+Space, Ctrl+Shift+V)
-
-### 🔧 Improvements
-- TurboTax-style installation wizard
-- 5 transcription engine options
-- Cursor injection for direct paste
+### Initial Release
+- Basic voice-to-text transcription
+- Python faster-whisper backend
+- Electron desktop client
+- Local file archiving
