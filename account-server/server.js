@@ -757,7 +757,208 @@ app.get('/api/v1/admin/revenue', authenticateToken, adminOnly, (req, res) => {
     }
 });
 
-// ─── Error Handler ───
+// ═══════════════════════════════════════════
+//  VIDEO RECORDING & CLONE TRAINING
+// ═══════════════════════════════════════════
+
+// Large file upload for video bundles (500MB limit)
+const videoUpload = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            const dir = path.join(__dirname, 'uploads', 'bundles');
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+        },
+        filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname) || '.webm';
+            cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`);
+        }
+    }),
+    limits: { fileSize: 500 * 1024 * 1024 }
+});
+
+// Create recordings table
+db.exec(`
+    CREATE TABLE IF NOT EXISTS recordings (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        bundle_id TEXT UNIQUE,
+        duration_seconds INTEGER DEFAULT 0,
+        has_video INTEGER DEFAULT 0,
+        video_resolution TEXT,
+        camera_source TEXT,
+        transcript_text TEXT,
+        transcript_segments TEXT,
+        file_path TEXT,
+        file_size INTEGER DEFAULT 0,
+        device_platform TEXT DEFAULT 'desktop',
+        app_version TEXT,
+        sync_status TEXT DEFAULT 'local',
+        clone_training_ready INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_recordings_user ON recordings(user_id);
+    CREATE INDEX IF NOT EXISTS idx_recordings_training ON recordings(clone_training_ready);
+`);
+
+// ─── POST /api/v1/recordings/upload — Upload recording bundle ───
+app.post('/api/v1/recordings/upload', authenticateToken, videoUpload.single('media'), (req, res) => {
+    try {
+        const { bundle_id, duration_seconds, has_video, video_resolution, camera_source,
+            transcript_text, transcript_segments, device_platform, app_version, clone_training_ready } = req.body;
+
+        const id = crypto.randomUUID();
+        const filePath = req.file ? req.file.path : null;
+        const fileSize = req.file ? req.file.size : 0;
+
+        db.prepare(`INSERT INTO recordings
+            (id, user_id, bundle_id, duration_seconds, has_video, video_resolution, camera_source,
+             transcript_text, transcript_segments, file_path, file_size, device_platform, app_version,
+             sync_status, clone_training_ready)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'uploaded', ?)`).run(
+            id, req.user.userId, bundle_id || id, parseInt(duration_seconds) || 0,
+            has_video === 'true' || has_video === true ? 1 : 0,
+            video_resolution || null, camera_source || null,
+            transcript_text || null, transcript_segments || null,
+            filePath, fileSize, device_platform || 'desktop', app_version || '2.0',
+            clone_training_ready === 'true' || clone_training_ready === true ? 1 : 0
+        );
+
+        res.status(201).json({ id, bundle_id: bundle_id || id, file_size: fileSize });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/v1/recordings/:id/video — Stream video with range request support ───
+app.get('/api/v1/recordings/:id/video', authenticateToken, (req, res) => {
+    try {
+        const recording = db.prepare('SELECT file_path, file_size FROM recordings WHERE id = ? AND user_id = ?')
+            .get(req.params.id, req.user.userId);
+
+        if (!recording || !recording.file_path || !fs.existsSync(recording.file_path)) {
+            return res.status(404).json({ error: 'Recording not found' });
+        }
+
+        const stat = fs.statSync(recording.file_path);
+        const fileSize = stat.size;
+        const range = req.headers.range;
+
+        if (range) {
+            const parts = range.replace(/bytes=/, '').split('-');
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunkSize = end - start + 1;
+
+            res.writeHead(206, {
+                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunkSize,
+                'Content-Type': 'video/webm',
+            });
+            fs.createReadStream(recording.file_path, { start, end }).pipe(res);
+        } else {
+            res.writeHead(200, {
+                'Content-Length': fileSize,
+                'Content-Type': 'video/webm',
+            });
+            fs.createReadStream(recording.file_path).pipe(res);
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── WebRTC Signaling (in-memory store) ───
+const rtcSessions = new Map(); // token -> { offer, answer, candidates }
+
+app.post('/api/v1/rtc/signal', (req, res) => {
+    const { type, token, sdp, candidate } = req.body;
+    if (!token) return res.status(400).json({ error: 'Token required' });
+
+    if (!rtcSessions.has(token)) {
+        rtcSessions.set(token, { offer: null, answer: null, candidates: [] });
+    }
+    const session = rtcSessions.get(token);
+
+    if (type === 'offer') {
+        session.offer = sdp;
+        res.json({ success: true });
+    } else if (type === 'answer') {
+        session.answer = sdp;
+        res.json({ success: true });
+    } else if (type === 'ice-candidate') {
+        session.candidates.push(candidate);
+        res.json({ success: true });
+    } else if (type === 'switch-camera') {
+        session.switchCamera = true;
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ error: 'Unknown signal type' });
+    }
+});
+
+app.get('/api/v1/rtc/signal', (req, res) => {
+    const { token, type } = req.query;
+    if (!token) return res.status(400).json({ error: 'Token required' });
+    const session = rtcSessions.get(token);
+    if (!session) return res.json({});
+
+    if (type === 'offer') return res.json({ sdp: session.offer });
+    if (type === 'answer') return res.json({ sdp: session.answer, candidates: session.candidates });
+    return res.json(session);
+});
+
+// ─── GET /api/v1/clone/training-data — List training-ready bundles ───
+app.get('/api/v1/clone/training-data', authenticateToken, (req, res) => {
+    try {
+        const bundles = db.prepare(
+            `SELECT id, bundle_id, duration_seconds, has_video, video_resolution,
+                    camera_source, transcript_text, file_size, device_platform,
+                    clone_training_ready, created_at
+             FROM recordings WHERE user_id = ? AND clone_training_ready = 1
+             ORDER BY created_at DESC`
+        ).all(req.user.userId);
+        res.json({ bundles, total: bundles.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/v1/clone/start-training — Start clone training job ───
+app.post('/api/v1/clone/start-training', authenticateToken, (req, res) => {
+    try {
+        const { bundle_ids } = req.body;
+        if (!bundle_ids || !Array.isArray(bundle_ids) || bundle_ids.length < 3) {
+            return res.status(400).json({ error: 'At least 3 training-ready bundles required' });
+        }
+
+        // Validate bundles belong to user and are training-ready
+        const placeholders = bundle_ids.map(() => '?').join(',');
+        const count = db.prepare(
+            `SELECT COUNT(*) as count FROM recordings
+             WHERE bundle_id IN (${placeholders}) AND user_id = ? AND clone_training_ready = 1`
+        ).get(...bundle_ids, req.user.userId).count;
+
+        if (count < bundle_ids.length) {
+            return res.status(400).json({ error: 'Some bundles are not valid or training-ready' });
+        }
+
+        const jobId = crypto.randomUUID();
+        // Stub: in production, this would queue a training job
+        res.json({
+            jobId,
+            status: 'queued',
+            bundle_count: bundle_ids.length,
+            estimated_time: `${Math.ceil(bundle_ids.length * 15)} minutes`,
+            message: 'Clone training job queued successfully'
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 
 app.use((err, req, res, next) => {
     console.error('Server error:', err);
