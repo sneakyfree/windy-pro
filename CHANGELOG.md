@@ -2,6 +2,20 @@
 
 All notable changes to Windy Pro are documented here.
 
+## [1.6.0] — 2026-03-04
+
+### Phase 5: Rebrand, API Fixes & Release Prep
+- **Rebrand**: Removed all user-facing Whisper, OpenAI, Deepgram, Groq references — replaced with Windy Pro Engine branding
+- **API Fix**: Translate page now calls correct `/api/v1/translate/text` endpoint (was 404)
+- **API Fix**: i18n dynamic translation system now uses correct endpoint with auth
+- **License**: Added `POST /api/v1/license/activate` endpoint for online license activation
+- **Trust Signals**: US-based trust badges on landing page (hero, footer, privacy, download sections)
+- **Installer**: Storage-aware model recommendations with disk/RAM detection
+- **Download**: Cache-proof download system with GitHub API redirects
+- **Linux**: Fixed .desktop file Exec quoting for paths with spaces
+- **Tests**: Fixed `test_final_qa.py` pytest compatibility (sys.exit guard)
+- **Build**: Verified clean web build (0 errors, 324KB)
+
 ## [1.5.1] — 2026-03-02
 
 ### Phase 4: Docker, CI/CD & Launch Prep
@@ -43,20 +57,20 @@ All notable changes to Windy Pro are documented here.
 
 ### Pre-Phase: Foundation
 - **Electron App**: Frameless, always-on-top, transparent window with green strobe indicator
-- **WebSocket**: Real-time connection to Python faster-whisper backend
-- **Transcription**: Local Whisper models (base/small/medium) with batch processing
+- **WebSocket**: Real-time connection to Python transcription backend
+- **Transcription**: Local engine models (base/small/medium) with batch processing
 - **Archive System**: Local + cloud archiving with timestamped folders
 - **History Panel**: Full session history with playback and export
 - **Installation Wizard**: TurboTax-style 9-screen setup (hardware detection, account creation)
 - **Cloud Sync**: Encrypted recording upload to Windy Pro Cloud
 - **Crash Recovery**: Automatic transcript recovery from orphaned sessions
 - **Zoom/Font Controls**: Ctrl+/-, font size persistence
-- **Offline Mode**: Full transcription without internet via local Whisper models
+- **Offline Mode**: Full transcription without internet via local engine models
 
 ## [1.0.0] — 2026-02-01
 
 ### Initial Release
 - Basic voice-to-text transcription
-- Python faster-whisper backend
+- Python transcription engine backend
 - Electron desktop client
 - Local file archiving
