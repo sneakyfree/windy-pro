@@ -33,8 +33,8 @@ function proxyToApi(req, res) {
 
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
-  // Proxy API, WebSocket, and health check
-  if (url.startsWith('/api/') || url.startsWith('/ws/') || url === '/health') {
+  // Proxy API, WebSocket, health, and download endpoints
+  if (url.startsWith('/api/') || url.startsWith('/ws/') || url === '/health' || url.startsWith('/download/')) {
     return proxyToApi(req, res);
   }
   // Serve static files

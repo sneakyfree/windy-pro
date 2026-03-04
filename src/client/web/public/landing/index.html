@@ -395,27 +395,27 @@
                     <div class="dl-icon">🪟</div>
                     <h3>Windows</h3>
                     <p>Windows 10/11</p>
-                    <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/Windy-Pro-Setup-0.6.0.exe"
+                    <a href="/download/latest/windows"
                         class="btn btn-primary">Download .exe</a>
-                    <span class="dl-meta">v0.6.0 · 73 MB</span>
+                    <span class="dl-meta" data-version="true">Latest · 73 MB</span>
                 </div>
                 <div class="download-card">
                     <div class="dl-icon">🍎</div>
                     <h3>macOS</h3>
                     <p>Apple Silicon & Intel (Universal)</p>
-                    <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/Windy-Pro-0.6.0.dmg"
+                    <a href="/download/latest/macos"
                         class="btn btn-primary">Download .dmg</a>
-                    <span class="dl-meta">v0.6.0 · 165 MB</span>
+                    <span class="dl-meta" data-version="true">Latest · 165 MB</span>
                 </div>
                 <div class="download-card">
                     <div class="dl-icon">🐧</div>
                     <h3>Linux</h3>
                     <p>Ubuntu, Debian (deb) + Universal (AppImage)</p>
-                    <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/windy-pro_0.6.0_amd64.deb"
+                    <a href="/download/latest/linux-deb"
                         class="btn btn-primary">Download .deb</a>
-                    <a href="https://github.com/sneakyfree/windy-pro/releases/download/v0.6.0/Windy-Pro-0.6.0.AppImage"
+                    <a href="/download/latest/linux-appimage"
                         class="btn btn-ghost" style="margin-top:0.5rem">AppImage</a>
-                    <span class="dl-meta">v0.6.0 · 70-100 MB</span>
+                    <span class="dl-meta" data-version="true">Latest · 70-100 MB</span>
                 </div>
             </div>
         </div>
@@ -521,6 +521,17 @@
 
         // Init on load
         initI18n();
+    </script>
+
+    <script>
+      // Dynamically update version labels from live server
+      fetch('/download/version').then(r => r.json()).then(d => {
+        if (d && d.version) {
+          document.querySelectorAll('[data-version="true"]').forEach(el => {
+            el.textContent = el.textContent.replace('Latest', d.version);
+          });
+        }
+      }).catch(() => {}); // fail silently — "Latest" is already shown
     </script>
 </body>
 
