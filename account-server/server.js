@@ -713,6 +713,44 @@ app.post('/api/v1/auth/change-password', authenticateToken, (req, res) => {
     }
 });
 
+// POST /api/v1/license/activate — Activate a license key for the authenticated user
+app.post('/api/v1/license/activate', authenticateToken, (req, res) => {
+    try {
+        const { key } = req.body;
+        if (!key) return res.status(400).json({ error: 'License key is required' });
+
+        // Validate key format: WP-XXXX-XXXX-XXXX
+        if (!/^WP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)) {
+            return res.status(400).json({ error: 'Invalid license key format. Expected: WP-XXXX-XXXX-XXXX' });
+        }
+
+        // Determine tier from key prefix
+        let tier = 'pro';
+        if (key.startsWith('WP-T')) tier = 'translate';
+        else if (key.startsWith('WP-U')) tier = 'translate_pro';
+
+        // Ensure columns exist (migration-safe)
+        try { db.prepare('ALTER TABLE users ADD COLUMN license_key TEXT').run(); } catch (_) { /* already exists */ }
+        try { db.prepare('ALTER TABLE users ADD COLUMN license_tier TEXT DEFAULT \'free\'').run(); } catch (_) { /* already exists */ }
+
+        // Store license on user record
+        db.prepare('UPDATE users SET license_key = ?, license_tier = ? WHERE id = ?')
+            .run(key, tier, req.user.userId);
+
+        console.log(`🔑 License activated: ${tier} for user ${req.user.userId.slice(0, 8)} (key: ${key.slice(0, 7)}...)`);
+
+        res.json({
+            success: true,
+            tier,
+            key: key.slice(0, 7) + '...',
+            activatedAt: new Date().toISOString()
+        });
+    } catch (err) {
+        console.error('License activation error:', err);
+        res.status(500).json({ error: 'License activation failed: ' + err.message });
+    }
+});
+
 // ─── Admin Endpoints ───
 
 function adminOnly(req, res, next) {

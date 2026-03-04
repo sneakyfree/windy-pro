@@ -278,15 +278,19 @@ export async function translateDynamic(text, targetLang) {
     if (dynamicCache[cacheKey]) return dynamicCache[cacheKey]
 
     try {
-        const res = await fetch('/translate', {
+        const token = localStorage.getItem('windy_token') || ''
+        const res = await fetch('/api/v1/translate/text', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
             body: JSON.stringify({ text, sourceLang: 'en', targetLang })
         })
         if (res.ok) {
             const data = await res.json()
-            dynamicCache[cacheKey] = data.translated
-            return data.translated
+            dynamicCache[cacheKey] = data.translatedText
+            return data.translatedText
         }
     } catch { }
     return text // Fallback to English

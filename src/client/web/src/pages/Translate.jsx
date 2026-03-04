@@ -42,9 +42,12 @@ export default function Translate() {
 
     // Check translate API health on mount
     useEffect(() => {
-        fetch('/health')
-            .then(r => r.ok ? r.json() : null)
-            .then(data => setApiStatus(data?.worker === 'ready' ? 'ready' : data ? 'loading' : 'offline'))
+        fetch('/api/v1/translate/languages', {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('windy_token') || ''}`
+            }
+        })
+            .then(r => r.ok ? setApiStatus('ready') : setApiStatus('offline'))
             .catch(() => setApiStatus('offline'))
     }, [])
 
@@ -72,9 +75,13 @@ export default function Translate() {
         setTranslating(true)
 
         try {
-            const res = await fetch('/translate', {
+            const token = localStorage.getItem('windy_token') || ''
+            const res = await fetch('/api/v1/translate/text', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ text, sourceLang, targetLang })
             })
 
@@ -84,7 +91,7 @@ export default function Translate() {
             // Add translated message
             const transMsg = {
                 id: Date.now() + 1,
-                text: data.translated,
+                text: data.translatedText,
                 lang: targetLang,
                 flag: POPULAR_LANGS.find(l => l.code === targetLang)?.flag || '🌐',
                 side: 'right',
