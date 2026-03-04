@@ -29,6 +29,9 @@ const cors = require('cors');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const fs = require('fs');
+const http = require('http');
+const WebSocket = require('ws');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -174,6 +177,20 @@ function authenticateToken(req, res, next) {
         }
         return res.status(403).json({ error: 'Invalid token' });
     }
+}
+
+/**
+ * Optional auth middleware — sets req.user if valid token present, otherwise continues.
+ */
+function optionalAuth(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token) {
+        try {
+            req.user = jwt.verify(token, JWT_SECRET);
+        } catch (_) { /* ignore invalid tokens */ }
+    }
+    next();
 }
 
 // ─── Token Helpers ───
@@ -569,14 +586,15 @@ app.post('/api/v1/translate/speech', authenticateToken, upload.single('audio'), 
 // POST /api/v1/translate/text — Accept JSON {text, sourceLang, targetLang}
 /**
  * @route POST /api/v1/translate/text
- * @description Translate text between languages using AI backend.
+ * @description Translate text between languages using AI backend (Groq/OpenAI).
+ * Falls back to stub if no API key configured.
  * @access Authenticated
  * @param {string} req.body.text - Text to translate (max 5000 chars)
  * @param {string} req.body.source - Source language code (ISO 639-1)
  * @param {string} req.body.target - Target language code
  * @returns {{ translation: string, source: string, target: string }}
  */
-app.post('/api/v1/translate/text', authenticateToken, (req, res) => {
+app.post('/api/v1/translate/text', authenticateToken, async (req, res) => {
     try {
         const { text, sourceLang, targetLang } = req.body;
 
@@ -584,9 +602,58 @@ app.post('/api/v1/translate/text', authenticateToken, (req, res) => {
             return res.status(400).json({ error: 'text, sourceLang, and targetLang are required' });
         }
 
-        // Stub translation
-        const translatedText = `[${targetLang}] ${text}`;
-        const confidence = 0.88 + Math.random() * 0.10;
+        let translatedText;
+        let engine = 'stub';
+        const langName = (code) => (SUPPORTED_LANGUAGES.find(l => l.code === code) || { name: code }).name;
+
+        // Try real translation via Groq or OpenAI
+        const groqKey = process.env.GROQ_API_KEY;
+        const openaiKey = process.env.OPENAI_API_KEY;
+
+        if (groqKey || openaiKey) {
+            try {
+                const isGroq = !!groqKey;
+                const apiUrl = isGroq
+                    ? 'https://api.groq.com/openai/v1/chat/completions'
+                    : 'https://api.openai.com/v1/chat/completions';
+                const apiKey = groqKey || openaiKey;
+                const model = isGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
+
+                const prompt = `Translate the following text from ${langName(sourceLang)} to ${langName(targetLang)}. Return ONLY the translated text, nothing else.\n\n${text}`;
+
+                const apiRes = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model,
+                        messages: [{ role: 'user', content: prompt }],
+                        temperature: 0.3,
+                        max_tokens: 2048
+                    })
+                });
+
+                if (apiRes.ok) {
+                    const data = await apiRes.json();
+                    translatedText = data.choices?.[0]?.message?.content?.trim();
+                    engine = isGroq ? 'groq' : 'openai';
+                    console.log(`📝 AI Translation (${engine}): ${sourceLang}→${targetLang}`);
+                } else {
+                    console.warn(`⚠️  AI translation API returned ${apiRes.status}, falling back to stub`);
+                }
+            } catch (aiErr) {
+                console.warn('⚠️  AI translation failed, falling back to stub:', aiErr.message);
+            }
+        }
+
+        // Fallback to stub if no AI translation available
+        if (!translatedText) {
+            translatedText = `[${targetLang}] ${text}`;
+        }
+
+        const confidence = engine !== 'stub' ? 0.92 + Math.random() * 0.06 : 0.88 + Math.random() * 0.10;
         const translationId = uuidv4();
 
         stmts.insertTranslation.run(
@@ -596,7 +663,7 @@ app.post('/api/v1/translate/text', authenticateToken, (req, res) => {
             Math.round(confidence * 100) / 100, 'text'
         );
 
-        console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${req.user.userId.slice(0, 8)}`);
+        console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${req.user.userId.slice(0, 8)} (engine: ${engine})`);
 
         res.json({
             id: translationId,
@@ -605,7 +672,8 @@ app.post('/api/v1/translate/text', authenticateToken, (req, res) => {
             sourceLang,
             targetLang,
             confidence: Math.round(confidence * 100) / 100,
-            type: 'text'
+            type: 'text',
+            engine
         });
     } catch (err) {
         console.error('Text translation error:', err);
@@ -667,6 +735,293 @@ app.post('/api/v1/user/favorites', authenticateToken, (req, res) => {
         console.error('Favorite error:', err);
         res.status(500).json({ error: 'Failed to save favorite: ' + err.message });
     }
+});
+
+// ═══════════════════════════════════════════
+//  TRANSCRIPTION ENDPOINTS
+// ═══════════════════════════════════════════
+
+// POST /api/v1/transcribe — Single audio file transcription (stub)
+app.post('/api/v1/transcribe', optionalAuth, upload.single('audio'), (req, res) => {
+    try {
+        const language = req.body.language || 'en';
+        const engine = req.body.engine || 'cloud-standard';
+        const duration = 0; // In production, detect from audio file
+
+        const segments = [{
+            id: uuidv4(),
+            text: '[Transcription stub — connect a real STT engine]',
+            startTime: 0,
+            endTime: duration || 5.0,
+            confidence: 0.95,
+            language,
+            partial: false
+        }];
+
+        console.log(`🎤 Transcribe: language=${language} engine=${engine}`);
+
+        res.json({
+            segments,
+            fullText: segments.map(s => s.text).join(' '),
+            language,
+            duration: duration || 5.0
+        });
+    } catch (err) {
+        console.error('Transcribe error:', err);
+        res.status(500).json({ error: 'Transcription failed: ' + err.message });
+    }
+});
+
+// POST /api/v1/transcribe/batch — Batch audio transcription (stub)
+app.post('/api/v1/transcribe/batch', optionalAuth, upload.array('audio', 20), (req, res) => {
+    try {
+        const language = req.body.language || 'en';
+        const engine = req.body.engine || 'cloud-standard';
+        const files = req.files || [];
+        const count = files.length || parseInt(req.body.count) || 1;
+
+        const results = Array.from({ length: count }, (_, i) => ({
+            index: i,
+            segments: [{
+                id: uuidv4(),
+                text: `[Batch transcription stub — item ${i + 1}]`,
+                startTime: 0,
+                endTime: 5.0,
+                confidence: 0.95,
+                language,
+                partial: false
+            }],
+            fullText: `[Batch transcription stub — item ${i + 1}]`,
+            language,
+            duration: 5.0
+        }));
+
+        console.log(`🎤 Batch transcribe: ${count} items, language=${language}`);
+
+        res.json({ results });
+    } catch (err) {
+        console.error('Batch transcribe error:', err);
+        res.status(500).json({ error: 'Batch transcription failed: ' + err.message });
+    }
+});
+
+// ═══════════════════════════════════════════
+//  OCR / IMAGE TRANSLATION
+// ═══════════════════════════════════════════
+
+// POST /api/v1/ocr/translate — OCR + translate an image (stub)
+app.post('/api/v1/ocr/translate', optionalAuth, upload.single('image'), (req, res) => {
+    try {
+        const targetLanguage = req.body.targetLanguage || 'en';
+
+        console.log(`📷 OCR translate: target=${targetLanguage}`);
+
+        res.json({
+            originalText: '[OCR stub — connect a real OCR engine]',
+            translatedText: `[${targetLanguage}] [OCR stub — connect a real OCR engine]`,
+            language: targetLanguage,
+            confidence: 0.85
+        });
+    } catch (err) {
+        console.error('OCR translate error:', err);
+        res.status(500).json({ error: 'OCR translation failed: ' + err.message });
+    }
+});
+
+// ═══════════════════════════════════════════
+//  RECORDINGS — ADDITIONAL CRUD
+// ═══════════════════════════════════════════
+
+// GET /api/v1/recordings — Alias for /api/v1/recordings/list
+app.get('/api/v1/recordings', authenticateToken, (req, res) => {
+    try {
+        const since = req.query.since || '1970-01-01T00:00:00Z';
+        const recordings = db.prepare(
+            `SELECT id, bundle_id, duration_seconds, has_video, video_resolution,
+                    camera_source, transcript_text, transcript_segments, file_size,
+                    device_platform, device_id, device_name, clone_training_ready,
+                    sync_status, created_at
+             FROM recordings
+             WHERE user_id = ? AND created_at > ?
+             ORDER BY created_at DESC
+             LIMIT 100`
+        ).all(req.user.userId, since);
+
+        const mapped = recordings.map(r => ({
+            ...r,
+            transcript: r.transcript_text,
+            segments_json: r.transcript_segments,
+            duration: r.duration_seconds
+        }));
+
+        res.json({ bundles: mapped, total: mapped.length, since });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/v1/recordings/:id — Single recording metadata (no video)
+app.get('/api/v1/recordings/:id', authenticateToken, (req, res) => {
+    try {
+        const recording = db.prepare(
+            `SELECT id, bundle_id, created_at, duration_seconds, transcript_text,
+                    source, device_platform, app_version, has_video
+             FROM recordings WHERE id = ? AND user_id = ?`
+        ).get(req.params.id, req.user.userId);
+
+        if (!recording) {
+            return res.status(404).json({ error: 'Recording not found' });
+        }
+
+        res.json(recording);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/v1/recordings/:id — Delete recording by id
+app.delete('/api/v1/recordings/:id', authenticateToken, (req, res) => {
+    try {
+        const recording = db.prepare(
+            'SELECT id, file_path FROM recordings WHERE id = ? AND user_id = ?'
+        ).get(req.params.id, req.user.userId);
+
+        if (!recording) {
+            return res.status(404).json({ error: 'Recording not found' });
+        }
+
+        // Delete file if it exists
+        if (recording.file_path && fs.existsSync(recording.file_path)) {
+            try { fs.unlinkSync(recording.file_path); } catch (_) { /* best effort */ }
+        }
+
+        db.prepare('DELETE FROM recordings WHERE id = ? AND user_id = ?')
+            .run(req.params.id, req.user.userId);
+
+        console.log(`🗑️  Recording deleted: ${req.params.id.slice(0, 8)}`);
+        res.json({ deleted: true, id: req.params.id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// In-memory chunk store for chunked uploads
+const chunkStore = new Map(); // bundle_id -> { chunks: Map<index, data>, total, file_type }
+
+// POST /api/v1/recordings/upload/chunk — Upload a single chunk
+app.post('/api/v1/recordings/upload/chunk', authenticateToken, (req, res) => {
+    try {
+        const { bundle_id, chunk_index, total_chunks, data, file_type } = req.body;
+
+        if (!bundle_id || chunk_index === undefined || !total_chunks) {
+            return res.status(400).json({ error: 'bundle_id, chunk_index, and total_chunks are required' });
+        }
+
+        if (!chunkStore.has(bundle_id)) {
+            chunkStore.set(bundle_id, { chunks: new Map(), total: total_chunks, file_type: file_type || 'audio/webm' });
+        }
+
+        const entry = chunkStore.get(bundle_id);
+        entry.chunks.set(chunk_index, data || '');
+
+        console.log(`📦 Chunk ${chunk_index + 1}/${total_chunks} for bundle ${bundle_id.slice(0, 8)}`);
+
+        // Auto-cleanup completed bundles after 5 minutes
+        if (entry.chunks.size >= entry.total) {
+            setTimeout(() => chunkStore.delete(bundle_id), 5 * 60 * 1000);
+        }
+
+        res.json({ received: true, chunk_index, bundle_id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/v1/recordings/upload/batch — Batch upload recording metadata
+app.post('/api/v1/recordings/upload/batch', authenticateToken, (req, res) => {
+    try {
+        const recordings = req.body;
+        if (!Array.isArray(recordings)) {
+            return res.status(400).json({ error: 'Request body must be a JSON array of recording objects' });
+        }
+
+        let uploaded = 0;
+        const errors = [];
+
+        for (const r of recordings) {
+            try {
+                const id = uuidv4();
+                const bundleId = r.bundle_id || r.id || uuidv4();
+                const transcriptText = r.transcript_text || r.transcript || '';
+                const transcriptSegments = r.transcript_segments || r.segments_json || '[]';
+
+                db.prepare(`INSERT INTO recordings
+                    (id, user_id, bundle_id, created_at, duration_seconds,
+                     transcript_text, transcript_segments, source, device_platform,
+                     app_version, has_video, file_size, sync_status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'uploaded')`
+                ).run(
+                    id, req.user.userId, bundleId,
+                    r.created_at || new Date().toISOString(),
+                    r.duration_seconds || r.duration || 0,
+                    transcriptText, transcriptSegments,
+                    r.source || 'record',
+                    r.device_platform || 'unknown',
+                    r.app_version || '2.0.0',
+                    r.has_video ? 1 : 0,
+                    r.file_size || 0
+                );
+                uploaded++;
+            } catch (itemErr) {
+                errors.push(`${r.bundle_id || 'unknown'}: ${itemErr.message}`);
+            }
+        }
+
+        console.log(`📦 Batch upload: ${uploaded} recordings, ${errors.length} errors`);
+        res.json({ uploaded, errors });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ═══════════════════════════════════════════
+//  AUTH — LOGOUT
+// ═══════════════════════════════════════════
+
+// POST /api/v1/auth/logout — Invalidate all refresh tokens for user
+app.post('/api/v1/auth/logout', authenticateToken, (req, res) => {
+    try {
+        db.prepare('DELETE FROM refresh_tokens WHERE user_id = ?').run(req.user.userId);
+        console.log(`🔒 Logout: user ${req.user.userId.slice(0, 8)}`);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ═══════════════════════════════════════════
+//  ANALYTICS (no auth)
+// ═══════════════════════════════════════════
+
+// POST /api/v1/analytics — Log analytics event
+app.post('/api/v1/analytics', (req, res) => {
+    const { event, properties } = req.body || {};
+    console.log(`📊 Analytics: ${event || 'unknown'}`, properties ? JSON.stringify(properties).slice(0, 200) : '');
+    res.json({ received: true });
+});
+
+// ═══════════════════════════════════════════
+//  UPDATE CHECK (no auth)
+// ═══════════════════════════════════════════
+
+// GET /api/v1/updates/check — Check for app updates
+app.get('/api/v1/updates/check', (req, res) => {
+    res.json({
+        version: '0.6.0',
+        url: 'https://windypro.thewindstorm.uk/download/latest/linux',
+        releaseNotes: 'Bug fixes and performance improvements',
+        required: false
+    });
 });
 
 // ─── Billing Endpoints ───
@@ -958,7 +1313,7 @@ app.post('/api/v1/recordings/upload', authenticateToken, videoUpload.single('med
             clone_training_ready === 'true' || clone_training_ready === true ? 1 : 0
         );
 
-        res.status(201).json({ id, bundle_id: bundle_id || id, file_size: fileSize });
+        res.status(201).json({ id, bundle_id: bundleId, file_size: fileSize });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1388,7 +1743,97 @@ app.use((err, req, res, next) => {
 
 // ─── Start ───
 
-app.listen(PORT, () => {
+const server = http.createServer(app);
+
+// ═══════════════════════════════════════════
+//  WebSocket /ws/transcribe — Real-time transcription
+// ═══════════════════════════════════════════
+
+const wss = new WebSocket.Server({ server, path: '/ws/transcribe' });
+
+wss.on('connection', (ws) => {
+    let authenticated = false;
+    let config = { language: 'en', engine: 'cloud-standard' };
+    let chunkCount = 0;
+
+    console.log('🎙️  WS transcribe: client connected');
+
+    ws.send(JSON.stringify({ type: 'ack' }));
+
+    ws.on('message', (data) => {
+        // Binary audio chunk
+        if (Buffer.isBuffer(data) || data instanceof ArrayBuffer) {
+            chunkCount++;
+            // In production, feed to a real STT engine
+            // For now, send periodic stub transcripts
+            if (chunkCount % 10 === 0) {
+                ws.send(JSON.stringify({
+                    type: 'transcript',
+                    text: `[Transcription chunk ${chunkCount}]`,
+                    partial: true,
+                    confidence: 0.92,
+                    startTime: (chunkCount - 10) * 0.1,
+                    endTime: chunkCount * 0.1,
+                    language: config.language
+                }));
+            }
+            return;
+        }
+
+        // Text message (JSON)
+        try {
+            const msg = JSON.parse(data.toString());
+
+            switch (msg.type) {
+                case 'auth':
+                    // Verify JWT token if provided
+                    if (msg.token) {
+                        try {
+                            jwt.verify(msg.token, JWT_SECRET);
+                            authenticated = true;
+                        } catch (_) {
+                            authenticated = false;
+                        }
+                    }
+                    ws.send(JSON.stringify({ type: 'ack', authenticated }));
+                    break;
+
+                case 'config':
+                    config.language = msg.language || config.language;
+                    config.engine = msg.engine || config.engine;
+                    ws.send(JSON.stringify({ type: 'state', state: 'listening' }));
+                    console.log(`🎙️  WS config: language=${config.language}, engine=${config.engine}`);
+                    break;
+
+                case 'stop':
+                    // Send final transcript
+                    ws.send(JSON.stringify({
+                        type: 'transcript',
+                        text: `[Final transcription — ${chunkCount} audio chunks processed]`,
+                        partial: false,
+                        confidence: 0.95,
+                        startTime: 0,
+                        endTime: chunkCount * 0.1,
+                        language: config.language
+                    }));
+                    console.log(`🎙️  WS transcribe: stopped after ${chunkCount} chunks`);
+                    ws.close();
+                    break;
+
+                default:
+                    ws.send(JSON.stringify({ type: 'error', message: `Unknown message type: ${msg.type}` }));
+            }
+        } catch (parseErr) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON' }));
+        }
+    });
+
+    ws.on('close', () => {
+        console.log(`🎙️  WS transcribe: client disconnected (${chunkCount} chunks)`);
+    });
+});
+
+server.listen(PORT, () => {
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
 
     console.log('');
@@ -1401,16 +1846,28 @@ app.listen(PORT, () => {
     console.log('   Endpoints:');
     console.log(`   POST /v1/auth/register              — Create account`);
     console.log(`   POST /v1/auth/login                 — Login`);
+    console.log(`   POST /v1/auth/logout                — Logout`);
     console.log(`   GET  /v1/auth/me                    — Current user info`);
     console.log(`   GET  /v1/auth/devices               — List devices`);
     console.log(`   POST /v1/auth/devices/register      — Register device (${MAX_DEVICES} max)`);
     console.log(`   POST /v1/auth/devices/remove        — Remove device`);
     console.log(`   POST /v1/auth/refresh               — Refresh token`);
     console.log(`   POST /api/v1/translate/speech        — Speech translation`);
-    console.log(`   POST /api/v1/translate/text          — Text translation`);
+    console.log(`   POST /api/v1/translate/text          — Text translation (AI)`);
     console.log(`   GET  /api/v1/translate/languages     — Supported languages`);
+    console.log(`   POST /api/v1/transcribe              — Audio transcription`);
+    console.log(`   POST /api/v1/transcribe/batch        — Batch transcription`);
+    console.log(`   WS   /ws/transcribe                  — Real-time transcription`);
+    console.log(`   POST /api/v1/ocr/translate           — OCR + translate`);
+    console.log(`   GET  /api/v1/recordings              — List recordings`);
+    console.log(`   GET  /api/v1/recordings/:id          — Get recording`);
+    console.log(`   DEL  /api/v1/recordings/:id          — Delete recording`);
+    console.log(`   POST /api/v1/recordings/upload/chunk — Chunked upload`);
+    console.log(`   POST /api/v1/recordings/upload/batch — Batch upload`);
     console.log(`   GET  /api/v1/user/history            — Translation history`);
     console.log(`   POST /api/v1/user/favorites          — Toggle favorite`);
+    console.log(`   POST /api/v1/analytics               — Log event (no auth)`);
+    console.log(`   GET  /api/v1/updates/check           — Check for updates`);
     console.log(`   GET  /health                        — Health check`);
     console.log('');
 });
