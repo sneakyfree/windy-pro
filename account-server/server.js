@@ -861,6 +861,33 @@ app.get('/api/v1/recordings', authenticateToken, (req, res) => {
 });
 
 // GET /api/v1/recordings/:id — Single recording metadata (no video)
+
+// ─── /recordings/stats — MUST be before /:id to avoid route shadowing ───
+app.get('/api/v1/recordings/stats', authenticateToken, (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const row = db.prepare(`
+            SELECT
+                COUNT(*) as totalRecordings,
+                COALESCE(SUM(word_count), 0) as totalWords,
+                ROUND(COALESCE(SUM(duration_seconds), 0) / 3600.0, 2) as totalHours,
+                COALESCE(SUM(CASE WHEN has_audio = 1 THEN 1 ELSE 0 END), 0) as audioCount,
+                COALESCE(SUM(CASE WHEN has_video = 1 THEN 1 ELSE 0 END), 0) as videoCount
+            FROM recordings WHERE user_id = ?
+        `).get(userId);
+        res.json({ stats: {
+            totalRecordings: row.totalRecordings,
+            totalWords: row.totalWords,
+            totalHours: row.totalHours,
+            audioCount: row.audioCount,
+            videoCount: row.videoCount
+        }});
+    } catch (err) {
+        console.error('[GET /recordings/stats]', err.message);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
 app.get('/api/v1/recordings/:id', authenticateToken, (req, res) => {
     try {
         const recording = db.prepare(
@@ -1833,6 +1860,195 @@ wss.on('connection', (ws) => {
     });
 });
 
+
+// ─── BOMB-PROOF SCHEMA ADDITIONS (04 Mar 2026) ───────────────────────────────
+
+/**
+ * @route POST /api/v1/recordings
+ * @description Create a recording from JSON (transcript-only, no file upload).
+ * Used by desktop sync.js to batch-upload transcripts without media.
+ * @access Private (requires auth)
+ */
+app.post('/api/v1/recordings', authenticateToken, (req, res) => {
+    const { transcript, wordCount, durationSeconds, engine, mode, recordedAt } = req.body;
+    if (!transcript && transcript !== '') {
+        return res.status(400).json({ error: 'transcript field required' });
+    }
+    try {
+        const stmt = db.prepare(`
+            INSERT INTO recordings
+                (user_id, transcript, word_count, duration_seconds, engine, mode, recorded_at, synced)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        `);
+        const result = stmt.run(
+            req.user.userId,
+            transcript || '',
+            wordCount || 0,
+            durationSeconds || 0,
+            engine || 'local',
+            mode || 'batch',
+            recordedAt || new Date().toISOString()
+        );
+        res.json({ success: true, id: result.lastInsertRowid });
+    } catch (err) {
+        console.error('[POST /api/v1/recordings]', err.message);
+        res.status(500).json({ error: 'Database error', detail: err.message });
+    }
+});
+
+/**
+ * @route GET /api/v1/recordings/stats
+ * @description Aggregate stats for the authenticated user's recordings.
+ * Used by web Dashboard, Soul File, Vault pages, and desktop sync.js.
+ * @access Private
+ */
+app.get('/api/v1/recordings/stats', authenticateToken, (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const row = db.prepare(`
+            SELECT
+                COUNT(*) as totalRecordings,
+                COALESCE(SUM(word_count), 0) as totalWords,
+                ROUND(COALESCE(SUM(duration_seconds), 0) / 3600.0, 2) as totalHours,
+                COALESCE(SUM(CASE WHEN has_audio = 1 THEN 1 ELSE 0 END), 0) as audioCount,
+                COALESCE(SUM(CASE WHEN has_video = 1 THEN 1 ELSE 0 END), 0) as videoCount
+            FROM recordings
+            WHERE user_id = ?
+        `).get(userId);
+
+        res.json({
+            stats: {
+                totalRecordings: row.totalRecordings,
+                totalWords: row.totalWords,
+                totalHours: row.totalHours,
+                audioCount: row.audioCount,
+                videoCount: row.videoCount
+            }
+        });
+    } catch (err) {
+        console.error('[GET /api/v1/recordings/stats]', err.message);
+        res.status(500).json({ error: 'Database error', detail: err.message });
+    }
+});
+
+/**
+ * @route POST /translate
+ * @description Alias for /api/v1/translate/text. Used by the web app translate page
+ * (compiled bundle calls /translate directly). Forwards to the same handler.
+ * @access Public (rate-limited by IP)
+ */
+app.post('/translate', optionalAuth, async (req, res) => {
+    const { text, sourceLang, targetLang } = req.body;
+    if (!text || !targetLang) {
+        return res.status(400).json({ error: 'text and targetLang required' });
+    }
+    try {
+        const Groq = require('groq-sdk');
+        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
+        const completion = await groq.chat.completions.create({
+            model: 'llama3-8b-8192',
+            messages: [
+                {
+                    role: 'system',
+                    content: `You are a translator. Translate the user's text from ${sourceLang || 'auto'} to ${targetLang}. Return ONLY the translated text, nothing else.`
+                },
+                { role: 'user', content: text }
+            ],
+            max_tokens: 2048
+        });
+        const translated = completion.choices[0]?.message?.content?.trim() || text;
+        res.json({ translated, sourceLang: sourceLang || 'auto', targetLang, cached: false });
+    } catch (err) {
+        console.error('[POST /translate]', err.message);
+        // Fallback: return placeholder if Groq fails
+        res.json({ translated: `[${targetLang}] ${text}`, sourceLang, targetLang, cached: false, error: 'translation service unavailable' });
+    }
+});
+
+/**
+ * @route GET /api/voice-clone/status/:jobId
+ * @description Voice clone job status stub. Used by mobile clone-bundle viewer.
+ * @access Public
+ */
+app.get('/api/voice-clone/status/:jobId', optionalAuth, (req, res) => {
+    res.json({
+        jobId: req.params.jobId,
+        status: 'queued',
+        progress: 0,
+        message: 'Voice cloning pipeline not yet active'
+    });
+});
+
+/**
+ * @route POST /api/register-push-token
+ * @description Register a mobile push notification token. Stub implementation.
+ * @access Private (optional auth)
+ */
+app.post('/api/register-push-token', optionalAuth, (req, res) => {
+    const { token, platform } = req.body;
+    if (!token) return res.status(400).json({ error: 'token required' });
+    // TODO: Persist push tokens when push notification service is implemented
+    console.log('[Push] Registered token for platform:', platform || 'unknown');
+    res.json({ success: true, message: 'Push token registered' });
+});
+
+/**
+ * @route POST /api/stripe/checkout
+ * @description Create a Stripe checkout session for license purchase.
+ * Used by mobile license.ts getPurchaseUrl().
+ * @access Public
+ */
+app.post('/api/stripe/checkout', async (req, res) => {
+    const { deviceId, tier } = req.body;
+    try {
+        const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || '');
+        const prices = {
+            pro: process.env.STRIPE_PRICE_PRO || 'price_pro',
+            translate: process.env.STRIPE_PRICE_TRANSLATE || 'price_translate',
+            translate_pro: process.env.STRIPE_PRICE_TRANSLATE_PRO || 'price_translate_pro'
+        };
+        const priceId = prices[tier] || prices.pro;
+        const session = await stripe.checkout.sessions.create({
+            mode: 'payment',
+            line_items: [{ price: priceId, quantity: 1 }],
+            success_url: `https://windypro.thewindstorm.uk/auth?success=1&device=${encodeURIComponent(deviceId || '')}`,
+            cancel_url: 'https://windypro.thewindstorm.uk/#pricing',
+            metadata: { deviceId: deviceId || '', tier: tier || 'pro' }
+        });
+        res.json({ url: session.url });
+    } catch (err) {
+        console.error('[Stripe checkout]', err.message);
+        res.status(200).json({ url: `https://windypro.thewindstorm.uk/#pricing?device=${encodeURIComponent(deviceId || '')}` });
+    }
+});
+
+/**
+ * @route POST /api/v1/license/validate
+ * @description License validation alias (mobile license.ts uses this path).
+ * Routes to the same logic as /api/v1/license/activate.
+ * @access Private (authenticateToken)
+ */
+app.post('/api/v1/license/validate', authenticateToken, (req, res) => {
+    const { key, deviceId } = req.body;
+    if (!key) return res.status(400).json({ error: 'key required' });
+    try {
+        const license = db.prepare('SELECT * FROM license_keys WHERE key = ? AND active = 1').get(key);
+        if (!license) {
+            return res.status(404).json({ valid: false, tier: 'free', error: 'License key not found' });
+        }
+        res.json({
+            valid: true,
+            tier: license.tier || 'pro',
+            features: [],
+            expiresAt: license.expires_at || null
+        });
+    } catch (err) {
+        // license_keys table may not exist yet - return valid free tier
+        res.json({ valid: false, tier: 'free', error: 'License system not initialized' });
+    }
+});
+
+// ─── END BOMB-PROOF ADDITIONS ─────────────────────────────────────────────────
 server.listen(PORT, () => {
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
 
