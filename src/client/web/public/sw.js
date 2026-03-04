@@ -1,5 +1,5 @@
-// Windy Pro — Service Worker for PWA offline shell v3
-const CACHE_NAME = 'windy-pro-v3';
+// Windy Pro — Service Worker for PWA offline shell v4
+const CACHE_NAME = 'windy-pro-v4';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -44,14 +44,17 @@ self.addEventListener('install', (event) => {
     self.skipWaiting();
 });
 
-// Activate: clean old caches + take control immediately
+// Activate: clean old caches + take control + notify clients to reload
 self.addEventListener('activate', (event) => {
     event.waitUntil(
-        caches.keys().then((keys) =>
-            Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== API_CACHE_NAME).map((k) => caches.delete(k)))
-        )
+        caches.keys()
+            .then((keys) =>
+                Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== API_CACHE_NAME).map((k) => caches.delete(k)))
+            )
+            .then(() => self.clients.claim())
+            .then(() => self.clients.matchAll({ includeUncontrolled: true, type: 'window' }))
+            .then((clients) => clients.forEach((client) => client.postMessage({ type: 'SW_UPDATED', version: CACHE_NAME })))
     );
-    self.clients.claim();
 });
 
 // Fetch: network-first for API, stale-while-revalidate for static
