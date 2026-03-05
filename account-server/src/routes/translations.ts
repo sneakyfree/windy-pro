@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { config } from '../config';
 import { getStatements } from '../db/statements';
-import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { authenticateToken, optionalAuth, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validation';
 import {
     TranslateTextRequestSchema,
@@ -37,7 +37,7 @@ const SUPPORTED_LANGUAGES: Language[] = [
 
 // ─── POST /api/v1/translate/speech ───────────────────────────
 
-router.post('/speech', authenticateToken, upload.single('audio'), validate(SpeechTranslateBodySchema), (req: Request, res: Response) => {
+router.post('/speech', optionalAuth, upload.single('audio'), validate(SpeechTranslateBodySchema), (req: Request, res: Response) => {
     try {
         // Normalize: mobile sends source/target, desktop sends sourceLang/targetLang
         const sourceLang = req.body.sourceLang || req.body.source;
@@ -54,13 +54,13 @@ router.post('/speech', authenticateToken, upload.single('audio'), validate(Speec
         const translationId = uuidv4();
 
         stmts.insertTranslation.run(
-            translationId, (req as AuthRequest).user.userId,
+            translationId, (req as AuthRequest).user?.userId || 'guest',
             sourceLang, targetLang,
             detectedText, translatedText,
             confidence, 'speech'
         );
 
-        console.log(`🗣️  Speech translation: ${sourceLang}→${targetLang} for user ${(req as AuthRequest).user.userId.slice(0, 8)}`);
+        console.log(`🗣️  Speech translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'guest').slice(0, 8)}`);
 
         res.set('X-Stub', 'true');
         res.json({
@@ -81,7 +81,7 @@ router.post('/speech', authenticateToken, upload.single('audio'), validate(Speec
 
 // ─── POST /api/v1/translate/text ─────────────────────────────
 
-router.post('/text', authenticateToken, validate(TranslateTextRequestSchema), async (req: Request, res: Response) => {
+router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (req: Request, res: Response) => {
     try {
         const text = req.body.text;
         // Normalize: mobile sends source/target, desktop sends sourceLang/targetLang
@@ -143,13 +143,13 @@ router.post('/text', authenticateToken, validate(TranslateTextRequestSchema), as
         const translationId = uuidv4();
 
         stmts.insertTranslation.run(
-            translationId, (req as AuthRequest).user.userId,
+            translationId, (req as AuthRequest).user?.userId || 'guest',
             sourceLang, targetLang,
             text, translatedText,
             confidence, 'text'
         );
 
-        console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${(req as AuthRequest).user.userId.slice(0, 8)} (engine: ${engine})`);
+        console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'guest').slice(0, 8)} (engine: ${engine})`);
 
         if (engine === 'stub') res.set('X-Stub', 'true');
         res.json({
@@ -170,7 +170,7 @@ router.post('/text', authenticateToken, validate(TranslateTextRequestSchema), as
 
 // ─── GET /api/v1/translate/languages ─────────────────────────
 
-router.get('/languages', authenticateToken, (_req: Request, res: Response) => {
+router.get('/languages', (_req: Request, res: Response) => {
     res.json({ languages: SUPPORTED_LANGUAGES });
 });
 
