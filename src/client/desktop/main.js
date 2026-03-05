@@ -345,7 +345,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      autoplayPolicy: 'no-user-gesture-required'
     },
 
     // Visual
@@ -1306,12 +1307,13 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
     const { clipboard } = require('electron');
     clipboard.writeText(text.trim());
 
-    // Hide the main window first so paste goes to the previously active app
-    const wasVisible = mainWindow && mainWindow.isVisible();
+    // Briefly hide the window so the previously-active app regains focus
+    const wasAlwaysOnTop = mainWindow && mainWindow.isAlwaysOnTop();
     if (mainWindow && mainWindow.isVisible()) {
+      if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(false);
       mainWindow.hide();
     }
-    // Wait for window to fully hide and the previous app to regain focus
+    // Wait for the previous app to regain focus
     await new Promise(r => setTimeout(r, 400));
 
     // Simulate Ctrl+V at current cursor position in the now-active app
@@ -1323,8 +1325,20 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
       // Windows — use PowerShell
       require('child_process').execSync('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"', { timeout: 5000 });
     }
+
+    // Re-show the window after pasting (don't leave it hidden)
+    await new Promise(r => setTimeout(r, 300));
+    if (mainWindow) {
+      mainWindow.show();
+      if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true);
+    }
+    console.log(`[AutoPaste] Pasted ${text.trim().length} chars to cursor, window re-shown`);
     return true;
   } catch (err) {
+    // On failure, still re-show the window
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
     console.error('[AutoPaste] Failed:', err.message);
     return false;
   }

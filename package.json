@@ -116,8 +116,7 @@
         "Type": "Application",
         "Categories": "Utility;Audio;Accessibility;",
         "StartupWMClass": "windy-pro",
-        "MimeType": "",
-        "Exec": "\"windy-pro\" %U"
+        "MimeType": ""
       }
     },
     "nsis": {

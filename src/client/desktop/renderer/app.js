@@ -153,6 +153,15 @@ class WindyApp {
       if (settings?.cloudEmail) this.cloudEmail = settings.cloudEmail;
       if (settings?.cloudPassword) this.cloudPassword = settings.cloudPassword;
       console.log(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
+
+      // Show current engine/model in status bar badge on startup
+      const savedModel = settings?.model || localStorage.getItem('windy_model') || 'small';
+      const engineName = this.transcriptionEngine || 'local';
+      if (['groq', 'openai', 'deepgram', 'cloud', 'stream'].includes(engineName)) {
+        this.updateModelBadge(engineName, false);
+      } else {
+        this.updateModelBadge(savedModel, false);
+      }
     }
 
     // Font size: apply saved preference
@@ -1575,7 +1584,14 @@ class WindyApp {
         this.updateModelBadge('🧬 clone capture', false);
       } else {
         this.transcriptContent.innerHTML = '<p class="batch-recording-hint" style="color:#888;text-align:center;padding:20px;">🎙️ Recording... text will appear when you stop</p>';
-        this.updateModelBadge('batch', false);
+        // Show actual engine/model in badge during batch recording
+        const batchEngine = localStorage.getItem('windy_engine') || this.transcriptionEngine || 'local';
+        const batchModel = localStorage.getItem('windy_model') || 'small';
+        if (['groq', 'openai', 'deepgram', 'cloud', 'stream'].includes(batchEngine)) {
+          this.updateModelBadge(batchEngine, false);
+        } else {
+          this.updateModelBadge(batchModel, false);
+        }
       }
       this.startSessionTimer();
       console.log('[Batch] Recording started');
