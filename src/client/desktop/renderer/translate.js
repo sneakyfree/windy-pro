@@ -361,11 +361,21 @@ class TranslatePanel {
 
         try {
             const token = localStorage.getItem('windy_cloudToken') || '';
-            const resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/speech', {
+            let resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/speech', {
                 method: 'POST',
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {},
                 body: formData
             });
+
+            // Retry without token on auth failure
+            if (resp.status === 401 || resp.status === 403) {
+                console.warn('[Translate] Auth failed, retrying without token');
+                localStorage.removeItem('windy_cloudToken');
+                resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/speech', {
+                    method: 'POST',
+                    body: formData
+                });
+            }
 
             if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
             const data = await resp.json();
@@ -410,14 +420,26 @@ class TranslatePanel {
 
         try {
             const token = localStorage.getItem('windy_cloudToken') || '';
-            const resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/text', {
+            const body = JSON.stringify({ text, sourceLang: this._sourceLang.value, targetLang: this._targetLang.value });
+            let resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/text', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 },
-                body: JSON.stringify({ text, sourceLang: this._sourceLang.value, targetLang: this._targetLang.value })
+                body
             });
+
+            // Retry without token on auth failure
+            if (resp.status === 401 || resp.status === 403) {
+                console.warn('[Translate] Auth failed, retrying without token');
+                localStorage.removeItem('windy_cloudToken');
+                resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/text', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body
+                });
+            }
 
             if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
             const data = await resp.json();
