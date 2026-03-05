@@ -1,40 +1,168 @@
 /**
- * Transcription routes — single file and batch (stubs).
+ * Transcription routes — real speech-to-text via Groq Whisper / OpenAI Whisper.
+ * Falls back to stub if no API keys are configured.
  */
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { optionalAuth } from '../middleware/auth';
+import { config } from '../config';
+import FormData from 'form-data';
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+// ─── Whisper API helper ──────────────────────────────────────────
+
+interface WhisperSegment {
+    id: number;
+    seek: number;
+    start: number;
+    end: number;
+    text: string;
+    tokens: number[];
+    temperature: number;
+    avg_logprob: number;
+    compression_ratio: number;
+    no_speech_prob: number;
+}
+
+interface WhisperResponse {
+    text: string;
+    segments?: WhisperSegment[];
+    language?: string;
+    duration?: number;
+}
+
+async function callWhisperAPI(
+    audioBuffer: Buffer,
+    originalName: string,
+    language: string,
+): Promise<WhisperResponse> {
+    const groqKey = config.GROQ_API_KEY;
+    const openaiKey = config.OPENAI_API_KEY;
+
+    if (!groqKey && !openaiKey) {
+        throw new Error('NO_API_KEY');
+    }
+
+    const isGroq = !!groqKey;
+    const apiUrl = isGroq
+        ? 'https://api.groq.com/openai/v1/audio/transcriptions'
+        : 'https://api.openai.com/v1/audio/transcriptions';
+    const apiKey = groqKey || openaiKey;
+    const model = isGroq ? 'whisper-large-v3' : 'whisper-1';
+
+    // Build multipart form data
+    const form = new FormData();
+    form.append('file', audioBuffer, {
+        filename: originalName || 'audio.wav',
+        contentType: 'audio/wav',
+    });
+    form.append('model', model);
+    form.append('response_format', 'verbose_json');
+    if (language && language !== 'auto') {
+        form.append('language', language);
+    }
+
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            ...form.getHeaders(),
+        },
+        body: form.getBuffer(),
+    });
+
+    if (!response.ok) {
+        const errBody = await response.text();
+        console.error(`[Transcription] Whisper API ${response.status}:`, errBody);
+        throw new Error(`Whisper API error: ${response.status} — ${errBody.slice(0, 200)}`);
+    }
+
+    const result = (await response.json()) as WhisperResponse;
+    console.log(`[Transcription] ✅ ${isGroq ? 'Groq' : 'OpenAI'} Whisper: "${result.text?.slice(0, 80)}..." (${result.segments?.length || 0} segments)`);
+    return result;
+}
 
 // ─── POST /api/v1/transcribe ─────────────────────────────────
 
-router.post('/', optionalAuth, upload.single('audio'), (req: Request, res: Response) => {
+router.post('/', optionalAuth, upload.single('audio'), async (req: Request, res: Response) => {
     try {
         const language = req.body.language || 'en';
         const engine = req.body.engine || 'cloud-standard';
-        const duration = 0;
+        const file = req.file;
 
+        if (!file || file.size === 0) {
+            res.status(400).json({ error: 'No audio file provided. Send as multipart field "audio".' });
+            return;
+        }
+
+        console.log(`🎤 Transcribe: ${file.originalname} (${(file.size / 1024).toFixed(1)} KB) language=${language} engine=${engine}`);
+
+        // Try real Whisper API
+        try {
+            const result = await callWhisperAPI(file.buffer, file.originalname, language);
+
+            // Map Whisper segments to our format
+            const segments = (result.segments || []).map((seg, i) => ({
+                id: uuidv4(),
+                text: seg.text.trim(),
+                startTime: seg.start,
+                endTime: seg.end,
+                confidence: Math.max(0, Math.min(1, 1 + (seg.avg_logprob || -0.3))),
+                language: result.language || language,
+                partial: false,
+            }));
+
+            // If no segments returned, create one from fullText
+            if (segments.length === 0 && result.text) {
+                segments.push({
+                    id: uuidv4(),
+                    text: result.text.trim(),
+                    startTime: 0,
+                    endTime: result.duration || 5.0,
+                    confidence: 0.9,
+                    language: result.language || language,
+                    partial: false,
+                });
+            }
+
+            res.json({
+                segments,
+                fullText: result.text?.trim() || segments.map(s => s.text).join(' '),
+                language: result.language || language,
+                duration: result.duration || (segments.length > 0 ? segments[segments.length - 1].endTime : 0),
+                engine: config.GROQ_API_KEY ? 'groq-whisper' : 'openai-whisper',
+            });
+            return;
+        } catch (whisperErr: any) {
+            if (whisperErr.message === 'NO_API_KEY') {
+                console.warn('[Transcription] No API key configured — falling back to stub');
+            } else {
+                console.error('[Transcription] Whisper API failed:', whisperErr.message);
+                // Still fall through to stub so the user gets something
+            }
+        }
+
+        // Fallback: stub response (when no API key)
         const segments = [{
             id: uuidv4(),
-            text: '[Transcription stub — connect a real STT engine]',
+            text: '[No transcription API key configured — set GROQ_API_KEY or OPENAI_API_KEY on server]',
             startTime: 0,
-            endTime: duration || 5.0,
-            confidence: 0.95,
+            endTime: 5.0,
+            confidence: 0,
             language,
             partial: false,
         }];
-
-        console.log(`🎤 Transcribe: language=${language} engine=${engine}`);
 
         res.set('X-Stub', 'true');
         res.json({
             segments,
             fullText: segments.map(s => s.text).join(' '),
             language,
-            duration: duration || 5.0,
+            duration: 5.0,
+            engine: 'stub',
         });
     } catch (err: any) {
         console.error('Transcribe error:', err);
@@ -44,32 +172,63 @@ router.post('/', optionalAuth, upload.single('audio'), (req: Request, res: Respo
 
 // ─── POST /api/v1/transcribe/batch ───────────────────────────
 
-router.post('/batch', optionalAuth, upload.array('audio', 20), (req: Request, res: Response) => {
+router.post('/batch', optionalAuth, upload.array('audio', 20), async (req: Request, res: Response) => {
     try {
         const language = req.body.language || 'en';
         const engine = req.body.engine || 'cloud-standard';
-        const files = req.files || [];
-        const count = (files as Express.Multer.File[]).length || parseInt(req.body.count) || 1;
+        const files = (req.files || []) as Express.Multer.File[];
 
-        const results = Array.from({ length: count }, (_, i) => ({
-            index: i,
-            segments: [{
-                id: uuidv4(),
-                text: `[Batch transcription stub — item ${i + 1}]`,
-                startTime: 0,
-                endTime: 5.0,
-                confidence: 0.95,
-                language,
-                partial: false,
-            }],
-            fullText: `[Batch transcription stub — item ${i + 1}]`,
-            language,
-            duration: 5.0,
+        if (files.length === 0) {
+            res.status(400).json({ error: 'No audio files provided.' });
+            return;
+        }
+
+        console.log(`🎤 Batch transcribe: ${files.length} files, language=${language}`);
+
+        const results = await Promise.all(files.map(async (file, i) => {
+            try {
+                const result = await callWhisperAPI(file.buffer, file.originalname, language);
+                const segments = (result.segments || []).map(seg => ({
+                    id: uuidv4(),
+                    text: seg.text.trim(),
+                    startTime: seg.start,
+                    endTime: seg.end,
+                    confidence: Math.max(0, Math.min(1, 1 + (seg.avg_logprob || -0.3))),
+                    language: result.language || language,
+                    partial: false,
+                }));
+
+                if (segments.length === 0 && result.text) {
+                    segments.push({
+                        id: uuidv4(),
+                        text: result.text.trim(),
+                        startTime: 0,
+                        endTime: result.duration || 5.0,
+                        confidence: 0.9,
+                        language: result.language || language,
+                        partial: false,
+                    });
+                }
+
+                return {
+                    index: i,
+                    segments,
+                    fullText: result.text?.trim() || '',
+                    language: result.language || language,
+                    duration: result.duration || 0,
+                };
+            } catch (err: any) {
+                return {
+                    index: i,
+                    segments: [],
+                    fullText: `[Transcription failed: ${err.message}]`,
+                    language,
+                    duration: 0,
+                    error: err.message,
+                };
+            }
         }));
 
-        console.log(`🎤 Batch transcribe: ${count} items, language=${language}`);
-
-        res.set('X-Stub', 'true');
         res.json({ results });
     } catch (err: any) {
         console.error('Batch transcribe error:', err);
