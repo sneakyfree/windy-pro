@@ -108,7 +108,7 @@ class UpgradePanel {
             const isUpgrade = !isCurrent && plan.key !== 'free';
             const isDowngrade = plan.key === 'free' && this._currentTier !== 'free';
             const recommendedBadge = plan.recommended ? '<span class="upgrade-recommended">RECOMMENDED</span>' : '';
-            const currentBadge = isCurrent ? '<span class="upgrade-current-badge">CURRENT PLAN</span>' : '';
+            const currentBadge = isCurrent ? '<span class="upgrade-current-badge">✓ YOUR CURRENT PLAN</span>' : '';
 
             let priceDisplay = plan.price;
             if (plan.altPrice) {
@@ -142,13 +142,15 @@ class UpgradePanel {
         </div>`;
         }).join('');
 
+        const currentPlanObj = this.plans.find(p => p.key === this._currentTier);
+        const currentPlanName = currentPlanObj ? currentPlanObj.name : 'Free';
         return `
       <div class="upgrade-header">
         <div class="upgrade-title-row">
           <h3>⚡ Upgrade Your Plan</h3>
           <button class="upgrade-close" id="upgradeClose">✕</button>
         </div>
-        <p class="upgrade-subtitle">Unlock the full power of Windy Pro</p>
+        <p class="upgrade-subtitle">You're on: <strong style="color:#22C55E;">${currentPlanName}</strong> · Unlock the full power of Windy Pro</p>
       </div>
       <div class="upgrade-body">
         <div class="upgrade-cards">${cards}</div>
@@ -258,7 +260,12 @@ class UpgradePanel {
                 this._startPolling();
             }
         } catch (err) {
-            status.innerHTML = `❌ ${err.message}`;
+            const msg = err.message || 'Unknown error';
+            if (msg.includes('Payment system not configured') || msg.includes('Not available')) {
+                status.innerHTML = `❌ <strong>Stripe API key not set.</strong><br><span style="font-size:11px;color:#9CA3AF;">Set STRIPE_SECRET_KEY environment variable or configure in Settings → Advanced → Stripe Secret Key</span>`;
+            } else {
+                status.innerHTML = `❌ ${msg}`;
+            }
             status.className = 'upgrade-status upgrade-status-error';
         }
     }
