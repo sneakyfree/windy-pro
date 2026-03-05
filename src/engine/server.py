@@ -286,6 +286,14 @@ class WindyServer:
                 self.transcriber.config.language = config_data["language"]
                 applied["language"] = config_data["language"]
 
+            # Task change: transcribe vs translate (hot-swappable)
+            if "task" in config_data and self.transcriber:
+                new_task = config_data["task"]
+                if new_task in ("transcribe", "translate"):
+                    self.transcriber.config.task = new_task
+                    applied["task"] = new_task
+                    print(f"Task switched to: {new_task}")
+
             # Vibe toggle (hot-swappable)
             if "vibe_enabled" in config_data:
                 self.vibe.enabled = config_data["vibe_enabled"]

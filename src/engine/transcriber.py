@@ -65,6 +65,7 @@ class TranscriberConfig:
     device: str = "auto"      # auto, cpu, cuda
     compute_type: str = "auto"  # auto, int8, float16, float32
     language: str = "en"
+    task: str = "transcribe"  # 'transcribe' or 'translate' (translate = any language → English)
     vad_enabled: bool = True
     vad_threshold: float = 0.5
     temp_file_path: Optional[str] = None  # For crash recovery
@@ -391,10 +392,13 @@ class StreamingTranscriber:
             if audio_np.size > 0 and np.max(np.abs(audio_np)) < 0.001:
                 return
             
-            # Transcribe — condition_on_previous_text=False prevents hallucination buildup
+            # Transcribe or translate — condition_on_previous_text=False prevents hallucination buildup
+            # When task='translate', Whisper translates any spoken language → English text
+            lang = self.config.language if self.config.language not in ('auto', '') else None
             segments, info = self.model.transcribe(
                 audio_np,
-                language=self.config.language,
+                language=lang,
+                task=self.config.task,
                 beam_size=self.config.beam_size,
                 word_timestamps=False,
                 vad_filter=self.config.vad_enabled,
