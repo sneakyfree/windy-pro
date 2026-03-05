@@ -1326,18 +1326,18 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
       require('child_process').execSync('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"', { timeout: 5000 });
     }
 
-    // Re-show the window after pasting (don't leave it hidden)
+    // Re-show the window WITHOUT stealing focus so the user can hit Enter in their app
     await new Promise(r => setTimeout(r, 300));
     if (mainWindow) {
-      mainWindow.show();
+      mainWindow.showInactive();  // showInactive = don't steal focus from the target app
       if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true);
     }
-    console.log(`[AutoPaste] Pasted ${text.trim().length} chars to cursor, window re-shown`);
+    console.log(`[AutoPaste] Pasted ${text.trim().length} chars to cursor, window re-shown (inactive)`);
     return true;
   } catch (err) {
     // On failure, still re-show the window
     if (mainWindow && !mainWindow.isVisible()) {
-      mainWindow.show();
+      mainWindow.showInactive();
     }
     console.error('[AutoPaste] Failed:', err.message);
     return false;

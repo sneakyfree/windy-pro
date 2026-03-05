@@ -368,27 +368,17 @@ class TranslatePanel {
 
                 ws.onopen = async () => {
                     try {
-                        // Decode webm blob to 16-bit PCM
-                        const arrayBuf = await audioBlob.arrayBuffer();
-                        const audioCtx = new AudioContext({ sampleRate: 16000 });
-                        const decoded = await audioCtx.decodeAudioData(arrayBuf);
-                        const pcmFloat = decoded.getChannelData(0);
-                        const pcm16 = new Int16Array(pcmFloat.length);
-                        for (let i = 0; i < pcmFloat.length; i++) {
-                            const s = Math.max(-1, Math.min(1, pcmFloat[i]));
-                            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                        }
-                        audioCtx.close();
-
-                        // Send translate_blob command, then the audio binary
+                        // Send translate_blob command, then the raw webm audio binary
+                        // Server decodes via faster-whisper's native ffmpeg support
                         ws.send(JSON.stringify({
                             action: 'translate_blob',
                             language: this._sourceLang.value === 'auto' ? 'auto' : this._sourceLang.value
                         }));
-                        ws.send(pcm16.buffer);
+                        const arrayBuf = await audioBlob.arrayBuffer();
+                        ws.send(arrayBuf);
                     } catch (e) {
                         clearTimeout(timeout);
-                        reject(new Error('Audio decode failed: ' + e.message));
+                        reject(new Error('Failed to send audio: ' + e.message));
                     }
                 };
 
