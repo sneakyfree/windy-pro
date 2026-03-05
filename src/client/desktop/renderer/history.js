@@ -137,8 +137,18 @@ class HistoryPanel {
           <input type="text" class="history-search" id="historySearch"
                  placeholder="Search transcripts…" aria-label="Search transcripts" title="Search through all your transcripts by keyword">
         </div>
-        <div class="history-actions-row">
-          <button class="history-action-btn" id="historyExportAll" title="Export all transcripts as a single text file">📥 Export All</button>
+        <div class="history-actions-row" style="position:relative;">
+          <button class="history-action-btn" id="historyExportAll" title="Export transcripts">📤 Export ▾</button>
+          <div class="export-dropdown" id="exportDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;margin-top:4px;background:var(--bg-secondary,#1a1f26);border:1px solid var(--bg-tertiary,#30363d);border-radius:8px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.4);">
+            <div style="font-size:10px;color:var(--text-tertiary,#8b949e);padding:4px 8px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Save to</div>
+            <button class="export-option" data-export="save-txt" style="width:100%;text-align:left;padding:8px 10px;background:none;border:none;color:var(--text-primary,#e6edf3);font-size:12px;cursor:pointer;border-radius:5px;display:flex;align-items:center;gap:8px;">📁 Choose folder… <span style="color:var(--text-tertiary,#8b949e);font-size:10px;margin-left:auto;">.txt</span></button>
+            <button class="export-option" data-export="save-srt" style="width:100%;text-align:left;padding:8px 10px;background:none;border:none;color:var(--text-primary,#e6edf3);font-size:12px;cursor:pointer;border-radius:5px;display:flex;align-items:center;gap:8px;">📁 Choose folder… <span style="color:var(--text-tertiary,#8b949e);font-size:10px;margin-left:auto;">.srt subtitles</span></button>
+            <button class="export-option" data-export="save-md" style="width:100%;text-align:left;padding:8px 10px;background:none;border:none;color:var(--text-primary,#e6edf3);font-size:12px;cursor:pointer;border-radius:5px;display:flex;align-items:center;gap:8px;">📁 Choose folder… <span style="color:var(--text-tertiary,#8b949e);font-size:10px;margin-left:auto;">.md</span></button>
+            <div style="border-top:1px solid var(--bg-tertiary,#30363d);margin:4px 0;"></div>
+            <div style="font-size:10px;color:var(--text-tertiary,#8b949e);padding:4px 8px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Quick actions</div>
+            <button class="export-option" data-export="clipboard" style="width:100%;text-align:left;padding:8px 10px;background:none;border:none;color:var(--text-primary,#e6edf3);font-size:12px;cursor:pointer;border-radius:5px;display:flex;align-items:center;gap:8px;">📋 Copy all to clipboard</button>
+            <button class="export-option" data-export="email" style="width:100%;text-align:left;padding:8px 10px;background:none;border:none;color:var(--text-primary,#e6edf3);font-size:12px;cursor:pointer;border-radius:5px;display:flex;align-items:center;gap:8px;">📧 Email transcripts</button>
+          </div>
         </div>
       </div>
       <div class="history-body" id="historyBody">
@@ -520,8 +530,31 @@ class HistoryPanel {
             this.searchTimeout = setTimeout(() => this._onSearch(), 300);
         });
 
-        // Export all
-        this.panel.querySelector('#historyExportAll').addEventListener('click', () => this._exportAll());
+        // Export dropdown
+        const exportBtn = this.panel.querySelector('#historyExportAll');
+        const exportDropdown = this.panel.querySelector('#exportDropdown');
+        exportBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            exportDropdown.style.display = exportDropdown.style.display === 'none' ? 'block' : 'none';
+        });
+        // Close dropdown on outside click
+        document.addEventListener('click', () => { exportDropdown.style.display = 'none'; });
+        exportDropdown.addEventListener('click', (e) => e.stopPropagation());
+
+        // Export options
+        exportDropdown.querySelectorAll('.export-option').forEach(btn => {
+            btn.addEventListener('mouseenter', () => { btn.style.background = 'var(--bg-tertiary, #21262d)'; });
+            btn.addEventListener('mouseleave', () => { btn.style.background = 'none'; });
+            btn.addEventListener('click', async () => {
+                exportDropdown.style.display = 'none';
+                const action = btn.dataset.export;
+                if (action === 'save-txt') this._exportToFile('txt');
+                else if (action === 'save-srt') this._exportToFile('srt');
+                else if (action === 'save-md') this._exportToFile('md');
+                else if (action === 'clipboard') this._exportToClipboard();
+                else if (action === 'email') this._exportToEmail();
+            });
+        });
 
 
 
@@ -702,15 +735,106 @@ class HistoryPanel {
         }
     }
 
-    _exportAll() {
+    // ─── Enhanced Export Methods ─────────────────────────────────
+
+    _buildExportContent(format) {
         const entries = this.filteredEntries;
-        if (!entries.length) return;
-        let content = '# Windy Pro — Transcript History\n\n';
-        entries.forEach(item => {
-            const date = new Date(item.date).toLocaleString();
-            content += `## ${date} (${item.wordCount || 0}w · ${item.engine || 'unknown'})\n\n${item.text}\n\n---\n\n`;
-        });
-        this._downloadFile(content, `windy-history-${new Date().toISOString().slice(0, 10)}.md`, 'text/markdown');
+        if (!entries.length) return null;
+        const dateStr = new Date().toISOString().slice(0, 10);
+
+        if (format === 'txt') {
+            let content = 'WINDY PRO — TRANSCRIPT HISTORY\n';
+            content += `Exported: ${new Date().toLocaleString()}\n`;
+            content += `Total: ${entries.length} recordings\n`;
+            content += '═'.repeat(50) + '\n\n';
+            entries.forEach((item, i) => {
+                const date = new Date(item.date).toLocaleString();
+                content += `[${i + 1}] ${date} — ${item.wordCount || 0} words (${item.engine || 'unknown'})\n`;
+                content += (item.text || '(no transcript)') + '\n\n';
+                content += '—'.repeat(40) + '\n\n';
+            });
+            return { content, filename: `windy-transcripts-${dateStr}.txt`, type: 'text/plain' };
+        }
+
+        if (format === 'srt') {
+            let content = '';
+            let counter = 1;
+            entries.forEach(item => {
+                const d = new Date(item.date);
+                const start = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')},000`;
+                const endD = new Date(d.getTime() + Math.max((item.wordCount || 10) * 300, 5000));
+                const end = `${String(endD.getHours()).padStart(2, '0')}:${String(endD.getMinutes()).padStart(2, '0')}:${String(endD.getSeconds()).padStart(2, '0')},000`;
+                content += `${counter}\n${start} --> ${end}\n${item.text || ''}\n\n`;
+                counter++;
+            });
+            return { content, filename: `windy-transcripts-${dateStr}.srt`, type: 'text/srt' };
+        }
+
+        if (format === 'md') {
+            let content = '# Windy Pro — Transcript History\n\n';
+            content += `> Exported: ${new Date().toLocaleString()} · ${entries.length} recordings\n\n`;
+            entries.forEach(item => {
+                const date = new Date(item.date).toLocaleString();
+                content += `## ${date} (${item.wordCount || 0}w · ${item.engine || 'unknown'})\n\n${item.text}\n\n---\n\n`;
+            });
+            return { content, filename: `windy-transcripts-${dateStr}.md`, type: 'text/markdown' };
+        }
+
+        return null;
+    }
+
+    async _exportToFile(format) {
+        const data = this._buildExportContent(format);
+        if (!data) return;
+
+        // Use Electron's native save dialog — user can pick ANY location (USB, SSD, network drive)
+        try {
+            const filterMap = {
+                txt: { name: 'Text Files', extensions: ['txt'] },
+                srt: { name: 'Subtitle Files', extensions: ['srt'] },
+                md: { name: 'Markdown Files', extensions: ['md'] }
+            };
+            const result = await window.windyAPI.saveFile({
+                defaultPath: data.filename,
+                filters: [filterMap[format] || filterMap.txt],
+                content: data.content
+            });
+            if (result?.saved) {
+                this._showExportToast(`✅ Saved to ${result.path || 'chosen location'}`);
+            }
+        } catch (err) {
+            // Fallback to browser download
+            this._downloadFile(data.content, data.filename, data.type);
+            this._showExportToast('📥 Downloaded to default folder');
+        }
+    }
+
+    _exportToClipboard() {
+        const data = this._buildExportContent('txt');
+        if (!data) return;
+        navigator.clipboard.writeText(data.content);
+        this._showExportToast('📋 All transcripts copied to clipboard!');
+    }
+
+    _exportToEmail() {
+        const data = this._buildExportContent('txt');
+        if (!data) return;
+        // Truncate for mailto URL limit (~2000 chars)
+        const body = data.content.length > 1800
+            ? data.content.substring(0, 1800) + '\n\n… (truncated — use Save to File for full export)'
+            : data.content;
+        const subject = `Windy Pro Transcripts — ${new Date().toLocaleDateString()}`;
+        const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        window.windyAPI.openExternalUrl(mailto);
+        this._showExportToast('📧 Opening email client…');
+    }
+
+    _showExportToast(message) {
+        const toast = document.createElement('div');
+        toast.textContent = message;
+        toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#22C55E;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,0.3);transition:opacity 0.3s;';
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
     }
 
     _downloadFile(content, filename, type) {

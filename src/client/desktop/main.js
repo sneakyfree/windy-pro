@@ -2193,16 +2193,16 @@ ipcMain.on('recording-failed', () => {
 });
 
 // Save file dialog
-ipcMain.handle('save-file', async (event, { content, defaultName, filters }) => {
+ipcMain.handle('save-file', async (event, { content, defaultName, defaultPath: dp, filters }) => {
   const result = await dialog.showSaveDialog(mainWindow, {
-    defaultPath: defaultName || 'transcript.txt',
+    defaultPath: dp || defaultName || 'transcript.txt',
     filters: filters || [{ name: 'Text', extensions: ['txt'] }]
   });
   if (!result.canceled && result.filePath) {
     fs.writeFileSync(result.filePath, content, 'utf8');
-    return { ok: true, path: result.filePath };
+    return { ok: true, saved: true, path: result.filePath };
   }
-  return { ok: false };
+  return { ok: false, saved: false };
 });
 
 ipcMain.handle('install-update', async () => {
