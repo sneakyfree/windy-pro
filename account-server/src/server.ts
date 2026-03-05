@@ -31,6 +31,15 @@ app.use(cors());
 app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response-time ms'));
 app.use(express.json());
 
+// ─── Static Website ──────────────────────────────────────────
+// Serve the Windy Pro landing page and web app from the web dist folder
+import path from 'path';
+const webDistDir = path.join(__dirname, '..', '..', 'src', 'client', 'web', 'dist');
+app.use('/landing', express.static(path.join(webDistDir, 'landing')));
+app.use('/assets', express.static(path.join(webDistDir, 'assets')));
+app.use('/wizard', express.static(path.join(webDistDir, 'wizard')));
+app.use(express.static(webDistDir, { index: 'index.html' }));
+
 // ─── Mount Routes ────────────────────────────────────────────
 
 // Auth
