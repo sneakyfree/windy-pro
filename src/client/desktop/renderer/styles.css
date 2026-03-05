@@ -2540,7 +2540,7 @@ select:focus-visible,
 
 .history-time {
   font-size: 11px;
-  color: var(--text-tertiary, #484f58);
+  color: var(--text-secondary, #8b949e);
   white-space: nowrap;
   min-width: 55px;
 }
