@@ -35,10 +35,32 @@ app.use(express.json());
 // Serve the Windy Pro landing page and web app from the web dist folder
 import path from 'path';
 const webDistDir = path.join(__dirname, '..', '..', 'src', 'client', 'web', 'dist');
-app.use('/landing', express.static(path.join(webDistDir, 'landing')));
-app.use('/assets', express.static(path.join(webDistDir, 'assets')));
+// Cache strategy matching the original web proxy:
+// - index.html, sw.js, manifest.json: NEVER cache (always fresh)
+// - /assets/*: immutable (Vite hashed filenames)
+// - everything else: revalidate hourly
+app.use('/assets', express.static(path.join(webDistDir, 'assets'), {
+    maxAge: '1y', immutable: true
+}));
+app.use('/landing', express.static(path.join(webDistDir, 'landing'), {
+    setHeaders: (res: any, filePath: string) => {
+        if (filePath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+    }
+}));
 app.use('/wizard', express.static(path.join(webDistDir, 'wizard')));
-app.use(express.static(webDistDir, { index: 'index.html' }));
+app.use(express.static(webDistDir, {
+    index: 'index.html',
+    setHeaders: (res: any, filePath: string) => {
+        const base = path.basename(filePath);
+        if (['index.html', 'sw.js', 'manifest.json'].includes(base)) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+    }
+}));
 
 // ─── Mount Routes ────────────────────────────────────────────
 
