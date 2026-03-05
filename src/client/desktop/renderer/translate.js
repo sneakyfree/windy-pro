@@ -445,8 +445,21 @@ class TranslatePanel {
             const data = await resp.json();
             this._showResult(data);
         } catch (err) {
-            console.error('[Translate] Text translation failed:', err);
-            this._targetText.textContent = `⚠️ ${err.message}`;
+            console.error('[Translate] Text translation failed, using local stub:', err);
+            // Local stub translation when server is unreachable
+            const targetLang = this._targetLang.value;
+            const stubText = `[${targetLang.toUpperCase()}] ${text}`;
+            this._showResult({
+                text,
+                translatedText: stubText,
+                confidence: 0.0,
+                offline: true
+            });
+            this._confidence.innerHTML = `
+                <span class="confidence-badge" style="background:#EF444420;color:#EF4444;border:1px solid #EF444440;">
+                    ⚠️ Cloud translation unavailable — stub result. Sign in under Settings → Transcription Engine → Cloud to enable.
+                </span>
+            `;
         }
     }
 
