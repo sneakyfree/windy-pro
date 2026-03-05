@@ -107,6 +107,7 @@ class WindyApp {
     this.vaultPanel = new VaultPanel(this);
     this.historyPanel = new HistoryPanel(this);
     this.translatePanel = typeof TranslatePanel !== 'undefined' ? new TranslatePanel(this) : null;
+    window._translatePanel = this.translatePanel; // Expose for inline TTS onclick
     this.bindEvents();
     this.bindIPCEvents();
 

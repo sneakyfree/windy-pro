@@ -166,11 +166,9 @@ class TranslatePanel {
         // Favorite
         document.getElementById('translateFavBtn').addEventListener('click', () => this._saveFavorite());
 
-        // Play audio
+        // Play audio (Web Speech API TTS)
         document.getElementById('translatePlayBtn').addEventListener('click', () => {
-            if (this._audioEl.src) {
-                this._audioEl.play().catch(() => { });
-            }
+            this._speakLastTranslation();
         });
     }
 
@@ -551,8 +549,21 @@ class TranslatePanel {
         this._targetText.textContent = data.translatedText || '';
         this._resultArea.classList.add('visible');
 
-        // Track translation ID for favorites
+        // Track translation for favorites and TTS playback
         this._lastTranslationId = data.id || null;
+        this._lastTranslatedText = data.translatedText || '';
+        this._lastTargetLang = this._targetLang.value;
+
+        // Language label above translation
+        const langName = this._getLanguageName(this._lastTargetLang);
+        const langFlag = this._getLanguageFlag(this._lastTargetLang);
+        this._targetText.innerHTML = `
+            <div style="font-size:11px;color:#9CA3AF;margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+                <span>${langFlag} ${langName}</span>
+                <button onclick="window._translatePanel._speakLastTranslation()" style="background:none;border:none;cursor:pointer;font-size:16px;padding:0;" title="Listen in ${langName}">🔊</button>
+            </div>
+            <div>${data.translatedText || ''}</div>
+        `;
 
         // Confidence badge
         const conf = data.confidence || 0;
@@ -569,20 +580,58 @@ class TranslatePanel {
       `;
         }
 
-        // Audio playback — support base64 audio data from API or direct URL
-        if (data.audioData) {
-            const audioBytes = atob(data.audioData);
-            const arr = new Uint8Array(audioBytes.length);
-            for (let i = 0; i < audioBytes.length; i++) arr[i] = audioBytes.charCodeAt(i);
-            const blob = new Blob([arr], { type: 'audio/mp3' });
-            this._audioEl.src = URL.createObjectURL(blob);
-            this._audioEl.play().catch(() => { });
-        } else if (data.audioUrl) {
-            this._audioEl.src = data.audioUrl;
-        }
-
         // Prepend to history view
         this._addHistoryItem(data);
+    }
+
+    // ─── Text-to-Speech (Web Speech API) ──────────────────────────
+
+    _speakLastTranslation() {
+        if (!this._lastTranslatedText) return;
+        this._speakText(this._lastTranslatedText, this._lastTargetLang);
+    }
+
+    _speakText(text, langCode) {
+        // Stop any current speech
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+
+        // Map language codes to BCP 47 tags for better voice matching
+        const langMap = {
+            en: 'en-US', es: 'es-ES', fr: 'fr-FR', de: 'de-DE', it: 'it-IT',
+            pt: 'pt-BR', zh: 'zh-CN', ja: 'ja-JP', ko: 'ko-KR', ar: 'ar-SA',
+            ru: 'ru-RU', pl: 'pl-PL', nl: 'nl-NL', sv: 'sv-SE', hi: 'hi-IN'
+        };
+        utterance.lang = langMap[langCode] || langCode;
+        utterance.rate = 0.9; // Slightly slower for clarity
+        utterance.pitch = 1;
+
+        // Try to find a voice for this language
+        const voices = window.speechSynthesis.getVoices();
+        const matchingVoice = voices.find(v => v.lang.startsWith(langCode)) ||
+            voices.find(v => v.lang.startsWith(utterance.lang));
+        if (matchingVoice) utterance.voice = matchingVoice;
+
+        // Visual feedback on play button
+        const playBtn = document.getElementById('translatePlayBtn');
+        if (playBtn) {
+            playBtn.textContent = '⏹️';
+            utterance.onend = () => { playBtn.textContent = '🔊'; };
+            utterance.onerror = () => { playBtn.textContent = '🔊'; };
+        }
+
+        window.speechSynthesis.speak(utterance);
+    }
+
+    /** Get flag emoji for a language code */
+    _getLanguageFlag(code) {
+        const flags = {
+            en: '🇺🇸', es: '🇪🇸', fr: '🇫🇷', de: '🇩🇪', it: '🇮🇹',
+            pt: '🇧🇷', zh: '🇨🇳', ja: '🇯🇵', ko: '🇰🇷', ar: '🇸🇦',
+            ru: '🇷🇺', pl: '🇵🇱', nl: '🇳🇱', sv: '🇸🇪', hi: '🇮🇳'
+        };
+        return flags[code] || '🌐';
     }
 
     // ─── Favorites ────────────────────────────────────────────────
