@@ -2037,6 +2037,87 @@ ipcMain.handle('get-current-tier', async () => {
   return { tier: license.tier, limits, license };
 });
 
+// ═══ Text Translation via AI (Groq/OpenAI) ═══
+ipcMain.handle('translate-text', async (event, text, sourceLang, targetLang) => {
+  if (!text || !targetLang) return { ok: false, error: 'Missing text or target language' };
+
+  const LANG_NAMES = {
+    en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian',
+    pt: 'Portuguese', zh: 'Chinese', ja: 'Japanese', ko: 'Korean', ar: 'Arabic',
+    ru: 'Russian', pl: 'Polish', nl: 'Dutch', sv: 'Swedish', hi: 'Hindi',
+    auto: 'auto-detected'
+  };
+  const srcName = LANG_NAMES[sourceLang] || sourceLang;
+  const tgtName = LANG_NAMES[targetLang] || targetLang;
+
+  // Try Groq first, then OpenAI
+  const groqKey = store.get('engine.groqApiKey', '') || process.env.GROQ_API_KEY || '';
+  const openaiKey = store.get('engine.openaiApiKey', '') || process.env.OPENAI_API_KEY || '';
+
+  const apiKey = groqKey || openaiKey;
+  if (!apiKey) {
+    return { ok: false, error: 'No AI API key configured. Add a Groq or OpenAI API key in Settings → Transcription Engine.' };
+  }
+
+  const isGroq = !!groqKey;
+  const apiUrl = isGroq
+    ? 'https://api.groq.com/openai/v1/chat/completions'
+    : 'https://api.openai.com/v1/chat/completions';
+  const model = isGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
+
+  const prompt = `Translate the following text from ${srcName} to ${tgtName}. Return ONLY the translated text, nothing else.\n\n${text}`;
+
+  try {
+    const https = require('https');
+    const url = new URL(apiUrl);
+    const postData = JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      max_tokens: 2048,
+    });
+
+    const result = await new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: url.hostname,
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Length': Buffer.byteLength(postData),
+        }
+      }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              const json = JSON.parse(data);
+              const translated = json.choices?.[0]?.message?.content?.trim();
+              resolve({ ok: true, translatedText: translated, engine: isGroq ? 'groq' : 'openai', confidence: 0.95 });
+            } catch (e) {
+              reject(new Error('Failed to parse AI response'));
+            }
+          } else {
+            reject(new Error(`AI API returned ${res.statusCode}: ${data.substring(0, 200)}`));
+          }
+        });
+      });
+      req.on('error', reject);
+      req.setTimeout(15000, () => { req.destroy(); reject(new Error('AI API timeout')); });
+      req.write(postData);
+      req.end();
+    });
+
+    console.log(`🌐 Text translation (${result.engine}): ${srcName}→${tgtName}`);
+    return result;
+  } catch (err) {
+    console.error('[Translate] AI text translation failed:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
 ipcMain.handle('apply-coupon', async (event, code) => {
   try {
     const stripe = getStripe();

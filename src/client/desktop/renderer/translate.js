@@ -439,50 +439,27 @@ class TranslatePanel {
         this._targetText.textContent = `Translating to ${this._getLanguageName(targetLang)}…`;
 
         try {
-            const token = localStorage.getItem('windy_cloudToken') || '';
-            const body = JSON.stringify({
-                text: englishText,
-                sourceLang: 'en',
-                targetLang: targetLang
-            });
-            let resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/text', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                },
-                body
-            });
+            const result = await window.windyAPI.translateText(englishText, 'en', targetLang);
 
-            // Retry without token on auth failure
-            if (resp.status === 401 || resp.status === 403) {
-                resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/text', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body
-                });
-            }
-
-            if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
-            const data = await resp.json();
-            const translated = data.translatedText || data.translated || '';
-
-            if (translated && !translated.startsWith('[')) {
+            if (result?.ok && result.translatedText) {
                 this._showResult({
                     sourceText: `🎙️ Heard (English): "${englishText}"`,
-                    translatedText: translated,
-                    confidence: data.confidence || 0.9,
-                    engine: data.engine || 'ai'
+                    translatedText: result.translatedText,
+                    confidence: result.confidence || 0.9,
+                    engine: result.engine || 'ai'
                 });
+                const engineLabel = result.engine === 'groq' ? 'Groq AI' : result.engine === 'openai' ? 'OpenAI' : 'AI';
                 this._confidence.innerHTML += `
                     <span class="confidence-badge" style="background:#3B82F620;color:#3B82F6;border:1px solid #3B82F640;margin-left:6px;">
-                        🏠 Speech by Whisper · 🌐 Text by ${data.engine === 'groq' ? 'Groq AI' : data.engine === 'openai' ? 'OpenAI' : 'AI'}
+                        🏠 Speech by Whisper · 🌐 Text by ${engineLabel}
                     </span>
                 `;
                 return;
+            } else {
+                throw new Error(result?.error || 'Translation returned no result');
             }
         } catch (textErr) {
-            console.warn('[Translate] Text translation API failed:', textErr.message);
+            console.warn('[Translate] Text translation failed:', textErr.message);
         }
 
         // ── Fallback: show English result with note ──
@@ -494,7 +471,7 @@ class TranslatePanel {
         });
         this._confidence.innerHTML += `
             <span class="confidence-badge" style="background:#EAB30820;color:#EAB308;border:1px solid #EAB30840;margin-left:6px;">
-                ⚠️ Text translation unavailable — showing English from Whisper
+                ⚠️ Text translation needs an AI key — add Groq or OpenAI key in Settings
             </span>
         `;
     }
@@ -534,41 +511,34 @@ class TranslatePanel {
             return;
         }
 
+        // ── Try local AI translation (Groq/OpenAI via main process) ──
         try {
-            const token = localStorage.getItem('windy_cloudToken') || '';
-            const body = JSON.stringify({ text, sourceLang: this._sourceLang.value, targetLang: this._targetLang.value });
-            let resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/text', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                },
-                body
-            });
-
-            // Retry without token on auth failure
-            if (resp.status === 401 || resp.status === 403) {
-                console.warn('[Translate] Auth failed, retrying without token');
-                localStorage.removeItem('windy_cloudToken');
-                resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/text', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body
+            const result = await window.windyAPI.translateText(text, this._sourceLang.value, this._targetLang.value);
+            if (result?.ok && result.translatedText) {
+                this._showResult({
+                    text,
+                    translatedText: result.translatedText,
+                    confidence: result.confidence || 0.9,
+                    engine: result.engine || 'ai'
                 });
+                const engineLabel = result.engine === 'groq' ? 'Groq AI' : result.engine === 'openai' ? 'OpenAI' : 'AI';
+                this._confidence.innerHTML = `
+                    <span class="confidence-badge" style="background:#3B82F620;color:#3B82F6;border:1px solid #3B82F640;">
+                        🌐 Translated by ${engineLabel}
+                    </span>
+                `;
+                return;
+            } else {
+                throw new Error(result?.error || 'Translation failed');
             }
-
-            if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
-            const data = await resp.json();
-            this._showResult(data);
         } catch (err) {
-            console.error('[Translate] Text translation failed:', err);
-            // Clear and helpful message
+            console.error('[Translate] Text translation failed:', err.message);
             this._sourceText.textContent = text;
             this._targetText.textContent = '';
             this._confidence.innerHTML = `
-                <span class="confidence-badge" style="background:#3B82F620;color:#60A5FA;border:1px solid #3B82F640;font-size:12px;padding:8px 12px;line-height:1.4;display:block;">
-                    💡 <strong>Text-to-text translation</strong> requires a cloud connection.<br>
-                    For local translation, use the <strong>🎤 mic button</strong> above — speak in any language and Whisper will translate to English locally, no internet needed!
+                <span class="confidence-badge" style="background:#EAB30820;color:#EAB308;border:1px solid #EAB30840;font-size:12px;padding:8px 12px;line-height:1.4;display:block;">
+                    ⚠️ <strong>AI translation key needed.</strong><br>
+                    Add a <strong>Groq</strong> (free) or <strong>OpenAI</strong> API key in Settings → Transcription Engine to enable text translation.
                 </span>
             `;
         }
