@@ -2416,7 +2416,7 @@ select:focus-visible,
   display: flex;
   gap: 6px;
   font-size: 11px;
-  color: var(--text-tertiary, #484f58);
+  color: var(--text-tertiary, #9CA3AF);
   margin-bottom: 8px;
 }
 
@@ -2446,7 +2446,7 @@ select:focus-visible,
 }
 
 .history-search::placeholder {
-  color: var(--text-tertiary, #484f58);
+  color: var(--text-tertiary, #9CA3AF);
 }
 
 /* Actions row */
@@ -2489,7 +2489,7 @@ select:focus-visible,
 .history-empty {
   text-align: center;
   padding: 32px 16px;
-  color: var(--text-tertiary, #484f58);
+  color: var(--text-tertiary, #9CA3AF);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -2504,7 +2504,7 @@ select:focus-visible,
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-tertiary, #484f58);
+  color: var(--text-tertiary, #9CA3AF);
   padding: 4px 0;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--bg-tertiary, #21262d);
@@ -2522,7 +2522,7 @@ select:focus-visible,
 }
 
 .history-entry:hover {
-  border-color: var(--text-tertiary, #484f58);
+  border-color: var(--text-tertiary, #9CA3AF);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
@@ -2563,7 +2563,7 @@ select:focus-visible,
 
 .history-wc {
   font-size: 10px;
-  color: var(--text-tertiary, #484f58);
+  color: var(--text-tertiary, #9CA3AF);
   background: var(--bg-tertiary, #21262d);
   padding: 1px 5px;
   border-radius: 3px;
@@ -2659,7 +2659,7 @@ select:focus-visible,
   background: var(--bg-secondary, #161b22);
   border: 1px dashed var(--bg-tertiary, #21262d);
   border-radius: 6px;
-  color: var(--text-tertiary, #484f58);
+  color: var(--text-tertiary, #9CA3AF);
   font-size: 11px;
   cursor: pointer;
   margin-top: 4px;
@@ -2667,7 +2667,7 @@ select:focus-visible,
 }
 
 .history-load-more:hover {
-  border-color: var(--text-tertiary, #484f58);
+  border-color: var(--text-tertiary, #9CA3AF);
   color: var(--text-secondary, #8b949e);
 }
 
@@ -2741,7 +2741,7 @@ select:focus-visible,
 
 .audio-loading {
   font-size: 11px;
-  color: var(--text-tertiary, #484f58);
+  color: var(--text-tertiary, #9CA3AF);
   padding: 4px 0;
   animation: blink 1s infinite;
 }
