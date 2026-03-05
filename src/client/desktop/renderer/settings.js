@@ -227,14 +227,21 @@ class SettingsPanel {
 
         <div class="settings-section" id="localModelSection">
           <h3>🎤 Transcription</h3>
+          <div id="transcriptionPlanBanner" style="background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid #333;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span id="transcriptionPlanLabel" style="font-size:12px;color:#D1D5DB;">Your Plan: <b style="color:#22C55E;">Free</b></span>
+              <button id="transcriptionUpgradeBtn" class="settings-btn" style="font-size:11px;padding:4px 10px;background:#F59E0B;color:#000;border:none;border-radius:4px;font-weight:600;cursor:pointer;">⚡ Upgrade</button>
+            </div>
+            <p id="transcriptionPlanHint" style="font-size:11px;color:#9CA3AF;margin:4px 0 0;line-height:1.4;">Unlock more engines — see grayed-out options for what's available on higher plans.</p>
+          </div>
           <div class="setting-row" id="modelSizeRow">
             <label for="modelSelect">Model Size</label>
             <select id="modelSelect">
-              <option value="tiny" selected>Tiny (75MB — fastest, CPU ✅)</option>
-              <option value="base">Base (150MB — balanced, CPU ✅)</option>
-              <option value="small">Small (500MB — ⚠️ GPU recommended)</option>
-              <option value="medium">Medium (1.5GB — ⚠️ GPU only)</option>
-              <option value="large-v3">Large (3GB — ⚠️ GPU only)</option>
+              <option value="tiny" selected>Edge Spark (75MB — fastest, CPU ✅)</option>
+              <option value="base">Edge Pulse (150MB — balanced, CPU ✅)</option>
+              <option value="small">Core Standard (500MB — ⚠️ GPU recommended)</option>
+              <option value="medium">Core Pro (1.5GB — ⚠️ GPU only)</option>
+              <option value="large-v3">Core Ultra (3GB — ⚠️ GPU only)</option>
             </select>
           </div>
           <div class="setting-row">
@@ -1194,6 +1201,7 @@ class SettingsPanel {
       if (!window.windyAPI?.getCurrentTier) return;
       const result = await window.windyAPI.getCurrentTier();
       const tier = result?.tier || 'free';
+      this._currentTier = tier;
       const badge = this.panel.querySelector('#settingsTierBadge');
       const hint = this.panel.querySelector('#settingsTierHint');
       const upgradeBtn = this.panel.querySelector('#settingsUpgradeBtn');
@@ -1213,7 +1221,96 @@ class SettingsPanel {
       if (upgradeBtn && tier !== 'free') {
         upgradeBtn.textContent = '💎 Manage Plan';
       }
+      // Apply tier-based engine gating
+      this._applyTierGating(tier);
     } catch (_) { }
+  }
+
+  /**
+   * Gray out engines/models not available on the user's plan tier.
+   * Free: WindyTune + Edge Spark + Edge Pulse (2 smallest engines)
+   * Pro: All Edge + all Core engines
+   * Translate: Pro + Lingua language specialists
+   * Translate Pro: Everything
+   */
+  _applyTierGating(tier) {
+    const tierEngines = {
+      free: ['windytune', 'local', 'edge-spark', 'edge-pulse'],
+      pro: ['windytune', 'local', 'edge-spark', 'edge-pulse', 'edge-standard', 'edge-global', 'edge-pro',
+        'core-spark', 'core-pulse', 'core-standard', 'core-global', 'core-pro', 'core-turbo', 'core-ultra'],
+      translate: ['windytune', 'local', 'edge-spark', 'edge-pulse', 'edge-standard', 'edge-global', 'edge-pro',
+        'core-spark', 'core-pulse', 'core-standard', 'core-global', 'core-pro', 'core-turbo', 'core-ultra',
+        'lingua-es', 'lingua-fr', 'lingua-hi'],
+      translate_pro: null // all engines
+    };
+    const tierModels = {
+      free: ['tiny', 'base'],
+      pro: ['tiny', 'base', 'small', 'medium', 'large-v3'],
+      translate: ['tiny', 'base', 'small', 'medium', 'large-v3'],
+      translate_pro: null // all models
+    };
+
+    const allowedEngines = tierEngines[tier] || tierEngines.free;
+    const allowedModels = tierModels[tier] || tierModels.free;
+
+    // Gate engine dropdown
+    const engineSelect = this.panel.querySelector('#engineSelect');
+    if (engineSelect) {
+      for (const opt of engineSelect.options) {
+        if (allowedEngines && !allowedEngines.includes(opt.value)) {
+          opt.disabled = true;
+          if (!opt.dataset.originalText) opt.dataset.originalText = opt.textContent;
+          opt.textContent = '🔒 ' + opt.dataset.originalText + ' — upgrade to unlock';
+          opt.style.color = '#555';
+        } else {
+          opt.disabled = false;
+          if (opt.dataset.originalText) opt.textContent = opt.dataset.originalText;
+          opt.style.color = '';
+        }
+      }
+    }
+
+    // Gate model dropdown (manual mode)
+    const modelSelect = this.panel.querySelector('#modelSelect');
+    if (modelSelect) {
+      for (const opt of modelSelect.options) {
+        if (allowedModels && !allowedModels.includes(opt.value)) {
+          opt.disabled = true;
+          if (!opt.dataset.originalText) opt.dataset.originalText = opt.textContent;
+          opt.textContent = '🔒 ' + opt.dataset.originalText + ' — upgrade to unlock';
+          opt.style.color = '#555';
+        } else {
+          opt.disabled = false;
+          if (opt.dataset.originalText) opt.textContent = opt.dataset.originalText;
+          opt.style.color = '';
+        }
+      }
+    }
+
+    // Update transcription plan banner
+    const banner = this.panel.querySelector('#transcriptionPlanBanner');
+    const planLabel = this.panel.querySelector('#transcriptionPlanLabel');
+    const planHint = this.panel.querySelector('#transcriptionPlanHint');
+    const planUpgrade = this.panel.querySelector('#transcriptionUpgradeBtn');
+    if (banner) {
+      banner.style.display = 'block';
+      const tierLabels = {
+        free: { name: 'Free', color: '#6B7280', hint: '2 engines included. Upgrade to Pro for all 15 engines, GPU models, and 30-min recordings.' },
+        pro: { name: 'Pro', color: '#22C55E', hint: 'All 15 engines unlocked! Add Translate to get language-specialist engines for Spanish, French, and Hindi.' },
+        translate: { name: 'Translate', color: '#3B82F6', hint: 'All engines + language specialists unlocked. Upgrade to Translate Pro for priority support.' },
+        translate_pro: { name: 'Translate Pro', color: '#8B5CF6', hint: 'All engines and features unlocked. You have the best plan! 👑' }
+      };
+      const tInfo = tierLabels[tier] || tierLabels.free;
+      if (planLabel) planLabel.innerHTML = `Your Plan: <b style="color:${tInfo.color};">${tInfo.name}</b>`;
+      if (planHint) planHint.textContent = tInfo.hint;
+      if (planUpgrade) {
+        planUpgrade.style.display = (tier === 'translate_pro') ? 'none' : '';
+        planUpgrade.addEventListener('click', () => {
+          if (!this._upgradePanel) this._upgradePanel = new UpgradePanel(this.app);
+          this._upgradePanel.toggle();
+        });
+      }
+    }
   }
 
   showToast(message) {
