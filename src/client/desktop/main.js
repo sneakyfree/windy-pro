@@ -126,7 +126,30 @@ let pythonRestartCount = 0;
 const MAX_PYTHON_RESTARTS = 3;
 
 // ═══ Stripe Payment Integration ═══
-// Secret key loaded from environment or electron-store (NEVER hardcode in source)
+// Bootstrap: load .env file if present and persist Stripe keys to electron-store
+(function bootstrapStripeKeys() {
+  try {
+    const fs = require('fs');
+    const p = require('path');
+    // Try multiple locations for .env: project root (dev), app dir (prod)
+    const candidates = [p.join(__dirname, '..', '..', '..', '.env'), p.join(p.dirname(process.execPath), '.env')];
+    for (const envPath of candidates) {
+      if (fs.existsSync(envPath)) {
+        const lines = fs.readFileSync(envPath, 'utf8').split('\n');
+        for (const line of lines) {
+          const m = line.match(/^(STRIPE_\w+)=(.+)$/);
+          if (m) {
+            process.env[m[1]] = m[2].trim();
+            // Persist to electron-store so it works on subsequent launches without .env
+            if (m[1] === 'STRIPE_SECRET_KEY') store.set('stripe.secretKey', m[2].trim());
+          }
+        }
+        break;
+      }
+    }
+  } catch (_) { }
+})();
+// Secret key: env var → electron-store → empty
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || store.get('stripe.secretKey', '');
 const STRIPE_PRICES = {
   pro: { id: 'price_1T5oYzBXIOBasDQibSlnIsPg', mode: 'payment', tier: 'pro', amount: 4900 },

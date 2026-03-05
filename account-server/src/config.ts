@@ -40,7 +40,7 @@ export const config = {
     DATA_ROOT,
     UPLOADS_PATH,
     MAX_FILE_SIZE: 500 * 1024 * 1024, // 500MB
-    // Stripe billing
+    // Stripe billing — set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET in .env or system env
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
 } as const;
