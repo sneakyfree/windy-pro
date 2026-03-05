@@ -18,12 +18,13 @@ export function validate(schema: ZodSchema, target: ValidationTarget = 'body') {
             // Replace with parsed (coerced/defaulted) values
             (req as any)[target] = parsed;
             next();
-        } catch (err) {
-            if (err instanceof ZodError) {
+        } catch (err: any) {
+            // Check by name instead of instanceof — avoids cross-module zod duplication issue
+            if (err instanceof ZodError || err?.name === 'ZodError') {
                 res.status(400).json({
                     error: 'Validation failed',
-                    details: err.errors.map(e => ({
-                        field: e.path.join('.'),
+                    details: (err.errors || err.issues || []).map((e: any) => ({
+                        field: (e.path || []).join('.'),
                         message: e.message,
                     })),
                 });

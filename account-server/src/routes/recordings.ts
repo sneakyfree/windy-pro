@@ -103,6 +103,41 @@ router.get('/check', authenticateToken, (req: Request, res: Response) => {
     }
 });
 
+// ─── GET /api/v1/recordings/stats ────────────────────────────
+// MUST be before /:id to avoid route shadowing
+
+router.get('/stats', authenticateToken, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const userId = (req as AuthRequest).user.userId;
+        const stats = db.prepare(`
+            SELECT
+                COUNT(*) as totalRecordings,
+                COALESCE(SUM(duration_seconds), 0) as totalDuration,
+                COALESCE(SUM(file_size), 0) as totalSize,
+                COALESCE(AVG(quality_score), 0) as avgQuality,
+                COUNT(CASE WHEN has_video = 1 THEN 1 END) as videoRecordings,
+                COUNT(CASE WHEN clone_training_ready = 1 THEN 1 END) as cloneReady,
+                MIN(created_at) as firstRecording,
+                MAX(created_at) as lastRecording
+            FROM recordings WHERE user_id = ?
+        `).get(userId) as any;
+
+        res.json({
+            totalRecordings: stats.totalRecordings,
+            totalDuration: Math.round(stats.totalDuration),
+            totalSize: stats.totalSize,
+            avgQuality: Math.round(stats.avgQuality),
+            videoRecordings: stats.videoRecordings,
+            cloneReady: stats.cloneReady,
+            firstRecording: stats.firstRecording,
+            lastRecording: stats.lastRecording,
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── GET /api/v1/recordings/:id ──────────────────────────────
 
 router.get('/:id', authenticateToken, (req: Request, res: Response) => {

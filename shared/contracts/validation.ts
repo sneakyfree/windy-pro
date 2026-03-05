@@ -50,9 +50,15 @@ export const ChangePasswordRequestSchema = z.object({
 
 export const TranslateTextRequestSchema = z.object({
     text: z.string().min(1, 'Text is required').max(5000, 'Text too long (max 5000 chars)'),
-    sourceLang: z.string().min(1, 'sourceLang is required'),
-    targetLang: z.string().min(1, 'targetLang is required'),
-});
+    // Desktop sends sourceLang/targetLang, mobile sends source/target — accept both
+    sourceLang: z.string().min(1).optional(),
+    targetLang: z.string().min(1).optional(),
+    source: z.string().min(1).optional(),
+    target: z.string().min(1).optional(),
+}).refine(
+    (d) => (d.sourceLang || d.source) && (d.targetLang || d.target),
+    { message: 'sourceLang/source and targetLang/target are required' }
+);
 
 export const FavoriteToggleRequestSchema = z.object({
     translationId: z.string().min(1, 'translationId is required'),
@@ -149,9 +155,14 @@ export const OcrTranslateBodySchema = z.object({
 // ─── Speech Translation Schemas ──────────────────────────────
 
 export const SpeechTranslateBodySchema = z.object({
-    sourceLang: z.string().min(1, 'sourceLang is required'),
-    targetLang: z.string().min(1, 'targetLang is required'),
-});
+    sourceLang: z.string().min(1).optional(),
+    targetLang: z.string().min(1).optional(),
+    source: z.string().min(1).optional(),
+    target: z.string().min(1).optional(),
+}).refine(
+    (d) => (d.sourceLang || d.source) && (d.targetLang || d.target),
+    { message: 'sourceLang/source and targetLang/target are required' }
+);
 
 // ─── History Query Schemas ───────────────────────────────────
 

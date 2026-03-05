@@ -39,7 +39,9 @@ const SUPPORTED_LANGUAGES: Language[] = [
 
 router.post('/speech', authenticateToken, upload.single('audio'), validate(SpeechTranslateBodySchema), (req: Request, res: Response) => {
     try {
-        const { sourceLang, targetLang } = req.body;
+        // Normalize: mobile sends source/target, desktop sends sourceLang/targetLang
+        const sourceLang = req.body.sourceLang || req.body.source;
+        const targetLang = req.body.targetLang || req.body.target;
 
         if (!req.file) {
             return res.status(400).json({ error: 'Audio file is required' });
@@ -81,7 +83,10 @@ router.post('/speech', authenticateToken, upload.single('audio'), validate(Speec
 
 router.post('/text', authenticateToken, validate(TranslateTextRequestSchema), async (req: Request, res: Response) => {
     try {
-        const { text, sourceLang, targetLang } = req.body;
+        const text = req.body.text;
+        // Normalize: mobile sends source/target, desktop sends sourceLang/targetLang
+        const sourceLang = req.body.sourceLang || req.body.source;
+        const targetLang = req.body.targetLang || req.body.target;
 
         let translatedText: string | undefined;
         let engine = 'stub';
