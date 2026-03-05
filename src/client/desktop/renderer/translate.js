@@ -69,6 +69,10 @@ class TranslatePanel {
             <span class="translate-mic-icon">🎤</span>
           </button>
           <div class="translate-mic-hint">Hold to speak</div>
+          <div class="translate-speech-hint" id="translateSpeechHint" 
+               style="font-size:11px;color:#9CA3AF;margin-top:4px;text-align:center;">
+            🎙️ Speech: speaks any language → translates to <strong>English</strong>
+          </div>
         </div>
 
         <!-- Text input alternative -->
@@ -404,11 +408,17 @@ class TranslatePanel {
 
             if (result) {
                 this._showResult({
-                    sourceText: `[${this._sourceLang.value.toUpperCase()} speech]`,
+                    sourceText: `🎙️ You spoke (auto-detected)`,
                     translatedText: result,
                     confidence: 0.92,
                     engine: 'local-whisper'
                 });
+                // Show engine badge after result
+                this._confidence.innerHTML += `
+                    <span class="confidence-badge" style="background:#3B82F620;color:#3B82F6;border:1px solid #3B82F640;margin-left:6px;">
+                        🏠 Translated locally by Whisper
+                    </span>
+                `;
                 console.log('[Translate] Local speech translation successful');
                 return;
             }
@@ -473,19 +483,14 @@ class TranslatePanel {
             const data = await resp.json();
             this._showResult(data);
         } catch (err) {
-            console.error('[Translate] Text translation failed, using local stub:', err);
-            // Local stub translation when server is unreachable
-            const targetLang = this._targetLang.value;
-            const stubText = `[${targetLang.toUpperCase()}] ${text}`;
-            this._showResult({
-                text,
-                translatedText: stubText,
-                confidence: 0.0,
-                offline: true
-            });
+            console.error('[Translate] Text translation failed:', err);
+            // Clear and helpful message
+            this._sourceText.textContent = text;
+            this._targetText.textContent = '';
             this._confidence.innerHTML = `
-                <span class="confidence-badge" style="background:#EF444420;color:#EF4444;border:1px solid #EF444440;">
-                    ⚠️ Cloud translation unavailable — stub result. Sign in under Settings → Transcription Engine → Cloud to enable.
+                <span class="confidence-badge" style="background:#3B82F620;color:#60A5FA;border:1px solid #3B82F640;font-size:12px;padding:8px 12px;line-height:1.4;display:block;">
+                    💡 <strong>Text-to-text translation</strong> requires a cloud connection.<br>
+                    For local translation, use the <strong>🎤 mic button</strong> above — speak in any language and Whisper will translate to English locally, no internet needed!
                 </span>
             `;
         }
