@@ -1404,7 +1404,10 @@ ipcMain.handle('get-archive-history', async () => {
             for (let i = 0; i < lines.length; i++) {
               const line = lines[i];
               if (line.startsWith('# ')) continue;
-              if (line.startsWith('**') && line.includes(':')) {
+              // Handle both **Bold:** and bare Key: metadata formats
+              const isMetaLine = (line.startsWith('**') && line.includes(':')) ||
+                /^(Start|End|Words|Engine|Time|Date|Duration):\s/.test(line);
+              if (isMetaLine) {
                 if (line.includes('Words:')) {
                   const m = line.match(/Words:\s*(\d+)/);
                   if (m) wordCount = parseInt(m[1]);
