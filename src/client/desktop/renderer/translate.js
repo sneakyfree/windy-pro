@@ -71,7 +71,7 @@ class TranslatePanel {
           <div class="translate-mic-hint">Hold to speak</div>
           <div class="translate-speech-hint" id="translateSpeechHint" 
                style="font-size:11px;color:#9CA3AF;margin-top:4px;text-align:center;">
-            🎙️ Speech: speaks any language → translates to <strong>English</strong>
+            🎙️ Speak in any language → translates to <strong>your selected target</strong>
           </div>
         </div>
 
@@ -353,18 +353,21 @@ class TranslatePanel {
     // ─── Translation API Calls ────────────────────────────────────
 
     async _translateSpeech(audioBlob) {
+        const targetLang = this._targetLang.value;
+        const isTargetEnglish = targetLang === 'en';
         this._sourceText.textContent = 'Translating speech…';
         this._targetText.textContent = '';
         this._confidence.innerHTML = '';
         this._resultArea.classList.add('visible');
 
-        // ── Try LOCAL Whisper engine (one-shot translate_blob — no session, no state interference) ──
+        // ── Step 1: Whisper transcribes/translates speech → English text ──
+        let englishText = '';
         try {
             const config = await window.windyAPI.getServerConfig();
             const wsUrl = `ws://${config.host}:${config.port}`;
             const ws = new WebSocket(wsUrl);
 
-            const result = await new Promise((resolve, reject) => {
+            englishText = await new Promise((resolve, reject) => {
                 let timeout = setTimeout(() => {
                     ws.close();
                     reject(new Error('Translation timed out'));
@@ -372,8 +375,6 @@ class TranslatePanel {
 
                 ws.onopen = async () => {
                     try {
-                        // Send translate_blob command, then the raw webm audio binary
-                        // Server decodes via faster-whisper's native ffmpeg support
                         ws.send(JSON.stringify({
                             action: 'translate_blob',
                             language: this._sourceLang.value === 'auto' ? 'auto' : this._sourceLang.value
@@ -397,7 +398,6 @@ class TranslatePanel {
                             resolve(msg.text || '');
                         }
                     }
-                    // Ignore state/pong/other messages from the shared server
                 };
 
                 ws.onerror = () => {
@@ -405,30 +405,108 @@ class TranslatePanel {
                     reject(new Error('Local engine not running'));
                 };
             });
-
-            if (result) {
-                this._showResult({
-                    sourceText: `🎙️ You spoke (auto-detected)`,
-                    translatedText: result,
-                    confidence: 0.92,
-                    engine: 'local-whisper'
-                });
-                // Show engine badge after result
-                this._confidence.innerHTML += `
-                    <span class="confidence-badge" style="background:#3B82F620;color:#3B82F6;border:1px solid #3B82F640;margin-left:6px;">
-                        🏠 Translated locally by Whisper
-                    </span>
-                `;
-                console.log('[Translate] Local speech translation successful');
-                return;
-            }
         } catch (localErr) {
-            console.warn('[Translate] Local engine unavailable:', localErr.message);
+            console.warn('[Translate] Whisper unavailable:', localErr.message);
+            this._sourceText.textContent = '⚠️ Translation unavailable';
+            this._targetText.textContent = 'Start the Windy Pro engine to enable speech translation.';
+            return;
         }
 
-        // ── Fallback: show helpful message ──
-        this._sourceText.textContent = '⚠️ Translation unavailable';
-        this._targetText.textContent = 'Start the Windy Pro engine first (it powers local translation).';
+        if (!englishText || !englishText.trim()) {
+            this._sourceText.textContent = '🎙️ (no speech detected)';
+            this._targetText.textContent = 'Try speaking more clearly or holding the mic button longer.';
+            return;
+        }
+
+        // ── If target is English, we're done ──
+        if (isTargetEnglish) {
+            this._showResult({
+                sourceText: `🎙️ You spoke`,
+                translatedText: englishText,
+                confidence: 0.92,
+                engine: 'local-whisper'
+            });
+            this._confidence.innerHTML += `
+                <span class="confidence-badge" style="background:#3B82F620;color:#3B82F6;border:1px solid #3B82F640;margin-left:6px;">
+                    🏠 Translated locally by Whisper
+                </span>
+            `;
+            return;
+        }
+
+        // ── Step 2: English → target language via text translation API ──
+        this._sourceText.textContent = `🎙️ Heard: "${englishText}"`;
+        this._targetText.textContent = `Translating to ${this._getLanguageName(targetLang)}…`;
+
+        try {
+            const token = localStorage.getItem('windy_cloudToken') || '';
+            const body = JSON.stringify({
+                text: englishText,
+                sourceLang: 'en',
+                targetLang: targetLang
+            });
+            let resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body
+            });
+
+            // Retry without token on auth failure
+            if (resp.status === 401 || resp.status === 403) {
+                resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/text', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body
+                });
+            }
+
+            if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
+            const data = await resp.json();
+            const translated = data.translatedText || data.translated || '';
+
+            if (translated && !translated.startsWith('[')) {
+                this._showResult({
+                    sourceText: `🎙️ Heard (English): "${englishText}"`,
+                    translatedText: translated,
+                    confidence: data.confidence || 0.9,
+                    engine: data.engine || 'ai'
+                });
+                this._confidence.innerHTML += `
+                    <span class="confidence-badge" style="background:#3B82F620;color:#3B82F6;border:1px solid #3B82F640;margin-left:6px;">
+                        🏠 Speech by Whisper · 🌐 Text by ${data.engine === 'groq' ? 'Groq AI' : data.engine === 'openai' ? 'OpenAI' : 'AI'}
+                    </span>
+                `;
+                return;
+            }
+        } catch (textErr) {
+            console.warn('[Translate] Text translation API failed:', textErr.message);
+        }
+
+        // ── Fallback: show English result with note ──
+        this._showResult({
+            sourceText: `🎙️ Heard (English)`,
+            translatedText: englishText,
+            confidence: 0.92,
+            engine: 'local-whisper'
+        });
+        this._confidence.innerHTML += `
+            <span class="confidence-badge" style="background:#EAB30820;color:#EAB308;border:1px solid #EAB30840;margin-left:6px;">
+                ⚠️ Text translation unavailable — showing English from Whisper
+            </span>
+        `;
+    }
+
+    /** Get human-readable language name from code */
+    _getLanguageName(code) {
+        const names = {
+            en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian',
+            pt: 'Portuguese', zh: 'Chinese', ja: 'Japanese', ko: 'Korean', ar: 'Arabic',
+            ru: 'Russian', pl: 'Polish', nl: 'Dutch', sv: 'Swedish', hi: 'Hindi'
+        };
+        return names[code] || code.toUpperCase();
     }
 
     async _translateText() {
