@@ -433,6 +433,62 @@ class WindyServer:
                 "success": success
             }))
         
+        elif action == "translate_blob":
+            # One-shot translation: process audio blob without starting a session.
+            # This avoids broadcasting state changes to the main app UI.
+            # The translate panel sends audio as the next binary message after this command.
+            source_lang = cmd.get("language", "auto")
+            if self.transcriber and self.transcriber.model:
+                try:
+                    # Wait for the next binary message (the audio blob)
+                    audio_data = await websocket.recv()
+                    if isinstance(audio_data, bytes) and len(audio_data) > 100:
+                        import numpy as np
+                        audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+                        
+                        lang = source_lang if source_lang not in ('auto', '') else None
+                        segments, info = self.transcriber.model.transcribe(
+                            audio_np,
+                            language=lang,
+                            task="translate",
+                            beam_size=self.transcriber.config.beam_size,
+                            vad_filter=True,
+                            condition_on_previous_text=False,
+                            no_speech_threshold=0.6,
+                            log_prob_threshold=-1.0
+                        )
+                        
+                        translated_text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())
+                        detected_lang = getattr(info, 'language', '') or ''
+                        
+                        await websocket.send(json.dumps({
+                            "type": "translate_result",
+                            "text": translated_text,
+                            "detected_language": detected_lang,
+                            "confidence": 0.92,
+                            "engine": "local-whisper"
+                        }))
+                        print(f"🌐 One-shot translate: {detected_lang}→en: {translated_text[:60]}")
+                    else:
+                        await websocket.send(json.dumps({
+                            "type": "translate_result",
+                            "text": "",
+                            "error": "No audio data received"
+                        }))
+                except Exception as e:
+                    print(f"Translate blob error: {e}", file=sys.stderr)
+                    await websocket.send(json.dumps({
+                        "type": "translate_result",
+                        "text": "",
+                        "error": str(e)
+                    }))
+            else:
+                await websocket.send(json.dumps({
+                    "type": "translate_result",
+                    "text": "",
+                    "error": "No model loaded"
+                }))
+        
         else:
             await websocket.send(json.dumps({
                 "type": "error",

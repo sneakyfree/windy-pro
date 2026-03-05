@@ -354,82 +354,61 @@ class TranslatePanel {
         this._confidence.innerHTML = '';
         this._resultArea.classList.add('visible');
 
-        // ── Try LOCAL Whisper engine first (task='translate') ──
-        // The main app's WebSocket at ws://127.0.0.1:9876 has Whisper loaded.
-        // We configure it to task='translate' + source language, start a session,
-        // feed the audio, then stop and collect the English translation.
+        // ── Try LOCAL Whisper engine (one-shot translate_blob — no session, no state interference) ──
         try {
             const config = await window.windyAPI.getServerConfig();
             const wsUrl = `ws://${config.host}:${config.port}`;
             const ws = new WebSocket(wsUrl);
 
             const result = await new Promise((resolve, reject) => {
-                let translatedText = '';
                 let timeout = setTimeout(() => {
                     ws.close();
                     reject(new Error('Translation timed out'));
                 }, 30000);
 
-                ws.onopen = () => {
-                    // Step 1: Configure for translation
-                    ws.send(JSON.stringify({
-                        action: 'config',
-                        config: {
-                            task: 'translate',
-                            language: this._sourceLang.value === 'auto' ? 'auto' : this._sourceLang.value
+                ws.onopen = async () => {
+                    try {
+                        // Decode webm blob to 16-bit PCM
+                        const arrayBuf = await audioBlob.arrayBuffer();
+                        const audioCtx = new AudioContext({ sampleRate: 16000 });
+                        const decoded = await audioCtx.decodeAudioData(arrayBuf);
+                        const pcmFloat = decoded.getChannelData(0);
+                        const pcm16 = new Int16Array(pcmFloat.length);
+                        for (let i = 0; i < pcmFloat.length; i++) {
+                            const s = Math.max(-1, Math.min(1, pcmFloat[i]));
+                            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                         }
-                    }));
+                        audioCtx.close();
+
+                        // Send translate_blob command, then the audio binary
+                        ws.send(JSON.stringify({
+                            action: 'translate_blob',
+                            language: this._sourceLang.value === 'auto' ? 'auto' : this._sourceLang.value
+                        }));
+                        ws.send(pcm16.buffer);
+                    } catch (e) {
+                        clearTimeout(timeout);
+                        reject(new Error('Audio decode failed: ' + e.message));
+                    }
                 };
 
-                ws.onmessage = async (event) => {
+                ws.onmessage = (event) => {
                     const msg = JSON.parse(event.data);
-
-                    if (msg.type === 'ack' && msg.action === 'config') {
-                        // Step 2: Start session
-                        ws.send(JSON.stringify({ action: 'start' }));
-                    } else if (msg.type === 'ack' && msg.action === 'start') {
-                        // Step 3: Convert blob to PCM and feed audio
-                        try {
-                            const arrayBuf = await audioBlob.arrayBuffer();
-                            // Decode the webm audio to PCM using AudioContext
-                            const audioCtx = new AudioContext({ sampleRate: 16000 });
-                            const decoded = await audioCtx.decodeAudioData(arrayBuf);
-                            const pcmFloat = decoded.getChannelData(0);
-                            // Convert float32 to int16 PCM
-                            const pcm16 = new Int16Array(pcmFloat.length);
-                            for (let i = 0; i < pcmFloat.length; i++) {
-                                const s = Math.max(-1, Math.min(1, pcmFloat[i]));
-                                pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                            }
-                            ws.send(pcm16.buffer);
-                            audioCtx.close();
-                            // Step 4: Stop session to get translation
-                            setTimeout(() => {
-                                ws.send(JSON.stringify({ action: 'stop' }));
-                            }, 500); // Small delay to let engine process
-                        } catch (e) {
-                            reject(new Error('Audio decode failed: ' + e.message));
+                    if (msg.type === 'translate_result') {
+                        clearTimeout(timeout);
+                        ws.close();
+                        if (msg.error) {
+                            reject(new Error(msg.error));
+                        } else {
+                            resolve(msg.text || '');
                         }
-                    } else if (msg.type === 'transcript') {
-                        translatedText += (translatedText ? ' ' : '') + msg.text;
-                    } else if (msg.type === 'ack' && msg.action === 'stop') {
-                        clearTimeout(timeout);
-                        // Restore transcribe mode
-                        ws.send(JSON.stringify({
-                            action: 'config',
-                            config: { task: 'transcribe', language: 'en' }
-                        }));
-                        setTimeout(() => ws.close(), 200);
-                        resolve(translatedText || msg.transcript || '');
-                    } else if (msg.type === 'error') {
-                        clearTimeout(timeout);
-                        reject(new Error(msg.message));
                     }
+                    // Ignore state/pong/other messages from the shared server
                 };
 
                 ws.onerror = () => {
                     clearTimeout(timeout);
-                    reject(new Error('WebSocket connection failed'));
+                    reject(new Error('Local engine not running'));
                 };
             });
 
@@ -444,39 +423,12 @@ class TranslatePanel {
                 return;
             }
         } catch (localErr) {
-            console.warn('[Translate] Local engine failed, trying cloud:', localErr.message);
+            console.warn('[Translate] Local engine unavailable:', localErr.message);
         }
 
-        // ── Fallback to cloud API ──
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.webm');
-        formData.append('sourceLang', this._sourceLang.value);
-        formData.append('targetLang', this._targetLang.value);
-
-        try {
-            const token = localStorage.getItem('windy_cloudToken') || '';
-            let resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/speech', {
-                method: 'POST',
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-                body: formData
-            });
-
-            if (resp.status === 401 || resp.status === 403) {
-                localStorage.removeItem('windy_cloudToken');
-                resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/speech', {
-                    method: 'POST',
-                    body: formData
-                });
-            }
-
-            if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
-            const data = await resp.json();
-            this._showResult(data);
-        } catch (err) {
-            console.error('[Translate] All translation methods failed:', err);
-            this._sourceText.textContent = '⚠️ Translation failed';
-            this._targetText.textContent = 'Local engine not running. Start the Windy Pro engine first.';
-        }
+        // ── Fallback: show helpful message ──
+        this._sourceText.textContent = '⚠️ Translation unavailable';
+        this._targetText.textContent = 'Start the Windy Pro engine first (it powers local translation).';
     }
 
     async _translateText() {
