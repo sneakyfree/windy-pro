@@ -4,6 +4,7 @@
  */
 
 import path from 'path';
+import fs from 'fs';
 
 function requireEnv(name: string): string {
     const value = process.env[name];
@@ -17,6 +18,14 @@ function requireEnv(name: string): string {
     return value;
 }
 
+const DATA_ROOT = process.env.DATA_ROOT || path.join(__dirname, '..', 'data');
+const UPLOADS_PATH = path.join(DATA_ROOT, 'uploads');
+
+// Ensure upload directories exist
+[DATA_ROOT, UPLOADS_PATH].forEach(d => {
+    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+});
+
 export const config = {
     PORT: parseInt(process.env.PORT || '8098', 10),
     JWT_SECRET: requireEnv('JWT_SECRET'),
@@ -27,4 +36,11 @@ export const config = {
     DB_PATH: path.join(__dirname, '..', 'accounts.db'),
     GROQ_API_KEY: process.env.GROQ_API_KEY || '',
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+    // File storage
+    DATA_ROOT,
+    UPLOADS_PATH,
+    MAX_FILE_SIZE: 500 * 1024 * 1024, // 500MB
+    // Stripe billing
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
+    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
 } as const;

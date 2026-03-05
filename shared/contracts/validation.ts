@@ -176,3 +176,46 @@ export const HistoryQuerySchema = z.object({
 export const RecordingsListQuerySchema = z.object({
     since: z.string().optional().default('1970-01-01T00:00:00Z'),
 });
+
+// ─── File Storage Schemas (merged from cloud-storage) ────────
+
+export const FileUploadBodySchema = z.object({
+    type: z.enum(['transcript', 'audio', 'video']).optional().default('transcript'),
+    sessionDate: z.string().optional(),
+    metadata: z.string().optional(),  // JSON string
+});
+
+export const FileListQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).optional().default(1),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+});
+
+// ─── Billing Schemas (merged from cloud-storage) ─────────────
+
+export const BillingTransactionsQuerySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+    offset: z.coerce.number().int().min(0).optional().default(0),
+    status: z.string().optional(),
+});
+
+export const RefundRequestSchema = z.object({
+    transactionId: z.string().min(1, 'transactionId is required'),
+});
+
+// ─── Admin User Management Schemas ───────────────────────────
+
+export const AdminFreezeRequestSchema = z.object({
+    frozen: z.boolean().optional().default(true),
+});
+
+export const AdminTierRequestSchema = z.object({
+    tier: z.enum(['free', 'pro', 'translate', 'translate-pro']).optional(),
+    storageLimit: z.number().int().optional(),
+});
+
+export const AdminCouponCreateSchema = z.object({
+    code: z.string().min(1, 'Coupon code is required'),
+    discountPercent: z.number().int().min(1).max(100),
+    maxUses: z.number().int().optional().default(999),
+    expiresAt: z.string().optional(),
+});

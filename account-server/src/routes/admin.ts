@@ -3,6 +3,8 @@
  */
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
+import path from 'path';
+import https from 'https';
 import { config } from '../config';
 import { getDb } from '../db/schema';
 import { authenticateToken, adminOnly } from '../middleware/auth';
@@ -95,6 +97,217 @@ router.get('/revenue', authenticateToken, adminOnly, (req: Request, res: Respons
             mrr: planCounts.translate * 799,
             planCounts,
         });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /users/:userId — detailed user info ─────────────────
+
+router.get('/users/:userId', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const user = db.prepare(
+            'SELECT id, name, email, tier, role, storage_used, storage_limit, frozen, created_at, updated_at FROM users WHERE id = ?'
+        ).get(req.params.userId) as any;
+
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+
+        const files = db.prepare('SELECT id, original_name, type, size, uploaded_at FROM files WHERE user_id = ?')
+            .all(user.id) as any[];
+        const recordingCount = (db.prepare('SELECT COUNT(*) as count FROM recordings WHERE user_id = ?')
+            .get(user.id) as any).count;
+        const devices = db.prepare('SELECT id, name, platform, last_seen FROM devices WHERE user_id = ?')
+            .all(user.id) as any[];
+
+        res.json({ ok: true, user, files, recordingCount, devices });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /users/:userId/freeze — freeze/unfreeze account ────
+
+router.post('/users/:userId/freeze', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.userId) as any;
+        if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+
+        const frozen = req.body.frozen !== false ? 1 : 0;
+        db.prepare('UPDATE users SET frozen = ? WHERE id = ?').run(frozen, user.id);
+
+        res.json({ ok: true, frozen: !!frozen });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /users/:userId/tier — change tier ──────────────────
+
+router.post('/users/:userId/tier', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const user = db.prepare('SELECT id, tier FROM users WHERE id = ?').get(req.params.userId) as any;
+        if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+
+        const tierLimits: Record<string, number> = {
+            free: 500 * 1024 * 1024,
+            pro: 5 * 1024 * 1024 * 1024,
+            translate: 10 * 1024 * 1024 * 1024,
+            'translate-pro': 50 * 1024 * 1024 * 1024,
+        };
+
+        if (req.body.tier) {
+            const newLimit = tierLimits[req.body.tier] || tierLimits.free;
+            db.prepare('UPDATE users SET tier = ?, storage_limit = ? WHERE id = ?')
+                .run(req.body.tier, newLimit, user.id);
+        }
+        if (req.body.storageLimit !== undefined) {
+            db.prepare('UPDATE users SET storage_limit = ? WHERE id = ?')
+                .run(req.body.storageLimit, user.id);
+        }
+
+        const updated = db.prepare('SELECT tier, storage_limit FROM users WHERE id = ?').get(user.id) as any;
+        res.json({ ok: true, tier: updated.tier, storageLimit: updated.storage_limit });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── DELETE /users/:userId — delete user + all data ──────────
+
+router.delete('/users/:userId', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(req.params.userId) as any;
+        if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+
+        // Delete user files from disk
+        const files = db.prepare('SELECT stored_name, user_id FROM files WHERE user_id = ?').all(user.id) as any[];
+        const userUploadDir = require('path').join(config.UPLOADS_PATH, user.id);
+        for (const f of files) {
+            try { require('fs').unlinkSync(require('path').join(config.UPLOADS_PATH, f.user_id, f.stored_name)); } catch { /* ignore */ }
+        }
+        try { require('fs').rmSync(userUploadDir, { recursive: true }); } catch { /* ignore */ }
+
+        // Cascade delete — files, recordings, devices, tokens, translations, favorites
+        db.prepare('DELETE FROM files WHERE user_id = ?').run(user.id);
+        db.prepare('DELETE FROM recordings WHERE user_id = ?').run(user.id);
+        db.prepare('DELETE FROM devices WHERE user_id = ?').run(user.id);
+        db.prepare('DELETE FROM refresh_tokens WHERE user_id = ?').run(user.id);
+        db.prepare('DELETE FROM translations WHERE user_id = ?').run(user.id);
+        db.prepare('DELETE FROM favorites WHERE user_id = ?').run(user.id);
+        db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+
+        res.json({ ok: true, filesDeleted: files.length });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /overview — storage and system overview ─────────────
+
+router.get('/overview', authenticateToken, adminOnly, (_req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const totalUsers = (db.prepare("SELECT COUNT(*) as count FROM users WHERE role != 'admin' OR role IS NULL").get() as any).count;
+        const totalFiles = (db.prepare('SELECT COUNT(*) as count FROM files').get() as any).count;
+        const totalRecordings = (db.prepare('SELECT COUNT(*) as count FROM recordings').get() as any).count;
+        const totalStorage = (db.prepare('SELECT COALESCE(SUM(size), 0) as total FROM files').get() as any).total;
+
+        const tierCounts: Record<string, number> = {};
+        for (const tier of ['free', 'pro', 'translate', 'translate-pro']) {
+            tierCounts[tier] = (db.prepare('SELECT COUNT(*) as count FROM users WHERE tier = ?').get(tier) as any)?.count || 0;
+        }
+
+        const storageByType: Record<string, number> = {};
+        const typeRows = db.prepare('SELECT type, COALESCE(SUM(size), 0) as total FROM files GROUP BY type').all() as any[];
+        for (const row of typeRows) { storageByType[row.type] = row.total; }
+
+        res.json({
+            ok: true,
+            summary: {
+                totalUsers,
+                totalFiles,
+                totalRecordings,
+                totalStorage,
+                usersByTier: tierCounts,
+                storageByType,
+            },
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /billing/transactions — admin view of all txns ──────
+
+router.get('/billing/transactions', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+        const offset = parseInt(req.query.offset as string) || 0;
+
+        let txs: any[];
+        let total: number;
+        const userId = req.query.userId as string | undefined;
+        const status = req.query.status as string | undefined;
+
+        let where = '';
+        const params: any[] = [];
+        if (userId) { where += ' AND user_id = ?'; params.push(userId); }
+        if (status) { where += ' AND status = ?'; params.push(status); }
+
+        txs = db.prepare(`SELECT * FROM transactions WHERE 1=1 ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+            .all(...params, limit, offset) as any[];
+        total = (db.prepare(`SELECT COUNT(*) as count FROM transactions WHERE 1=1 ${where}`)
+            .get(...params) as any).count;
+
+        res.json({ ok: true, transactions: txs, total, limit, offset });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /billing/refund — admin refund ─────────────────────
+
+router.post('/billing/refund', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const { transactionId } = req.body;
+        if (!transactionId) { res.status(400).json({ error: 'transactionId required' }); return; }
+
+        const db = getDb();
+        const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(transactionId) as any;
+        if (!tx) { res.status(404).json({ error: 'Transaction not found' }); return; }
+
+        db.prepare("UPDATE transactions SET status = 'refunded' WHERE id = ?").run(tx.id);
+
+        // Downgrade user
+        if (tx.user_id) {
+            db.prepare("UPDATE users SET tier = 'free', storage_limit = 524288000 WHERE id = ?").run(tx.user_id);
+        }
+
+        // Call Stripe refund API if configured
+        if (config.STRIPE_SECRET_KEY && tx.stripe_payment_id) {
+            const postData = `payment_intent=${tx.stripe_payment_id}`;
+            const stripeReq = https.request({
+                hostname: 'api.stripe.com', path: '/v1/refunds', method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${config.STRIPE_SECRET_KEY}`,
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Content-Length': Buffer.byteLength(postData),
+                },
+            });
+            stripeReq.on('error', (e: Error) => console.error('[Billing] Stripe refund error:', e.message));
+            stripeReq.write(postData);
+            stripeReq.end();
+        }
+
+        res.json({ ok: true, transaction: tx });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }

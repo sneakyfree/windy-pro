@@ -21,6 +21,8 @@ import cloneRoutes from './routes/clone';
 import adminRoutes from './routes/admin';
 import downloadRoutes from './routes/downloads';
 import miscRoutes from './routes/misc';
+import storageRoutes from './routes/storage';
+import { billingRouter, stripeRouter } from './routes/billing';
 import { authenticateToken } from './middleware/auth';
 
 const app = express();
@@ -29,6 +31,10 @@ const app = express();
 
 app.use(cors());
 app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response-time ms'));
+
+// Stripe webhook needs raw body — must come BEFORE express.json()
+app.use('/api/v1/stripe', express.raw({ type: 'application/json' }), stripeRouter);
+
 app.use(express.json());
 
 // ─── Static Website ──────────────────────────────────────────
@@ -92,6 +98,12 @@ app.use('/download', downloadRoutes);
 
 // Misc routes (health, analytics, updates, license, rtc, ocr)
 app.use('/', miscRoutes);
+
+// File storage (merged from cloud-storage service)
+app.use('/api/v1/files', storageRoutes);
+
+// Billing
+app.use('/api/v1/billing', billingRouter);
 
 // ─── Error Handler ───────────────────────────────────────────
 

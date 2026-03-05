@@ -7,24 +7,24 @@ import { config } from '../config';
 let db: Database.Database;
 
 export function getDb(): Database.Database {
-    if (!db) {
-        db = new Database(config.DB_PATH);
-        db.pragma('journal_mode = WAL');
-        db.pragma('foreign_keys = ON');
-        initSchema(db);
-    }
-    return db;
+  if (!db) {
+    db = new Database(config.DB_PATH);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    initSchema(db);
+  }
+  return db;
 }
 
 export function closeDb(): void {
-    if (db) {
-        db.close();
-    }
+  if (db) {
+    db.close();
+  }
 }
 
 function initSchema(db: Database.Database): void {
-    // Core tables
-    db.exec(`
+  // Core tables
+  db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
@@ -126,36 +126,83 @@ function initSchema(db: Database.Database): void {
       attempts INTEGER NOT NULL DEFAULT 0,
       error TEXT
     );
+
+    -- Cloud file storage (merged from cloud-storage service)
+    CREATE TABLE IF NOT EXISTS files (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      stored_name TEXT NOT NULL,
+      mime_type TEXT DEFAULT 'application/octet-stream',
+      size INTEGER NOT NULL DEFAULT 0,
+      type TEXT NOT NULL DEFAULT 'transcript',
+      session_date TEXT,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_files_user ON files(user_id);
+    CREATE INDEX IF NOT EXISTS idx_files_uploaded ON files(uploaded_at);
+
+    -- Billing transactions (merged from cloud-storage service)
+    CREATE TABLE IF NOT EXISTS transactions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      email TEXT DEFAULT '',
+      amount INTEGER NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'usd',
+      type TEXT NOT NULL DEFAULT 'one_time',
+      status TEXT NOT NULL DEFAULT 'pending',
+      stripe_payment_id TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_tx_status ON transactions(status);
+
+    -- Coupons (merged from cloud-storage service)
+    CREATE TABLE IF NOT EXISTS coupons (
+      code TEXT PRIMARY KEY,
+      discount_percent INTEGER NOT NULL DEFAULT 0,
+      max_uses INTEGER NOT NULL DEFAULT 999,
+      usage_count INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
-    // Safe column migrations — silently skip if column already exists
-    const migrations: string[] = [
-        "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'",
-        "ALTER TABLE users ADD COLUMN stripe_customer_id TEXT",
-        "ALTER TABLE users ADD COLUMN license_key TEXT",
-        "ALTER TABLE users ADD COLUMN license_tier TEXT DEFAULT 'free'",
-        // Canonical recording columns that may be missing from old schemas
-        "ALTER TABLE recordings ADD COLUMN device_id TEXT",
-        "ALTER TABLE recordings ADD COLUMN device_name TEXT",
-        "ALTER TABLE recordings ADD COLUMN source TEXT DEFAULT 'record'",
-        "ALTER TABLE recordings ADD COLUMN languages_json TEXT DEFAULT '[\"en\"]'",
-        "ALTER TABLE recordings ADD COLUMN media_audio INTEGER DEFAULT 1",
-        "ALTER TABLE recordings ADD COLUMN media_video INTEGER DEFAULT 0",
-        "ALTER TABLE recordings ADD COLUMN quality_score INTEGER DEFAULT 0",
-        "ALTER TABLE recordings ADD COLUMN quality_json TEXT DEFAULT '{}'",
-        "ALTER TABLE recordings ADD COLUMN engine_used TEXT DEFAULT 'cloud-standard'",
-        "ALTER TABLE recordings ADD COLUMN synced INTEGER DEFAULT 0",
-        "ALTER TABLE recordings ADD COLUMN synced_at TEXT",
-        "ALTER TABLE recordings ADD COLUMN clone_usable INTEGER DEFAULT 0",
-        "ALTER TABLE recordings ADD COLUMN tags_json TEXT DEFAULT '[]'",
-        "ALTER TABLE recordings ADD COLUMN latitude REAL",
-        "ALTER TABLE recordings ADD COLUMN longitude REAL",
-        "ALTER TABLE recordings ADD COLUMN device_model TEXT",
-        "ALTER TABLE recordings ADD COLUMN audio_path TEXT",
-        "ALTER TABLE recordings ADD COLUMN video_path TEXT",
-    ];
+  // Safe column migrations — silently skip if column already exists
+  const migrations: string[] = [
+    "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'",
+    "ALTER TABLE users ADD COLUMN stripe_customer_id TEXT",
+    "ALTER TABLE users ADD COLUMN license_key TEXT",
+    "ALTER TABLE users ADD COLUMN license_tier TEXT DEFAULT 'free'",
+    // Canonical recording columns that may be missing from old schemas
+    "ALTER TABLE recordings ADD COLUMN device_id TEXT",
+    "ALTER TABLE recordings ADD COLUMN device_name TEXT",
+    "ALTER TABLE recordings ADD COLUMN source TEXT DEFAULT 'record'",
+    "ALTER TABLE recordings ADD COLUMN languages_json TEXT DEFAULT '[\"en\"]'",
+    "ALTER TABLE recordings ADD COLUMN media_audio INTEGER DEFAULT 1",
+    "ALTER TABLE recordings ADD COLUMN media_video INTEGER DEFAULT 0",
+    "ALTER TABLE recordings ADD COLUMN quality_score INTEGER DEFAULT 0",
+    "ALTER TABLE recordings ADD COLUMN quality_json TEXT DEFAULT '{}'",
+    "ALTER TABLE recordings ADD COLUMN engine_used TEXT DEFAULT 'cloud-standard'",
+    "ALTER TABLE recordings ADD COLUMN synced INTEGER DEFAULT 0",
+    "ALTER TABLE recordings ADD COLUMN synced_at TEXT",
+    "ALTER TABLE recordings ADD COLUMN clone_usable INTEGER DEFAULT 0",
+    "ALTER TABLE recordings ADD COLUMN tags_json TEXT DEFAULT '[]'",
+    "ALTER TABLE recordings ADD COLUMN latitude REAL",
+    "ALTER TABLE recordings ADD COLUMN longitude REAL",
+    "ALTER TABLE recordings ADD COLUMN device_model TEXT",
+    "ALTER TABLE recordings ADD COLUMN audio_path TEXT",
+    "ALTER TABLE recordings ADD COLUMN video_path TEXT",
+    // Cloud storage user fields
+    "ALTER TABLE users ADD COLUMN storage_used INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN storage_limit INTEGER DEFAULT 524288000",
+    "ALTER TABLE users ADD COLUMN frozen INTEGER DEFAULT 0",
+  ];
 
-    for (const sql of migrations) {
-        try { db.exec(sql); } catch { /* column already exists */ }
-    }
+  for (const sql of migrations) {
+    try { db.exec(sql); } catch { /* column already exists */ }
+  }
 }

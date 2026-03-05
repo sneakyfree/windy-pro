@@ -178,4 +178,12 @@ export {
     SpeechTranslateBodySchema,
     HistoryQuerySchema,
     RecordingsListQuerySchema,
+    // Cloud storage + billing (merged from cloud-storage service)
+    FileUploadBodySchema,
+    FileListQuerySchema,
+    BillingTransactionsQuerySchema,
+    RefundRequestSchema,
+    AdminFreezeRequestSchema,
+    AdminTierRequestSchema,
+    AdminCouponCreateSchema,
 } from './validation';
