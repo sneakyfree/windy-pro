@@ -1241,13 +1241,15 @@ class SettingsPanel {
       translate: ['windytune', 'local', 'edge-spark', 'edge-pulse', 'edge-standard', 'edge-global', 'edge-pro',
         'core-spark', 'core-pulse', 'core-standard', 'core-global', 'core-pro', 'core-turbo', 'core-ultra',
         'lingua-es', 'lingua-fr', 'lingua-hi'],
-      translate_pro: null // all engines
+      translate_pro: null, // all engines
+      unlimited: null  // all engines
     };
     const tierModels = {
       free: ['tiny', 'base'],
       pro: ['tiny', 'base', 'small', 'medium', 'large-v3'],
       translate: ['tiny', 'base', 'small', 'medium', 'large-v3'],
-      translate_pro: null // all models
+      translate_pro: null, // all models
+      unlimited: null  // all models
     };
 
     const allowedEngines = tierEngines[tier] || tierEngines.free;
@@ -1261,7 +1263,7 @@ class SettingsPanel {
           opt.disabled = true;
           if (!opt.dataset.originalText) opt.dataset.originalText = opt.textContent;
           opt.textContent = '🔒 ' + opt.dataset.originalText + ' — upgrade to unlock';
-          opt.style.color = '#555';
+          opt.style.color = '#8899AA';
         } else {
           opt.disabled = false;
           if (opt.dataset.originalText) opt.textContent = opt.dataset.originalText;
@@ -1278,7 +1280,7 @@ class SettingsPanel {
           opt.disabled = true;
           if (!opt.dataset.originalText) opt.dataset.originalText = opt.textContent;
           opt.textContent = '🔒 ' + opt.dataset.originalText + ' — upgrade to unlock';
-          opt.style.color = '#555';
+          opt.style.color = '#8899AA';
         } else {
           opt.disabled = false;
           if (opt.dataset.originalText) opt.textContent = opt.dataset.originalText;
