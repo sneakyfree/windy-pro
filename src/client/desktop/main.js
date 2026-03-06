@@ -2506,11 +2506,21 @@ ipcMain.handle('dismiss-crash-recovery', async () => {
 
 // ─── Global Security: Enforce navigation + permission policies on ALL webContents ───
 app.on('web-contents-created', (event, contents) => {
-  // Block navigation to non-local URLs
+  // Block navigation to non-local URLs (except checkout windows navigating to Stripe)
   contents.on('will-navigate', (navEvent, navigationUrl) => {
-    const parsed = new URL(navigationUrl);
-    if (parsed.protocol !== 'file:') {
-      console.warn('[Security] Blocked navigation to:', navigationUrl);
+    try {
+      const parsed = new URL(navigationUrl);
+      // Allow checkout windows (data: origin) to navigate to https (Stripe)
+      const currentUrl = contents.getURL();
+      if (parsed.protocol === 'https:' && (currentUrl.startsWith('data:') || currentUrl.includes('checkout.stripe.com'))) {
+        console.log('[Security] Allowed checkout navigation to:', navigationUrl);
+        return; // Allow
+      }
+      if (parsed.protocol !== 'file:') {
+        console.warn('[Security] Blocked navigation to:', navigationUrl);
+        navEvent.preventDefault();
+      }
+    } catch (e) {
       navEvent.preventDefault();
     }
   });
