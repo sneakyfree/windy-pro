@@ -2183,7 +2183,7 @@ ipcMain.handle('open-checkout-url', async (event, { url, currentTier, upgradeTie
 
   const tableRows = featureDefs.map(f => {
     const cells = allPlans.map(p => {
-      const t = tiers[p.key];
+      const t = tiers[p.key] || tiers.free;
       const isSelected = p.key === upgradeTier;
       const selColor = allPlans.find(x => x.key === upgradeTier)?.color || '#3B82F6';
       let val;
@@ -2200,8 +2200,8 @@ ipcMain.handle('open-checkout-url', async (event, { url, currentTier, upgradeTie
 
   const selectedPlan = allPlans.find(p => p.key === upgradeTier) || allPlans[1];
   const newFeaturesCount = featureDefs.filter(f => {
-    const cur = tiers[currentTier || 'free'];
-    const upg = tiers[upgradeTier || 'pro'];
+    const cur = tiers[currentTier] || tiers.free;
+    const upg = tiers[upgradeTier] || tiers.pro;
     if (typeof cur[f.key] === 'boolean') return !cur[f.key] && upg[f.key];
     return upg[f.key] > cur[f.key];
   }).length;
