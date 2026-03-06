@@ -238,8 +238,8 @@ class UpgradePanel {
             const result = await window.windyAPI.createCheckoutSession(priceId, email);
             if (!result?.ok) throw new Error(result?.error || 'Session creation failed');
 
-            // Track this session (keep all for multi-tab support)
-            this._activeSessions.push({ sessionId: result.sessionId, tier });
+            // Track this session with its URL (keep all for multi-tab support)
+            this._activeSessions.push({ sessionId: result.sessionId, tier, url: result.url });
 
             // Try to auto-open checkout in browser/window
             if (window.windyAPI?.openExternalUrl) {
@@ -316,12 +316,29 @@ class UpgradePanel {
                     }
                 }
 
-                // No payment yet — update status
+                // No payment yet — update status with checkout link
                 if (status) {
                     const tabCount = sessions.length;
                     const dots = '.'.repeat((this._pollCount % 3) + 1);
+                    const latestUrl = sessions[sessions.length - 1]?.url || '';
                     const tabNote = tabCount > 1 ? `<br><span style="font-size:10px;color:#6B7280;">Watching ${tabCount} checkout tabs — pay on any one</span>` : '';
-                    status.innerHTML = `⏳ Waiting for payment${dots}<br><span style="font-size:11px;color:#9CA3AF;">Complete checkout in your browser, then come back here</span>${tabNote}<br><a href="#" id="cancelCheckout" style="font-size:11px;color:#60A5FA;cursor:pointer;">Changed your mind? Pick a different plan</a>`;
+                    status.innerHTML = `
+                        <div style="text-align:center;">
+                            <div style="margin-bottom:6px;font-size:13px;">⏳ Waiting for payment${dots}</div>
+                            ${latestUrl ? `
+                                <a href="${latestUrl}" 
+                                   style="display:inline-block;background:#635BFF;color:#fff;padding:8px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:6px;"
+                                   onclick="if(window.windyAPI?.openExternalUrl){window.windyAPI.openExternalUrl('${latestUrl}')};return false;">
+                                    💳 Open Stripe Checkout →
+                                </a>
+                                <div style="font-size:10px;color:#6B7280;margin-bottom:4px;">
+                                    or <a href="#" onclick="navigator.clipboard.writeText('${latestUrl}');this.textContent='✅ Copied!';return false;" style="color:#60A5FA;cursor:pointer;">copy checkout URL</a>
+                                </div>
+                            ` : `<div style="font-size:11px;color:#9CA3AF;">Complete checkout in your browser</div>`}
+                            ${tabNote}
+                            <a href="#" id="cancelCheckout" style="font-size:11px;color:#60A5FA;cursor:pointer;">Changed your mind? Pick a different plan</a>
+                        </div>
+                    `;
                     const cancelLink = status.querySelector('#cancelCheckout');
                     if (cancelLink) {
                         cancelLink.onclick = (ev) => {
