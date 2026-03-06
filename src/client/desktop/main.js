@@ -1258,12 +1258,12 @@ ipcMain.on('open-archive-folder', () => {
 
 ipcMain.handle('open-external-url', async (event, url) => {
   console.log('[Main] open-external-url called with:', url);
-  // Security: validate URL with URL parser — reject non-https schemes
+  // Security: validate URL with URL parser — allow https and mailto
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== 'https:') {
-      console.warn('[Main] Blocked non-https external URL:', url);
-      return { ok: false, error: 'Only HTTPS URLs are allowed' };
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'mailto:') {
+      console.warn('[Main] Blocked non-https/mailto external URL:', url);
+      return { ok: false, error: 'Only HTTPS and mailto URLs are allowed' };
     }
   } catch (e) {
     console.warn('[Main] Invalid URL:', url);
@@ -1277,6 +1277,19 @@ ipcMain.handle('open-external-url', async (event, url) => {
     return { ok: true };
   } catch (e) {
     console.error('[Main] ❌ shell.openExternal failed:', e.message);
+    // Fallback: use xdg-open on Linux (AppImage sandbox can block shell.openExternal)
+    if (process.platform === 'linux') {
+      try {
+        const { exec } = require('child_process');
+        exec(`xdg-open "${url.replace(/"/g, '')}"`, (err) => {
+          if (err) console.error('[Main] xdg-open also failed:', err.message);
+          else console.log('[Main] ✅ Opened URL via xdg-open fallback');
+        });
+        return { ok: true };
+      } catch (e2) {
+        console.error('[Main] xdg-open fallback failed:', e2.message);
+      }
+    }
     return { ok: false, error: e.message };
   }
 });
