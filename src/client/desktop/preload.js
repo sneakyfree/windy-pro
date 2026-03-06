@@ -125,6 +125,13 @@ contextBridge.exposeInMainWorld('windyAPI', {
   getCurrentTier: () => ipcRenderer.invoke('get-current-tier'),
   applyCoupon: (code) => ipcRenderer.invoke('apply-coupon', code),
 
+  // Model download manager
+  checkModelStatus: () => ipcRenderer.invoke('check-model-status'),
+  downloadModels: (modelNames) => ipcRenderer.invoke('download-models', modelNames),
+  showDownloadWizard: (tier) => ipcRenderer.invoke('show-download-wizard', tier),
+  onModelDownloadProgress: (callback) => ipcRenderer.on('model-download-progress', (e, data) => callback(data)),
+  onLicenseUpdated: (callback) => ipcRenderer.on('license-updated', (e, tier) => callback(tier)),
+
   // Wizard
   getWizardState: () => ipcRenderer.invoke('get-wizard-state'),
   setWizardState: (state) => ipcRenderer.invoke('set-wizard-state', state),

@@ -126,6 +126,25 @@ let pythonProcess = null;
 let pythonRestartCount = 0;
 const MAX_PYTHON_RESTARTS = 3;
 
+// ═══ Model Download Manifest ═══
+const MODEL_MANIFEST = {
+  models: {
+    tiny: { size: '39MB', bytes: 40894464, label: 'Edge Spark', desc: 'Fastest, CPU ✅' },
+    base: { size: '142MB', bytes: 148897792, label: 'Edge Pulse', desc: 'Balanced, CPU ✅' },
+    small: { size: '466MB', bytes: 488636416, label: 'Core Standard', desc: '⚠️ GPU recommended' },
+    medium: { size: '1.5GB', bytes: 1533100032, label: 'Core Pro', desc: '⚠️ GPU only' },
+    'large-v3': { size: '3.1GB', bytes: 3087007744, label: 'Core Ultra', desc: '⚠️ GPU only' },
+    turbo: { size: '809MB', bytes: 847872000, label: 'Turbo', desc: 'Fast + accurate' }
+  },
+  tierModels: {
+    free: ['tiny', 'base', 'small'],
+    pro: ['tiny', 'base', 'small', 'medium', 'large-v3', 'turbo'],
+    translate: ['tiny', 'base', 'small', 'medium', 'large-v3', 'turbo'],
+    translate_pro: ['tiny', 'base', 'small', 'medium', 'large-v3', 'turbo']
+  }
+};
+let activeModelDownload = null; // Track background download process
+
 // ═══ Stripe Payment Integration ═══
 // Bootstrap: load .env file if present and persist Stripe keys to electron-store
 (function bootstrapStripeKeys() {
@@ -2373,6 +2392,9 @@ ipcMain.handle('check-payment-status', async (event, sessionId) => {
         expiresAt: session.mode === 'subscription' ? null : null // one-time = never expires
       });
       console.log(`[Stripe] Payment confirmed! Tier upgraded to: ${tier}`);
+      safeSend('license-updated', tier);
+      // Trigger download wizard for the new tier
+      showDownloadWizard(tier);
     }
 
     return { ok: true, paid, tier, status: session.payment_status };
@@ -2386,6 +2408,303 @@ ipcMain.handle('get-current-tier', async () => {
   const license = store.get('license') || { tier: 'free' };
   const limits = getTierLimits(license.tier);
   return { tier: license.tier, limits, license };
+});
+
+
+
+// ═══ Model Download Manager & Wizard ═══
+
+/**
+ * Check which models are already downloaded (scan HuggingFace cache + local folder)
+ */
+function checkModelStatus() {
+    const fs = require('fs');
+    const models = {};
+    const hfCache = path.join(os.homedir(), '.cache', 'huggingface', 'hub');
+    const localModelDir = path.join(os.homedir(), '.windy-pro', 'model');
+    const bundledDir = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : null;
+
+    for (const [name, info] of Object.entries(MODEL_MANIFEST.models)) {
+        const localPath = path.join(localModelDir, `faster-whisper-${name}`);
+        const bundledPath = bundledDir ? path.join(bundledDir, `faster-whisper-${name}`) : null;
+
+        // Check local model dir
+        const localExists = fs.existsSync(path.join(localPath, 'model.bin'));
+        // Check bundled model dir
+        const bundledExists = bundledPath && fs.existsSync(path.join(bundledPath, 'model.bin'));
+        // Check HuggingFace cache (models downloaded by faster-whisper)
+        let hfExists = false;
+        try {
+            const hfModelDir = path.join(hfCache, `models--Systran--faster-whisper-${name}`);
+            if (fs.existsSync(hfModelDir)) {
+                // Check for snapshots directory with content
+                const snapshotsDir = path.join(hfModelDir, 'snapshots');
+                if (fs.existsSync(snapshotsDir)) {
+                    const snapshots = fs.readdirSync(snapshotsDir);
+                    if (snapshots.length > 0) {
+                        const snapDir = path.join(snapshotsDir, snapshots[0]);
+                        hfExists = fs.existsSync(path.join(snapDir, 'model.bin'));
+                    }
+                }
+            }
+        } catch (_) { }
+
+        models[name] = {
+            ...info,
+            downloaded: localExists || bundledExists || hfExists,
+            location: localExists ? 'local' : bundledExists ? 'bundled' : hfExists ? 'cache' : null
+        };
+    }
+    return models;
+}
+
+ipcMain.handle('check-model-status', async () => {
+    const tier = store.get('license.tier') || 'free';
+    const models = checkModelStatus();
+    const allowedModels = MODEL_MANIFEST.tierModels[tier] || MODEL_MANIFEST.tierModels.free;
+    return { tier, models, allowedModels };
+});
+
+/**
+ * Download a specific model by spawning a Python subprocess
+ * Returns a promise that resolves when download completes
+ */
+function downloadModel(modelName) {
+    return new Promise((resolve, reject) => {
+        const venvPython = path.join(os.homedir(), '.windy-pro', 'venv', 'bin', 'python');
+        const pythonExe = require('fs').existsSync(venvPython) ? venvPython : 'python3';
+
+        console.log(`[ModelDownload] Starting download: ${modelName}`);
+
+        const proc = require('child_process').spawn(pythonExe, ['-c', `
+import sys
+print(f"DOWNLOADING {sys.argv[0]}", flush=True)
+try:
+    from faster_whisper import WhisperModel
+    print("LOADING", flush=True)
+    model = WhisperModel("${modelName}", device="cpu", compute_type="int8")
+    del model
+    print("DONE", flush=True)
+except Exception as e:
+    print(f"ERROR {e}", flush=True)
+    sys.exit(1)
+`], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+        let output = '';
+        proc.stdout.on('data', (data) => {
+            output += data.toString();
+            const lines = data.toString().trim().split('\n');
+            for (const line of lines) {
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    safeSend('model-download-progress', { model: modelName, status: line.trim() });
+                }
+            }
+        });
+        proc.stderr.on('data', (data) => {
+            // HuggingFace downloads print progress to stderr
+            const text = data.toString();
+            if (text.includes('%')) {
+                const match = text.match(/(\d+)%/);
+                if (match && mainWindow && !mainWindow.isDestroyed()) {
+                    safeSend('model-download-progress', { model: modelName, percent: parseInt(match[1]) });
+                }
+            }
+        });
+        proc.on('close', (code) => {
+            if (code === 0 && output.includes('DONE')) {
+                console.log(`[ModelDownload] Completed: ${modelName}`);
+                resolve(true);
+            } else {
+                console.error(`[ModelDownload] Failed: ${modelName} (exit ${code})`);
+                reject(new Error(`Download failed for ${modelName}`));
+            }
+        });
+        proc.on('error', (err) => reject(err));
+    });
+}
+
+ipcMain.handle('download-models', async (event, modelNames) => {
+    const results = {};
+    for (const name of modelNames) {
+        try {
+            safeSend('model-download-progress', { model: name, status: 'STARTING', percent: 0 });
+            await downloadModel(name);
+            results[name] = { ok: true };
+            safeSend('model-download-progress', { model: name, status: 'DONE', percent: 100 });
+        } catch (err) {
+            results[name] = { ok: false, error: err.message };
+            safeSend('model-download-progress', { model: name, status: 'ERROR', error: err.message });
+        }
+    }
+    return results;
+});
+
+/**
+ * Show the Model Download Wizard popup
+ */
+function showDownloadWizard(newTier) {
+    const models = checkModelStatus();
+    const allowedModels = MODEL_MANIFEST.tierModels[newTier] || MODEL_MANIFEST.tierModels.free;
+    const toDownload = allowedModels.filter(m => !models[m]?.downloaded);
+
+    if (toDownload.length === 0) {
+        console.log('[Wizard] All models already downloaded for tier:', newTier);
+        safeSend('license-updated', newTier);
+        return;
+    }
+
+    const tierNames = { free: 'Free', pro: 'Windy Pro', translate: 'Windy Translate', translate_pro: 'Windy Translate Pro' };
+    const tierName = tierNames[newTier] || newTier;
+
+    const totalBytes = toDownload.reduce((sum, m) => sum + (MODEL_MANIFEST.models[m]?.bytes || 0), 0);
+    const totalSizeMB = Math.round(totalBytes / 1024 / 1024);
+
+    const modelRows = allowedModels.map(m => {
+        const info = MODEL_MANIFEST.models[m];
+        const isDownloaded = models[m]?.downloaded;
+        const needsDownload = toDownload.includes(m);
+        return { key: m, label: info.label, size: info.size, desc: info.desc, downloaded: isDownloaded, needsDownload };
+    });
+
+    const DATA = JSON.stringify({ modelRows, toDownload, tierName, totalSizeMB });
+
+    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Downloading Engines</title>' +
+        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
+        '<style>' +
+        '*{margin:0;padding:0;box-sizing:border-box;}' +
+        'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B,#0F172A);color:#F1F5F9;min-height:100vh;padding:30px;}' +
+        '.header{text-align:center;margin-bottom:24px;}' +
+        '.emoji{font-size:48px;margin-bottom:8px;}' +
+        'h1{font-size:24px;font-weight:800;background:linear-gradient(135deg,#22C55E,#3B82F6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px;}' +
+        '.subtitle{color:#94A3B8;font-size:13px;}' +
+        '.model-list{max-width:500px;margin:0 auto 20px;}' +
+        '.model-row{display:flex;align-items:center;gap:12px;background:#1E293B;border:1px solid #334155;border-radius:10px;padding:12px 16px;margin-bottom:8px;transition:all 0.3s;}' +
+        '.model-row.done{border-color:#22C55E33;}' +
+        '.model-row.active{border-color:#3B82F6;box-shadow:0 0 12px #3B82F644;}' +
+        '.model-row.error{border-color:#EF444433;}' +
+        '.model-icon{font-size:20px;width:28px;text-align:center;}' +
+        '.model-info{flex:1;}' +
+        '.model-name{font-size:13px;font-weight:600;color:#F1F5F9;}' +
+        '.model-detail{font-size:11px;color:#64748B;}' +
+        '.model-status{font-size:11px;font-weight:600;text-align:right;min-width:80px;}' +
+        '.model-status.done{color:#22C55E;}' +
+        '.model-status.downloading{color:#3B82F6;}' +
+        '.model-status.queued{color:#64748B;}' +
+        '.model-status.error{color:#EF4444;}' +
+        '.progress-bar{width:100%;height:4px;background:#334155;border-radius:2px;margin-top:4px;overflow:hidden;}' +
+        '.progress-fill{height:100%;background:linear-gradient(90deg,#3B82F6,#22C55E);border-radius:2px;transition:width 0.3s;width:0%;}' +
+        '.overall{max-width:500px;margin:0 auto 16px;text-align:center;}' +
+        '.overall-bar{width:100%;height:6px;background:#334155;border-radius:3px;overflow:hidden;margin:8px 0;}' +
+        '.overall-fill{height:100%;background:linear-gradient(90deg,#7C3AED,#3B82F6,#22C55E);border-radius:3px;transition:width 0.5s;width:0%;}' +
+        '.overall-text{font-size:11px;color:#94A3B8;}' +
+        '.actions{text-align:center;margin-top:16px;}' +
+        '.use-btn{background:linear-gradient(135deg,#22C55E,#16A34A);color:#fff;border:none;padding:12px 28px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s;}' +
+        '.use-btn:hover{transform:translateY(-2px);box-shadow:0 4px 20px #22C55E44;}' +
+        '.done-msg{display:none;text-align:center;margin-top:20px;}' +
+        '.done-msg.show{display:block;}' +
+        '.done-msg h2{font-size:20px;color:#22C55E;margin-bottom:6px;}' +
+        '.done-msg p{color:#94A3B8;font-size:12px;}' +
+        '</style></head><body>' +
+        '<div class="header">' +
+        '<div class="emoji">🚀</div>' +
+        '<h1>Welcome to ' + tierName + '!</h1>' +
+        '<p class="subtitle">Downloading your premium engines (~' + totalSizeMB + ' MB total)</p>' +
+        '</div>' +
+        '<div class="model-list" id="modelList"></div>' +
+        '<div class="overall">' +
+        '<div class="overall-bar"><div class="overall-fill" id="overallFill"></div></div>' +
+        '<div class="overall-text" id="overallText">Preparing downloads…</div>' +
+        '</div>' +
+        '<div class="actions">' +
+        '<button class="use-btn" id="useBtn" onclick="window.close()">✨ Use App Now — downloads continue in background</button>' +
+        '</div>' +
+        '<div class="done-msg" id="doneMsg">' +
+        '<h2>✅ All Engines Ready!</h2>' +
+        '<p>All premium engines are downloaded and ready. Close this window and enjoy!</p>' +
+        '</div>' +
+        '<script>' +
+        'const D=' + DATA + ';' +
+        'const states={};' +
+        'D.modelRows.forEach(m=>states[m.key]=m.downloaded?"done":"queued");' +
+        'function renderList(){' +
+        '  const list=document.getElementById("modelList");list.innerHTML="";' +
+        '  D.modelRows.forEach(m=>{' +
+        '    const st=states[m.key]||"queued";const pct=states[m.key+"_pct"]||0;' +
+        '    const cls="model-row "+(st==="done"?"done":st==="downloading"?"active":st==="error"?"error":"");' +
+        '    const icon=st==="done"?"✅":st==="downloading"?"⬇️":st==="error"?"❌":"⏳";' +
+        '    const statusCls="model-status "+(st==="done"?"done":st==="downloading"?"downloading":st==="error"?"error":"queued");' +
+        '    const statusText=st==="done"?"Ready":st==="downloading"?pct+"%":st==="error"?"Failed":"Queued";' +
+        '    let barHtml="";' +
+        '    if(st==="downloading")barHtml="<div class=\\"progress-bar\\"><div class=\\"progress-fill\\" style=\\"width:"+pct+"%\\"></div></div>";' +
+        '    list.innerHTML+="<div class=\\""+cls+"\\"><div class=\\"model-icon\\">"+icon+"</div>"' +
+        '      +"<div class=\\"model-info\\"><div class=\\"model-name\\">"+m.label+" ("+m.key+")</div>"' +
+        '      +"<div class=\\"model-detail\\">"+m.size+" — "+m.desc+"</div>"+barHtml+"</div>"' +
+        '      +"<div class=\\""+statusCls+"\\">"+statusText+"</div></div>";' +
+        '  });' +
+        '  const doneCount=D.modelRows.filter(m=>states[m.key]==="done").length;' +
+        '  const pct=Math.round(doneCount/D.modelRows.length*100);' +
+        '  document.getElementById("overallFill").style.width=pct+"%";' +
+        '  document.getElementById("overallText").textContent=doneCount+" of "+D.modelRows.length+" engines ready";' +
+        '  if(D.toDownload.every(m=>states[m]==="done")){' +
+        '    document.getElementById("doneMsg").classList.add("show");' +
+        '    document.getElementById("useBtn").textContent="🎉 Close & Start Using Premium Engines";' +
+        '  }' +
+        '}' +
+        'renderList();' +
+        // Poll for status updates via title changes (simple IPC without preload)
+        'setInterval(()=>{' +
+        '  const t=document.title;' +
+        '  if(t.startsWith("UPDATE:")){' +
+        '    try{const u=JSON.parse(t.substring(7));' +
+        '    if(u.model){' +
+        '      if(u.status==="DONE")states[u.model]="done";' +
+        '      else if(u.status==="ERROR")states[u.model]="error";' +
+        '      else if(u.status==="STARTING"||u.status==="DOWNLOADING"||u.status==="LOADING"){states[u.model]="downloading";states[u.model+"_pct"]=u.percent||0;}' +
+        '      else if(u.percent!==undefined){states[u.model]="downloading";states[u.model+"_pct"]=u.percent;}' +
+        '      renderList();' +
+        '    }}catch(_){}' +
+        '    document.title="Downloading Engines";' +
+        '  }' +
+        '},200);' +
+        '</script></body></html>';
+
+    const wizardWin = new BrowserWindow({
+        width: 580, height: 620, x: 200, y: 100,
+        title: 'Downloading Engines',
+        autoHideMenuBar: true,
+        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, javascript: true }
+    });
+    wizardWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    wizardWin.focus();
+
+    // Start downloading missing models sequentially
+    (async () => {
+        for (const modelName of toDownload) {
+            // Send status update via title change (safe without preload)
+            try {
+                wizardWin.setTitle('UPDATE:' + JSON.stringify({ model: modelName, status: 'DOWNLOADING', percent: 0 }));
+            } catch (_) { }
+
+            try {
+                await downloadModel(modelName);
+                try {
+                    wizardWin.setTitle('UPDATE:' + JSON.stringify({ model: modelName, status: 'DONE', percent: 100 }));
+                } catch (_) { }
+            } catch (err) {
+                try {
+                    wizardWin.setTitle('UPDATE:' + JSON.stringify({ model: modelName, status: 'ERROR' }));
+                } catch (_) { }
+                console.error(`[Wizard] Download failed for ${modelName}:`, err.message);
+            }
+        }
+        console.log('[Wizard] All model downloads complete for tier:', newTier);
+        safeSend('license-updated', newTier);
+    })();
+}
+
+ipcMain.handle('show-download-wizard', async (event, tier) => {
+    showDownloadWizard(tier || store.get('license.tier') || 'free');
+    return { ok: true };
 });
 
 // ═══ Text Translation via AI (Groq/OpenAI) ═══
