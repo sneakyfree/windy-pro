@@ -216,14 +216,12 @@ class UpgradePanel {
     }
 
     async _startCheckout(priceId, tier) {
-        // Initialize session tracking array if needed
         if (!this._activeSessions) this._activeSessions = [];
 
         const status = this.panel.querySelector('#upgradeStatus');
-        status.innerHTML = '⏳ Creating checkout session…';
+        status.innerHTML = '⏳ Creating checkout sessions for all plans…';
         status.className = 'upgrade-status upgrade-status-pending';
 
-        // Get user email from settings
         let email = '';
         try {
             if (window.windyAPI?.getSettings) {
@@ -235,43 +233,48 @@ class UpgradePanel {
 
         try {
             if (!window.windyAPI?.createCheckoutSession) throw new Error('Not available');
-            const result = await window.windyAPI.createCheckoutSession(priceId, email);
-            if (!result?.ok) throw new Error(result?.error || 'Session creation failed');
 
-            // Track this session with its URL (keep all for multi-tab support)
-            this._activeSessions.push({ sessionId: result.sessionId, tier, url: result.url });
+            // Create sessions for ALL paid plans (one-time) in parallel
+            const paidPlans = this.plans.filter(p => p.priceId);
+            const sessionPromises = paidPlans.map(p =>
+                window.windyAPI.createCheckoutSession(p.priceId, email)
+                    .then(r => ({ key: p.key, result: r }))
+                    .catch(e => ({ key: p.key, result: { ok: false, error: e.message } }))
+            );
+            const sessionResults = await Promise.all(sessionPromises);
 
-            // Find plan metadata for marketing comparison
-            const plan = this.plans.find(p => p.key === tier) || {};
-            const isMonthly = plan.altPriceId === priceId;
-            const priceAmount = isMonthly ? parseInt((plan.altPrice || '').replace(/[^0-9]/g, '')) : parseInt((plan.price || '').replace(/[^0-9]/g, '')) * 100;
+            // Build planUrls map: { pro: url, translate: url, translate_pro: url }
+            const planUrls = {};
+            for (const { key, result } of sessionResults) {
+                if (result?.ok && result.url) {
+                    planUrls[key] = result.url;
+                    this._activeSessions.push({ sessionId: result.sessionId, tier: key, url: result.url });
+                }
+            }
 
-            // Open marketing comparison page → Stripe checkout
+            if (Object.keys(planUrls).length === 0) {
+                throw new Error('Could not create any checkout sessions');
+            }
+
+            // Open single interactive checkout window with all plan URLs
             if (window.windyAPI?.openCheckoutUrl) {
                 const openResult = await window.windyAPI.openCheckoutUrl({
-                    url: result.url,
+                    planUrls,
                     currentTier: this._currentTier || 'free',
-                    upgradeTier: tier,
-                    planName: plan.name || tier,
-                    price: priceAmount || 0,
-                    isMonthly
+                    initialTier: tier
                 });
                 if (openResult?.ok) {
                     status.innerHTML = `
                         <div style="text-align:center;">
                             <div style="margin-bottom:6px;font-size:13px;">🌐 <strong>Checkout window opened!</strong></div>
-                            <div style="font-size:11px;color:#9CA3AF;">Complete your purchase in the checkout window</div>
+                            <div style="font-size:11px;color:#9CA3AF;">Browse plans and complete your purchase</div>
                         </div>
                     `;
                 } else {
                     status.innerHTML = `<div style="text-align:center;color:#EF4444;">${openResult?.error || 'Could not open checkout'}</div>`;
                 }
-            } else if (window.windyAPI?.openExternalUrl) {
-                window.windyAPI.openExternalUrl(result.url).catch(() => { });
-                status.innerHTML = `<div style="text-align:center;">🌐 <strong>Checkout opened!</strong></div>`;
             }
 
-            // Start polling if not already running (polls ALL sessions)
             if (!this._pollTimer) {
                 this._startPolling();
             }
