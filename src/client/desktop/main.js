@@ -2235,19 +2235,31 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '.trust-badges{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center;}' +
     '.trust-badge{background:#1E293B;border:1px solid #334155;border-radius:6px;padding:5px 8px;font-size:9px;color:#94A3B8;}' +
     '.savings{border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600;margin-bottom:10px;transition:all 0.3s;}' +
-    '.billing-selector{display:flex;align-items:center;justify-content:center;gap:4px;padding:10px 16px 6px;background:#0F172A;}' +
-    '.billing-pill{padding:8px 16px;border-radius:8px;border:1px solid #334155;background:#1E293B;color:#94A3B8;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;text-align:center;min-width:100px;}' +
-    '.billing-pill:hover{border-color:#64748B;color:#E2E8F0;}' +
-    '.billing-pill.active{background:linear-gradient(135deg,#22C55E22,#10B98111);border-color:#22C55E;color:#22C55E;}' +
-    '.billing-pill .pill-label{font-size:9px;color:#64748B;display:block;margin-top:2px;font-weight:400;}' +
-    '.billing-pill.active .pill-label{color:#22C55EAA;}' +
-    '.save-badge{background:#10B98122;color:#10B981;font-size:9px;font-weight:700;padding:3px 8px;border-radius:8px;margin-left:6px;white-space:nowrap;}' +
+    '@keyframes pulse-glow{0%,100%{box-shadow:0 0 8px rgba(34,197,94,0.3);}50%{box-shadow:0 0 20px rgba(34,197,94,0.6);}}' +
+    '@keyframes sparkle{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.7;transform:scale(1.05);}}' +
+    '@keyframes shimmer{0%{background-position:-200% center;}100%{background-position:200% center;}}' +
+    '@keyframes gold-pulse{0%,100%{box-shadow:0 0 8px rgba(251,191,36,0.3),0 0 16px rgba(251,191,36,0.1);}50%{box-shadow:0 0 20px rgba(251,191,36,0.6),0 0 30px rgba(251,191,36,0.2);}}' +
+    '.billing-selector{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 20px 10px;background:linear-gradient(180deg,#0F172A,#1E293B44);}' +
+    '.billing-pill{padding:12px 20px;border-radius:12px;border:2px solid #334155;background:#1E293B;color:#CBD5E1;font-size:15px;font-weight:700;cursor:pointer;transition:all 0.3s;text-align:center;min-width:130px;position:relative;}' +
+    '.billing-pill:hover{border-color:#64748B;color:#F1F5F9;transform:translateY(-1px);}' +
+    '.billing-pill.active-monthly{background:linear-gradient(135deg,#7C3AED22,#6D28D911);border-color:#7C3AED;color:#E9D5FF;}' +
+    '.billing-pill.active-annual{background:linear-gradient(135deg,#22C55E22,#10B98111);border-color:#22C55E;color:#BBF7D0;animation:pulse-glow 2s ease-in-out infinite;}' +
+    '.billing-pill.active-lifetime{background:linear-gradient(135deg,#FBBF2422,#F59E0B11);border-color:#FBBF24;color:#FEF3C7;animation:gold-pulse 2s ease-in-out infinite;}' +
+    '.billing-pill .pill-label{font-size:11px;display:block;margin-top:3px;font-weight:500;letter-spacing:0.3px;}' +
+    '.billing-pill .pill-label{color:#94A3B8;}' +
+    '.billing-pill.active-monthly .pill-label{color:#C4B5FD;font-weight:600;}' +
+    '.billing-pill.active-annual .pill-label{color:#86EFAC;font-weight:600;}' +
+    '.billing-pill.active-lifetime .pill-label{color:#FDE68A;font-weight:600;}' +
+    '.save-badge{font-size:12px;font-weight:800;padding:6px 14px;border-radius:20px;margin-left:8px;white-space:nowrap;animation:sparkle 1.5s ease-in-out infinite;letter-spacing:0.5px;text-transform:uppercase;}' +
+    '.save-badge.b-monthly{background:#7C3AED33;color:#E9D5FF;border:1px solid #7C3AED55;}' +
+    '.save-badge.b-annual{background:#22C55E33;color:#86EFAC;border:1px solid #22C55E55;}' +
+    '.save-badge.b-lifetime{background:linear-gradient(135deg,#FBBF2444,#F59E0B33);color:#FDE68A;border:1px solid #FBBF2466;background-size:200% auto;animation:sparkle 1.5s ease-in-out infinite,shimmer 3s linear infinite;}' +
     '</style></head><body>' +
     '<div class="billing-selector">' +
-    '<div class="billing-pill" data-billing="monthly" id="pillMonthly">📅 Monthly<span class="pill-label">cancel anytime</span></div>' +
-    '<div class="billing-pill active" data-billing="annual" id="pillAnnual">⭐ Annual<span class="pill-label">most popular</span></div>' +
-    '<div class="billing-pill" data-billing="lifetime" id="pillLifetime">💎 Lifetime<span class="pill-label">pay once, own forever</span></div>' +
-    '<span class="save-badge" id="saveBadge">SAVE 18% vs MONTHLY</span>' +
+    '<div class="billing-pill" data-billing="monthly" id="pillMonthly">📅 Monthly<span class="pill-label">Cancel anytime</span></div>' +
+    '<div class="billing-pill active-annual" data-billing="annual" id="pillAnnual">⭐ Annual<span class="pill-label">Most popular &mdash; save 18%</span></div>' +
+    '<div class="billing-pill" data-billing="lifetime" id="pillLifetime">💎 Lifetime<span class="pill-label">Pay once, own forever</span></div>' +
+    '<span class="save-badge b-annual" id="saveBadge">✨ SAVE 18% vs MONTHLY</span>' +
     '</div>' +
     '<div class="plan-strip" id="planStrip"></div>' +
     '<div class="main"><div class="left">' +
@@ -2265,18 +2277,20 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '<div class="guarantee">🛡️ 30-day money-back guarantee · Stripe secured</div>' +
     '<div class="trust-badges"><div class="trust-badge">🔒 256-bit SSL</div><div class="trust-badge">🏆 50K+ users</div><div class="trust-badge">⚡ Instant activation</div></div>' +
     '</div></div>' +
-    '<script>const D=' + DATA + ';' +
+    '<script>window.onerror=function(m,s,l){document.body.innerHTML="<pre style=color:red;padding:20px>JS ERROR: "+m+"\\nLine: "+l+"</pre>";};' +
+    'const D=' + DATA + ';' +
     'let selected=D.initialTier;' +
     'let billing="annual";' +
     'document.querySelectorAll(".billing-pill").forEach(pill=>{' +
     '  pill.addEventListener("click",function(){' +
     '    billing=this.dataset.billing;' +
-    '    document.querySelectorAll(".billing-pill").forEach(p=>p.classList.remove("active"));' +
-    '    this.classList.add("active");' +
+    '    document.querySelectorAll(".billing-pill").forEach(p=>{p.classList.remove("active-monthly","active-annual","active-lifetime");});' +
+    '    this.classList.add("active-"+billing);' +
     '    const badge=document.getElementById("saveBadge");' +
-    '    if(billing==="monthly"){badge.textContent="CANCEL ANYTIME";badge.style.background="#7C3AED22";badge.style.color="#C4B5FD";}' +
-    '    else if(billing==="annual"){badge.textContent="SAVE 18% vs MONTHLY";badge.style.background="#10B98122";badge.style.color="#10B981";}' +
-    '    else{badge.textContent="PAY ONCE, OWN FOREVER";badge.style.background="#FBBF2422";badge.style.color="#FBBF24";}' +
+    '    badge.className="save-badge b-"+billing;' +
+    '    if(billing==="monthly"){badge.textContent="FLEXIBLE - CANCEL ANYTIME";}' +
+    '    else if(billing==="annual"){badge.textContent="SAVE 18% vs MONTHLY";}' +
+    '    else{badge.textContent="BEST VALUE - PAY ONCE, OWN FOREVER";}' +
     '    render();' +
     '  });' +
     '});' +
@@ -2355,9 +2369,13 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
       width: 1140, height: 780, x: 100, y: 60,
       title: 'Choose Your Plan — Windy Pro',
       autoHideMenuBar: true,
-      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, javascript: true, partition: 'persist:checkout' }
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, javascript: true, partition: 'persist:checkout', devTools: true }
     });
-    checkoutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    // Write HTML to temp file to avoid data: URL encoding issues with emojis
+    const tmpCheckoutPath = path.join(os.tmpdir(), 'windy-checkout-' + Date.now() + '.html');
+    require('fs').writeFileSync(tmpCheckoutPath, html, 'utf8');
+    checkoutWin.loadFile(tmpCheckoutPath);
+    checkoutWin.on('closed', () => { try { require('fs').unlinkSync(tmpCheckoutPath); } catch (_) { } });
     checkoutWin.focus();
     checkoutWindows = [checkoutWin];
     checkoutWin.on('closed', () => { checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed()); });
