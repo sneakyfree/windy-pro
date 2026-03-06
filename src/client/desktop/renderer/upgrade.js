@@ -241,29 +241,35 @@ class UpgradePanel {
             // Track this session with its URL (keep all for multi-tab support)
             this._activeSessions.push({ sessionId: result.sessionId, tier, url: result.url });
 
-            // Try to auto-open checkout in browser/window
-            if (window.windyAPI?.openExternalUrl) {
-                window.windyAPI.openExternalUrl(result.url).catch(() => { });
-            }
+            // Find plan metadata for marketing comparison
+            const plan = this.plans.find(p => p.key === tier) || {};
+            const isMonthly = plan.altPriceId === priceId;
+            const priceAmount = isMonthly ? parseInt((plan.altPrice || '').replace(/[^0-9]/g, '')) : parseInt((plan.price || '').replace(/[^0-9]/g, '')) * 100;
 
-            // ALWAYS show clickable checkout link (don't rely on auto-open)
-            status.innerHTML = `
-                <div style="text-align:center;">
-                    <div style="margin-bottom:8px;font-size:13px;">🌐 <strong>Checkout ready!</strong></div>
-                    <a href="${result.url}" 
-                       style="display:inline-block;background:#635BFF;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;cursor:pointer;margin-bottom:8px;"
-                       onclick="if(window.windyAPI?.openExternalUrl){window.windyAPI.openExternalUrl('${result.url}')};return false;">
-                        💳 Open Stripe Checkout →
-                    </a>
-                    <div style="font-size:11px;color:#9CA3AF;margin-top:6px;">
-                        If the button doesn't work: 
-                        <a href="#" onclick="window.windyAPI.copyToClipboard('${result.url}');this.textContent='✅ Copied!';return false;" 
-                           style="color:#60A5FA;text-decoration:underline;cursor:pointer;">
-                            Copy checkout URL
-                        </a>
-                    </div>
-                </div>
-            `;
+            // Open marketing comparison page → Stripe checkout
+            if (window.windyAPI?.openCheckoutUrl) {
+                const openResult = await window.windyAPI.openCheckoutUrl({
+                    url: result.url,
+                    currentTier: this._currentTier || 'free',
+                    upgradeTier: tier,
+                    planName: plan.name || tier,
+                    price: priceAmount || 0,
+                    isMonthly
+                });
+                if (openResult?.ok) {
+                    status.innerHTML = `
+                        <div style="text-align:center;">
+                            <div style="margin-bottom:6px;font-size:13px;">🌐 <strong>Checkout window opened!</strong></div>
+                            <div style="font-size:11px;color:#9CA3AF;">Complete your purchase in the checkout window</div>
+                        </div>
+                    `;
+                } else {
+                    status.innerHTML = `<div style="text-align:center;color:#EF4444;">${openResult?.error || 'Could not open checkout'}</div>`;
+                }
+            } else if (window.windyAPI?.openExternalUrl) {
+                window.windyAPI.openExternalUrl(result.url).catch(() => { });
+                status.innerHTML = `<div style="text-align:center;">🌐 <strong>Checkout opened!</strong></div>`;
+            }
 
             // Start polling if not already running (polls ALL sessions)
             if (!this._pollTimer) {

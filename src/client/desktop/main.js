@@ -2092,6 +2092,155 @@ ipcMain.handle('create-checkout-session', async (event, priceId, email) => {
   }
 });
 
+// --- Marketing comparison checkout windows ---
+let checkoutWindows = [];
+const MAX_CHECKOUT_WINDOWS = 4;
+
+ipcMain.handle('open-checkout-url', async (event, { url, currentTier, upgradeTier, planName, price, isMonthly }) => {
+  // Limit max open checkout windows
+  checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed());
+  if (checkoutWindows.length >= MAX_CHECKOUT_WINDOWS) {
+    return { ok: false, error: `Maximum ${MAX_CHECKOUT_WINDOWS} checkout windows. Close one first.` };
+  }
+
+  const currentLimits = getTierLimits(currentTier || 'free');
+  const upgradeLimits = getTierLimits(upgradeTier || 'pro');
+
+  const tierNames = { free: 'Free', pro: 'Windy Pro', translate: 'Windy Translate', translate_pro: 'Windy Translate Pro' };
+  const currentName = tierNames[currentTier] || 'Free';
+  const upgradeName = planName || tierNames[upgradeTier] || 'Pro';
+
+  // Build comparison rows
+  const features = [
+    { label: 'AI Engines', current: `${currentLimits.maxEngines} engines`, upgrade: `${upgradeLimits.maxEngines} engines`, improved: upgradeLimits.maxEngines > currentLimits.maxEngines },
+    { label: 'Languages', current: `${currentLimits.maxLanguages} language${currentLimits.maxLanguages > 1 ? 's' : ''}`, upgrade: `${upgradeLimits.maxLanguages} languages`, improved: upgradeLimits.maxLanguages > currentLimits.maxLanguages },
+    { label: 'Recording Length', current: `${currentLimits.maxMinutes}-min max`, upgrade: `${upgradeLimits.maxMinutes}-min max`, improved: upgradeLimits.maxMinutes > currentLimits.maxMinutes },
+    { label: 'Batch Mode', current: currentLimits.batchMode ? '✅' : '❌', upgrade: upgradeLimits.batchMode ? '✅' : '—', improved: !currentLimits.batchMode && upgradeLimits.batchMode },
+    { label: 'LLM Polish', current: currentLimits.llmPolish ? '✅' : '❌', upgrade: upgradeLimits.llmPolish ? '✅' : '—', improved: !currentLimits.llmPolish && upgradeLimits.llmPolish },
+    { label: 'Real-time Translation', current: currentLimits.translation ? '✅' : '❌', upgrade: upgradeLimits.translation ? '✅' : '—', improved: !currentLimits.translation && upgradeLimits.translation },
+    { label: 'Text-to-Speech', current: currentLimits.tts ? '✅' : '❌', upgrade: upgradeLimits.tts ? '✅' : '—', improved: !currentLimits.tts && upgradeLimits.tts },
+    { label: 'Medical/Legal Glossaries', current: currentLimits.glossaries ? '✅' : '❌', upgrade: upgradeLimits.glossaries ? '✅' : '—', improved: !currentLimits.glossaries && upgradeLimits.glossaries }
+  ];
+
+  const comparisonRows = features.map(f => `
+    <tr>
+      <td style="padding:10px 14px;font-weight:500;color:#E5E7EB;border-bottom:1px solid #2D3748;">${f.label}</td>
+      <td style="padding:10px 14px;text-align:center;color:${f.improved ? '#EF4444' : '#9CA3AF'};border-bottom:1px solid #2D3748;">${f.current}</td>
+      <td style="padding:10px 14px;text-align:center;color:${f.improved ? '#10B981' : '#9CA3AF'};font-weight:${f.improved ? '700' : '400'};border-bottom:1px solid #2D3748;">${f.upgrade}${f.improved ? ' ✨' : ''}</td>
+    </tr>
+  `).join('');
+
+  const priceDisplay = isMonthly ? `$${(price / 100).toFixed(2)}/mo` : `$${(price / 100).toFixed(0)} one-time`;
+  const newFeaturesCount = features.filter(f => f.improved).length;
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Upgrade to ${upgradeName}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter',system-ui,sans-serif; background:linear-gradient(135deg,#0F172A 0%,#1E1B4B 50%,#0F172A 100%); color:#F1F5F9; min-height:100vh; display:flex; }
+  .left { flex:1; padding:40px 32px; display:flex; flex-direction:column; justify-content:center; max-width:520px; }
+  .right { flex:1; background:linear-gradient(180deg,#1E293B,#0F172A); padding:40px 32px; display:flex; flex-direction:column; justify-content:center; align-items:center; border-left:1px solid #334155; }
+  .badge { display:inline-block; background:linear-gradient(135deg,#7C3AED,#EC4899); color:#fff; font-size:11px; font-weight:700; padding:4px 12px; border-radius:20px; text-transform:uppercase; letter-spacing:1px; margin-bottom:16px; }
+  h1 { font-size:28px; font-weight:800; margin-bottom:8px; background:linear-gradient(135deg,#A78BFA,#F472B6); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .subtitle { color:#94A3B8; font-size:14px; margin-bottom:24px; line-height:1.5; }
+  .highlight { color:#FBBF24; font-weight:600; }
+  table { width:100%; border-collapse:collapse; background:rgba(30,41,59,0.6); border-radius:12px; overflow:hidden; backdrop-filter:blur(8px); border:1px solid #334155; }
+  th { padding:12px 14px; font-size:12px; text-transform:uppercase; letter-spacing:1px; color:#64748B; border-bottom:2px solid #334155; }
+  .urgency { background:linear-gradient(135deg,#7C3AED22,#EC489922); border:1px solid #7C3AED44; border-radius:10px; padding:14px 18px; margin-top:20px; text-align:center; }
+  .urgency-text { font-size:13px; color:#C4B5FD; }
+  .cta-btn { display:inline-block; background:linear-gradient(135deg,#7C3AED,#6D28D9); color:#fff; font-size:18px; font-weight:700; padding:16px 40px; border-radius:12px; border:none; cursor:pointer; text-decoration:none; transition:all 0.2s; box-shadow:0 4px 20px rgba(124,58,237,0.4); margin-bottom:16px; }
+  .cta-btn:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(124,58,237,0.6); }
+  .price-tag { font-size:48px; font-weight:800; margin-bottom:4px; }
+  .price-sub { color:#94A3B8; font-size:14px; margin-bottom:24px; }
+  .guarantee { display:flex; align-items:center; gap:8px; color:#94A3B8; font-size:12px; margin-top:12px; }
+  .trust-badges { display:flex; gap:16px; margin-top:20px; flex-wrap:wrap; justify-content:center; }
+  .trust-badge { background:#1E293B; border:1px solid #334155; border-radius:8px; padding:8px 12px; font-size:11px; color:#94A3B8; }
+  .savings { background:#10B98122; color:#10B981; border:1px solid #10B98133; border-radius:8px; padding:8px 16px; font-size:13px; font-weight:600; margin-bottom:16px; }
+</style></head><body>
+<div class="left">
+  <div class="badge">🚀 ${newFeaturesCount} New Features Unlocked</div>
+  <h1>Why ${upgradeName}?</h1>
+  <p class="subtitle">You're currently on <span class="highlight">${currentName}</span>. Here's everything you'll unlock with your upgrade — features that save professionals hours every week.</p>
+
+  <table>
+    <thead><tr>
+      <th style="text-align:left;">Feature</th>
+      <th>${currentName}</th>
+      <th style="color:#10B981;">${upgradeName}</th>
+    </tr></thead>
+    <tbody>${comparisonRows}</tbody>
+  </table>
+
+  <div class="urgency">
+    <div class="urgency-text">
+      🔥 <strong>Join 2,400+ professionals</strong> who upgraded this month.<br>
+      Your recordings deserve the best transcription quality.
+    </div>
+  </div>
+</div>
+
+<div class="right">
+  ${isMonthly ? '<div class="savings">💰 Cancel anytime — no commitment</div>' : '<div class="savings">💰 One-time payment — yours forever</div>'}
+  <div class="price-tag">${isMonthly ? '$' + (price / 100).toFixed(2) : '$' + (price / 100).toFixed(0)}</div>
+  <div class="price-sub">${isMonthly ? 'per month · cancel anytime' : 'one-time · lifetime access'}</div>
+
+  <a href="${url}" class="cta-btn" id="proceedBtn">
+    🔒 Proceed to Secure Payment →
+  </a>
+
+  <div class="guarantee">🛡️ 30-day money-back guarantee · Secure payment via Stripe</div>
+
+  <div class="trust-badges">
+    <div class="trust-badge">🔒 256-bit SSL</div>
+    <div class="trust-badge">🏆 Trusted by 50K+ users</div>
+    <div class="trust-badge">⚡ Instant activation</div>
+  </div>
+</div>
+<script>
+  document.getElementById('proceedBtn').addEventListener('click', function(e) {
+    e.preventDefault();
+    window.location.href = '${url}';
+  });
+</script>
+</body></html>`;
+
+  // Stagger window position
+  const offset = checkoutWindows.length * 40;
+  try {
+    const checkoutWin = new BrowserWindow({
+      width: 1100,
+      height: 750,
+      x: 100 + offset,
+      y: 80 + offset,
+      title: `Upgrade to ${upgradeName} — Windy Pro`,
+      autoHideMenuBar: true,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: false,
+        javascript: true,
+        partition: 'persist:checkout'
+      }
+    });
+
+    checkoutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    checkoutWin.focus();
+    checkoutWindows.push(checkoutWin);
+
+    // Clean up on close
+    checkoutWin.on('closed', () => {
+      checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed());
+    });
+
+    console.log(`[Main] ✅ Opened marketing checkout window #${checkoutWindows.length} (staggered +${offset}px)`);
+    return { ok: true };
+  } catch (e) {
+    console.error('[Main] Checkout window failed:', e.message);
+    return { ok: false, error: e.message };
+  }
+});
+
 ipcMain.handle('check-payment-status', async (event, sessionId) => {
   try {
     const stripe = getStripe();
