@@ -153,9 +153,11 @@ const MAX_PYTHON_RESTARTS = 3;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || store.get('stripe.secretKey', '');
 const STRIPE_PRICES = {
   pro: { id: 'price_1T5oYzBXIOBasDQibSlnIsPg', mode: 'payment', tier: 'pro', amount: 4900 },
+  pro_monthly: { id: 'price_1T60GeBXIOBasDQi4aitcq8O', mode: 'subscription', tier: 'pro', amount: 499 },
   translate: { id: 'price_1T5oZJBXIOBasDQiHO0MtYS7', mode: 'payment', tier: 'translate', amount: 7900 },
   translate_monthly: { id: 'price_1T5oZJBXIOBasDQijBW23Gow', mode: 'subscription', tier: 'translate', amount: 799 },
-  translate_pro: { id: 'price_1T5oZ1BXIOBasDQinrz3VdvG', mode: 'payment', tier: 'translate_pro', amount: 14900 }
+  translate_pro: { id: 'price_1T5oZ1BXIOBasDQinrz3VdvG', mode: 'payment', tier: 'translate_pro', amount: 14900 },
+  translate_pro_monthly: { id: 'price_1T60H8BXIOBasDQiy5eorTWR', mode: 'subscription', tier: 'translate_pro', amount: 1499 }
 };
 
 let stripeClient = null;
@@ -1280,7 +1282,11 @@ ipcMain.handle('open-external-url', async (event, url) => {
         autoHideMenuBar: true,
         webPreferences: {
           nodeIntegration: false,
-          contextIsolation: true
+          contextIsolation: true,
+          sandbox: false,
+          javascript: true,
+          // Use separate session so main window CSP doesn't block Stripe
+          partition: 'persist:checkout'
         }
       });
       checkoutWin.loadURL(url);
