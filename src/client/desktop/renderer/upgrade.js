@@ -28,7 +28,7 @@ class UpgradePanel {
                 key: 'pro',
                 name: 'Windy Pro',
                 price: '$49',
-                altPrice: '$4.99/mo',
+                altPrice: '$3.99/mo',
                 period: 'one-time',
                 priceId: 'price_1T5oYzBXIOBasDQibSlnIsPg',
                 altPriceId: 'price_1T60GeBXIOBasDQi4aitcq8O',
@@ -40,7 +40,7 @@ class UpgradePanel {
                 key: 'translate',
                 name: 'Windy Translate',
                 price: '$79',
-                altPrice: '$7.99/mo',
+                altPrice: '$5.99/mo',
                 period: 'one-time',
                 priceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7',
                 altPriceId: 'price_1T5oZJBXIOBasDQijBW23Gow',
@@ -53,7 +53,7 @@ class UpgradePanel {
                 key: 'translate_pro',
                 name: 'Windy Translate Pro',
                 price: '$149',
-                altPrice: '$14.99/mo',
+                altPrice: '$9.99/mo',
                 period: 'one-time',
                 priceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG',
                 altPriceId: 'price_1T60H8BXIOBasDQiy5eorTWR',
@@ -234,32 +234,51 @@ class UpgradePanel {
         try {
             if (!window.windyAPI?.createCheckoutSession) throw new Error('Not available');
 
-            // Create sessions for ALL paid plans (one-time) in parallel
+            // Create sessions for ALL paid plans (one-time AND monthly) in parallel
             const paidPlans = this.plans.filter(p => p.priceId);
-            const sessionPromises = paidPlans.map(p =>
-                window.windyAPI.createCheckoutSession(p.priceId, email)
-                    .then(r => ({ key: p.key, result: r }))
-                    .catch(e => ({ key: p.key, result: { ok: false, error: e.message } }))
-            );
-            const sessionResults = await Promise.all(sessionPromises);
+            const allSessionPromises = [];
 
-            // Build planUrls map: { pro: url, translate: url, translate_pro: url }
+            // One-time sessions
+            for (const p of paidPlans) {
+                allSessionPromises.push(
+                    window.windyAPI.createCheckoutSession(p.priceId, email)
+                        .then(r => ({ key: p.key, billing: 'onetime', result: r }))
+                        .catch(e => ({ key: p.key, billing: 'onetime', result: { ok: false, error: e.message } }))
+                );
+                // Monthly sessions
+                if (p.altPriceId) {
+                    allSessionPromises.push(
+                        window.windyAPI.createCheckoutSession(p.altPriceId, email)
+                            .then(r => ({ key: p.key, billing: 'monthly', result: r }))
+                            .catch(e => ({ key: p.key, billing: 'monthly', result: { ok: false, error: e.message } }))
+                    );
+                }
+            }
+            const sessionResults = await Promise.all(allSessionPromises);
+
+            // Build separate URL maps for one-time and monthly
             const planUrls = {};
-            for (const { key, result } of sessionResults) {
+            const monthlyPlanUrls = {};
+            for (const { key, billing, result } of sessionResults) {
                 if (result?.ok && result.url) {
-                    planUrls[key] = result.url;
+                    if (billing === 'monthly') {
+                        monthlyPlanUrls[key] = result.url;
+                    } else {
+                        planUrls[key] = result.url;
+                    }
                     this._activeSessions.push({ sessionId: result.sessionId, tier: key, url: result.url });
                 }
             }
 
-            if (Object.keys(planUrls).length === 0) {
+            if (Object.keys(planUrls).length === 0 && Object.keys(monthlyPlanUrls).length === 0) {
                 throw new Error('Could not create any checkout sessions');
             }
 
-            // Open single interactive checkout window with all plan URLs
+            // Open single interactive checkout window with both billing URL maps
             if (window.windyAPI?.openCheckoutUrl) {
                 const openResult = await window.windyAPI.openCheckoutUrl({
                     planUrls,
+                    monthlyPlanUrls,
                     currentTier: this._currentTier || 'free',
                     initialTier: tier
                 });

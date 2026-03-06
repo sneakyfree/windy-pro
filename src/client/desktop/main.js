@@ -173,11 +173,11 @@ let activeModelDownload = null; // Track background download process
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || store.get('stripe.secretKey', '');
 const STRIPE_PRICES = {
   pro: { id: 'price_1T5oYzBXIOBasDQibSlnIsPg', mode: 'payment', tier: 'pro', amount: 4900 },
-  pro_monthly: { id: 'price_1T60GeBXIOBasDQi4aitcq8O', mode: 'subscription', tier: 'pro', amount: 499 },
+  pro_monthly: { id: 'price_1T60GeBXIOBasDQi4aitcq8O', mode: 'subscription', tier: 'pro', amount: 399 },
   translate: { id: 'price_1T5oZJBXIOBasDQiHO0MtYS7', mode: 'payment', tier: 'translate', amount: 7900 },
-  translate_monthly: { id: 'price_1T5oZJBXIOBasDQijBW23Gow', mode: 'subscription', tier: 'translate', amount: 799 },
+  translate_monthly: { id: 'price_1T5oZJBXIOBasDQijBW23Gow', mode: 'subscription', tier: 'translate', amount: 599 },
   translate_pro: { id: 'price_1T5oZ1BXIOBasDQinrz3VdvG', mode: 'payment', tier: 'translate_pro', amount: 14900 },
-  translate_pro_monthly: { id: 'price_1T60H8BXIOBasDQiy5eorTWR', mode: 'subscription', tier: 'translate_pro', amount: 1499 }
+  translate_pro_monthly: { id: 'price_1T60H8BXIOBasDQiy5eorTWR', mode: 'subscription', tier: 'translate_pro', amount: 999 }
 };
 
 let stripeClient = null;
@@ -2134,7 +2134,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
   }
   checkoutWindows = [];
 
-  const { planUrls = {}, currentTier = 'free', initialTier = 'pro' } = opts;
+  const { planUrls = {}, monthlyPlanUrls = {}, currentTier = 'free', initialTier = 'pro' } = opts;
 
   // Backwards compat: if old-style single URL passed
   if (opts.url && !Object.keys(planUrls).length) {
@@ -2143,19 +2143,19 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
 
   const allPlans = [
     {
-      key: 'free', name: 'Free', icon: '🌱', price: 0, priceLabel: '$0', period: 'forever', color: '#6B7280',
+      key: 'free', name: 'Free', icon: '🌱', price: 0, priceLabel: '$0', monthlyPrice: 0, monthlyLabel: '$0', period: 'forever', color: '#6B7280',
       desc: 'Perfect for trying it out. Limited to 1 language, 3 engines, and 5-minute recordings.'
     },
     {
-      key: 'pro', name: 'Windy Pro', icon: '⚡', price: 4900, priceLabel: '$49', period: 'one-time', color: '#22C55E',
+      key: 'pro', name: 'Windy Pro', icon: '⚡', price: 4900, priceLabel: '$49', monthlyPrice: 399, monthlyLabel: '$3.99', period: 'one-time', color: '#22C55E',
       desc: 'Unlock all 15 AI engines, 99 languages, 30-min recordings, batch processing, and AI-powered LLM polish for perfect transcripts.'
     },
     {
-      key: 'translate', name: 'Windy Translate', icon: '🌍', price: 7900, priceLabel: '$79', period: 'one-time', color: '#3B82F6', recommended: true,
+      key: 'translate', name: 'Windy Translate', icon: '🌍', price: 7900, priceLabel: '$79', monthlyPrice: 599, monthlyLabel: '$5.99', period: 'one-time', color: '#3B82F6', recommended: true,
       desc: 'Everything in Pro PLUS real-time speech translation across 99 language pairs. Perfect for international meetings, travel, and cross-language work.'
     },
     {
-      key: 'translate_pro', name: 'Translate Pro', icon: '👑', price: 14900, priceLabel: '$149', period: 'one-time', color: '#A855F7',
+      key: 'translate_pro', name: 'Translate Pro', icon: '👑', price: 14900, priceLabel: '$149', monthlyPrice: 999, monthlyLabel: '$9.99', period: 'one-time', color: '#A855F7',
       desc: 'The ultimate suite: all translation + text-to-speech output + specialized medical/legal glossaries for industry-grade accuracy.'
     }
   ];
@@ -2179,7 +2179,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
   };
 
   // Encode data for embedding in HTML
-  const DATA = JSON.stringify({ allPlans, featureDefs, tiers, planUrls, currentTier, initialTier });
+  const DATA = JSON.stringify({ allPlans, featureDefs, tiers, planUrls, monthlyPlanUrls, currentTier, initialTier });
 
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Choose Your Plan</title>' +
     '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
@@ -2221,7 +2221,21 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '.trust-badges{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center;}' +
     '.trust-badge{background:#1E293B;border:1px solid #334155;border-radius:6px;padding:5px 8px;font-size:9px;color:#94A3B8;}' +
     '.savings{border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600;margin-bottom:10px;transition:all 0.3s;}' +
+    '.billing-toggle{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 0 4px;font-size:13px;}' +
+    '.toggle-label{color:#64748B;font-weight:500;cursor:pointer;transition:color 0.2s;}' +
+    '.toggle-label.active{color:#F1F5F9;font-weight:700;}' +
+    '.toggle-switch{width:44px;height:24px;background:#334155;border-radius:12px;position:relative;cursor:pointer;transition:background 0.3s;}' +
+    '.toggle-switch.monthly{background:#7C3AED;}' +
+    '.toggle-knob{width:20px;height:20px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:left 0.3s;}' +
+    '.toggle-switch.monthly .toggle-knob{left:22px;}' +
+    '.save-badge{background:#10B98122;color:#10B981;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;margin-left:4px;}' +
     '</style></head><body>' +
+    '<div class="billing-toggle">' +
+    '<span class="toggle-label active" id="lblLifetime">💎 Lifetime</span>' +
+    '<div class="toggle-switch" id="billingToggle"><div class="toggle-knob"></div></div>' +
+    '<span class="toggle-label" id="lblMonthly">📅 Monthly</span>' +
+    '<span class="save-badge" id="saveBadge">SAVE 50%+ WITH LIFETIME</span>' +
+    '</div>' +
     '<div class="plan-strip" id="planStrip"></div>' +
     '<div class="main"><div class="left">' +
     '<div class="badge" id="badgeText"></div>' +
@@ -2240,6 +2254,17 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '</div></div>' +
     '<script>const D=' + DATA + ';' +
     'let selected=D.initialTier;' +
+    'let billing="lifetime";' +
+    'document.getElementById("billingToggle").addEventListener("click",function(){' +
+    '  billing=billing==="lifetime"?"monthly":"lifetime";' +
+    '  this.classList.toggle("monthly",billing==="monthly");' +
+    '  document.getElementById("lblLifetime").classList.toggle("active",billing==="lifetime");' +
+    '  document.getElementById("lblMonthly").classList.toggle("active",billing==="monthly");' +
+    '  document.getElementById("saveBadge").textContent=billing==="lifetime"?"SAVE 50%+ WITH LIFETIME":"CANCEL ANYTIME";' +
+    '  document.getElementById("saveBadge").style.background=billing==="lifetime"?"#10B98122":"#7C3AED22";' +
+    '  document.getElementById("saveBadge").style.color=billing==="lifetime"?"#10B981":"#C4B5FD";' +
+    '  render();' +
+    '});' +
     'function render(){' +
     '  const sp=D.allPlans.find(p=>p.key===selected)||D.allPlans[1];' +
     '  const ct=D.tiers[D.currentTier]||D.tiers.free;' +
@@ -2253,14 +2278,17 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '  document.getElementById("heading").textContent="Why "+sp.name+"?";' +
     '  document.getElementById("currentPlanLabel").textContent=D.allPlans.find(p=>p.key===D.currentTier)?.name||"Free";' +
     '  document.getElementById("planDesc").innerHTML="<strong style=\\"color:"+sp.color+"\\">"+sp.icon+" "+sp.name+":</strong> "+sp.desc;' +
-    '  document.getElementById("priceTag").textContent=sp.priceLabel;' +
-    '  document.getElementById("priceSub").textContent=sp.period==="forever"?"free forever":"one-time · lifetime access";' +
-    '  const hasUrl=!!D.planUrls[selected];' +
+    '  const isMonthly=billing==="monthly";' +
+    '  document.getElementById("priceTag").textContent=isMonthly?(sp.monthlyLabel||sp.priceLabel):sp.priceLabel;' +
+    '  document.getElementById("priceSub").textContent=sp.period==="forever"?"free forever":isMonthly?"per month · cancel anytime":"one-time · lifetime access";' +
+    '  const urls=isMonthly?D.monthlyPlanUrls:D.planUrls;' +
+    '  const hasUrl=!!urls[selected];' +
     '  const btn=document.getElementById("proceedBtn");' +
     '  if(selected==="free"||!hasUrl){btn.className="cta-btn disabled";btn.textContent=selected==="free"?"✓ This is your current plan":"⏳ Session unavailable";}' +
-    '  else{btn.className="cta-btn";btn.textContent="🔒 Proceed to Secure Payment →";}' +
+    '  else{btn.className="cta-btn";btn.textContent=isMonthly?"🔒 Start Monthly Subscription →":"🔒 Proceed to Secure Payment →";}' +
     '  const sav=document.getElementById("savings");' +
     '  if(selected==="free"){sav.textContent="🌱 Free forever";sav.style.background="#6B728022";sav.style.color="#9CA3AF";sav.style.border="1px solid #6B728033";}' +
+    '  else if(isMonthly){sav.textContent="📅 Cancel anytime · no commitment";sav.style.background="#7C3AED22";sav.style.color="#C4B5FD";sav.style.border="1px solid #7C3AED33";}' +
     '  else{sav.textContent="💰 One-time · yours forever";sav.style.background="#10B98122";sav.style.color="#10B981";sav.style.border="1px solid #10B98133";}' +
     '  const strip=document.getElementById("planStrip");strip.innerHTML="";' +
     '  D.allPlans.forEach(p=>{' +
@@ -2273,8 +2301,8 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '      +(p.recommended&&p.key!==selected&&p.key!==D.currentTier?"<div class=\\"plan-badge\\" style=\\"background:#3B82F6\\">POPULAR</div>":"")' +
     '      +"<div class=\\"plan-icon\\">"+p.icon+"</div>"' +
     '      +"<div class=\\"plan-name\\" style=\\"color:"+(p.key===selected?p.color:p.key===D.currentTier?"#FBBF24":"#94A3B8")+"\\">"+p.name+"</div>"' +
-    '      +"<div class=\\"plan-price\\">"+p.priceLabel+"</div>"' +
-    '      +"<div class=\\"plan-period\\">"+p.period+"</div>";' +
+    '      +"<div class=\\"plan-price\\">"+( billing==="monthly"?(p.monthlyLabel||p.priceLabel):p.priceLabel)+"</div>"' +
+    '      +"<div class=\\"plan-period\\">"+(p.period==="forever"?"forever":billing==="monthly"?"/month":"one-time")+"</div>";' +
     '    card.addEventListener("click",()=>{selected=p.key;render();});' +
     '    strip.appendChild(card);' +
     '  });' +
@@ -2295,8 +2323,9 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '}' +
     'document.getElementById("proceedBtn").addEventListener("click",function(e){' +
     '  e.preventDefault();' +
-    '  if(selected==="free"||!D.planUrls[selected])return;' +
-    '  window.location.href=D.planUrls[selected];' +
+    '  const urls=billing==="monthly"?D.monthlyPlanUrls:D.planUrls;' +
+    '  if(selected==="free"||!urls[selected])return;' +
+    '  window.location.href=urls[selected];' +
     '});' +
     'render();' +
     '</script></body></html>';
@@ -2418,51 +2447,51 @@ ipcMain.handle('get-current-tier', async () => {
  * Check which models are already downloaded (scan HuggingFace cache + local folder)
  */
 function checkModelStatus() {
-    const fs = require('fs');
-    const models = {};
-    const hfCache = path.join(os.homedir(), '.cache', 'huggingface', 'hub');
-    const localModelDir = path.join(os.homedir(), '.windy-pro', 'model');
-    const bundledDir = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : null;
+  const fs = require('fs');
+  const models = {};
+  const hfCache = path.join(os.homedir(), '.cache', 'huggingface', 'hub');
+  const localModelDir = path.join(os.homedir(), '.windy-pro', 'model');
+  const bundledDir = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : null;
 
-    for (const [name, info] of Object.entries(MODEL_MANIFEST.models)) {
-        const localPath = path.join(localModelDir, `faster-whisper-${name}`);
-        const bundledPath = bundledDir ? path.join(bundledDir, `faster-whisper-${name}`) : null;
+  for (const [name, info] of Object.entries(MODEL_MANIFEST.models)) {
+    const localPath = path.join(localModelDir, `faster-whisper-${name}`);
+    const bundledPath = bundledDir ? path.join(bundledDir, `faster-whisper-${name}`) : null;
 
-        // Check local model dir
-        const localExists = fs.existsSync(path.join(localPath, 'model.bin'));
-        // Check bundled model dir
-        const bundledExists = bundledPath && fs.existsSync(path.join(bundledPath, 'model.bin'));
-        // Check HuggingFace cache (models downloaded by faster-whisper)
-        let hfExists = false;
-        try {
-            const hfModelDir = path.join(hfCache, `models--Systran--faster-whisper-${name}`);
-            if (fs.existsSync(hfModelDir)) {
-                // Check for snapshots directory with content
-                const snapshotsDir = path.join(hfModelDir, 'snapshots');
-                if (fs.existsSync(snapshotsDir)) {
-                    const snapshots = fs.readdirSync(snapshotsDir);
-                    if (snapshots.length > 0) {
-                        const snapDir = path.join(snapshotsDir, snapshots[0]);
-                        hfExists = fs.existsSync(path.join(snapDir, 'model.bin'));
-                    }
-                }
-            }
-        } catch (_) { }
+    // Check local model dir
+    const localExists = fs.existsSync(path.join(localPath, 'model.bin'));
+    // Check bundled model dir
+    const bundledExists = bundledPath && fs.existsSync(path.join(bundledPath, 'model.bin'));
+    // Check HuggingFace cache (models downloaded by faster-whisper)
+    let hfExists = false;
+    try {
+      const hfModelDir = path.join(hfCache, `models--Systran--faster-whisper-${name}`);
+      if (fs.existsSync(hfModelDir)) {
+        // Check for snapshots directory with content
+        const snapshotsDir = path.join(hfModelDir, 'snapshots');
+        if (fs.existsSync(snapshotsDir)) {
+          const snapshots = fs.readdirSync(snapshotsDir);
+          if (snapshots.length > 0) {
+            const snapDir = path.join(snapshotsDir, snapshots[0]);
+            hfExists = fs.existsSync(path.join(snapDir, 'model.bin'));
+          }
+        }
+      }
+    } catch (_) { }
 
-        models[name] = {
-            ...info,
-            downloaded: localExists || bundledExists || hfExists,
-            location: localExists ? 'local' : bundledExists ? 'bundled' : hfExists ? 'cache' : null
-        };
-    }
-    return models;
+    models[name] = {
+      ...info,
+      downloaded: localExists || bundledExists || hfExists,
+      location: localExists ? 'local' : bundledExists ? 'bundled' : hfExists ? 'cache' : null
+    };
+  }
+  return models;
 }
 
 ipcMain.handle('check-model-status', async () => {
-    const tier = store.get('license.tier') || 'free';
-    const models = checkModelStatus();
-    const allowedModels = MODEL_MANIFEST.tierModels[tier] || MODEL_MANIFEST.tierModels.free;
-    return { tier, models, allowedModels };
+  const tier = store.get('license.tier') || 'free';
+  const models = checkModelStatus();
+  const allowedModels = MODEL_MANIFEST.tierModels[tier] || MODEL_MANIFEST.tierModels.free;
+  return { tier, models, allowedModels };
 });
 
 /**
@@ -2470,13 +2499,13 @@ ipcMain.handle('check-model-status', async () => {
  * Returns a promise that resolves when download completes
  */
 function downloadModel(modelName) {
-    return new Promise((resolve, reject) => {
-        const venvPython = path.join(os.homedir(), '.windy-pro', 'venv', 'bin', 'python');
-        const pythonExe = require('fs').existsSync(venvPython) ? venvPython : 'python3';
+  return new Promise((resolve, reject) => {
+    const venvPython = path.join(os.homedir(), '.windy-pro', 'venv', 'bin', 'python');
+    const pythonExe = require('fs').existsSync(venvPython) ? venvPython : 'python3';
 
-        console.log(`[ModelDownload] Starting download: ${modelName}`);
+    console.log(`[ModelDownload] Starting download: ${modelName}`);
 
-        const proc = require('child_process').spawn(pythonExe, ['-c', `
+    const proc = require('child_process').spawn(pythonExe, ['-c', `
 import sys
 print(f"DOWNLOADING {sys.argv[0]}", flush=True)
 try:
@@ -2490,221 +2519,221 @@ except Exception as e:
     sys.exit(1)
 `], { stdio: ['pipe', 'pipe', 'pipe'] });
 
-        let output = '';
-        proc.stdout.on('data', (data) => {
-            output += data.toString();
-            const lines = data.toString().trim().split('\n');
-            for (const line of lines) {
-                if (mainWindow && !mainWindow.isDestroyed()) {
-                    safeSend('model-download-progress', { model: modelName, status: line.trim() });
-                }
-            }
-        });
-        proc.stderr.on('data', (data) => {
-            // HuggingFace downloads print progress to stderr
-            const text = data.toString();
-            if (text.includes('%')) {
-                const match = text.match(/(\d+)%/);
-                if (match && mainWindow && !mainWindow.isDestroyed()) {
-                    safeSend('model-download-progress', { model: modelName, percent: parseInt(match[1]) });
-                }
-            }
-        });
-        proc.on('close', (code) => {
-            if (code === 0 && output.includes('DONE')) {
-                console.log(`[ModelDownload] Completed: ${modelName}`);
-                resolve(true);
-            } else {
-                console.error(`[ModelDownload] Failed: ${modelName} (exit ${code})`);
-                reject(new Error(`Download failed for ${modelName}`));
-            }
-        });
-        proc.on('error', (err) => reject(err));
+    let output = '';
+    proc.stdout.on('data', (data) => {
+      output += data.toString();
+      const lines = data.toString().trim().split('\n');
+      for (const line of lines) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          safeSend('model-download-progress', { model: modelName, status: line.trim() });
+        }
+      }
     });
+    proc.stderr.on('data', (data) => {
+      // HuggingFace downloads print progress to stderr
+      const text = data.toString();
+      if (text.includes('%')) {
+        const match = text.match(/(\d+)%/);
+        if (match && mainWindow && !mainWindow.isDestroyed()) {
+          safeSend('model-download-progress', { model: modelName, percent: parseInt(match[1]) });
+        }
+      }
+    });
+    proc.on('close', (code) => {
+      if (code === 0 && output.includes('DONE')) {
+        console.log(`[ModelDownload] Completed: ${modelName}`);
+        resolve(true);
+      } else {
+        console.error(`[ModelDownload] Failed: ${modelName} (exit ${code})`);
+        reject(new Error(`Download failed for ${modelName}`));
+      }
+    });
+    proc.on('error', (err) => reject(err));
+  });
 }
 
 ipcMain.handle('download-models', async (event, modelNames) => {
-    const results = {};
-    for (const name of modelNames) {
-        try {
-            safeSend('model-download-progress', { model: name, status: 'STARTING', percent: 0 });
-            await downloadModel(name);
-            results[name] = { ok: true };
-            safeSend('model-download-progress', { model: name, status: 'DONE', percent: 100 });
-        } catch (err) {
-            results[name] = { ok: false, error: err.message };
-            safeSend('model-download-progress', { model: name, status: 'ERROR', error: err.message });
-        }
+  const results = {};
+  for (const name of modelNames) {
+    try {
+      safeSend('model-download-progress', { model: name, status: 'STARTING', percent: 0 });
+      await downloadModel(name);
+      results[name] = { ok: true };
+      safeSend('model-download-progress', { model: name, status: 'DONE', percent: 100 });
+    } catch (err) {
+      results[name] = { ok: false, error: err.message };
+      safeSend('model-download-progress', { model: name, status: 'ERROR', error: err.message });
     }
-    return results;
+  }
+  return results;
 });
 
 /**
  * Show the Model Download Wizard popup
  */
 function showDownloadWizard(newTier) {
-    const models = checkModelStatus();
-    const allowedModels = MODEL_MANIFEST.tierModels[newTier] || MODEL_MANIFEST.tierModels.free;
-    const toDownload = allowedModels.filter(m => !models[m]?.downloaded);
+  const models = checkModelStatus();
+  const allowedModels = MODEL_MANIFEST.tierModels[newTier] || MODEL_MANIFEST.tierModels.free;
+  const toDownload = allowedModels.filter(m => !models[m]?.downloaded);
 
-    if (toDownload.length === 0) {
-        console.log('[Wizard] All models already downloaded for tier:', newTier);
-        safeSend('license-updated', newTier);
-        return;
+  if (toDownload.length === 0) {
+    console.log('[Wizard] All models already downloaded for tier:', newTier);
+    safeSend('license-updated', newTier);
+    return;
+  }
+
+  const tierNames = { free: 'Free', pro: 'Windy Pro', translate: 'Windy Translate', translate_pro: 'Windy Translate Pro' };
+  const tierName = tierNames[newTier] || newTier;
+
+  const totalBytes = toDownload.reduce((sum, m) => sum + (MODEL_MANIFEST.models[m]?.bytes || 0), 0);
+  const totalSizeMB = Math.round(totalBytes / 1024 / 1024);
+
+  const modelRows = allowedModels.map(m => {
+    const info = MODEL_MANIFEST.models[m];
+    const isDownloaded = models[m]?.downloaded;
+    const needsDownload = toDownload.includes(m);
+    return { key: m, label: info.label, size: info.size, desc: info.desc, downloaded: isDownloaded, needsDownload };
+  });
+
+  const DATA = JSON.stringify({ modelRows, toDownload, tierName, totalSizeMB });
+
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Downloading Engines</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
+    '<style>' +
+    '*{margin:0;padding:0;box-sizing:border-box;}' +
+    'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B,#0F172A);color:#F1F5F9;min-height:100vh;padding:30px;}' +
+    '.header{text-align:center;margin-bottom:24px;}' +
+    '.emoji{font-size:48px;margin-bottom:8px;}' +
+    'h1{font-size:24px;font-weight:800;background:linear-gradient(135deg,#22C55E,#3B82F6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px;}' +
+    '.subtitle{color:#94A3B8;font-size:13px;}' +
+    '.model-list{max-width:500px;margin:0 auto 20px;}' +
+    '.model-row{display:flex;align-items:center;gap:12px;background:#1E293B;border:1px solid #334155;border-radius:10px;padding:12px 16px;margin-bottom:8px;transition:all 0.3s;}' +
+    '.model-row.done{border-color:#22C55E33;}' +
+    '.model-row.active{border-color:#3B82F6;box-shadow:0 0 12px #3B82F644;}' +
+    '.model-row.error{border-color:#EF444433;}' +
+    '.model-icon{font-size:20px;width:28px;text-align:center;}' +
+    '.model-info{flex:1;}' +
+    '.model-name{font-size:13px;font-weight:600;color:#F1F5F9;}' +
+    '.model-detail{font-size:11px;color:#64748B;}' +
+    '.model-status{font-size:11px;font-weight:600;text-align:right;min-width:80px;}' +
+    '.model-status.done{color:#22C55E;}' +
+    '.model-status.downloading{color:#3B82F6;}' +
+    '.model-status.queued{color:#64748B;}' +
+    '.model-status.error{color:#EF4444;}' +
+    '.progress-bar{width:100%;height:4px;background:#334155;border-radius:2px;margin-top:4px;overflow:hidden;}' +
+    '.progress-fill{height:100%;background:linear-gradient(90deg,#3B82F6,#22C55E);border-radius:2px;transition:width 0.3s;width:0%;}' +
+    '.overall{max-width:500px;margin:0 auto 16px;text-align:center;}' +
+    '.overall-bar{width:100%;height:6px;background:#334155;border-radius:3px;overflow:hidden;margin:8px 0;}' +
+    '.overall-fill{height:100%;background:linear-gradient(90deg,#7C3AED,#3B82F6,#22C55E);border-radius:3px;transition:width 0.5s;width:0%;}' +
+    '.overall-text{font-size:11px;color:#94A3B8;}' +
+    '.actions{text-align:center;margin-top:16px;}' +
+    '.use-btn{background:linear-gradient(135deg,#22C55E,#16A34A);color:#fff;border:none;padding:12px 28px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s;}' +
+    '.use-btn:hover{transform:translateY(-2px);box-shadow:0 4px 20px #22C55E44;}' +
+    '.done-msg{display:none;text-align:center;margin-top:20px;}' +
+    '.done-msg.show{display:block;}' +
+    '.done-msg h2{font-size:20px;color:#22C55E;margin-bottom:6px;}' +
+    '.done-msg p{color:#94A3B8;font-size:12px;}' +
+    '</style></head><body>' +
+    '<div class="header">' +
+    '<div class="emoji">🚀</div>' +
+    '<h1>Welcome to ' + tierName + '!</h1>' +
+    '<p class="subtitle">Downloading your premium engines (~' + totalSizeMB + ' MB total)</p>' +
+    '</div>' +
+    '<div class="model-list" id="modelList"></div>' +
+    '<div class="overall">' +
+    '<div class="overall-bar"><div class="overall-fill" id="overallFill"></div></div>' +
+    '<div class="overall-text" id="overallText">Preparing downloads…</div>' +
+    '</div>' +
+    '<div class="actions">' +
+    '<button class="use-btn" id="useBtn" onclick="window.close()">✨ Use App Now — downloads continue in background</button>' +
+    '</div>' +
+    '<div class="done-msg" id="doneMsg">' +
+    '<h2>✅ All Engines Ready!</h2>' +
+    '<p>All premium engines are downloaded and ready. Close this window and enjoy!</p>' +
+    '</div>' +
+    '<script>' +
+    'const D=' + DATA + ';' +
+    'const states={};' +
+    'D.modelRows.forEach(m=>states[m.key]=m.downloaded?"done":"queued");' +
+    'function renderList(){' +
+    '  const list=document.getElementById("modelList");list.innerHTML="";' +
+    '  D.modelRows.forEach(m=>{' +
+    '    const st=states[m.key]||"queued";const pct=states[m.key+"_pct"]||0;' +
+    '    const cls="model-row "+(st==="done"?"done":st==="downloading"?"active":st==="error"?"error":"");' +
+    '    const icon=st==="done"?"✅":st==="downloading"?"⬇️":st==="error"?"❌":"⏳";' +
+    '    const statusCls="model-status "+(st==="done"?"done":st==="downloading"?"downloading":st==="error"?"error":"queued");' +
+    '    const statusText=st==="done"?"Ready":st==="downloading"?pct+"%":st==="error"?"Failed":"Queued";' +
+    '    let barHtml="";' +
+    '    if(st==="downloading")barHtml="<div class=\\"progress-bar\\"><div class=\\"progress-fill\\" style=\\"width:"+pct+"%\\"></div></div>";' +
+    '    list.innerHTML+="<div class=\\""+cls+"\\"><div class=\\"model-icon\\">"+icon+"</div>"' +
+    '      +"<div class=\\"model-info\\"><div class=\\"model-name\\">"+m.label+" ("+m.key+")</div>"' +
+    '      +"<div class=\\"model-detail\\">"+m.size+" — "+m.desc+"</div>"+barHtml+"</div>"' +
+    '      +"<div class=\\""+statusCls+"\\">"+statusText+"</div></div>";' +
+    '  });' +
+    '  const doneCount=D.modelRows.filter(m=>states[m.key]==="done").length;' +
+    '  const pct=Math.round(doneCount/D.modelRows.length*100);' +
+    '  document.getElementById("overallFill").style.width=pct+"%";' +
+    '  document.getElementById("overallText").textContent=doneCount+" of "+D.modelRows.length+" engines ready";' +
+    '  if(D.toDownload.every(m=>states[m]==="done")){' +
+    '    document.getElementById("doneMsg").classList.add("show");' +
+    '    document.getElementById("useBtn").textContent="🎉 Close & Start Using Premium Engines";' +
+    '  }' +
+    '}' +
+    'renderList();' +
+    // Poll for status updates via title changes (simple IPC without preload)
+    'setInterval(()=>{' +
+    '  const t=document.title;' +
+    '  if(t.startsWith("UPDATE:")){' +
+    '    try{const u=JSON.parse(t.substring(7));' +
+    '    if(u.model){' +
+    '      if(u.status==="DONE")states[u.model]="done";' +
+    '      else if(u.status==="ERROR")states[u.model]="error";' +
+    '      else if(u.status==="STARTING"||u.status==="DOWNLOADING"||u.status==="LOADING"){states[u.model]="downloading";states[u.model+"_pct"]=u.percent||0;}' +
+    '      else if(u.percent!==undefined){states[u.model]="downloading";states[u.model+"_pct"]=u.percent;}' +
+    '      renderList();' +
+    '    }}catch(_){}' +
+    '    document.title="Downloading Engines";' +
+    '  }' +
+    '},200);' +
+    '</script></body></html>';
+
+  const wizardWin = new BrowserWindow({
+    width: 580, height: 620, x: 200, y: 100,
+    title: 'Downloading Engines',
+    autoHideMenuBar: true,
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, javascript: true }
+  });
+  wizardWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  wizardWin.focus();
+
+  // Start downloading missing models sequentially
+  (async () => {
+    for (const modelName of toDownload) {
+      // Send status update via title change (safe without preload)
+      try {
+        wizardWin.setTitle('UPDATE:' + JSON.stringify({ model: modelName, status: 'DOWNLOADING', percent: 0 }));
+      } catch (_) { }
+
+      try {
+        await downloadModel(modelName);
+        try {
+          wizardWin.setTitle('UPDATE:' + JSON.stringify({ model: modelName, status: 'DONE', percent: 100 }));
+        } catch (_) { }
+      } catch (err) {
+        try {
+          wizardWin.setTitle('UPDATE:' + JSON.stringify({ model: modelName, status: 'ERROR' }));
+        } catch (_) { }
+        console.error(`[Wizard] Download failed for ${modelName}:`, err.message);
+      }
     }
-
-    const tierNames = { free: 'Free', pro: 'Windy Pro', translate: 'Windy Translate', translate_pro: 'Windy Translate Pro' };
-    const tierName = tierNames[newTier] || newTier;
-
-    const totalBytes = toDownload.reduce((sum, m) => sum + (MODEL_MANIFEST.models[m]?.bytes || 0), 0);
-    const totalSizeMB = Math.round(totalBytes / 1024 / 1024);
-
-    const modelRows = allowedModels.map(m => {
-        const info = MODEL_MANIFEST.models[m];
-        const isDownloaded = models[m]?.downloaded;
-        const needsDownload = toDownload.includes(m);
-        return { key: m, label: info.label, size: info.size, desc: info.desc, downloaded: isDownloaded, needsDownload };
-    });
-
-    const DATA = JSON.stringify({ modelRows, toDownload, tierName, totalSizeMB });
-
-    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Downloading Engines</title>' +
-        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
-        '<style>' +
-        '*{margin:0;padding:0;box-sizing:border-box;}' +
-        'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B,#0F172A);color:#F1F5F9;min-height:100vh;padding:30px;}' +
-        '.header{text-align:center;margin-bottom:24px;}' +
-        '.emoji{font-size:48px;margin-bottom:8px;}' +
-        'h1{font-size:24px;font-weight:800;background:linear-gradient(135deg,#22C55E,#3B82F6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px;}' +
-        '.subtitle{color:#94A3B8;font-size:13px;}' +
-        '.model-list{max-width:500px;margin:0 auto 20px;}' +
-        '.model-row{display:flex;align-items:center;gap:12px;background:#1E293B;border:1px solid #334155;border-radius:10px;padding:12px 16px;margin-bottom:8px;transition:all 0.3s;}' +
-        '.model-row.done{border-color:#22C55E33;}' +
-        '.model-row.active{border-color:#3B82F6;box-shadow:0 0 12px #3B82F644;}' +
-        '.model-row.error{border-color:#EF444433;}' +
-        '.model-icon{font-size:20px;width:28px;text-align:center;}' +
-        '.model-info{flex:1;}' +
-        '.model-name{font-size:13px;font-weight:600;color:#F1F5F9;}' +
-        '.model-detail{font-size:11px;color:#64748B;}' +
-        '.model-status{font-size:11px;font-weight:600;text-align:right;min-width:80px;}' +
-        '.model-status.done{color:#22C55E;}' +
-        '.model-status.downloading{color:#3B82F6;}' +
-        '.model-status.queued{color:#64748B;}' +
-        '.model-status.error{color:#EF4444;}' +
-        '.progress-bar{width:100%;height:4px;background:#334155;border-radius:2px;margin-top:4px;overflow:hidden;}' +
-        '.progress-fill{height:100%;background:linear-gradient(90deg,#3B82F6,#22C55E);border-radius:2px;transition:width 0.3s;width:0%;}' +
-        '.overall{max-width:500px;margin:0 auto 16px;text-align:center;}' +
-        '.overall-bar{width:100%;height:6px;background:#334155;border-radius:3px;overflow:hidden;margin:8px 0;}' +
-        '.overall-fill{height:100%;background:linear-gradient(90deg,#7C3AED,#3B82F6,#22C55E);border-radius:3px;transition:width 0.5s;width:0%;}' +
-        '.overall-text{font-size:11px;color:#94A3B8;}' +
-        '.actions{text-align:center;margin-top:16px;}' +
-        '.use-btn{background:linear-gradient(135deg,#22C55E,#16A34A);color:#fff;border:none;padding:12px 28px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s;}' +
-        '.use-btn:hover{transform:translateY(-2px);box-shadow:0 4px 20px #22C55E44;}' +
-        '.done-msg{display:none;text-align:center;margin-top:20px;}' +
-        '.done-msg.show{display:block;}' +
-        '.done-msg h2{font-size:20px;color:#22C55E;margin-bottom:6px;}' +
-        '.done-msg p{color:#94A3B8;font-size:12px;}' +
-        '</style></head><body>' +
-        '<div class="header">' +
-        '<div class="emoji">🚀</div>' +
-        '<h1>Welcome to ' + tierName + '!</h1>' +
-        '<p class="subtitle">Downloading your premium engines (~' + totalSizeMB + ' MB total)</p>' +
-        '</div>' +
-        '<div class="model-list" id="modelList"></div>' +
-        '<div class="overall">' +
-        '<div class="overall-bar"><div class="overall-fill" id="overallFill"></div></div>' +
-        '<div class="overall-text" id="overallText">Preparing downloads…</div>' +
-        '</div>' +
-        '<div class="actions">' +
-        '<button class="use-btn" id="useBtn" onclick="window.close()">✨ Use App Now — downloads continue in background</button>' +
-        '</div>' +
-        '<div class="done-msg" id="doneMsg">' +
-        '<h2>✅ All Engines Ready!</h2>' +
-        '<p>All premium engines are downloaded and ready. Close this window and enjoy!</p>' +
-        '</div>' +
-        '<script>' +
-        'const D=' + DATA + ';' +
-        'const states={};' +
-        'D.modelRows.forEach(m=>states[m.key]=m.downloaded?"done":"queued");' +
-        'function renderList(){' +
-        '  const list=document.getElementById("modelList");list.innerHTML="";' +
-        '  D.modelRows.forEach(m=>{' +
-        '    const st=states[m.key]||"queued";const pct=states[m.key+"_pct"]||0;' +
-        '    const cls="model-row "+(st==="done"?"done":st==="downloading"?"active":st==="error"?"error":"");' +
-        '    const icon=st==="done"?"✅":st==="downloading"?"⬇️":st==="error"?"❌":"⏳";' +
-        '    const statusCls="model-status "+(st==="done"?"done":st==="downloading"?"downloading":st==="error"?"error":"queued");' +
-        '    const statusText=st==="done"?"Ready":st==="downloading"?pct+"%":st==="error"?"Failed":"Queued";' +
-        '    let barHtml="";' +
-        '    if(st==="downloading")barHtml="<div class=\\"progress-bar\\"><div class=\\"progress-fill\\" style=\\"width:"+pct+"%\\"></div></div>";' +
-        '    list.innerHTML+="<div class=\\""+cls+"\\"><div class=\\"model-icon\\">"+icon+"</div>"' +
-        '      +"<div class=\\"model-info\\"><div class=\\"model-name\\">"+m.label+" ("+m.key+")</div>"' +
-        '      +"<div class=\\"model-detail\\">"+m.size+" — "+m.desc+"</div>"+barHtml+"</div>"' +
-        '      +"<div class=\\""+statusCls+"\\">"+statusText+"</div></div>";' +
-        '  });' +
-        '  const doneCount=D.modelRows.filter(m=>states[m.key]==="done").length;' +
-        '  const pct=Math.round(doneCount/D.modelRows.length*100);' +
-        '  document.getElementById("overallFill").style.width=pct+"%";' +
-        '  document.getElementById("overallText").textContent=doneCount+" of "+D.modelRows.length+" engines ready";' +
-        '  if(D.toDownload.every(m=>states[m]==="done")){' +
-        '    document.getElementById("doneMsg").classList.add("show");' +
-        '    document.getElementById("useBtn").textContent="🎉 Close & Start Using Premium Engines";' +
-        '  }' +
-        '}' +
-        'renderList();' +
-        // Poll for status updates via title changes (simple IPC without preload)
-        'setInterval(()=>{' +
-        '  const t=document.title;' +
-        '  if(t.startsWith("UPDATE:")){' +
-        '    try{const u=JSON.parse(t.substring(7));' +
-        '    if(u.model){' +
-        '      if(u.status==="DONE")states[u.model]="done";' +
-        '      else if(u.status==="ERROR")states[u.model]="error";' +
-        '      else if(u.status==="STARTING"||u.status==="DOWNLOADING"||u.status==="LOADING"){states[u.model]="downloading";states[u.model+"_pct"]=u.percent||0;}' +
-        '      else if(u.percent!==undefined){states[u.model]="downloading";states[u.model+"_pct"]=u.percent;}' +
-        '      renderList();' +
-        '    }}catch(_){}' +
-        '    document.title="Downloading Engines";' +
-        '  }' +
-        '},200);' +
-        '</script></body></html>';
-
-    const wizardWin = new BrowserWindow({
-        width: 580, height: 620, x: 200, y: 100,
-        title: 'Downloading Engines',
-        autoHideMenuBar: true,
-        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, javascript: true }
-    });
-    wizardWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-    wizardWin.focus();
-
-    // Start downloading missing models sequentially
-    (async () => {
-        for (const modelName of toDownload) {
-            // Send status update via title change (safe without preload)
-            try {
-                wizardWin.setTitle('UPDATE:' + JSON.stringify({ model: modelName, status: 'DOWNLOADING', percent: 0 }));
-            } catch (_) { }
-
-            try {
-                await downloadModel(modelName);
-                try {
-                    wizardWin.setTitle('UPDATE:' + JSON.stringify({ model: modelName, status: 'DONE', percent: 100 }));
-                } catch (_) { }
-            } catch (err) {
-                try {
-                    wizardWin.setTitle('UPDATE:' + JSON.stringify({ model: modelName, status: 'ERROR' }));
-                } catch (_) { }
-                console.error(`[Wizard] Download failed for ${modelName}:`, err.message);
-            }
-        }
-        console.log('[Wizard] All model downloads complete for tier:', newTier);
-        safeSend('license-updated', newTier);
-    })();
+    console.log('[Wizard] All model downloads complete for tier:', newTier);
+    safeSend('license-updated', newTier);
+  })();
 }
 
 ipcMain.handle('show-download-wizard', async (event, tier) => {
-    showDownloadWizard(tier || store.get('license.tier') || 'free');
-    return { ok: true };
+  showDownloadWizard(tier || store.get('license.tier') || 'free');
+  return { ok: true };
 });
 
 // ═══ Text Translation via AI (Groq/OpenAI) ═══
