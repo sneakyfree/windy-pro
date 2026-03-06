@@ -1270,45 +1270,37 @@ ipcMain.handle('open-external-url', async (event, url) => {
     return { ok: false, error: 'Invalid URL' };
   }
 
-  // Attempt 1: shell.openExternal
+  // On Linux (AppImage), shell.openExternal silently fails — use BrowserWindow directly
+  if (process.platform === 'linux') {
+    try {
+      const checkoutWin = new BrowserWindow({
+        width: 1100,
+        height: 750,
+        title: 'Windy Pro',
+        autoHideMenuBar: true,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      });
+      checkoutWin.loadURL(url);
+      checkoutWin.focus();
+      console.log('[Main] ✅ Opened URL in Electron BrowserWindow (Linux primary)');
+      return { ok: true };
+    } catch (e) {
+      console.error('[Main] BrowserWindow failed:', e.message);
+      // Fall through to shell.openExternal as last resort
+    }
+  }
+
+  // macOS/Windows: use shell.openExternal (works reliably on these platforms)
   try {
     await shell.openExternal(url);
     console.log('[Main] ✅ Opened URL via shell.openExternal');
     return { ok: true };
   } catch (e) {
-    console.warn('[Main] shell.openExternal failed:', e.message);
-  }
-
-  // Attempt 2: xdg-open on Linux
-  if (process.platform === 'linux') {
-    try {
-      const { execSync } = require('child_process');
-      execSync(`xdg-open "${url.replace(/"/g, '')}"`, { timeout: 5000 });
-      console.log('[Main] ✅ Opened URL via xdg-open');
-      return { ok: true };
-    } catch (e) {
-      console.warn('[Main] xdg-open failed:', e.message);
-    }
-  }
-
-  // Attempt 3: Open in a new Electron BrowserWindow (guaranteed to work)
-  try {
-    const checkoutWin = new BrowserWindow({
-      width: 1000,
-      height: 700,
-      title: 'Stripe Checkout — Windy Pro',
-      autoHideMenuBar: true,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true
-      }
-    });
-    checkoutWin.loadURL(url);
-    console.log('[Main] ✅ Opened URL in Electron BrowserWindow fallback');
-    return { ok: true };
-  } catch (e) {
-    console.error('[Main] ❌ All URL opening methods failed:', e.message);
-    return { ok: false, error: 'Could not open URL' };
+    console.error('[Main] ❌ shell.openExternal failed:', e.message);
+    return { ok: false, error: e.message };
   }
 });
 
