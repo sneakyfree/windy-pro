@@ -19,8 +19,7 @@ class UpgradePanel {
                 name: 'Free',
                 price: '$0',
                 period: 'forever',
-                priceId: null,
-                features: ['1 language', '3 engines', '5-min recordings', 'Local transcription'],
+                features: ['1 language', '3 engines', '2-min recordings', 'Local transcription'],
                 color: '#6B7280',
                 icon: '🌱'
             },
@@ -28,11 +27,11 @@ class UpgradePanel {
                 key: 'pro',
                 name: 'Windy Pro',
                 price: '$49',
-                altPrice: '$3.99/mo',
-                period: 'one-time',
-                priceId: 'price_1T5oYzBXIOBasDQibSlnIsPg',
-                altPriceId: 'price_1T60GeBXIOBasDQi4aitcq8O',
-                features: ['All 15 engines', '99 languages', '30-min recordings', 'Batch mode', 'LLM polish'],
+                period: 'annual',
+                monthlyPriceId: 'price_1T60GeBXIOBasDQi4aitcq8O',
+                annualPriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg',
+                lifetimePriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg_life',
+                features: ['All 15 engines', '99 languages', '15-min recordings', 'Batch mode', 'LLM polish'],
                 color: '#22C55E',
                 icon: '⚡'
             },
@@ -40,11 +39,11 @@ class UpgradePanel {
                 key: 'translate',
                 name: 'Windy Translate',
                 price: '$79',
-                altPrice: '$5.99/mo',
-                period: 'one-time',
-                priceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7',
-                altPriceId: 'price_1T5oZJBXIOBasDQijBW23Gow',
-                features: ['Everything in Pro', 'Real-time translation', 'Conversation mode', '99 language pairs'],
+                period: 'annual',
+                monthlyPriceId: 'price_1T5oZJBXIOBasDQijBW23Gow',
+                annualPriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7',
+                lifetimePriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7_life',
+                features: ['Everything in Pro', 'Real-time translation', '60-min recordings', '99 language pairs'],
                 color: '#3B82F6',
                 icon: '🌍',
                 recommended: true
@@ -53,11 +52,11 @@ class UpgradePanel {
                 key: 'translate_pro',
                 name: 'Windy Translate Pro',
                 price: '$149',
-                altPrice: '$9.99/mo',
-                period: 'one-time',
-                priceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG',
-                altPriceId: 'price_1T60H8BXIOBasDQiy5eorTWR',
-                features: ['Everything in Translate', 'Text-to-speech', 'Medical/legal glossaries', 'Priority support'],
+                period: 'annual',
+                monthlyPriceId: 'price_1T60H8BXIOBasDQiy5eorTWR',
+                annualPriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG',
+                lifetimePriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG_life',
+                features: ['Everything in Translate', 'Unlimited recordings', 'Text-to-speech', 'Medical/legal glossaries'],
                 color: '#8B5CF6',
                 icon: '👑'
             }
@@ -78,6 +77,7 @@ class UpgradePanel {
         } catch (_) { }
 
         if (this.panel) this.panel.remove();
+
         this.panel = document.createElement('div');
         this.panel.className = 'upgrade-panel';
         this.panel.innerHTML = this._buildHTML();
@@ -111,8 +111,8 @@ class UpgradePanel {
             const currentBadge = isCurrent ? '<span class="upgrade-current-badge">✓ YOUR CURRENT PLAN</span>' : '';
 
             let priceDisplay = plan.price;
-            if (plan.altPrice) {
-                priceDisplay += ` <span class="upgrade-alt-price">or ${plan.altPrice}</span>`;
+            if (plan.monthlyPriceId) {
+                priceDisplay += ` <span class="upgrade-alt-price">or $${plan.key === 'pro' ? '4.99' : plan.key === 'translate' ? '8.99' : '14.99'}/mo</span>`;
             }
 
             const features = plan.features.map(f => `<li>✓ ${f}</li>`).join('');
@@ -121,10 +121,8 @@ class UpgradePanel {
             if (isCurrent) {
                 actionBtn = '<button class="upgrade-btn upgrade-btn-current" disabled>Current Plan</button>';
             } else if (isUpgrade) {
-                actionBtn = `<button class="upgrade-btn upgrade-btn-buy" data-price="${plan.priceId}" data-tier="${plan.key}">Upgrade →</button>`;
-                if (plan.altPriceId) {
-                    actionBtn += `<button class="upgrade-btn upgrade-btn-alt" data-price="${plan.altPriceId}" data-tier="${plan.key}" data-sub="true">or subscribe monthly</button>`;
-                }
+                actionBtn = `<button class="upgrade-btn upgrade-btn-buy" data-price="${plan.annualPriceId}" data-tier="${plan.key}">Upgrade →</button>`;
+                actionBtn += `<button class="upgrade-btn upgrade-btn-alt" data-price="${plan.monthlyPriceId}" data-tier="${plan.key}" data-sub="true">or subscribe monthly</button>`;
             } else if (isDowngrade) {
                 actionBtn = '<button class="upgrade-btn upgrade-btn-current" disabled>✓ Included</button>';
             }
@@ -234,51 +232,56 @@ class UpgradePanel {
         try {
             if (!window.windyAPI?.createCheckoutSession) throw new Error('Not available');
 
-            // Create sessions for ALL paid plans (one-time AND monthly) in parallel
-            const paidPlans = this.plans.filter(p => p.priceId);
+            // Create sessions for ALL paid plans (monthly + annual + lifetime) in parallel
+            const paidPlans = this.plans.filter(p => p.monthlyPriceId);
             const allSessionPromises = [];
 
-            // One-time sessions
             for (const p of paidPlans) {
+                // Monthly
                 allSessionPromises.push(
-                    window.windyAPI.createCheckoutSession(p.priceId, email)
-                        .then(r => ({ key: p.key, billing: 'onetime', result: r }))
-                        .catch(e => ({ key: p.key, billing: 'onetime', result: { ok: false, error: e.message } }))
+                    window.windyAPI.createCheckoutSession(p.monthlyPriceId, email)
+                        .then(r => ({ key: p.key, billing: 'monthly', result: r }))
+                        .catch(e => ({ key: p.key, billing: 'monthly', result: { ok: false, error: e.message } }))
                 );
-                // Monthly sessions
-                if (p.altPriceId) {
-                    allSessionPromises.push(
-                        window.windyAPI.createCheckoutSession(p.altPriceId, email)
-                            .then(r => ({ key: p.key, billing: 'monthly', result: r }))
-                            .catch(e => ({ key: p.key, billing: 'monthly', result: { ok: false, error: e.message } }))
-                    );
-                }
+                // Annual
+                allSessionPromises.push(
+                    window.windyAPI.createCheckoutSession(p.annualPriceId, email)
+                        .then(r => ({ key: p.key, billing: 'annual', result: r }))
+                        .catch(e => ({ key: p.key, billing: 'annual', result: { ok: false, error: e.message } }))
+                );
+                // Lifetime
+                allSessionPromises.push(
+                    window.windyAPI.createCheckoutSession(p.lifetimePriceId, email)
+                        .then(r => ({ key: p.key, billing: 'lifetime', result: r }))
+                        .catch(e => ({ key: p.key, billing: 'lifetime', result: { ok: false, error: e.message } }))
+                );
             }
             const sessionResults = await Promise.all(allSessionPromises);
 
-            // Build separate URL maps for one-time and monthly
-            const planUrls = {};
+            // Build 3 URL maps
             const monthlyPlanUrls = {};
+            const annualPlanUrls = {};
+            const lifetimePlanUrls = {};
             for (const { key, billing, result } of sessionResults) {
                 if (result?.ok && result.url) {
-                    if (billing === 'monthly') {
-                        monthlyPlanUrls[key] = result.url;
-                    } else {
-                        planUrls[key] = result.url;
-                    }
+                    if (billing === 'monthly') monthlyPlanUrls[key] = result.url;
+                    else if (billing === 'annual') annualPlanUrls[key] = result.url;
+                    else lifetimePlanUrls[key] = result.url;
                     this._activeSessions.push({ sessionId: result.sessionId, tier: key, url: result.url });
                 }
             }
 
-            if (Object.keys(planUrls).length === 0 && Object.keys(monthlyPlanUrls).length === 0) {
+            const totalUrls = Object.keys(monthlyPlanUrls).length + Object.keys(annualPlanUrls).length + Object.keys(lifetimePlanUrls).length;
+            if (totalUrls === 0) {
                 throw new Error('Could not create any checkout sessions');
             }
 
-            // Open single interactive checkout window with both billing URL maps
+            // Open interactive checkout window with all 3 billing URL maps
             if (window.windyAPI?.openCheckoutUrl) {
                 const openResult = await window.windyAPI.openCheckoutUrl({
-                    planUrls,
                     monthlyPlanUrls,
+                    annualPlanUrls,
+                    lifetimePlanUrls,
                     currentTier: this._currentTier || 'free',
                     initialTier: tier
                 });

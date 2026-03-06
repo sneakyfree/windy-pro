@@ -172,12 +172,18 @@ let activeModelDownload = null; // Track background download process
 // Secret key: env var → electron-store → empty
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || store.get('stripe.secretKey', '');
 const STRIPE_PRICES = {
-  pro: { id: 'price_1T5oYzBXIOBasDQibSlnIsPg', mode: 'payment', tier: 'pro', amount: 4900 },
-  pro_monthly: { id: 'price_1T60GeBXIOBasDQi4aitcq8O', mode: 'subscription', tier: 'pro', amount: 399 },
-  translate: { id: 'price_1T5oZJBXIOBasDQiHO0MtYS7', mode: 'payment', tier: 'translate', amount: 7900 },
-  translate_monthly: { id: 'price_1T5oZJBXIOBasDQijBW23Gow', mode: 'subscription', tier: 'translate', amount: 599 },
-  translate_pro: { id: 'price_1T5oZ1BXIOBasDQinrz3VdvG', mode: 'payment', tier: 'translate_pro', amount: 14900 },
-  translate_pro_monthly: { id: 'price_1T60H8BXIOBasDQiy5eorTWR', mode: 'subscription', tier: 'translate_pro', amount: 999 }
+  // Monthly subscriptions
+  pro_monthly: { id: 'price_1T60GeBXIOBasDQi4aitcq8O', mode: 'subscription', tier: 'pro', amount: 499, billing: 'monthly' },
+  translate_monthly: { id: 'price_1T5oZJBXIOBasDQijBW23Gow', mode: 'subscription', tier: 'translate', amount: 899, billing: 'monthly' },
+  translate_pro_monthly: { id: 'price_1T60H8BXIOBasDQiy5eorTWR', mode: 'subscription', tier: 'translate_pro', amount: 1499, billing: 'monthly' },
+  // Annual subscriptions
+  pro_annual: { id: 'price_1T5oYzBXIOBasDQibSlnIsPg', mode: 'subscription', tier: 'pro', amount: 4900, billing: 'annual' },
+  translate_annual: { id: 'price_1T5oZJBXIOBasDQiHO0MtYS7', mode: 'subscription', tier: 'translate', amount: 7900, billing: 'annual' },
+  translate_pro_annual: { id: 'price_1T5oZ1BXIOBasDQinrz3VdvG', mode: 'subscription', tier: 'translate_pro', amount: 14900, billing: 'annual' },
+  // Lifetime (one-time payment)
+  pro_lifetime: { id: 'price_1T5oYzBXIOBasDQibSlnIsPg_life', mode: 'payment', tier: 'pro', amount: 9900, billing: 'lifetime' },
+  translate_lifetime: { id: 'price_1T5oZJBXIOBasDQiHO0MtYS7_life', mode: 'payment', tier: 'translate', amount: 19900, billing: 'lifetime' },
+  translate_pro_lifetime: { id: 'price_1T5oZ1BXIOBasDQinrz3VdvG_life', mode: 'payment', tier: 'translate_pro', amount: 29900, billing: 'lifetime' }
 };
 
 let stripeClient = null;
@@ -195,10 +201,10 @@ function getStripe() {
 
 function getTierLimits(tier) {
   const tiers = {
-    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
-    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
-    translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
-    translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
+    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 2, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
+    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 15, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
+    translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 60, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
+    translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 999, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
   };
   return tiers[tier] || tiers.free;
 }
@@ -2134,7 +2140,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
   }
   checkoutWindows = [];
 
-  const { planUrls = {}, monthlyPlanUrls = {}, currentTier = 'free', initialTier = 'pro' } = opts;
+  const { planUrls = {}, monthlyPlanUrls = {}, annualPlanUrls = {}, lifetimePlanUrls = {}, currentTier = 'free', initialTier = 'pro' } = opts;
 
   // Backwards compat: if old-style single URL passed
   if (opts.url && !Object.keys(planUrls).length) {
@@ -2143,27 +2149,35 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
 
   const allPlans = [
     {
-      key: 'free', name: 'Free', icon: '🌱', price: 0, priceLabel: '$0', monthlyPrice: 0, monthlyLabel: '$0', period: 'forever', color: '#6B7280',
-      desc: 'Perfect for trying it out. Limited to 1 language, 3 engines, and 5-minute recordings.'
+      key: 'free', name: 'Free', icon: '🌱',
+      monthlyLabel: '$0', annualLabel: '$0', lifetimeLabel: '$0',
+      period: 'forever', color: '#6B7280',
+      desc: 'Perfect for trying it out. Limited to 1 language, 3 engines, and 2-minute recordings.'
     },
     {
-      key: 'pro', name: 'Windy Pro', icon: '⚡', price: 4900, priceLabel: '$49', monthlyPrice: 399, monthlyLabel: '$3.99', period: 'one-time', color: '#22C55E',
-      desc: 'Unlock all 15 AI engines, 99 languages, 30-min recordings, batch processing, and AI-powered LLM polish for perfect transcripts.'
+      key: 'pro', name: 'Windy Pro', icon: '⚡',
+      monthlyLabel: '$4.99', annualLabel: '$49', lifetimeLabel: '$99',
+      period: 'annual', color: '#22C55E',
+      desc: 'Unlock all 15 AI engines, 99 languages, 15-min recordings, batch processing, and AI-powered LLM polish.'
     },
     {
-      key: 'translate', name: 'Windy Translate', icon: '🌍', price: 7900, priceLabel: '$79', monthlyPrice: 599, monthlyLabel: '$5.99', period: 'one-time', color: '#3B82F6', recommended: true,
-      desc: 'Everything in Pro PLUS real-time speech translation across 99 language pairs. Perfect for international meetings, travel, and cross-language work.'
+      key: 'translate', name: 'Windy Translate', icon: '🌍',
+      monthlyLabel: '$8.99', annualLabel: '$79', lifetimeLabel: '$199',
+      period: 'annual', color: '#3B82F6', recommended: true,
+      desc: 'Everything in Pro PLUS real-time speech translation, 60-min recordings, and 99 language pairs.'
     },
     {
-      key: 'translate_pro', name: 'Translate Pro', icon: '👑', price: 14900, priceLabel: '$149', monthlyPrice: 999, monthlyLabel: '$9.99', period: 'one-time', color: '#A855F7',
-      desc: 'The ultimate suite: all translation + text-to-speech output + specialized medical/legal glossaries for industry-grade accuracy.'
+      key: 'translate_pro', name: 'Translate Pro', icon: '👑',
+      monthlyLabel: '$14.99', annualLabel: '$149', lifetimeLabel: '$299',
+      period: 'annual', color: '#A855F7',
+      desc: 'The ultimate: unlimited recording, text-to-speech, and medical/legal glossaries for industry-grade accuracy.'
     }
   ];
 
   const featureDefs = [
     { key: 'maxEngines', label: 'AI Engines', tip: 'Number of transcription engines. More = better accuracy across accents and noise.' },
     { key: 'maxLanguages', label: 'Languages', tip: 'Free: 1, Paid: all 99 languages including rare dialects.' },
-    { key: 'maxMinutes', label: 'Max Recording', tip: 'Free: 5 min. Paid: 30 min per session — full meetings and lectures.' },
+    { key: 'maxMinutes', label: 'Max Recording', tip: 'Free: 2 min. Pro: 15 min. Translate: 60 min. Translate Pro: unlimited.' },
     { key: 'batchMode', label: 'Batch Mode', tip: 'Drag-drop a folder of recordings and transcribe them all at once.' },
     { key: 'llmPolish', label: 'LLM Polish', tip: 'AI fixes grammar, removes filler words, adds punctuation automatically.' },
     { key: 'translation', label: 'Real-time Translation', tip: 'Live speech translation across 99 language pairs.' },
@@ -2172,14 +2186,14 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
   ];
 
   const tiers = {
-    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
-    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
-    translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
-    translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
+    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 2, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
+    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 15, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
+    translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 60, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
+    translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 999, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
   };
 
   // Encode data for embedding in HTML
-  const DATA = JSON.stringify({ allPlans, featureDefs, tiers, planUrls, monthlyPlanUrls, currentTier, initialTier });
+  const DATA = JSON.stringify({ allPlans, featureDefs, tiers, monthlyPlanUrls, annualPlanUrls: Object.keys(annualPlanUrls).length ? annualPlanUrls : planUrls, lifetimePlanUrls, currentTier, initialTier });
 
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Choose Your Plan</title>' +
     '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
@@ -2221,20 +2235,19 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '.trust-badges{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center;}' +
     '.trust-badge{background:#1E293B;border:1px solid #334155;border-radius:6px;padding:5px 8px;font-size:9px;color:#94A3B8;}' +
     '.savings{border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600;margin-bottom:10px;transition:all 0.3s;}' +
-    '.billing-toggle{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 0 4px;font-size:13px;}' +
-    '.toggle-label{color:#64748B;font-weight:500;cursor:pointer;transition:color 0.2s;}' +
-    '.toggle-label.active{color:#F1F5F9;font-weight:700;}' +
-    '.toggle-switch{width:44px;height:24px;background:#334155;border-radius:12px;position:relative;cursor:pointer;transition:background 0.3s;}' +
-    '.toggle-switch.monthly{background:#7C3AED;}' +
-    '.toggle-knob{width:20px;height:20px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:left 0.3s;}' +
-    '.toggle-switch.monthly .toggle-knob{left:22px;}' +
-    '.save-badge{background:#10B98122;color:#10B981;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;margin-left:4px;}' +
+    '.billing-selector{display:flex;align-items:center;justify-content:center;gap:4px;padding:10px 16px 6px;background:#0F172A;}' +
+    '.billing-pill{padding:8px 16px;border-radius:8px;border:1px solid #334155;background:#1E293B;color:#94A3B8;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;text-align:center;min-width:100px;}' +
+    '.billing-pill:hover{border-color:#64748B;color:#E2E8F0;}' +
+    '.billing-pill.active{background:linear-gradient(135deg,#22C55E22,#10B98111);border-color:#22C55E;color:#22C55E;}' +
+    '.billing-pill .pill-label{font-size:9px;color:#64748B;display:block;margin-top:2px;font-weight:400;}' +
+    '.billing-pill.active .pill-label{color:#22C55EAA;}' +
+    '.save-badge{background:#10B98122;color:#10B981;font-size:9px;font-weight:700;padding:3px 8px;border-radius:8px;margin-left:6px;white-space:nowrap;}' +
     '</style></head><body>' +
-    '<div class="billing-toggle">' +
-    '<span class="toggle-label active" id="lblLifetime">💎 Lifetime</span>' +
-    '<div class="toggle-switch" id="billingToggle"><div class="toggle-knob"></div></div>' +
-    '<span class="toggle-label" id="lblMonthly">📅 Monthly</span>' +
-    '<span class="save-badge" id="saveBadge">SAVE 50%+ WITH LIFETIME</span>' +
+    '<div class="billing-selector">' +
+    '<div class="billing-pill" data-billing="monthly" id="pillMonthly">📅 Monthly<span class="pill-label">cancel anytime</span></div>' +
+    '<div class="billing-pill active" data-billing="annual" id="pillAnnual">⭐ Annual<span class="pill-label">most popular</span></div>' +
+    '<div class="billing-pill" data-billing="lifetime" id="pillLifetime">💎 Lifetime<span class="pill-label">pay once, own forever</span></div>' +
+    '<span class="save-badge" id="saveBadge">SAVE 18% vs MONTHLY</span>' +
     '</div>' +
     '<div class="plan-strip" id="planStrip"></div>' +
     '<div class="main"><div class="left">' +
@@ -2254,16 +2267,18 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '</div></div>' +
     '<script>const D=' + DATA + ';' +
     'let selected=D.initialTier;' +
-    'let billing="lifetime";' +
-    'document.getElementById("billingToggle").addEventListener("click",function(){' +
-    '  billing=billing==="lifetime"?"monthly":"lifetime";' +
-    '  this.classList.toggle("monthly",billing==="monthly");' +
-    '  document.getElementById("lblLifetime").classList.toggle("active",billing==="lifetime");' +
-    '  document.getElementById("lblMonthly").classList.toggle("active",billing==="monthly");' +
-    '  document.getElementById("saveBadge").textContent=billing==="lifetime"?"SAVE 50%+ WITH LIFETIME":"CANCEL ANYTIME";' +
-    '  document.getElementById("saveBadge").style.background=billing==="lifetime"?"#10B98122":"#7C3AED22";' +
-    '  document.getElementById("saveBadge").style.color=billing==="lifetime"?"#10B981":"#C4B5FD";' +
-    '  render();' +
+    'let billing="annual";' +
+    'document.querySelectorAll(".billing-pill").forEach(pill=>{' +
+    '  pill.addEventListener("click",function(){' +
+    '    billing=this.dataset.billing;' +
+    '    document.querySelectorAll(".billing-pill").forEach(p=>p.classList.remove("active"));' +
+    '    this.classList.add("active");' +
+    '    const badge=document.getElementById("saveBadge");' +
+    '    if(billing==="monthly"){badge.textContent="CANCEL ANYTIME";badge.style.background="#7C3AED22";badge.style.color="#C4B5FD";}' +
+    '    else if(billing==="annual"){badge.textContent="SAVE 18% vs MONTHLY";badge.style.background="#10B98122";badge.style.color="#10B981";}' +
+    '    else{badge.textContent="PAY ONCE, OWN FOREVER";badge.style.background="#FBBF2422";badge.style.color="#FBBF24";}' +
+    '    render();' +
+    '  });' +
     '});' +
     'function render(){' +
     '  const sp=D.allPlans.find(p=>p.key===selected)||D.allPlans[1];' +
@@ -2278,18 +2293,22 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '  document.getElementById("heading").textContent="Why "+sp.name+"?";' +
     '  document.getElementById("currentPlanLabel").textContent=D.allPlans.find(p=>p.key===D.currentTier)?.name||"Free";' +
     '  document.getElementById("planDesc").innerHTML="<strong style=\\"color:"+sp.color+"\\">"+sp.icon+" "+sp.name+":</strong> "+sp.desc;' +
-    '  const isMonthly=billing==="monthly";' +
-    '  document.getElementById("priceTag").textContent=isMonthly?(sp.monthlyLabel||sp.priceLabel):sp.priceLabel;' +
-    '  document.getElementById("priceSub").textContent=sp.period==="forever"?"free forever":isMonthly?"per month · cancel anytime":"one-time · lifetime access";' +
-    '  const urls=isMonthly?D.monthlyPlanUrls:D.planUrls;' +
+    '  const priceKey=billing==="monthly"?"monthlyLabel":billing==="annual"?"annualLabel":"lifetimeLabel";' +
+    '  document.getElementById("priceTag").textContent=sp[priceKey]||"$0";' +
+    '  const periodMap={monthly:"per month · cancel anytime",annual:"per year · renews annually",lifetime:"one-time · yours forever"};' +
+    '  document.getElementById("priceSub").textContent=sp.period==="forever"?"free forever":periodMap[billing];' +
+    '  const urlMap={monthly:D.monthlyPlanUrls,annual:D.annualPlanUrls,lifetime:D.lifetimePlanUrls};' +
+    '  const urls=urlMap[billing]||{};' +
     '  const hasUrl=!!urls[selected];' +
     '  const btn=document.getElementById("proceedBtn");' +
+    '  const ctaMap={monthly:"🔒 Start Monthly Subscription →",annual:"🔒 Start Annual Plan →",lifetime:"🔒 Buy Lifetime Access →"};' +
     '  if(selected==="free"||!hasUrl){btn.className="cta-btn disabled";btn.textContent=selected==="free"?"✓ This is your current plan":"⏳ Session unavailable";}' +
-    '  else{btn.className="cta-btn";btn.textContent=isMonthly?"🔒 Start Monthly Subscription →":"🔒 Proceed to Secure Payment →";}' +
+    '  else{btn.className="cta-btn";btn.textContent=ctaMap[billing];}' +
     '  const sav=document.getElementById("savings");' +
     '  if(selected==="free"){sav.textContent="🌱 Free forever";sav.style.background="#6B728022";sav.style.color="#9CA3AF";sav.style.border="1px solid #6B728033";}' +
-    '  else if(isMonthly){sav.textContent="📅 Cancel anytime · no commitment";sav.style.background="#7C3AED22";sav.style.color="#C4B5FD";sav.style.border="1px solid #7C3AED33";}' +
-    '  else{sav.textContent="💰 One-time · yours forever";sav.style.background="#10B98122";sav.style.color="#10B981";sav.style.border="1px solid #10B98133";}' +
+    '  else if(billing==="monthly"){sav.textContent="📅 Cancel anytime · no commitment";sav.style.background="#7C3AED22";sav.style.color="#C4B5FD";sav.style.border="1px solid #7C3AED33";}' +
+    '  else if(billing==="annual"){sav.textContent="⭐ Save 18% vs monthly · most popular";sav.style.background="#10B98122";sav.style.color="#10B981";sav.style.border="1px solid #10B98133";}' +
+    '  else{sav.textContent="💎 One-time · yours forever";sav.style.background="#FBBF2422";sav.style.color="#FBBF24";sav.style.border="1px solid #FBBF2433";}' +
     '  const strip=document.getElementById("planStrip");strip.innerHTML="";' +
     '  D.allPlans.forEach(p=>{' +
     '    const card=document.createElement("div");card.className="plan-card";' +
@@ -2301,8 +2320,8 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '      +(p.recommended&&p.key!==selected&&p.key!==D.currentTier?"<div class=\\"plan-badge\\" style=\\"background:#3B82F6\\">POPULAR</div>":"")' +
     '      +"<div class=\\"plan-icon\\">"+p.icon+"</div>"' +
     '      +"<div class=\\"plan-name\\" style=\\"color:"+(p.key===selected?p.color:p.key===D.currentTier?"#FBBF24":"#94A3B8")+"\\">"+p.name+"</div>"' +
-    '      +"<div class=\\"plan-price\\">"+( billing==="monthly"?(p.monthlyLabel||p.priceLabel):p.priceLabel)+"</div>"' +
-    '      +"<div class=\\"plan-period\\">"+(p.period==="forever"?"forever":billing==="monthly"?"/month":"one-time")+"</div>";' +
+    '      +"<div class=\\"plan-price\\">"+p[priceKey]+"</div>"' +
+    '      +"<div class=\\"plan-period\\">"+(p.period==="forever"?"forever":billing==="monthly"?"/month":billing==="annual"?"/year":"one-time")+"</div>";' +
     '    card.addEventListener("click",()=>{selected=p.key;render();});' +
     '    strip.appendChild(card);' +
     '  });' +
@@ -2323,9 +2342,10 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '}' +
     'document.getElementById("proceedBtn").addEventListener("click",function(e){' +
     '  e.preventDefault();' +
-    '  const urls=billing==="monthly"?D.monthlyPlanUrls:D.planUrls;' +
-    '  if(selected==="free"||!urls[selected])return;' +
-    '  window.location.href=urls[selected];' +
+    '  const umap={monthly:D.monthlyPlanUrls,annual:D.annualPlanUrls,lifetime:D.lifetimePlanUrls};' +
+    '  const urls2=umap[billing]||{};' +
+    '  if(selected==="free"||!urls2[selected])return;' +
+    '  window.location.href=urls2[selected];' +
     '});' +
     'render();' +
     '</script></body></html>';
@@ -2412,15 +2432,34 @@ ipcMain.handle('check-payment-status', async (event, sessionId) => {
     const tier = session.metadata?.tier || 'pro';
 
     if (paid) {
+      // Determine billing info
+      const isSubscription = session.mode === 'subscription';
+      const billingMode = isSubscription ? 'subscription' : 'lifetime';
+      let expiresAt = null;
+      let subscriptionId = null;
+      if (isSubscription && session.subscription) {
+        subscriptionId = session.subscription;
+        try {
+          const sub = await stripe.subscriptions.retrieve(session.subscription);
+          expiresAt = new Date(sub.current_period_end * 1000).toISOString();
+        } catch (_) {
+          // Fallback: 30 days from now
+          expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        }
+      }
+
       // Update license in store
       store.set('license', {
         tier,
         email: session.customer_email || session.customer_details?.email || '',
         stripeSessionId: sessionId,
+        subscriptionId,
+        billingMode,
         purchasedAt: new Date().toISOString(),
-        expiresAt: session.mode === 'subscription' ? null : null // one-time = never expires
+        expiresAt,
+        lastValidated: new Date().toISOString()
       });
-      console.log(`[Stripe] Payment confirmed! Tier upgraded to: ${tier}`);
+      console.log(`[Stripe] Payment confirmed! Tier: ${tier}, Billing: ${billingMode}, Expires: ${expiresAt || 'never'}`);
       safeSend('license-updated', tier);
       // Trigger download wizard for the new tier
       showDownloadWizard(tier);
@@ -2438,6 +2477,82 @@ ipcMain.handle('get-current-tier', async () => {
   const limits = getTierLimits(license.tier);
   return { tier: license.tier, limits, license };
 });
+
+// ═══ License Enforcement — Subscription Validation ═══
+async function validateLicense() {
+  const license = store.get('license');
+  if (!license || license.tier === 'free') return; // No license to validate
+
+  // Lifetime purchases never expire
+  if (license.billingMode === 'lifetime' || !license.billingMode) {
+    console.log('[License] Lifetime license — no validation needed');
+    return;
+  }
+
+  // Check if subscription has expired locally first
+  if (license.expiresAt) {
+    const expiryDate = new Date(license.expiresAt);
+    const now = new Date();
+    const gracePeriod = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+    if (now < expiryDate) {
+      console.log(`[License] Subscription valid until ${license.expiresAt}`);
+      return; // Still within subscription period
+    }
+
+    // Past expiry — check if within grace period
+    if (now - expiryDate < gracePeriod) {
+      console.log('[License] Subscription expired but within 7-day grace period');
+    }
+  }
+
+  // Try to validate with Stripe
+  const stripe = getStripe();
+  if (!stripe || !license.subscriptionId) {
+    // No internet or no subscription ID — allow 7-day grace from last validation
+    if (license.lastValidated) {
+      const lastCheck = new Date(license.lastValidated);
+      const daysSinceCheck = (Date.now() - lastCheck.getTime()) / (24 * 60 * 60 * 1000);
+      if (daysSinceCheck < 7) {
+        console.log(`[License] Offline — ${Math.round(daysSinceCheck)}d since last check, grace allowed`);
+        return;
+      }
+    }
+    // Grace period exceeded — downgrade
+    console.log('[License] Grace period exceeded — reverting to free tier');
+    store.set('license.tier', 'free');
+    safeSend('license-expired', { reason: 'grace_period_exceeded' });
+    return;
+  }
+
+  try {
+    const sub = await stripe.subscriptions.retrieve(license.subscriptionId);
+    if (sub.status === 'active' || sub.status === 'trialing') {
+      // Subscription active — extend local license
+      store.set('license.expiresAt', new Date(sub.current_period_end * 1000).toISOString());
+      store.set('license.lastValidated', new Date().toISOString());
+      console.log(`[License] Subscription active, extended to ${new Date(sub.current_period_end * 1000).toISOString()}`);
+    } else {
+      // Subscription cancelled/past_due — downgrade
+      console.log(`[License] Subscription status: ${sub.status} — reverting to free tier`);
+      store.set('license.tier', 'free');
+      store.set('license.expiresAt', null);
+      safeSend('license-expired', { reason: sub.status });
+    }
+  } catch (err) {
+    console.error('[License] Stripe validation failed:', err.message);
+    // Network error — allow grace period
+    if (license.lastValidated) {
+      const daysSinceCheck = (Date.now() - new Date(license.lastValidated).getTime()) / (24 * 60 * 60 * 1000);
+      if (daysSinceCheck > 7) {
+        store.set('license.tier', 'free');
+        safeSend('license-expired', { reason: 'validation_failed' });
+      }
+    }
+  }
+}
+
+ipcMain.handle('validate-license', validateLicense);
 
 
 
@@ -3020,6 +3135,9 @@ app.whenReady().then(async () => {
   createWindow();
   createTray();
   registerHotkeys();
+
+  // Validate license on launch (non-blocking)
+  validateLicense().catch(e => console.error('[License] Validation error:', e.message));
 
   // Auto-cleanup old archive media files (keeps transcripts forever)
   autoCleanupArchive();

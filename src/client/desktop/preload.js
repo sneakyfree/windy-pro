@@ -131,6 +131,8 @@ contextBridge.exposeInMainWorld('windyAPI', {
   showDownloadWizard: (tier) => ipcRenderer.invoke('show-download-wizard', tier),
   onModelDownloadProgress: (callback) => ipcRenderer.on('model-download-progress', (e, data) => callback(data)),
   onLicenseUpdated: (callback) => ipcRenderer.on('license-updated', (e, tier) => callback(tier)),
+  onLicenseExpired: (callback) => ipcRenderer.on('license-expired', (e, data) => callback(data)),
+  validateLicense: () => ipcRenderer.invoke('validate-license'),
 
   // Wizard
   getWizardState: () => ipcRenderer.invoke('get-wizard-state'),
