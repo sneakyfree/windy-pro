@@ -160,6 +160,14 @@ class HistoryPanel {
           <div class="skeleton-line" style="width:70%"></div>
         </div>
       </div>
+      <div class="history-footer" style="padding:8px 12px;border-top:1px solid var(--bg-tertiary,#21262d);text-align:center;">
+        <div style="font-size:11px;color:var(--text-secondary,#6B7280);margin-bottom:6px;">
+          🗂️ Audio/video auto-cleaned after 7 days · Transcripts kept forever
+        </div>
+        <button id="historyOpenPortal" style="background:none;border:1px solid var(--color-primary,#7C3AED);color:var(--color-primary,#7C3AED);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;transition:all 0.15s;font-weight:500;" title="Open web portal for full history">
+          🌐 View all history in Web Portal →
+        </button>
+      </div>
     `;
     }
 
@@ -556,8 +564,15 @@ class HistoryPanel {
             });
         });
 
-
-
+        // View in Portal button
+        const portalBtn = this.panel.querySelector('#historyOpenPortal');
+        if (portalBtn) {
+            portalBtn.addEventListener('mouseenter', () => { portalBtn.style.background = 'var(--color-primary, #7C3AED)'; portalBtn.style.color = '#fff'; });
+            portalBtn.addEventListener('mouseleave', () => { portalBtn.style.background = 'none'; portalBtn.style.color = 'var(--color-primary, #7C3AED)'; });
+            portalBtn.addEventListener('click', () => {
+                window.windyAPI.openExternalUrl('https://windypro.thewindstorm.uk/dashboard');
+            });
+        }
 
         // Scroll for lazy load
         const body = this.panel.querySelector('#historyBody');

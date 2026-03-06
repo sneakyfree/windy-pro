@@ -185,6 +185,60 @@ function getArchiveFolder() {
   return store.get('engine.archiveFolder') || path.join(os.homedir(), 'Documents', 'WindyProArchive');
 }
 
+/**
+ * Auto-cleanup: delete local audio/video files older than 7 days.
+ * Keeps all .md transcript files forever (text is tiny).
+ * Runs once on app startup.
+ */
+function autoCleanupArchive() {
+  const RETENTION_DAYS = store.get('engine.archiveRetentionDays', 7);
+  const archiveDir = getArchiveFolder();
+  if (!fs.existsSync(archiveDir)) return;
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - RETENTION_DAYS);
+  const cutoffStr = cutoff.toISOString().slice(0, 10); // YYYY-MM-DD
+
+  let purgedCount = 0;
+  let purgedBytes = 0;
+
+  try {
+    const dateDirs = fs.readdirSync(archiveDir).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    for (const dateDir of dateDirs) {
+      if (dateDir >= cutoffStr) continue; // Keep recent days
+
+      const dirPath = path.join(archiveDir, dateDir);
+      if (!fs.statSync(dirPath).isDirectory()) continue;
+
+      const files = fs.readdirSync(dirPath);
+      for (const file of files) {
+        if (file.endsWith('.webm') || file.endsWith('.wav') || file.endsWith('.mp3')) {
+          const filePath = path.join(dirPath, file);
+          try {
+            const stat = fs.statSync(filePath);
+            purgedBytes += stat.size;
+            fs.unlinkSync(filePath);
+            purgedCount++;
+          } catch (e) { /* skip locked files */ }
+        }
+      }
+
+      // Remove empty date directories
+      const remaining = fs.readdirSync(dirPath);
+      if (remaining.length === 0) {
+        try { fs.rmdirSync(dirPath); } catch (e) { /* ok */ }
+      }
+    }
+
+    if (purgedCount > 0) {
+      const mb = (purgedBytes / 1024 / 1024).toFixed(1);
+      console.log(`🗂️ Archive cleanup: purged ${purgedCount} media files (${mb} MB), kept transcripts. Retention: ${RETENTION_DAYS} days.`);
+    }
+  } catch (err) {
+    console.warn('[Archive] Cleanup error:', err.message);
+  }
+}
+
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -2311,6 +2365,9 @@ app.whenReady().then(async () => {
   createWindow();
   createTray();
   registerHotkeys();
+
+  // Auto-cleanup old archive media files (keeps transcripts forever)
+  autoCleanupArchive();
 
   // Auto-update check (T16 — fail silently if no releases)
   let updaterInstance = null;
