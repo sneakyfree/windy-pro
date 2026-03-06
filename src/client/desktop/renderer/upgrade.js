@@ -241,19 +241,29 @@ class UpgradePanel {
             // Track this session (keep all for multi-tab support)
             this._activeSessions.push({ sessionId: result.sessionId, tier });
 
-            // Open checkout in browser
-            status.innerHTML = '🌐 Opening Stripe checkout in your browser…<br><span style="font-size:11px;color:#9CA3AF;">Complete payment there, then come back here</span>';
-
-            // Open checkout in system browser (not Electron window)
+            // Try to auto-open checkout in browser/window
             if (window.windyAPI?.openExternalUrl) {
-                const openResult = await window.windyAPI.openExternalUrl(result.url);
-                if (!openResult?.ok) {
-                    console.warn('[Upgrade] shell.openExternal failed, showing link');
-                    status.innerHTML = `🔗 <a href="#" onclick="navigator.clipboard.writeText('${result.url}');this.textContent='Copied!';return false" style="color:#60A5FA;text-decoration:underline;cursor:pointer;">Click to copy checkout URL</a><br><span style="font-size:11px;color:#9CA3AF;">Paste in your browser to complete payment</span>`;
-                }
-            } else {
-                window.open(result.url, '_blank');
+                window.windyAPI.openExternalUrl(result.url).catch(() => { });
             }
+
+            // ALWAYS show clickable checkout link (don't rely on auto-open)
+            status.innerHTML = `
+                <div style="text-align:center;">
+                    <div style="margin-bottom:8px;font-size:13px;">🌐 <strong>Checkout ready!</strong></div>
+                    <a href="${result.url}" 
+                       style="display:inline-block;background:#635BFF;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;cursor:pointer;margin-bottom:8px;"
+                       onclick="if(window.windyAPI?.openExternalUrl){window.windyAPI.openExternalUrl('${result.url}')};return false;">
+                        💳 Open Stripe Checkout →
+                    </a>
+                    <div style="font-size:11px;color:#9CA3AF;margin-top:6px;">
+                        If the button doesn't work: 
+                        <a href="#" onclick="navigator.clipboard.writeText('${result.url}');this.textContent='✅ Copied!';return false;" 
+                           style="color:#60A5FA;text-decoration:underline;cursor:pointer;">
+                            Copy checkout URL
+                        </a>
+                    </div>
+                </div>
+            `;
 
             // Start polling if not already running (polls ALL sessions)
             if (!this._pollTimer) {
