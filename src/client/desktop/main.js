@@ -2107,227 +2107,198 @@ let checkoutWindows = [];
 const MAX_CHECKOUT_WINDOWS = 1;
 
 ipcMain.handle('open-checkout-url', async (event, opts) => {
-    checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed());
+  checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed());
 
-    // Close any existing checkout window (single window mode)
-    for (const w of checkoutWindows) {
-        try { w.close(); } catch (_) { }
+  // Close any existing checkout window (single window mode)
+  for (const w of checkoutWindows) {
+    try { w.close(); } catch (_) { }
+  }
+  checkoutWindows = [];
+
+  const { planUrls = {}, currentTier = 'free', initialTier = 'pro' } = opts;
+
+  // Backwards compat: if old-style single URL passed
+  if (opts.url && !Object.keys(planUrls).length) {
+    planUrls[opts.upgradeTier || 'pro'] = opts.url;
+  }
+
+  const allPlans = [
+    {
+      key: 'free', name: 'Free', icon: '🌱', price: 0, priceLabel: '$0', period: 'forever', color: '#6B7280',
+      desc: 'Perfect for trying it out. Limited to 1 language, 3 engines, and 5-minute recordings.'
+    },
+    {
+      key: 'pro', name: 'Windy Pro', icon: '⚡', price: 4900, priceLabel: '$49', period: 'one-time', color: '#22C55E',
+      desc: 'Unlock all 15 AI engines, 99 languages, 30-min recordings, batch processing, and AI-powered LLM polish for perfect transcripts.'
+    },
+    {
+      key: 'translate', name: 'Windy Translate', icon: '🌍', price: 7900, priceLabel: '$79', period: 'one-time', color: '#3B82F6', recommended: true,
+      desc: 'Everything in Pro PLUS real-time speech translation across 99 language pairs. Perfect for international meetings, travel, and cross-language work.'
+    },
+    {
+      key: 'translate_pro', name: 'Translate Pro', icon: '👑', price: 14900, priceLabel: '$149', period: 'one-time', color: '#A855F7',
+      desc: 'The ultimate suite: all translation + text-to-speech output + specialized medical/legal glossaries for industry-grade accuracy.'
     }
-    checkoutWindows = [];
+  ];
 
-    const { planUrls = {}, currentTier = 'free', initialTier = 'pro' } = opts;
+  const featureDefs = [
+    { key: 'maxEngines', label: 'AI Engines', tip: 'Number of transcription engines. More = better accuracy across accents and noise.' },
+    { key: 'maxLanguages', label: 'Languages', tip: 'Free: 1, Paid: all 99 languages including rare dialects.' },
+    { key: 'maxMinutes', label: 'Max Recording', tip: 'Free: 5 min. Paid: 30 min per session — full meetings and lectures.' },
+    { key: 'batchMode', label: 'Batch Mode', tip: 'Drag-drop a folder of recordings and transcribe them all at once.' },
+    { key: 'llmPolish', label: 'LLM Polish', tip: 'AI fixes grammar, removes filler words, adds punctuation automatically.' },
+    { key: 'translation', label: 'Real-time Translation', tip: 'Live speech translation across 99 language pairs.' },
+    { key: 'tts', label: 'Text-to-Speech', tip: 'Convert transcripts to natural-sounding audio output.' },
+    { key: 'glossaries', label: 'Medical/Legal Glossaries', tip: 'Specialized medical and legal terminology databases.' }
+  ];
 
-    // Backwards compat: if old-style single URL passed
-    if (opts.url && !Object.keys(planUrls).length) {
-        planUrls[opts.upgradeTier || 'pro'] = opts.url;
-    }
+  const tiers = {
+    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
+    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
+    translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
+    translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
+  };
 
-    const allPlans = [
-        {
-            key: 'free', name: 'Free', icon: '🌱', price: 0, priceLabel: '$0', period: 'forever', color: '#6B7280',
-            desc: 'Perfect for trying it out. Limited to 1 language, 3 engines, and 5-minute recordings.'
-        },
-        {
-            key: 'pro', name: 'Windy Pro', icon: '⚡', price: 4900, priceLabel: '$49', period: 'one-time', color: '#22C55E',
-            desc: 'Unlock all 15 AI engines, 99 languages, 30-min recordings, batch processing, and AI-powered LLM polish for perfect transcripts.'
-        },
-        {
-            key: 'translate', name: 'Windy Translate', icon: '🌍', price: 7900, priceLabel: '$79', period: 'one-time', color: '#3B82F6', recommended: true,
-            desc: 'Everything in Pro PLUS real-time speech translation across 99 language pairs. Perfect for international meetings, travel, and cross-language work.'
-        },
-        {
-            key: 'translate_pro', name: 'Translate Pro', icon: '👑', price: 14900, priceLabel: '$149', period: 'one-time', color: '#A855F7',
-            desc: 'The ultimate suite: all translation + text-to-speech output + specialized medical/legal glossaries for industry-grade accuracy.'
-        }
-    ];
+  // Encode data for embedding in HTML
+  const DATA = JSON.stringify({ allPlans, featureDefs, tiers, planUrls, currentTier, initialTier });
 
-    const featureDefs = [
-        { key: 'maxEngines', label: 'AI Engines', tip: 'Number of transcription engines. More = better accuracy across accents and noise.' },
-        { key: 'maxLanguages', label: 'Languages', tip: 'Free: 1, Paid: all 99 languages including rare dialects.' },
-        { key: 'maxMinutes', label: 'Max Recording', tip: 'Free: 5 min. Paid: 30 min per session — full meetings and lectures.' },
-        { key: 'batchMode', label: 'Batch Mode', tip: 'Drag-drop a folder of recordings and transcribe them all at once.' },
-        { key: 'llmPolish', label: 'LLM Polish', tip: 'AI fixes grammar, removes filler words, adds punctuation automatically.' },
-        { key: 'translation', label: 'Real-time Translation', tip: 'Live speech translation across 99 language pairs.' },
-        { key: 'tts', label: 'Text-to-Speech', tip: 'Convert transcripts to natural-sounding audio output.' },
-        { key: 'glossaries', label: 'Medical/Legal Glossaries', tip: 'Specialized medical and legal terminology databases.' }
-    ];
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Choose Your Plan</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
+    '<style>' +
+    '*{margin:0;padding:0;box-sizing:border-box;}' +
+    'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B,#0F172A);color:#F1F5F9;min-height:100vh;overflow-x:hidden;}' +
+    '.plan-strip{display:flex;gap:14px;padding:22px 28px 14px;justify-content:center;}' +
+    '.plan-card{flex:1;max-width:180px;background:#1E293B;border:2px solid #334155;border-radius:12px;padding:14px 10px;text-align:center;position:relative;cursor:pointer;transition:all 0.3s ease;opacity:0.5;}' +
+    '.plan-card:hover{opacity:0.8;transform:scale(1.02);}' +
+    '.plan-card.selected{opacity:1;transform:scale(1.06);}' +
+    '.plan-card.current{border-style:dashed;border-color:#FBBF24;opacity:0.85;}' +
+    '.plan-card.unavailable{cursor:not-allowed;opacity:0.3;}' +
+    '.plan-badge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:#fff;padding:2px 10px;border-radius:10px;white-space:nowrap;text-transform:uppercase;letter-spacing:0.5px;}' +
+    '.plan-icon{font-size:24px;margin-bottom:3px;}' +
+    '.plan-name{font-size:12px;font-weight:600;transition:color 0.2s;}' +
+    '.plan-price{font-size:20px;font-weight:800;color:#F1F5F9;}' +
+    '.plan-period{font-size:9px;color:#64748B;text-transform:uppercase;}' +
+    '.main{display:flex;min-height:calc(100vh - 90px);}' +
+    '.left{flex:1.3;padding:18px 22px;display:flex;flex-direction:column;overflow-y:auto;}' +
+    '.right{flex:0.7;background:linear-gradient(180deg,#1E293B,#0F172A);padding:24px 20px;display:flex;flex-direction:column;justify-content:center;align-items:center;border-left:1px solid #334155;}' +
+    '.badge{display:inline-block;background:linear-gradient(135deg,#7C3AED,#EC4899);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}' +
+    'h1{font-size:22px;font-weight:800;margin-bottom:5px;background:linear-gradient(135deg,#A78BFA,#F472B6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;transition:all 0.3s;}' +
+    '.subtitle{color:#94A3B8;font-size:12px;margin-bottom:12px;line-height:1.4;}' +
+    '.highlight{color:#FBBF24;font-weight:600;}' +
+    '.plan-desc{background:#1E293B;border:1px solid #334155;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#CBD5E1;line-height:1.4;transition:all 0.3s;}' +
+    'table{width:100%;border-collapse:collapse;background:rgba(30,41,59,0.6);border-radius:10px;overflow:hidden;border:1px solid #334155;font-size:11px;}' +
+    'th{padding:8px 6px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #334155;transition:all 0.3s;}' +
+    'td{padding:7px 6px;border-bottom:1px solid #2D3748;color:#9CA3AF;text-align:center;transition:all 0.3s;}' +
+    'td.feature-label{text-align:left;font-weight:500;color:#E5E7EB;padding-left:10px;}' +
+    'td.selected-col{font-weight:600;}' +
+    '[title]{cursor:help;border-bottom:1px dotted #64748B;}' +
+    '.urgency{background:linear-gradient(135deg,#7C3AED22,#EC489922);border:1px solid #7C3AED44;border-radius:8px;padding:10px 12px;margin-top:10px;text-align:center;font-size:11px;color:#C4B5FD;}' +
+    '.cta-btn{display:inline-block;background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;font-size:16px;font-weight:700;padding:14px 28px;border-radius:12px;border:none;cursor:pointer;text-decoration:none;transition:all 0.2s;box-shadow:0 4px 20px rgba(124,58,237,0.4);margin-bottom:10px;}' +
+    '.cta-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(124,58,237,0.6);}' +
+    '.cta-btn.disabled{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none;}' +
+    '.price-tag{font-size:42px;font-weight:800;margin-bottom:2px;transition:all 0.3s;}' +
+    '.price-sub{color:#94A3B8;font-size:12px;margin-bottom:16px;transition:all 0.3s;}' +
+    '.guarantee{color:#94A3B8;font-size:10px;margin-top:8px;text-align:center;}' +
+    '.trust-badges{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center;}' +
+    '.trust-badge{background:#1E293B;border:1px solid #334155;border-radius:6px;padding:5px 8px;font-size:9px;color:#94A3B8;}' +
+    '.savings{border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600;margin-bottom:10px;transition:all 0.3s;}' +
+    '</style></head><body>' +
+    '<div class="plan-strip" id="planStrip"></div>' +
+    '<div class="main"><div class="left">' +
+    '<div class="badge" id="badgeText"></div>' +
+    '<h1 id="heading"></h1>' +
+    '<p class="subtitle">You\'re on <span class="highlight" id="currentPlanLabel"></span>. Click any plan above to compare:</p>' +
+    '<div class="plan-desc" id="planDesc"></div>' +
+    '<table><thead><tr id="tableHead"></tr></thead><tbody id="tableBody"></tbody></table>' +
+    '<div class="urgency">🔥 <strong>2,400+ professionals</strong> upgraded this month · Your recordings deserve the best</div>' +
+    '</div><div class="right">' +
+    '<div class="savings" id="savings"></div>' +
+    '<div class="price-tag" id="priceTag"></div>' +
+    '<div class="price-sub" id="priceSub"></div>' +
+    '<a class="cta-btn" id="proceedBtn">🔒 Proceed to Secure Payment →</a>' +
+    '<div class="guarantee">🛡️ 30-day money-back guarantee · Stripe secured</div>' +
+    '<div class="trust-badges"><div class="trust-badge">🔒 256-bit SSL</div><div class="trust-badge">🏆 50K+ users</div><div class="trust-badge">⚡ Instant activation</div></div>' +
+    '</div></div>' +
+    '<script>const D=' + DATA + ';' +
+    'let selected=D.initialTier;' +
+    'function render(){' +
+    '  const sp=D.allPlans.find(p=>p.key===selected)||D.allPlans[1];' +
+    '  const ct=D.tiers[D.currentTier]||D.tiers.free;' +
+    '  const st=D.tiers[selected]||D.tiers.pro;' +
+    '  let newCount=0;' +
+    '  D.featureDefs.forEach(f=>{' +
+    '    if(typeof ct[f.key]==="boolean"){if(!ct[f.key]&&st[f.key])newCount++;}' +
+    '    else{if(st[f.key]>ct[f.key])newCount++;}' +
+    '  });' +
+    '  document.getElementById("badgeText").textContent="🚀 "+newCount+" New Features Unlocked";' +
+    '  document.getElementById("heading").textContent="Why "+sp.name+"?";' +
+    '  document.getElementById("currentPlanLabel").textContent=D.allPlans.find(p=>p.key===D.currentTier)?.name||"Free";' +
+    '  document.getElementById("planDesc").innerHTML="<strong style=\\"color:"+sp.color+"\\">"+sp.icon+" "+sp.name+":</strong> "+sp.desc;' +
+    '  document.getElementById("priceTag").textContent=sp.priceLabel;' +
+    '  document.getElementById("priceSub").textContent=sp.period==="forever"?"free forever":"one-time · lifetime access";' +
+    '  const hasUrl=!!D.planUrls[selected];' +
+    '  const btn=document.getElementById("proceedBtn");' +
+    '  if(selected==="free"||!hasUrl){btn.className="cta-btn disabled";btn.textContent=selected==="free"?"✓ This is your current plan":"⏳ Session unavailable";}' +
+    '  else{btn.className="cta-btn";btn.textContent="🔒 Proceed to Secure Payment →";}' +
+    '  const sav=document.getElementById("savings");' +
+    '  if(selected==="free"){sav.textContent="🌱 Free forever";sav.style.background="#6B728022";sav.style.color="#9CA3AF";sav.style.border="1px solid #6B728033";}' +
+    '  else{sav.textContent="💰 One-time · yours forever";sav.style.background="#10B98122";sav.style.color="#10B981";sav.style.border="1px solid #10B98133";}' +
+    '  const strip=document.getElementById("planStrip");strip.innerHTML="";' +
+    '  D.allPlans.forEach(p=>{' +
+    '    const card=document.createElement("div");card.className="plan-card";' +
+    '    if(p.key===selected)card.classList.add("selected");' +
+    '    if(p.key===D.currentTier)card.classList.add("current");' +
+    '    if(p.key===selected)card.style.borderColor=p.color,card.style.boxShadow="0 0 20px "+p.color+"44";' +
+    '    card.innerHTML=(p.key===selected?"<div class=\\"plan-badge\\" style=\\"background:"+p.color+"\\">SELECTED</div>":"")' +
+    '      +(p.key===D.currentTier&&p.key!==selected?"<div class=\\"plan-badge\\" style=\\"background:#6B7280\\">YOUR PLAN</div>":"")' +
+    '      +(p.recommended&&p.key!==selected&&p.key!==D.currentTier?"<div class=\\"plan-badge\\" style=\\"background:#3B82F6\\">POPULAR</div>":"")' +
+    '      +"<div class=\\"plan-icon\\">"+p.icon+"</div>"' +
+    '      +"<div class=\\"plan-name\\" style=\\"color:"+(p.key===selected?p.color:p.key===D.currentTier?"#FBBF24":"#94A3B8")+"\\">"+p.name+"</div>"' +
+    '      +"<div class=\\"plan-price\\">"+p.priceLabel+"</div>"' +
+    '      +"<div class=\\"plan-period\\">"+p.period+"</div>";' +
+    '    card.addEventListener("click",()=>{selected=p.key;render();});' +
+    '    strip.appendChild(card);' +
+    '  });' +
+    '  let headHtml="<th style=\\"text-align:left;padding:8px 10px;color:#64748B;\\">Feature <span style=\\"font-size:8px;color:#475569;\\">(hover for info)</span></th>";' +
+    '  D.allPlans.forEach(p=>{' +
+    '    const isSel=p.key===selected;const isCur=p.key===D.currentTier;' +
+    '    headHtml+="<th style=\\"color:"+(isSel?p.color:isCur?"#FBBF24":"#64748B")+";font-weight:"+(isSel?"700":"500")+";"+(isSel?"background:"+p.color+"11;":"")+"\\">"+p.name+(isCur?" ★":"")+"</th>";' +
+    '  });document.getElementById("tableHead").innerHTML=headHtml;' +
+    '  let bodyHtml="";' +
+    '  D.featureDefs.forEach(f=>{' +
+    '    bodyHtml+="<tr><td class=\\"feature-label\\" title=\\""+f.tip+"\\">"+f.label+"</td>";' +
+    '    D.allPlans.forEach(p=>{' +
+    '      const t=D.tiers[p.key]||D.tiers.free;const isSel=p.key===selected;' +
+    '      const v=typeof t[f.key]==="boolean"?(t[f.key]?"✅":"❌"):t[f.key]+(f.key==="maxMinutes"?" min":"");' +
+    '      bodyHtml+="<td class=\\""+(isSel?"selected-col":"")+"\\" style=\\""+(isSel?"background:"+sp.color+"08;":"")+"\\">"+ v+"</td>";' +
+    '    });bodyHtml+="</tr>";' +
+    '  });document.getElementById("tableBody").innerHTML=bodyHtml;' +
+    '}' +
+    'document.getElementById("proceedBtn").addEventListener("click",function(e){' +
+    '  e.preventDefault();' +
+    '  if(selected==="free"||!D.planUrls[selected])return;' +
+    '  window.location.href=D.planUrls[selected];' +
+    '});' +
+    'render();' +
+    '</script></body></html>';
 
-    const tiers = {
-        free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
-        pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
-        translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
-        translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
-    };
-
-    // Encode data for embedding in HTML
-    const DATA = JSON.stringify({ allPlans, featureDefs, tiers, planUrls, currentTier, initialTier });
-
-    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Choose Your Plan</title>' +
-        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
-        '<style>' +
-        '*{margin:0;padding:0;box-sizing:border-box;}' +
-        'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B,#0F172A);color:#F1F5F9;min-height:100vh;overflow-x:hidden;}' +
-        '.plan-strip{display:flex;gap:14px;padding:22px 28px 14px;justify-content:center;}' +
-        '.plan-card{flex:1;max-width:180px;background:#1E293B;border:2px solid #334155;border-radius:12px;padding:14px 10px;text-align:center;position:relative;cursor:pointer;transition:all 0.3s ease;opacity:0.5;}' +
-        '.plan-card:hover{opacity:0.8;transform:scale(1.02);}' +
-        '.plan-card.selected{opacity:1;transform:scale(1.06);}' +
-        '.plan-card.current{border-style:dashed;border-color:#FBBF24;opacity:0.85;}' +
-        '.plan-card.unavailable{cursor:not-allowed;opacity:0.3;}' +
-        '.plan-badge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:#fff;padding:2px 10px;border-radius:10px;white-space:nowrap;text-transform:uppercase;letter-spacing:0.5px;}' +
-        '.plan-icon{font-size:24px;margin-bottom:3px;}' +
-        '.plan-name{font-size:12px;font-weight:600;transition:color 0.2s;}' +
-        '.plan-price{font-size:20px;font-weight:800;color:#F1F5F9;}' +
-        '.plan-period{font-size:9px;color:#64748B;text-transform:uppercase;}' +
-        '.main{display:flex;min-height:calc(100vh - 90px);}' +
-        '.left{flex:1.3;padding:18px 22px;display:flex;flex-direction:column;overflow-y:auto;}' +
-        '.right{flex:0.7;background:linear-gradient(180deg,#1E293B,#0F172A);padding:24px 20px;display:flex;flex-direction:column;justify-content:center;align-items:center;border-left:1px solid #334155;}' +
-        '.badge{display:inline-block;background:linear-gradient(135deg,#7C3AED,#EC4899);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}' +
-        'h1{font-size:22px;font-weight:800;margin-bottom:5px;background:linear-gradient(135deg,#A78BFA,#F472B6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;transition:all 0.3s;}' +
-        '.subtitle{color:#94A3B8;font-size:12px;margin-bottom:12px;line-height:1.4;}' +
-        '.highlight{color:#FBBF24;font-weight:600;}' +
-        '.plan-desc{background:#1E293B;border:1px solid #334155;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#CBD5E1;line-height:1.4;transition:all 0.3s;}' +
-        'table{width:100%;border-collapse:collapse;background:rgba(30,41,59,0.6);border-radius:10px;overflow:hidden;border:1px solid #334155;font-size:11px;}' +
-        'th{padding:8px 6px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #334155;transition:all 0.3s;}' +
-        'td{padding:7px 6px;border-bottom:1px solid #2D3748;color:#9CA3AF;text-align:center;transition:all 0.3s;}' +
-        'td.feature-label{text-align:left;font-weight:500;color:#E5E7EB;padding-left:10px;}' +
-        'td.selected-col{font-weight:600;}' +
-        '[title]{cursor:help;border-bottom:1px dotted #64748B;}' +
-        '.urgency{background:linear-gradient(135deg,#7C3AED22,#EC489922);border:1px solid #7C3AED44;border-radius:8px;padding:10px 12px;margin-top:10px;text-align:center;font-size:11px;color:#C4B5FD;}' +
-        '.cta-btn{display:inline-block;background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;font-size:16px;font-weight:700;padding:14px 28px;border-radius:12px;border:none;cursor:pointer;text-decoration:none;transition:all 0.2s;box-shadow:0 4px 20px rgba(124,58,237,0.4);margin-bottom:10px;}' +
-        '.cta-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(124,58,237,0.6);}' +
-        '.cta-btn.disabled{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none;}' +
-        '.price-tag{font-size:42px;font-weight:800;margin-bottom:2px;transition:all 0.3s;}' +
-        '.price-sub{color:#94A3B8;font-size:12px;margin-bottom:16px;transition:all 0.3s;}' +
-        '.guarantee{color:#94A3B8;font-size:10px;margin-top:8px;text-align:center;}' +
-        '.trust-badges{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center;}' +
-        '.trust-badge{background:#1E293B;border:1px solid #334155;border-radius:6px;padding:5px 8px;font-size:9px;color:#94A3B8;}' +
-        '.savings{border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600;margin-bottom:10px;transition:all 0.3s;}' +
-        '</style></head><body>' +
-        '<div class="plan-strip" id="planStrip"></div>' +
-        '<div class="main"><div class="left">' +
-        '<div class="badge" id="badgeText"></div>' +
-        '<h1 id="heading"></h1>' +
-        '<p class="subtitle">You\'re on <span class="highlight" id="currentPlanLabel"></span>. Click any plan above to compare:</p>' +
-        '<div class="plan-desc" id="planDesc"></div>' +
-        '<table><thead><tr id="tableHead"></tr></thead><tbody id="tableBody"></tbody></table>' +
-        '<div class="urgency">🔥 <strong>2,400+ professionals</strong> upgraded this month · Your recordings deserve the best</div>' +
-        '</div><div class="right">' +
-        '<div class="savings" id="savings"></div>' +
-        '<div class="price-tag" id="priceTag"></div>' +
-        '<div class="price-sub" id="priceSub"></div>' +
-        '<a class="cta-btn" id="proceedBtn">🔒 Proceed to Secure Payment →</a>' +
-        '<div class="guarantee">🛡️ 30-day money-back guarantee · Stripe secured</div>' +
-        '<div class="trust-badges"><div class="trust-badge">🔒 256-bit SSL</div><div class="trust-badge">🏆 50K+ users</div><div class="trust-badge">⚡ Instant activation</div></div>' +
-        '</div></div>' +
-        '<script>const D=' + DATA + ';' +
-        'let selected=D.initialTier;' +
-        'function render(){' +
-        '  const sp=D.allPlans.find(p=>p.key===selected)||D.allPlans[1];' +
-        '  const ct=D.tiers[D.currentTier]||D.tiers.free;' +
-        '  const st=D.tiers[selected]||D.tiers.pro;' +
-        '  let newCount=0;' +
-        '  D.featureDefs.forEach(f=>{' +
-        '    if(typeof ct[f.key]==="boolean"){if(!ct[f.key]&&st[f.key])newCount++;}' +
-        '    else{if(st[f.key]>ct[f.key])newCount++;}' +
-        '  });' +
-        '  document.getElementById("badgeText").textContent="🚀 "+newCount+" New Features Unlocked";' +
-        '  document.getElementById("heading").textContent="Why "+sp.name+"?";' +
-        '  document.getElementById("currentPlanLabel").textContent=D.allPlans.find(p=>p.key===D.currentTier)?.name||"Free";' +
-        '  document.getElementById("planDesc").innerHTML="<strong style=\\"color:"+sp.color+"\\">"+sp.icon+" "+sp.name+":</strong> "+sp.desc;' +
-        '  document.getElementById("priceTag").textContent=sp.priceLabel;' +
-        '  document.getElementById("priceSub").textContent=sp.period==="forever"?"free forever":"one-time · lifetime access";' +
-        '  const hasUrl=!!D.planUrls[selected];' +
-        '  const btn=document.getElementById("proceedBtn");' +
-        '  if(selected==="free"||!hasUrl){btn.className="cta-btn disabled";btn.textContent=selected==="free"?"✓ This is your current plan":"⏳ Session unavailable";}' +
-        '  else{btn.className="cta-btn";btn.textContent="🔒 Proceed to Secure Payment →";}' +
-        '  const sav=document.getElementById("savings");' +
-        '  if(selected==="free"){sav.textContent="🌱 Free forever";sav.style.background="#6B728022";sav.style.color="#9CA3AF";sav.style.border="1px solid #6B728033";}' +
-        '  else{sav.textContent="💰 One-time · yours forever";sav.style.background="#10B98122";sav.style.color="#10B981";sav.style.border="1px solid #10B98133";}' +
-        '  const strip=document.getElementById("planStrip");strip.innerHTML="";' +
-        '  D.allPlans.forEach(p=>{' +
-        '    const card=document.createElement("div");card.className="plan-card";' +
-        '    if(p.key===selected)card.classList.add("selected");' +
-        '    if(p.key===D.currentTier)card.classList.add("current");' +
-        '    if(p.key===selected)card.style.borderColor=p.color,card.style.boxShadow="0 0 20px "+p.color+"44";' +
-        '    card.innerHTML=(p.key===selected?"<div class=\\"plan-badge\\" style=\\"background:"+p.color+"\\">SELECTED</div>":"")' +
-        '      +(p.key===D.currentTier&&p.key!==selected?"<div class=\\"plan-badge\\" style=\\"background:#6B7280\\">YOUR PLAN</div>":"")' +
-        '      +(p.recommended&&p.key!==selected&&p.key!==D.currentTier?"<div class=\\"plan-badge\\" style=\\"background:#3B82F6\\">POPULAR</div>":"")' +
-        '      +"<div class=\\"plan-icon\\">"+p.icon+"</div>"' +
-        '      +"<div class=\\"plan-name\\" style=\\"color:"+(p.key===selected?p.color:p.key===D.currentTier?"#FBBF24":"#94A3B8")+"\\">"+p.name+"</div>"' +
-        '      +"<div class=\\"plan-price\\">"+p.priceLabel+"</div>"' +
-        '      +"<div class=\\"plan-period\\">"+p.period+"</div>";' +
-        '    card.addEventListener("click",()=>{selected=p.key;render();});' +
-        '    strip.appendChild(card);' +
-        '  });' +
-        '  let headHtml="<th style=\\"text-align:left;padding:8px 10px;color:#64748B;\\">Feature <span style=\\"font-size:8px;color:#475569;\\">(hover for info)</span></th>";' +
-        '  D.allPlans.forEach(p=>{' +
-        '    const isSel=p.key===selected;const isCur=p.key===D.currentTier;' +
-        '    headHtml+="<th style=\\"color:"+(isSel?p.color:isCur?"#FBBF24":"#64748B")+";font-weight:"+(isSel?"700":"500")+";"+(isSel?"background:"+p.color+"11;":"")+"\\">"+p.name+(isCur?" ★":"")+"</th>";' +
-        '  });document.getElementById("tableHead").innerHTML=headHtml;' +
-        '  let bodyHtml="";' +
-        '  D.featureDefs.forEach(f=>{' +
-        '    bodyHtml+="<tr><td class=\\"feature-label\\" title=\\""+f.tip+"\\">"+f.label+"</td>";' +
-        '    D.allPlans.forEach(p=>{' +
-        '      const t=D.tiers[p.key]||D.tiers.free;const isSel=p.key===selected;' +
-        '      const v=typeof t[f.key]==="boolean"?(t[f.key]?"✅":"❌"):t[f.key]+(f.key==="maxMinutes"?" min":"");' +
-        '      bodyHtml+="<td class=\\""+(isSel?"selected-col":"")+"\\" style=\\""+(isSel?"background:"+sp.color+"08;":"")+"\\">"+ v+"</td>";' +
-        '    });bodyHtml+="</tr>";' +
-        '  });document.getElementById("tableBody").innerHTML=bodyHtml;' +
-        '}' +
-        'document.getElementById("proceedBtn").addEventListener("click",function(e){' +
-        '  e.preventDefault();' +
-        '  if(selected==="free"||!D.planUrls[selected])return;' +
-        '  window.location.href=D.planUrls[selected];' +
-        '});' +
-        'render();' +
-        '</script></body></html>';
-
-    try {
-        const checkoutWin = new BrowserWindow({
-            width: 1140, height: 780, x: 100, y: 60,
-            title: 'Choose Your Plan — Windy Pro',
-            autoHideMenuBar: true,
-            webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, javascript: true, partition: 'persist:checkout' }
-        });
-        checkoutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-        checkoutWin.focus();
-        checkoutWindows = [checkoutWin];
-        checkoutWin.on('closed', () => { checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed()); });
-        console.log('[Main] Opened interactive checkout window');
-        return { ok: true };
-    } catch (e) {
-        console.error('[Main] Checkout window failed:', e.message);
-        return { ok: false, error: e.message };
-    }
-});
-
-
-        '}' +
-        'document.getElementById("proceedBtn").addEventListener("click",function(e){' +
-        '  e.preventDefault();' +
-        '  if(selected==="free"||!D.planUrls[selected])return;' +
-        '  window.location.href=D.planUrls[selected];' +
-        '});' +
-        'render();' +
-        '</script></body></html>';
-
-    try {
-        const checkoutWin = new BrowserWindow({
-            width: 1140, height: 780, x: 100, y: 60,
-            title: 'Choose Your Plan — Windy Pro',
-            autoHideMenuBar: true,
-            webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, javascript: true, partition: 'persist:checkout' }
-        });
-        checkoutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-        checkoutWin.focus();
-        checkoutWindows = [checkoutWin];
-        checkoutWin.on('closed', () => { checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed()); });
-        console.log('[Main] Opened interactive checkout window');
-        return { ok: true };
-    } catch (e) {
-        console.error('[Main] Checkout window failed:', e.message);
-        return { ok: false, error: e.message };
-    }
+  try {
+    const checkoutWin = new BrowserWindow({
+      width: 1140, height: 780, x: 100, y: 60,
+      title: 'Choose Your Plan — Windy Pro',
+      autoHideMenuBar: true,
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, javascript: true, partition: 'persist:checkout' }
+    });
+    checkoutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    checkoutWin.focus();
+    checkoutWindows = [checkoutWin];
+    checkoutWin.on('closed', () => { checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed()); });
+    console.log('[Main] Opened interactive checkout window');
+    return { ok: true };
+  } catch (e) {
+    console.error('[Main] Checkout window failed:', e.message);
+    return { ok: false, error: e.message };
+  }
 });
 
 
