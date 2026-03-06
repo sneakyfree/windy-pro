@@ -1258,7 +1258,7 @@ ipcMain.on('open-archive-folder', () => {
 
 ipcMain.handle('open-external-url', async (event, url) => {
   console.log('[Main] open-external-url called with:', url);
-  // Security: validate URL with URL parser — allow https and mailto
+  // Security: validate URL — allow https and mailto
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'mailto:') {
@@ -1270,27 +1270,45 @@ ipcMain.handle('open-external-url', async (event, url) => {
     return { ok: false, error: 'Invalid URL' };
   }
 
-  // Use Electron's shell.openExternal — avoids spawn/exec injection risk
+  // Attempt 1: shell.openExternal
   try {
     await shell.openExternal(url);
     console.log('[Main] ✅ Opened URL via shell.openExternal');
     return { ok: true };
   } catch (e) {
-    console.error('[Main] ❌ shell.openExternal failed:', e.message);
-    // Fallback: use xdg-open on Linux (AppImage sandbox can block shell.openExternal)
-    if (process.platform === 'linux') {
-      try {
-        const { exec } = require('child_process');
-        exec(`xdg-open "${url.replace(/"/g, '')}"`, (err) => {
-          if (err) console.error('[Main] xdg-open also failed:', err.message);
-          else console.log('[Main] ✅ Opened URL via xdg-open fallback');
-        });
-        return { ok: true };
-      } catch (e2) {
-        console.error('[Main] xdg-open fallback failed:', e2.message);
-      }
+    console.warn('[Main] shell.openExternal failed:', e.message);
+  }
+
+  // Attempt 2: xdg-open on Linux
+  if (process.platform === 'linux') {
+    try {
+      const { execSync } = require('child_process');
+      execSync(`xdg-open "${url.replace(/"/g, '')}"`, { timeout: 5000 });
+      console.log('[Main] ✅ Opened URL via xdg-open');
+      return { ok: true };
+    } catch (e) {
+      console.warn('[Main] xdg-open failed:', e.message);
     }
-    return { ok: false, error: e.message };
+  }
+
+  // Attempt 3: Open in a new Electron BrowserWindow (guaranteed to work)
+  try {
+    const checkoutWin = new BrowserWindow({
+      width: 1000,
+      height: 700,
+      title: 'Stripe Checkout — Windy Pro',
+      autoHideMenuBar: true,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true
+      }
+    });
+    checkoutWin.loadURL(url);
+    console.log('[Main] ✅ Opened URL in Electron BrowserWindow fallback');
+    return { ok: true };
+  } catch (e) {
+    console.error('[Main] ❌ All URL opening methods failed:', e.message);
+    return { ok: false, error: 'Could not open URL' };
   }
 });
 
