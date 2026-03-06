@@ -121,6 +121,7 @@ let miniWindow = null;
 let miniTranslateWindow = null;
 let tray = null;
 let isRecording = false;
+let userHiddenWindow = false;  // Tracks if user intentionally hid everything via Ctrl+Shift+W
 let pythonProcess = null;
 let pythonRestartCount = 0;
 const MAX_PYTHON_RESTARTS = 3;
@@ -1065,8 +1066,10 @@ function registerHotkeys() {
     } else if (miniVisible) {
       // State 2 → State 3: Tornado → Hidden (everything gone)
       miniWindow.hide();
+      userHiddenWindow = true;  // Track that user intentionally hid everything
     } else {
       // State 3 → State 1: Hidden → Full window
+      userHiddenWindow = false;  // User brought window back
       mainWindow.show();
       mainWindow.focus();
     }
@@ -1418,9 +1421,13 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
     const { clipboard } = require('electron');
     clipboard.writeText(text.trim());
 
-    // Briefly hide the window so the previously-active app regains focus
+    // Remember if user had intentionally hidden the window before paste
+    const wasUserHidden = userHiddenWindow;
+    const wasVisible = mainWindow && mainWindow.isVisible();
     const wasAlwaysOnTop = mainWindow && mainWindow.isAlwaysOnTop();
-    if (mainWindow && mainWindow.isVisible()) {
+
+    // Briefly hide the window so the previously-active app regains focus
+    if (mainWindow && wasVisible) {
       if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(false);
       mainWindow.hide();
     }
@@ -1437,17 +1444,19 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
       require('child_process').execSync('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"', { timeout: 5000 });
     }
 
-    // Re-show the window WITHOUT stealing focus so the user can hit Enter in their app
+    // Only re-show if user hadn't intentionally hidden the window
     await new Promise(r => setTimeout(r, 300));
-    if (mainWindow) {
+    if (mainWindow && !wasUserHidden) {
       mainWindow.showInactive();  // showInactive = don't steal focus from the target app
       if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true);
+      console.log(`[AutoPaste] Pasted ${text.trim().length} chars, window re-shown (inactive)`);
+    } else {
+      console.log(`[AutoPaste] Pasted ${text.trim().length} chars, window stays hidden (user preference)`);
     }
-    console.log(`[AutoPaste] Pasted ${text.trim().length} chars to cursor, window re-shown (inactive)`);
     return true;
   } catch (err) {
-    // On failure, still re-show the window
-    if (mainWindow && !mainWindow.isVisible()) {
+    // On failure, only re-show if user hadn't hidden it
+    if (mainWindow && !mainWindow.isVisible() && !userHiddenWindow) {
       mainWindow.showInactive();
     }
     console.error('[AutoPaste] Failed:', err.message);
@@ -2097,193 +2106,170 @@ let checkoutWindows = [];
 const MAX_CHECKOUT_WINDOWS = 4;
 
 ipcMain.handle('open-checkout-url', async (event, { url, currentTier, upgradeTier, planName, price, isMonthly }) => {
-    checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed());
-    if (checkoutWindows.length >= MAX_CHECKOUT_WINDOWS) {
-        return { ok: false, error: `Maximum ${MAX_CHECKOUT_WINDOWS} checkout windows. Close one first.` };
+  checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed());
+  if (checkoutWindows.length >= MAX_CHECKOUT_WINDOWS) {
+    return { ok: false, error: `Maximum ${MAX_CHECKOUT_WINDOWS} checkout windows. Close one first.` };
+  }
+
+  const tierNames = { free: 'Free', pro: 'Windy Pro', translate: 'Windy Translate', translate_pro: 'Windy Translate Pro' };
+  const currentName = tierNames[currentTier] || 'Free';
+  const upgradeName = planName || tierNames[upgradeTier] || 'Pro';
+
+  const allPlans = [
+    {
+      key: 'free', name: 'Free', icon: '🌱', price: '$0', period: 'forever', color: '#6B7280',
+      desc: 'Perfect for trying things out. Limited to 1 language, 3 engines, and 5-minute recordings.'
+    },
+    {
+      key: 'pro', name: 'Windy Pro', icon: '⚡', price: '$49', altPrice: '$4.99/mo', period: 'one-time', color: '#22C55E',
+      desc: 'Unlock all 15 AI engines, 99 languages, 30-min recordings, batch processing, and AI-powered LLM polish for perfect transcripts.'
+    },
+    {
+      key: 'translate', name: 'Windy Translate', icon: '🌍', price: '$79', altPrice: '$7.99/mo', period: 'one-time', color: '#3B82F6', recommended: true,
+      desc: 'Everything in Pro PLUS real-time speech translation across 99 language pairs. Ideal for international meetings, travel, and cross-language communication.'
+    },
+    {
+      key: 'translate_pro', name: 'Translate Pro', icon: '👑', price: '$149', altPrice: '$14.99/mo', period: 'one-time', color: '#A855F7',
+      desc: 'The ultimate package: all translation features PLUS text-to-speech and specialized medical/legal glossaries for industry-grade accuracy.'
     }
+  ];
 
-    const tierNames = { free: 'Free', pro: 'Windy Pro', translate: 'Windy Translate', translate_pro: 'Windy Translate Pro' };
-    const currentName = tierNames[currentTier] || 'Free';
-    const upgradeName = planName || tierNames[upgradeTier] || 'Pro';
+  const featureDefs = [
+    { key: 'maxEngines', label: 'AI Engines', tooltip: 'Number of transcription engines. More engines = better accuracy across accents, noise, and audio quality.' },
+    { key: 'maxLanguages', label: 'Languages', tooltip: 'Free: 1 language. Paid: all 99 languages including rare and regional dialects.' },
+    { key: 'maxMinutes', label: 'Max Recording', tooltip: 'Free: 5 min (quick notes). Paid: 30 min (full meetings, lectures, interviews).' },
+    { key: 'batchMode', label: 'Batch Mode', tooltip: 'Process multiple audio files at once. Drag-and-drop a folder and transcribe everything simultaneously.' },
+    { key: 'llmPolish', label: 'LLM Polish', tooltip: 'AI fixes grammar, removes filler words, adds punctuation. Like having a professional editor review every transcript.' },
+    { key: 'translation', label: 'Real-time Translation', tooltip: 'Live speech-to-speech translation across 99 language pairs. Speak in one language, get instant text and audio in another.' },
+    { key: 'tts', label: 'Text-to-Speech', tooltip: 'Convert transcripts to natural-sounding audio. For proofreading, accessibility, or listening to translations.' },
+    { key: 'glossaries', label: 'Medical/Legal Glossaries', tooltip: 'Specialized terminology for healthcare and legal. Ensures correct transcription of medical terms, legal jargon, and Latin phrases.' }
+  ];
 
-    const allPlans = [
-        {
-            key: 'free', name: 'Free', icon: '🌱', price: '$0', period: 'forever', color: '#6B7280',
-            desc: 'Perfect for trying things out. Limited to 1 language, 3 engines, and 5-minute recordings.'
-        },
-        {
-            key: 'pro', name: 'Windy Pro', icon: '⚡', price: '$49', altPrice: '$4.99/mo', period: 'one-time', color: '#22C55E',
-            desc: 'Unlock all 15 AI engines, 99 languages, 30-min recordings, batch processing, and AI-powered LLM polish for perfect transcripts.'
-        },
-        {
-            key: 'translate', name: 'Windy Translate', icon: '🌍', price: '$79', altPrice: '$7.99/mo', period: 'one-time', color: '#3B82F6', recommended: true,
-            desc: 'Everything in Pro PLUS real-time speech translation across 99 language pairs. Ideal for international meetings, travel, and cross-language communication.'
-        },
-        {
-            key: 'translate_pro', name: 'Translate Pro', icon: '👑', price: '$149', altPrice: '$14.99/mo', period: 'one-time', color: '#A855F7',
-            desc: 'The ultimate package: all translation features PLUS text-to-speech and specialized medical/legal glossaries for industry-grade accuracy.'
-        }
-    ];
+  const tiers = {
+    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
+    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
+    translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
+    translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
+  };
 
-    const featureDefs = [
-        { key: 'maxEngines', label: 'AI Engines', tooltip: 'Number of transcription engines. More engines = better accuracy across accents, noise, and audio quality.' },
-        { key: 'maxLanguages', label: 'Languages', tooltip: 'Free: 1 language. Paid: all 99 languages including rare and regional dialects.' },
-        { key: 'maxMinutes', label: 'Max Recording', tooltip: 'Free: 5 min (quick notes). Paid: 30 min (full meetings, lectures, interviews).' },
-        { key: 'batchMode', label: 'Batch Mode', tooltip: 'Process multiple audio files at once. Drag-and-drop a folder and transcribe everything simultaneously.' },
-        { key: 'llmPolish', label: 'LLM Polish', tooltip: 'AI fixes grammar, removes filler words, adds punctuation. Like having a professional editor review every transcript.' },
-        { key: 'translation', label: 'Real-time Translation', tooltip: 'Live speech-to-speech translation across 99 language pairs. Speak in one language, get instant text and audio in another.' },
-        { key: 'tts', label: 'Text-to-Speech', tooltip: 'Convert transcripts to natural-sounding audio. For proofreading, accessibility, or listening to translations.' },
-        { key: 'glossaries', label: 'Medical/Legal Glossaries', tooltip: 'Specialized terminology for healthcare and legal. Ensures correct transcription of medical terms, legal jargon, and Latin phrases.' }
-    ];
+  const planCards = allPlans.map(p => {
+    const isSelected = p.key === upgradeTier;
+    const isCurrent = p.key === (currentTier || 'free');
+    return '<div style="flex:1;max-width:170px;background:#1E293B;border:2px solid ' +
+      (isSelected ? p.color : isCurrent ? '#FBBF24' : '#334155') +
+      ';border-radius:12px;padding:12px 10px;text-align:center;position:relative;' +
+      (isSelected ? 'box-shadow:0 0 20px ' + p.color + '44;transform:scale(1.05);' : '') +
+      (!isSelected && !isCurrent ? 'opacity:0.5;' : '') +
+      (isCurrent ? 'border-style:dashed;' : '') + '">' +
+      (isSelected ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:#fff;padding:2px 8px;border-radius:10px;background:' + p.color + ';white-space:nowrap;">SELECTED</div>' : '') +
+      (isCurrent ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:#fff;padding:2px 8px;border-radius:10px;background:#6B7280;white-space:nowrap;">YOUR PLAN</div>' : '') +
+      '<div style="font-size:22px;margin-bottom:2px;">' + p.icon + '</div>' +
+      '<div style="font-size:12px;font-weight:600;color:' + (isSelected ? p.color : isCurrent ? '#FBBF24' : '#94A3B8') + ';">' + p.name + '</div>' +
+      '<div style="font-size:18px;font-weight:800;color:#F1F5F9;">' + p.price + '</div>' +
+      '<div style="font-size:9px;color:#64748B;text-transform:uppercase;">' + p.period + '</div>' +
+      '</div>';
+  }).join('');
 
-    const tiers = {
-        free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
-        pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
-        translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
-        translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
-    };
+  const tableHeader = allPlans.map(p => {
+    const isSelected = p.key === upgradeTier;
+    const isCurrent = p.key === (currentTier || 'free');
+    return '<th style="padding:8px 6px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:' +
+      (isSelected ? p.color : isCurrent ? '#FBBF24' : '#64748B') +
+      ';font-weight:' + (isSelected ? '700' : '500') +
+      ';border-bottom:2px solid #334155;' +
+      (isSelected ? 'background:' + p.color + '11;' : '') + '">' +
+      p.name + (isCurrent ? ' ★' : '') + '</th>';
+  }).join('');
 
-    const planCards = allPlans.map(p => {
-        const isSelected = p.key === upgradeTier;
-        const isCurrent = p.key === (currentTier || 'free');
-        return '<div style="flex:1;max-width:170px;background:#1E293B;border:2px solid ' +
-            (isSelected ? p.color : isCurrent ? '#FBBF24' : '#334155') +
-            ';border-radius:12px;padding:12px 10px;text-align:center;position:relative;' +
-            (isSelected ? 'box-shadow:0 0 20px ' + p.color + '44;transform:scale(1.05);' : '') +
-            (!isSelected && !isCurrent ? 'opacity:0.5;' : '') +
-            (isCurrent ? 'border-style:dashed;' : '') + '">' +
-            (isSelected ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:#fff;padding:2px 8px;border-radius:10px;background:' + p.color + ';white-space:nowrap;">SELECTED</div>' : '') +
-            (isCurrent ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:#fff;padding:2px 8px;border-radius:10px;background:#6B7280;white-space:nowrap;">YOUR PLAN</div>' : '') +
-            '<div style="font-size:22px;margin-bottom:2px;">' + p.icon + '</div>' +
-            '<div style="font-size:12px;font-weight:600;color:' + (isSelected ? p.color : isCurrent ? '#FBBF24' : '#94A3B8') + ';">' + p.name + '</div>' +
-            '<div style="font-size:18px;font-weight:800;color:#F1F5F9;">' + p.price + '</div>' +
-            '<div style="font-size:9px;color:#64748B;text-transform:uppercase;">' + p.period + '</div>' +
-            '</div>';
+  const tableRows = featureDefs.map(f => {
+    const cells = allPlans.map(p => {
+      const t = tiers[p.key];
+      const isSelected = p.key === upgradeTier;
+      const selColor = allPlans.find(x => x.key === upgradeTier)?.color || '#3B82F6';
+      let val;
+      if (typeof t[f.key] === 'boolean') val = t[f.key] ? '✅' : '❌';
+      else val = t[f.key] + (f.key === 'maxMinutes' ? ' min' : '');
+      return '<td style="padding:7px 6px;text-align:center;border-bottom:1px solid #2D3748;color:#9CA3AF;' +
+        (isSelected ? 'background:' + selColor + '08;font-weight:600;' : '') + '">' + val + '</td>';
     }).join('');
+    return '<tr>' +
+      '<td style="padding:7px 10px;font-weight:500;color:#E5E7EB;border-bottom:1px solid #2D3748;position:relative;">' +
+      '<span style="cursor:help;border-bottom:1px dotted #64748B;" title="' + f.tooltip + '">' + f.label + '</span></td>' +
+      cells + '</tr>';
+  }).join('');
 
-    const tableHeader = allPlans.map(p => {
-        const isSelected = p.key === upgradeTier;
-        const isCurrent = p.key === (currentTier || 'free');
-        return '<th style="padding:8px 6px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:' +
-            (isSelected ? p.color : isCurrent ? '#FBBF24' : '#64748B') +
-            ';font-weight:' + (isSelected ? '700' : '500') +
-            ';border-bottom:2px solid #334155;' +
-            (isSelected ? 'background:' + p.color + '11;' : '') + '">' +
-            p.name + (isCurrent ? ' ★' : '') + '</th>';
-    }).join('');
+  const selectedPlan = allPlans.find(p => p.key === upgradeTier) || allPlans[1];
+  const newFeaturesCount = featureDefs.filter(f => {
+    const cur = tiers[currentTier || 'free'];
+    const upg = tiers[upgradeTier || 'pro'];
+    if (typeof cur[f.key] === 'boolean') return !cur[f.key] && upg[f.key];
+    return upg[f.key] > cur[f.key];
+  }).length;
 
-    const tableRows = featureDefs.map(f => {
-        const cells = allPlans.map(p => {
-            const t = tiers[p.key];
-            const isSelected = p.key === upgradeTier;
-            const selColor = allPlans.find(x => x.key === upgradeTier)?.color || '#3B82F6';
-            let val;
-            if (typeof t[f.key] === 'boolean') val = t[f.key] ? '✅' : '❌';
-            else val = t[f.key] + (f.key === 'maxMinutes' ? ' min' : '');
-            return '<td style="padding:7px 6px;text-align:center;border-bottom:1px solid #2D3748;color:#9CA3AF;' +
-                (isSelected ? 'background:' + selColor + '08;font-weight:600;' : '') + '">' + val + '</td>';
-        }).join('');
-        return '<tr>' +
-            '<td style="padding:7px 10px;font-weight:500;color:#E5E7EB;border-bottom:1px solid #2D3748;position:relative;">' +
-            '<span style="cursor:help;border-bottom:1px dotted #64748B;" title="' + f.tooltip + '">' + f.label + '</span></td>' +
-            cells + '</tr>';
-    }).join('');
+  const html = '<!DOCTYPE html>' +
+    '<html><head><meta charset="utf-8"><title>Upgrade to ' + upgradeName + '</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
+    '<style>' +
+    '*{margin:0;padding:0;box-sizing:border-box;}' +
+    'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B,#0F172A);color:#F1F5F9;min-height:100vh;overflow-x:hidden;}' +
+    '.plan-strip{display:flex;gap:12px;padding:20px 28px 14px;justify-content:center;}' +
+    '.main{display:flex;gap:0;min-height:calc(100vh - 90px);}' +
+    '.left{flex:1.3;padding:18px 22px;display:flex;flex-direction:column;overflow-y:auto;}' +
+    '.right{flex:0.7;background:linear-gradient(180deg,#1E293B,#0F172A);padding:24px 20px;display:flex;flex-direction:column;justify-content:center;align-items:center;border-left:1px solid #334155;}' +
+    '.badge{display:inline-block;background:linear-gradient(135deg,#7C3AED,#EC4899);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}' +
+    'h1{font-size:22px;font-weight:800;margin-bottom:5px;background:linear-gradient(135deg,#A78BFA,#F472B6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}' +
+    '.subtitle{color:#94A3B8;font-size:12px;margin-bottom:12px;line-height:1.4;}' +
+    '.highlight{color:#FBBF24;font-weight:600;}' +
+    '.plan-desc{background:#1E293B;border:1px solid #334155;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#CBD5E1;line-height:1.4;}' +
+    'table{width:100%;border-collapse:collapse;background:rgba(30,41,59,0.6);border-radius:10px;overflow:hidden;border:1px solid #334155;font-size:11px;}' +
+    '.urgency{background:linear-gradient(135deg,#7C3AED22,#EC489922);border:1px solid #7C3AED44;border-radius:8px;padding:10px 12px;margin-top:10px;text-align:center;font-size:11px;color:#C4B5FD;}' +
+    '.cta-btn{display:inline-block;background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;font-size:16px;font-weight:700;padding:13px 28px;border-radius:12px;border:none;cursor:pointer;text-decoration:none;transition:all 0.2s;box-shadow:0 4px 20px rgba(124,58,237,0.4);margin-bottom:10px;}' +
+    '.cta-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(124,58,237,0.6);}' +
+    '.price-tag{font-size:40px;font-weight:800;margin-bottom:2px;}' +
+    '.price-sub{color:#94A3B8;font-size:12px;margin-bottom:16px;}' +
+    '.guarantee{color:#94A3B8;font-size:10px;margin-top:8px;text-align:center;}' +
+    '.trust-badges{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center;}' +
+    '.trust-badge{background:#1E293B;border:1px solid #334155;border-radius:6px;padding:5px 8px;font-size:9px;color:#94A3B8;}' +
+    '.savings{background:#10B98122;color:#10B981;border:1px solid #10B98133;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600;margin-bottom:10px;}' +
+    '</style></head><body>' +
+    '<div class="plan-strip">' + planCards + '</div>' +
+    '<div class="main"><div class="left">' +
+    '<div class="badge">🚀 ' + newFeaturesCount + ' New Features Unlocked</div>' +
+    '<h1>Why ' + upgradeName + '?</h1>' +
+    '<p class="subtitle">You\'re on <span class="highlight">' + currentName + '</span>. Here\'s what you\'ll unlock:</p>' +
+    '<div class="plan-desc"><strong style="color:' + selectedPlan.color + '">' + selectedPlan.icon + ' ' + selectedPlan.name + ':</strong> ' + selectedPlan.desc + '</div>' +
+    '<table><thead><tr><th style="text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748B;border-bottom:2px solid #334155;">Feature <span style="font-weight:400;font-size:8px;color:#475569;">(hover for info)</span></th>' + tableHeader + '</tr></thead><tbody>' + tableRows + '</tbody></table>' +
+    '<div class="urgency">🔥 <strong>2,400+ professionals</strong> upgraded this month · Your recordings deserve the best</div>' +
+    '</div>' +
+    '<div class="right">' +
+    (isMonthly ? '<div class="savings">💰 Cancel anytime · no lock-in</div>' : '<div class="savings">💰 One-time · yours forever</div>') +
+    '<div class="price-tag">' + (isMonthly ? '$' + (price / 100).toFixed(2) : '$' + Math.round(price / 100)) + '</div>' +
+    '<div class="price-sub">' + (isMonthly ? 'per month · cancel anytime' : 'one-time · lifetime access') + '</div>' +
+    '<a href="' + url + '" class="cta-btn" id="proceedBtn">🔒 Proceed to Secure Payment →</a>' +
+    '<div class="guarantee">🛡️ 30-day money-back guarantee · Stripe secured</div>' +
+    '<div class="trust-badges"><div class="trust-badge">🔒 256-bit SSL</div><div class="trust-badge">🏆 50K+ users</div><div class="trust-badge">⚡ Instant activation</div></div>' +
+    '</div></div>' +
+    '<script>document.getElementById("proceedBtn").addEventListener("click",function(e){e.preventDefault();window.location.href="' + url + '";});</script>' +
+    '</body></html>';
 
-    const selectedPlan = allPlans.find(p => p.key === upgradeTier) || allPlans[1];
-    const newFeaturesCount = featureDefs.filter(f => {
-        const cur = tiers[currentTier || 'free'];
-        const upg = tiers[upgradeTier || 'pro'];
-        if (typeof cur[f.key] === 'boolean') return !cur[f.key] && upg[f.key];
-        return upg[f.key] > cur[f.key];
-    }).length;
-
-    const html = '<!DOCTYPE html>' +
-        '<html><head><meta charset="utf-8"><title>Upgrade to ' + upgradeName + '</title>' +
-        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
-        '<style>' +
-        '*{margin:0;padding:0;box-sizing:border-box;}' +
-        'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B,#0F172A);color:#F1F5F9;min-height:100vh;overflow-x:hidden;}' +
-        '.plan-strip{display:flex;gap:12px;padding:20px 28px 14px;justify-content:center;}' +
-        '.main{display:flex;gap:0;min-height:calc(100vh - 90px);}' +
-        '.left{flex:1.3;padding:18px 22px;display:flex;flex-direction:column;overflow-y:auto;}' +
-        '.right{flex:0.7;background:linear-gradient(180deg,#1E293B,#0F172A);padding:24px 20px;display:flex;flex-direction:column;justify-content:center;align-items:center;border-left:1px solid #334155;}' +
-        '.badge{display:inline-block;background:linear-gradient(135deg,#7C3AED,#EC4899);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}' +
-        'h1{font-size:22px;font-weight:800;margin-bottom:5px;background:linear-gradient(135deg,#A78BFA,#F472B6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}' +
-        '.subtitle{color:#94A3B8;font-size:12px;margin-bottom:12px;line-height:1.4;}' +
-        '.highlight{color:#FBBF24;font-weight:600;}' +
-        '.plan-desc{background:#1E293B;border:1px solid #334155;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#CBD5E1;line-height:1.4;}' +
-        'table{width:100%;border-collapse:collapse;background:rgba(30,41,59,0.6);border-radius:10px;overflow:hidden;border:1px solid #334155;font-size:11px;}' +
-        '.urgency{background:linear-gradient(135deg,#7C3AED22,#EC489922);border:1px solid #7C3AED44;border-radius:8px;padding:10px 12px;margin-top:10px;text-align:center;font-size:11px;color:#C4B5FD;}' +
-        '.cta-btn{display:inline-block;background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;font-size:16px;font-weight:700;padding:13px 28px;border-radius:12px;border:none;cursor:pointer;text-decoration:none;transition:all 0.2s;box-shadow:0 4px 20px rgba(124,58,237,0.4);margin-bottom:10px;}' +
-        '.cta-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(124,58,237,0.6);}' +
-        '.price-tag{font-size:40px;font-weight:800;margin-bottom:2px;}' +
-        '.price-sub{color:#94A3B8;font-size:12px;margin-bottom:16px;}' +
-        '.guarantee{color:#94A3B8;font-size:10px;margin-top:8px;text-align:center;}' +
-        '.trust-badges{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center;}' +
-        '.trust-badge{background:#1E293B;border:1px solid #334155;border-radius:6px;padding:5px 8px;font-size:9px;color:#94A3B8;}' +
-        '.savings{background:#10B98122;color:#10B981;border:1px solid #10B98133;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600;margin-bottom:10px;}' +
-        '</style></head><body>' +
-        '<div class="plan-strip">' + planCards + '</div>' +
-        '<div class="main"><div class="left">' +
-        '<div class="badge">🚀 ' + newFeaturesCount + ' New Features Unlocked</div>' +
-        '<h1>Why ' + upgradeName + '?</h1>' +
-        '<p class="subtitle">You\'re on <span class="highlight">' + currentName + '</span>. Here\'s what you\'ll unlock:</p>' +
-        '<div class="plan-desc"><strong style="color:' + selectedPlan.color + '">' + selectedPlan.icon + ' ' + selectedPlan.name + ':</strong> ' + selectedPlan.desc + '</div>' +
-        '<table><thead><tr><th style="text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748B;border-bottom:2px solid #334155;">Feature <span style="font-weight:400;font-size:8px;color:#475569;">(hover for info)</span></th>' + tableHeader + '</tr></thead><tbody>' + tableRows + '</tbody></table>' +
-        '<div class="urgency">🔥 <strong>2,400+ professionals</strong> upgraded this month · Your recordings deserve the best</div>' +
-        '</div>' +
-        '<div class="right">' +
-        (isMonthly ? '<div class="savings">💰 Cancel anytime · no lock-in</div>' : '<div class="savings">💰 One-time · yours forever</div>') +
-        '<div class="price-tag">' + (isMonthly ? '$' + (price / 100).toFixed(2) : '$' + Math.round(price / 100)) + '</div>' +
-        '<div class="price-sub">' + (isMonthly ? 'per month · cancel anytime' : 'one-time · lifetime access') + '</div>' +
-        '<a href="' + url + '" class="cta-btn" id="proceedBtn">🔒 Proceed to Secure Payment →</a>' +
-        '<div class="guarantee">🛡️ 30-day money-back guarantee · Stripe secured</div>' +
-        '<div class="trust-badges"><div class="trust-badge">🔒 256-bit SSL</div><div class="trust-badge">🏆 50K+ users</div><div class="trust-badge">⚡ Instant activation</div></div>' +
-        '</div></div>' +
-        '<script>document.getElementById("proceedBtn").addEventListener("click",function(e){e.preventDefault();window.location.href="' + url + '";});</script>' +
-        '</body></html>';
-
-    const offset = checkoutWindows.length * 40;
-    try {
-        const checkoutWin = new BrowserWindow({
-            width: 1140, height: 780, x: 100 + offset, y: 60 + offset,
-            title: 'Upgrade to ' + upgradeName + ' — Windy Pro',
-            autoHideMenuBar: true,
-            webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, javascript: true, partition: 'persist:checkout' }
-        });
-        checkoutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-        checkoutWin.focus();
-        checkoutWindows.push(checkoutWin);
-        checkoutWin.on('closed', () => { checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed()); });
-        console.log('[Main] Opened marketing checkout #' + checkoutWindows.length + ' (offset +' + offset + 'px)');
-        return { ok: true };
-    } catch (e) {
-        console.error('[Main] Checkout window failed:', e.message);
-        return { ok: false, error: e.message };
-    }
-});
-
-        '<script>document.getElementById("proceedBtn").addEventListener("click",function(e){e.preventDefault();window.location.href="' + url + '";});</script>' +
-        '</body></html>';
-
-    const offset = checkoutWindows.length * 40;
-    try {
-        const checkoutWin = new BrowserWindow({
-            width: 1140, height: 780, x: 100 + offset, y: 60 + offset,
-            title: 'Upgrade to ' + upgradeName + ' — Windy Pro',
-            autoHideMenuBar: true,
-            webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, javascript: true, partition: 'persist:checkout' }
-        });
-        checkoutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-        checkoutWin.focus();
-        checkoutWindows.push(checkoutWin);
-        checkoutWin.on('closed', () => { checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed()); });
-        console.log('[Main] Opened marketing checkout #' + checkoutWindows.length + ' (offset +' + offset + 'px)');
-        return { ok: true };
-    } catch (e) {
-        console.error('[Main] Checkout window failed:', e.message);
-        return { ok: false, error: e.message };
-    }
+  const offset = checkoutWindows.length * 40;
+  try {
+    const checkoutWin = new BrowserWindow({
+      width: 1140, height: 780, x: 100 + offset, y: 60 + offset,
+      title: 'Upgrade to ' + upgradeName + ' — Windy Pro',
+      autoHideMenuBar: true,
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, javascript: true, partition: 'persist:checkout' }
+    });
+    checkoutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    checkoutWin.focus();
+    checkoutWindows.push(checkoutWin);
+    checkoutWin.on('closed', () => { checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed()); });
+    console.log('[Main] Opened marketing checkout #' + checkoutWindows.length + ' (offset +' + offset + 'px)');
+    return { ok: true };
+  } catch (e) {
+    console.error('[Main] Checkout window failed:', e.message);
+    return { ok: false, error: e.message };
+  }
 });
 
 
