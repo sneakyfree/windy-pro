@@ -257,7 +257,7 @@ class UpgradePanel {
                     </a>
                     <div style="font-size:11px;color:#9CA3AF;margin-top:6px;">
                         If the button doesn't work: 
-                        <a href="#" onclick="navigator.clipboard.writeText('${result.url}');this.textContent='✅ Copied!';return false;" 
+                        <a href="#" onclick="window.windyAPI.copyToClipboard('${result.url}');this.textContent='✅ Copied!';return false;" 
                            style="color:#60A5FA;text-decoration:underline;cursor:pointer;">
                             Copy checkout URL
                         </a>
@@ -332,7 +332,7 @@ class UpgradePanel {
                                     💳 Open Stripe Checkout →
                                 </a>
                                 <div style="font-size:10px;color:#6B7280;margin-bottom:4px;">
-                                    or <a href="#" onclick="navigator.clipboard.writeText('${latestUrl}');this.textContent='✅ Copied!';return false;" style="color:#60A5FA;cursor:pointer;">copy checkout URL</a>
+                                    or <a href="#" onclick="window.windyAPI.copyToClipboard('${latestUrl}');this.textContent='✅ Copied!';return false;" style="color:#60A5FA;cursor:pointer;">copy checkout URL</a>
                                 </div>
                             ` : `<div style="font-size:11px;color:#9CA3AF;">Complete checkout in your browser</div>`}
                             ${tabNote}

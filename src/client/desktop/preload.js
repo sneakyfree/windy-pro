@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   },
   openArchiveFolder: () => ipcRenderer.send('open-archive-folder'),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
+  copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
   minimize: () => ipcRenderer.send('minimize-window'),
 
   // Video preview window (independent)

@@ -1258,6 +1258,11 @@ ipcMain.on('open-archive-folder', () => {
   shell.openPath(folder);
 });
 
+ipcMain.handle('copy-to-clipboard', async (event, text) => {
+  clipboard.writeText(text);
+  return { ok: true };
+});
+
 ipcMain.handle('open-external-url', async (event, url) => {
   console.log('[Main] open-external-url called with:', url);
   // Security: validate URL — allow https and mailto
