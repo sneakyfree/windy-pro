@@ -2293,6 +2293,59 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     checkoutWin.focus();
     checkoutWindows = [checkoutWin];
     checkoutWin.on('closed', () => { checkoutWindows = checkoutWindows.filter(w => !w.isDestroyed()); });
+
+    // Intercept payment-success and payment-cancel redirects
+    checkoutWin.webContents.on('will-navigate', (navEvent, navUrl) => {
+      if (navUrl.includes('/payment-success')) {
+        navEvent.preventDefault();
+        const successHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment Successful!</title>' +
+          '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">' +
+          '<style>*{margin:0;padding:0;box-sizing:border-box;}' +
+          'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B);color:#F1F5F9;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;}' +
+          '.card{max-width:500px;padding:40px;animation:fadeIn 0.6s ease;}' +
+          '@keyframes fadeIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}' +
+          '.check{font-size:80px;margin-bottom:16px;animation:pop 0.5s ease 0.3s both;}' +
+          '@keyframes pop{from{transform:scale(0);}to{transform:scale(1);}}' +
+          'h1{font-size:32px;font-weight:800;background:linear-gradient(135deg,#22C55E,#10B981);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:10px;}' +
+          'p{color:#94A3B8;font-size:14px;line-height:1.6;margin-bottom:20px;}' +
+          '.confetti{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;}' +
+          '.confetti span{position:absolute;display:block;width:8px;height:8px;border-radius:2px;animation:fall 3s ease-in forwards;}' +
+          '@keyframes fall{to{transform:translateY(110vh) rotate(720deg);opacity:0;}}' +
+          '</style></head><body>' +
+          '<div class="confetti" id="confetti"></div>' +
+          '<div class="card">' +
+          '<div class="check">✅</div>' +
+          '<h1>Payment Successful!</h1>' +
+          '<p>Welcome aboard! Your upgrade has been activated instantly.<br>You now have access to all premium features.</p>' +
+          '<p style="font-size:12px;color:#64748B;">You can close this window. Your app will update automatically.</p>' +
+          '</div>' +
+          '<script>' +
+          'const c=document.getElementById("confetti");const colors=["#22C55E","#3B82F6","#A855F7","#EC4899","#FBBF24","#F97316"];' +
+          'for(let i=0;i<60;i++){const s=document.createElement("span");s.style.left=Math.random()*100+"%";s.style.top=-10+"px";' +
+          's.style.background=colors[Math.floor(Math.random()*colors.length)];' +
+          's.style.animationDelay=Math.random()*2+"s";s.style.animationDuration=(2+Math.random()*2)+"s";' +
+          's.style.width=(4+Math.random()*8)+"px";s.style.height=(4+Math.random()*8)+"px";c.appendChild(s);}' +
+          '</script></body></html>';
+        checkoutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(successHtml));
+        console.log('[Checkout] Payment success — showing confirmation page');
+      } else if (navUrl.includes('/payment-cancel')) {
+        navEvent.preventDefault();
+        const cancelHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment Cancelled</title>' +
+          '<style>*{margin:0;padding:0;box-sizing:border-box;}' +
+          'body{font-family:"Inter",system-ui,sans-serif;background:#0F172A;color:#F1F5F9;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;}' +
+          '.card{max-width:400px;padding:40px;}' +
+          'h1{font-size:24px;color:#EF4444;margin-bottom:10px;}' +
+          'p{color:#94A3B8;font-size:14px;}' +
+          '</style></head><body><div class="card">' +
+          '<div style="font-size:60px;margin-bottom:12px;">😔</div>' +
+          '<h1>Payment Cancelled</h1>' +
+          '<p>No worries! You can upgrade anytime from the app. Your free account is still active.</p>' +
+          '</div></body></html>';
+        checkoutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(cancelHtml));
+        console.log('[Checkout] Payment cancelled');
+      }
+    });
+
     console.log('[Main] Opened interactive checkout window');
     return { ok: true };
   } catch (e) {
