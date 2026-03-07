@@ -2088,51 +2088,105 @@ body {
   }
 }
 
-/* Compact stacked hotkey layout */
+/* Stacked hotkey layout — label on top, button below */
 .hotkey-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
-.hotkey-item {
+.hotkey-item-stacked {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.hotkey-item:last-child {
+.hotkey-item-stacked:last-child {
   border-bottom: none;
 }
 
 .hotkey-label {
   font-size: 12px;
   color: var(--text-primary);
-  flex-shrink: 0;
+  font-weight: 500;
 }
 
-.hotkey-item .shortcut-capture {
-  min-width: 0;
-  max-width: 140px;
-  font-size: 10px;
-  padding: 3px 6px;
+/* Big button-style shortcut badges */
+.shortcut-btn {
+  display: block;
+  width: 100%;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  padding: 8px 12px !important;
+  font-size: 13px !important;
+  font-family: monospace;
+  text-align: center;
+  background: linear-gradient(180deg, #334155 0%, #1E293B 100%);
+  color: #E2E8F0;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: all 0.15s ease;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.hotkey-fixed {
-  font-size: 10px;
+.shortcut-btn:hover {
+  background: linear-gradient(180deg, #475569 0%, #334155 100%);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.shortcut-btn:focus {
+  border-color: #F59E0B !important;
+  color: #F59E0B !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3), 0 2px 4px rgba(0, 0, 0, 0.3);
+  outline: none;
+}
+
+/* Readonly fixed shortcut badge */
+.hotkey-fixed-btn {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 11px;
   font-family: monospace;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text-secondary);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
   opacity: 0.7;
 }
 
 .hotkey-readonly {
   opacity: 0.6;
+}
+
+/* Reset to defaults button */
+.hotkey-reset-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  color: #94A3B8;
+  border: 1px dashed #475569;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hotkey-reset-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #EF4444;
+  border-color: #EF4444;
 }
 
 /* Collapsible reserved shortcuts info */
@@ -3480,8 +3534,37 @@ body.light-theme .reserved-list span {
   color: #DC2626;
 }
 
-body.light-theme .hotkey-item {
+body.light-theme .hotkey-item-stacked {
   border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+body.light-theme .shortcut-btn {
+  background: linear-gradient(180deg, #FFFFFF 0%, #F1F5F9 100%);
+  color: #0F172A;
+  border-color: #94A3B8;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+body.light-theme .shortcut-btn:hover {
+  background: linear-gradient(180deg, #F8FAFC 0%, #E2E8F0 100%);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+body.light-theme .hotkey-fixed-btn {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #64748B;
+}
+
+body.light-theme .hotkey-reset-btn {
+  color: #64748B;
+  border-color: #CBD5E1;
+}
+
+body.light-theme .hotkey-reset-btn:hover {
+  color: #DC2626;
+  border-color: #DC2626;
+  background: rgba(239, 68, 68, 0.06);
 }
 
 body.light-theme .settings-panel {

@@ -299,30 +299,31 @@ class SettingsPanel {
         <!-- Old Archive section replaced by new Archive & Storage + Soul File sections above -->
 
         <div class="settings-section">
-          <h3>⌨️ Keyboard Shortcuts</h3>
-          <p class="settings-hint">Click any shortcut to rebind it. Press your new key combo.</p>
+          <h3>🎹 Customizable Keyboard Shortcuts</h3>
+          <p class="settings-hint">Tap any shortcut button below to rebind it. Press your new key combo.</p>
           <div class="hotkey-list">
-            <div class="hotkey-item">
+            <div class="hotkey-item-stacked">
               <span class="hotkey-label">🎙️ Toggle Recording</span>
-              <div class="shortcut-capture" id="shortcutToggle" tabindex="0" data-key="toggleRecording">Ctrl+Shift+Space</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutToggle" tabindex="0" data-key="toggleRecording">Ctrl+Shift+Space</div>
             </div>
-            <div class="hotkey-item">
+            <div class="hotkey-item-stacked">
               <span class="hotkey-label">📋 Paste Transcript</span>
-              <div class="shortcut-capture" id="shortcutPaste" tabindex="0" data-key="pasteTranscript">Ctrl+Shift+V</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutPaste" tabindex="0" data-key="pasteTranscript">Ctrl+Shift+V</div>
             </div>
-            <div class="hotkey-item">
+            <div class="hotkey-item-stacked">
               <span class="hotkey-label">📸 Paste Clipboard</span>
-              <div class="shortcut-capture" id="shortcutClipboard" tabindex="0" data-key="pasteClipboard">Ctrl+Shift+B</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutClipboard" tabindex="0" data-key="pasteClipboard">Ctrl+Shift+B</div>
             </div>
-            <div class="hotkey-item">
+            <div class="hotkey-item-stacked">
               <span class="hotkey-label">👁️ Show / Hide Window</span>
-              <div class="shortcut-capture" id="shortcutShowHide" tabindex="0" data-key="showHide">Ctrl+Shift+W</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutShowHide" tabindex="0" data-key="showHide">Ctrl+Shift+W</div>
             </div>
-            <div class="hotkey-item hotkey-readonly">
-              <span class="hotkey-label">🔍 Zoom In / Out / Reset</span>
-              <span class="hotkey-fixed">Ctrl + / −  ·  Ctrl+0</span>
+            <div class="hotkey-item-stacked hotkey-readonly">
+              <span class="hotkey-label">🔍 Zoom (app window only)</span>
+              <span class="hotkey-fixed-btn">Ctrl + / −  ·  Ctrl+0 Reset</span>
             </div>
           </div>
+          <button class="hotkey-reset-btn" id="hotkeyResetBtn">🔄 Reset All to Defaults</button>
           <details class="reserved-shortcuts-info">
             <summary>ℹ️ Why can't I use Ctrl+V, Ctrl+C, etc?</summary>
             <p>These shortcuts are <b>system-wide</b> — used by every app for copy, paste, undo, etc. If Windy Pro hijacked them, you couldn't paste screenshots, copy text, or undo anywhere.</p>
@@ -914,6 +915,37 @@ class SettingsPanel {
         }
       });
     });
+
+    // Reset all hotkeys to defaults
+    const resetBtn = this.panel.querySelector('#hotkeyResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        const defaults = {
+          toggleRecording: 'CommandOrControl+Shift+Space',
+          pasteTranscript: 'CommandOrControl+Shift+V',
+          pasteClipboard: 'CommandOrControl+Shift+B',
+          showHide: 'CommandOrControl+Shift+W'
+        };
+        const displayMap = {
+          toggleRecording: '#shortcutToggle',
+          pasteTranscript: '#shortcutPaste',
+          pasteClipboard: '#shortcutClipboard',
+          showHide: '#shortcutShowHide'
+        };
+        // Reset each badge display
+        for (const [key, selector] of Object.entries(displayMap)) {
+          const el = this.panel.querySelector(selector);
+          if (el) el.textContent = defaults[key].replace('CommandOrControl', 'Ctrl');
+        }
+        // Tell main process to reset each
+        if (window.windyAPI?.rebindHotkey) {
+          for (const [key, accel] of Object.entries(defaults)) {
+            window.windyAPI.rebindHotkey(key, accel);
+          }
+        }
+        this.showToast('✅ All shortcuts reset to defaults');
+      });
+    }
 
     // Archive folder browse
     const browseArchiveBtn = this.panel.querySelector('#browseArchive');
