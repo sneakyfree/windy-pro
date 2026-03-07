@@ -852,14 +852,16 @@ class SettingsPanel {
     // Keyboard shortcut capture
     this.panel.querySelectorAll('.shortcut-capture').forEach(el => {
       el.addEventListener('focus', () => {
+        // Save current text so we can restore it if user cancels
+        el.dataset.previous = el.textContent;
         el.classList.add('capturing');
         el.textContent = 'Press keys...';
       });
       el.addEventListener('blur', () => {
         el.classList.remove('capturing');
-        // Restore current value if nothing was set
+        // Restore previous value if nothing was set (user clicked away)
         if (el.textContent === 'Press keys...') {
-          this._restoreShortcutDisplay(el);
+          el.textContent = el.dataset.previous || el.textContent;
         }
       });
       el.addEventListener('keydown', (e) => {
