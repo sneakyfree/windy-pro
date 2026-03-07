@@ -75,6 +75,7 @@ const store = new Store({
     hotkeys: {
       toggleRecording: 'CommandOrControl+Shift+Space',
       pasteTranscript: 'CommandOrControl+Shift+V',
+      pasteClipboard: 'CommandOrControl+Shift+B',
       showHide: 'CommandOrControl+Shift+W'
     },
     window: {
@@ -1079,6 +1080,22 @@ function registerHotkeys() {
   });
   console.log(`[Hotkey] Paste transcript (${hotkeys.pasteTranscript}): ${regPaste ? 'OK' : 'FAILED'}`);
 
+  // Paste clipboard (screenshots, copied text, etc.) via simulated Ctrl+V
+  const pasteClipAccel = hotkeys.pasteClipboard || 'CommandOrControl+Shift+B';
+  const regClipboard = globalShortcut.register(pasteClipAccel, () => {
+    // Simulate Ctrl+V keystroke in the currently focused application
+    const { exec } = require('child_process');
+    if (process.platform === 'linux') {
+      exec('xdotool key ctrl+v');
+    } else if (process.platform === 'darwin') {
+      exec('osascript -e \'tell application "System Events" to keystroke "v" using command down\'');
+    } else {
+      // Windows: use PowerShell
+      exec('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"');
+    }
+  });
+  console.log(`[Hotkey] Paste clipboard (${pasteClipAccel}): ${regClipboard ? 'OK' : 'FAILED'}`);
+
   // Show/hide window — three-state cycle: Full Window → Tornado → Hidden → Full Window
   const regShow = globalShortcut.register(hotkeys.showHide, () => {
     const mainVisible = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible();
@@ -1123,6 +1140,7 @@ const RESERVED_SHORTCUTS = [
 const HOTKEY_DEFAULTS = {
   toggleRecording: 'CommandOrControl+Shift+Space',
   pasteTranscript: 'CommandOrControl+Shift+V',
+  pasteClipboard: 'CommandOrControl+Shift+B',
   showHide: 'CommandOrControl+Shift+W'
 };
 

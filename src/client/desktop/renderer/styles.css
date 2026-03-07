@@ -2135,6 +2135,48 @@ body {
   opacity: 0.6;
 }
 
+/* Collapsible reserved shortcuts info */
+.reserved-shortcuts-info {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.reserved-shortcuts-info summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: #94A3B8;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.reserved-shortcuts-info summary:hover {
+  color: var(--text-primary);
+}
+
+.reserved-shortcuts-info p {
+  margin: 6px 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.reserved-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.reserved-list span {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-family: monospace;
+  color: #EF4444;
+}
 
 /* Old history panel styles removed — see AG v0.4.0 styles below */
 
@@ -3426,6 +3468,20 @@ body.light-theme .title-btn.close-btn:hover {
   background: #EF4444;
   color: white;
   border-color: #DC2626;
+}
+
+body.light-theme .reserved-shortcuts-info summary {
+  color: #64748B;
+}
+
+body.light-theme .reserved-list span {
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: #DC2626;
+}
+
+body.light-theme .hotkey-item {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
 }
 
 body.light-theme .settings-panel {

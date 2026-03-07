@@ -311,6 +311,10 @@ class SettingsPanel {
               <div class="shortcut-capture" id="shortcutPaste" tabindex="0" data-key="pasteTranscript">Ctrl+Shift+V</div>
             </div>
             <div class="hotkey-item">
+              <span class="hotkey-label">📸 Paste Clipboard</span>
+              <div class="shortcut-capture" id="shortcutClipboard" tabindex="0" data-key="pasteClipboard">Ctrl+Shift+B</div>
+            </div>
+            <div class="hotkey-item">
               <span class="hotkey-label">👁️ Show / Hide Window</span>
               <div class="shortcut-capture" id="shortcutShowHide" tabindex="0" data-key="showHide">Ctrl+Shift+W</div>
             </div>
@@ -319,6 +323,19 @@ class SettingsPanel {
               <span class="hotkey-fixed">Ctrl + / −  ·  Ctrl+0</span>
             </div>
           </div>
+          <details class="reserved-shortcuts-info">
+            <summary>ℹ️ Why can't I use Ctrl+V, Ctrl+C, etc?</summary>
+            <p>These shortcuts are <b>system-wide</b> — used by every app for copy, paste, undo, etc. If Windy Pro hijacked them, you couldn't paste screenshots, copy text, or undo anywhere.</p>
+            <p><b>Blocked shortcuts:</b></p>
+            <div class="reserved-list">
+              <span>Ctrl+V</span><span>Ctrl+C</span><span>Ctrl+X</span>
+              <span>Ctrl+Z</span><span>Ctrl+A</span><span>Ctrl+S</span>
+              <span>Ctrl+F</span><span>Ctrl+P</span><span>Ctrl+N</span>
+              <span>Ctrl+W</span><span>Ctrl+T</span><span>Ctrl+Q</span>
+              <span>Alt+F4</span>
+            </div>
+            <p>✅ <b>Tip:</b> Use <b>Ctrl+Shift+key</b> or <b>Ctrl+Alt+key</b> combos — those are fair game!</p>
+          </details>
         </div>
         
         <div class="settings-section">
@@ -1088,7 +1105,7 @@ class SettingsPanel {
         }
         // Restore custom hotkeys
         if (settings.hotkeys) {
-          const map = { toggleRecording: '#shortcutToggle', pasteTranscript: '#shortcutPaste', showHide: '#shortcutShowHide' };
+          const map = { toggleRecording: '#shortcutToggle', pasteTranscript: '#shortcutPaste', pasteClipboard: '#shortcutClipboard', showHide: '#shortcutShowHide' };
           for (const [key, selector] of Object.entries(map)) {
             const el = this.panel.querySelector(selector);
             if (el && settings.hotkeys[key]) {
@@ -1380,6 +1397,7 @@ class SettingsPanel {
     const defaults = {
       toggleRecording: 'Ctrl+Shift+Space',
       pasteTranscript: 'Ctrl+Shift+V',
+      pasteClipboard: 'Ctrl+Shift+B',
       showHide: 'Ctrl+Shift+W'
     };
     el.textContent = defaults[el.dataset.key] || 'Not set';
