@@ -3387,6 +3387,45 @@ body.light-theme .shortcut-capture {
   font-weight: 600;
 }
 
+/* Light theme — plan banner (dark bg that's unreadable in light) */
+body.light-theme #transcriptionPlanBanner {
+  background: linear-gradient(135deg, #E2E8F0, #F1F5F9) !important;
+  border-color: #94A3B8 !important;
+}
+
+body.light-theme #transcriptionPlanLabel {
+  color: #0F172A !important;
+}
+
+body.light-theme #transcriptionPlanHint {
+  color: #475569 !important;
+}
+
+/* Light theme — soul file stats box */
+body.light-theme #soulFileStats {
+  background: #F1F5F9 !important;
+}
+
+body.light-theme #soulFileStats span {
+  color: #334155 !important;
+}
+
+body.light-theme #soulFileStats [id$="Hours"],
+body.light-theme #soulFileStats [id$="Words"],
+body.light-theme #soulFileStats [id$="Grade"] {
+  color: inherit !important;
+}
+
+/* Light theme — settings tier badge */
+body.light-theme .settings-tier-badge {
+  border-color: #94A3B8;
+  color: #334155;
+}
+
+body.light-theme .settings-upgrade-btn {
+  color: #FFFFFF;
+}
+
 body.light-theme .settings-close-btn {
   background: #EF4444;
   color: white;
