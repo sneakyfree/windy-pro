@@ -2321,7 +2321,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '  const hasUrl=!!urls[selected];' +
     '  const btn=document.getElementById("proceedBtn");' +
     '  const ctaMap={monthly:"🔒 Start Monthly Subscription →",annual:"🔒 Start Annual Plan →",lifetime:"🔒 Buy Lifetime Access →"};' +
-    '  if(selected==="free"||!hasUrl){btn.className="cta-btn disabled";btn.textContent=selected==="free"?"✓ This is your current plan":"⏳ Session unavailable";}' +
+    '  if(selected==="free"){btn.className="cta-btn disabled";btn.textContent="✓ This is your current plan";}' +
     '  else{btn.className="cta-btn";btn.textContent=ctaMap[billing];}' +
     '  const sav=document.getElementById("savings");' +
     '  document.getElementById("planNameDisplay").innerHTML=sp.icon+" "+sp.name;document.getElementById("planNameDisplay").style.color=sp.color;' +

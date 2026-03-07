@@ -104,9 +104,12 @@ class UpgradePanel {
 
     _buildHTML() {
         const cards = this.plans.map(plan => {
+            const tierOrder = ['free', 'pro', 'translate', 'translate_pro'];
+            const currentIdx = tierOrder.indexOf(this._currentTier);
+            const planIdx = tierOrder.indexOf(plan.key);
             const isCurrent = plan.key === this._currentTier;
-            const isUpgrade = !isCurrent && plan.key !== 'free';
-            const isDowngrade = plan.key === 'free' && this._currentTier !== 'free';
+            const isUpgrade = !isCurrent && planIdx > currentIdx;
+            const isDowngrade = !isCurrent && planIdx <= currentIdx;
             const recommendedBadge = plan.recommended ? '<span class="upgrade-recommended">RECOMMENDED</span>' : '';
             const currentBadge = isCurrent ? '<span class="upgrade-current-badge">✓ YOUR CURRENT PLAN</span>' : '';
 
@@ -153,13 +156,17 @@ class UpgradePanel {
 
         const currentPlanObj = this.plans.find(p => p.key === this._currentTier);
         const currentPlanName = currentPlanObj ? currentPlanObj.name : 'Free';
+        const isMaxTier = this._currentTier === 'translate_pro';
+        const subtitleText = isMaxTier
+            ? `You're on: <strong style="color:#A855F7;">${currentPlanName}</strong> · You have the best plan! 👑`
+            : `You're on: <strong style="color:#22C55E;">${currentPlanName}</strong> · Unlock more features by upgrading`;
         return `
       <div class="upgrade-header">
         <div class="upgrade-title-row">
-          <h3>⚡ Upgrade Your Plan</h3>
+          <h3>${isMaxTier ? '👑 Your Plan' : '⚡ Upgrade Your Plan'}</h3>
           <button class="upgrade-close" id="upgradeClose">✕</button>
         </div>
-        <p class="upgrade-subtitle">You're on: <strong style="color:#22C55E;">${currentPlanName}</strong> · Unlock the full power of Windy Pro</p>
+        <p class="upgrade-subtitle">${subtitleText}</p>
       </div>
       <div class="upgrade-body">
         <div class="upgrade-cards">${cards}</div>

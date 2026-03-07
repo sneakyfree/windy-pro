@@ -3007,7 +3007,7 @@ select:focus-visible,
 
 .upgrade-btn-buy {
   background: linear-gradient(135deg, var(--card-color, #22C55E), color-mix(in srgb, var(--card-color, #22C55E) 80%, #000));
-  color: #000;
+  color: #FFFFFF;
 }
 
 .upgrade-btn-buy:hover {
