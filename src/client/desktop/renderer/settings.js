@@ -303,19 +303,23 @@ class SettingsPanel {
           <p class="settings-hint">Tap any shortcut button below to rebind it. Press your new key combo.</p>
           <div class="hotkey-list">
             <div class="hotkey-item-stacked">
-              <span class="hotkey-label">🎙️ Toggle Recording</span>
+              <span class="hotkey-label">🎙️ Start / Stop Recording</span>
+              <span class="hotkey-desc">Begins or ends a voice recording session</span>
               <div class="shortcut-capture shortcut-btn" id="shortcutToggle" tabindex="0" data-key="toggleRecording">Ctrl+Shift+Space</div>
             </div>
             <div class="hotkey-item-stacked">
-              <span class="hotkey-label">📋 Paste Transcript</span>
+              <span class="hotkey-label">📋 Auto-Type Transcription</span>
+              <span class="hotkey-desc">Types your latest recording at the cursor</span>
               <div class="shortcut-capture shortcut-btn" id="shortcutPaste" tabindex="0" data-key="pasteTranscript">Ctrl+Shift+V</div>
             </div>
             <div class="hotkey-item-stacked">
-              <span class="hotkey-label">📸 Paste Clipboard</span>
+              <span class="hotkey-label">📸 Paste from Clipboard</span>
+              <span class="hotkey-desc">Pastes clipboard contents (screenshots, copied text)</span>
               <div class="shortcut-capture shortcut-btn" id="shortcutClipboard" tabindex="0" data-key="pasteClipboard">Ctrl+Shift+B</div>
             </div>
             <div class="hotkey-item-stacked">
               <span class="hotkey-label">👁️ Show / Hide Window</span>
+              <span class="hotkey-desc">Cycles: Full window → Tornado → Hidden</span>
               <div class="shortcut-capture shortcut-btn" id="shortcutShowHide" tabindex="0" data-key="showHide">Ctrl+Shift+W</div>
             </div>
             <div class="hotkey-item-stacked hotkey-readonly">
