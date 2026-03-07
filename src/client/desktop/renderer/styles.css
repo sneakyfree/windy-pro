@@ -3035,6 +3035,55 @@ select:focus-visible,
   cursor: default;
 }
 
+/* Gold lifetime price display */
+.upgrade-lifetime-price {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(245, 158, 11, 0.08));
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #FDE68A;
+  text-align: center;
+  animation: gold-sparkle 2s ease-in-out infinite;
+}
+
+@keyframes gold-sparkle {
+
+  0%,
+  100% {
+    box-shadow: 0 0 6px rgba(251, 191, 36, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 14px rgba(251, 191, 36, 0.5);
+  }
+}
+
+.upgrade-lifetime-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  color: #FBBF24;
+  letter-spacing: 0.3px;
+  margin-top: 2px;
+}
+
+/* Lifetime button — gold gradient */
+.upgrade-btn-lifetime {
+  background: linear-gradient(135deg, #FBBF24, #F59E0B);
+  color: #000;
+  font-weight: 800;
+  border: none;
+  animation: gold-sparkle 2s ease-in-out infinite;
+}
+
+.upgrade-btn-lifetime:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(251, 191, 36, 0.4);
+}
+
 /* Coupon Section */
 .upgrade-coupon-section {
   margin-bottom: 16px;

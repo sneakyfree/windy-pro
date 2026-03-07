@@ -110,9 +110,18 @@ class UpgradePanel {
             const recommendedBadge = plan.recommended ? '<span class="upgrade-recommended">RECOMMENDED</span>' : '';
             const currentBadge = isCurrent ? '<span class="upgrade-current-badge">✓ YOUR CURRENT PLAN</span>' : '';
 
+            const monthlyPrices = { pro: '$4.99', translate: '$8.99', translate_pro: '$14.99' };
+            const lifetimePrices = { pro: '$99', translate: '$199', translate_pro: '$299' };
+
             let priceDisplay = plan.price;
             if (plan.monthlyPriceId) {
-                priceDisplay += ` <span class="upgrade-alt-price">or $${plan.key === 'pro' ? '4.99' : plan.key === 'translate' ? '8.99' : '14.99'}/mo</span>`;
+                priceDisplay += ` <span class="upgrade-alt-price">/year</span>`;
+            }
+
+            // Lifetime price in gold (only for paid plans)
+            let lifetimeDisplay = '';
+            if (plan.monthlyPriceId) {
+                lifetimeDisplay = `<div class="upgrade-lifetime-price">💎 ${lifetimePrices[plan.key]} <span class="upgrade-lifetime-label">lifetime — own forever</span></div>`;
             }
 
             const features = plan.features.map(f => `<li>✓ ${f}</li>`).join('');
@@ -121,8 +130,9 @@ class UpgradePanel {
             if (isCurrent) {
                 actionBtn = '<button class="upgrade-btn upgrade-btn-current" disabled>Current Plan</button>';
             } else if (isUpgrade) {
-                actionBtn = `<button class="upgrade-btn upgrade-btn-buy" data-price="${plan.annualPriceId}" data-tier="${plan.key}">Upgrade →</button>`;
-                actionBtn += `<button class="upgrade-btn upgrade-btn-alt" data-price="${plan.monthlyPriceId}" data-tier="${plan.key}" data-sub="true">or subscribe monthly</button>`;
+                actionBtn = `<button class="upgrade-btn upgrade-btn-buy" data-price="${plan.annualPriceId}" data-tier="${plan.key}">Upgrade — ${plan.price}/yr →</button>`;
+                actionBtn += `<button class="upgrade-btn upgrade-btn-lifetime" data-price="${plan.lifetimePriceId}" data-tier="${plan.key}">💎 ${lifetimePrices[plan.key]} Lifetime</button>`;
+                actionBtn += `<button class="upgrade-btn upgrade-btn-alt" data-price="${plan.monthlyPriceId}" data-tier="${plan.key}" data-sub="true">or ${monthlyPrices[plan.key]}/mo</button>`;
             } else if (isDowngrade) {
                 actionBtn = '<button class="upgrade-btn upgrade-btn-current" disabled>✓ Included</button>';
             }
@@ -135,6 +145,7 @@ class UpgradePanel {
           <h3 class="upgrade-card-name">${plan.name}</h3>
           <div class="upgrade-card-price">${priceDisplay}</div>
           <div class="upgrade-card-period">${plan.period}</div>
+          ${lifetimeDisplay}
           <ul class="upgrade-card-features">${features}</ul>
           <div class="upgrade-card-actions">${actionBtn}</div>
         </div>`;
@@ -169,7 +180,7 @@ class UpgradePanel {
         this.panel.querySelector('#upgradeClose').addEventListener('click', () => this.close());
 
         // Buy buttons
-        this.panel.querySelectorAll('.upgrade-btn-buy, .upgrade-btn-alt').forEach(btn => {
+        this.panel.querySelectorAll('.upgrade-btn-buy, .upgrade-btn-alt, .upgrade-btn-lifetime').forEach(btn => {
             btn.addEventListener('click', () => {
                 const priceId = btn.dataset.price;
                 const tier = btn.dataset.tier;
