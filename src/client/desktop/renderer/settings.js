@@ -862,6 +862,23 @@ class SettingsPanel {
           const accelerator = parts.join('+');
           const settingKey = el.dataset.key;
           const displayStr = accelerator.replace('CommandOrControl', 'Ctrl');
+
+          // Block reserved system shortcuts that should never be hijacked
+          const reserved = [
+            'CommandOrControl+V', 'CommandOrControl+C', 'CommandOrControl+X',
+            'CommandOrControl+Z', 'CommandOrControl+A', 'CommandOrControl+S',
+            'CommandOrControl+F', 'CommandOrControl+P', 'CommandOrControl+N',
+            'CommandOrControl+W', 'CommandOrControl+T', 'CommandOrControl+Q',
+            'Alt+F4'
+          ];
+          if (reserved.includes(accelerator)) {
+            this.showToast(`⛔ ${displayStr} is a system shortcut and can't be used. Use Ctrl+Shift+key instead.`);
+            el.classList.remove('capturing');
+            el.blur();
+            this._restoreShortcutDisplay(el);
+            return;
+          }
+
           el.textContent = displayStr;
           el.classList.remove('capturing');
           el.blur();

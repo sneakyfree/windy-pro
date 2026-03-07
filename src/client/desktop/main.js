@@ -1112,8 +1112,41 @@ function registerHotkeys() {
  * IPC: Rebind a hotkey from renderer Settings panel
  * Unregisters all shortcuts, updates the store, re-registers all
  */
+const RESERVED_SHORTCUTS = [
+  'CommandOrControl+V', 'CommandOrControl+C', 'CommandOrControl+X',
+  'CommandOrControl+Z', 'CommandOrControl+A', 'CommandOrControl+S',
+  'CommandOrControl+F', 'CommandOrControl+P', 'CommandOrControl+N',
+  'CommandOrControl+W', 'CommandOrControl+T', 'CommandOrControl+Q',
+  'Alt+F4'
+];
+
+const HOTKEY_DEFAULTS = {
+  toggleRecording: 'CommandOrControl+Shift+Space',
+  pasteTranscript: 'CommandOrControl+Shift+V',
+  showHide: 'CommandOrControl+Shift+W'
+};
+
+// Startup: sanitize any reserved shortcuts that were accidentally bound
+function sanitizeHotkeys() {
+  const hotkeys = store.get('hotkeys');
+  let fixed = false;
+  for (const [key, accel] of Object.entries(hotkeys)) {
+    if (RESERVED_SHORTCUTS.includes(accel)) {
+      console.log(`[Hotkey] Resetting reserved shortcut ${key}: ${accel} → ${HOTKEY_DEFAULTS[key]}`);
+      hotkeys[key] = HOTKEY_DEFAULTS[key];
+      fixed = true;
+    }
+  }
+  if (fixed) store.set('hotkeys', hotkeys);
+}
+
 ipcMain.handle('rebind-hotkey', (event, key, accelerator) => {
   try {
+    // Block reserved system shortcuts
+    if (RESERVED_SHORTCUTS.includes(accelerator)) {
+      return { ok: false, error: `${accelerator} is a reserved system shortcut` };
+    }
+
     // Unregister all current shortcuts
     globalShortcut.unregisterAll();
 
@@ -3183,6 +3216,7 @@ app.whenReady().then(async () => {
   startPythonServer();
   createWindow();
   createTray();
+  sanitizeHotkeys();  // Reset any accidentally-bound system shortcuts (e.g. Ctrl+V)
   registerHotkeys();
 
   // Validate license on launch (non-blocking)
