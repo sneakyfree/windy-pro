@@ -2071,10 +2071,70 @@ body {
 }
 
 .shortcut-capture.capturing {
-  border-color: var(--color-buffering);
-  color: var(--color-buffering);
-  animation: blink 1s infinite;
+  border-color: #F59E0B;
+  color: #F59E0B;
+  animation: pulse-border 1s infinite;
 }
+
+@keyframes pulse-border {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
+  }
+}
+
+/* Compact stacked hotkey layout */
+.hotkey-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hotkey-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.hotkey-item:last-child {
+  border-bottom: none;
+}
+
+.hotkey-label {
+  font-size: 12px;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.hotkey-item .shortcut-capture {
+  min-width: 0;
+  max-width: 120px;
+  font-size: 10px;
+  padding: 3px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hotkey-fixed {
+  font-size: 10px;
+  font-family: monospace;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.hotkey-readonly {
+  opacity: 0.6;
+}
+
 
 /* Old history panel styles removed — see AG v0.4.0 styles below */
 
