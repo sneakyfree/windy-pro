@@ -300,7 +300,7 @@ class SettingsPanel {
 
         <div class="settings-section">
           <h3>🎹 Customizable Keyboard Shortcuts</h3>
-          <p class="settings-hint">Tap any shortcut button below to rebind it. Press your new key combo.</p>
+          <p class="settings-hint" style="color:#94A3B8;font-weight:500;">🖱️ Tap any button below to rebind it. Press your new key combo.</p>
           <div class="hotkey-list">
             <div class="hotkey-item-stacked">
               <span class="hotkey-label">🎙️ Start / Stop Recording</span>
@@ -324,6 +324,7 @@ class SettingsPanel {
             </div>
             <div class="hotkey-item-stacked hotkey-readonly">
               <span class="hotkey-label">🔍 Zoom (app window only)</span>
+              <span class="hotkey-desc">Click inside the app first — only zooms the Windy Pro window, not your desktop</span>
               <span class="hotkey-fixed-btn">Ctrl + / −  ·  Ctrl+0 Reset</span>
             </div>
           </div>
