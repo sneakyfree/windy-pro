@@ -726,6 +726,29 @@ body {
   letter-spacing: 0.5px;
 }
 
+/* Collapsible section headers */
+.section-header-clickable {
+  cursor: pointer;
+  padding: 4px 6px;
+  margin: 0 -6px 10px -6px !important;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+  user-select: none;
+}
+
+.section-header-clickable:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.settings-section.collapsed .section-header-clickable {
+  margin-bottom: 0 !important;
+}
+
+.section-toggle {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
 .setting-row {
   display: flex;
   align-items: center;
@@ -3550,6 +3573,10 @@ body.light-theme .reserved-list span {
 
 body.light-theme .hotkey-item-stacked {
   border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme .section-header-clickable:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 body.light-theme .hotkey-desc {

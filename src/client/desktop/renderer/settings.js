@@ -24,6 +24,7 @@ class SettingsPanel {
     }
     this.bindEvents();
     this.loadSettings();
+    this._makeCollapsible();
   }
 
   buildHTML() {
@@ -1440,6 +1441,60 @@ class SettingsPanel {
       showHide: 'Ctrl+Shift+W'
     };
     el.textContent = defaults[el.dataset.key] || 'Not set';
+  }
+
+  /**
+   * Make each settings-section collapsible with a ▼/▶ toggle.
+   * State is persisted in localStorage so it survives settings closes and app restarts.
+   */
+  _makeCollapsible() {
+    const saved = JSON.parse(localStorage.getItem('settings-collapsed') || '{}');
+    const sections = this.panel.querySelectorAll('.settings-section');
+
+    sections.forEach((section, i) => {
+      const h3 = section.querySelector('h3');
+      if (!h3) return;
+
+      // Create a key from the section title text
+      const key = h3.textContent.trim().replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+
+      // Wrap content below h3 in a collapsible container
+      const content = document.createElement('div');
+      content.className = 'section-collapsible-content';
+      while (h3.nextSibling) {
+        content.appendChild(h3.nextSibling);
+      }
+      section.appendChild(content);
+
+      // Add toggle indicator to h3
+      const toggle = document.createElement('span');
+      toggle.className = 'section-toggle';
+      h3.prepend(toggle);
+      h3.classList.add('section-header-clickable');
+
+      // Set initial state (all open by default on first use)
+      const isCollapsed = saved[key] === true;
+      if (isCollapsed) {
+        content.style.display = 'none';
+        toggle.textContent = '▶ ';
+        section.classList.add('collapsed');
+      } else {
+        toggle.textContent = '▼ ';
+      }
+
+      // Click handler
+      h3.addEventListener('click', () => {
+        const nowCollapsed = content.style.display !== 'none';
+        content.style.display = nowCollapsed ? 'none' : '';
+        toggle.textContent = nowCollapsed ? '▶ ' : '▼ ';
+        section.classList.toggle('collapsed', nowCollapsed);
+
+        // Save state
+        const state = JSON.parse(localStorage.getItem('settings-collapsed') || '{}');
+        state[key] = nowCollapsed;
+        localStorage.setItem('settings-collapsed', JSON.stringify(state));
+      });
+    });
   }
 
   saveSetting(key, value) {
