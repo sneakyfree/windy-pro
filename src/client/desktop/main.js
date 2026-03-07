@@ -1068,9 +1068,26 @@ function registerHotkeys() {
   if (!app.isReady()) return;
   const hotkeys = store.get('hotkeys');
 
-  // Toggle recording — focus is restored in the renderer after getUserMedia
+  // Toggle recording — MECHANICAL fix: prevent focus steal during recording start
+  // getUserMedia, MediaRecorder.start(), video capture all steal focus asynchronously.
+  // A single blur() call doesn't work because later async calls re-steal focus.
+  // Solution: keep blurring for 2 seconds so ALL async focus grabs are defeated.
   const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
+    const wasRecording = isRecording;
     toggleRecording();
+
+    // Only guard focus when STARTING recording (not stopping)
+    if (!wasRecording && mainWindow && !mainWindow.isDestroyed()) {
+      let blurCount = 0;
+      const blurGuard = setInterval(() => {
+        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
+          mainWindow.blur();
+          console.log(`[Hotkey] Focus guard: blurred (${blurCount})`);
+        }
+        blurCount++;
+        if (blurCount >= 20) clearInterval(blurGuard); // Stop after 2s (20 x 100ms)
+      }, 100);
+    }
   });
   console.log(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
 
