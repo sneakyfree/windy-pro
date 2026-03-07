@@ -146,6 +146,9 @@ class WindyApp {
       this._archiveFolder = settings?.archiveFolder || null;
       this._updateArchivePathLabel();
 
+      // ── Dynamic Keyboard Shortcuts on main screen ──
+      this._populateShortcutDisplay(settings?.hotkeys);
+
       // Load cloud transcription settings at startup
       // Key is 'engine' not 'transcriptionEngine' (matches saveSetting('engine', val))
       if (settings?.engine) this.transcriptionEngine = settings.engine;
@@ -800,6 +803,56 @@ class WindyApp {
       this.setArchiveStatus('Route: Local + Cloud', 'ok');
     } else {
       this.setArchiveStatus('Archive route: Local', 'ok');
+    }
+  }
+
+  /**
+   * Populate the keyboard shortcuts display on the main screen
+   * Shows actual user hotkeys, with 'custom' badge if changed from defaults
+   */
+  _populateShortcutDisplay(hotkeys) {
+    const defaults = {
+      toggleRecording: 'CommandOrControl+Shift+Space',
+      pasteTranscript: 'CommandOrControl+Shift+V',
+      showHide: 'CommandOrControl+Shift+W'
+    };
+
+    const actual = {
+      toggleRecording: hotkeys?.toggleRecording || defaults.toggleRecording,
+      pasteTranscript: hotkeys?.pasteTranscript || defaults.pasteTranscript,
+      showHide: hotkeys?.showHide || defaults.showHide
+    };
+
+    // Format accelerator string for display
+    const fmt = (accel) => accel
+      .replace(/CommandOrControl/gi, 'Ctrl')
+      .replace(/\+/g, '+');
+
+    const customBadge = ' <span style="color:#A78BFA;font-size:10px;font-weight:600;vertical-align:middle;margin-left:4px;background:rgba(167,139,250,0.15);padding:1px 5px;border-radius:4px;">✦ custom</span>';
+
+    const rows = [
+      {
+        id: 'shortcutRow_toggle',
+        key: 'toggleRecording',
+        label: '<span style="color:#22C55E;font-weight:600;">Start</span> / <span style="color:#EF4444;font-weight:600;">Stop</span> recording'
+      },
+      {
+        id: 'shortcutRow_paste',
+        key: 'pasteTranscript',
+        label: '<span style="color:#4ECDC4;font-weight:600;">Paste</span> transcript to cursor'
+      },
+      {
+        id: 'shortcutRow_showHide',
+        key: 'showHide',
+        label: '<span style="color:#F7DC6F;font-weight:600;">Show / Hide</span> app window'
+      }
+    ];
+
+    for (const row of rows) {
+      const el = document.getElementById(row.id);
+      if (!el) continue;
+      const isCustom = actual[row.key] !== defaults[row.key];
+      el.innerHTML = `<kbd>${fmt(actual[row.key])}</kbd> — ${row.label}${isCustom ? customBadge : ''}`;
     }
   }
 
