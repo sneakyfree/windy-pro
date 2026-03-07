@@ -2218,6 +2218,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     'h1{font-size:24px;font-weight:800;margin-bottom:5px;background:linear-gradient(135deg,#A78BFA,#F472B6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;transition:all 0.3s;}' +
     '.subtitle{color:#94A3B8;font-size:14px;margin-bottom:12px;line-height:1.5;}' +
     '.highlight{color:#FBBF24;font-weight:600;}' +
+    '.plan-name-display{font-size:22px;font-weight:800;text-align:center;margin-bottom:6px;letter-spacing:0.5px;text-shadow:0 0 20px rgba(255,255,255,0.15);}' +
     '.plan-desc{background:#1E293B;border:1px solid #334155;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#CBD5E1;line-height:1.5;transition:all 0.3s;}' +
     'table{width:100%;border-collapse:collapse;background:rgba(30,41,59,0.6);border-radius:10px;overflow:hidden;border:1px solid #334155;font-size:13px;}' +
     'th{padding:10px 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #334155;transition:all 0.3s;}' +
@@ -2273,6 +2274,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '<table><thead><tr id="tableHead"></tr></thead><tbody id="tableBody"></tbody></table>' +
     '<div class="urgency">🔥 <strong>2,400+ professionals</strong> upgraded this month · Your recordings deserve the best</div>' +
     '</div><div class="right">' +
+    '<div class="plan-name-display" id="planNameDisplay"></div>' +
     '<div class="savings" id="savings"></div>' +
     '<div class="price-tag" id="priceTag"></div>' +
     '<div class="price-sub" id="priceSub"></div>' +
@@ -2322,6 +2324,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '  if(selected==="free"||!hasUrl){btn.className="cta-btn disabled";btn.textContent=selected==="free"?"✓ This is your current plan":"⏳ Session unavailable";}' +
     '  else{btn.className="cta-btn";btn.textContent=ctaMap[billing];}' +
     '  const sav=document.getElementById("savings");' +
+    '  document.getElementById("planNameDisplay").innerHTML=sp.icon+" "+sp.name;document.getElementById("planNameDisplay").style.color=sp.color;' +
     '  if(selected==="free"){sav.textContent="🌱 Free forever";sav.style.background="#6B728022";sav.style.color="#9CA3AF";sav.style.border="1px solid #6B728033";}' +
     '  else if(billing==="monthly"){sav.textContent="📅 Cancel anytime · no commitment";sav.style.background="#7C3AED22";sav.style.color="#C4B5FD";sav.style.border="1px solid #7C3AED33";}' +
     '  else if(billing==="annual"){sav.textContent="⭐ Save 18% vs monthly · most popular";sav.style.background="#10B98122";sav.style.color="#10B981";sav.style.border="1px solid #10B98133";}' +
@@ -2342,10 +2345,10 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '    card.addEventListener("click",()=>{selected=p.key;render();});' +
     '    strip.appendChild(card);' +
     '  });' +
-    '  let headHtml="<th style=\\"text-align:left;padding:8px 10px;color:#64748B;\\">Feature <span style=\\"font-size:8px;color:#475569;\\">(hover for info)</span></th>";' +
+    '  let headHtml="<th style=\\"text-align:left;padding:8px 10px;color:#CBD5E1;\\">Feature <span style=\\"font-size:10px;color:#94A3B8;\\">(hover for info)</span></th>";' +
     '  D.allPlans.forEach(p=>{' +
     '    const isSel=p.key===selected;const isCur=p.key===D.currentTier;' +
-    '    headHtml+="<th style=\\"color:"+(isSel?p.color:isCur?"#FBBF24":"#64748B")+";font-weight:"+(isSel?"800":"500")+";"+(isSel?"background:"+p.color+"30;":"")+"\\">"+p.name+(isCur?" ★":"")+"</th>";' +
+    '    headHtml+="<th style=\\"color:"+(isSel?p.color:isCur?"#FBBF24":"#CBD5E1")+";font-weight:"+(isSel?"800":"500")+";"+(isSel?"background:"+p.color+"30;":"")+"\\">"+p.name+(isCur?" ★":"")+"</th>";' +
     '  });document.getElementById("tableHead").innerHTML=headHtml;' +
     '  let bodyHtml="";' +
     '  D.featureDefs.forEach(f=>{' +
