@@ -1109,6 +1109,31 @@ function registerHotkeys() {
 }
 
 /**
+ * IPC: Rebind a hotkey from renderer Settings panel
+ * Unregisters all shortcuts, updates the store, re-registers all
+ */
+ipcMain.handle('rebind-hotkey', (event, key, accelerator) => {
+  try {
+    // Unregister all current shortcuts
+    globalShortcut.unregisterAll();
+
+    // Update the specific hotkey in store
+    const hotkeys = store.get('hotkeys');
+    hotkeys[key] = accelerator;
+    store.set('hotkeys', hotkeys);
+
+    // Re-register all shortcuts with updated config
+    registerHotkeys();
+
+    console.log(`[Hotkey] Rebound ${key} → ${accelerator}`);
+    return { ok: true, key, accelerator };
+  } catch (err) {
+    console.error(`[Hotkey] Rebind failed:`, err);
+    return { ok: false, error: err.message };
+  }
+});
+
+/**
  * Toggle recording state
  */
 function toggleRecording() {

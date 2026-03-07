@@ -861,10 +861,22 @@ class SettingsPanel {
 
           const accelerator = parts.join('+');
           const settingKey = el.dataset.key;
-          el.textContent = accelerator.replace('CommandOrControl', 'Ctrl');
+          const displayStr = accelerator.replace('CommandOrControl', 'Ctrl');
+          el.textContent = displayStr;
           el.classList.remove('capturing');
           el.blur();
           this.saveSetting(settingKey, accelerator);
+
+          // Tell main process to actually re-register the global shortcut
+          if (window.windyAPI?.rebindHotkey) {
+            window.windyAPI.rebindHotkey(settingKey, accelerator).then(result => {
+              if (result?.ok) {
+                this.showToast(`✅ ${displayStr} bound successfully`);
+              } else {
+                this.showToast(`⚠️ Failed to bind ${displayStr}: ${result?.error || 'unknown'}`);
+              }
+            });
+          }
         }
       });
     });

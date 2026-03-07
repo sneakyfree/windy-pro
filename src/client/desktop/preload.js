@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (settings) => ipcRenderer.send('update-settings', settings),
+  rebindHotkey: (key, accelerator) => ipcRenderer.invoke('rebind-hotkey', key, accelerator),
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),
   chooseArchiveFolder: () => ipcRenderer.invoke('choose-archive-folder'),
   archiveTranscript: (payload) => ipcRenderer.send('archive-transcript', payload),
