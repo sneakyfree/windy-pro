@@ -351,7 +351,9 @@ class WindyApp {
   bindIPCEvents() {
     // Toggle recording from hotkey
     window.windyAPI.onToggleRecording((isRecording) => {
-      // Route through toggleRecording() so engine selection is respected
+      // Mark as hotkey-triggered so toggleRecording skips the blip
+      // (AudioContext creation steals window focus on Linux)
+      this._hotkeyTriggered = true;
       this.toggleRecording();
     });
 
@@ -2631,8 +2633,8 @@ class WindyApp {
     const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
 
     if (this.isRecording) {
-      // Stop — low blip
-      this._playBlip(440, 0.1);
+      // Stop — low blip (skip on hotkey to prevent focus steal)
+      if (!this._hotkeyTriggered) this._playBlip(440, 0.1);
       if (this._batchRecorder) {
         this.stopBatchRecording();
       } else if (['deepgram', 'groq', 'openai'].includes(engine) && this._apiMediaRecorder) {
@@ -2643,8 +2645,8 @@ class WindyApp {
         this.stopRecording();
       }
     } else {
-      // Start — high blip
-      this._playBlip(880, 0.08);
+      // Start — high blip (skip on hotkey to prevent focus steal)
+      if (!this._hotkeyTriggered) this._playBlip(880, 0.08);
       if (recordingMode === 'batch' || recordingMode === 'clone_capture') {
         this.startBatchRecording();
       } else if (['deepgram', 'groq', 'openai'].includes(engine)) {
@@ -2655,6 +2657,8 @@ class WindyApp {
         this.startRecording();
       }
     }
+    // Clear hotkey flag
+    this._hotkeyTriggered = false;
   }
 
   /**

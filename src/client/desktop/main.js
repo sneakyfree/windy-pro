@@ -1543,18 +1543,19 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
     const { clipboard } = require('electron');
     clipboard.writeText(text.trim());
 
-    // Remember if user had intentionally hidden the window before paste
+    // Remember original state
     const wasUserHidden = userHiddenWindow;
-    const wasVisible = mainWindow && mainWindow.isVisible();
     const wasAlwaysOnTop = mainWindow && mainWindow.isAlwaysOnTop();
+    const savedOpacity = mainWindow ? mainWindow.getOpacity() : 1;
 
-    // Briefly hide the window so the previously-active app regains focus
-    if (mainWindow && wasVisible) {
+    // Make window invisible + non-topmost so target app gets the paste
+    // Using opacity instead of hide() to avoid window manager focus changes
+    if (mainWindow && !mainWindow.isDestroyed()) {
       if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(false);
-      mainWindow.hide();
+      mainWindow.setOpacity(0);
     }
-    // Wait for the previous app to regain focus
-    await new Promise(r => setTimeout(r, 400));
+    // Wait for the target app to be the active/focused app
+    await new Promise(r => setTimeout(r, 200));
 
     // Simulate Ctrl+V at current cursor position in the now-active app
     if (process.platform === 'linux') {
@@ -1562,24 +1563,23 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
     } else if (process.platform === 'darwin') {
       require('child_process').execSync('osascript -e \'tell application "System Events" to keystroke "v" using command down\'', { timeout: 5000 });
     } else {
-      // Windows — use PowerShell
       require('child_process').execSync('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"', { timeout: 5000 });
     }
 
-    // Only re-show if user hadn't intentionally hidden the window
-    await new Promise(r => setTimeout(r, 300));
-    if (mainWindow && !wasUserHidden) {
-      mainWindow.showInactive();  // showInactive = don't steal focus from the target app
+    // Restore window visibility
+    await new Promise(r => setTimeout(r, 100));
+    if (mainWindow && !mainWindow.isDestroyed() && !wasUserHidden) {
+      mainWindow.setOpacity(savedOpacity || 1);
       if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true);
-      console.log(`[AutoPaste] Pasted ${text.trim().length} chars, window re-shown (inactive)`);
+      console.log(`[AutoPaste] Pasted ${text.trim().length} chars, window restored`);
     } else {
       console.log(`[AutoPaste] Pasted ${text.trim().length} chars, window stays hidden (user preference)`);
     }
     return true;
   } catch (err) {
-    // On failure, only re-show if user hadn't hidden it
-    if (mainWindow && !mainWindow.isVisible() && !userHiddenWindow) {
-      mainWindow.showInactive();
+    // On failure, restore window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setOpacity(1);
     }
     console.error('[AutoPaste] Failed:', err.message);
     return false;
