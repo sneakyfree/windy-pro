@@ -1397,6 +1397,12 @@ class WindyApp {
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
+      // CRITICAL: getUserMedia steals window focus — immediately give it back
+      // so the user's cursor stays in their target app (chat box, text editor, etc.)
+      if (window.windyAPI?.blur) {
+        window.windyAPI.blur();
+      }
+
       // 2. Use MediaRecorder to capture full audio
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus' : 'audio/webm';
@@ -1441,6 +1447,8 @@ class WindyApp {
           this._videoStream = await navigator.mediaDevices.getUserMedia({
             video: { width: { ideal: vq.width }, height: { ideal: vq.height }, frameRate: { ideal: 30 } }
           });
+          // Video getUserMedia also steals focus — blur again
+          if (window.windyAPI?.blur) window.windyAPI.blur();
 
           // ═══ Camera resolution check: warn if hardware < requested ═══
           const vTrack = this._videoStream.getVideoTracks()[0];

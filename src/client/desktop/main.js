@@ -1068,32 +1068,9 @@ function registerHotkeys() {
   if (!app.isReady()) return;
   const hotkeys = store.get('hotkeys');
 
-  // Toggle recording — save & restore focus so cursor stays in target app
+  // Toggle recording — focus is restored in the renderer after getUserMedia
   const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
-    const { execSync, exec } = require('child_process');
-    // Capture the currently focused window BEFORE we do anything
-    let savedWindowId = null;
-    try {
-      if (process.platform === 'linux') {
-        savedWindowId = execSync('xdotool getactivewindow', { timeout: 1000 }).toString().trim();
-      }
-    } catch (e) {
-      console.warn('[Hotkey] Could not capture active window:', e.message);
-    }
-
     toggleRecording();
-
-    // After a short delay (let getUserMedia/IPC settle), restore focus to the original window
-    if (savedWindowId && process.platform === 'linux') {
-      setTimeout(() => {
-        try {
-          exec(`xdotool windowactivate ${savedWindowId}`, (err) => {
-            if (err) console.warn('[Hotkey] Focus restore failed:', err.message);
-            else console.log('[Hotkey] Focus restored to window', savedWindowId);
-          });
-        } catch (e) { }
-      }, 300);
-    }
   });
   console.log(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
 
@@ -1276,6 +1253,13 @@ ipcMain.handle('check-injection-permissions', async () => {
 });
 
 // Update settings — accepts flat keys from renderer and routes to correct store namespace
+// Blur window — gives focus back to previously focused app (used after getUserMedia)
+ipcMain.on('blur-window', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.blur();
+  }
+});
+
 ipcMain.on('update-settings', (event, settings) => {
   const appearanceKeys = ['alwaysOnTop', 'opacity'];
   const serverKeys = ['host', 'port'];
