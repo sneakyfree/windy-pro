@@ -441,6 +441,7 @@ function createWindow() {
     minimizable: true,
     maximizable: false,
     skipTaskbar: false,
+    focusable: false,       // CRITICAL: prevents stealing focus from target app during recording
 
     // Minimum size
     minWidth: 250,
@@ -467,6 +468,24 @@ function createWindow() {
 
   // Load the renderer
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+
+  // Click-to-focus: window is non-focusable by default (prevents stealing
+  // focus during recording). When user clicks inside, temporarily enable
+  // focus so they can interact with settings, text inputs, etc.
+  mainWindow.on('blur', () => {
+    // When window loses focus, go back to non-focusable
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setFocusable(false);
+    }
+  });
+
+  // IPC from renderer: user clicked inside the window
+  ipcMain.on('request-focus', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setFocusable(true);
+      mainWindow.focus();
+    }
+  });
 
   // CSP Headers
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
@@ -1068,26 +1087,9 @@ function registerHotkeys() {
   if (!app.isReady()) return;
   const hotkeys = store.get('hotkeys');
 
-  // Toggle recording — MECHANICAL fix: prevent focus steal during recording start
-  // getUserMedia, MediaRecorder.start(), video capture all steal focus asynchronously.
-  // A single blur() call doesn't work because later async calls re-steal focus.
-  // Solution: keep blurring for 2 seconds so ALL async focus grabs are defeated.
+  // Toggle recording
   const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
-    const wasRecording = isRecording;
     toggleRecording();
-
-    // Only guard focus when STARTING recording (not stopping)
-    if (!wasRecording && mainWindow && !mainWindow.isDestroyed()) {
-      let blurCount = 0;
-      const blurGuard = setInterval(() => {
-        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
-          mainWindow.blur();
-          console.log(`[Hotkey] Focus guard: blurred (${blurCount})`);
-        }
-        blurCount++;
-        if (blurCount >= 20) clearInterval(blurGuard); // Stop after 2s (20 x 100ms)
-      }, 100);
-    }
   });
   console.log(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
 
@@ -1270,13 +1272,6 @@ ipcMain.handle('check-injection-permissions', async () => {
 });
 
 // Update settings — accepts flat keys from renderer and routes to correct store namespace
-// Blur window — gives focus back to previously focused app (used after getUserMedia)
-ipcMain.on('blur-window', () => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.blur();
-  }
-});
-
 ipcMain.on('update-settings', (event, settings) => {
   const appearanceKeys = ['alwaysOnTop', 'opacity'];
   const serverKeys = ['host', 'port'];

@@ -9,8 +9,8 @@ contextBridge.exposeInMainWorld('windyAPI', {
   // Zoom
   setZoomFactor: (factor) => webFrame.setZoomFactor(factor),
 
-  // Window focus
-  blur: () => ipcRenderer.send('blur-window'),
+  // Window focus (click-to-focus for non-focusable window)
+  requestFocus: () => ipcRenderer.send('request-focus'),
 
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
