@@ -2345,7 +2345,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '  let headHtml="<th style=\\"text-align:left;padding:8px 10px;color:#64748B;\\">Feature <span style=\\"font-size:8px;color:#475569;\\">(hover for info)</span></th>";' +
     '  D.allPlans.forEach(p=>{' +
     '    const isSel=p.key===selected;const isCur=p.key===D.currentTier;' +
-    '    headHtml+="<th style=\"color:"+(isSel?p.color:isCur?"#FBBF24":"#64748B")+";font-weight:"+(isSel?"800":"500")+";font-size:"+(isSel?"14px":"12px")+";"+(isSel?"background:"+p.color+"30;":"")+"\">"+ p.name+(isCur?" ★":"")+"</th>";' +
+    '    headHtml+="<th style=\\"color:"+(isSel?p.color:isCur?"#FBBF24":"#64748B")+";font-weight:"+(isSel?"800":"500")+";"+(isSel?"background:"+p.color+"30;":"")+"\\">"+p.name+(isCur?" ★":"")+"</th>";' +
     '  });document.getElementById("tableHead").innerHTML=headHtml;' +
     '  let bodyHtml="";' +
     '  D.featureDefs.forEach(f=>{' +
