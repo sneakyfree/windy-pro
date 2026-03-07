@@ -1068,8 +1068,16 @@ function registerHotkeys() {
   if (!app.isReady()) return;
   const hotkeys = store.get('hotkeys');
 
-  // Toggle recording
+  // Toggle recording — prevent window focus steal so cursor stays in target app
   const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
+    // Temporarily make window non-focusable so getUserMedia doesn't steal focus
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setFocusable(false);
+      // Re-enable after 500ms (enough time for getUserMedia to fire without grabbing focus)
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setFocusable(true);
+      }, 500);
+    }
     toggleRecording();
   });
   console.log(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);

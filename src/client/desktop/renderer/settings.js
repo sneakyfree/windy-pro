@@ -1472,8 +1472,8 @@ class SettingsPanel {
       h3.prepend(toggle);
       h3.classList.add('section-header-clickable');
 
-      // Set initial state (all open by default on first use)
-      const isCollapsed = saved[key] === true;
+      // Set initial state (all COLLAPSED by default on first use)
+      const isCollapsed = saved[key] !== false; // collapsed unless explicitly opened
       if (isCollapsed) {
         content.style.display = 'none';
         toggle.textContent = '▶ ';

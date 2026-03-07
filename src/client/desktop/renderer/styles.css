@@ -745,8 +745,11 @@ body {
 }
 
 .section-toggle {
-  font-size: 10px;
-  opacity: 0.6;
+  font-size: 12px;
+  opacity: 0.8;
+  color: #A78BFA;
+  margin-right: 4px;
+  transition: transform 0.15s ease;
 }
 
 .setting-row {
