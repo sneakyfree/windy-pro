@@ -1208,8 +1208,8 @@ class SettingsPanel {
       const tierInfo = {
         free: { label: '🌱 Free', color: '#6B7280', hint: 'Unlock more engines, languages, and recording time.' },
         pro: { label: '⚡ Pro', color: '#22C55E', hint: 'All 15 engines, 99 languages, 30-min recordings.' },
-        translate: { label: '🌍 Translate', color: '#3B82F6', hint: 'Pro + real-time conversation translation.' },
-        translate_pro: { label: '👑 Translate Pro', color: '#8B5CF6', hint: 'All features unlocked. Premium support.' }
+        translate: { label: '🚀 Ultra', color: '#3B82F6', hint: 'Pro + 60-min recordings, real-time translation, conversation mode.' },
+        translate_pro: { label: '👑 Windy Max', color: '#8B5CF6', hint: 'All features unlocked. Premium support.' }
       };
       const info = tierInfo[tier] || tierInfo.free;
       if (badge) {
@@ -1231,7 +1231,7 @@ class SettingsPanel {
    * Free: WindyTune + Edge Spark + Edge Pulse (2 smallest engines)
    * Pro: All Edge + all Core engines
    * Translate: Pro + Lingua language specialists
-   * Translate Pro: Everything
+   * Windy Max: Everything
    */
   _applyTierGating(tier) {
     const tierEngines = {
@@ -1299,8 +1299,8 @@ class SettingsPanel {
       const tierLabels = {
         free: { name: 'Free', color: '#6B7280', hint: '2 engines included. Upgrade to Pro for all 15 engines, GPU models, and 30-min recordings.' },
         pro: { name: 'Pro', color: '#22C55E', hint: 'All 15 engines unlocked! Add Translate to get language-specialist engines for Spanish, French, and Hindi.' },
-        translate: { name: 'Translate', color: '#3B82F6', hint: 'All engines + language specialists unlocked. Upgrade to Translate Pro for priority support.' },
-        translate_pro: { name: 'Translate Pro', color: '#8B5CF6', hint: 'All engines and features unlocked. You have the best plan! 👑' }
+        translate: { name: 'Ultra', color: '#3B82F6', hint: 'All engines + language specialists unlocked. Upgrade to Windy Max for priority support.' },
+        translate_pro: { name: 'Windy Max', color: '#8B5CF6', hint: 'All engines and features unlocked. You have the best plan! 👑' }
       };
       const tInfo = tierLabels[tier] || tierLabels.free;
       if (planLabel) planLabel.innerHTML = `Your Plan: <b style="color:${tInfo.color};">${tInfo.name}</b>`;

@@ -37,26 +37,26 @@ class UpgradePanel {
             },
             {
                 key: 'translate',
-                name: 'Windy Translate',
+                name: 'Windy Ultra',
                 price: '$79',
                 period: 'annual',
                 monthlyPriceId: 'price_1T5oZJBXIOBasDQijBW23Gow',
                 annualPriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7',
                 lifetimePriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7_life',
-                features: ['Everything in Pro', 'Real-time translation', '60-min recordings', '99 language pairs'],
+                features: ['Everything in Pro', '60-min recordings', 'Real-time translation', '99 language pairs'],
                 color: '#3B82F6',
-                icon: '🌍',
+                icon: '🚀',
                 recommended: true
             },
             {
                 key: 'translate_pro',
-                name: 'Windy Translate Pro',
+                name: 'Windy Max',
                 price: '$149',
                 period: 'annual',
                 monthlyPriceId: 'price_1T60H8BXIOBasDQiy5eorTWR',
                 annualPriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG',
                 lifetimePriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG_life',
-                features: ['Everything in Translate', 'Unlimited recordings', 'Text-to-speech', 'Medical/legal glossaries'],
+                features: ['Everything in Ultra', 'Unlimited recordings', 'Text-to-speech', 'Medical/legal glossaries'],
                 color: '#8B5CF6',
                 icon: '👑'
             }
@@ -393,7 +393,7 @@ class UpgradePanel {
     }
 
     _onPaymentSuccess(tier) {
-        const tierNames = { pro: 'Windy Pro', translate: 'Windy Translate', translate_pro: 'Windy Translate Pro' };
+        const tierNames = { pro: 'Windy Pro', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
         const status = this.panel?.querySelector('#upgradeStatus');
         if (status) {
             status.innerHTML = `

@@ -2161,23 +2161,23 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
       desc: 'Unlock all 15 AI engines, 99 languages, 15-min recordings, batch processing, and AI-powered LLM polish.'
     },
     {
-      key: 'translate', name: 'Windy Translate', icon: '🌍',
+      key: 'translate', name: 'Windy Ultra', icon: '🚀',
       monthlyLabel: '$8.99', annualLabel: '$79', lifetimeLabel: '$199',
       period: 'annual', color: '#3B82F6', recommended: true,
-      desc: 'Everything in Pro PLUS real-time speech translation, 60-min recordings, and 99 language pairs.'
+      desc: 'Everything in Pro PLUS 60-min recordings, real-time translation across 99 languages, and conversation mode.'
     },
     {
-      key: 'translate_pro', name: 'Translate Pro', icon: '👑',
+      key: 'translate_pro', name: 'Windy Max', icon: '👑',
       monthlyLabel: '$14.99', annualLabel: '$149', lifetimeLabel: '$299',
       period: 'annual', color: '#A855F7',
-      desc: 'The ultimate: unlimited recording, text-to-speech, and medical/legal glossaries for industry-grade accuracy.'
+      desc: 'The ultimate: unlimited recording, text-to-speech, medical/legal glossaries, and every feature unlocked.'
     }
   ];
 
   const featureDefs = [
     { key: 'maxEngines', label: 'AI Engines', tip: 'Number of transcription engines. More = better accuracy across accents and noise.' },
     { key: 'maxLanguages', label: 'Languages', tip: 'Free: 1, Paid: all 99 languages including rare dialects.' },
-    { key: 'maxMinutes', label: 'Max Recording', tip: 'Free: 2 min. Pro: 15 min. Translate: 60 min. Translate Pro: unlimited.' },
+    { key: 'maxMinutes', label: 'Max Recording', tip: 'Free: 2 min. Pro: 15 min. Ultra: 60 min. Max: unlimited.' },
     { key: 'batchMode', label: 'Batch Mode', tip: 'Drag-drop a folder of recordings and transcribe them all at once.' },
     { key: 'llmPolish', label: 'LLM Polish', tip: 'AI fixes grammar, removes filler words, adds punctuation automatically.' },
     { key: 'translation', label: 'Real-time Translation', tip: 'Live speech translation across 99 language pairs.' },
@@ -2715,7 +2715,7 @@ function showDownloadWizard(newTier) {
     return;
   }
 
-  const tierNames = { free: 'Free', pro: 'Windy Pro', translate: 'Windy Translate', translate_pro: 'Windy Translate Pro' };
+  const tierNames = { free: 'Free', pro: 'Windy Pro', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
   const tierName = tierNames[newTier] || newTier;
 
   const totalBytes = toDownload.reduce((sum, m) => sum + (MODEL_MANIFEST.models[m]?.bytes || 0), 0);

@@ -447,8 +447,8 @@ class SetupWizard {
     const plans = [
       { key: 'free', name: 'Free', price: '$0', period: 'forever', color: '#6B7280', icon: '🌱', features: ['1 language', '3 engines', '5-min'], priceId: null },
       { key: 'pro', name: 'Windy Pro', price: '$49', period: 'one-time', color: '#22C55E', icon: '⚡', features: ['All engines', '99 languages', '30-min'], priceId: 'price_1T5oYzBXIOBasDQibSlnIsPg' },
-      { key: 'translate', name: 'Translate', price: '$79', period: 'one-time', color: '#3B82F6', icon: '🌍', features: ['Pro +', 'Translation', 'Convo mode'], priceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7', recommended: true },
-      { key: 'translate_pro', name: 'Translate Pro', price: '$149', period: 'one-time', color: '#8B5CF6', icon: '👑', features: ['Everything', 'TTS', 'Glossaries'], priceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG' },
+      { key: 'translate', name: 'Windy Ultra', price: '$79', period: 'one-time', color: '#3B82F6', icon: '🚀', features: ['Pro +', 'Translation', '60-min rec'], priceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7', recommended: true },
+      { key: 'translate_pro', name: 'Windy Max', price: '$149', period: 'one-time', color: '#8B5CF6', icon: '👑', features: ['Everything', 'TTS', 'Glossaries'], priceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG' },
     ];
 
     this.choices.planTier = 'free';
