@@ -2223,7 +2223,8 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     'th{padding:10px 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #334155;transition:all 0.3s;}' +
     'td{padding:8px 8px;border-bottom:1px solid #2D3748;color:#CBD5E1;text-align:center;transition:all 0.3s;font-size:13px;}' +
     'td.feature-label{text-align:left;font-weight:600;color:#F1F5F9;padding-left:12px;font-size:13px;}' +
-    'td.selected-col{font-weight:700;}' +
+    'td.selected-col{font-weight:700;color:#FFFFFF;font-size:14px;border-left:2px solid var(--sel-color,#22C55E);border-right:2px solid var(--sel-color,#22C55E);}' +
+    'th.selected-col-head{font-weight:800;border-left:2px solid var(--sel-color,#22C55E);border-right:2px solid var(--sel-color,#22C55E);}' +
     '[title]{cursor:help;border-bottom:1px dotted #64748B;}' +
     '.urgency{background:linear-gradient(135deg,#7C3AED22,#EC489922);border:1px solid #7C3AED44;border-radius:8px;padding:10px 12px;margin-top:10px;text-align:center;font-size:13px;color:#C4B5FD;}' +
     '.cta-btn{display:inline-block;background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;font-size:17px;font-weight:700;padding:15px 30px;border-radius:12px;border:none;cursor:pointer;text-decoration:none;transition:all 0.2s;box-shadow:0 4px 20px rgba(124,58,237,0.4);margin-bottom:10px;}' +
@@ -2344,7 +2345,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '  let headHtml="<th style=\\"text-align:left;padding:8px 10px;color:#64748B;\\">Feature <span style=\\"font-size:8px;color:#475569;\\">(hover for info)</span></th>";' +
     '  D.allPlans.forEach(p=>{' +
     '    const isSel=p.key===selected;const isCur=p.key===D.currentTier;' +
-    '    headHtml+="<th style=\\"color:"+(isSel?p.color:isCur?"#FBBF24":"#64748B")+";font-weight:"+(isSel?"700":"500")+";"+(isSel?"background:"+p.color+"11;":"")+"\\">"+p.name+(isCur?" ★":"")+"</th>";' +
+    '    headHtml+="<th class=\\\\"+(isSel?"selected-col-head":"")+"\\\\" style=\\\\"color:"+(isSel?p.color:isCur?"#FBBF24":"#64748B")+";font-weight:"+(isSel?"800":"500")+";font-size:"+(isSel?"14px":"12px")+";"+(isSel?"background:"+p.color+"30;--sel-color:"+p.color+";":"")+"\\\\">"+p.name+(isCur?" ★":"")+"</th>";' +
     '  });document.getElementById("tableHead").innerHTML=headHtml;' +
     '  let bodyHtml="";' +
     '  D.featureDefs.forEach(f=>{' +
@@ -2352,7 +2353,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '    D.allPlans.forEach(p=>{' +
     '      const t=D.tiers[p.key]||D.tiers.free;const isSel=p.key===selected;' +
     '      const v=typeof t[f.key]==="boolean"?(t[f.key]?"✅":"❌"):(typeof t[f.key]==="string"?t[f.key]:t[f.key]+(f.key==="maxMinutes"?" min":""));' +
-    '      bodyHtml+="<td class=\\""+(isSel?"selected-col":"")+"\\" style=\\""+(isSel?"background:"+sp.color+"08;":"")+"\\">"+ v+"</td>";' +
+    '      bodyHtml+="<td class=\\""+(isSel?"selected-col":"")+"\\" style=\\""+(isSel?"background:"+sp.color+"30;--sel-color:"+sp.color+";":"")+"\\">"+v+"</td>";' +
     '    });bodyHtml+="</tr>";' +
     '  });document.getElementById("tableBody").innerHTML=bodyHtml;' +
     '}' +
