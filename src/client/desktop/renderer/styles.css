@@ -3398,6 +3398,72 @@ body.light-theme .export-btn:hover {
   background: #94A3B8;
 }
 
+/* ═══ Light Theme — Upgrade Panel ═══ */
+body.light-theme .upgrade-panel {
+  background: #F8FAFC;
+  border-left: 1px solid #94A3B8;
+}
+
+body.light-theme .upgrade-card {
+  background: #FFFFFF;
+  border-color: #CBD5E1;
+}
+
+body.light-theme .upgrade-card-name {
+  color: #0F172A;
+}
+
+body.light-theme .upgrade-card-features li {
+  color: #334155;
+}
+
+body.light-theme .upgrade-lifetime-price {
+  background: linear-gradient(135deg, rgba(180, 120, 0, 0.12), rgba(160, 100, 0, 0.08));
+  border: 1px solid rgba(180, 120, 0, 0.4);
+  color: #92400E;
+}
+
+body.light-theme .upgrade-lifetime-label {
+  color: #B45309;
+}
+
+body.light-theme .upgrade-btn-lifetime {
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  color: #FFFFFF;
+}
+
+body.light-theme .upgrade-btn-alt {
+  color: #334155;
+  border-color: #94A3B8;
+}
+
+body.light-theme .upgrade-btn-current {
+  background: #E2E8F0;
+  color: #64748B;
+}
+
+body.light-theme .upgrade-coupon-input {
+  background: #FFFFFF;
+  border-color: #94A3B8;
+  color: #0F172A;
+}
+
+body.light-theme .upgrade-alt-price {
+  color: #475569;
+}
+
+body.light-theme .upgrade-card-period {
+  color: #64748B;
+}
+
+body.light-theme .upgrade-subtitle {
+  color: #334155;
+}
+
+body.light-theme .upgrade-title-row h3 {
+  color: #0F172A;
+}
+
 /* ═══ Backend Error Overlay ═══ */
 .backend-error-overlay {
   position: fixed;
