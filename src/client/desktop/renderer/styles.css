@@ -660,6 +660,7 @@ body {
   transition: right 0.25s ease;
   z-index: 100;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -711,6 +712,9 @@ body {
   padding: 14px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .settings-section h3 {
@@ -727,6 +731,9 @@ body {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .setting-row label {
@@ -744,7 +751,17 @@ body {
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 12px;
-  max-width: 180px;
+  max-width: 140px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+
+.setting-row label {
+  flex-shrink: 0;
+  min-width: 0;
+  word-break: break-word;
 }
 
 .setting-row input[type="checkbox"] {
@@ -755,16 +772,22 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .setting-inline input {
-  width: 140px;
+  width: 120px;
+  max-width: 120px;
   background: var(--bg-secondary);
   color: var(--text-secondary);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-btn {
