@@ -298,26 +298,7 @@ class SettingsPanel {
         
         <!-- Old Archive section replaced by new Archive & Storage + Soul File sections above -->
 
-        <div class="settings-section">
-          <h3>⌨️ Hotkeys</h3>
-          <p class="settings-hint">Click a shortcut to rebind, then press the new key combo.</p>
-          <div class="setting-row">
-            <label>Toggle Recording</label>
-            <div class="shortcut-capture" id="shortcutToggle" tabindex="0" data-key="toggleRecording">Ctrl+Shift+Space</div>
-          </div>
-          <div class="setting-row">
-            <label>Paste Transcript</label>
-            <div class="shortcut-capture" id="shortcutPaste" tabindex="0" data-key="pasteTranscript">Ctrl+Shift+V</div>
-          </div>
-          <div class="setting-row">
-            <label>Show/Hide Window</label>
-            <div class="shortcut-capture" id="shortcutShowHide" tabindex="0" data-key="showHide">Ctrl+Shift+W</div>
-          </div>
-          <div class="setting-row" style="opacity:0.7;">
-            <label>Zoom In / Out</label>
-            <span style="color:#A78BFA; font-size:12px; font-weight:600;">Ctrl + / − &nbsp; Ctrl+0 Reset</span>
-          </div>
-        </div>
+        <!-- Hotkeys removed — always visible on main screen -->
         
         <div class="settings-section">
           <h3>🎨 Appearance</h3>
