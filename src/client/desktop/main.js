@@ -2235,6 +2235,8 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '.trust-badges{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center;}' +
     '.trust-badge{background:#1E293B;border:1px solid #334155;border-radius:6px;padding:5px 8px;font-size:9px;color:#94A3B8;}' +
     '.savings{border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600;margin-bottom:10px;transition:all 0.3s;}' +
+    '.plan-lifetime-teaser{margin-top:4px;padding:3px 6px;font-size:10px;font-weight:700;color:#FBBF24;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);border-radius:6px;cursor:pointer;text-align:center;transition:all 0.2s;}' +
+    '.plan-lifetime-teaser:hover{background:rgba(251,191,36,0.2);border-color:rgba(251,191,36,0.5);transform:scale(1.02);}' +
     '@keyframes pulse-glow{0%,100%{box-shadow:0 0 8px rgba(34,197,94,0.3);}50%{box-shadow:0 0 20px rgba(34,197,94,0.6);}}' +
     '@keyframes sparkle{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.7;transform:scale(1.05);}}' +
     '@keyframes shimmer{0%{background-position:-200% center;}100%{background-position:200% center;}}' +
@@ -2335,7 +2337,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
     '      +"<div class=\\"plan-icon\\">"+p.icon+"</div>"' +
     '      +"<div class=\\"plan-name\\" style=\\"color:"+(p.key===selected?p.color:p.key===D.currentTier?"#FBBF24":"#94A3B8")+"\\">"+p.name+"</div>"' +
     '      +"<div class=\\"plan-price\\">"+p[priceKey]+"</div>"' +
-    '      +"<div class=\\"plan-period\\">"+(p.period==="forever"?"forever":billing==="monthly"?"/month":billing==="annual"?"/year":"one-time")+"</div>";' +
+    '      +"<div class=\\"plan-period\\">"+(p.period==="forever"?"forever":billing==="monthly"?"/month":billing==="annual"?"/year":"one-time")+"</div>"+(billing!=="lifetime"&&p.lifetimeLabel&&p.period!=="forever"?"<div class=\\\"plan-lifetime-teaser\\\" onclick=\\\"event.stopPropagation();document.getElementById(\x27pillLifetime\x27).click();\\\">\uD83D\uDC8E "+p.lifetimeLabel+" lifetime</div>":"");' +
     '    card.addEventListener("click",()=>{selected=p.key;render();});' +
     '    strip.appendChild(card);' +
     '  });' +
