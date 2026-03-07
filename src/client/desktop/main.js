@@ -1068,17 +1068,32 @@ function registerHotkeys() {
   if (!app.isReady()) return;
   const hotkeys = store.get('hotkeys');
 
-  // Toggle recording — prevent window focus steal so cursor stays in target app
+  // Toggle recording — save & restore focus so cursor stays in target app
   const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
-    // Temporarily make window non-focusable so getUserMedia doesn't steal focus
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setFocusable(false);
-      // Re-enable after 500ms (enough time for getUserMedia to fire without grabbing focus)
-      setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setFocusable(true);
-      }, 500);
+    const { execSync, exec } = require('child_process');
+    // Capture the currently focused window BEFORE we do anything
+    let savedWindowId = null;
+    try {
+      if (process.platform === 'linux') {
+        savedWindowId = execSync('xdotool getactivewindow', { timeout: 1000 }).toString().trim();
+      }
+    } catch (e) {
+      console.warn('[Hotkey] Could not capture active window:', e.message);
     }
+
     toggleRecording();
+
+    // After a short delay (let getUserMedia/IPC settle), restore focus to the original window
+    if (savedWindowId && process.platform === 'linux') {
+      setTimeout(() => {
+        try {
+          exec(`xdotool windowactivate ${savedWindowId}`, (err) => {
+            if (err) console.warn('[Hotkey] Focus restore failed:', err.message);
+            else console.log('[Hotkey] Focus restored to window', savedWindowId);
+          });
+        } catch (e) { }
+      }, 300);
+    }
   });
   console.log(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
 
