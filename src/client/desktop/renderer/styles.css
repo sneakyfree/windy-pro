@@ -3399,6 +3399,35 @@ body.light-theme .model-badge {
   font-weight: 700;
 }
 
+/* ═══ Light Theme — Title Bar Buttons ═══ */
+body.light-theme .title-bar {
+  background: #F1F5F9;
+  border-bottom: 1px solid #CBD5E1;
+}
+
+body.light-theme .title {
+  color: #334155;
+}
+
+body.light-theme .title-btn {
+  background: rgba(0, 0, 0, 0.06);
+  color: #475569;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+body.light-theme .title-btn:hover {
+  background: rgba(0, 0, 0, 0.12);
+  color: #0F172A;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+body.light-theme .title-btn.close-btn:hover {
+  background: #EF4444;
+  color: white;
+  border-color: #DC2626;
+}
+
 body.light-theme .settings-panel {
   background: #F1F5F9;
   color: #0F172A;
