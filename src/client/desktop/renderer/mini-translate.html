@@ -219,7 +219,18 @@
         const API_BASE = 'https://windypro.thewindstorm.uk';
 
         document.getElementById('closeBtn').addEventListener('click', () => {
-            window.miniTranslateAPI.close();
+            try {
+                if (window.miniTranslateAPI?.close) {
+                    window.miniTranslateAPI.close();
+                }
+            } catch (_) { }
+            // Fallback: direct window close
+            window.close();
+        });
+
+        // Also close on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') window.close();
         });
 
         document.getElementById('swapBtn').addEventListener('click', () => {

@@ -3078,14 +3078,18 @@ class WindyApp {
    */
   clearTranscript() {
     this.transcript = [];
-    this.transcriptContent.innerHTML = `<div class="placeholder">
+    this.transcriptContent.innerHTML = `<div class="placeholder" id="shortcutsPlaceholder">
       <div style="margin-bottom:8px;font-weight:600;opacity:0.9;">⌨️ Keyboard Shortcuts</div>
-      <div style="margin:4px 0;"><kbd>Ctrl+Shift+Space</kbd> — <span style="color:#22C55E;font-weight:600;">Start</span> recording</div>
-      <div style="margin:4px 0;"><kbd>Ctrl+Shift+Space</kbd> — <span style="color:#EF4444;font-weight:600;">Stop</span> recording</div>
-      <div style="margin:4px 0;"><kbd>Ctrl+Shift+V</kbd> — <span style="color:#4ECDC4;font-weight:600;">Paste</span> transcript to cursor</div>
-      <div style="margin:4px 0;"><kbd>Ctrl+Shift+W</kbd> — <span style="color:#F7DC6F;font-weight:600;">Show / Hide</span> app window</div>
+      <div id="shortcutRow_toggle" style="margin:4px 0;"></div>
+      <div id="shortcutRow_paste" style="margin:4px 0;"></div>
+      <div id="shortcutRow_showHide" style="margin:4px 0;"></div>
+      <div id="shortcutRow_quickTranslate" style="margin:4px 0;"></div>
       <div style="margin:4px 0;"><kbd>Ctrl + / −</kbd> — <span style="color:#A78BFA;font-weight:600;">Zoom</span> in / out &nbsp; <kbd>Ctrl+0</kbd> Reset</div>
     </div>`;
+    // Re-populate with user's actual hotkeys
+    if (window.windyAPI?.getSettings) {
+      window.windyAPI.getSettings().then(s => this._populateShortcutDisplay(s?.hotkeys));
+    }
     this.transcriptContent.contentEditable = 'false';
     this.updateWordCount();
   }
