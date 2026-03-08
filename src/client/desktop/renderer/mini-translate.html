@@ -25,7 +25,7 @@
             height: 100vh;
             padding: 12px;
             gap: 10px;
-            overflow: hidden;
+            overflow: visible;
             min-height: 0;
         }
 
@@ -38,33 +38,39 @@
         .ui-scale-row {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
         }
 
         .ui-scale-label {
-            font-size: 9px;
+            font-size: 11px;
             color: #9CA3AF;
             font-weight: 600;
         }
 
         .ui-scale-slider {
-            width: 50px;
+            width: 100px;
             -webkit-appearance: none;
             appearance: none;
-            height: 3px;
+            height: 6px;
             background: #374151;
-            border-radius: 2px;
+            border-radius: 3px;
             outline: none;
         }
 
         .ui-scale-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 10px;
-            height: 10px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
             background: #F59E0B;
+            border: 2px solid #FBBF24;
             cursor: pointer;
+            transition: transform 0.15s;
+        }
+
+        .ui-scale-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
         }
 
         .header-title {
@@ -556,30 +562,31 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 2px 0;
+            padding: 4px 0;
         }
 
         .font-slider-row label {
-            font-size: 10px;
+            font-size: 12px;
             color: #9CA3AF;
             white-space: nowrap;
+            font-weight: 600;
         }
 
         .font-slider {
             flex: 1;
             -webkit-appearance: none;
             appearance: none;
-            height: 4px;
+            height: 6px;
             background: #374151;
-            border-radius: 2px;
+            border-radius: 3px;
             outline: none;
         }
 
         .font-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 14px;
-            height: 14px;
+            width: 18px;
+            height: 18px;
             border-radius: 50%;
             background: #F59E0B;
             cursor: pointer;
@@ -592,7 +599,7 @@
         }
 
         .font-size-label {
-            font-size: 11px;
+            font-size: 13px;
             font-weight: 700;
             color: #FBBF24;
             min-width: 30px;
@@ -608,21 +615,22 @@
         [data-tooltip]:hover::after {
             content: attr(data-tooltip);
             position: absolute;
-            bottom: 120%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #1F2937;
-            color: #F9FAFB;
-            border: 1px solid #4B5563;
-            border-radius: 6px;
-            padding: 6px 10px;
-            font-size: 10px;
+            top: calc(100% + 6px);
+            left: 0;
+            background: #0F172A;
+            color: #F1F5F9;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
             font-weight: 400;
             white-space: normal;
-            width: 200px;
-            z-index: 100;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            line-height: 1.4;
+            max-width: 260px;
+            width: max-content;
+            z-index: 9999;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            line-height: 1.5;
+            pointer-events: none;
         }
 
         .live-transcript .chunk {
