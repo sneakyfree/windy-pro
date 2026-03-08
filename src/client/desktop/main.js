@@ -1061,8 +1061,12 @@ ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang
 });
 
 // ── Live Listen: speech translation for Quick Translate ──
-ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, targetLang) => {
+ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, targetLang, apiKeys) => {
   const audioBuffer = Buffer.from(audioArray);
+  // Merge API keys: renderer localStorage → electron-store → env vars
+  const rendererKeys = apiKeys || {};
+  const groqKey = rendererKeys.groq || store.get('engine.groqApiKey', '') || process.env.GROQ_API_KEY || '';
+  const openaiKey = rendererKeys.openai || store.get('engine.openaiApiKey', '') || process.env.OPENAI_API_KEY || '';
 
   // ── Try local Whisper engine first ──
   try {
@@ -1072,7 +1076,7 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
 
     const localResult = await new Promise((resolve, reject) => {
       const ws = new WebSocket(wsUrl);
-      let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 10000);
+      let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 3000);
 
       ws.on('open', () => {
         // Use Whisper's task=translate for any-language → English
@@ -1119,10 +1123,8 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
 
   // ── Cloud fallback: Groq Whisper API ──
   try {
-    const groqKey = store.get('engine.groqApiKey', '') || process.env.GROQ_API_KEY || '';
-    const openaiKey = store.get('engine.openaiApiKey', '') || process.env.OPENAI_API_KEY || '';
     const apiKey = groqKey || openaiKey;
-    if (!apiKey) return { error: 'No API key. Add Groq or OpenAI key in Settings.' };
+    if (!apiKey) return { error: 'No API key. Add Groq or OpenAI key in Settings → Transcription Engine.' };
 
     const isGroq = !!groqKey;
     const FormData = require('form-data');

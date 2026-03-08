@@ -134,7 +134,7 @@ async function startListening() {
 
     try {
         mediaStream = await navigator.mediaDevices.getUserMedia({
-            audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
+            audio: { channelCount: 1, sampleRate: 16000, echoCancellation: false, noiseSuppression: false, autoGainControl: true }
         });
     } catch (err) {
         appendChunk(`⚠️ Microphone access denied: ${err.message}`, 'error');
@@ -192,10 +192,17 @@ async function processChunk(audioBlob) {
 
     try {
         const arrayBuf = await audioBlob.arrayBuffer();
+        // Pass API keys from localStorage (renderer storage) since main process
+        // uses electron-store which may not have them
+        const apiKeys = {
+            groq: localStorage.getItem('windy_groqApiKey') || '',
+            openai: localStorage.getItem('windy_openaiApiKey') || ''
+        };
         const result = await ipcRenderer.invoke('mini-translate-speech',
             Array.from(new Uint8Array(arrayBuf)),
             sourceLang.value,
-            targetLang.value
+            targetLang.value,
+            apiKeys
         );
 
         if (result.error) {
