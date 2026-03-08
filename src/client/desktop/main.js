@@ -1126,7 +1126,7 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
 
       const localResult = await new Promise((resolve, reject) => {
         const ws = new WebSocket(wsUrl);
-        let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 3000);
+        let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 15000);
 
         ws.on('open', () => {
           // Use Whisper's task=translate for any-language → English
