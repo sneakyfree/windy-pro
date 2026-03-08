@@ -48,9 +48,8 @@ let chunks = [];
 let chunkTimer = null;
 let chunkDurationMs = 10000; // default 10 seconds
 
-// Processing queue — limit concurrent Whisper requests to avoid overwhelming the server
-const MAX_CONCURRENT = 2;
-const MAX_QUEUE_SIZE = 4; // Drop oldest if queue exceeds this
+// Processing queue — buffer all chunks, never drop (delayed > missing)
+const MAX_CONCURRENT = 3;
 let activeProcessing = 0;
 const processingQueue = [];
 
@@ -319,13 +318,12 @@ function startNextChunk() {
 let chunkCount = 0;
 
 function enqueueChunk(audioBlob) {
-    // Queue overflow protection — drop oldest pending chunks if backlog too large
-    while (processingQueue.length >= MAX_QUEUE_SIZE) {
-        const dropped = processingQueue.shift();
-        chunkCount++;
-        appendChunk(`⏭️ Skipped chunk #${chunkCount} — server busy, queue overflow`, 'info');
-    }
     processingQueue.push(audioBlob);
+    // Show queue depth if backing up
+    const pending = processingQueue.length + activeProcessing;
+    if (pending > 3) {
+        appendChunk(`⏳ Queue: ${pending} chunks pending — catching up…`, 'info');
+    }
     drainQueue();
 }
 
