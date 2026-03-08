@@ -1089,14 +1089,18 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
       });
 
       ws.on('message', (data) => {
-        clearTimeout(timeout);
-        ws.close();
         try {
           const msg = JSON.parse(data.toString());
-          if (msg.error) reject(new Error(msg.error));
-          else resolve({ text: msg.text || '', detectedLang: msg.language || sourceLang, engine: 'local' });
+          // Only process the actual translate result — server sends other messages first
+          if (msg.type === 'translate_result') {
+            clearTimeout(timeout);
+            ws.close();
+            if (msg.error) reject(new Error(msg.error));
+            else resolve({ text: msg.text || '', detectedLang: msg.language || sourceLang, engine: 'local' });
+          }
+          // Ignore other message types (handshake, status, etc.)
         } catch (e) {
-          reject(new Error('invalid local response'));
+          // Non-JSON message, ignore
         }
       });
 
