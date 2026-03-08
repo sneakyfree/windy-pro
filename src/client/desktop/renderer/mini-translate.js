@@ -28,6 +28,8 @@ const engineBadge = document.getElementById('engineBadge');
 const modelInfoBar = document.getElementById('modelInfoBar');
 const windytuneBadge = document.getElementById('windytuneBadge');
 const modelBadge = document.getElementById('modelBadge');
+const chunkSlider = document.getElementById('chunkSlider');
+const chunkDurationLabel = document.getElementById('chunkDurationLabel');
 
 // Tab buttons
 const tabText = document.getElementById('tabText');
@@ -39,6 +41,14 @@ let mediaStream = null;
 let mediaRecorder = null;
 let chunks = [];
 let chunkTimer = null;
+let chunkDurationMs = 10000; // default 10 seconds
+
+// Chunk duration slider
+chunkSlider.addEventListener('input', () => {
+    const val = parseInt(chunkSlider.value, 10);
+    chunkDurationMs = val * 1000;
+    chunkDurationLabel.textContent = `${val}s`;
+});
 
 const LANG_NAMES = {
     en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian',
@@ -177,12 +187,12 @@ function startNextChunk() {
 
     mediaRecorder.start();
 
-    // Stop after 5 seconds to process
+    // Stop after configured duration to process
     chunkTimer = setTimeout(() => {
         if (mediaRecorder && mediaRecorder.state === 'recording') {
             mediaRecorder.stop();
         }
-    }, 5000);
+    }, chunkDurationMs);
 }
 
 let chunkCount = 0;
@@ -191,7 +201,8 @@ async function processChunk(audioBlob) {
     chunkCount++;
     const chunkNum = chunkCount;
     const sizeKB = Math.round(audioBlob.size / 1024);
-    appendChunk(`⏳ Processing chunk #${chunkNum} (${sizeKB} KB)…`, 'info');
+    const durSec = Math.round(chunkDurationMs / 1000);
+    appendChunk(`⏳ Processing chunk #${chunkNum} (${sizeKB} KB · ${durSec}s)…`, 'info');
 
     try {
         const arrayBuf = await audioBlob.arrayBuffer();

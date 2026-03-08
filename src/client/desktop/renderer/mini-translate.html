@@ -338,6 +338,54 @@
             border: 1px solid rgba(14, 165, 233, 0.3);
         }
 
+        /* ── Chunk duration slider ── */
+        .chunk-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 2px 0;
+        }
+
+        .chunk-slider-row label {
+            font-size: 10px;
+            color: #9CA3AF;
+            white-space: nowrap;
+        }
+
+        .chunk-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            background: #374151;
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .chunk-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #6366F1;
+            cursor: pointer;
+            border: 2px solid #818CF8;
+            transition: transform 0.15s;
+        }
+
+        .chunk-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .chunk-duration-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #A5B4FC;
+            min-width: 28px;
+            text-align: right;
+        }
+
         .live-transcript .chunk {
             margin-bottom: 6px;
             padding-bottom: 6px;
@@ -450,6 +498,11 @@
             <div class="model-info-bar" id="modelInfoBar" style="display:none;">
                 <span class="badge badge-windytune" id="windytuneBadge" style="display:none;">⚡ WindyTune</span>
                 <span class="badge badge-model" id="modelBadge" style="display:none;"></span>
+            </div>
+            <div class="chunk-slider-row">
+                <label>⏱️ Chunk</label>
+                <input type="range" class="chunk-slider" id="chunkSlider" min="5" max="20" step="5" value="10">
+                <span class="chunk-duration-label" id="chunkDurationLabel">10s</span>
             </div>
             <div class="live-transcript" id="liveTranscript">
                 <div class="placeholder-text">
