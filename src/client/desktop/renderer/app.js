@@ -239,12 +239,6 @@ class WindyApp {
    * Bind DOM events
    */
   bindEvents() {
-    // Click-to-focus: window is non-focusable by default to prevent
-    // stealing focus during recording. Clicking inside enables focus.
-    document.addEventListener('mousedown', () => {
-      if (window.windyAPI?.requestFocus) window.windyAPI.requestFocus();
-    });
-
     // Record button
     this.recordBtn.addEventListener('click', () => this.toggleRecording());
 

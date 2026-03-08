@@ -441,7 +441,6 @@ function createWindow() {
     minimizable: true,
     maximizable: false,
     skipTaskbar: false,
-    focusable: false,       // CRITICAL: prevents stealing focus from target app during recording
 
     // Minimum size
     minWidth: 250,
@@ -468,24 +467,6 @@ function createWindow() {
 
   // Load the renderer
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-
-  // Click-to-focus: window is non-focusable by default (prevents stealing
-  // focus during recording). When user clicks inside, temporarily enable
-  // focus so they can interact with settings, text inputs, etc.
-  mainWindow.on('blur', () => {
-    // When window loses focus, go back to non-focusable
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setFocusable(false);
-    }
-  });
-
-  // IPC from renderer: user clicked inside the window
-  ipcMain.on('request-focus', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setFocusable(true);
-      mainWindow.focus();
-    }
-  });
 
   // CSP Headers
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
@@ -1087,9 +1068,31 @@ function registerHotkeys() {
   if (!app.isReady()) return;
   const hotkeys = store.get('hotkeys');
 
-  // Toggle recording
+  // Toggle recording — save & restore focus so cursor stays in target app
   const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
+    // Capture the focused window BEFORE anything happens
+    let savedWindowId = null;
+    try {
+      if (process.platform === 'linux') {
+        savedWindowId = require('child_process').execSync('xdotool getactivewindow', { timeout: 500 }).toString().trim();
+      }
+    } catch (_) { }
+
     toggleRecording();
+
+    // Restore focus to the user's target app after a delay
+    // (getUserMedia/AudioContext/IPC can all steal focus asynchronously)
+    if (savedWindowId && process.platform === 'linux') {
+      const restore = () => {
+        try {
+          require('child_process').exec(`xdotool windowactivate ${savedWindowId}`);
+        } catch (_) { }
+      };
+      // Multiple restore attempts to catch all async focus steals
+      setTimeout(restore, 200);
+      setTimeout(restore, 500);
+      setTimeout(restore, 1000);
+    }
   });
   console.log(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
 
