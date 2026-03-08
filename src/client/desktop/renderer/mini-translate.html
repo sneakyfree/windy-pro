@@ -44,7 +44,6 @@
         }
 
         .close-btn {
-            -webkit-app-region: no-drag;
             background: #374151;
             border: 1px solid #4B5563;
             color: #9CA3AF;
@@ -94,8 +93,41 @@
             color: #F9FAFB;
         }
 
-        .input-area {
+        /* ── Mode tabs ── */
+        .mode-tabs {
+            display: flex;
+            gap: 4px;
+        }
+
+        .mode-tab {
             flex: 1;
+            background: #374151;
+            border: 1px solid #4B5563;
+            color: #9CA3AF;
+            border-radius: 6px;
+            padding: 5px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: center;
+        }
+
+        .mode-tab.active {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: #6366F1;
+            color: #A5B4FC;
+        }
+
+        /* ── Text mode ── */
+        .text-mode {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .input-row {
             display: flex;
             gap: 6px;
         }
@@ -135,7 +167,7 @@
             background: #374151;
             border-radius: 8px;
             padding: 10px;
-            min-height: 60px;
+            min-height: 40px;
             font-size: 14px;
             font-weight: 500;
             line-height: 1.5;
@@ -164,6 +196,126 @@
             margin-top: 4px;
             font-weight: 600;
         }
+
+        /* ── Live Listen mode ── */
+        .listen-mode {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .listen-mode.active {
+            display: flex;
+        }
+
+        .listen-controls {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .listen-btn {
+            background: #22C55E;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .listen-btn.recording {
+            background: #EF4444;
+            animation: pulse-listen 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse-listen {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+            }
+        }
+
+        .listen-badges {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            flex: 1;
+            justify-content: flex-end;
+        }
+
+        .badge {
+            font-size: 9px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        .badge-lang {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60A5FA;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .badge-engine {
+            background: rgba(34, 197, 94, 0.15);
+            color: #22C55E;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .badge-engine.cloud {
+            background: rgba(168, 85, 247, 0.15);
+            color: #A855F7;
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+
+        .live-transcript {
+            flex: 1;
+            background: #111827;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #E5E7EB;
+            min-height: 100px;
+        }
+
+        .live-transcript .chunk {
+            margin-bottom: 6px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #1F2937;
+        }
+
+        .live-transcript .chunk:last-child {
+            border-bottom: none;
+        }
+
+        .live-transcript .chunk-time {
+            font-size: 9px;
+            color: #6B7280;
+            margin-bottom: 2px;
+        }
+
+        .live-transcript .placeholder-text {
+            color: #6B7280;
+            font-style: italic;
+            text-align: center;
+            padding: 20px 10px;
+        }
     </style>
 </head>
 
@@ -191,11 +343,18 @@
                 <option value="ar">Arabic</option>
                 <option value="ru">Russian</option>
                 <option value="pl">Polish</option>
+                <option value="hi">Hindi</option>
+                <option value="uk">Ukrainian</option>
+                <option value="th">Thai</option>
+                <option value="vi">Vietnamese</option>
+                <option value="tr">Turkish</option>
+                <option value="nl">Dutch</option>
+                <option value="sv">Swedish</option>
             </select>
             <button class="swap-btn" id="swapBtn">⇄</button>
             <select id="targetLang" class="lang-select">
-                <option value="es">Spanish</option>
                 <option value="en">English</option>
+                <option value="es">Spanish</option>
                 <option value="fr">French</option>
                 <option value="de">German</option>
                 <option value="it">Italian</option>
@@ -206,18 +365,51 @@
                 <option value="ar">Arabic</option>
                 <option value="ru">Russian</option>
                 <option value="pl">Polish</option>
+                <option value="hi">Hindi</option>
+                <option value="uk">Ukrainian</option>
+                <option value="th">Thai</option>
+                <option value="vi">Vietnamese</option>
+                <option value="tr">Turkish</option>
+                <option value="nl">Dutch</option>
+                <option value="sv">Swedish</option>
             </select>
         </div>
 
-        <div class="input-area">
-            <textarea id="textInput" class="text-input" placeholder="Type text to translate…" rows="3"></textarea>
-            <button class="translate-btn" id="translateBtn">→</button>
+        <!-- Mode tabs -->
+        <div class="mode-tabs">
+            <button class="mode-tab active" id="tabText" data-mode="text">⌨️ Text</button>
+            <button class="mode-tab" id="tabListen" data-mode="listen">🎤 Live Listen</button>
         </div>
 
-        <div class="result" id="resultArea">
-            <div class="source" id="sourceText"></div>
-            <div class="translation" id="translationText"></div>
-            <span class="confidence" id="confidenceBadge"></span>
+        <!-- Text mode (existing) -->
+        <div class="text-mode" id="textMode">
+            <div class="input-row">
+                <textarea id="textInput" class="text-input" placeholder="Type text to translate…" rows="3"></textarea>
+                <button class="translate-btn" id="translateBtn">→</button>
+            </div>
+            <div class="result" id="resultArea">
+                <div class="source" id="sourceText"></div>
+                <div class="translation" id="translationText"></div>
+                <span class="confidence" id="confidenceBadge"></span>
+            </div>
+        </div>
+
+        <!-- Live Listen mode -->
+        <div class="listen-mode" id="listenMode">
+            <div class="listen-controls">
+                <button class="listen-btn" id="listenBtn">🎤 Start Listening</button>
+                <div class="listen-badges">
+                    <span class="badge badge-lang" id="detectedLangBadge" style="display:none;"></span>
+                    <span class="badge badge-engine" id="engineBadge" style="display:none;"></span>
+                </div>
+            </div>
+            <div class="live-transcript" id="liveTranscript">
+                <div class="placeholder-text">
+                    Press <strong>Start Listening</strong> to begin live translation.<br>
+                    Windy Pro will listen through your microphone and<br>
+                    translate speech in real-time.
+                </div>
+            </div>
         </div>
     </div>
 

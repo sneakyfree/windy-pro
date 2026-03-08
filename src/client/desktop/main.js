@@ -1002,16 +1002,16 @@ function showMiniTranslateWindow() {
   }
 
   miniTranslateWindow = new BrowserWindow({
-    width: 400,
-    height: 300,
+    width: 440,
+    height: 480,
     frame: false,
     transparent: false,
     alwaysOnTop: true,
     resizable: true,
     skipTaskbar: true,
     backgroundColor: '#1F2937',
-    minWidth: 300,
-    minHeight: 200,
+    minWidth: 340,
+    minHeight: 350,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
@@ -1059,6 +1059,179 @@ ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang
     req.end();
   });
 });
+
+// ── Live Listen: speech translation for Quick Translate ──
+ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, targetLang) => {
+  const audioBuffer = Buffer.from(audioArray);
+
+  // ── Try local Whisper engine first ──
+  try {
+    const serverCfg = store.get('server') || { host: '127.0.0.1', port: 9384 };
+    const wsUrl = `ws://${serverCfg.host}:${serverCfg.port}`;
+    const WebSocket = require('ws');
+
+    const localResult = await new Promise((resolve, reject) => {
+      const ws = new WebSocket(wsUrl);
+      let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 10000);
+
+      ws.on('open', () => {
+        // Use Whisper's task=translate for any-language → English
+        ws.send(JSON.stringify({
+          action: 'translate_blob',
+          language: sourceLang === 'auto' ? 'auto' : sourceLang,
+          task: targetLang === 'en' ? 'translate' : 'transcribe'
+        }));
+        ws.send(audioBuffer);
+      });
+
+      ws.on('message', (data) => {
+        clearTimeout(timeout);
+        ws.close();
+        try {
+          const msg = JSON.parse(data.toString());
+          if (msg.error) reject(new Error(msg.error));
+          else resolve({ text: msg.text || '', detectedLang: msg.language || sourceLang, engine: 'local' });
+        } catch (e) {
+          reject(new Error('invalid local response'));
+        }
+      });
+
+      ws.on('error', () => { clearTimeout(timeout); reject(new Error('local unavailable')); });
+    });
+
+    // If target is English, Whisper already translated → done
+    if (targetLang === 'en') return localResult;
+
+    // If target is NOT English, we got English text from Whisper — now translate English → target
+    if (localResult.text && localResult.text.trim()) {
+      const textResult = await translateTextViaAI(localResult.text, 'en', targetLang);
+      if (textResult && textResult.ok) {
+        return { text: textResult.translatedText, detectedLang: localResult.detectedLang, engine: textResult.engine || 'groq' };
+      }
+      // Fall through - return English if text translation failed
+      return localResult;
+    }
+    return localResult;
+
+  } catch (localErr) {
+    // Local engine not available — fall back to cloud
+  }
+
+  // ── Cloud fallback: Groq Whisper API ──
+  try {
+    const groqKey = store.get('engine.groqApiKey', '') || process.env.GROQ_API_KEY || '';
+    const openaiKey = store.get('engine.openaiApiKey', '') || process.env.OPENAI_API_KEY || '';
+    const apiKey = groqKey || openaiKey;
+    if (!apiKey) return { error: 'No API key. Add Groq or OpenAI key in Settings.' };
+
+    const isGroq = !!groqKey;
+    const FormData = require('form-data');
+    const https = require('https');
+
+    // Step 1: Transcribe audio via Whisper API
+    const transcription = await new Promise((resolve, reject) => {
+      const form = new FormData();
+      form.append('file', audioBuffer, { filename: 'audio.webm', contentType: 'audio/webm' });
+      form.append('model', isGroq ? 'whisper-large-v3' : 'whisper-1');
+      if (targetLang === 'en') form.append('response_format', 'verbose_json');
+
+      const apiUrl = isGroq
+        ? 'https://api.groq.com/openai/v1/audio/transcriptions'
+        : 'https://api.openai.com/v1/audio/transcriptions';
+      const url = new URL(apiUrl);
+
+      const req = https.request({
+        hostname: url.hostname,
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          ...form.getHeaders()
+        }
+      }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            resolve({ text: json.text || '', language: json.language || sourceLang });
+          } catch (e) {
+            reject(new Error('parse error'));
+          }
+        });
+      });
+      req.on('error', reject);
+      req.setTimeout(15000, () => { req.destroy(); reject(new Error('timeout')); });
+      form.pipe(req);
+    });
+
+    if (!transcription.text || !transcription.text.trim()) {
+      return { text: '', detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai' };
+    }
+
+    // Step 2: If target is English and source isn't, translate the text
+    const needsTranslation = targetLang !== sourceLang && targetLang !== 'auto';
+    if (needsTranslation) {
+      const textResult = await translateTextViaAI(transcription.text, transcription.language || 'auto', targetLang);
+      if (textResult && textResult.ok) {
+        return { text: textResult.translatedText, detectedLang: transcription.language, engine: textResult.engine || (isGroq ? 'groq' : 'openai') };
+      }
+    }
+
+    return { text: transcription.text, detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai' };
+
+  } catch (cloudErr) {
+    return { error: `Translation failed: ${cloudErr.message}` };
+  }
+});
+
+// Helper: translate text via Groq/OpenAI LLM (reused by both mini-translate-speech and translate-text)
+async function translateTextViaAI(text, sourceLang, targetLang) {
+  const LANG_NAMES = {
+    en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian',
+    pt: 'Portuguese', zh: 'Chinese', ja: 'Japanese', ko: 'Korean', ar: 'Arabic',
+    ru: 'Russian', pl: 'Polish', nl: 'Dutch', sv: 'Swedish', hi: 'Hindi',
+    uk: 'Ukrainian', th: 'Thai', vi: 'Vietnamese', tr: 'Turkish', auto: 'auto-detected'
+  };
+  const srcName = LANG_NAMES[sourceLang] || sourceLang;
+  const tgtName = LANG_NAMES[targetLang] || targetLang;
+
+  const groqKey = store.get('engine.groqApiKey', '') || process.env.GROQ_API_KEY || '';
+  const openaiKey = store.get('engine.openaiApiKey', '') || process.env.OPENAI_API_KEY || '';
+  const apiKey = groqKey || openaiKey;
+  if (!apiKey) return { ok: false, error: 'No API key' };
+
+  const isGroq = !!groqKey;
+  const apiUrl = isGroq ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+  const model = isGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
+  const prompt = `Translate the following text from ${srcName} to ${tgtName}. Return ONLY the translated text, nothing else.\n\n${text}`;
+
+  const https = require('https');
+  const url = new URL(apiUrl);
+  const postData = JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.3, max_tokens: 2048 });
+
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: url.hostname, path: url.pathname, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`, 'Content-Length': Buffer.byteLength(postData) }
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            const json = JSON.parse(data);
+            resolve({ ok: true, translatedText: json.choices?.[0]?.message?.content?.trim(), engine: isGroq ? 'groq' : 'openai', confidence: 0.95 });
+          } catch (e) { reject(new Error('parse error')); }
+        } else { reject(new Error(`API ${res.statusCode}`)); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(15000, () => { req.destroy(); reject(new Error('timeout')); });
+    req.write(postData);
+    req.end();
+  });
+}
 
 /**
  * Register global hotkeys
