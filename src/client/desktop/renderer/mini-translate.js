@@ -272,12 +272,16 @@ function startNextChunk() {
         if (e.data.size > 0) chunks.push(e.data);
     };
     mediaRecorder.onstop = async () => {
+        // Save old chunks BEFORE startNextChunk resets the array
+        const savedChunks = chunks.slice();
+        const savedMime = mimeType;
+
         // Start next chunk IMMEDIATELY — zero gap, no lost words
         if (isListening) startNextChunk();
 
         // Process old chunk in background (don't await — recording continues)
-        if (chunks.length > 0) {
-            const audioBlob = new Blob(chunks, { type: mimeType });
+        if (savedChunks.length > 0) {
+            const audioBlob = new Blob(savedChunks, { type: savedMime });
             processChunk(audioBlob).catch(err => {
                 appendChunk(`⚠️ ${err.message}`, 'error');
             });
