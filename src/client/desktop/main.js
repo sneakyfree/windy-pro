@@ -1131,7 +1131,9 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
 
         const localResult = await new Promise((resolve, reject) => {
           const ws = new WebSocket(wsUrl);
-          let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 15000);
+          // Dynamic timeout: scale with audio size (min 15s, ~1s per 10KB, max 60s)
+          const timeoutMs = Math.min(60000, Math.max(15000, Math.round(audioBuffer.length / 10000) * 1000));
+          let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, timeoutMs);
 
           ws.on('open', () => {
             ws.send(JSON.stringify({

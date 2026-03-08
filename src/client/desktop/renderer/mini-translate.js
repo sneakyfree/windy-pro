@@ -50,14 +50,20 @@ let chunkDurationMs = 10000; // default 10 seconds
 
 // Processing queue — limit concurrent Whisper requests to avoid overwhelming the server
 const MAX_CONCURRENT = 2;
+const MAX_QUEUE_SIZE = 4; // Drop oldest if queue exceeds this
 let activeProcessing = 0;
 const processingQueue = [];
 
-// Chunk duration slider
+// Chunk duration slider — restart recorder on change
 chunkSlider.addEventListener('input', () => {
     const val = parseInt(chunkSlider.value, 10);
     chunkDurationMs = val * 1000;
     chunkDurationLabel.textContent = `${val}s`;
+    // If recording, restart the current chunk with new duration
+    if (isListening && mediaRecorder && mediaRecorder.state === 'recording') {
+        clearTimeout(chunkTimer);
+        mediaRecorder.stop(); // triggers onstop → enqueue + startNextChunk
+    }
 });
 
 // Font size slider
@@ -277,6 +283,7 @@ function startNextChunk() {
 
     const recorder = new MediaRecorder(mediaStream, { mimeType });
     mediaRecorder = recorder; // Update global ref for stop button
+    let stoppedByTimer = false; // Track if timer handled the restart
 
     recorder.ondataavailable = (e) => {
         if (e.data.size > 0) localChunks.push(e.data);
@@ -287,12 +294,18 @@ function startNextChunk() {
             const audioBlob = new Blob(localChunks, { type: mimeType });
             enqueueChunk(audioBlob);
         }
+        // If stopped externally (slider change, stop button) and not by the timer,
+        // restart recording with the new settings
+        if (!stoppedByTimer && isListening) {
+            startNextChunk();
+        }
     };
 
     recorder.start();
 
     // Start next recorder BEFORE stopping this one (creates overlap)
     chunkTimer = setTimeout(() => {
+        stoppedByTimer = true;
         if (isListening) startNextChunk(); // New recorder starts NOW
         // Stop this recorder after overlap window
         setTimeout(() => {
@@ -306,6 +319,12 @@ function startNextChunk() {
 let chunkCount = 0;
 
 function enqueueChunk(audioBlob) {
+    // Queue overflow protection — drop oldest pending chunks if backlog too large
+    while (processingQueue.length >= MAX_QUEUE_SIZE) {
+        const dropped = processingQueue.shift();
+        chunkCount++;
+        appendChunk(`⏭️ Skipped chunk #${chunkCount} — server busy, queue overflow`, 'info');
+    }
     processingQueue.push(audioBlob);
     drainQueue();
 }
