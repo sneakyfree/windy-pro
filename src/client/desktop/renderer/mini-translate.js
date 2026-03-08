@@ -25,6 +25,9 @@ const listenBtn = document.getElementById('listenBtn');
 const liveTranscript = document.getElementById('liveTranscript');
 const detectedLangBadge = document.getElementById('detectedLangBadge');
 const engineBadge = document.getElementById('engineBadge');
+const modelInfoBar = document.getElementById('modelInfoBar');
+const windytuneBadge = document.getElementById('windytuneBadge');
+const modelBadge = document.getElementById('modelBadge');
 
 // Tab buttons
 const tabText = document.getElementById('tabText');
@@ -223,9 +226,36 @@ async function processChunk(audioBlob) {
             // Update engine badge
             if (result.engine) {
                 const isCloud = result.engine === 'groq' || result.engine === 'openai';
-                engineBadge.textContent = isCloud ? `☁️ ${result.engine}` : '🏠 Local';
-                engineBadge.className = `badge badge-engine${isCloud ? ' cloud' : ''}`;
+                if (isCloud) {
+                    const cloudModel = result.engine === 'groq' ? 'whisper-large-v3' : 'whisper-1';
+                    engineBadge.textContent = `☁️ ${result.engine.toUpperCase()} · ${cloudModel}`;
+                    engineBadge.className = 'badge badge-engine cloud';
+                } else {
+                    engineBadge.textContent = '🏠 Local Whisper';
+                    engineBadge.className = 'badge badge-engine';
+                }
                 engineBadge.style.display = '';
+            }
+
+            // Update model info bar
+            if (result.modelInfo) {
+                modelInfoBar.style.display = 'flex';
+                const mi = result.modelInfo;
+
+                // WindyTune badge
+                if (mi.windyTune) {
+                    windytuneBadge.textContent = '⚡ WindyTune Auto';
+                    windytuneBadge.style.display = '';
+                } else {
+                    windytuneBadge.style.display = 'none';
+                }
+
+                // Model name + size badge
+                if (mi.model) {
+                    const sizeStr = mi.size ? ` · ${mi.size}` : '';
+                    modelBadge.textContent = `🧠 ${mi.model}${sizeStr}`;
+                    modelBadge.style.display = '';
+                }
             }
         } else {
             appendChunk(`🔇 Chunk #${chunkNum}: no speech detected`, 'info');

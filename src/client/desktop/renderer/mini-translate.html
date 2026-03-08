@@ -16,6 +16,7 @@
             background: #1F2937;
             color: #F9FAFB;
             overflow: hidden;
+            -webkit-app-region: no-drag;
         }
 
         .container {
@@ -287,11 +288,54 @@
             border: 1px solid #374151;
             border-radius: 8px;
             padding: 10px;
-            overflow-y: auto;
+            overflow-y: scroll;
+            -webkit-overflow-scrolling: touch;
             font-size: 14px;
             line-height: 1.6;
             color: #E5E7EB;
             min-height: 100px;
+        }
+
+        .live-transcript::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .live-transcript::-webkit-scrollbar-track {
+            background: #1F2937;
+            border-radius: 3px;
+        }
+
+        .live-transcript::-webkit-scrollbar-thumb {
+            background: #4B5563;
+            border-radius: 3px;
+        }
+
+        .live-transcript::-webkit-scrollbar-thumb:hover {
+            background: #6B7280;
+        }
+
+        .model-info-bar {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 4px 0;
+        }
+
+        .model-info-bar .badge {
+            font-size: 9px;
+        }
+
+        .badge-model {
+            background: rgba(251, 191, 36, 0.15);
+            color: #FBBF24;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+        }
+
+        .badge-windytune {
+            background: rgba(14, 165, 233, 0.15);
+            color: #0EA5E9;
+            border: 1px solid rgba(14, 165, 233, 0.3);
         }
 
         .live-transcript .chunk {
@@ -402,6 +446,10 @@
                     <span class="badge badge-lang" id="detectedLangBadge" style="display:none;"></span>
                     <span class="badge badge-engine" id="engineBadge" style="display:none;"></span>
                 </div>
+            </div>
+            <div class="model-info-bar" id="modelInfoBar" style="display:none;">
+                <span class="badge badge-windytune" id="windytuneBadge" style="display:none;">⚡ WindyTune</span>
+                <span class="badge badge-model" id="modelBadge" style="display:none;"></span>
             </div>
             <div class="live-transcript" id="liveTranscript">
                 <div class="placeholder-text">

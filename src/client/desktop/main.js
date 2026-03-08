@@ -1068,6 +1068,19 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   const groqKey = rendererKeys.groq || store.get('engine.groqApiKey', '') || process.env.GROQ_API_KEY || '';
   const openaiKey = rendererKeys.openai || store.get('engine.openaiApiKey', '') || process.env.OPENAI_API_KEY || '';
 
+  // Gather model info for badges
+  const modelName = store.get('engine.model') || 'base';
+  const windyTune = store.get('engine.windyTune', false);
+  const MODEL_SIZES = {
+    'edge-spark': '39MB', 'edge-bolt': '74MB', 'edge-global': '145MB', 'edge-precision': '483MB', 'edge-pro': '1.5GB',
+    'core-spark': '39MB', 'core-bolt': '74MB', 'core-global': '145MB', 'core-precision': '483MB', 'core-ultra': '1.5GB',
+    'lingua-es': '145MB', 'lingua-fr': '145MB', 'lingua-hi': '145MB',
+    'tiny': '39MB', 'base': '145MB', 'small': '483MB', 'medium': '1.5GB', 'large': '2.9GB', 'large-v3': '2.9GB',
+    'faster-whisper-base': '145MB'
+  };
+  const modelSize = MODEL_SIZES[modelName] || '';
+  const modelInfo = { model: modelName, size: modelSize, windyTune };
+
   // ── Try local Whisper engine first ──
   try {
     const serverCfg = store.get('server') || { host: '127.0.0.1', port: 9384 };
@@ -1096,7 +1109,7 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
             clearTimeout(timeout);
             ws.close();
             if (msg.error) reject(new Error(msg.error));
-            else resolve({ text: msg.text || '', detectedLang: msg.language || sourceLang, engine: 'local' });
+            else resolve({ text: msg.text || '', detectedLang: msg.language || sourceLang, engine: 'local', modelInfo });
           }
           // Ignore other message types (handshake, status, etc.)
         } catch (e) {
@@ -1108,18 +1121,18 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     });
 
     // If target is English, Whisper already translated → done
-    if (targetLang === 'en') return localResult;
+    if (targetLang === 'en') return { ...localResult, modelInfo };
 
     // If target is NOT English, we got English text from Whisper — now translate English → target
     if (localResult.text && localResult.text.trim()) {
       const textResult = await translateTextViaAI(localResult.text, 'en', targetLang);
       if (textResult && textResult.ok) {
-        return { text: textResult.translatedText, detectedLang: localResult.detectedLang, engine: textResult.engine || 'groq' };
+        return { text: textResult.translatedText, detectedLang: localResult.detectedLang, engine: textResult.engine || 'groq', modelInfo };
       }
       // Fall through - return English if text translation failed
-      return localResult;
+      return { ...localResult, modelInfo };
     }
-    return localResult;
+    return { ...localResult, modelInfo };
 
   } catch (localErr) {
     // Local engine not available — fall back to cloud
@@ -1172,7 +1185,7 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     });
 
     if (!transcription.text || !transcription.text.trim()) {
-      return { text: '', detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai' };
+      return { text: '', detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai', modelInfo };
     }
 
     // Step 2: If target is English and source isn't, translate the text
@@ -1180,11 +1193,11 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     if (needsTranslation) {
       const textResult = await translateTextViaAI(transcription.text, transcription.language || 'auto', targetLang);
       if (textResult && textResult.ok) {
-        return { text: textResult.translatedText, detectedLang: transcription.language, engine: textResult.engine || (isGroq ? 'groq' : 'openai') };
+        return { text: textResult.translatedText, detectedLang: transcription.language, engine: textResult.engine || (isGroq ? 'groq' : 'openai'), modelInfo };
       }
     }
 
-    return { text: transcription.text, detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai' };
+    return { text: transcription.text, detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai', modelInfo };
 
   } catch (cloudErr) {
     return { error: `Translation failed: ${cloudErr.message}` };
