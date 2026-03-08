@@ -48,6 +48,11 @@ let chunks = [];
 let chunkTimer = null;
 let chunkDurationMs = 10000; // default 10 seconds
 
+// Processing queue — limit concurrent Whisper requests to avoid overwhelming the server
+const MAX_CONCURRENT = 2;
+let activeProcessing = 0;
+const processingQueue = [];
+
 // Chunk duration slider
 chunkSlider.addEventListener('input', () => {
     const val = parseInt(chunkSlider.value, 10);
@@ -277,12 +282,10 @@ function startNextChunk() {
         if (e.data.size > 0) localChunks.push(e.data);
     };
     recorder.onstop = () => {
-        // Process in background — recording already continues via next recorder
+        // Enqueue for processing — queue limits concurrency to avoid overwhelming server
         if (localChunks.length > 0) {
             const audioBlob = new Blob(localChunks, { type: mimeType });
-            processChunk(audioBlob).catch(err => {
-                appendChunk(`⚠️ ${err.message}`, 'error');
-            });
+            enqueueChunk(audioBlob);
         }
     };
 
@@ -301,6 +304,24 @@ function startNextChunk() {
 }
 
 let chunkCount = 0;
+
+function enqueueChunk(audioBlob) {
+    processingQueue.push(audioBlob);
+    drainQueue();
+}
+
+function drainQueue() {
+    while (activeProcessing < MAX_CONCURRENT && processingQueue.length > 0) {
+        const blob = processingQueue.shift();
+        activeProcessing++;
+        processChunk(blob)
+            .catch(err => appendChunk(`⚠️ ${err.message}`, 'error'))
+            .finally(() => {
+                activeProcessing--;
+                drainQueue(); // process next in queue
+            });
+    }
+}
 
 async function processChunk(audioBlob) {
     chunkCount++;
