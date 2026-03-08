@@ -1072,26 +1072,34 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   const engineId = store.get('engine.selected') || store.get('engine.model') || 'windytune';
   const windyTune = engineId === 'windytune' || store.get('engine.windyTune', false);
   const MODEL_INFO = {
-    'windytune': { name: 'WindyTune Auto', size: '' },
-    'local': { name: 'Local', size: '' },
-    'edge-spark': { name: 'Edge Spark', size: '42 MB' },
-    'edge-pulse': { name: 'Edge Pulse', size: '78 MB' },
-    'edge-standard': { name: 'Edge Standard', size: '168 MB' },
-    'edge-global': { name: 'Edge Global', size: '515 MB' },
-    'edge-pro': { name: 'Edge Pro', size: '515 MB' },
-    'core-spark': { name: 'Core Spark', size: '75 MB' },
-    'core-pulse': { name: 'Core Pulse', size: '142 MB' },
-    'core-standard': { name: 'Core Standard', size: '466 MB' },
-    'core-global': { name: 'Core Global', size: '1.5 GB' },
-    'core-pro': { name: 'Core Pro', size: '1.5 GB' },
-    'core-turbo': { name: 'Core Turbo', size: '1.6 GB' },
-    'core-ultra': { name: 'Core Ultra', size: '2.9 GB' },
-    'lingua-es': { name: 'Lingua Español', size: '500 MB' },
-    'lingua-fr': { name: 'Lingua Français', size: '500 MB' },
-    'lingua-hi': { name: 'Lingua हिन्दी', size: '500 MB' },
+    'windytune': { name: 'WindyTune Auto', size: '', specialty: 'Auto-selects best model' },
+    'local': { name: 'Local', size: '', specialty: '' },
+    'edge-spark': { name: 'Edge Spark', size: '42 MB', specialty: 'Ultra-light, 32× speed' },
+    'edge-pulse': { name: 'Edge Pulse', size: '78 MB', specialty: 'Phone-friendly, 16×' },
+    'edge-standard': { name: 'Edge Standard', size: '168 MB', specialty: 'Best CPU balance, 6×' },
+    'edge-global': { name: 'Edge Global', size: '515 MB', specialty: 'Multilingual CPU, 2×' },
+    'edge-pro': { name: 'Edge Pro', size: '515 MB', specialty: 'Best English on CPU, 4×' },
+    'core-spark': { name: 'Core Spark', size: '75 MB', specialty: 'Fastest GPU, 32×' },
+    'core-pulse': { name: 'Core Pulse', size: '142 MB', specialty: 'Reliable GPU, 16×' },
+    'core-standard': { name: 'Core Standard', size: '466 MB', specialty: 'All-rounder GPU, 6×' },
+    'core-global': { name: 'Core Global', size: '1.5 GB', specialty: 'Multilingual GPU, 2×' },
+    'core-pro': { name: 'Core Pro', size: '1.5 GB', specialty: 'English excellence, 6×' },
+    'core-turbo': { name: 'Core Turbo', size: '1.6 GB', specialty: 'Near-Ultra, 4×' },
+    'core-ultra': { name: 'Core Ultra', size: '2.9 GB', specialty: 'BEST accuracy, 1×' },
+    'lingua-es': { name: 'Lingua Español', size: '500 MB', specialty: 'Spanish specialist' },
+    'lingua-fr': { name: 'Lingua Français', size: '500 MB', specialty: 'French specialist' },
+    'lingua-hi': { name: 'Lingua हिन्दी', size: '500 MB', specialty: 'Hindi specialist' },
+    // Legacy model names → Windy Pro equivalents
+    'tiny': { name: 'Edge Spark', size: '42 MB', specialty: 'Ultra-light, 32× speed' },
+    'base': { name: 'Edge Standard', size: '168 MB', specialty: 'Best CPU balance, 6×' },
+    'small': { name: 'Core Standard', size: '466 MB', specialty: 'All-rounder GPU, 6×' },
+    'medium': { name: 'Core Pro', size: '1.5 GB', specialty: 'English excellence, 6×' },
+    'large': { name: 'Core Ultra', size: '2.9 GB', specialty: 'BEST accuracy, 1×' },
+    'large-v3': { name: 'Core Ultra', size: '2.9 GB', specialty: 'BEST accuracy, 1×' },
+    'faster-whisper-base': { name: 'Edge Standard', size: '168 MB', specialty: 'Best CPU balance, 6×' },
   };
-  const mi = MODEL_INFO[engineId] || { name: engineId, size: '' };
-  const modelInfo = { model: mi.name, size: mi.size, windyTune, engineId };
+  const mi = MODEL_INFO[engineId] || { name: engineId, size: '', specialty: '' };
+  const modelInfo = { model: mi.name, size: mi.size, windyTune, engineId, specialty: mi.specialty };
 
   // ── Try local Whisper engine first ──
   try {

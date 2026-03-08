@@ -51,10 +51,25 @@ chunkSlider.addEventListener('input', () => {
 });
 
 const LANG_NAMES = {
-    en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian',
-    pt: 'Portuguese', zh: 'Chinese', ja: 'Japanese', ko: 'Korean', ar: 'Arabic',
-    ru: 'Russian', pl: 'Polish', nl: 'Dutch', sv: 'Swedish', hi: 'Hindi',
-    uk: 'Ukrainian', th: 'Thai', vi: 'Vietnamese', tr: 'Turkish', auto: 'Auto'
+    auto: 'Auto', af: 'Afrikaans', sq: 'Albanian', am: 'Amharic', ar: 'Arabic',
+    hy: 'Armenian', az: 'Azerbaijani', eu: 'Basque', be: 'Belarusian', bn: 'Bengali',
+    bs: 'Bosnian', bg: 'Bulgarian', my: 'Burmese', ca: 'Catalan', zh: 'Chinese',
+    hr: 'Croatian', cs: 'Czech', da: 'Danish', nl: 'Dutch', en: 'English',
+    et: 'Estonian', fi: 'Finnish', fr: 'French', gl: 'Galician', ka: 'Georgian',
+    de: 'German', el: 'Greek', gu: 'Gujarati', ht: 'Haitian Creole', ha: 'Hausa',
+    he: 'Hebrew', hi: 'Hindi', hu: 'Hungarian', is: 'Icelandic', id: 'Indonesian',
+    ga: 'Irish', it: 'Italian', ja: 'Japanese', jv: 'Javanese', kn: 'Kannada',
+    kk: 'Kazakh', km: 'Khmer', ko: 'Korean', lo: 'Lao', la: 'Latin', lv: 'Latvian',
+    ln: 'Lingala', lt: 'Lithuanian', lb: 'Luxembourgish', mk: 'Macedonian',
+    mg: 'Malagasy', ms: 'Malay', ml: 'Malayalam', mt: 'Maltese', mi: 'Maori',
+    mr: 'Marathi', mn: 'Mongolian', ne: 'Nepali', no: 'Norwegian', nn: 'Nynorsk',
+    oc: 'Occitan', ps: 'Pashto', fa: 'Persian', pl: 'Polish', pt: 'Portuguese',
+    pa: 'Punjabi', ro: 'Romanian', ru: 'Russian', sa: 'Sanskrit', sr: 'Serbian',
+    sn: 'Shona', sd: 'Sindhi', si: 'Sinhala', sk: 'Slovak', sl: 'Slovenian',
+    so: 'Somali', es: 'Spanish', su: 'Sundanese', sw: 'Swahili', sv: 'Swedish',
+    tl: 'Tagalog', tg: 'Tajik', ta: 'Tamil', tt: 'Tatar', te: 'Telugu',
+    th: 'Thai', bo: 'Tibetan', tk: 'Turkmen', tr: 'Turkish', uk: 'Ukrainian',
+    ur: 'Urdu', uz: 'Uzbek', vi: 'Vietnamese', cy: 'Welsh', yi: 'Yiddish', yo: 'Yoruba'
 };
 
 // ── Close ──
@@ -261,10 +276,11 @@ async function processChunk(audioBlob) {
                     windytuneBadge.style.display = 'none';
                 }
 
-                // Model name + size badge
+                // Model name + size + specialty badge
                 if (mi.model) {
                     const sizeStr = mi.size ? ` · ${mi.size}` : '';
-                    modelBadge.textContent = `🧠 ${mi.model}${sizeStr}`;
+                    const specStr = mi.specialty ? ` — ${mi.specialty}` : '';
+                    modelBadge.textContent = `🧠 ${mi.model}${sizeStr}${specStr}`;
                     modelBadge.style.display = '';
                 }
             }
