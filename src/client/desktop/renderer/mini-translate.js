@@ -28,7 +28,9 @@ const windyTuneToggle = document.getElementById('windyTuneToggle');
 const manualLabel = document.getElementById('manualLabel');
 const windyTuneLabel = document.getElementById('windyTuneLabel');
 const modelSelectRow = document.getElementById('modelSelectRow');
-const modelSelect = document.getElementById('modelSelect');
+const listenModelSelect = document.getElementById('listenModelSelect');
+const translateModelSelect = document.getElementById('translateModelSelect');
+const translateModelRow = document.getElementById('translateModelRow');
 const listeningValue = document.getElementById('listeningValue');
 const translatingValue = document.getElementById('translatingValue');
 const localOnlyRow = document.getElementById('localOnlyRow');
@@ -120,43 +122,59 @@ windyTuneToggle.addEventListener('click', () => {
     windyTuneToggle.classList.toggle('on', isWindyTune);
     manualLabel.classList.toggle('active', !isWindyTune);
     windyTuneLabel.classList.toggle('active', isWindyTune);
-    modelSelectRow.style.display = isWindyTune ? 'none' : 'flex';
+    // Show/hide model selects
+    const showModels = isWindyTune ? 'none' : 'flex';
+    modelSelectRow.style.display = showModels;
+    translateModelRow.style.display = showModels;
+    // Show Local Only only in WindyTune mode
     localOnlyRow.style.display = isWindyTune ? 'flex' : 'none';
     // Update cockpit display
     if (isWindyTune) {
-        listeningValue.textContent = '🌪️ WindyTune — auto';
+        const suffix = isLocalOnly ? 'local only' : 'auto';
+        listeningValue.textContent = `🌪️ WindyTune — ${suffix}`;
         listeningValue.className = 'cockpit-value';
-        translatingValue.textContent = '🌪️ WindyTune — auto';
+        translatingValue.textContent = `🌪️ WindyTune — ${suffix}`;
         translatingValue.className = 'cockpit-value';
     } else {
-        const sel = modelSelect.options[modelSelect.selectedIndex];
-        listeningValue.textContent = `🏠 ${sel.text}`;
-        listeningValue.className = 'cockpit-value local';
-        translatingValue.textContent = `🏠 ${sel.text}`;
-        translatingValue.className = 'cockpit-value local';
+        updateCockpitFromSelects();
     }
 });
+
+function updateCockpitFromSelects() {
+    const lSel = listenModelSelect.options[listenModelSelect.selectedIndex];
+    const tSel = translateModelSelect.options[translateModelSelect.selectedIndex];
+    const isCloudL = listenModelSelect.value === 'cloud';
+    const isCloudT = translateModelSelect.value === 'cloud';
+    listeningValue.textContent = isCloudL ? '☁️ Windy Cloud' : `🏠 ${lSel.text}`;
+    listeningValue.className = isCloudL ? 'cockpit-value cloud' : 'cockpit-value local';
+    translatingValue.textContent = isCloudT ? '☁️ Windy Cloud' : `🏠 ${tSel.text}`;
+    translatingValue.className = isCloudT ? 'cockpit-value cloud' : 'cockpit-value local';
+}
 
 localOnlyCheckbox.addEventListener('change', () => {
     isLocalOnly = localOnlyCheckbox.checked;
     localOnlyRow.classList.toggle('active', isLocalOnly);
+    // Disable cloud options when Local Only is checked
+    const cloudOpts = [...listenModelSelect.querySelectorAll('option[value="cloud"]'),
+    ...translateModelSelect.querySelectorAll('option[value="cloud"]')];
+    cloudOpts.forEach(opt => { opt.disabled = isLocalOnly; });
+    // If cloud was selected, switch to default local
     if (isLocalOnly) {
-        listeningValue.textContent = '🌪️ WindyTune — local only';
-        translatingValue.textContent = '🌪️ WindyTune — local only';
-    } else {
-        listeningValue.textContent = '🌪️ WindyTune — auto';
-        translatingValue.textContent = '🌪️ WindyTune — auto';
+        if (listenModelSelect.value === 'cloud') listenModelSelect.value = 'core-standard';
+        if (translateModelSelect.value === 'cloud') translateModelSelect.value = 'core-standard';
+    }
+    if (isWindyTune) {
+        const suffix = isLocalOnly ? 'local only' : 'auto';
+        listeningValue.textContent = `🌪️ WindyTune — ${suffix}`;
+        translatingValue.textContent = `🌪️ WindyTune — ${suffix}`;
     }
 });
 
-modelSelect.addEventListener('change', () => {
-    if (!isWindyTune) {
-        const sel = modelSelect.options[modelSelect.selectedIndex];
-        listeningValue.textContent = `🏠 ${sel.text}`;
-        listeningValue.className = 'cockpit-value local';
-        translatingValue.textContent = `🏠 ${sel.text}`;
-        translatingValue.className = 'cockpit-value local';
-    }
+listenModelSelect.addEventListener('change', () => {
+    if (!isWindyTune) updateCockpitFromSelects();
+});
+translateModelSelect.addEventListener('change', () => {
+    if (!isWindyTune) updateCockpitFromSelects();
 });
 
 // ── Mode tabs ──
@@ -294,7 +312,11 @@ async function processChunk(audioBlob) {
             sourceLang.value,
             targetLang.value,
             apiKeys,
-            { localOnly: isLocalOnly }
+            {
+                localOnly: isLocalOnly,
+                listeningModel: isWindyTune ? 'windytune' : listenModelSelect.value,
+                translatingModel: isWindyTune ? 'windytune' : translateModelSelect.value
+            }
         );
 
         if (result.error) {

@@ -1068,17 +1068,23 @@ ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang
 // ── Live Listen: speech translation for Quick Translate ──
 ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, targetLang, apiKeys, options) => {
   const localOnly = options && options.localOnly;
+  const listeningModel = (options && options.listeningModel) || 'windytune';
+  const translatingModel = (options && options.translatingModel) || 'windytune';
   const audioBuffer = Buffer.from(audioArray);
   // Merge API keys: renderer localStorage → electron-store → env vars
   const rendererKeys = apiKeys || {};
   const groqKey = rendererKeys.groq || store.get('engine.groqApiKey', '') || process.env.GROQ_API_KEY || '';
   const openaiKey = rendererKeys.openai || store.get('engine.openaiApiKey', '') || process.env.OPENAI_API_KEY || '';
 
-  // Gather model info for badges — use proprietary Windy Pro model names
-  const engineId = store.get('engine.selected') || store.get('engine.model') || 'windytune';
-  const windyTune = engineId === 'windytune' || store.get('engine.windyTune', false);
+  // Use the model the user selected in the cockpit (not the global store)
+  const engineId = listeningModel === 'windytune'
+    ? (store.get('engine.selected') || store.get('engine.model') || 'windytune')
+    : listeningModel;
+  const windyTune = listeningModel === 'windytune';
+  const userWantsCloud = listeningModel === 'cloud';
   const MODEL_INFO = {
     'windytune': { name: 'WindyTune Auto', size: '', specialty: 'Auto-selects best model' },
+    'cloud': { name: 'Windy Cloud', size: '', specialty: 'Cloud-based transcription' },
     'local': { name: 'Local', size: '', specialty: '' },
     'edge-spark': { name: 'Edge Spark', size: '42 MB', specialty: 'Ultra-light, 32× speed' },
     'edge-pulse': { name: 'Edge Pulse', size: '78 MB', specialty: 'Phone-friendly, 16×' },
@@ -1107,65 +1113,71 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   const mi = MODEL_INFO[engineId] || { name: engineId, size: '', specialty: '' };
   const modelInfo = { model: mi.name, size: mi.size, windyTune, engineId, specialty: mi.specialty };
 
-  // ── Try local Whisper engine first ──
-  try {
-    const serverCfg = store.get('server') || { host: '127.0.0.1', port: 9384 };
-    const wsUrl = `ws://${serverCfg.host}:${serverCfg.port}`;
-    const WebSocket = require('ws');
+  // If user explicitly selected cloud for listening, skip local and go straight to cloud
+  if (userWantsCloud && !localOnly) {
+    // Jump directly to cloud section below
+  } else {
 
-    const localResult = await new Promise((resolve, reject) => {
-      const ws = new WebSocket(wsUrl);
-      let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 3000);
+    // ── Try local Whisper engine first ──
+    try {
+      const serverCfg = store.get('server') || { host: '127.0.0.1', port: 9384 };
+      const wsUrl = `ws://${serverCfg.host}:${serverCfg.port}`;
+      const WebSocket = require('ws');
 
-      ws.on('open', () => {
-        // Use Whisper's task=translate for any-language → English
-        ws.send(JSON.stringify({
-          action: 'translate_blob',
-          language: sourceLang === 'auto' ? 'auto' : sourceLang,
-          task: targetLang === 'en' ? 'translate' : 'transcribe'
-        }));
-        ws.send(audioBuffer);
-      });
+      const localResult = await new Promise((resolve, reject) => {
+        const ws = new WebSocket(wsUrl);
+        let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 3000);
 
-      ws.on('message', (data) => {
-        try {
-          const msg = JSON.parse(data.toString());
-          // Only process the actual translate result — server sends other messages first
-          if (msg.type === 'translate_result') {
-            clearTimeout(timeout);
-            ws.close();
-            if (msg.error) reject(new Error(msg.error));
-            else resolve({ text: msg.text || '', detectedLang: msg.language || sourceLang, engine: 'local', modelInfo });
+        ws.on('open', () => {
+          // Use Whisper's task=translate for any-language → English
+          ws.send(JSON.stringify({
+            action: 'translate_blob',
+            language: sourceLang === 'auto' ? 'auto' : sourceLang,
+            task: targetLang === 'en' ? 'translate' : 'transcribe'
+          }));
+          ws.send(audioBuffer);
+        });
+
+        ws.on('message', (data) => {
+          try {
+            const msg = JSON.parse(data.toString());
+            // Only process the actual translate result — server sends other messages first
+            if (msg.type === 'translate_result') {
+              clearTimeout(timeout);
+              ws.close();
+              if (msg.error) reject(new Error(msg.error));
+              else resolve({ text: msg.text || '', detectedLang: msg.language || sourceLang, engine: 'local', modelInfo });
+            }
+            // Ignore other message types (handshake, status, etc.)
+          } catch (e) {
+            // Non-JSON message, ignore
           }
-          // Ignore other message types (handshake, status, etc.)
-        } catch (e) {
-          // Non-JSON message, ignore
-        }
+        });
+
+        ws.on('error', () => { clearTimeout(timeout); reject(new Error('local unavailable')); });
       });
 
-      ws.on('error', () => { clearTimeout(timeout); reject(new Error('local unavailable')); });
-    });
+      // If target is English, Whisper already translated → done
+      if (targetLang === 'en') return { ...localResult, modelInfo };
 
-    // If target is English, Whisper already translated → done
-    if (targetLang === 'en') return { ...localResult, modelInfo };
-
-    // If target is NOT English, we got English text from Whisper — now translate English → target
-    if (localResult.text && localResult.text.trim()) {
-      const textResult = await translateTextViaAI(localResult.text, 'en', targetLang);
-      if (textResult && textResult.ok) {
-        return { text: textResult.translatedText, detectedLang: localResult.detectedLang, engine: textResult.engine || 'groq', modelInfo };
+      // If target is NOT English, we got English text from Whisper — now translate English → target
+      if (localResult.text && localResult.text.trim()) {
+        const textResult = await translateTextViaAI(localResult.text, 'en', targetLang);
+        if (textResult && textResult.ok) {
+          return { text: textResult.translatedText, detectedLang: localResult.detectedLang, engine: textResult.engine || 'groq', modelInfo };
+        }
+        // Fall through - return English if text translation failed
+        return { ...localResult, modelInfo };
       }
-      // Fall through - return English if text translation failed
       return { ...localResult, modelInfo };
-    }
-    return { ...localResult, modelInfo };
 
-  } catch (localErr) {
-    // Local engine not available — fallback depends on localOnly setting
-    if (localOnly) {
-      return { error: '🔒 Local Only mode: No local engine available. Start the local Whisper server or disable Local Only.' };
+    } catch (localErr) {
+      // Local engine not available — fallback depends on localOnly setting
+      if (localOnly) {
+        return { error: '🔒 Local Only mode: No local engine available. Start the local Whisper server or disable Local Only.' };
+      }
     }
-  }
+  } // end else (not userWantsCloud)
 
   // ── Cloud fallback: Groq Whisper API ──
   try {
@@ -1214,19 +1226,19 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     });
 
     if (!transcription.text || !transcription.text.trim()) {
-      return { text: '', detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai', modelInfo };
+      return { text: '', detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai', modelInfo: { ...modelInfo, model: 'Windy Cloud' } };
     }
 
-    // Step 2: If target is English and source isn't, translate the text
+    // Step 2: If target is different from source, translate the text
     const needsTranslation = targetLang !== sourceLang && targetLang !== 'auto';
     if (needsTranslation) {
       const textResult = await translateTextViaAI(transcription.text, transcription.language || 'auto', targetLang);
       if (textResult && textResult.ok) {
-        return { text: textResult.translatedText, detectedLang: transcription.language, engine: textResult.engine || (isGroq ? 'groq' : 'openai'), modelInfo };
+        return { text: textResult.translatedText, detectedLang: transcription.language, engine: textResult.engine || (isGroq ? 'groq' : 'openai'), modelInfo: { ...modelInfo, model: 'Windy Cloud' } };
       }
     }
 
-    return { text: transcription.text, detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai', modelInfo };
+    return { text: transcription.text, detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai', modelInfo: { ...modelInfo, model: 'Windy Cloud' } };
 
   } catch (cloudErr) {
     return { error: `Translation failed: ${cloudErr.message}` };

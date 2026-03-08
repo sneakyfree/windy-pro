@@ -962,9 +962,13 @@
                         <input type="checkbox" class="local-only-checkbox" id="localOnlyCheckbox">
                         <label for="localOnlyCheckbox">🔒 Local Only — data never leaves your device</label>
                     </div>
-                    <div class="cockpit-row" id="modelSelectRow" style="display:none;">
-                        <span class="cockpit-label">Model:</span>
-                        <select class="model-select" id="modelSelect">
+                    <div class="cockpit-row" id="modelSelectRow" style="display:none;"
+                        data-tooltip="Choose which engine listens to speech and converts it to text.">
+                        <span class="cockpit-label">🎤 Listening:</span>
+                        <select class="model-select" id="listenModelSelect">
+                            <optgroup label="☁️ Cloud">
+                                <option value="cloud">☁️ Windy Cloud</option>
+                            </optgroup>
                             <optgroup label="🛡️ Edge (CPU)">
                                 <option value="edge-spark">Edge Spark — 42 MB, 32×</option>
                                 <option value="edge-pulse">Edge Pulse — 78 MB, 16×</option>
@@ -988,13 +992,41 @@
                             </optgroup>
                         </select>
                     </div>
-                    <div class="cockpit-row"
-                        data-tooltip="The engine that listens to the speaker and converts speech to text.">
+                    <div class="cockpit-row" id="translateModelRow" style="display:none;"
+                        data-tooltip="Choose which engine translates the text to the target language.">
+                        <span class="cockpit-label">📝 Translating:</span>
+                        <select class="model-select" id="translateModelSelect">
+                            <optgroup label="☁️ Cloud">
+                                <option value="cloud">☁️ Windy Cloud</option>
+                            </optgroup>
+                            <optgroup label="🛡️ Edge (CPU)">
+                                <option value="edge-spark">Edge Spark — 42 MB, 32×</option>
+                                <option value="edge-pulse">Edge Pulse — 78 MB, 16×</option>
+                                <option value="edge-standard">Edge Standard — 168 MB, 6×</option>
+                                <option value="edge-global">Edge Global — 515 MB, multilingual</option>
+                                <option value="edge-pro">Edge Pro — 515 MB, English</option>
+                            </optgroup>
+                            <optgroup label="⚡ Core (GPU)">
+                                <option value="core-spark">Core Spark — 75 MB, 32×</option>
+                                <option value="core-pulse">Core Pulse — 142 MB, 16×</option>
+                                <option value="core-standard" selected>Core Standard — 466 MB, 6×</option>
+                                <option value="core-global">Core Global — 1.5 GB, multilingual</option>
+                                <option value="core-pro">Core Pro — 1.5 GB, English</option>
+                                <option value="core-turbo">Core Turbo — 1.6 GB, 4×</option>
+                                <option value="core-ultra">Core Ultra — 2.9 GB, BEST</option>
+                            </optgroup>
+                            <optgroup label="🌍 Lingua (Specialist)">
+                                <option value="lingua-es">Lingua Español — 500 MB</option>
+                                <option value="lingua-fr">Lingua Français — 500 MB</option>
+                                <option value="lingua-hi">Lingua हिन्दी — 500 MB</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="cockpit-row" data-tooltip="Shows which engine is currently active for listening.">
                         <span class="cockpit-label">🎤 Listening:</span>
                         <span class="cockpit-value" id="listeningValue">—</span>
                     </div>
-                    <div class="cockpit-row"
-                        data-tooltip="The engine that translates the text from one language to another.">
+                    <div class="cockpit-row" data-tooltip="Shows which engine is currently active for translating.">
                         <span class="cockpit-label">📝 Translating:</span>
                         <span class="cockpit-value" id="translatingValue">—</span>
                     </div>
