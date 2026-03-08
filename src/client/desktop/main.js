@@ -1118,64 +1118,72 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     // Jump directly to cloud section below
   } else {
 
-    // ── Try local Whisper engine first ──
-    try {
-      const serverCfg = store.get('server') || { host: '127.0.0.1', port: 9876 };
-      const wsUrl = `ws://${serverCfg.host}:${serverCfg.port}`;
-      const WebSocket = require('ws');
+    // ── Try local Whisper engine with retry ──
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 2000;
+    let lastLocalErr = null;
 
-      const localResult = await new Promise((resolve, reject) => {
-        const ws = new WebSocket(wsUrl);
-        let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 15000);
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const serverCfg = store.get('server') || { host: '127.0.0.1', port: 9876 };
+        const wsUrl = `ws://${serverCfg.host}:${serverCfg.port}`;
+        const WebSocket = require('ws');
 
-        ws.on('open', () => {
-          // Use Whisper's task=translate for any-language → English
-          ws.send(JSON.stringify({
-            action: 'translate_blob',
-            language: sourceLang === 'auto' ? 'auto' : sourceLang,
-            task: targetLang === 'en' ? 'translate' : 'transcribe'
-          }));
-          ws.send(audioBuffer);
-        });
+        const localResult = await new Promise((resolve, reject) => {
+          const ws = new WebSocket(wsUrl);
+          let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 15000);
 
-        ws.on('message', (data) => {
-          try {
-            const msg = JSON.parse(data.toString());
-            // Only process the actual translate result — server sends other messages first
-            if (msg.type === 'translate_result') {
-              clearTimeout(timeout);
-              ws.close();
-              if (msg.error) reject(new Error(msg.error));
-              else resolve({ text: msg.text || '', detectedLang: msg.language || sourceLang, engine: 'local', modelInfo });
+          ws.on('open', () => {
+            ws.send(JSON.stringify({
+              action: 'translate_blob',
+              language: sourceLang === 'auto' ? 'auto' : sourceLang,
+              task: targetLang === 'en' ? 'translate' : 'transcribe'
+            }));
+            ws.send(audioBuffer);
+          });
+
+          ws.on('message', (data) => {
+            try {
+              const msg = JSON.parse(data.toString());
+              if (msg.type === 'translate_result') {
+                clearTimeout(timeout);
+                ws.close();
+                if (msg.error) reject(new Error(msg.error));
+                else resolve({ text: msg.text || '', detectedLang: msg.language || sourceLang, engine: 'local', modelInfo });
+              }
+            } catch (e) {
+              // Non-JSON message, ignore
             }
-            // Ignore other message types (handshake, status, etc.)
-          } catch (e) {
-            // Non-JSON message, ignore
-          }
+          });
+
+          ws.on('error', () => { clearTimeout(timeout); reject(new Error('local unavailable')); });
         });
 
-        ws.on('error', () => { clearTimeout(timeout); reject(new Error('local unavailable')); });
-      });
+        // If target is English, Whisper already translated → done
+        if (targetLang === 'en') return { ...localResult, modelInfo };
 
-      // If target is English, Whisper already translated → done
-      if (targetLang === 'en') return { ...localResult, modelInfo };
-
-      // If target is NOT English, we got English text from Whisper — now translate English → target
-      if (localResult.text && localResult.text.trim()) {
-        const textResult = await translateTextViaAI(localResult.text, 'en', targetLang);
-        if (textResult && textResult.ok) {
-          return { text: textResult.translatedText, detectedLang: localResult.detectedLang, engine: textResult.engine || 'groq', modelInfo };
+        // If target is NOT English, translate English → target
+        if (localResult.text && localResult.text.trim()) {
+          const textResult = await translateTextViaAI(localResult.text, 'en', targetLang);
+          if (textResult && textResult.ok) {
+            return { text: textResult.translatedText, detectedLang: localResult.detectedLang, engine: textResult.engine || 'groq', modelInfo };
+          }
+          return { ...localResult, modelInfo };
         }
-        // Fall through - return English if text translation failed
         return { ...localResult, modelInfo };
-      }
-      return { ...localResult, modelInfo };
 
-    } catch (localErr) {
-      // Local engine not available — fallback depends on localOnly setting
-      if (localOnly) {
-        return { error: '🔒 Local Only mode: No local engine available. Start the local Whisper server or disable Local Only.' };
+      } catch (localErr) {
+        lastLocalErr = localErr;
+        if (attempt < MAX_RETRIES) {
+          // Wait before retrying — server may be busy processing other chunks
+          await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+        }
       }
+    }
+
+    // All retries exhausted
+    if (localOnly) {
+      return { error: '🔒 Local Only mode: No local engine available after ' + MAX_RETRIES + ' attempts. Server may be overloaded — try a longer chunk duration.' };
     }
   } // end else (not userWantsCloud)
 
