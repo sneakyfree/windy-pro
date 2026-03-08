@@ -617,28 +617,21 @@
             text-align: right;
         }
 
-        /* ── Tooltips ── */
-        [data-tooltip] {
-            position: relative;
-            cursor: help;
-        }
-
-        [data-tooltip]:hover::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            top: calc(100% + 6px);
-            left: 0;
+        /* ── Tooltip (JS-positioned) ── */
+        #tooltip {
+            position: fixed;
+            display: none;
             background: #0F172A;
             color: #F1F5F9;
             border: 1px solid #475569;
             border-radius: 8px;
-            padding: 8px 12px;
+            padding: 8px 14px;
             font-size: 12px;
             font-weight: 400;
             white-space: normal;
             max-width: 260px;
             width: max-content;
-            z-index: 9999;
+            z-index: 99999;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
             line-height: 1.5;
             pointer-events: none;
@@ -676,14 +669,15 @@
                 <div class="header-title">
                     <h1>🌐 Quick Translate</h1>
                 </div>
-                <button class="close-btn" id="closeBtn">×</button>
+                <button class="close-btn" id="closeBtn" data-tooltip="Close Quick Translate popup.">×</button>
             </div>
 
             <!-- Ui scale slider — full-width row -->
             <div class="ui-scale-row">
                 <label class="ui-scale-label" data-tooltip="Adjust the size of all controls, buttons, and labels.">🔧 Ui
                     Scale</label>
-                <input type="range" class="ui-scale-slider" id="uiScaleSlider" min="8" max="16" step="1" value="10">
+                <input type="range" class="ui-scale-slider" id="uiScaleSlider" min="8" max="16" step="1" value="10"
+                    data-tooltip="Drag to make all controls bigger or smaller. Only affects the control panel, not the transcript below.">
             </div>
 
             <div class="lang-row">
@@ -899,14 +893,17 @@
                 <div class="input-row">
                     <textarea id="textInput" class="text-input" placeholder="Type text to translate…"
                         rows="2"></textarea>
-                    <button class="translate-btn" id="translateBtn">→</button>
+                    <button class="translate-btn" id="translateBtn"
+                        data-tooltip="Send your text for translation.">→</button>
                 </div>
             </div>
 
             <!-- Live Listen mode controls -->
             <div class="listen-mode" id="listenMode">
                 <div class="listen-controls">
-                    <button class="listen-btn" id="listenBtn">🎤 Start Listening</button>
+                    <button class="listen-btn" id="listenBtn"
+                        data-tooltip="Start/stop listening. Your microphone will capture audio and translate in real-time.">🎤
+                        Start Listening</button>
                     <div class="audio-strobe" id="audioStrobe"></div>
                     <div class="listen-badges">
                         <span class="badge badge-lang" id="detectedLangBadge" style="display:none;"></span>
@@ -962,7 +959,8 @@
                 </div>
                 <div class="chunk-slider-row">
                     <label>⏱️ Chunk</label>
-                    <input type="range" class="chunk-slider" id="chunkSlider" min="5" max="60" step="1" value="10">
+                    <input type="range" class="chunk-slider" id="chunkSlider" min="5" max="60" step="1" value="10"
+                        data-tooltip="How many seconds of audio to capture before sending for translation. Longer = smoother, shorter = faster.">
                     <span class="chunk-duration-label" id="chunkDurationLabel">10s</span>
                 </div>
             </div>
@@ -971,7 +969,8 @@
         <!-- Shared sliders + unified transcript (NOT zoomed) -->
         <div class="font-slider-row">
             <label>Aa Size</label>
-            <input type="range" class="font-slider" id="fontSlider" min="10" max="24" step="1" value="14">
+            <input type="range" class="font-slider" id="fontSlider" min="10" max="24" step="1" value="14"
+                data-tooltip="Drag to make the transcript text bigger or smaller.">
             <span class="font-size-label" id="fontSizeLabel">14</span>
         </div>
         <div class="live-transcript" id="unifiedTranscript">
@@ -982,7 +981,53 @@
         </div>
     </div>
 
+    <div id="tooltip"></div>
+
     <script src="mini-translate.js"></script>
+    <script>
+        // JS tooltip system — positions tooltips within viewport bounds
+        (function () {
+            const tip = document.getElementById('tooltip');
+            let hideTimer = null;
+
+            document.querySelectorAll('[data-tooltip]').forEach(el => {
+                el.addEventListener('mouseenter', (e) => {
+                    clearTimeout(hideTimer);
+                    const text = el.getAttribute('data-tooltip');
+                    if (!text) return;
+                    tip.textContent = text;
+                    tip.style.display = 'block';
+
+                    // Position near the element
+                    const rect = el.getBoundingClientRect();
+                    const tipW = tip.offsetWidth;
+                    const tipH = tip.offsetHeight;
+                    const winW = window.innerWidth;
+                    const winH = window.innerHeight;
+
+                    // Try below the element, centered
+                    let x = rect.left + (rect.width / 2) - (tipW / 2);
+                    let y = rect.bottom + 8;
+
+                    // Clamp right edge
+                    if (x + tipW > winW - 8) x = winW - tipW - 8;
+                    // Clamp left edge
+                    if (x < 8) x = 8;
+                    // If below overflows, show above
+                    if (y + tipH > winH - 8) y = rect.top - tipH - 8;
+                    // Clamp top
+                    if (y < 8) y = 8;
+
+                    tip.style.left = x + 'px';
+                    tip.style.top = y + 'px';
+                });
+
+                el.addEventListener('mouseleave', () => {
+                    hideTimer = setTimeout(() => { tip.style.display = 'none'; }, 100);
+                });
+            });
+        })();
+    </script>
 </body>
 
 </html>
