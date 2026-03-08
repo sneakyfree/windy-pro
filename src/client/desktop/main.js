@@ -995,9 +995,9 @@ ipcMain.handle('set-font-size', async (event, percent) => {
 // ═══════════════════════════════════════════
 
 function showMiniTranslateWindow() {
+  // Toggle: if already open, close it
   if (miniTranslateWindow && !miniTranslateWindow.isDestroyed()) {
-    miniTranslateWindow.show();
-    miniTranslateWindow.focus();
+    miniTranslateWindow.close();
     return;
   }
 
@@ -1015,7 +1015,7 @@ function showMiniTranslateWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
+      sandbox: false,
       preload: path.join(__dirname, 'mini-translate-preload.js')
     }
   });
