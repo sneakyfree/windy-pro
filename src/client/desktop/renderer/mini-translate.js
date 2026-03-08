@@ -142,6 +142,7 @@ async function startListening() {
     }
 
     isListening = true;
+    chunkCount = 0;
     listenBtn.textContent = '⏹ Stop Listening';
     listenBtn.classList.add('recording');
     liveTranscript.innerHTML = '';
@@ -181,7 +182,14 @@ function startNextChunk() {
     }, 5000);
 }
 
+let chunkCount = 0;
+
 async function processChunk(audioBlob) {
+    chunkCount++;
+    const chunkNum = chunkCount;
+    const sizeKB = Math.round(audioBlob.size / 1024);
+    appendChunk(`⏳ Processing chunk #${chunkNum} (${sizeKB} KB)…`, 'info');
+
     try {
         const arrayBuf = await audioBlob.arrayBuffer();
         const result = await ipcRenderer.invoke('mini-translate-speech',
@@ -212,9 +220,11 @@ async function processChunk(audioBlob) {
                 engineBadge.className = `badge badge-engine${isCloud ? ' cloud' : ''}`;
                 engineBadge.style.display = '';
             }
+        } else {
+            appendChunk(`🔇 Chunk #${chunkNum}: no speech detected`, 'info');
         }
     } catch (err) {
-        appendChunk(`⚠️ ${err.message}`, 'error');
+        appendChunk(`⚠️ Chunk #${chunkNum}: ${err.message}`, 'error');
     }
 }
 
