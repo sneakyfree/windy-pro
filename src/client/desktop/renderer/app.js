@@ -808,13 +808,15 @@ class WindyApp {
     const defaults = {
       toggleRecording: 'CommandOrControl+Shift+Space',
       pasteTranscript: 'CommandOrControl+Shift+V',
-      showHide: 'CommandOrControl+Shift+W'
+      showHide: 'CommandOrControl+Shift+W',
+      quickTranslate: 'CommandOrControl+Shift+T'
     };
 
     const actual = {
       toggleRecording: hotkeys?.toggleRecording || defaults.toggleRecording,
       pasteTranscript: hotkeys?.pasteTranscript || defaults.pasteTranscript,
-      showHide: hotkeys?.showHide || defaults.showHide
+      showHide: hotkeys?.showHide || defaults.showHide,
+      quickTranslate: hotkeys?.quickTranslate || defaults.quickTranslate
     };
 
     // Format accelerator string for display
@@ -839,6 +841,11 @@ class WindyApp {
         id: 'shortcutRow_showHide',
         key: 'showHide',
         label: '<span style="color:#F7DC6F;font-weight:600;">Show / Hide</span> app window'
+      },
+      {
+        id: 'shortcutRow_quickTranslate',
+        key: 'quickTranslate',
+        label: '<span style="color:#6366F1;font-weight:600;">Quick Translate</span> pop-up'
       }
     ];
 

@@ -76,7 +76,8 @@ const store = new Store({
       toggleRecording: 'CommandOrControl+Shift+Space',
       pasteTranscript: 'CommandOrControl+Shift+V',
       pasteClipboard: 'CommandOrControl+Shift+B',
-      showHide: 'CommandOrControl+Shift+W'
+      showHide: 'CommandOrControl+Shift+W',
+      quickTranslate: 'CommandOrControl+Shift+T'
     },
     window: {
       width: 400,
@@ -1142,11 +1143,12 @@ function registerHotkeys() {
   });
   console.log(`[Hotkey] Show/Hide (${hotkeys.showHide}): ${regShow ? 'OK' : 'FAILED'}`);
 
-  // Quick Translate hotkey (Ctrl+Shift+T)
-  const regTranslate = globalShortcut.register('CommandOrControl+Shift+T', () => {
+  // Quick Translate hotkey
+  const qtAccel = hotkeys.quickTranslate || 'CommandOrControl+Shift+T';
+  const regTranslate = globalShortcut.register(qtAccel, () => {
     showMiniTranslateWindow();
   });
-  console.log(`[Hotkey] Quick Translate (Ctrl+Shift+T): ${regTranslate ? 'OK' : 'FAILED'}`);
+  console.log(`[Hotkey] Quick Translate (${qtAccel}): ${regTranslate ? 'OK' : 'FAILED'}`);
 }
 
 /**

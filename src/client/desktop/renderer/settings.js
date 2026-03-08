@@ -323,6 +323,11 @@ class SettingsPanel {
               <span class="hotkey-desc">Cycles: Full window → Tornado → Hidden</span>
               <div class="shortcut-capture shortcut-btn" id="shortcutShowHide" tabindex="0" data-key="showHide">Ctrl+Shift+W</div>
             </div>
+            <div class="hotkey-item-stacked">
+              <span class="hotkey-label">🌐 Quick Translate</span>
+              <span class="hotkey-desc">Opens floating translate pop-up for instant translations</span>
+              <div class="shortcut-capture shortcut-btn" id="shortcutQuickTranslate" tabindex="0" data-key="quickTranslate">Ctrl+Shift+T</div>
+            </div>
             <div class="hotkey-item-stacked hotkey-readonly">
               <span class="hotkey-label">🔍 Zoom (app window only)</span>
               <span class="hotkey-desc">Click inside the app first — only zooms the Windy Pro window, not your desktop</span>
@@ -940,13 +945,15 @@ class SettingsPanel {
           toggleRecording: 'CommandOrControl+Shift+Space',
           pasteTranscript: 'CommandOrControl+Shift+V',
           pasteClipboard: 'CommandOrControl+Shift+B',
-          showHide: 'CommandOrControl+Shift+W'
+          showHide: 'CommandOrControl+Shift+W',
+          quickTranslate: 'CommandOrControl+Shift+T'
         };
         const displayMap = {
           toggleRecording: '#shortcutToggle',
           pasteTranscript: '#shortcutPaste',
           pasteClipboard: '#shortcutClipboard',
-          showHide: '#shortcutShowHide'
+          showHide: '#shortcutShowHide',
+          quickTranslate: '#shortcutQuickTranslate'
         };
         // Reset each badge display
         for (const [key, selector] of Object.entries(displayMap)) {
