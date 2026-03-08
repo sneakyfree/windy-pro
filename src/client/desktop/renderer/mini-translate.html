@@ -832,20 +832,15 @@
             <button class="mode-tab" id="tabListen" data-mode="listen">🎤 Live Listen</button>
         </div>
 
-        <!-- Text mode (existing) -->
+        <!-- Text mode input controls -->
         <div class="text-mode" id="textMode">
             <div class="input-row">
-                <textarea id="textInput" class="text-input" placeholder="Type text to translate…" rows="3"></textarea>
+                <textarea id="textInput" class="text-input" placeholder="Type text to translate…" rows="2"></textarea>
                 <button class="translate-btn" id="translateBtn">→</button>
-            </div>
-            <div class="result" id="resultArea">
-                <div class="source" id="sourceText"></div>
-                <div class="translation" id="translationText"></div>
-                <span class="confidence" id="confidenceBadge"></span>
             </div>
         </div>
 
-        <!-- Live Listen mode -->
+        <!-- Live Listen mode controls -->
         <div class="listen-mode" id="listenMode">
             <div class="listen-controls">
                 <button class="listen-btn" id="listenBtn">🎤 Start Listening</button>
@@ -902,22 +897,23 @@
                     <span class="cockpit-value" id="translatingValue">—</span>
                 </div>
             </div>
-            <div class="font-slider-row">
-                <label>Aa Size</label>
-                <input type="range" class="font-slider" id="fontSlider" min="10" max="24" step="1" value="14">
-                <span class="font-size-label" id="fontSizeLabel">14</span>
-            </div>
             <div class="chunk-slider-row">
                 <label>⏱️ Chunk</label>
                 <input type="range" class="chunk-slider" id="chunkSlider" min="5" max="60" step="1" value="10">
                 <span class="chunk-duration-label" id="chunkDurationLabel">10s</span>
             </div>
-            <div class="live-transcript" id="liveTranscript">
-                <div class="placeholder-text">
-                    Press <strong>Start Listening</strong> to begin live translation.<br>
-                    Windy Pro will listen through your microphone and<br>
-                    translate speech in real-time.
-                </div>
+        </div>
+
+        <!-- Shared sliders + unified transcript -->
+        <div class="font-slider-row">
+            <label>Aa Size</label>
+            <input type="range" class="font-slider" id="fontSlider" min="10" max="24" step="1" value="14">
+            <span class="font-size-label" id="fontSizeLabel">14</span>
+        </div>
+        <div class="live-transcript" id="unifiedTranscript">
+            <div class="placeholder-text">
+                Choose <strong>⌨️ Text</strong> to type or <strong>🎤 Live Listen</strong> to speak.<br>
+                All translations appear here in one conversation thread.
             </div>
         </div>
     </div>

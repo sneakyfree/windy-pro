@@ -14,15 +14,11 @@ const targetLang = document.getElementById('targetLang');
 const textMode = document.getElementById('textMode');
 const textInput = document.getElementById('textInput');
 const translateBtn = document.getElementById('translateBtn');
-const resultArea = document.getElementById('resultArea');
-const sourceText = document.getElementById('sourceText');
-const translationText = document.getElementById('translationText');
-const confidenceBadge = document.getElementById('confidenceBadge');
 
 // Listen mode
 const listenMode = document.getElementById('listenMode');
 const listenBtn = document.getElementById('listenBtn');
-const liveTranscript = document.getElementById('liveTranscript');
+const unifiedTranscript = document.getElementById('unifiedTranscript');
 const detectedLangBadge = document.getElementById('detectedLangBadge');
 const chunkSlider = document.getElementById('chunkSlider');
 const chunkDurationLabel = document.getElementById('chunkDurationLabel');
@@ -61,7 +57,7 @@ const fontSizeLabel = document.getElementById('fontSizeLabel');
 fontSlider.addEventListener('input', () => {
     const px = fontSlider.value;
     fontSizeLabel.textContent = px;
-    liveTranscript.style.fontSize = `${px}px`;
+    unifiedTranscript.style.fontSize = `${px}px`;
 });
 
 const LANG_NAMES = {
@@ -164,26 +160,20 @@ async function doTranslate() {
     const text = textInput.value.trim();
     if (!text) return;
 
-    sourceText.textContent = text;
-    translationText.textContent = 'Translating…';
-    confidenceBadge.textContent = '';
-    resultArea.classList.add('visible');
+    const srcName = LANG_NAMES[sourceLang.value] || sourceLang.value;
+    const tgtName = LANG_NAMES[targetLang.value] || targetLang.value;
+    appendChunk(`⌨️ [${srcName} → ${tgtName}]  ${text}`, 'info');
+    textInput.value = '';
 
     try {
         const result = await ipcRenderer.invoke('mini-translate-text', text, sourceLang.value, targetLang.value);
-        translationText.textContent = result.translatedText || '';
-        const conf = result.confidence || 0;
-        if (conf > 0) {
-            const pct = Math.round(conf * 100);
-            let bg = 'rgba(34,197,94,0.15)', fg = '#22C55E';
-            if (conf < 0.7) { bg = 'rgba(239,68,68,0.15)'; fg = '#EF4444'; }
-            else if (conf < 0.9) { bg = 'rgba(234,179,8,0.15)'; fg = '#EAB308'; }
-            confidenceBadge.style.background = bg;
-            confidenceBadge.style.color = fg;
-            confidenceBadge.textContent = `${pct}%`;
+        if (result.translatedText) {
+            appendChunk(`${result.translatedText}`);
+        } else {
+            appendChunk('⚠️ No translation returned', 'error');
         }
     } catch (err) {
-        translationText.textContent = `⚠️ ${err.message}`;
+        appendChunk(`⚠️ ${err.message}`, 'error');
     }
 }
 
@@ -221,7 +211,6 @@ async function startListening() {
     listenBtn.textContent = '⏹ Stop Listening';
     listenBtn.classList.add('recording');
     audioStrobe.classList.add('active');
-    liveTranscript.innerHTML = '';
     appendChunk('🎤 Listening… speak now', 'info');
 
     // Start recording in 5-second chunks
@@ -338,7 +327,7 @@ async function processChunk(audioBlob) {
 
 function appendChunk(text, type = 'normal') {
     // Remove placeholder if present
-    const placeholder = liveTranscript.querySelector('.placeholder-text');
+    const placeholder = unifiedTranscript.querySelector('.placeholder-text');
     if (placeholder) placeholder.remove();
 
     const div = document.createElement('div');
@@ -356,8 +345,8 @@ function appendChunk(text, type = 'normal') {
     if (type === 'info') textDiv.style.color = '#6B7280';
     div.appendChild(textDiv);
 
-    liveTranscript.appendChild(div);
-    liveTranscript.scrollTop = liveTranscript.scrollHeight;
+    unifiedTranscript.appendChild(div);
+    unifiedTranscript.scrollTop = unifiedTranscript.scrollHeight;
 }
 
 function stopListening() {
