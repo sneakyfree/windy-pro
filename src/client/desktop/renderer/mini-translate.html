@@ -35,6 +35,38 @@
             align-items: center;
         }
 
+        .ui-scale-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .ui-scale-label {
+            font-size: 9px;
+            color: #9CA3AF;
+            font-weight: 600;
+        }
+
+        .ui-scale-slider {
+            width: 50px;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 3px;
+            background: #374151;
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .ui-scale-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #F59E0B;
+            cursor: pointer;
+        }
+
         .header-title {
             -webkit-app-region: drag;
             flex: 1;
@@ -624,11 +656,17 @@
             <div class="header-title">
                 <h1>🌐 Quick Translate</h1>
             </div>
+            <div class="ui-scale-row">
+                <label class="ui-scale-label"
+                    data-tooltip="Adjust the size of all controls, buttons, and labels.">Ui</label>
+                <input type="range" class="ui-scale-slider" id="uiScaleSlider" min="8" max="16" step="1" value="10">
+            </div>
             <button class="close-btn" id="closeBtn">×</button>
         </div>
 
         <div class="lang-row">
-            <select id="sourceLang" class="lang-select">
+            <select id="sourceLang" class="lang-select"
+                data-tooltip="The language being spoken or typed. Auto will detect it for you.">
                 <option value="auto">🔍 Auto</option>
                 <option value="af">Afrikaans</option>
                 <option value="sq">Albanian</option>
@@ -726,8 +764,8 @@
                 <option value="yi">Yiddish</option>
                 <option value="yo">Yoruba</option>
             </select>
-            <button class="swap-btn" id="swapBtn">⇄</button>
-            <select id="targetLang" class="lang-select">
+            <button class="swap-btn" id="swapBtn" data-tooltip="Swap source and target languages.">⇄</button>
+            <select id="targetLang" class="lang-select" data-tooltip="The language you want the translation in.">
                 <option value="en">English</option>
                 <option value="af">Afrikaans</option>
                 <option value="sq">Albanian</option>
@@ -828,8 +866,10 @@
 
         <!-- Mode tabs -->
         <div class="mode-tabs">
-            <button class="mode-tab active" id="tabText" data-mode="text">⌨️ Text</button>
-            <button class="mode-tab" id="tabListen" data-mode="listen">🎤 Live Listen</button>
+            <button class="mode-tab active" id="tabText" data-mode="text"
+                data-tooltip="Type text and press Enter to translate.">⌨️ Text</button>
+            <button class="mode-tab" id="tabListen" data-mode="listen"
+                data-tooltip="Use your microphone to translate speech in real-time.">🎤 Live Listen</button>
         </div>
 
         <!-- Text mode input controls -->
