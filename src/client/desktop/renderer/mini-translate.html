@@ -30,7 +30,11 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+
+        .header-title {
             -webkit-app-region: drag;
+            flex: 1;
         }
 
         .header h1 {
@@ -166,7 +170,9 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🌐 Quick Translate</h1>
+            <div class="header-title">
+                <h1>🌐 Quick Translate</h1>
+            </div>
             <button class="close-btn" id="closeBtn">×</button>
         </div>
 
