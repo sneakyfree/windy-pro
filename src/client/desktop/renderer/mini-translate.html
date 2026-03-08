@@ -985,47 +985,48 @@
 
     <script src="mini-translate.js"></script>
     <script>
-        // JS tooltip system — positions tooltips within viewport bounds
+        // Tooltip system — event delegation, works for ALL elements at any time
         (function () {
-            const tip = document.getElementById('tooltip');
-            let hideTimer = null;
+            var tip = document.getElementById('tooltip');
+            if (!tip) return;
+            var timer = null;
+            var activeEl = null;
 
-            document.querySelectorAll('[data-tooltip]').forEach(el => {
-                el.addEventListener('mouseenter', (e) => {
-                    clearTimeout(hideTimer);
-                    const text = el.getAttribute('data-tooltip');
+            document.addEventListener('mouseover', function (e) {
+                var el = e.target.closest ? e.target.closest('[data-tooltip]') : null;
+                if (!el) { return; }
+                if (el === activeEl) return;
+                activeEl = el;
+                clearTimeout(timer);
+                timer = setTimeout(function () {
+                    var text = el.getAttribute('data-tooltip');
                     if (!text) return;
                     tip.textContent = text;
                     tip.style.display = 'block';
-
-                    // Position near the element
-                    const rect = el.getBoundingClientRect();
-                    const tipW = tip.offsetWidth;
-                    const tipH = tip.offsetHeight;
-                    const winW = window.innerWidth;
-                    const winH = window.innerHeight;
-
-                    // Try below the element, centered
-                    let x = rect.left + (rect.width / 2) - (tipW / 2);
-                    let y = rect.bottom + 8;
-
-                    // Clamp right edge
-                    if (x + tipW > winW - 8) x = winW - tipW - 8;
-                    // Clamp left edge
-                    if (x < 8) x = 8;
-                    // If below overflows, show above
-                    if (y + tipH > winH - 8) y = rect.top - tipH - 8;
-                    // Clamp top
-                    if (y < 8) y = 8;
-
+                    var rect = el.getBoundingClientRect();
+                    var tw = tip.offsetWidth;
+                    var th = tip.offsetHeight;
+                    var ww = window.innerWidth;
+                    var wh = window.innerHeight;
+                    var x = rect.left + (rect.width / 2) - (tw / 2);
+                    var y = rect.bottom + 8;
+                    if (x + tw > ww - 10) x = ww - tw - 10;
+                    if (x < 10) x = 10;
+                    if (y + th > wh - 10) y = rect.top - th - 8;
+                    if (y < 10) y = 10;
                     tip.style.left = x + 'px';
                     tip.style.top = y + 'px';
-                });
+                }, 300);
+            }, true);
 
-                el.addEventListener('mouseleave', () => {
-                    hideTimer = setTimeout(() => { tip.style.display = 'none'; }, 100);
-                });
-            });
+            document.addEventListener('mouseout', function (e) {
+                var el = e.target.closest ? e.target.closest('[data-tooltip]') : null;
+                if (el) {
+                    clearTimeout(timer);
+                    activeEl = null;
+                    tip.style.display = 'none';
+                }
+            }, true);
         })();
     </script>
 </body>
