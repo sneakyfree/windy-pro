@@ -653,6 +653,43 @@
             margin-bottom: 2px;
         }
 
+        .live-transcript .chunk-meta {
+            font-size: 10px;
+            color: #A5B4FC;
+            margin-bottom: 4px;
+            padding: 3px 6px;
+            background: rgba(99, 102, 241, 0.08);
+            border-radius: 4px;
+            border-left: 2px solid #6366F1;
+            line-height: 1.4;
+        }
+
+        /* Local Only toggle */
+        .local-only-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+        }
+
+        .local-only-row label {
+            font-size: 11px;
+            color: #9CA3AF;
+            cursor: pointer;
+        }
+
+        .local-only-checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: #22C55E;
+            cursor: pointer;
+        }
+
+        .local-only-row.active label {
+            color: #22C55E;
+            font-weight: 600;
+        }
+
         .live-transcript .placeholder-text {
             color: #6B7280;
             font-style: italic;
@@ -919,6 +956,11 @@
                         <span class="toggle-label active" id="windyTuneLabel"
                             data-tooltip="WindyTune automatically picks the best model based on your hardware, language, and load. Just set it and forget it.">🌪️
                             WindyTune</span>
+                    </div>
+                    <div class="local-only-row" id="localOnlyRow"
+                        data-tooltip="When checked, WindyTune will only use local models — your text never leaves your device.">
+                        <input type="checkbox" class="local-only-checkbox" id="localOnlyCheckbox">
+                        <label for="localOnlyCheckbox">🔒 Local Only — data never leaves your device</label>
                     </div>
                     <div class="cockpit-row" id="modelSelectRow" style="display:none;">
                         <span class="cockpit-label">Model:</span>

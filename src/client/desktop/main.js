@@ -1066,7 +1066,8 @@ ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang
 });
 
 // ── Live Listen: speech translation for Quick Translate ──
-ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, targetLang, apiKeys) => {
+ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, targetLang, apiKeys, options) => {
+  const localOnly = options && options.localOnly;
   const audioBuffer = Buffer.from(audioArray);
   // Merge API keys: renderer localStorage → electron-store → env vars
   const rendererKeys = apiKeys || {};
@@ -1160,7 +1161,10 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     return { ...localResult, modelInfo };
 
   } catch (localErr) {
-    // Local engine not available — fall back to cloud
+    // Local engine not available — fallback depends on localOnly setting
+    if (localOnly) {
+      return { error: '🔒 Local Only mode: No local engine available. Start the local Whisper server or disable Local Only.' };
+    }
   }
 
   // ── Cloud fallback: Groq Whisper API ──

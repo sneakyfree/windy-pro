@@ -31,6 +31,8 @@ const modelSelectRow = document.getElementById('modelSelectRow');
 const modelSelect = document.getElementById('modelSelect');
 const listeningValue = document.getElementById('listeningValue');
 const translatingValue = document.getElementById('translatingValue');
+const localOnlyRow = document.getElementById('localOnlyRow');
+const localOnlyCheckbox = document.getElementById('localOnlyCheckbox');
 
 // Tab buttons
 const tabText = document.getElementById('tabText');
@@ -111,12 +113,15 @@ swapBtn.addEventListener('click', () => {
 
 // ── WindyTune / Manual toggle ──
 let isWindyTune = true;
+let isLocalOnly = false;
+
 windyTuneToggle.addEventListener('click', () => {
     isWindyTune = !isWindyTune;
     windyTuneToggle.classList.toggle('on', isWindyTune);
     manualLabel.classList.toggle('active', !isWindyTune);
     windyTuneLabel.classList.toggle('active', isWindyTune);
     modelSelectRow.style.display = isWindyTune ? 'none' : 'flex';
+    localOnlyRow.style.display = isWindyTune ? 'flex' : 'none';
     // Update cockpit display
     if (isWindyTune) {
         listeningValue.textContent = '🌪️ WindyTune — auto';
@@ -129,6 +134,18 @@ windyTuneToggle.addEventListener('click', () => {
         listeningValue.className = 'cockpit-value local';
         translatingValue.textContent = `🏠 ${sel.text}`;
         translatingValue.className = 'cockpit-value local';
+    }
+});
+
+localOnlyCheckbox.addEventListener('change', () => {
+    isLocalOnly = localOnlyCheckbox.checked;
+    localOnlyRow.classList.toggle('active', isLocalOnly);
+    if (isLocalOnly) {
+        listeningValue.textContent = '🌪️ WindyTune — local only';
+        translatingValue.textContent = '🌪️ WindyTune — local only';
+    } else {
+        listeningValue.textContent = '🌪️ WindyTune — auto';
+        translatingValue.textContent = '🌪️ WindyTune — auto';
     }
 });
 
@@ -276,7 +293,8 @@ async function processChunk(audioBlob) {
             Array.from(new Uint8Array(arrayBuf)),
             sourceLang.value,
             targetLang.value,
-            apiKeys
+            apiKeys,
+            { localOnly: isLocalOnly }
         );
 
         if (result.error) {
@@ -285,7 +303,17 @@ async function processChunk(audioBlob) {
         }
 
         if (result.text && result.text.trim()) {
-            appendChunk(result.text);
+            // Build metadata for this chunk
+            const meta = { duration: durSec };
+            if (result.engine) {
+                const isCloudListen = result.engine === 'groq' || result.engine === 'openai';
+                meta.listening = isCloudListen ? '☁️ Windy Cloud' : ('🏠 ' + (result.modelInfo?.model || 'Local'));
+            }
+            if (result.modelInfo) {
+                const isCloudTranslate = result.engine === 'groq' || result.engine === 'openai';
+                meta.translating = isCloudTranslate ? '☁️ Windy Cloud LLM' : ('🏠 ' + result.modelInfo.model);
+            }
+            appendChunk(result.text, 'normal', meta);
 
             // Update detected language badge
             if (result.detectedLang) {
@@ -333,7 +361,7 @@ async function processChunk(audioBlob) {
     }
 }
 
-function appendChunk(text, type = 'normal') {
+function appendChunk(text, type = 'normal', meta = null) {
     // Remove placeholder if present
     const placeholder = unifiedTranscript.querySelector('.placeholder-text');
     if (placeholder) placeholder.remove();
@@ -346,6 +374,18 @@ function appendChunk(text, type = 'normal') {
     timeDiv.className = 'chunk-time';
     timeDiv.textContent = time;
     div.appendChild(timeDiv);
+
+    // Engine metadata line
+    if (meta) {
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'chunk-meta';
+        const parts = [];
+        if (meta.listening) parts.push('🎤 ' + meta.listening);
+        if (meta.translating) parts.push('📝 ' + meta.translating);
+        if (meta.duration) parts.push(meta.duration + 's');
+        metaDiv.textContent = parts.join('  ·  ');
+        div.appendChild(metaDiv);
+    }
 
     const textDiv = document.createElement('div');
     textDiv.textContent = text;
