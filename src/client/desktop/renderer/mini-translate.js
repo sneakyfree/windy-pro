@@ -327,13 +327,24 @@ async function processChunk(audioBlob) {
         if (result.text && result.text.trim()) {
             // Build metadata for this chunk
             const meta = { duration: durSec };
+            // Listening engine — from backend result
             if (result.engine) {
                 const isCloudListen = result.engine === 'groq' || result.engine === 'openai';
                 meta.listening = isCloudListen ? '☁️ Windy Cloud' : ('🏠 ' + (result.modelInfo?.model || 'Local'));
             }
-            if (result.modelInfo) {
+            // Translating engine — from the user's dropdown selection (Manual)
+            // or from back-end result (WindyTune)
+            if (isWindyTune) {
                 const isCloudTranslate = result.engine === 'groq' || result.engine === 'openai';
-                meta.translating = isCloudTranslate ? '☁️ Windy Cloud LLM' : ('🏠 ' + result.modelInfo.model);
+                meta.translating = isCloudTranslate ? '☁️ Windy Cloud' : ('🏠 ' + (result.modelInfo?.model || 'Local'));
+            } else {
+                const tVal = translateModelSelect.value;
+                if (tVal === 'cloud') {
+                    meta.translating = '☁️ Windy Cloud';
+                } else {
+                    const tSel = translateModelSelect.options[translateModelSelect.selectedIndex];
+                    meta.translating = '🏠 ' + tSel.text;
+                }
             }
             appendChunk(result.text, 'normal', meta);
 
