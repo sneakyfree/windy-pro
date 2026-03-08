@@ -519,6 +519,80 @@
             text-align: right;
         }
 
+        /* ── Font size slider ── */
+        .font-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 2px 0;
+        }
+
+        .font-slider-row label {
+            font-size: 10px;
+            color: #9CA3AF;
+            white-space: nowrap;
+        }
+
+        .font-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            background: #374151;
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .font-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #F59E0B;
+            cursor: pointer;
+            border: 2px solid #FBBF24;
+            transition: transform 0.15s;
+        }
+
+        .font-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .font-size-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #FBBF24;
+            min-width: 30px;
+            text-align: right;
+        }
+
+        /* ── Tooltips ── */
+        [data-tooltip] {
+            position: relative;
+            cursor: help;
+        }
+
+        [data-tooltip]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1F2937;
+            color: #F9FAFB;
+            border: 1px solid #4B5563;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 10px;
+            font-weight: 400;
+            white-space: normal;
+            width: 200px;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            line-height: 1.4;
+        }
+
         .live-transcript .chunk {
             margin-bottom: 6px;
             padding-bottom: 6px;
@@ -783,9 +857,13 @@
             <!-- Cockpit info panel -->
             <div class="cockpit" id="cockpitPanel">
                 <div class="mode-toggle-row">
-                    <span class="toggle-label" id="manualLabel">Manual</span>
-                    <div class="toggle-switch on" id="windyTuneToggle"></div>
-                    <span class="toggle-label active" id="windyTuneLabel">🌪️ WindyTune</span>
+                    <span class="toggle-label" id="manualLabel"
+                        data-tooltip="You pick which model to use. Best for advanced users who know their hardware.">Manual</span>
+                    <div class="toggle-switch on" id="windyTuneToggle"
+                        data-tooltip="Click to switch between Manual and WindyTune modes."></div>
+                    <span class="toggle-label active" id="windyTuneLabel"
+                        data-tooltip="WindyTune automatically picks the best model based on your hardware, language, and load. Just set it and forget it.">🌪️
+                        WindyTune</span>
                 </div>
                 <div class="cockpit-row" id="modelSelectRow" style="display:none;">
                     <span class="cockpit-label">Model:</span>
@@ -813,14 +891,21 @@
                         </optgroup>
                     </select>
                 </div>
-                <div class="cockpit-row">
+                <div class="cockpit-row"
+                    data-tooltip="The engine that listens to the speaker and converts speech to text.">
                     <span class="cockpit-label">🎤 Listening:</span>
                     <span class="cockpit-value" id="listeningValue">—</span>
                 </div>
-                <div class="cockpit-row">
+                <div class="cockpit-row"
+                    data-tooltip="The engine that translates the text from one language to another.">
                     <span class="cockpit-label">📝 Translating:</span>
                     <span class="cockpit-value" id="translatingValue">—</span>
                 </div>
+            </div>
+            <div class="font-slider-row">
+                <label>Aa Size</label>
+                <input type="range" class="font-slider" id="fontSlider" min="10" max="24" step="1" value="14">
+                <span class="font-size-label" id="fontSizeLabel">14</span>
             </div>
             <div class="chunk-slider-row">
                 <label>⏱️ Chunk</label>

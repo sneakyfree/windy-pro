@@ -55,6 +55,15 @@ chunkSlider.addEventListener('input', () => {
     chunkDurationLabel.textContent = `${val}s`;
 });
 
+// Font size slider
+const fontSlider = document.getElementById('fontSlider');
+const fontSizeLabel = document.getElementById('fontSizeLabel');
+fontSlider.addEventListener('input', () => {
+    const px = fontSlider.value;
+    fontSizeLabel.textContent = px;
+    liveTranscript.style.fontSize = `${px}px`;
+});
+
 const LANG_NAMES = {
     auto: 'Auto', af: 'Afrikaans', sq: 'Albanian', am: 'Amharic', ar: 'Arabic',
     hy: 'Armenian', az: 'Azerbaijani', eu: 'Basque', be: 'Belarusian', bn: 'Bengali',
@@ -288,33 +297,35 @@ async function processChunk(audioBlob) {
                 detectedLangBadge.style.display = '';
             }
 
-            // Update cockpit — listening role
-            if (result.engine) {
-                const isCloud = result.engine === 'groq' || result.engine === 'openai';
-                if (isCloud) {
-                    listeningValue.textContent = '☁️ Windy Cloud';
-                    listeningValue.className = 'cockpit-value cloud';
-                } else {
-                    const localLabel = result.modelInfo?.model || 'Local';
-                    const sizeStr = result.modelInfo?.size ? ` · ${result.modelInfo.size}` : '';
-                    listeningValue.textContent = `🏠 ${localLabel}${sizeStr}`;
-                    listeningValue.className = 'cockpit-value local';
+            // Only update cockpit engine values in WindyTune mode
+            // In Manual mode, the user's selection is locked
+            if (isWindyTune) {
+                // Update cockpit — listening role
+                if (result.engine) {
+                    const isCloud = result.engine === 'groq' || result.engine === 'openai';
+                    if (isCloud) {
+                        listeningValue.textContent = '☁️ Windy Cloud';
+                        listeningValue.className = 'cockpit-value cloud';
+                    } else {
+                        const localLabel = result.modelInfo?.model || 'Local';
+                        const sizeStr = result.modelInfo?.size ? ` · ${result.modelInfo.size}` : '';
+                        listeningValue.textContent = `🏠 ${localLabel}${sizeStr}`;
+                        listeningValue.className = 'cockpit-value local';
+                    }
                 }
-            }
 
-            // Update cockpit — translating role
-            if (result.modelInfo) {
-                const mi = result.modelInfo;
-                const isCloud = result.engine === 'groq' || result.engine === 'openai';
-                if (isCloud) {
-                    const specStr = mi.specialty ? ` — ${mi.specialty}` : '';
-                    translatingValue.textContent = `☁️ Windy Cloud LLM${specStr}`;
-                    translatingValue.className = 'cockpit-value cloud';
-                } else {
-                    const sizeStr = mi.size ? ` · ${mi.size}` : '';
-                    const specStr = mi.specialty ? ` — ${mi.specialty}` : '';
-                    translatingValue.textContent = `🏠 ${mi.model}${sizeStr}${specStr}`;
-                    translatingValue.className = 'cockpit-value local';
+                // Update cockpit — translating role
+                if (result.modelInfo) {
+                    const mi = result.modelInfo;
+                    const isCloud = result.engine === 'groq' || result.engine === 'openai';
+                    if (isCloud) {
+                        translatingValue.textContent = '☁️ Windy Cloud';
+                        translatingValue.className = 'cockpit-value cloud';
+                    } else {
+                        const sizeStr = mi.size ? ` · ${mi.size}` : '';
+                        translatingValue.textContent = `🏠 ${mi.model}${sizeStr}`;
+                        translatingValue.className = 'cockpit-value local';
+                    }
                 }
             }
         } else {
