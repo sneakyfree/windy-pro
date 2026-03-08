@@ -984,51 +984,6 @@
     <div id="tooltip"></div>
 
     <script src="mini-translate.js"></script>
-    <script>
-        // Tooltip system — event delegation, works for ALL elements at any time
-        (function () {
-            var tip = document.getElementById('tooltip');
-            if (!tip) return;
-            var timer = null;
-            var activeEl = null;
-
-            document.addEventListener('mouseover', function (e) {
-                var el = e.target.closest ? e.target.closest('[data-tooltip]') : null;
-                if (!el) { return; }
-                if (el === activeEl) return;
-                activeEl = el;
-                clearTimeout(timer);
-                timer = setTimeout(function () {
-                    var text = el.getAttribute('data-tooltip');
-                    if (!text) return;
-                    tip.textContent = text;
-                    tip.style.display = 'block';
-                    var rect = el.getBoundingClientRect();
-                    var tw = tip.offsetWidth;
-                    var th = tip.offsetHeight;
-                    var ww = window.innerWidth;
-                    var wh = window.innerHeight;
-                    var x = rect.left + (rect.width / 2) - (tw / 2);
-                    var y = rect.bottom + 8;
-                    if (x + tw > ww - 10) x = ww - tw - 10;
-                    if (x < 10) x = 10;
-                    if (y + th > wh - 10) y = rect.top - th - 8;
-                    if (y < 10) y = 10;
-                    tip.style.left = x + 'px';
-                    tip.style.top = y + 'px';
-                }, 300);
-            }, true);
-
-            document.addEventListener('mouseout', function (e) {
-                var el = e.target.closest ? e.target.closest('[data-tooltip]') : null;
-                if (el) {
-                    clearTimeout(timer);
-                    activeEl = null;
-                    tip.style.display = 'none';
-                }
-            }, true);
-        })();
-    </script>
 </body>
 
 </html>

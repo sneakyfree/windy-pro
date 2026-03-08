@@ -118,65 +118,86 @@ body {
 .translate-menu-wrap {
   position: relative;
 }
+
 .translate-menu {
   position: absolute;
   top: 34px;
   right: 0;
-  width: 280px;
+  width: 310px;
   background: #1e293b;
   border: 1px solid #334155;
   border-radius: 10px;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
   z-index: 999;
-  padding: 6px;
+  padding: 8px;
+  overflow: visible;
   animation: menuFade 0.15s ease;
 }
+
 @keyframes menuFade {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
+
 .translate-menu-option {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px;
+  gap: 12px;
+  padding: 12px;
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.12s;
+  overflow: visible;
 }
+
 .translate-menu-option:hover {
   background: rgba(99, 102, 241, 0.15);
 }
+
 .tm-icon {
-  font-size: 22px;
+  font-size: 24px;
   flex-shrink: 0;
-  margin-top: 2px;
+  min-width: 28px;
+  text-align: center;
+  line-height: 1;
 }
+
 .tm-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
+
 .tm-info strong {
   font-size: 13px;
   color: #F9FAFB;
 }
+
 .tm-info kbd {
   display: inline;
   font-size: 10px;
-  background: rgba(99,102,241,0.2);
-  border: 1px solid rgba(99,102,241,0.3);
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.3);
   padding: 1px 5px;
   border-radius: 4px;
   font-family: 'SF Mono', monospace;
   color: #c4b5fd;
   margin-left: 4px;
 }
+
 .tm-info span {
   font-size: 11px;
   color: #9CA3AF;
   line-height: 1.3;
 }
+
 .translate-menu-divider {
   height: 1px;
   background: #334155;

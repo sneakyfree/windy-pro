@@ -375,3 +375,61 @@ function stopListening() {
     audioStrobe.classList.remove('active');
     appendChunk('⏹ Stopped listening', 'info');
 }
+
+// ════════════════════════════════════════════
+// TOOLTIP SYSTEM — event delegation, viewport-clamped
+// ════════════════════════════════════════════
+(function initTooltips() {
+    const tip = document.getElementById('tooltip');
+    if (!tip) {
+        console.warn('[Tooltip] #tooltip element not found');
+        return;
+    }
+    let timer = null;
+    let activeEl = null;
+
+    document.addEventListener('mouseover', function (e) {
+        const el = e.target.closest('[data-tooltip]');
+        if (!el) return;
+        if (el === activeEl) return;
+        activeEl = el;
+        clearTimeout(timer);
+        timer = setTimeout(function () {
+            const text = el.getAttribute('data-tooltip');
+            if (!text) return;
+            tip.textContent = text;
+            tip.style.display = 'block';
+
+            // Measure after display:block
+            const rect = el.getBoundingClientRect();
+            const tw = tip.offsetWidth;
+            const th = tip.offsetHeight;
+            const ww = window.innerWidth;
+            const wh = window.innerHeight;
+
+            // Position below element, centered
+            let x = rect.left + (rect.width / 2) - (tw / 2);
+            let y = rect.bottom + 8;
+
+            // Clamp to viewport
+            if (x + tw > ww - 10) x = ww - tw - 10;
+            if (x < 10) x = 10;
+            if (y + th > wh - 10) y = rect.top - th - 8;
+            if (y < 10) y = 10;
+
+            tip.style.left = x + 'px';
+            tip.style.top = y + 'px';
+        }, 300);
+    }, true);
+
+    document.addEventListener('mouseout', function (e) {
+        const el = e.target.closest('[data-tooltip]');
+        if (el) {
+            clearTimeout(timer);
+            activeEl = null;
+            tip.style.display = 'none';
+        }
+    }, true);
+
+    console.log('[Tooltip] Initialized — found', document.querySelectorAll('[data-tooltip]').length, 'elements');
+})();
