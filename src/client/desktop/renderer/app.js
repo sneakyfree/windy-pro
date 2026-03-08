@@ -257,11 +257,38 @@ class WindyApp {
       });
     }
 
-    // Translate button
+    // Translate discovery menu
     const translateBtn = document.getElementById('translateBtn');
-    if (translateBtn) {
-      translateBtn.addEventListener('click', () => {
+    const translateMenu = document.getElementById('translateMenu');
+    const openStudio = document.getElementById('openStudio');
+    const openQuickTranslate = document.getElementById('openQuickTranslate');
+
+    if (translateBtn && translateMenu) {
+      translateBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const visible = translateMenu.style.display !== 'none';
+        translateMenu.style.display = visible ? 'none' : 'block';
+      });
+
+      // Open Translate Studio (embedded panel)
+      openStudio?.addEventListener('click', () => {
+        translateMenu.style.display = 'none';
         if (this.translatePanel) this.translatePanel.toggle();
+      });
+
+      // Open Quick Translate (popup window)
+      openQuickTranslate?.addEventListener('click', () => {
+        translateMenu.style.display = 'none';
+        if (window.windyAPI?.openMiniTranslate) {
+          window.windyAPI.openMiniTranslate();
+        } else if (window.electronAPI?.send) {
+          window.electronAPI.send('open-mini-translate');
+        }
+      });
+
+      // Click outside to close menu
+      document.addEventListener('click', () => {
+        translateMenu.style.display = 'none';
       });
     }
 

@@ -1029,6 +1029,11 @@ ipcMain.on('mini-translate-close', () => {
   }
 });
 
+// Mini-translate IPC open (from renderer discovery menu)
+ipcMain.on('open-mini-translate', () => {
+  showMiniTranslateWindow();
+});
+
 // Mini-translate IPC text translation
 ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang) => {
   const https = require('https');

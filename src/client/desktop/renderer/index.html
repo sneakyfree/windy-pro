@@ -22,8 +22,27 @@
         <span class="title">Windy Pro</span>
       </div>
       <div class="title-bar-right">
-        <button class="title-btn" id="translateBtn" title="Translate" aria-label="Open translate panel"
-          style="font-size:14px;">🌐</button>
+        <div class="translate-menu-wrap" id="translateMenuWrap">
+          <button class="title-btn" id="translateBtn" title="Translation Tools" aria-label="Open translation tools"
+            style="font-size:14px;">🌐</button>
+          <div class="translate-menu" id="translateMenu" style="display:none;">
+            <div class="translate-menu-option" id="openStudio">
+              <div class="tm-icon">🎤</div>
+              <div class="tm-info">
+                <strong>Translate Studio</strong>
+                <span>Full workspace — push-to-talk, history, TTS playback, favorites</span>
+              </div>
+            </div>
+            <div class="translate-menu-divider"></div>
+            <div class="translate-menu-option" id="openQuickTranslate">
+              <div class="tm-icon">🌐</div>
+              <div class="tm-info">
+                <strong>Quick Translate</strong> <kbd>Ctrl+Shift+T</kbd>
+                <span>Floating overlay — live listen in meetings, type-to-translate, auto-detect</span>
+              </div>
+            </div>
+          </div>
+        </div>
         <button class="title-btn" id="themeQuickToggle" title="Toggle light/dark mode" aria-label="Toggle theme"
           style="font-size:14px;">🌙</button>
         <button class="title-btn" id="settingsBtn" title="Settings" aria-label="Open settings">⚙️</button>
