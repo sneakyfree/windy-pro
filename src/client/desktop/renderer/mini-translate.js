@@ -60,12 +60,12 @@ fontSlider.addEventListener('input', () => {
     unifiedTranscript.style.fontSize = `${px}px`;
 });
 
-// UI scale slider — scales all control panel elements via CSS zoom
+// UI scale slider — scales control panel elements only (NOT transcript)
 const uiScaleSlider = document.getElementById('uiScaleSlider');
-const container = document.querySelector('.container');
+const controlPanel = document.getElementById('controlPanel');
 uiScaleSlider.addEventListener('input', () => {
     const scale = uiScaleSlider.value / 10; // 0.8x to 1.6x
-    container.style.zoom = scale;
+    controlPanel.style.zoom = scale;
 });
 
 const LANG_NAMES = {
