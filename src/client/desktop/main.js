@@ -1013,10 +1013,8 @@ function showMiniTranslateWindow() {
     minWidth: 300,
     minHeight: 200,
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: false,
-      preload: path.join(__dirname, 'mini-translate-preload.js')
+      nodeIntegration: true,
+      contextIsolation: false
     }
   });
 
