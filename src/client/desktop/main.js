@@ -1026,7 +1026,7 @@ function showMiniTranslateWindow() {
 // Mini-translate IPC close
 ipcMain.on('mini-translate-close', () => {
   if (miniTranslateWindow && !miniTranslateWindow.isDestroyed()) {
-    miniTranslateWindow.hide();
+    miniTranslateWindow.close();
   }
 });
 
