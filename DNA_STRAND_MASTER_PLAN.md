@@ -948,6 +948,59 @@ NOBODY ELSE DOES FULLY OFFLINE SPEECH-TO-SPEECH TRANSLATION ON A PHONE/LAPTOP.
 This is a genuine market gap as of Feb 2026.
 ```
 
+### E0.5: Current Implementation Status (as of 2026-03-08) ✅
+```
+REFERENCE: docs/TRANSLATE_ARCHITECTURE.md (full architecture documentation)
+
+TWO-TOOL ARCHITECTURE (both shipping in Electron desktop app):
+
+┌─────────────────────────────────────────────────────────────────━━━━┐
+│  🌐 QUICK TRANSLATE (Popup)         🎤 TRANSLATE STUDIO (Panel)    │
+│  ├── Ctrl+Shift+T instant access    ├── Embedded in main window    │
+│  ├── ⌨️ Text + 🎤 Live Listen       ├── 💬 Text + 🎙️ Push-to-talk │
+│  ├── Passive continuous mic          ├── Active push-to-talk mic    │
+│  ├── 📜 Unified chronological feed  ├── 📋 History + ⭐ Favorites  │
+│  ├── 🔧 Cockpit (15 model selector) ├── 🔊 TTS playback           │
+│  ├── 🌪️ WindyTune/Manual toggle    ├── 🌊 Waveform animation      │
+│  ├── 📏 Ui + Aa scale sliders       ├── 📡 Health check + offline  │
+│  ├── ⏱️ Chunk slider (5-60s)        │   queue                      │
+│  ├── 💡 Tooltips on every control   └── ~770 lines (TranslatePanel)│
+│  └── ~380 lines                                                     │
+└━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┘
+
+FILES (all ✅ COMPLETE):
+├── src/client/desktop/renderer/mini-translate.html  (Quick Translate UI)
+├── src/client/desktop/renderer/mini-translate.js    (Quick Translate logic)
+├── src/client/desktop/mini-translate-preload.js     (Electron preload)
+├── src/client/desktop/renderer/translate.js         (Translate Studio class)
+└── src/client/desktop/main.js                       (IPC: mini-translate-speech)
+
+CURRENT ENGINES (BYOK — Bring Your Own Key):
+├── ☁️ Groq Whisper API (primary cloud)
+├── ☁️ OpenAI Whisper API (fallback cloud)
+└── 🏠 Local Whisper models (15 proprietary names):
+    ├── 🛡️ Edge (CPU): Spark 42MB, Pulse 78MB, Standard 168MB, Global 515MB, Pro 515MB
+    ├── ⚡ Core (GPU): Spark 75MB, Pulse 142MB, Standard 466MB, Global 1.5GB,
+    │                  Pro 1.5GB, Turbo 1.6GB, Ultra 2.9GB
+    └── 🌍 Lingua: Español 500MB, Français 500MB, हिन्दी 500MB
+
+QUICK TRANSLATE COCKPIT FEATURES (✅ all implemented):
+├── WindyTune/Manual toggle with CSS animation
+├── Manual mode locks cockpit — IPC never overwrites user selection
+├── 🎤 Listening / 📝 Translating role labels with cloud/local distinction
+├── 🟢 Audio strobe (pulsing green dot when mic active)
+├── Unified transcript thread (⌨️ text + 🎤 voice in one feed)
+├── Font size slider (10-24px) for transcript
+├── UI scale slider (0.8x-1.6x zoom) for all controls
+├── Chunk duration slider (5-60s with 1s steps)
+├── 99 Whisper-supported languages in both dropdowns
+└── Educational tooltips on every interactive element
+
+STATUS: This is a PRECURSOR to the full Strand E vision below.
+The current tools use cloud APIs + local Whisper for translation.
+Strand E targets full offline speech-to-speech via CTranslate2/NLLB.
+```
+
 ### E1: Translation Engine Core
 ```
 FILE: src/engine/translator.py
