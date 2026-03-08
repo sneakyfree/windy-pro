@@ -1120,7 +1120,7 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
 
     // ── Try local Whisper engine first ──
     try {
-      const serverCfg = store.get('server') || { host: '127.0.0.1', port: 9384 };
+      const serverCfg = store.get('server') || { host: '127.0.0.1', port: 9876 };
       const wsUrl = `ws://${serverCfg.host}:${serverCfg.port}`;
       const WebSocket = require('ws');
 
