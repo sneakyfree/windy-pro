@@ -24,12 +24,17 @@ const listenMode = document.getElementById('listenMode');
 const listenBtn = document.getElementById('listenBtn');
 const liveTranscript = document.getElementById('liveTranscript');
 const detectedLangBadge = document.getElementById('detectedLangBadge');
-const engineBadge = document.getElementById('engineBadge');
-const modelInfoBar = document.getElementById('modelInfoBar');
-const windytuneBadge = document.getElementById('windytuneBadge');
-const modelBadge = document.getElementById('modelBadge');
 const chunkSlider = document.getElementById('chunkSlider');
 const chunkDurationLabel = document.getElementById('chunkDurationLabel');
+// Cockpit elements
+const audioStrobe = document.getElementById('audioStrobe');
+const windyTuneToggle = document.getElementById('windyTuneToggle');
+const manualLabel = document.getElementById('manualLabel');
+const windyTuneLabel = document.getElementById('windyTuneLabel');
+const modelSelectRow = document.getElementById('modelSelectRow');
+const modelSelect = document.getElementById('modelSelect');
+const listeningValue = document.getElementById('listeningValue');
+const translatingValue = document.getElementById('translatingValue');
 
 // Tab buttons
 const tabText = document.getElementById('tabText');
@@ -88,6 +93,39 @@ swapBtn.addEventListener('click', () => {
         const tmp = sourceLang.value;
         sourceLang.value = targetLang.value;
         targetLang.value = tmp;
+    }
+});
+
+// ── WindyTune / Manual toggle ──
+let isWindyTune = true;
+windyTuneToggle.addEventListener('click', () => {
+    isWindyTune = !isWindyTune;
+    windyTuneToggle.classList.toggle('on', isWindyTune);
+    manualLabel.classList.toggle('active', !isWindyTune);
+    windyTuneLabel.classList.toggle('active', isWindyTune);
+    modelSelectRow.style.display = isWindyTune ? 'none' : 'flex';
+    // Update cockpit display
+    if (isWindyTune) {
+        listeningValue.textContent = '🌪️ WindyTune — auto';
+        listeningValue.className = 'cockpit-value';
+        translatingValue.textContent = '🌪️ WindyTune — auto';
+        translatingValue.className = 'cockpit-value';
+    } else {
+        const sel = modelSelect.options[modelSelect.selectedIndex];
+        listeningValue.textContent = `🏠 ${sel.text}`;
+        listeningValue.className = 'cockpit-value local';
+        translatingValue.textContent = `🏠 ${sel.text}`;
+        translatingValue.className = 'cockpit-value local';
+    }
+});
+
+modelSelect.addEventListener('change', () => {
+    if (!isWindyTune) {
+        const sel = modelSelect.options[modelSelect.selectedIndex];
+        listeningValue.textContent = `🏠 ${sel.text}`;
+        listeningValue.className = 'cockpit-value local';
+        translatingValue.textContent = `🏠 ${sel.text}`;
+        translatingValue.className = 'cockpit-value local';
     }
 });
 
@@ -173,6 +211,7 @@ async function startListening() {
     chunkCount = 0;
     listenBtn.textContent = '⏹ Stop Listening';
     listenBtn.classList.add('recording');
+    audioStrobe.classList.add('active');
     liveTranscript.innerHTML = '';
     appendChunk('🎤 Listening… speak now', 'info');
 
@@ -249,39 +288,33 @@ async function processChunk(audioBlob) {
                 detectedLangBadge.style.display = '';
             }
 
-            // Update engine badge — show what's doing what
+            // Update cockpit — listening role
             if (result.engine) {
                 const isCloud = result.engine === 'groq' || result.engine === 'openai';
                 if (isCloud) {
-                    engineBadge.textContent = `🎤 Listening: ☁️ Windy Cloud`;
-                    engineBadge.className = 'badge badge-engine cloud';
+                    listeningValue.textContent = '☁️ Windy Cloud';
+                    listeningValue.className = 'cockpit-value cloud';
                 } else {
                     const localLabel = result.modelInfo?.model || 'Local';
-                    engineBadge.textContent = `🎤 Listening: 🏠 ${localLabel}`;
-                    engineBadge.className = 'badge badge-engine';
+                    const sizeStr = result.modelInfo?.size ? ` · ${result.modelInfo.size}` : '';
+                    listeningValue.textContent = `🏠 ${localLabel}${sizeStr}`;
+                    listeningValue.className = 'cockpit-value local';
                 }
-                engineBadge.style.display = '';
             }
 
-            // Update model info bar
+            // Update cockpit — translating role
             if (result.modelInfo) {
-                modelInfoBar.style.display = 'flex';
                 const mi = result.modelInfo;
-
-                // WindyTune badge
-                if (mi.windyTune) {
-                    windytuneBadge.textContent = '🌪️ WindyTune';
-                    windytuneBadge.style.display = '';
+                const isCloud = result.engine === 'groq' || result.engine === 'openai';
+                if (isCloud) {
+                    const specStr = mi.specialty ? ` — ${mi.specialty}` : '';
+                    translatingValue.textContent = `☁️ Windy Cloud LLM${specStr}`;
+                    translatingValue.className = 'cockpit-value cloud';
                 } else {
-                    windytuneBadge.style.display = 'none';
-                }
-
-                // Model name + size + specialty badge
-                if (mi.model) {
                     const sizeStr = mi.size ? ` · ${mi.size}` : '';
                     const specStr = mi.specialty ? ` — ${mi.specialty}` : '';
-                    modelBadge.textContent = `🧠 ${mi.model}${sizeStr}${specStr}`;
-                    modelBadge.style.display = '';
+                    translatingValue.textContent = `🏠 ${mi.model}${sizeStr}${specStr}`;
+                    translatingValue.className = 'cockpit-value local';
                 }
             }
         } else {
@@ -331,5 +364,6 @@ function stopListening() {
 
     listenBtn.textContent = '🎤 Start Listening';
     listenBtn.classList.remove('recording');
+    audioStrobe.classList.remove('active');
     appendChunk('⏹ Stopped listening', 'info');
 }

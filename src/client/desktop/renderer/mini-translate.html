@@ -259,6 +259,134 @@
             justify-content: flex-end;
         }
 
+        /* ── Cockpit info panel ── */
+        .cockpit {
+            background: #111827;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .cockpit-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+        }
+
+        .cockpit-label {
+            color: #6B7280;
+            min-width: 72px;
+            font-weight: 500;
+        }
+
+        .cockpit-value {
+            color: #E5E7EB;
+            font-weight: 600;
+        }
+
+        .cockpit-value.cloud {
+            color: #A855F7;
+        }
+
+        .cockpit-value.local {
+            color: #22C55E;
+        }
+
+        /* ── Toggle switch ── */
+        .mode-toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+        }
+
+        .toggle-label {
+            color: #9CA3AF;
+            font-weight: 500;
+        }
+
+        .toggle-label.active {
+            color: #F9FAFB;
+            font-weight: 700;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 32px;
+            height: 16px;
+            background: #374151;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch.on {
+            background: #0EA5E9;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 12px;
+            height: 12px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        .toggle-switch.on::after {
+            transform: translateX(16px);
+        }
+
+        /* ── Model selector ── */
+        .model-select {
+            background: #1F2937;
+            color: #E5E7EB;
+            border: 1px solid #4B5563;
+            border-radius: 4px;
+            padding: 2px 4px;
+            font-size: 10px;
+            outline: none;
+            flex: 1;
+            max-width: 200px;
+        }
+
+        /* ── Audio strobe ── */
+        .audio-strobe {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #374151;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+
+        .audio-strobe.active {
+            background: #22C55E;
+            box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+            animation: strobe-pulse 0.8s ease-in-out infinite;
+        }
+
+        @keyframes strobe-pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 4px rgba(34, 197, 94, 0.3);
+                transform: scale(1);
+            }
+
+            50% {
+                box-shadow: 0 0 12px rgba(34, 197, 94, 0.8);
+                transform: scale(1.3);
+            }
+        }
+
         .badge {
             font-size: 9px;
             font-weight: 600;
@@ -647,14 +775,52 @@
         <div class="listen-mode" id="listenMode">
             <div class="listen-controls">
                 <button class="listen-btn" id="listenBtn">🎤 Start Listening</button>
+                <div class="audio-strobe" id="audioStrobe"></div>
                 <div class="listen-badges">
                     <span class="badge badge-lang" id="detectedLangBadge" style="display:none;"></span>
-                    <span class="badge badge-engine" id="engineBadge" style="display:none;"></span>
                 </div>
             </div>
-            <div class="model-info-bar" id="modelInfoBar" style="display:none;">
-                <span class="badge badge-windytune" id="windytuneBadge" style="display:none;">⚡ WindyTune</span>
-                <span class="badge badge-model" id="modelBadge" style="display:none;"></span>
+            <!-- Cockpit info panel -->
+            <div class="cockpit" id="cockpitPanel">
+                <div class="mode-toggle-row">
+                    <span class="toggle-label" id="manualLabel">Manual</span>
+                    <div class="toggle-switch on" id="windyTuneToggle"></div>
+                    <span class="toggle-label active" id="windyTuneLabel">🌪️ WindyTune</span>
+                </div>
+                <div class="cockpit-row" id="modelSelectRow" style="display:none;">
+                    <span class="cockpit-label">Model:</span>
+                    <select class="model-select" id="modelSelect">
+                        <optgroup label="🛡️ Edge (CPU)">
+                            <option value="edge-spark">Edge Spark — 42 MB, 32×</option>
+                            <option value="edge-pulse">Edge Pulse — 78 MB, 16×</option>
+                            <option value="edge-standard">Edge Standard — 168 MB, 6×</option>
+                            <option value="edge-global">Edge Global — 515 MB, multilingual</option>
+                            <option value="edge-pro">Edge Pro — 515 MB, English</option>
+                        </optgroup>
+                        <optgroup label="⚡ Core (GPU)">
+                            <option value="core-spark">Core Spark — 75 MB, 32×</option>
+                            <option value="core-pulse">Core Pulse — 142 MB, 16×</option>
+                            <option value="core-standard" selected>Core Standard — 466 MB, 6×</option>
+                            <option value="core-global">Core Global — 1.5 GB, multilingual</option>
+                            <option value="core-pro">Core Pro — 1.5 GB, English</option>
+                            <option value="core-turbo">Core Turbo — 1.6 GB, 4×</option>
+                            <option value="core-ultra">Core Ultra — 2.9 GB, BEST</option>
+                        </optgroup>
+                        <optgroup label="🌍 Lingua (Specialist)">
+                            <option value="lingua-es">Lingua Español — 500 MB</option>
+                            <option value="lingua-fr">Lingua Français — 500 MB</option>
+                            <option value="lingua-hi">Lingua हिन्दी — 500 MB</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="cockpit-row">
+                    <span class="cockpit-label">🎤 Listening:</span>
+                    <span class="cockpit-value" id="listeningValue">—</span>
+                </div>
+                <div class="cockpit-row">
+                    <span class="cockpit-label">📝 Translating:</span>
+                    <span class="cockpit-value" id="translatingValue">—</span>
+                </div>
             </div>
             <div class="chunk-slider-row">
                 <label>⏱️ Chunk</label>
