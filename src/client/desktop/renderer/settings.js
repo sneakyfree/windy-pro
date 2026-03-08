@@ -915,6 +915,14 @@ class SettingsPanel {
             window.windyAPI.rebindHotkey(settingKey, accelerator).then(result => {
               if (result?.ok) {
                 this.showToast(`✅ ${displayStr} bound successfully`);
+                // Refresh the main screen shortcuts display immediately
+                if (window.windyAPI?.getSettings) {
+                  window.windyAPI.getSettings().then(s => {
+                    if (window.app?._populateShortcutDisplay) {
+                      window.app._populateShortcutDisplay(s?.hotkeys);
+                    }
+                  });
+                }
               } else {
                 this.showToast(`⚠️ Failed to bind ${displayStr}: ${result?.error || 'unknown'}`);
               }
