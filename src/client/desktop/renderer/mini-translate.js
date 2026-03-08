@@ -49,15 +49,24 @@ let chunkTimer = null;
 let chunkDurationMs = 10000; // default 10 seconds
 
 // Processing queue — buffer all chunks, never drop (delayed > missing)
-const MAX_CONCURRENT = 3;
 let activeProcessing = 0;
 const processingQueue = [];
+
+// Track overlap timers so we can cancel them on slider change
+const pendingOverlapTimers = [];
+
+// Max effective recording per chunk (prevents huge audio overwhelming the server)
+const MAX_CHUNK_RECORD_MS = 15000; // 15s max per chunk, regardless of slider
 
 // Chunk duration slider — restart recorder on change
 chunkSlider.addEventListener('input', () => {
     const val = parseInt(chunkSlider.value, 10);
     chunkDurationMs = val * 1000;
     chunkDurationLabel.textContent = `${val}s`;
+    // Cancel ALL pending overlap timers to prevent stale callbacks
+    while (pendingOverlapTimers.length > 0) {
+        clearTimeout(pendingOverlapTimers.pop());
+    }
     // If recording, restart the current chunk with new duration
     if (isListening && mediaRecorder && mediaRecorder.state === 'recording') {
         clearTimeout(chunkTimer);
@@ -273,7 +282,9 @@ async function startListening() {
 function startNextChunk() {
     if (!isListening || !mediaStream) return;
 
-    const OVERLAP_MS = 500; // 500ms overlap captures boundary words
+    const OVERLAP_MS = 500;
+    // Cap actual recording at MAX_CHUNK_RECORD_MS to prevent huge audio
+    const effectiveDuration = Math.min(chunkDurationMs, MAX_CHUNK_RECORD_MS);
 
     // Each recorder gets its own closure-scoped chunks array — no shared state
     const localChunks = [];
@@ -282,19 +293,16 @@ function startNextChunk() {
 
     const recorder = new MediaRecorder(mediaStream, { mimeType });
     mediaRecorder = recorder; // Update global ref for stop button
-    let stoppedByTimer = false; // Track if timer handled the restart
+    let stoppedByTimer = false;
 
     recorder.ondataavailable = (e) => {
         if (e.data.size > 0) localChunks.push(e.data);
     };
     recorder.onstop = () => {
-        // Enqueue for processing — queue limits concurrency to avoid overwhelming server
         if (localChunks.length > 0) {
             const audioBlob = new Blob(localChunks, { type: mimeType });
             enqueueChunk(audioBlob);
         }
-        // If stopped externally (slider change, stop button) and not by the timer,
-        // restart recording with the new settings
         if (!stoppedByTimer && isListening) {
             startNextChunk();
         }
@@ -305,14 +313,18 @@ function startNextChunk() {
     // Start next recorder BEFORE stopping this one (creates overlap)
     chunkTimer = setTimeout(() => {
         stoppedByTimer = true;
-        if (isListening) startNextChunk(); // New recorder starts NOW
-        // Stop this recorder after overlap window
-        setTimeout(() => {
+        if (isListening) startNextChunk();
+        // Stop this recorder after overlap window — track the timer
+        const overlapTimer = setTimeout(() => {
             if (recorder.state === 'recording') {
                 recorder.stop();
             }
+            // Clean up from tracking array
+            const idx = pendingOverlapTimers.indexOf(overlapTimer);
+            if (idx > -1) pendingOverlapTimers.splice(idx, 1);
         }, OVERLAP_MS);
-    }, chunkDurationMs);
+        pendingOverlapTimers.push(overlapTimer);
+    }, effectiveDuration);
 }
 
 let chunkCount = 0;
@@ -328,14 +340,17 @@ function enqueueChunk(audioBlob) {
 }
 
 function drainQueue() {
-    while (activeProcessing < MAX_CONCURRENT && processingQueue.length > 0) {
+    // Adaptive concurrency: large chunks (>200KB) → 1 at a time, small → 3
+    const nextBlob = processingQueue[0];
+    const maxConcurrent = (nextBlob && nextBlob.size > 200000) ? 1 : 3;
+    while (activeProcessing < maxConcurrent && processingQueue.length > 0) {
         const blob = processingQueue.shift();
         activeProcessing++;
         processChunk(blob)
             .catch(err => appendChunk(`⚠️ ${err.message}`, 'error'))
             .finally(() => {
                 activeProcessing--;
-                drainQueue(); // process next in queue
+                drainQueue();
             });
     }
 }
