@@ -25,6 +25,8 @@
             height: 100vh;
             padding: 12px;
             gap: 10px;
+            overflow: hidden;
+            min-height: 0;
         }
 
         .header {
@@ -198,12 +200,13 @@
             font-weight: 600;
         }
 
-        /* ── Live Listen mode ── */
         .listen-mode {
             flex: 1;
             display: none;
             flex-direction: column;
             gap: 8px;
+            overflow: hidden;
+            min-height: 0;
         }
 
         .listen-mode.active {
@@ -288,12 +291,14 @@
             border: 1px solid #374151;
             border-radius: 8px;
             padding: 10px;
-            overflow-y: scroll;
+            overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             font-size: 14px;
             line-height: 1.6;
             color: #E5E7EB;
-            min-height: 100px;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
         }
 
         .live-transcript::-webkit-scrollbar {

@@ -234,15 +234,15 @@ async function processChunk(audioBlob) {
                 detectedLangBadge.style.display = '';
             }
 
-            // Update engine badge
+            // Update engine badge — show what's doing what
             if (result.engine) {
                 const isCloud = result.engine === 'groq' || result.engine === 'openai';
                 if (isCloud) {
-                    const cloudModel = result.engine === 'groq' ? 'whisper-large-v3' : 'whisper-1';
-                    engineBadge.textContent = `☁️ ${result.engine.toUpperCase()} · ${cloudModel}`;
+                    engineBadge.textContent = `🎤 Listening: ☁️ Windy Cloud`;
                     engineBadge.className = 'badge badge-engine cloud';
                 } else {
-                    engineBadge.textContent = '🏠 Local Whisper';
+                    const localLabel = result.modelInfo?.model || 'Local';
+                    engineBadge.textContent = `🎤 Listening: 🏠 ${localLabel}`;
                     engineBadge.className = 'badge badge-engine';
                 }
                 engineBadge.style.display = '';
@@ -255,7 +255,7 @@ async function processChunk(audioBlob) {
 
                 // WindyTune badge
                 if (mi.windyTune) {
-                    windytuneBadge.textContent = '⚡ WindyTune Auto';
+                    windytuneBadge.textContent = '🌪️ WindyTune';
                     windytuneBadge.style.display = '';
                 } else {
                     windytuneBadge.style.display = 'none';

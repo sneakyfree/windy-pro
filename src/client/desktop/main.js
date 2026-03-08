@@ -1068,18 +1068,30 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   const groqKey = rendererKeys.groq || store.get('engine.groqApiKey', '') || process.env.GROQ_API_KEY || '';
   const openaiKey = rendererKeys.openai || store.get('engine.openaiApiKey', '') || process.env.OPENAI_API_KEY || '';
 
-  // Gather model info for badges
-  const modelName = store.get('engine.model') || 'base';
-  const windyTune = store.get('engine.windyTune', false);
-  const MODEL_SIZES = {
-    'edge-spark': '39MB', 'edge-bolt': '74MB', 'edge-global': '145MB', 'edge-precision': '483MB', 'edge-pro': '1.5GB',
-    'core-spark': '39MB', 'core-bolt': '74MB', 'core-global': '145MB', 'core-precision': '483MB', 'core-ultra': '1.5GB',
-    'lingua-es': '145MB', 'lingua-fr': '145MB', 'lingua-hi': '145MB',
-    'tiny': '39MB', 'base': '145MB', 'small': '483MB', 'medium': '1.5GB', 'large': '2.9GB', 'large-v3': '2.9GB',
-    'faster-whisper-base': '145MB'
+  // Gather model info for badges — use proprietary Windy Pro model names
+  const engineId = store.get('engine.selected') || store.get('engine.model') || 'windytune';
+  const windyTune = engineId === 'windytune' || store.get('engine.windyTune', false);
+  const MODEL_INFO = {
+    'windytune': { name: 'WindyTune Auto', size: '' },
+    'local': { name: 'Local', size: '' },
+    'edge-spark': { name: 'Edge Spark', size: '42 MB' },
+    'edge-pulse': { name: 'Edge Pulse', size: '78 MB' },
+    'edge-standard': { name: 'Edge Standard', size: '168 MB' },
+    'edge-global': { name: 'Edge Global', size: '515 MB' },
+    'edge-pro': { name: 'Edge Pro', size: '515 MB' },
+    'core-spark': { name: 'Core Spark', size: '75 MB' },
+    'core-pulse': { name: 'Core Pulse', size: '142 MB' },
+    'core-standard': { name: 'Core Standard', size: '466 MB' },
+    'core-global': { name: 'Core Global', size: '1.5 GB' },
+    'core-pro': { name: 'Core Pro', size: '1.5 GB' },
+    'core-turbo': { name: 'Core Turbo', size: '1.6 GB' },
+    'core-ultra': { name: 'Core Ultra', size: '2.9 GB' },
+    'lingua-es': { name: 'Lingua Español', size: '500 MB' },
+    'lingua-fr': { name: 'Lingua Français', size: '500 MB' },
+    'lingua-hi': { name: 'Lingua हिन्दी', size: '500 MB' },
   };
-  const modelSize = MODEL_SIZES[modelName] || '';
-  const modelInfo = { model: modelName, size: modelSize, windyTune };
+  const mi = MODEL_INFO[engineId] || { name: engineId, size: '' };
+  const modelInfo = { model: mi.name, size: mi.size, windyTune, engineId };
 
   // ── Try local Whisper engine first ──
   try {
