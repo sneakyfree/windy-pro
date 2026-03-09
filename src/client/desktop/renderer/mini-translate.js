@@ -342,17 +342,29 @@ function enqueueChunk(audioBlob) {
     drainQueue();
 }
 
+let consecutiveFailures = 0;
+
 function drainQueue() {
     // Sequential: Whisper server handles 1 request at a time
     if (activeProcessing >= 1 || processingQueue.length === 0) return;
     const blob = processingQueue.shift();
     activeProcessing++;
     processChunk(blob)
-        .catch(err => appendChunk(`⚠️ ${err.message}`, 'error'))
+        .then(() => { consecutiveFailures = 0; }) // Reset on success
+        .catch(err => {
+            consecutiveFailures++;
+            appendChunk(`⚠️ ${err.message}`, 'error');
+        })
         .finally(() => {
             activeProcessing--;
-            // 500ms cooldown — gives server breathing room between requests
-            setTimeout(() => drainQueue(), 500);
+            // Exponential backoff: 500ms normal, 3s/8s/15s after consecutive failures
+            const cooldown = consecutiveFailures === 0 ? 500
+                : consecutiveFailures === 1 ? 3000
+                    : consecutiveFailures === 2 ? 8000 : 15000;
+            if (consecutiveFailures >= 2) {
+                appendChunk(`⏸️ Server busy — waiting ${cooldown / 1000}s before retry…`, 'info');
+            }
+            setTimeout(() => drainQueue(), cooldown);
         });
 }
 
