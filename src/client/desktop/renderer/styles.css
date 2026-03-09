@@ -122,7 +122,7 @@ body {
 .translate-menu {
   position: absolute;
   top: 34px;
-  right: 0;
+  left: 0;
   width: 360px;
   background: #1e293b;
   border: 1px solid #334155;
