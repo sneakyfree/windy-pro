@@ -343,7 +343,7 @@ function enqueueChunk(audioBlob) {
 }
 
 function drainQueue() {
-    // Sequential: Whisper server handles 1 request at a time, sending more just causes failures
+    // Sequential: Whisper server handles 1 request at a time
     if (activeProcessing >= 1 || processingQueue.length === 0) return;
     const blob = processingQueue.shift();
     activeProcessing++;
@@ -351,7 +351,8 @@ function drainQueue() {
         .catch(err => appendChunk(`⚠️ ${err.message}`, 'error'))
         .finally(() => {
             activeProcessing--;
-            drainQueue();
+            // 500ms cooldown — gives server breathing room between requests
+            setTimeout(() => drainQueue(), 500);
         });
 }
 
