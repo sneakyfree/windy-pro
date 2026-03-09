@@ -1,8 +1,8 @@
 # 🧬 WINDY PRO — DNA STRAND MASTER PLAN
 
-**Version:** 1.5.0
+**Version:** 1.6.0
 **Created:** 2026-02-04
-**Last Updated:** 2026-03-01
+**Last Updated:** 2026-03-09
 **Authors:** Kit 0 + Kit-0C1Veron + Antigravity + Kit 0C3 Charlie + Grant Whitmer
 **Philosophy:** Begin with the end in mind. — Stephen R. Covey
 
@@ -872,6 +872,7 @@ Each codon MUST have:
 3. **No terminal commands for end users.** Ever. TurboTax or nothing.
 4. **One codebase for mobile and desktop web.** Tailwind responsive, not separate apps.
 5. **Local mode works 100% offline.** No network required after install.
+6. **Effects are always opt-in, never forced.** Silent mode is factory default. Theme packs never compromise recording quality.
 
 ---
 
@@ -2069,6 +2070,571 @@ NOTE: Zero-knowledge analytics. We track behavior, never content.
 
 ---
 
+## 🧬 STRAND I: THEME PACKS & WIDGET CUSTOMIZATION
+
+**Added:** 2026-03-09 by Antigravity + Grant Whitmer
+**Priority:** MEDIUM — Engagement/retention multiplier, not critical path
+**Philosophy:** Make Windy Pro feel personal, rewarding, and fun — without EVER compromising recording fidelity.
+
+### I0: Critical Design Principles
+
+```
+⚠️  THREE LAWS OF STRAND I — NEVER VIOLATE THESE:
+
+LAW 1: COMPLETE ISOLATION
+├── The effects system is 100% decoupled from core recording pipeline
+├── Effects run in a SEPARATE rendering layer (CSS overlay + Web Audio)
+├── Effects NEVER touch: MediaRecorder, AudioContext (mic), WebSocket, Whisper
+├── If the effects engine crashes, recording continues unaffected
+├── Zero shared state between effects and transcription
+├── Performance budget: effects must use < 2% CPU, < 50MB RAM
+└── INVARIANT: Removing all of Strand I code = zero change in transcription quality
+
+LAW 2: PER-HOOK-POINT CUSTOMIZATION
+├── Users can enable/disable effects on EACH of the 5 hook points independently
+├── Example: sound on START + PASTE only, silent during RECORDING
+├── Each hook point has its own ON/OFF toggle in Settings
+├── Volume slider per hook point (0-100%)
+└── Users are never forced into all-or-nothing
+
+LAW 3: UNIVERSAL STATE COLORS (NEVER CHANGE)
+├── 🟢 Green strobe = RECORDING (mic is live, audio is being captured)
+├── 🟡 Yellow strobe = PROCESSING (transcribing, thinking)
+├── 🔴 Red = ERROR (something went wrong)
+├── 🔵 Blue flash = INJECTING (pasting text into target app)
+├── These colors appear as background GLOW behind ANY widget
+├── Widget shimmers/vibrates in sync with voice audio levels
+└── INVARIANT: State colors are SACRED. No theme pack changes them. Ever.
+```
+
+### I1: Widget Engine
+```
+FILE: src/client/desktop/renderer/widget-engine.js [NEW]
+STATUS: 🔲 NOT STARTED
+PRIORITY: MEDIUM
+
+CODONS:
+├── I1.1 WidgetConfig dataclass 🔲
+│   ├── type: "stock" | "custom"
+│   ├── stock_id: string (e.g., "tornado", "strobe", "lightning")
+│   ├── custom_path: string (path to user-uploaded image)
+│   ├── size: number (px, user-scalable via existing Aa slider)
+│   ├── position: { x: number, y: number } (draggable)
+│   └── opacity: number (0.0-1.0)
+│
+├── I1.2 Stock Widget Gallery 🔲
+│   │
+│   │  6 BUILT-IN WIDGETS:
+│   │  ├── 🌪️ Tornado (current default — already implemented)
+│   │  ├── 💚 Green Strobe (pulsing circle — matches website branding)
+│   │  ├── ⚡ Lightning Bolt (crackles with voice energy)
+│   │  ├── 🌀 Windy Pro Logo (brand mark, professional)
+│   │  ├── 🧭 Compass (spins during recording, points N on stop)
+│   │  └── 〰️ Sound Wave (real-time waveform visualization)
+│   │
+│   └── Each stock widget is an SVG or CSS animation (no image files)
+│
+├── I1.3 Custom Widget Upload 🔲
+│   ├── Supported formats: PNG, GIF, SVG, WebP
+│   ├── Max file size: 2MB
+│   ├── Stored in: app.getPath('userData') + '/widgets/'
+│   ├── Aspect ratio preserved, scaled to widget container
+│   ├── GIFs animate normally (team logos, pets, custom art)
+│   └── Upload via Settings → Widgets → "Upload Custom Widget" button
+│
+├── I1.4 Voice-Reactive Animation 🔲
+│   │
+│   │  ALL widgets (stock AND custom) react to voice audio:
+│   │
+│   ├── Data source: AnalyserNode from B2.6.6 (already exists)
+│   │   └── IMPORTANT: Read-only tap on existing audio meter data
+│   │   └── DOES NOT create new AudioContext or touch mic stream
+│   │
+│   ├── Animation behaviors:
+│   │   ├── Scale: widget grows/shrinks with volume (1.0x-1.15x range)
+│   │   ├── Shake: micro-vibration intensity tracks voice energy
+│   │   ├── Glow: state-color aura intensity follows audio level
+│   │   └── Rotate: subtle rotation oscillation (±3° max)
+│   │
+│   ├── CSS transform + will-change: transform (GPU-accelerated)
+│   └── requestAnimationFrame loop, throttled to 30fps (saves CPU)
+│
+└── I1.5 State Color System (Universal) 🔲
+    │
+    │  Applied as background GLOW behind ANY widget:
+    │
+    ├── IDLE: no glow (widget is static)
+    ├── RECORDING: green glow + voice-reactive shimmer
+    ├── PROCESSING: yellow glow + slow pulse
+    ├── ERROR: red glow + rapid pulse
+    ├── INJECTING: blue flash (200ms, single pulse)
+    │
+    ├── Implementation: box-shadow with state color + CSS animation
+    ├── Same colors from B2.2 (--color-listening, --color-buffering, etc.)
+    └── INVARIANT: No theme pack can override these colors
+```
+
+### I2: Effects Engine
+```
+FILE: src/client/desktop/renderer/effects-engine.js [NEW]
+STATUS: 🔲 NOT STARTED
+PRIORITY: MEDIUM
+
+ARCHITECTURE NOTE:
+│  The EffectsEngine is a PURE OBSERVER. It listens to state change events
+│  that the recording pipeline already emits. It NEVER sends commands back.
+│  One-way data flow: RecordingPipeline → Events → EffectsEngine → Display
+│  If EffectsEngine is deleted, nothing changes functionally.
+
+CODONS:
+├── I2.1 EffectHookPoint enum 🔲
+│   ├── START    — fires when recording begins
+│   ├── DURING   — loops while recording is active
+│   ├── STOP     — fires when recording ends
+│   ├── PROCESS  — fires when transcription begins
+│   └── PASTE    — fires when text is injected into target app
+│
+├── I2.2 EffectsEngine class 🔲
+│   ├── constructor(config: EffectsConfig)
+│   ├── bindToRecordingEvents(eventEmitter) — subscribe, never publish
+│   ├── triggerEffect(hookPoint: EffectHookPoint, metadata: {})
+│   ├── setThemePack(pack: ThemePack)
+│   ├── setMode(mode: "silent" | "single" | "surprise")
+│   ├── setHookPointEnabled(hookPoint, enabled: boolean)
+│   ├── setHookPointVolume(hookPoint, volume: 0-100)
+│   ├── previewEffect(hookPoint) — for Settings preview button
+│   └── destroy() — cleanup all audio/visual resources
+│
+├── I2.3 SoundManager class 🔲
+│   │
+│   │  ISOLATION: Uses its OWN AudioContext, completely separate from mic
+│   │
+│   ├── constructor() — creates new AudioContext for effects ONLY
+│   ├── loadSound(url) → AudioBuffer (cached)
+│   ├── playSound(buffer, volume, pitch?) — one-shot playback
+│   ├── playLoop(buffer, volume) → loopId — ambient during recording
+│   ├── stopLoop(loopId) — stop ambient sound
+│   ├── setMasterVolume(0-100)
+│   └── dispose() — cleanup AudioContext
+│   │
+│   │  CRITICAL: This AudioContext is OUTPUT-only (speakers)
+│   │  It has ZERO connection to the mic input AudioContext
+│   │  It cannot affect recording quality in any way
+│   │
+│   └── Sound file format: .webm (Opus) or .mp3, max 500KB per effect
+│
+├── I2.4 VisualOverlay class 🔲
+│   │
+│   │  CSS overlay layer on TOP of recording UI
+│   │  z-index above transcript, below window controls
+│   │
+│   ├── renderEffect(type, intensity, duration)
+│   │   ├── "particles" — CSS particle emitter (snow, sparks, embers)
+│   │   ├── "flash" — full-screen color flash (200ms)
+│   │   ├── "shake" — CSS transform shake (100-500ms)
+│   │   ├── "border-glow" — animated border color sweep
+│   │   └── "confetti" — CSS confetti burst
+│   │
+│   ├── All effects use CSS animations + transforms (GPU-accelerated)
+│   ├── pointer-events: none (effects don't block UI interaction)
+│   ├── Performance: max 50 particles, auto-cleanup after 2 seconds
+│   └── Falls back gracefully on low-end hardware (prefers-reduced-motion)
+│
+└── I2.5 Effect-Recording Isolation Architecture 🔲
+
+    ┌───────────────────────────────────────────────────────┐
+    │                    RECORDING PIPELINE                  │
+    │  MediaRecorder → AudioContext(mic) → WebSocket → STT  │
+    │                                                        │
+    │  Emits events:                                         │
+    │  ├── 'recording:start'                                 │
+    │  ├── 'recording:stop'                                  │
+    │  ├── 'transcription:start'                             │
+    │  └── 'transcription:paste'                             │
+    └────────────────┬──────────────────────────────────────┘
+                     │ (read-only events, one-way)
+                     ▼
+    ┌───────────────────────────────────────────────────────┐
+    │                    EFFECTS ENGINE                       │
+    │  EffectsEngine → SoundManager → AudioContext(speakers) │
+    │               → VisualOverlay → CSS animations         │
+    │                                                        │
+    │  ZERO connections back to recording pipeline            │
+    │  Own AudioContext (output only)                         │
+    │  Own CSS layer (pointer-events: none)                   │
+    │  Can be disabled/removed with ZERO functional impact    │
+    └───────────────────────────────────────────────────────┘
+```
+
+### I3: Theme Pack System
+```
+FILE: src/client/desktop/renderer/theme-packs/ [NEW DIRECTORY]
+STATUS: 🔲 NOT STARTED
+PRIORITY: MEDIUM
+
+CODONS:
+├── I3.1 ThemePack Schema 🔲
+│   │
+│   │  Each pack is a JSON manifest + sound files:
+│   │
+│   ├── manifest.json:
+│   │   {
+│   │     "id": "wizard",
+│   │     "name": "⚡ Wizard",
+│   │     "category": "epic",
+│   │     "description": "Arcane energy and lightning for creative sessions",
+│   │     "author": "Windy Pro",
+│   │     "version": "1.0.0",
+│   │     "hooks": {
+│   │       "start":   { "sound": "spell-charge.webm", "visual": "particles:energy" },
+│   │       "during":  { "sound": "ambient-hum.webm",  "visual": "shimmer:blue" },
+│   │       "stop":    { "sound": "wand-cast.webm",    "visual": "flash:purple" },
+│   │       "process": { "sound": null,                 "visual": "particles:stars" },
+│   │       "paste":   { "sound": "thunder.webm",       "visual": "lightning-storm" }
+│   │     },
+│   │     "scaling": {
+│   │       "enabled": true,
+│   │       "paste_tiers": [
+│   │         { "max_words": 50,  "intensity": 0.3, "label": "spark" },
+│   │         { "max_words": 200, "intensity": 0.7, "label": "rumble" },
+│   │         { "max_words": 999, "intensity": 1.0, "label": "storm" }
+│   │       ]
+│   │     }
+│   │   }
+│   │
+│   └── Pack directory structure:
+│       theme-packs/
+│       ├── _silent/manifest.json        (no sounds, no visuals)
+│       ├── classic-beep/manifest.json   (default utilitarian)
+│       ├── wizard/manifest.json + sounds/
+│       ├── battle-royale/manifest.json + sounds/
+│       └── ...
+│
+├── I3.2 Pack Categories 🔲
+│   │
+│   │  ┌──────────────────────────────────────────────────────────┐
+│   │  │  THEME PACK CATEGORIES                                   │
+│   │  ├──────────────────────────────────────────────────────────┤
+│   │  │                                                           │
+│   │  │  🔇 SYSTEM (always available, not deletable)              │
+│   │  │  ├── Silent — zero sounds, zero visuals, zero effects     │
+│   │  │  └── Classic Beep — beep↑ on start, beep↓ on stop,       │
+│   │  │                     beep✓ on paste (restore broken beep)  │
+│   │  │                                                           │
+│   │  │  🔊 UTILITARIAN (functional, professional)                │
+│   │  │  ├── Soft Chime — gentle chime start/stop/paste           │
+│   │  │  ├── Minimal Click — mechanical click, snap, ding         │
+│   │  │  └── Vibrate Only — haptic pulse, no audio                │
+│   │  │                                                           │
+│   │  │  ⚡ EPIC (power, energy, impact)                          │
+│   │  │  ├── Wizard — spell charge, lightning storm               │
+│   │  │  ├── Dragon — roar, fire breath                           │
+│   │  │  └── Midnight — wolf howl, thunder crack                  │
+│   │  │                                                           │
+│   │  │  🎮 GAMER (gaming-inspired, non-infringing)               │
+│   │  │  ├── Battle Royale — weapon rack, airstrike, victory horn │
+│   │  │  ├── Block Builder — pickaxe, TNT, level up               │
+│   │  │  ├── Space Marine — shield activate, orbital strike        │
+│   │  │  ├── Quest Mode — quest chime, treasure chest, fanfare    │
+│   │  │  └── Arcade Classic — coin insert, 8-bit, high score      │
+│   │  │                                                           │
+│   │  │  🎄 SEASONAL (holiday-themed)                             │
+│   │  │  ├── Christmas — jingle bells, sleigh, "Ho ho ho!"        │
+│   │  │  ├── Halloween — creaking door, witch cackle, ghost       │
+│   │  │  ├── Summer — splash, ocean waves, steel drum             │
+│   │  │  └── Fireworks — fuse, rocket launch, full finale         │
+│   │  │                                                           │
+│   │  │  🌍 CULTURAL (country/region-inspired)                    │
+│   │  │  ├── Tokyo Nights — taiko, lo-fi rain, koto flourish      │
+│   │  │  ├── London Calling — Big Ben, rain, God Save fanfare     │
+│   │  │  ├── Dragon Festival — gong, guzheng, dragon drums        │
+│   │  │  ├── Bollywood Beat — tabla, sitar, full orchestra        │
+│   │  │  ├── Carnival Rio — samba whistle, bossa nova, bateria    │
+│   │  │  └── Outback — didgeridoo, crickets, kookaburra laugh    │
+│   │  │                                                           │
+│   │  │  👨‍👩‍👧 EVERYDAY (cozy, calm, nostalgic)                    │
+│   │  │  ├── Morning Coffee — mug set down, brewing, spoon clink  │
+│   │  │  ├── Zen Garden — singing bowl, water, wind chime          │
+│   │  │  ├── Typewriter — carriage return, keys, ding              │
+│   │  │  └── Nature Walk — bird chirp, forest, birdsong chorus     │
+│   │  │                                                           │
+│   │  └──────────────────────────────────────────────────────────┘
+│   │
+│   └── Total: 2 system + 3 utilitarian + 3 epic + 5 gamer
+│              + 4 seasonal + 6 cultural + 4 everyday = 27 stock packs
+│
+├── I3.3 Pack Selection Modes 🔲
+│   │
+│   │  THREE MODES:
+│   │
+│   ├── MODE 1: Silent (factory default)
+│   │   ├── Zero sounds, zero visuals, zero effects
+│   │   ├── Widget still shows state colors (green/yellow/red/blue)
+│   │   ├── Widget still shimmers with voice (I1.4)
+│   │   └── This is what every user gets until they choose otherwise
+│   │
+│   ├── MODE 2: Single Pack
+│   │   ├── User selects one specific pack
+│   │   ├── That pack plays for every session
+│   │   └── User can customize which hook points are active
+│   │
+│   └── MODE 3: Surprise Me (Rotate)
+│       ├── Each recording session uses a DIFFERENT pack
+│       ├── Shuffle-bag algorithm (no repeats until all played)
+│       │
+│       ├── Sub-modes:
+│       │   ├── 🎲 All — rotate through ALL installed packs
+│       │   ├── 🎲 Category — rotate within chosen category only
+│       │   └── 🎲 Favorites — rotate through ⭐ starred packs only
+│       │
+│       └── Psychology: novelty-seeking + anticipation dopamine
+│           "What pack will I get this time?" before every session
+│
+└── I3.4 Pack Loader 🔲
+    ├── Scan theme-packs/ directory on app start
+    ├── Validate each manifest.json against schema
+    ├── Pre-load sound files for active pack (lazy-load others)
+    ├── Hot-swap: changing pack mid-session applies on NEXT session
+    └── Graceful fallback: if pack files missing → fall back to Silent
+```
+
+### I4: Dynamic Scaling
+```
+FILE: src/client/desktop/renderer/effects-engine.js (integrated)
+STATUS: 🔲 NOT STARTED
+PRIORITY: LOW (enhancement, not core)
+
+CODONS:
+├── I4.1 Length-Based Intensity Tiers 🔲
+│   │
+│   │  The PASTE climax effect scales with how much you recorded:
+│   │
+│   │  TIER 1 — SPARK (< 50 words):
+│   │  └── Subtle effect. Quick sound, small flash.
+│   │      "A quick note. Small reward."
+│   │
+│   │  TIER 2 — RUMBLE (50-200 words):
+│   │  └── Medium effect. Longer sound, visible particles.
+│   │      "A solid thought. Satisfying feedback."
+│   │
+│   │  TIER 3 — STORM (200+ words):
+│   │  └── Full climax. Maximum intensity, extended duration.
+│   │      "You painted a vision. Here's your lightning show."
+│   │
+│   ├── Word count comes from transcription result (already available)
+│   ├── Intensity multiplier: 0.3 (spark) → 0.7 (rumble) → 1.0 (storm)
+│   └── Duration multiplier: 0.5s (spark) → 1.5s (rumble) → 3s (storm)
+│
+├── I4.2 Variable Reward Randomization 🔲
+│   │
+│   │  SAME tier, DIFFERENT effect every time:
+│   │
+│   ├── Each pack can define 3-5 variations per tier
+│   ├── Randomly selected each time → never exactly the same
+│   ├── Slot machine psychology: variable rewards = sustained engagement
+│   └── Example (Wizard pack, STORM tier):
+│       ├── Variation A: 3 lightning bolts + long thunder roll
+│       ├── Variation B: blue energy vortex + electric crackle  
+│       └── Variation C: full screen white flash + rumbling bass
+│
+└── I4.3 Anticipation Building 🔲
+    ├── During PROCESS hook, visual hints at incoming tier:
+    │   ├── Spark: calm processing animation
+    │   ├── Rumble: slightly energized processing
+    │   └── Storm: intense processing animation
+    └── User subconsciously records longer → bigger reward → records longer
+```
+
+### I5: Settings UI — Theme Packs & Effects
+```
+FILE: src/client/desktop/renderer/settings.js (extend existing)
+STATUS: 🔲 NOT STARTED
+PRIORITY: MEDIUM
+
+CODONS:
+├── I5.1 Settings Section Layout 🔲
+│   │
+│   │  New collapsible section in Settings panel:
+│   │
+│   │  ┌─────────────────────────────────────────────────┐
+│   │  │  🎨 THEME PACKS & EFFECTS                       │
+│   │  │                                                  │
+│   │  │  Mode: [🔇 Silent ▾] [⚡ Single Pack ▾] [🎲 Surprise Me ▾]  │
+│   │  │                                                  │
+│   │  │  Active Pack: [⚡ Wizard ▾]                      │
+│   │  │  [▶ Preview]                                     │
+│   │  │                                                  │
+│   │  │  ── Hook Points ──────────────────────           │
+│   │  │  🎬 Start Recording  [ON/OFF] 🔊 ████░░ 70%    │
+│   │  │  🎤 During Recording [ON/OFF] 🔊 ██░░░░ 30%    │
+│   │  │  ⏹️ Stop Recording   [ON/OFF] 🔊 ████░░ 70%    │
+│   │  │  ⏳ Processing       [ON/OFF] 🔊 ██░░░░ 30%    │
+│   │  │  📋 Paste            [ON/OFF] 🔊 ██████ 100%   │
+│   │  │                                                  │
+│   │  │  ── Dynamic Scaling ─────────────────           │
+│   │  │  [✓] Scale paste effects with recording length   │
+│   │  │                                                  │
+│   │  │  ── Widget ──────────────────────────           │
+│   │  │  [🌪️ Tornado ▾] [Upload Custom...]              │
+│   │  │                                                  │
+│   │  └─────────────────────────────────────────────────┘
+│   │
+│   └── All settings saved via electron-store (existing settings system)
+│
+├── I5.2 Pack Browser 🔲
+│   ├── Grid/list of all installed packs with category tabs
+│   ├── Each pack shows: icon, name, description, [▶ Preview] button
+│   ├── ⭐ Star/favorite packs (for Surprise Me: Favorites mode)
+│   ├── Category filter tabs: All | System | Utilitarian | Epic | Gamer | ...
+│   └── Search bar for finding packs by name
+│
+├── I5.3 Widget Gallery 🔲
+│   ├── Visual grid of stock widgets (preview thumbnails)
+│   ├── Click to select, shows live preview in mini-window
+│   ├── "Upload Custom" button → file picker (PNG/GIF/SVG/WebP, max 2MB)
+│   └── Custom widgets shown alongside stock in gallery
+│
+├── I5.4 Preview System 🔲
+│   ├── [▶ Preview] button next to each pack and each hook point
+│   ├── Plays the sound + shows the visual in a small preview area
+│   ├── Does NOT trigger any recording or transcription
+│   └── Preview uses the EffectsEngine.previewEffect() method (I2.2)
+│
+└── I5.5 Persistence 🔲
+    ├── All settings stored in electron-store under "effects" key:
+    │   {
+    │     "mode": "silent" | "single" | "surprise",
+    │     "activePack": "wizard",
+    │     "surpriseCategory": "all" | "epic" | "gamer" | "favorites",
+    │     "hookPoints": {
+    │       "start":   { "enabled": true,  "volume": 70 },
+    │       "during":  { "enabled": false, "volume": 30 },
+    │       "stop":    { "enabled": true,  "volume": 70 },
+    │       "process": { "enabled": false, "volume": 30 },
+    │       "paste":   { "enabled": true,  "volume": 100 }
+    │     },
+    │     "dynamicScaling": true,
+    │     "widget": { "type": "stock", "id": "tornado" },
+    │     "favorites": ["wizard", "battle-royale", "zen-garden"]
+    │   }
+    └── Defaults to: mode="silent", all hooks disabled, widget="tornado"
+```
+
+### I6: Community Hub
+```
+FILE: TBD (future — requires cloud infrastructure)
+STATUS: 🔲 NOT STARTED (Phase 3+)
+PRIORITY: LOW
+
+CODONS:
+├── I6.1 Social Activity Feed 🔲
+│   │
+│   │  Inspired by Venmo's social feed — but for productivity:
+│   │
+│   ├── Feed entries (all opt-in):
+│   │   ├── "Grant unlocked the Dragon pack 🔥"
+│   │   ├── "Sarah shared her custom 'Lo-Fi Study' pack"
+│   │   ├── "Alex just hit 1,000 prompts with Wizard theme ⚡"
+│   │   └── "New community pack trending: 'Cyberpunk Neon' 🌆"
+│   │
+│   ├── NEVER shared: recording content, transcripts, prompt text
+│   ├── ONLY shared: pack usage, pack creations, milestone counts
+│   └── Privacy toggle: Settings → Community → "Share my activity" [OFF default]
+│
+├── I6.2 Usage Leaderboards 🔲
+│   ├── Most popular packs this week/month
+│   ├── Top pack creators (by installs)
+│   ├── "Pack of the Week" curated spotlight
+│   └── Stats: total packs created, total installs, active creators
+│
+├── I6.3 Creator Profiles 🔲
+│   ├── Users who publish packs get a public profile
+│   ├── Shows: packs created, total installs, average rating
+│   ├── Follow creators → notified when they publish new packs
+│   └── Gamification: badges for milestones (10 packs, 1K installs, etc.)
+│
+└── I6.4 Privacy Controls 🔲
+    ├── ALL social features OFF by default (private)
+    ├── Granular toggles:
+    │   ├── "Show my pack usage" [OFF]
+    │   ├── "Show my creations" [OFF]
+    │   ├── "Show my milestones" [OFF]
+    │   └── "Make my profile public" [OFF]
+    ├── Users can participate as consumers without sharing anything
+    └── INVARIANT: We track behavior (pack installs), NEVER content
+```
+
+### I7: Theme Pack Marketplace
+```
+FILE: TBD (future — requires cloud infrastructure)
+STATUS: 🔲 NOT STARTED (Phase 3+)
+PRIORITY: LOW
+
+CODONS:
+├── I7.1 .windypack Export Format 🔲
+│   ├── ZIP file containing: manifest.json + sound files
+│   ├── Max total size: 10MB per pack
+│   ├── Verified content: no executable code, only JSON + audio + images
+│   └── Signed with creator's account key for authenticity
+│
+├── I7.2 User-Created Pack Builder 🔲
+│   ├── In-app pack creation wizard:
+│   │   ├── Step 1: Name, description, category, icon
+│   │   ├── Step 2: Assign sounds to each hook point (upload or record)
+│   │   ├── Step 3: Choose visual effects per hook point
+│   │   ├── Step 4: Set dynamic scaling tiers
+│   │   └── Step 5: Preview & publish
+│   │
+│   ├── "Record your own" sounds via mic (novelty — record your dog barking)
+│   └── Import/export .windypack files for sharing outside marketplace
+│
+├── I7.3 Marketplace Browser 🔲
+│   ├── Accessible from Settings → Theme Packs → "Browse Marketplace"
+│   ├── Categories, search, trending, new arrivals
+│   ├── Star ratings (1-5) + review count
+│   ├── One-click install
+│   └── Report inappropriate content
+│
+├── I7.4 Content Moderation 🔲
+│   ├── Automated: scan for copyrighted audio (fingerprinting)
+│   ├── Automated: file size + format validation
+│   ├── Community: report button + review queue
+│   └── Manual: admin review for flagged content
+│
+└── I7.5 Monetization (Future) 🔲
+    ├── Free packs (default — community sharing)
+    ├── Premium packs by Windy Pro (bundled with paid tiers)
+    ├── Creator revenue share (future — 70/30 split)
+    └── "Featured Creator" program for top pack builders
+```
+
+### I-BUG: Restore Broken Start/Stop Beep 🔴
+```
+STATUS: 🔴 BUG — The app used to beep on start/stop but stopped working
+PRIORITY: HIGH (fix independently of Strand I — users need audio feedback NOW)
+
+CODONS:
+├── I-BUG.1 Investigate Why Beep Stopped 🔲
+│   ├── Check app.js for AudioContext beep code
+│   ├── Check if AudioContext was removed during refactoring
+│   ├── Check if browser autoplay policy is blocking audio
+│   └── Test: does beep work on fresh install?
+│
+├── I-BUG.2 Restore Beep Functionality 🔲
+│   ├── Beep on recording START (rising tone, 200ms)
+│   ├── Beep on recording STOP (falling tone, 200ms)
+│   ├── ADD: Beep on PASTE (confirmation tone, 150ms)
+│   ├── Use OscillatorNode (no audio files needed, works offline)
+│   └── Respect system volume, no separate volume control needed
+│
+└── I-BUG.3 Migration Path 🔲
+    ├── Once Strand I is implemented, beep migrates to "Classic Beep" pack
+    ├── Users who had beep = auto-migrated to Classic Beep pack
+    └── New users default to Silent (but Classic Beep is one click away)
+```
+
+---
+
 ## 📝 CHANGELOG
 
 | Date | Author | Change |
@@ -2122,6 +2688,18 @@ NOTE: Zero-knowledge analytics. We track behavior, never content.
 | 2026-03-01 | Grant | Vision: "Record all day, review from any browser that evening" |
 | 2026-03-01 | Antigravity | **v1.5.1**: H1-H7 fully implemented — 6 new files, 8 modified, ~1500 LOC |
 | 2026-03-01 | Antigravity | All codon statuses updated: H1-H5 ✅, H6 ✅/🟡, H7 ✅/🟡, H8 🟡 |
+| 2026-03-09 | Antigravity + Grant | **v1.6.0**: Added Strand I — Theme Packs & Widget Customization (I1-I7) |
+| 2026-03-09 | Antigravity | I0: Three Laws of Strand I — complete isolation, per-hook customization, universal state colors |
+| 2026-03-09 | Antigravity | I1: Widget Engine — 6 stock widgets, custom upload (PNG/GIF/SVG/WebP), voice-reactive animation |
+| 2026-03-09 | Antigravity | I2: Effects Engine — SoundManager + VisualOverlay, pure observer pattern, isolated AudioContext |
+| 2026-03-09 | Antigravity | I3: Theme Pack System — 27 stock packs across 7 categories, 3 selection modes (Silent/Single/Surprise Me) |
+| 2026-03-09 | Antigravity | I4: Dynamic Scaling — length-based intensity tiers (spark/rumble/storm), variable reward randomization |
+| 2026-03-09 | Antigravity | I5: Settings UI — pack browser, widget gallery, preview system, per-hook-point ON/OFF + volume |
+| 2026-03-09 | Antigravity | I6: Community Hub — social activity feed, leaderboards, creator profiles, privacy-first design |
+| 2026-03-09 | Antigravity | I7: Theme Marketplace — .windypack format, user-created packs, community rating, content moderation |
+| 2026-03-09 | Antigravity | I-BUG: Identified broken start/stop beep — flagged for immediate fix |
+| 2026-03-09 | Grant | Theme pack categories: Gamer (non-infringing names), Cultural (6 countries), Everyday (4 packs) |
+| 2026-03-09 | Grant | New invariant #6: "Effects are always opt-in, never forced" |
 
 ---
 
