@@ -120,10 +120,12 @@ body {
 }
 
 .translate-menu {
-  position: absolute;
-  top: 34px;
-  left: 0;
-  width: 360px;
+  position: fixed;
+  top: 38px;
+  left: 8px;
+  right: 8px;
+  width: auto;
+  max-width: 360px;
   background: #1e293b;
   border: 1px solid #334155;
   border-radius: 10px;
