@@ -329,6 +329,38 @@ class WindyApp {
 
     // Window controls
     this.closeBtn.addEventListener('click', () => window.close());
+
+    // ═══ SFX Volume Slider ═══
+    this._sfxVolume = parseInt(localStorage.getItem('windy_sfxVolume') || '70', 10) / 100;
+    const sfxIcon = document.getElementById('sfxVolumeIcon');
+    const sfxPopup = document.getElementById('sfxVolumePopup');
+    const sfxSlider = document.getElementById('sfxVolumeSlider');
+    const sfxLabel = document.getElementById('sfxVolumeLabel');
+    if (sfxSlider) {
+      sfxSlider.value = Math.round(this._sfxVolume * 100);
+      if (sfxLabel) sfxLabel.textContent = `${sfxSlider.value}%`;
+      if (sfxIcon) sfxIcon.textContent = this._sfxVolume === 0 ? '🔇' : '🔊';
+    }
+    if (sfxIcon && sfxPopup) {
+      sfxIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sfxPopup.classList.toggle('visible');
+      });
+      document.addEventListener('click', (e) => {
+        if (!sfxPopup.contains(e.target) && e.target !== sfxIcon) {
+          sfxPopup.classList.remove('visible');
+        }
+      });
+    }
+    if (sfxSlider) {
+      sfxSlider.addEventListener('input', () => {
+        const val = parseInt(sfxSlider.value, 10);
+        this._sfxVolume = val / 100;
+        if (sfxLabel) sfxLabel.textContent = `${val}%`;
+        if (sfxIcon) sfxIcon.textContent = val === 0 ? '🔇' : '🔊';
+        localStorage.setItem('windy_sfxVolume', String(val));
+      });
+    }
     this.minimizeBtn.addEventListener('click', () => {
       if (window.windyAPI?.minimize) {
         window.windyAPI.minimize();
@@ -2692,6 +2724,7 @@ class WindyApp {
    */
   _playBlip(frequency = 880, duration = 0.08) {
     try {
+      if (this._sfxVolume === 0) return;
       if (!this._blipAudioCtx || this._blipAudioCtx.state === 'closed') {
         this._blipAudioCtx = new AudioContext();
       }
@@ -2703,7 +2736,8 @@ class WindyApp {
       gain.connect(ctx.destination);
       osc.frequency.value = frequency;
       osc.type = 'sine';
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      const vol = (this._sfxVolume ?? 0.7) * 0.3;
+      gain.gain.setValueAtTime(vol, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + duration);
@@ -2713,6 +2747,7 @@ class WindyApp {
   /** Play a rising sweep blip for paste confirmation */
   _playPasteBlip() {
     try {
+      if (this._sfxVolume === 0) return;
       if (!this._blipAudioCtx || this._blipAudioCtx.state === 'closed') {
         this._blipAudioCtx = new AudioContext();
       }
@@ -2725,7 +2760,8 @@ class WindyApp {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(600, ctx.currentTime);
       osc.frequency.linearRampToValueAtTime(900, ctx.currentTime + 0.12);
-      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      const vol = (this._sfxVolume ?? 0.7) * 0.25;
+      gain.gain.setValueAtTime(vol, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.15);
