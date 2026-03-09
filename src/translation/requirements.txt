@@ -1,0 +1,15 @@
+# Windy Pro Translation Engine Dependencies
+
+# Core ML framework
+torch>=2.0.0
+transformers>=4.30.0
+sentencepiece>=0.1.99
+
+# WebSocket server
+websockets>=11.0
+
+# Language detection
+langdetect>=1.0.9
+
+# Optional: accelerate for faster loading
+accelerate>=0.20.0
