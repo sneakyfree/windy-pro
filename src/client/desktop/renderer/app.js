@@ -2129,7 +2129,11 @@ class WindyApp {
       // Small delay to let processing UI finish
       setTimeout(async () => {
         try {
-          this._playPasteBlip();
+          // Sound feedback: use default beep only if effects engine is in default mode or unavailable
+          const fxPasteMode = this.effectsEngine?._mode;
+          if (!fxPasteMode || fxPasteMode === 'default' || fxPasteMode === 'silent') {
+            this._playPasteBlip();
+          }
           await window.windyAPI.autoPasteText(text.trim());
           // Strand I: trigger paste effect with word count for dynamic scaling
           try { if (this.effectsEngine) this.effectsEngine.trigger('paste', { wordCount: text.trim().split(/\s+/).length }); } catch (_) { }
@@ -2797,8 +2801,11 @@ class WindyApp {
     const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
 
     if (this.isRecording) {
-      // Stop — low blip (always plays, reusable AudioContext avoids focus steal)
-      this._playBlip(440, 0.1);
+      // Sound feedback: use default beeps only if effects engine is in default mode or unavailable
+      const fxMode = this.effectsEngine?._mode;
+      if (!fxMode || fxMode === 'default' || fxMode === 'silent') {
+        this._playBlip(440, 0.1);
+      }
       // Strand I: trigger stop effect (pure observer, safe to fail)
       try { if (this.effectsEngine) this.effectsEngine.trigger('stop'); } catch (_) { }
       if (this._batchRecorder) {
@@ -2811,8 +2818,11 @@ class WindyApp {
         this.stopRecording();
       }
     } else {
-      // Start — high blip (always plays, reusable AudioContext avoids focus steal)
-      this._playBlip(880, 0.08);
+      // Sound feedback: use default beeps only if effects engine is in default mode or unavailable
+      const fxMode2 = this.effectsEngine?._mode;
+      if (!fxMode2 || fxMode2 === 'default' || fxMode2 === 'silent') {
+        this._playBlip(880, 0.08);
+      }
       // Strand I: trigger start effect (pure observer, safe to fail)
       try { if (this.effectsEngine) this.effectsEngine.trigger('start'); } catch (_) { }
       if (recordingMode === 'batch' || recordingMode === 'clone_capture') {

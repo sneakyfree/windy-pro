@@ -377,6 +377,7 @@ class SettingsPanel {
             <label>Mode</label>
             <div class="sfx-mode-pills" id="sfxModePills">
               <button class="sfx-mode-pill active" data-mode="silent">🔇 Silent</button>
+              <button class="sfx-mode-pill" data-mode="default">🔔 Default</button>
               <button class="sfx-mode-pill" data-mode="single">⚡ Single Pack</button>
               <button class="sfx-mode-pill" data-mode="surprise">🎲 Surprise Me</button>
             </div>
@@ -384,10 +385,11 @@ class SettingsPanel {
 
           <div id="sfxPackRow" class="setting-row" style="display:none;">
             <label for="sfxPackSelect">Active Pack</label>
-            <div style="display:flex;align-items:center;gap:8px;flex:1;">
-              <select id="sfxPackSelect" style="flex:1;"></select>
-              <button id="sfxPreviewBtn" class="settings-btn" style="padding:4px 10px;font-size:11px;" title="Preview this pack">▶ Preview</button>
-            </div>
+            <select id="sfxPackSelect" style="flex:1;"></select>
+          </div>
+
+          <div id="sfxPreviewRow" class="setting-row" style="display:none;">
+            <button id="sfxPreviewBtn" class="settings-btn" style="width:100%;padding:6px 12px;" title="Preview current pack sounds">▶ Preview Sounds</button>
           </div>
 
           <div id="sfxSurpriseRow" class="setting-row" style="display:none;">
@@ -1108,12 +1110,14 @@ class SettingsPanel {
     const packRow = this.panel.querySelector('#sfxPackRow');
     const surpriseRow = this.panel.querySelector('#sfxSurpriseRow');
     const hookSection = this.panel.querySelector('#sfxHookSection');
+    const previewRow = this.panel.querySelector('#sfxPreviewRow');
 
     const updateModeUI = (mode) => {
       modePills.forEach(p => p.classList.toggle('active', p.dataset.mode === mode));
       if (packRow) packRow.style.display = mode === 'single' ? 'flex' : 'none';
       if (surpriseRow) surpriseRow.style.display = mode === 'surprise' ? 'flex' : 'none';
-      if (hookSection) hookSection.style.display = mode === 'silent' ? 'none' : '';
+      if (hookSection) hookSection.style.display = (mode === 'silent' || mode === 'default') ? 'none' : '';
+      if (previewRow) previewRow.style.display = mode === 'silent' ? 'none' : '';
     };
 
     modePills.forEach(pill => {
@@ -1138,15 +1142,30 @@ class SettingsPanel {
       });
     }
 
-    // Preview button
+    // Preview button — works in all modes
     const previewBtn = this.panel.querySelector('#sfxPreviewBtn');
     if (previewBtn && fx) {
       previewBtn.addEventListener('click', () => {
-        const packId = packSelect?.value || 'classic-beep';
-        // Preview all 3 main hooks in sequence
-        fx.previewEffect(packId, 'start');
-        setTimeout(() => fx.previewEffect(packId, 'stop'), 600);
-        setTimeout(() => fx.previewEffect(packId, 'paste'), 1200);
+        const currentMode = fx._mode;
+        if (currentMode === 'default') {
+          // Preview default beeps
+          fx.previewEffect('classic-beep', 'start');
+          setTimeout(() => fx.previewEffect('classic-beep', 'stop'), 600);
+          setTimeout(() => fx.previewEffect('classic-beep', 'paste'), 1200);
+        } else if (currentMode === 'single') {
+          const packId = packSelect?.value || 'classic-beep';
+          fx.previewEffect(packId, 'start');
+          setTimeout(() => fx.previewEffect(packId, 'stop'), 600);
+          setTimeout(() => fx.previewEffect(packId, 'paste'), 1200);
+        } else if (currentMode === 'surprise') {
+          // Preview random packs from the pool
+          const pack1 = fx._getNextSurprisePack();
+          const pack2 = fx._getNextSurprisePack();
+          const pack3 = fx._getNextSurprisePack();
+          fx.previewEffect(pack1.id, 'start');
+          setTimeout(() => fx.previewEffect(pack2.id, 'stop'), 700);
+          setTimeout(() => fx.previewEffect(pack3.id, 'paste'), 1400);
+        }
       });
     }
 

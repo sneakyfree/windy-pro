@@ -422,7 +422,7 @@ class EffectsEngine {
      * @param {Object} metadata - { wordCount, recordingDuration }
      */
     trigger(hook, metadata = {}) {
-        if (this._mode === 'silent') return;
+        if (this._mode === 'silent' || this._mode === 'default') return;
 
         const hp = this._hookPoints[hook];
         if (!hp || !hp.enabled) return;
