@@ -182,20 +182,66 @@ def train_whisper_lora(config: WhisperLoRAConfig):
         metric_for_best_model="eval_loss",
         greater_is_better=False,
         push_to_hub=False,
-        remove_unused_columns=False,
+        remove_unused_columns=True,
         label_names=["labels"],
     )
 
-    # Data collator
-    from transformers import DataCollatorForSeq2Seq
-    data_collator = DataCollatorForSeq2Seq(
-        processor.tokenizer,
-        model=model,
-        padding=True
-    )
+    # Data collator for Whisper - custom implementation needed
+    # DataCollatorForSeq2Seq doesn't work because Whisper uses input_features, not input_ids
+    from typing import Any, Dict, List, Union
+
+    @dataclass
+    class DataCollatorSpeechSeq2SeqWithPadding:
+        """Data collator for Whisper - handles input_features + labels separately."""
+        processor: Any
+
+        def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+            # Extract input features (audio spectrograms)
+            input_features = [{"input_features": feature["input_features"]} for feature in features]
+            batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
+
+            # Extract and pad labels
+            label_features = [{"input_ids": feature["labels"]} for feature in features]
+            labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
+
+            # Replace padding with -100 to ignore in loss calculation
+            labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
+
+            # Remove BOS token if present (Whisper adds it during forward pass)
+            if (labels[:, 0] == self.processor.tokenizer.bos_token_id).all().cpu().item():
+                labels = labels[:, 1:]
+
+            batch["labels"] = labels
+
+            # Ensure ONLY input_features and labels are returned (no input_ids, attention_mask, etc.)
+            result = {
+                "input_features": batch["input_features"],
+                "labels": labels
+            }
+
+            # DEBUG: Print what keys we're returning
+            import sys
+            if not hasattr(self, '_debug_printed'):
+                print(f"DEBUG: Collator returning keys: {list(result.keys())}", file=sys.stderr)
+                self._debug_printed = True
+
+            return result
+
+    data_collator = DataCollatorSpeechSeq2SeqWithPadding(processor=processor)
+
+    # Custom Trainer to ensure proper input handling for Whisper
+    class WhisperSeq2SeqTrainer(Seq2SeqTrainer):
+        def compute_loss(self, model, inputs, return_outputs=False):
+            # Explicitly pass only the arguments Whisper expects
+            outputs = model(
+                input_features=inputs["input_features"],
+                labels=inputs["labels"]
+            )
+            loss = outputs.loss
+            return (loss, outputs) if return_outputs else loss
 
     # Trainer
-    trainer = Seq2SeqTrainer(
+    trainer = WhisperSeq2SeqTrainer(
         model=model,
         args=training_args,
         train_dataset=dataset["train"],
