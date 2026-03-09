@@ -344,7 +344,12 @@ class WindyApp {
     if (sfxIcon && sfxPopup) {
       sfxIcon.addEventListener('click', (e) => {
         e.stopPropagation();
-        sfxPopup.classList.toggle('visible');
+        const isVisible = sfxPopup.classList.toggle('visible');
+        if (isVisible) {
+          const rect = sfxIcon.getBoundingClientRect();
+          sfxPopup.style.left = `${rect.left + rect.width / 2 - 24}px`;
+          sfxPopup.style.top = `${rect.top - 130}px`;
+        }
       });
       document.addEventListener('click', (e) => {
         if (!sfxPopup.contains(e.target) && e.target !== sfxIcon) {
