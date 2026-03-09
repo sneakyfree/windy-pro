@@ -1,0 +1,74 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+Using custom `forced_decoder_ids` from the (generation) config. This is deprecated in favor of the `task` and `language` flags/config options.
+The attention mask is not set and cannot be inferred from input because pad token is same as eos token. As a consequence, you may observe unexpected behavior. Please pass your input's `attention_mask` to obtain reliable results.
+================================================================================
+WINDY PRO — QA SMOKE TEST (CPU MODE)
+================================================================================
+
+NOTE: Running on CPU to avoid GPU memory conflicts with other experiments.
+Testing methodology with smaller models first.
+
+Loading test audio...
+Ground truth: 'CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS'
+Audio length: 3.50 seconds
+
+================================================================================
+Testing 2 GPU STT Models vs Base Models
+================================================================================
+
+[1/2] windy-stt-nano vs openai/whisper-tiny.en
+--------------------------------------------------------------------------------
+  [Our Model: windy-stt-nano]
+    Loading model: models/windy-stt-nano
+    Transcribing...
+    Transcription: 'Concord returned to its place amidst the tents.'
+    WER: 1.0000
+  [Base Model: openai/whisper-tiny.en]
+    Loading model: openai/whisper-tiny.en
+    Transcribing...
+    Transcription: 'Concord returned to its place amidst the tents.'
+    WER: 1.0000
+
+  Match with base: True
+  Verdict: FAIL ❌
+  → Results saved (1 tests)
+
+[2/2] windy-stt-lite vs openai/whisper-base.en
+--------------------------------------------------------------------------------
+  [Our Model: windy-stt-lite]
+    Loading model: models/windy-stt-lite
+    Transcribing...
+    Transcription: 'Concorde returned to its place amidst the tents.'
+    WER: 1.0000
+  [Base Model: openai/whisper-base.en]
+    Loading model: openai/whisper-base.en
+    Transcribing...
+    Transcription: 'Concorde returned to its place amidst the tents.'
+    WER: 1.0000
+
+  Match with base: True
+  Verdict: FAIL ❌
+  → Results saved (2 tests)
+
+================================================================================
+SMOKE TEST COMPLETE
+================================================================================
+
+Total Tests: 2
+  PASS ✅: 0
+  WARN ⚠️: 0
+  FAIL ❌: 2
+
+⚠️  QUALITY GATE: SOME FAILURES DETECTED
+
+Failed tests:
+  - windy-stt-nano: WER 1.0000 vs base 1.0000
+      Expected: 'CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS'
+      Got:      'Concord returned to its place amidst the tents.'
+  - windy-stt-lite: WER 1.0000 vs base 1.0000
+      Expected: 'CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS'
+      Got:      'Concorde returned to its place amidst the tents.'
+
+
+Results saved to: tests/qa_results.json
+

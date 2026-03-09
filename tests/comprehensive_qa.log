@@ -1,0 +1,226 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+Using custom `forced_decoder_ids` from the (generation) config. This is deprecated in favor of the `task` and `language` flags/config options.
+The attention mask is not set and cannot be inferred from input because pad token is same as eos token. As a consequence, you may observe unexpected behavior. Please pass your input's `attention_mask` to obtain reliable results.
+Transcription using a multilingual Whisper will default to language detection followed by transcription instead of translation to English. This might be a breaking change for your use case. If you want to instead always translate your audio to English, make sure to pass `language='en'`. See https://github.com/huggingface/transformers/pull/28687 for more details.
+Could not find any ONNX files with standard file name decoder_model_merged.onnx, files found: [PosixPath('decoder_with_past_model.onnx'), PosixPath('decoder_model.onnx'), PosixPath('encoder_model.onnx')]. Please make sure to pass a `file_name` and/or `subfolder` argument to `from_pretrained` when loading an ONNX file with non-standard file names.
+Could not find any ONNX files with standard file name decoder_model_merged.onnx, files found: [PosixPath('decoder_with_past_model.onnx'), PosixPath('decoder_model.onnx'), PosixPath('encoder_model.onnx')]. Please make sure to pass a `file_name` and/or `subfolder` argument to `from_pretrained` when loading an ONNX file with non-standard file names.
+Could not find any ONNX files with standard file name decoder_model_merged.onnx, files found: [PosixPath('decoder_with_past_model.onnx'), PosixPath('decoder_model.onnx'), PosixPath('encoder_model.onnx')]. Please make sure to pass a `file_name` and/or `subfolder` argument to `from_pretrained` when loading an ONNX file with non-standard file names.
+Could not find any ONNX files with standard file name decoder_model_merged.onnx, files found: [PosixPath('decoder_with_past_model.onnx'), PosixPath('decoder_model.onnx'), PosixPath('encoder_model.onnx')]. Please make sure to pass a `file_name` and/or `subfolder` argument to `from_pretrained` when loading an ONNX file with non-standard file names.
+Could not find any ONNX files with standard file name decoder_model_merged.onnx, files found: [PosixPath('decoder_with_past_model.onnx'), PosixPath('decoder_model.onnx'), PosixPath('encoder_model.onnx')]. Please make sure to pass a `file_name` and/or `subfolder` argument to `from_pretrained` when loading an ONNX file with non-standard file names.
+Could not find any ONNX files with standard file name decoder_model_merged.onnx, files found: [PosixPath('decoder_with_past_model.onnx'), PosixPath('decoder_model.onnx'), PosixPath('encoder_model.onnx')]. Please make sure to pass a `file_name` and/or `subfolder` argument to `from_pretrained` when loading an ONNX file with non-standard file names.
+==========================================================================================
+                    WINDY PRO — COMPREHENSIVE QA SMOKE TEST
+==========================================================================================
+
+[SETUP] Loading test audio...
+        Ground truth: 'CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS'
+        Audio: 3.50s
+
+==========================================================================================
+PART 1: Testing 7 GPU STT Models (compared against base models)
+==========================================================================================
+
+[TEST 1/7] windy-stt-nano
+------------------------------------------------------------------------------------------
+    [1/2] Our model: windy-stt-nano
+      Loading models/windy-stt-nano...
+          Output: 'Concord returned to its place amidst the tents.'
+    [2/2] Base model: openai/whisper-tiny.en
+      Loading openai/whisper-tiny.en...
+          Output: 'Concord returned to its place amidst the tents.'
+
+    WER: Ours=0.0000, Base=0.0000
+    Verdict: PASS ✅
+    Reason: Perfect match with base, excellent accuracy
+
+[TEST 2/7] windy-stt-lite
+------------------------------------------------------------------------------------------
+    [1/2] Our model: windy-stt-lite
+      Loading models/windy-stt-lite...
+          Output: 'Concorde returned to its place amidst the tents.'
+    [2/2] Base model: openai/whisper-base.en
+      Loading openai/whisper-base.en...
+          Output: 'Concorde returned to its place amidst the tents.'
+
+    WER: Ours=0.1250, Base=0.1250
+    Verdict: WARN ⚠️
+    Reason: Matches base but both have minor errors
+
+[TEST 3/7] windy-stt-core
+------------------------------------------------------------------------------------------
+    [1/2] Our model: windy-stt-core
+      Loading models/windy-stt-core...
+          Output: 'Concord returned to its place amidst the tents.'
+    [2/2] Base model: openai/whisper-small.en
+      Loading openai/whisper-small.en...
+          Output: 'Concord returned to its place amidst the tents.'
+
+    WER: Ours=0.0000, Base=0.0000
+    Verdict: PASS ✅
+    Reason: Perfect match with base, excellent accuracy
+
+[TEST 4/7] windy-stt-plus
+------------------------------------------------------------------------------------------
+    [1/2] Our model: windy-stt-plus
+      Loading models/windy-stt-plus...
+          Output: 'Concord returned to its place amidst the tents.'
+    [2/2] Base model: openai/whisper-medium.en
+      Loading openai/whisper-medium.en...
+          Output: 'Concord returned to its place amidst the tents.'
+
+    WER: Ours=0.0000, Base=0.0000
+    Verdict: PASS ✅
+    Reason: Perfect match with base, excellent accuracy
+
+[TEST 5/7] windy-stt-pro
+------------------------------------------------------------------------------------------
+    [1/2] Our model: windy-stt-pro
+      Loading models/windy-stt-pro...
+          Output: 'Concord returned to its place amidst the tents.'
+    [2/2] Base model: openai/whisper-large-v3
+      Loading openai/whisper-large-v3...
+          Output: 'Concord returned to its place amidst the tents.'
+
+    WER: Ours=0.0000, Base=0.0000
+    Verdict: PASS ✅
+    Reason: Perfect match with base, excellent accuracy
+
+[TEST 6/7] windy-stt-turbo
+------------------------------------------------------------------------------------------
+    [1/2] Our model: windy-stt-turbo
+      Loading models/windy-stt-turbo...
+          Output: 'CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS.'
+    [2/2] Base model: openai/whisper-large-v3-turbo
+      Loading openai/whisper-large-v3-turbo...
+          Output: 'Concord returned to its place amidst the tents.'
+
+    WER: Ours=0.0000, Base=0.0000
+    Verdict: PASS ✅
+    Reason: Perfect match with base, excellent accuracy
+
+[TEST 7/7] windy-stt-edge
+------------------------------------------------------------------------------------------
+    [1/2] Our model: windy-stt-edge
+      Loading models/windy-stt-edge...
+          Output: 'Concord returned to its place amidst the tents.'
+    [2/2] Base model: distil-whisper/distil-large-v3
+      Loading distil-whisper/distil-large-v3...
+          Output: 'Concord returned to its place amidst the tents.'
+
+    WER: Ours=0.0000, Base=0.0000
+    Verdict: PASS ✅
+    Reason: Perfect match with base, excellent accuracy
+
+==========================================================================================
+PART 2: Testing 7 CPU ONNX Models (compared against GPU counterparts)
+==========================================================================================
+
+[TEST 1/7] windy-stt-nano-cpu
+------------------------------------------------------------------------------------------
+    [1/2] GPU version: windy-stt-nano
+      Loading models/windy-stt-nano...
+          Output: 'Concord returned to its place amidst the tents.'
+    [2/2] ONNX version: windy-stt-nano-cpu
+      Loading ONNX from models/windy-stt-nano-cpu...
+          Output: 'Concord returned to its place amidst the tents.'
+
+    WER: CPU=0.0000, GPU=0.0000
+    Verdict: PASS ✅
+    Reason: Perfect match with base, excellent accuracy
+
+[TEST 2/7] windy-stt-lite-cpu
+------------------------------------------------------------------------------------------
+    [1/2] GPU version: windy-stt-lite
+      Loading models/windy-stt-lite...
+          Output: 'Concorde returned to its place amidst the tents.'
+    [2/2] ONNX version: windy-stt-lite-cpu
+      Loading ONNX from models/windy-stt-lite-cpu...
+          Output: 'Concorde returned to its place amidst the tents.'
+
+    WER: CPU=0.1250, GPU=0.1250
+    Verdict: WARN ⚠️
+    Reason: Matches base but both have minor errors
+
+[TEST 3/7] windy-stt-core-cpu
+------------------------------------------------------------------------------------------
+    [1/2] GPU version: windy-stt-core
+      Loading models/windy-stt-core...
+          Output: 'Concord returned to its place amidst the tents.'
+    [2/2] ONNX version: windy-stt-core-cpu
+      Loading ONNX from models/windy-stt-core-cpu...
+          Output: 'Concord returned to its place amidst the tents.'
+
+    WER: CPU=0.0000, GPU=0.0000
+    Verdict: PASS ✅
+    Reason: Perfect match with base, excellent accuracy
+
+[TEST 4/7] windy-stt-plus-cpu
+------------------------------------------------------------------------------------------
+    [1/2] GPU version: windy-stt-plus
+      Loading models/windy-stt-plus...
+          Output: 'Concord returned to its place amidst the tents.'
+    [2/2] ONNX version: windy-stt-plus-cpu
+      Loading ONNX from models/windy-stt-plus-cpu...
+          Output: 'Concord returned to its place amidst the tents.'
+
+    WER: CPU=0.0000, GPU=0.0000
+    Verdict: PASS ✅
+    Reason: Perfect match with base, excellent accuracy
+
+[TEST 5/7] windy-stt-pro-cpu
+------------------------------------------------------------------------------------------
+    [1/2] GPU version: windy-stt-pro
+      Loading models/windy-stt-pro...
+          Output: 'Concord returned to its place amidst the tents.'
+    [2/2] ONNX version: windy-stt-pro-cpu
+      Loading ONNX from models/windy-stt-pro-cpu...
+          Output: 'Concord returned to its place amidst the tents.'
+
+    WER: CPU=0.0000, GPU=0.0000
+    Verdict: PASS ✅
+    Reason: Perfect match with base, excellent accuracy
+
+[TEST 6/7] windy-stt-turbo-cpu
+------------------------------------------------------------------------------------------
+    [1/2] GPU version: windy-stt-turbo
+      Loading models/windy-stt-turbo...
+          Output: 'CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS.'
+    [2/2] ONNX version: windy-stt-turbo-cpu
+      Loading ONNX from models/windy-stt-turbo-cpu...
+          Output: 'CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS.'
+
+    WER: CPU=0.0000, GPU=0.0000
+    Verdict: PASS ✅
+    Reason: Perfect match with base, excellent accuracy
+
+[TEST 7/7] windy-stt-edge-cpu
+------------------------------------------------------------------------------------------
+    [1/2] GPU version: windy-stt-edge
+      Loading models/windy-stt-edge...
+          Output: 'Concord returned to its place amidst the tents.'
+    [2/2] ONNX version: windy-stt-edge-cpu
+Could not find any ONNX files with standard file name decoder_model_merged.onnx, files found: [PosixPath('decoder_with_past_model.onnx'), PosixPath('decoder_model.onnx'), PosixPath('encoder_model.onnx')]. Please make sure to pass a `file_name` and/or `subfolder` argument to `from_pretrained` when loading an ONNX file with non-standard file names.
+      Loading ONNX from models/windy-stt-edge-cpu...
+          Output: 'Concord returned to its place amidst the tents.'
+
+    WER: CPU=0.0000, GPU=0.0000
+    Verdict: PASS ✅
+    Reason: Perfect match with base, excellent accuracy
+
+==========================================================================================
+TEST COMPLETE — GENERATING SUMMARY
+==========================================================================================
+
+Total Models Tested: 14
+  PASS ✅: 12
+  WARN ⚠️: 2
+  FAIL ❌: 0
+
+⚠️  QUALITY GATE: WARNINGS PRESENT
+
+Models with Warnings:
+  • windy-stt-lite: Matches base but both have minor errors
+  • windy-stt-lite-cpu: Matches base but both have minor errors
+
+Detailed results saved to: tests/qa_comprehensive_results.json
+

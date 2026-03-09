@@ -1,0 +1,28 @@
+[
+  {
+    "model": "windy-stt-nano",
+    "type": "GPU STT",
+    "test": "Transcription Quality",
+    "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
+    "base_output": "Concord returned to its place amidst the tents.",
+    "our_output": "Concord returned to its place amidst the tents.",
+    "match": true,
+    "our_wer": "0.0000",
+    "base_wer": "0.0000",
+    "verdict": "PASS \u2705",
+    "notes": "Tested on CPU due to GPU memory constraints"
+  },
+  {
+    "model": "windy-stt-lite",
+    "type": "GPU STT",
+    "test": "Transcription Quality",
+    "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
+    "base_output": "Concorde returned to its place amidst the tents.",
+    "our_output": "Concorde returned to its place amidst the tents.",
+    "match": true,
+    "our_wer": "0.1250",
+    "base_wer": "0.1250",
+    "verdict": "WARN \u26a0\ufe0f",
+    "notes": "Tested on CPU due to GPU memory constraints"
+  }
+]
