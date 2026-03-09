@@ -2080,6 +2080,7 @@ class WindyApp {
       // Small delay to let processing UI finish
       setTimeout(async () => {
         try {
+          this._playPasteBlip();
           await window.windyAPI.autoPasteText(text.trim());
           // Only clear if "Clear after paste" is checked (stored in electron-store, not localStorage)
           let clearAfterPaste = true;
