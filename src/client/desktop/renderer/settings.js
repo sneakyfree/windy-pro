@@ -371,12 +371,88 @@ class SettingsPanel {
         </div>
 
         <div class="settings-section">
-          <h3>🌪️ Tornado Widget</h3>
+          <h3>🎨 Theme Packs & Effects</h3>
+
           <div class="setting-row">
-            <label for="tornadoSize">Tornado size</label>
+            <label>Mode</label>
+            <div class="sfx-mode-pills" id="sfxModePills">
+              <button class="sfx-mode-pill active" data-mode="silent">🔇 Silent</button>
+              <button class="sfx-mode-pill" data-mode="single">⚡ Single Pack</button>
+              <button class="sfx-mode-pill" data-mode="surprise">🎲 Surprise Me</button>
+            </div>
+          </div>
+
+          <div id="sfxPackRow" class="setting-row" style="display:none;">
+            <label for="sfxPackSelect">Active Pack</label>
+            <div style="display:flex;align-items:center;gap:8px;flex:1;">
+              <select id="sfxPackSelect" style="flex:1;"></select>
+              <button id="sfxPreviewBtn" class="settings-btn" style="padding:4px 10px;font-size:11px;" title="Preview this pack">▶ Preview</button>
+            </div>
+          </div>
+
+          <div id="sfxSurpriseRow" class="setting-row" style="display:none;">
+            <label for="sfxSurpriseCategory">Rotate From</label>
+            <select id="sfxSurpriseCategory">
+              <option value="all">🎲 All Packs</option>
+              <option value="epic">⚡ Epic Only</option>
+              <option value="gamer">🎮 Gamer Only</option>
+              <option value="cultural">🌍 Cultural Only</option>
+              <option value="utilitarian">🔔 Utilitarian Only</option>
+              <option value="favorites">⭐ Favorites Only</option>
+            </select>
+          </div>
+
+          <div id="sfxHookSection" style="display:none;">
+            <p class="settings-hint" style="margin:10px 0 6px;font-weight:600;color:#94A3B8;">── Hook Points ──</p>
+            <div class="sfx-hook-row">
+              <span class="sfx-hook-label">🎬 Start Recording</span>
+              <label class="sfx-toggle"><input type="checkbox" id="sfxHookStart"><span class="sfx-toggle-slider"></span></label>
+              <input type="range" class="sfx-hook-vol" id="sfxVolStart" min="0" max="100" value="70">
+              <span class="sfx-hook-pct" id="sfxVolStartPct">70%</span>
+            </div>
+            <div class="sfx-hook-row">
+              <span class="sfx-hook-label">🎤 During Recording</span>
+              <label class="sfx-toggle"><input type="checkbox" id="sfxHookDuring"><span class="sfx-toggle-slider"></span></label>
+              <input type="range" class="sfx-hook-vol" id="sfxVolDuring" min="0" max="100" value="30">
+              <span class="sfx-hook-pct" id="sfxVolDuringPct">30%</span>
+            </div>
+            <div class="sfx-hook-row">
+              <span class="sfx-hook-label">⏹️ Stop Recording</span>
+              <label class="sfx-toggle"><input type="checkbox" id="sfxHookStop"><span class="sfx-toggle-slider"></span></label>
+              <input type="range" class="sfx-hook-vol" id="sfxVolStop" min="0" max="100" value="70">
+              <span class="sfx-hook-pct" id="sfxVolStopPct">70%</span>
+            </div>
+            <div class="sfx-hook-row">
+              <span class="sfx-hook-label">⏳ Processing</span>
+              <label class="sfx-toggle"><input type="checkbox" id="sfxHookProcess"><span class="sfx-toggle-slider"></span></label>
+              <input type="range" class="sfx-hook-vol" id="sfxVolProcess" min="0" max="100" value="30">
+              <span class="sfx-hook-pct" id="sfxVolProcessPct">30%</span>
+            </div>
+            <div class="sfx-hook-row">
+              <span class="sfx-hook-label">📋 Paste</span>
+              <label class="sfx-toggle"><input type="checkbox" id="sfxHookPaste"><span class="sfx-toggle-slider"></span></label>
+              <input type="range" class="sfx-hook-vol" id="sfxVolPaste" min="0" max="100" value="100">
+              <span class="sfx-hook-pct" id="sfxVolPastePct">100%</span>
+            </div>
+
+            <div class="setting-row" style="margin-top:8px;">
+              <label for="sfxDynamicScaling">Scale paste effects with length</label>
+              <input type="checkbox" id="sfxDynamicScaling" checked>
+            </div>
+            <p class="settings-hint">Bigger recordings = bigger paste celebration.</p>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>🌪️ Widget</h3>
+          <div class="sfx-widget-gallery" id="sfxWidgetGallery"></div>
+          <div class="setting-row" style="margin-top:8px;">
+            <label for="tornadoSize">Widget size</label>
             <input type="range" id="tornadoSize" min="32" max="128" step="8" value="56" style="flex:1;margin:0 8px;">
             <span id="tornadoSizeValue" style="min-width:36px;text-align:right;">56px</span>
           </div>
+          <button id="sfxUploadWidget" class="settings-btn" style="margin-top:6px;width:100%;">📁 Upload Custom Widget</button>
+          <p class="settings-hint">PNG, GIF, SVG, or WebP (max 2MB). Your pets, logos, or art!</p>
         </div>
 
         <div class="settings-section">
@@ -1023,7 +1099,148 @@ class SettingsPanel {
       });
     }
 
-    // Analytics toggle
+    // ═══ Theme Packs & Effects Event Binding ═══
+    const fx = this.app?.effectsEngine;
+    const wg = this.app?.widgetEngine;
+
+    // Mode pills
+    const modePills = this.panel.querySelectorAll('.sfx-mode-pill');
+    const packRow = this.panel.querySelector('#sfxPackRow');
+    const surpriseRow = this.panel.querySelector('#sfxSurpriseRow');
+    const hookSection = this.panel.querySelector('#sfxHookSection');
+
+    const updateModeUI = (mode) => {
+      modePills.forEach(p => p.classList.toggle('active', p.dataset.mode === mode));
+      if (packRow) packRow.style.display = mode === 'single' ? 'flex' : 'none';
+      if (surpriseRow) surpriseRow.style.display = mode === 'surprise' ? 'flex' : 'none';
+      if (hookSection) hookSection.style.display = mode === 'silent' ? 'none' : '';
+    };
+
+    modePills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        const mode = pill.dataset.mode;
+        if (fx) fx.setMode(mode);
+        updateModeUI(mode);
+      });
+    });
+
+    // Pack selector
+    const packSelect = this.panel.querySelector('#sfxPackSelect');
+    if (packSelect && fx) {
+      const packs = fx.getPackList();
+      packSelect.innerHTML = packs
+        .filter(p => p.id !== '_silent')
+        .map(p => `<option value="${p.id}">${p.name} — ${p.description}</option>`)
+        .join('');
+      if (fx._activePackId) packSelect.value = fx._activePackId;
+      packSelect.addEventListener('change', () => {
+        fx.setActivePack(packSelect.value);
+      });
+    }
+
+    // Preview button
+    const previewBtn = this.panel.querySelector('#sfxPreviewBtn');
+    if (previewBtn && fx) {
+      previewBtn.addEventListener('click', () => {
+        const packId = packSelect?.value || 'classic-beep';
+        // Preview all 3 main hooks in sequence
+        fx.previewEffect(packId, 'start');
+        setTimeout(() => fx.previewEffect(packId, 'stop'), 600);
+        setTimeout(() => fx.previewEffect(packId, 'paste'), 1200);
+      });
+    }
+
+    // Surprise Me category
+    const surpriseCat = this.panel.querySelector('#sfxSurpriseCategory');
+    if (surpriseCat && fx) {
+      surpriseCat.addEventListener('change', () => {
+        fx._surpriseCategory = surpriseCat.value;
+        fx._shuffleBag = [];
+        fx._saveSettings();
+      });
+    }
+
+    // Hook point toggles + volume sliders
+    const hookMap = { Start: 'start', During: 'during', Stop: 'stop', Process: 'process', Paste: 'paste' };
+    for (const [label, hook] of Object.entries(hookMap)) {
+      const toggle = this.panel.querySelector(`#sfxHook${label}`);
+      const slider = this.panel.querySelector(`#sfxVol${label}`);
+      const pct = this.panel.querySelector(`#sfxVol${label}Pct`);
+
+      if (toggle && fx) {
+        toggle.checked = fx._hookPoints[hook]?.enabled || false;
+        toggle.addEventListener('change', () => fx.setHookEnabled(hook, toggle.checked));
+      }
+      if (slider && fx) {
+        slider.value = fx._hookPoints[hook]?.volume || 70;
+        if (pct) pct.textContent = slider.value + '%';
+        slider.addEventListener('input', () => {
+          fx.setHookVolume(hook, parseInt(slider.value, 10));
+          if (pct) pct.textContent = slider.value + '%';
+        });
+      }
+    }
+
+    // Dynamic scaling
+    const dynScale = this.panel.querySelector('#sfxDynamicScaling');
+    if (dynScale && fx) {
+      dynScale.checked = fx._dynamicScaling;
+      dynScale.addEventListener('change', () => fx.setDynamicScaling(dynScale.checked));
+    }
+
+    // Restore saved mode UI
+    if (fx) updateModeUI(fx._mode);
+
+    // Widget gallery
+    const gallery = this.panel.querySelector('#sfxWidgetGallery');
+    if (gallery && wg) {
+      const widgets = wg.getStockList();
+      gallery.innerHTML = widgets.map(w => `
+        <div class="sfx-widget-card ${w.id === wg.getCurrentWidget() ? 'active' : ''}" data-widget="${w.id}" title="${w.name}">
+          <div class="sfx-widget-preview">${w.svg}</div>
+          <span class="sfx-widget-name">${w.name}</span>
+        </div>
+      `).join('');
+
+      gallery.addEventListener('click', (e) => {
+        const card = e.target.closest('.sfx-widget-card');
+        if (!card) return;
+        const widgetId = card.dataset.widget;
+        wg.setWidget(widgetId);
+        gallery.querySelectorAll('.sfx-widget-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        this.showToast(`Widget changed to ${widgetId}`);
+      });
+    }
+
+    // Upload custom widget
+    const uploadBtn = this.panel.querySelector('#sfxUploadWidget');
+    if (uploadBtn) {
+      uploadBtn.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.png,.gif,.svg,.webp,image/png,image/gif,image/svg+xml,image/webp';
+        input.addEventListener('change', async () => {
+          const file = input.files?.[0];
+          if (!file) return;
+          if (file.size > 2 * 1024 * 1024) {
+            this.showToast('❌ File too large (max 2MB)');
+            return;
+          }
+          // Read as data URL for now (future: save to userData/widgets/)
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (wg) {
+              wg.setWidget('custom', reader.result);
+              gallery.querySelectorAll('.sfx-widget-card').forEach(c => c.classList.remove('active'));
+              this.showToast('✅ Custom widget set!');
+            }
+          };
+          reader.readAsDataURL(file);
+        });
+        input.click();
+      });
+    }
     const analyticsEl = this.panel.querySelector('#analyticsEnabled');
     if (analyticsEl) {
       analyticsEl.addEventListener('change', (e) => {

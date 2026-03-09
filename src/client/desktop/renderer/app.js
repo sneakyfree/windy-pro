@@ -111,6 +111,15 @@ class WindyApp {
     this.bindEvents();
     this.bindIPCEvents();
 
+    // ── Strand I: Effects Engine (pure observer, zero impact on recording) ──
+    try {
+      this.effectsEngine = typeof EffectsEngine !== 'undefined' ? new EffectsEngine() : null;
+      this.widgetEngine = typeof WidgetEngine !== 'undefined' ? new WidgetEngine() : null;
+    } catch (_) {
+      this.effectsEngine = null;
+      this.widgetEngine = null;
+    }
+
     // ── Crash Recovery Detection (Repair 1.1) ──
     if (window.windyAPI?.checkCrashRecovery) {
       try {
@@ -364,6 +373,8 @@ class WindyApp {
         if (sfxLabel) sfxLabel.textContent = `${val}%`;
         if (sfxIcon) sfxIcon.textContent = val === 0 ? '🔇' : '🔊';
         localStorage.setItem('windy_sfxVolume', String(val));
+        // Sync with EffectsEngine
+        if (this.effectsEngine) this.effectsEngine.setMasterVolume(val / 100);
       });
     }
     this.minimizeBtn.addEventListener('click', () => {
@@ -2119,6 +2130,8 @@ class WindyApp {
         try {
           this._playPasteBlip();
           await window.windyAPI.autoPasteText(text.trim());
+          // Strand I: trigger paste effect with word count for dynamic scaling
+          try { if (this.effectsEngine) this.effectsEngine.trigger('paste', { wordCount: text.trim().split(/\s+/).length }); } catch (_) { }
           // Only clear if "Clear after paste" is checked (stored in electron-store, not localStorage)
           let clearAfterPaste = true;
           if (window.windyAPI?.getSettings) {
@@ -2785,6 +2798,8 @@ class WindyApp {
     if (this.isRecording) {
       // Stop — low blip (always plays, reusable AudioContext avoids focus steal)
       this._playBlip(440, 0.1);
+      // Strand I: trigger stop effect (pure observer, safe to fail)
+      try { if (this.effectsEngine) this.effectsEngine.trigger('stop'); } catch (_) { }
       if (this._batchRecorder) {
         this.stopBatchRecording();
       } else if (['deepgram', 'groq', 'openai'].includes(engine) && this._apiMediaRecorder) {
@@ -2797,6 +2812,8 @@ class WindyApp {
     } else {
       // Start — high blip (always plays, reusable AudioContext avoids focus steal)
       this._playBlip(880, 0.08);
+      // Strand I: trigger start effect (pure observer, safe to fail)
+      try { if (this.effectsEngine) this.effectsEngine.trigger('start'); } catch (_) { }
       if (recordingMode === 'batch' || recordingMode === 'clone_capture') {
         this.startBatchRecording();
       } else if (['deepgram', 'groq', 'openai'].includes(engine)) {
