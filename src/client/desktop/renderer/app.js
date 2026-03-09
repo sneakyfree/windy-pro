@@ -2678,188 +2678,161 @@ class WindyApp {
           }
         }
         this.recordingStartedAt = null;
-      };
-    }
-
-    /**
-     * Toggle recording state
-     * Debounced to prevent double-tap races (e.g. rapid Ctrl+Shift+Space)
-     */
-    /** Play a short blip sound for start/stop/paste feedback.
-     *  Reuses a single AudioContext to avoid focus-steal on Linux.
-     */
-    _playBlip(frequency = 880, duration = 0.08) {
-      try {
-        if (!this._blipAudioCtx || this._blipAudioCtx.state === 'closed') {
-          this._blipAudioCtx = new AudioContext();
-        }
-        const ctx = this._blipAudioCtx;
-        // Resume if suspended (autoplay policy)
-        if (ctx.state === 'suspended') ctx.resume();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = frequency;
-        osc.type = 'sine';
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + duration);
-      } catch (_) { }
-    }
-
-    /** Play a rising sweep blip for paste confirmation */
-    _playPasteBlip() {
-      try {
-        if (!this._blipAudioCtx || this._blipAudioCtx.state === 'closed') {
-          this._blipAudioCtx = new AudioContext();
-        }
-        const ctx = this._blipAudioCtx;
-        if (ctx.state === 'suspended') ctx.resume();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(600, ctx.currentTime);
-        osc.frequency.linearRampToValueAtTime(900, ctx.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.25, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.15);
-      } catch (_) { }
-    }
-
-    toggleRecording() {
-      // Debounce guard: ignore rapid toggles within 500ms
-      if (this._toggleLock) return;
-      this._toggleLock = true;
-      setTimeout(() => { this._toggleLock = false; }, 500);
-
-      const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine;
-      const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
-
-      if (this.isRecording) {
-        // Stop — low blip (always plays, even on hotkey)
-        this._playBlip(440, 0.1);
-        if (this._batchRecorder) {
-          this.stopBatchRecording();
-        } else if (['deepgram', 'groq', 'openai'].includes(engine) && this._apiMediaRecorder) {
-          this.stopApiRecording();
-        } else if (engine === 'stream' && this.speechRecognition) {
-          this.stopStreamRecognition();
-        } else {
-          this.stopRecording();
-        }
-      } else {
-        // Start — high blip (always plays, even on hotkey)
-        this._playBlip(880, 0.08);
-        if (recordingMode === 'batch' || recordingMode === 'clone_capture') {
-          this.startBatchRecording();
-        } else if (['deepgram', 'groq', 'openai'].includes(engine)) {
-          this.startApiRecording(engine);
-        } else if (engine === 'stream') {
-          this.startStreamRecognition();
-        } else {
-          this.startRecording();
-        }
       }
-      // Clear hotkey flag
-      this._hotkeyTriggered = false;
+    };
+  }
+
+  /**
+   * Toggle recording state
+   * Debounced to prevent double-tap races (e.g. rapid Ctrl+Shift+Space)
+   */
+  /** Play a short blip sound for start/stop feedback */
+  _playBlip(frequency = 880, duration = 0.08) {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = frequency;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + duration);
+      setTimeout(() => ctx.close(), 200);
+    } catch (_) { }
+  }
+
+  toggleRecording() {
+    // Debounce guard: ignore rapid toggles within 500ms
+    if (this._toggleLock) return;
+    this._toggleLock = true;
+    setTimeout(() => { this._toggleLock = false; }, 500);
+
+    const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine;
+    const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
+
+    if (this.isRecording) {
+      // Stop — low blip (skip on hotkey to prevent focus steal)
+      if (!this._hotkeyTriggered) this._playBlip(440, 0.1);
+      if (this._batchRecorder) {
+        this.stopBatchRecording();
+      } else if (['deepgram', 'groq', 'openai'].includes(engine) && this._apiMediaRecorder) {
+        this.stopApiRecording();
+      } else if (engine === 'stream' && this.speechRecognition) {
+        this.stopStreamRecognition();
+      } else {
+        this.stopRecording();
+      }
+    } else {
+      // Start — high blip (skip on hotkey to prevent focus steal)
+      if (!this._hotkeyTriggered) this._playBlip(880, 0.08);
+      if (recordingMode === 'batch' || recordingMode === 'clone_capture') {
+        this.startBatchRecording();
+      } else if (['deepgram', 'groq', 'openai'].includes(engine)) {
+        this.startApiRecording(engine);
+      } else if (engine === 'stream') {
+        this.startStreamRecognition();
+      } else {
+        this.startRecording();
+      }
     }
+    // Clear hotkey flag
+    this._hotkeyTriggered = false;
+  }
 
   /**
    * Start recording — captures audio and streams to server
    * INVARIANT: Green strobe ONLY shows after mic access confirmed (FEAT-053)
    */
   async startRecording() {
-      this.isRecording = true;
+    this.isRecording = true;
 
-      // Lock transcript editing during recording
-      this.transcriptContent.contentEditable = 'false';
+    // Lock transcript editing during recording
+    this.transcriptContent.contentEditable = 'false';
 
-      // Clear placeholder if exists
-      const placeholder = this.transcriptContent.querySelector('.placeholder');
-      if (placeholder) {
-        placeholder.remove();
+    // Clear placeholder if exists
+    const placeholder = this.transcriptContent.querySelector('.placeholder');
+    if (placeholder) {
+      placeholder.remove();
+    }
+
+    try {
+      // Reload cloud settings from localStorage (they may have been saved after init)
+      const lsToken = localStorage.getItem('windy_cloudToken');
+      const lsUrl = localStorage.getItem('windy_cloudUrl');
+      const lsEngine = localStorage.getItem('windy_engine');
+      if (lsToken) this.cloudToken = lsToken;
+      if (lsUrl) this.cloudUrl = lsUrl;
+      if (lsEngine) this.transcriptionEngine = lsEngine;
+
+      // If cloud mode, attempt cloud WS connection first
+      // Use default URL if not explicitly set
+      if (this.transcriptionEngine === 'cloud' && !this.cloudUrl) {
+        this.cloudUrl = 'wss://windypro.thewindstorm.uk';
+      }
+      console.warn(`[Record] engine=${this.transcriptionEngine}, cloudUrl="${this.cloudUrl}", cloudToken=${this.cloudToken ? 'exists' : 'MISSING'}`);
+      if (this.transcriptionEngine === 'cloud' && this.cloudUrl && this.cloudUrl.startsWith('wss://')) {
+        try {
+          await this.connectCloudWS();
+          this._usingCloud = true;
+          this.updateModelBadge('cloud', false);
+        } catch (err) {
+          console.warn('[Cloud] Connection failed, falling back to local:', err.message);
+          this._usingCloud = false;
+          this.showReconnectToast('⚠️ Cloud unavailable — using local transcription.');
+        }
+      } else if (this.transcriptionEngine === 'cloud') {
+        // No cloud URL set — use local with a hint
+        this.showReconnectToast('☁️ Cloud mode selected but no URL configured. Using local.');
       }
 
-      try {
-        // Reload cloud settings from localStorage (they may have been saved after init)
-        const lsToken = localStorage.getItem('windy_cloudToken');
-        const lsUrl = localStorage.getItem('windy_cloudUrl');
-        const lsEngine = localStorage.getItem('windy_engine');
-        if (lsToken) this.cloudToken = lsToken;
-        if (lsUrl) this.cloudUrl = lsUrl;
-        if (lsEngine) this.transcriptionEngine = lsEngine;
+      // Start audio capture FIRST — only show green strobe if mic works
+      await this.startAudioCapture();
+      this.recordingStartedAt = new Date().toISOString();
 
-        // If cloud mode, attempt cloud WS connection first
-        // Use default URL if not explicitly set
-        if (this.transcriptionEngine === 'cloud' && !this.cloudUrl) {
-          this.cloudUrl = 'wss://windypro.thewindstorm.uk';
-        }
-        console.warn(`[Record] engine=${this.transcriptionEngine}, cloudUrl="${this.cloudUrl}", cloudToken=${this.cloudToken ? 'exists' : 'MISSING'}`);
-        if (this.transcriptionEngine === 'cloud' && this.cloudUrl && this.cloudUrl.startsWith('wss://')) {
-          try {
-            await this.connectCloudWS();
-            this._usingCloud = true;
-            this.updateModelBadge('cloud', false);
-          } catch (err) {
-            console.warn('[Cloud] Connection failed, falling back to local:', err.message);
-            this._usingCloud = false;
-            this.showReconnectToast('⚠️ Cloud unavailable — using local transcription.');
-          }
-        } else if (this.transcriptionEngine === 'cloud') {
-          // No cloud URL set — use local with a hint
-          this.showReconnectToast('☁️ Cloud mode selected but no URL configured. Using local.');
-        }
-
-        // Start audio capture FIRST — only show green strobe if mic works
-        await this.startAudioCapture();
-        this.recordingStartedAt = new Date().toISOString();
-
-        // Verify cloud WS is still alive after audio capture started
-        if (this._usingCloud) {
-          if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN) {
-            console.log('[Cloud] ✅ WS still open after audio capture started — streaming to cloud');
-          } else {
-            console.warn('[Cloud] ⚠️ WS closed during audio setup — falling back to local');
-            this._usingCloud = false;
-            this.send('start');
-          }
+      // Verify cloud WS is still alive after audio capture started
+      if (this._usingCloud) {
+        if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN) {
+          console.log('[Cloud] ✅ WS still open after audio capture started — streaming to cloud');
         } else {
-          // Send resolved whisper model config to Python server for custom engines
-          const engineModel = this._engineModelMap?.[this.transcriptionEngine];
-          if (engineModel) {
-            this.send('config', { model: engineModel });
-          }
+          console.warn('[Cloud] ⚠️ WS closed during audio setup — falling back to local');
+          this._usingCloud = false;
           this.send('start');
         }
-        this.setState('listening');
-      } catch (error) {
-        console.error('Failed to start audio capture:', error);
-        this.recordingStartedAt = null;
-        this.isRecording = false;
-        this.setState('error');
-        setTimeout(() => this.setState('idle'), 2000);
+      } else {
+        // Send resolved whisper model config to Python server for custom engines
+        const engineModel = this._engineModelMap?.[this.transcriptionEngine];
+        if (engineModel) {
+          this.send('config', { model: engineModel });
+        }
+        this.send('start');
       }
-    }
-
-    /**
-     * Stop recording
-     */
-    stopRecording() {
+      this.setState('listening');
+    } catch (error) {
+      console.error('Failed to start audio capture:', error);
+      this.recordingStartedAt = null;
       this.isRecording = false;
-      this.stopAudioCapture();
-      this.send('stop');
-      this.setState('idle');
-
-      // Enable transcript editing after stop
-      if (this.transcript.length > 0 || this.transcriptContent.textContent.trim()) {
-        this.transcriptContent.contentEditable = 'true';
-      }
+      this.setState('error');
+      setTimeout(() => this.setState('idle'), 2000);
     }
+  }
+
+  /**
+   * Stop recording
+   */
+  stopRecording() {
+    this.isRecording = false;
+    this.stopAudioCapture();
+    this.send('stop');
+    this.setState('idle');
+
+    // Enable transcript editing after stop
+    if (this.transcript.length > 0 || this.transcriptContent.textContent.trim()) {
+      this.transcriptContent.contentEditable = 'true';
+    }
+  }
 
   // ═══════════════════════════════════════════════
   //  Audio Capture Pipeline (B2.6)
@@ -2874,265 +2847,265 @@ class WindyApp {
    * FEAT-033: Feed audio level meter
    */
   async startAudioCapture() {
-      // T20: Use saved mic device if set
-      const audioConstraints = {
-        channelCount: 1,          // mono
-        sampleRate: 16000,        // Whisper expects 16kHz
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
+    // T20: Use saved mic device if set
+    const audioConstraints = {
+      channelCount: 1,          // mono
+      sampleRate: 16000,        // Whisper expects 16kHz
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true
+    };
+    if (window.windyAPI) {
+      const settings = await window.windyAPI.getSettings();
+      if (settings && settings.micDeviceId && settings.micDeviceId !== 'default') {
+        audioConstraints.deviceId = { exact: settings.micDeviceId };
+      }
+    }
+
+    // B2.6.1: Request microphone access
+    this.mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: audioConstraints
+    });
+
+    // B2.6.2: Create AudioContext at 16kHz
+    this.audioContext = new AudioContext({ sampleRate: 16000 });
+    this.audioSource = this.audioContext.createMediaStreamSource(this.mediaStream);
+
+    // Use AudioWorklet (modern) with ScriptProcessorNode fallback (deprecated)
+    try {
+      await this.audioContext.audioWorklet.addModule('audio-processor.js');
+      this.audioProcessor = new AudioWorkletNode(this.audioContext, 'windy-audio-processor');
+      this.audioProcessor.port.onmessage = (e) => {
+        const int16Buffer = e.data;
+        // B2.6.5: Stream as binary via active WebSocket (local or cloud)
+        const activeWs = this.getActiveWs();
+        if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+          activeWs.send(int16Buffer);
+        }
       };
-      if (window.windyAPI) {
-        const settings = await window.windyAPI.getSettings();
-        if (settings && settings.micDeviceId && settings.micDeviceId !== 'default') {
-          audioConstraints.deviceId = { exact: settings.micDeviceId };
+      // Wire: mic → worklet
+      this.audioSource.connect(this.audioProcessor);
+      this.audioProcessor.connect(this.audioContext.destination);
+
+      // Level meter via AnalyserNode (separate path)
+      this._analyser = this.audioContext.createAnalyser();
+      this._analyser.fftSize = 2048;
+      this.audioSource.connect(this._analyser);
+      this._levelInterval = setInterval(() => {
+        const data = new Float32Array(this._analyser.fftSize);
+        this._analyser.getFloatTimeDomainData(data);
+        this.updateAudioMeter(data);
+      }, 100);
+    } catch (workletErr) {
+      console.warn('[Audio] AudioWorklet unavailable, falling back to ScriptProcessorNode:', workletErr.message);
+      // Fallback: ScriptProcessorNode (deprecated but widely supported)
+      this.audioProcessor = this.audioContext.createScriptProcessor(4096, 1, 1);
+      this.audioProcessor.onaudioprocess = (e) => {
+        const float32 = e.inputBuffer.getChannelData(0);
+        this.updateAudioMeter(float32);
+        const int16 = this.float32ToInt16(float32);
+        const activeWs = this.getActiveWs();
+        if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+          activeWs.send(int16.buffer);
+        }
+      };
+      this.audioSource.connect(this.audioProcessor);
+      this.audioProcessor.connect(this.audioContext.destination);
+    }
+
+    // Show audio meter
+    this.audioMeterContainer.style.display = 'block';
+  }
+
+  /**
+   * Stop audio capture and release resources
+   */
+  stopAudioCapture() {
+    // Disconnect audio nodes
+    if (this._levelInterval) {
+      clearInterval(this._levelInterval);
+      this._levelInterval = null;
+    }
+    if (this._analyser) {
+      this._analyser.disconnect();
+      this._analyser = null;
+    }
+    if (this.audioProcessor) {
+      this.audioProcessor.disconnect();
+      if (this.audioProcessor.onaudioprocess) this.audioProcessor.onaudioprocess = null;
+      if (this.audioProcessor.port) this.audioProcessor.port.onmessage = null;
+      this.audioProcessor = null;
+    }
+    if (this.audioSource) {
+      this.audioSource.disconnect();
+      this.audioSource = null;
+    }
+
+    // Close AudioContext
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
+
+    // Release mic
+    if (this.mediaStream) {
+      this.mediaStream.getTracks().forEach(track => track.stop());
+      this.mediaStream = null;
+    }
+
+    // Hide audio meter
+    this.audioMeterContainer.style.display = 'none';
+    this.audioMeterBar.style.width = '0%';
+  }
+
+  /**
+   * Convert Float32 audio samples to Int16 PCM
+   * Whisper expects 16-bit PCM at 16kHz mono
+   */
+  float32ToInt16(float32Array) {
+    const int16 = new Int16Array(float32Array.length);
+    for (let i = 0; i < float32Array.length; i++) {
+      const s = Math.max(-1, Math.min(1, float32Array[i]));
+      int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return int16;
+  }
+
+  /**
+   * Update the audio level meter with current RMS level
+   */
+  updateAudioMeter(float32Array) {
+    let sum = 0;
+    for (let i = 0; i < float32Array.length; i++) {
+      sum += float32Array[i] * float32Array[i];
+    }
+    const rms = Math.sqrt(sum / float32Array.length);
+    // Scale RMS (0-1, usually 0-0.3) to percentage (0-100)
+    const level = Math.min(100, rms * 300);
+    this.audioMeterBar.style.width = `${level}%`;
+  }
+
+  /**
+   * Rebuild transcript paragraph from stored final segments.
+   */
+  renderStoredTranscript() {
+    // Only remove hotkey placeholder if there's actual content to show
+    if (this.transcript.length > 0) {
+      const placeholder = this.transcriptContent.querySelector('.placeholder');
+      if (placeholder) placeholder.remove();
+    } else {
+      return; // Nothing to render — keep placeholder visible
+    }
+
+    // Remove transient partial text
+    const existingPartial = this.transcriptContent.querySelector('.partial-text');
+    if (existingPartial) existingPartial.remove();
+
+    let para = this.transcriptContent.querySelector('.transcript-para');
+    if (!para) {
+      para = document.createElement('p');
+      para.className = 'transcript-para';
+      this.transcriptContent.appendChild(para);
+    }
+
+    // Keep any already-pasted archive blocks; rebuild only final live text spans
+    const pastedBlocks = Array.from(para.querySelectorAll('.pasted-text'));
+    para.innerHTML = '';
+    pastedBlocks.forEach(block => para.appendChild(block));
+
+    this.transcript.forEach((segment, idx) => {
+      if (para.childNodes.length > 0) para.appendChild(document.createTextNode(' '));
+      const span = document.createElement('span');
+      span.className = 'final-text';
+      span.textContent = segment.text;
+      para.appendChild(span);
+    });
+
+    this.transcriptScroll.scrollTop = this.transcriptScroll.scrollHeight;
+  }
+
+  /**
+   * Add transcript segment to display
+   * Appends text inline as one continuous block (not separate lines)
+   */
+  addTranscriptSegment(msg) {
+    console.debug('[addTranscript] text:', msg.text, 'partial:', msg.partial, 'livePreview:', this.livePreview, 'state:', this.currentState);
+    // Always retain final segments for copy/paste reliability
+    if (!msg.partial) {
+      this.transcript.push(msg);
+    }
+
+    // In strobe-only mode, suppress live rendering while recording/buffering
+    if (!this.livePreview && (this.currentState === 'listening' || this.currentState === 'buffering')) {
+      if (!msg.partial) this.updateWordCount();
+      return;
+    }
+
+    // Remove any existing partial text
+    const existingPartial = this.transcriptContent.querySelector('.partial-text');
+    if (existingPartial) {
+      existingPartial.remove();
+    }
+
+    // Get or create the continuous transcript paragraph
+    let para = this.transcriptContent.querySelector('.transcript-para');
+    if (!para) {
+      para = document.createElement('p');
+      para.className = 'transcript-para';
+      this.transcriptContent.appendChild(para);
+    }
+
+    if (msg.partial) {
+      // Partial text — show in gray, will be replaced
+      const span = document.createElement('span');
+      span.className = 'partial-text';
+      span.textContent = msg.text;
+      para.appendChild(span);
+    } else {
+      // Final text — append permanently with a space separator
+      if (para.childNodes.length > 0) {
+        const lastNode = para.lastChild;
+        if (lastNode && !lastNode.classList?.contains('partial-text')) {
+          para.appendChild(document.createTextNode(' '));
         }
       }
-
-      // B2.6.1: Request microphone access
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: audioConstraints
-      });
-
-      // B2.6.2: Create AudioContext at 16kHz
-      this.audioContext = new AudioContext({ sampleRate: 16000 });
-      this.audioSource = this.audioContext.createMediaStreamSource(this.mediaStream);
-
-      // Use AudioWorklet (modern) with ScriptProcessorNode fallback (deprecated)
-      try {
-        await this.audioContext.audioWorklet.addModule('audio-processor.js');
-        this.audioProcessor = new AudioWorkletNode(this.audioContext, 'windy-audio-processor');
-        this.audioProcessor.port.onmessage = (e) => {
-          const int16Buffer = e.data;
-          // B2.6.5: Stream as binary via active WebSocket (local or cloud)
-          const activeWs = this.getActiveWs();
-          if (activeWs && activeWs.readyState === WebSocket.OPEN) {
-            activeWs.send(int16Buffer);
-          }
-        };
-        // Wire: mic → worklet
-        this.audioSource.connect(this.audioProcessor);
-        this.audioProcessor.connect(this.audioContext.destination);
-
-        // Level meter via AnalyserNode (separate path)
-        this._analyser = this.audioContext.createAnalyser();
-        this._analyser.fftSize = 2048;
-        this.audioSource.connect(this._analyser);
-        this._levelInterval = setInterval(() => {
-          const data = new Float32Array(this._analyser.fftSize);
-          this._analyser.getFloatTimeDomainData(data);
-          this.updateAudioMeter(data);
-        }, 100);
-      } catch (workletErr) {
-        console.warn('[Audio] AudioWorklet unavailable, falling back to ScriptProcessorNode:', workletErr.message);
-        // Fallback: ScriptProcessorNode (deprecated but widely supported)
-        this.audioProcessor = this.audioContext.createScriptProcessor(4096, 1, 1);
-        this.audioProcessor.onaudioprocess = (e) => {
-          const float32 = e.inputBuffer.getChannelData(0);
-          this.updateAudioMeter(float32);
-          const int16 = this.float32ToInt16(float32);
-          const activeWs = this.getActiveWs();
-          if (activeWs && activeWs.readyState === WebSocket.OPEN) {
-            activeWs.send(int16.buffer);
-          }
-        };
-        this.audioSource.connect(this.audioProcessor);
-        this.audioProcessor.connect(this.audioContext.destination);
-      }
-
-      // Show audio meter
-      this.audioMeterContainer.style.display = 'block';
+      const span = document.createElement('span');
+      span.className = 'final-text';
+      span.textContent = msg.text;
+      para.appendChild(span);
+      this.updateWordCount();
     }
 
-    /**
-     * Stop audio capture and release resources
-     */
-    stopAudioCapture() {
-      // Disconnect audio nodes
-      if (this._levelInterval) {
-        clearInterval(this._levelInterval);
-        this._levelInterval = null;
-      }
-      if (this._analyser) {
-        this._analyser.disconnect();
-        this._analyser = null;
-      }
-      if (this.audioProcessor) {
-        this.audioProcessor.disconnect();
-        if (this.audioProcessor.onaudioprocess) this.audioProcessor.onaudioprocess = null;
-        if (this.audioProcessor.port) this.audioProcessor.port.onmessage = null;
-        this.audioProcessor = null;
-      }
-      if (this.audioSource) {
-        this.audioSource.disconnect();
-        this.audioSource = null;
-      }
+    // Auto-scroll to bottom
+    this.transcriptScroll.scrollTop = this.transcriptScroll.scrollHeight;
+  }
 
-      // Close AudioContext
-      if (this.audioContext) {
-        this.audioContext.close();
-        this.audioContext = null;
-      }
+  /**
+   * Format time in seconds to MM:SS
+   */
+  formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
 
-      // Release mic
-      if (this.mediaStream) {
-        this.mediaStream.getTracks().forEach(track => track.stop());
-        this.mediaStream = null;
-      }
-
-      // Hide audio meter
-      this.audioMeterContainer.style.display = 'none';
-      this.audioMeterBar.style.width = '0%';
+  /**
+   * Get full transcript text
+   */
+  getFullTranscript() {
+    // If user has edited the transcript via contentEditable, read from DOM
+    if (this.transcriptContent.isContentEditable) {
+      return this.transcriptContent.textContent.trim();
     }
+    return this.transcript.map(s => s.text).join(' ');
+  }
 
-    /**
-     * Convert Float32 audio samples to Int16 PCM
-     * Whisper expects 16-bit PCM at 16kHz mono
-     */
-    float32ToInt16(float32Array) {
-      const int16 = new Int16Array(float32Array.length);
-      for (let i = 0; i < float32Array.length; i++) {
-        const s = Math.max(-1, Math.min(1, float32Array[i]));
-        int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      }
-      return int16;
-    }
-
-    /**
-     * Update the audio level meter with current RMS level
-     */
-    updateAudioMeter(float32Array) {
-      let sum = 0;
-      for (let i = 0; i < float32Array.length; i++) {
-        sum += float32Array[i] * float32Array[i];
-      }
-      const rms = Math.sqrt(sum / float32Array.length);
-      // Scale RMS (0-1, usually 0-0.3) to percentage (0-100)
-      const level = Math.min(100, rms * 300);
-      this.audioMeterBar.style.width = `${level}%`;
-    }
-
-    /**
-     * Rebuild transcript paragraph from stored final segments.
-     */
-    renderStoredTranscript() {
-      // Only remove hotkey placeholder if there's actual content to show
-      if (this.transcript.length > 0) {
-        const placeholder = this.transcriptContent.querySelector('.placeholder');
-        if (placeholder) placeholder.remove();
-      } else {
-        return; // Nothing to render — keep placeholder visible
-      }
-
-      // Remove transient partial text
-      const existingPartial = this.transcriptContent.querySelector('.partial-text');
-      if (existingPartial) existingPartial.remove();
-
-      let para = this.transcriptContent.querySelector('.transcript-para');
-      if (!para) {
-        para = document.createElement('p');
-        para.className = 'transcript-para';
-        this.transcriptContent.appendChild(para);
-      }
-
-      // Keep any already-pasted archive blocks; rebuild only final live text spans
-      const pastedBlocks = Array.from(para.querySelectorAll('.pasted-text'));
-      para.innerHTML = '';
-      pastedBlocks.forEach(block => para.appendChild(block));
-
-      this.transcript.forEach((segment, idx) => {
-        if (para.childNodes.length > 0) para.appendChild(document.createTextNode(' '));
-        const span = document.createElement('span');
-        span.className = 'final-text';
-        span.textContent = segment.text;
-        para.appendChild(span);
-      });
-
-      this.transcriptScroll.scrollTop = this.transcriptScroll.scrollHeight;
-    }
-
-    /**
-     * Add transcript segment to display
-     * Appends text inline as one continuous block (not separate lines)
-     */
-    addTranscriptSegment(msg) {
-      console.debug('[addTranscript] text:', msg.text, 'partial:', msg.partial, 'livePreview:', this.livePreview, 'state:', this.currentState);
-      // Always retain final segments for copy/paste reliability
-      if (!msg.partial) {
-        this.transcript.push(msg);
-      }
-
-      // In strobe-only mode, suppress live rendering while recording/buffering
-      if (!this.livePreview && (this.currentState === 'listening' || this.currentState === 'buffering')) {
-        if (!msg.partial) this.updateWordCount();
-        return;
-      }
-
-      // Remove any existing partial text
-      const existingPartial = this.transcriptContent.querySelector('.partial-text');
-      if (existingPartial) {
-        existingPartial.remove();
-      }
-
-      // Get or create the continuous transcript paragraph
-      let para = this.transcriptContent.querySelector('.transcript-para');
-      if (!para) {
-        para = document.createElement('p');
-        para.className = 'transcript-para';
-        this.transcriptContent.appendChild(para);
-      }
-
-      if (msg.partial) {
-        // Partial text — show in gray, will be replaced
-        const span = document.createElement('span');
-        span.className = 'partial-text';
-        span.textContent = msg.text;
-        para.appendChild(span);
-      } else {
-        // Final text — append permanently with a space separator
-        if (para.childNodes.length > 0) {
-          const lastNode = para.lastChild;
-          if (lastNode && !lastNode.classList?.contains('partial-text')) {
-            para.appendChild(document.createTextNode(' '));
-          }
-        }
-        const span = document.createElement('span');
-        span.className = 'final-text';
-        span.textContent = msg.text;
-        para.appendChild(span);
-        this.updateWordCount();
-      }
-
-      // Auto-scroll to bottom
-      this.transcriptScroll.scrollTop = this.transcriptScroll.scrollHeight;
-    }
-
-    /**
-     * Format time in seconds to MM:SS
-     */
-    formatTime(seconds) {
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
-
-    /**
-     * Get full transcript text
-     */
-    getFullTranscript() {
-      // If user has edited the transcript via contentEditable, read from DOM
-      if (this.transcriptContent.isContentEditable) {
-        return this.transcriptContent.textContent.trim();
-      }
-      return this.transcript.map(s => s.text).join(' ');
-    }
-
-    /**
-     * Clear transcript
-     */
-    clearTranscript() {
-      this.transcript = [];
-      this.transcriptContent.innerHTML = `<div class="placeholder" id="shortcutsPlaceholder">
+  /**
+   * Clear transcript
+   */
+  clearTranscript() {
+    this.transcript = [];
+    this.transcriptContent.innerHTML = `<div class="placeholder" id="shortcutsPlaceholder">
       <div style="margin-bottom:8px;font-weight:600;opacity:0.9;">⌨️ Keyboard Shortcuts</div>
       <div id="shortcutRow_toggle" style="margin:4px 0;"></div>
       <div id="shortcutRow_paste" style="margin:4px 0;"></div>
@@ -3140,110 +3113,107 @@ class WindyApp {
       <div id="shortcutRow_quickTranslate" style="margin:4px 0;"></div>
       <div style="margin:4px 0;"><kbd>Ctrl + / −</kbd> — <span style="color:#A78BFA;font-weight:600;">Zoom</span> in / out &nbsp; <kbd>Ctrl+0</kbd> Reset</div>
     </div>`;
-      // Re-populate with user's actual hotkeys
-      if (window.windyAPI?.getSettings) {
-        window.windyAPI.getSettings().then(s => this._populateShortcutDisplay(s?.hotkeys));
-      }
-      this.transcriptContent.contentEditable = 'false';
-      this.updateWordCount();
+    // Re-populate with user's actual hotkeys
+    if (window.windyAPI?.getSettings) {
+      window.windyAPI.getSettings().then(s => this._populateShortcutDisplay(s?.hotkeys));
     }
+    this.transcriptContent.contentEditable = 'false';
+    this.updateWordCount();
+  }
 
-    /**
-     * Copy transcript to clipboard
-     */
-    copyTranscript() {
-      const text = this.getFullTranscript();
-      if (text) {
-        navigator.clipboard.writeText(text);
-        // Visual feedback
-        this.copyBtn.querySelector('.icon').textContent = '✓';
-        setTimeout(() => {
-          this.copyBtn.querySelector('.icon').textContent = '📋';
-        }, 1000);
-      }
+  /**
+   * Copy transcript to clipboard
+   */
+  copyTranscript() {
+    const text = this.getFullTranscript();
+    if (text) {
+      navigator.clipboard.writeText(text);
+      // Visual feedback
+      this.copyBtn.querySelector('.icon').textContent = '✓';
+      setTimeout(() => {
+        this.copyBtn.querySelector('.icon').textContent = '📋';
+      }, 1000);
     }
+  }
 
   /**
    * Paste transcript to cursor
    */
   async pasteTranscript() {
-      const text = this.getFullTranscript();
-      if (!text) return;
+    const text = this.getFullTranscript();
+    if (!text) return;
 
-      // Paste confirmation beep (rising sweep)
-      this._playPasteBlip();
+    window.windyAPI.sendTranscriptForPaste(text);
 
-      window.windyAPI.sendTranscriptForPaste(text);
+    // After paste: either clear or gray-out based on setting
+    const settings = await window.windyAPI.getSettings();
+    const clearOnPaste = settings && settings.clearOnPaste;
 
-      // After paste: either clear or gray-out based on setting
-      const settings = await window.windyAPI.getSettings();
-      const clearOnPaste = settings && settings.clearOnPaste;
-
-      if (clearOnPaste) {
-        // === CLEAR MODE ===
-        // Reset everything — transcript array, DOM, contentEditable, word count
-        this.clearTranscript();
-      } else {
-        // === GRAY MODE ===
-        // Gray-out pasted text so user knows it's been sent
-        const para = this.transcriptContent.querySelector('.transcript-para');
-        if (para) {
-          const pastedDiv = document.createElement('div');
-          pastedDiv.className = 'pasted-text';
-          while (para.firstChild) {
-            pastedDiv.appendChild(para.firstChild);
-          }
-          para.appendChild(pastedDiv);
+    if (clearOnPaste) {
+      // === CLEAR MODE ===
+      // Reset everything — transcript array, DOM, contentEditable, word count
+      this.clearTranscript();
+    } else {
+      // === GRAY MODE ===
+      // Gray-out pasted text so user knows it's been sent
+      const para = this.transcriptContent.querySelector('.transcript-para');
+      if (para) {
+        const pastedDiv = document.createElement('div');
+        pastedDiv.className = 'pasted-text';
+        while (para.firstChild) {
+          pastedDiv.appendChild(para.firstChild);
         }
-        // Clear transcript array so next recording starts fresh
-        // but grayed-out text remains visible for scrollback
-        this.transcript = [];
-        // Disable editing — paste is a session boundary
-        this.transcriptContent.contentEditable = 'false';
-        this.updateWordCount();
+        para.appendChild(pastedDiv);
       }
+      // Clear transcript array so next recording starts fresh
+      // but grayed-out text remains visible for scrollback
+      this.transcript = [];
+      // Disable editing — paste is a session boundary
+      this.transcriptContent.contentEditable = 'false';
+      this.updateWordCount();
     }
+  }
 
-    /**
-     * T19: Show crash recovery banner
-     * @param {string} text - Recovered transcript text
-     */
-    showRecoveryBanner(text) {
-      if (!text || !text.trim()) return;
+  /**
+   * T19: Show crash recovery banner
+   * @param {string} text - Recovered transcript text
+   */
+  showRecoveryBanner(text) {
+    if (!text || !text.trim()) return;
 
-      const banner = document.createElement('div');
-      banner.className = 'recovery-banner';
-      banner.innerHTML = `
+    const banner = document.createElement('div');
+    banner.className = 'recovery-banner';
+    banner.innerHTML = `
       <span class="recovery-icon">🔄</span>
       <span class="recovery-text">Previous session recovered</span>
       <button class="recovery-restore" id="recoveryRestore">Restore</button>
       <button class="recovery-dismiss" id="recoveryDismiss">✕</button>
     `;
 
-      const window_el = document.querySelector('.window');
-      window_el.insertBefore(banner, window_el.firstChild);
+    const window_el = document.querySelector('.window');
+    window_el.insertBefore(banner, window_el.firstChild);
 
-      banner.querySelector('#recoveryRestore').addEventListener('click', () => {
-        // Split recovered text into segments and display
-        const lines = text.split('\n').filter(l => l.trim());
-        lines.forEach(line => {
-          this.addTranscriptSegment({
-            text: line.trim(),
-            is_partial: false,
-            start_time: 0,
-            end_time: 0
-          });
+    banner.querySelector('#recoveryRestore').addEventListener('click', () => {
+      // Split recovered text into segments and display
+      const lines = text.split('\n').filter(l => l.trim());
+      lines.forEach(line => {
+        this.addTranscriptSegment({
+          text: line.trim(),
+          is_partial: false,
+          start_time: 0,
+          end_time: 0
         });
-        banner.remove();
-        if (window.windyAPI?.dismissCrashRecovery) window.windyAPI.dismissCrashRecovery();
       });
+      banner.remove();
+      if (window.windyAPI?.dismissCrashRecovery) window.windyAPI.dismissCrashRecovery();
+    });
 
-      banner.querySelector('#recoveryDismiss').addEventListener('click', () => {
-        banner.remove();
-        if (window.windyAPI?.dismissCrashRecovery) window.windyAPI.dismissCrashRecovery();
-      });
-    }
+    banner.querySelector('#recoveryDismiss').addEventListener('click', () => {
+      banner.remove();
+      if (window.windyAPI?.dismissCrashRecovery) window.windyAPI.dismissCrashRecovery();
+    });
   }
+}
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
