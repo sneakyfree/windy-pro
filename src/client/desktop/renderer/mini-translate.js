@@ -56,7 +56,7 @@ const processingQueue = [];
 const pendingOverlapTimers = [];
 
 // Max effective recording per chunk (prevents huge audio overwhelming the server)
-const MAX_CHUNK_RECORD_MS = 15000; // 15s max per chunk, regardless of slider
+const MAX_CHUNK_RECORD_MS = 10000; // 10s max per chunk — server processes in ~5-6s
 
 // Chunk duration slider — restart recorder on change
 chunkSlider.addEventListener('input', () => {
@@ -340,19 +340,16 @@ function enqueueChunk(audioBlob) {
 }
 
 function drainQueue() {
-    // Adaptive concurrency: large chunks (>200KB) → 1 at a time, small → 3
-    const nextBlob = processingQueue[0];
-    const maxConcurrent = (nextBlob && nextBlob.size > 200000) ? 1 : 3;
-    while (activeProcessing < maxConcurrent && processingQueue.length > 0) {
-        const blob = processingQueue.shift();
-        activeProcessing++;
-        processChunk(blob)
-            .catch(err => appendChunk(`⚠️ ${err.message}`, 'error'))
-            .finally(() => {
-                activeProcessing--;
-                drainQueue();
-            });
-    }
+    // Sequential: Whisper server handles 1 request at a time, sending more just causes failures
+    if (activeProcessing >= 1 || processingQueue.length === 0) return;
+    const blob = processingQueue.shift();
+    activeProcessing++;
+    processChunk(blob)
+        .catch(err => appendChunk(`⚠️ ${err.message}`, 'error'))
+        .finally(() => {
+            activeProcessing--;
+            drainQueue();
+        });
 }
 
 async function processChunk(audioBlob) {
