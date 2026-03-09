@@ -1,0 +1,248 @@
+{
+  "version": "1.0.0",
+  "updated": "2026-03-09",
+  "models": [
+    {
+      "id": "windy-stt-nano",
+      "name": "Windy STT Nano",
+      "category": "stt",
+      "format": "gpu",
+      "size_mb": 73,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-tiny",
+      "huggingface": "WindyProLabs/windy-stt-nano",
+      "description": "Fastest STT model. Best for quick dictation on powerful hardware.",
+      "cpu_variant": "windy-stt-nano-cpu"
+    },
+    {
+      "id": "windy-stt-lite",
+      "name": "Windy STT Lite",
+      "category": "stt",
+      "format": "gpu",
+      "size_mb": 140,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-small",
+      "huggingface": "WindyProLabs/windy-stt-lite",
+      "description": "Lightweight STT with improved accuracy. Balanced speed/quality.",
+      "cpu_variant": "windy-stt-lite-cpu"
+    },
+    {
+      "id": "windy-stt-core",
+      "name": "Windy STT Core",
+      "category": "stt",
+      "format": "gpu",
+      "size_mb": 462,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-base",
+      "huggingface": "WindyProLabs/windy-stt-core",
+      "description": "Core STT model. Recommended for most use cases.",
+      "cpu_variant": "windy-stt-core-cpu"
+    },
+    {
+      "id": "windy-stt-edge",
+      "name": "Windy STT Edge",
+      "category": "stt",
+      "format": "gpu",
+      "size_mb": 1444,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-medium",
+      "huggingface": "WindyProLabs/windy-stt-edge",
+      "description": "High-accuracy STT. Best for professional transcription.",
+      "cpu_variant": "windy-stt-edge-cpu"
+    },
+    {
+      "id": "windy-stt-plus",
+      "name": "Windy STT Plus",
+      "category": "stt",
+      "format": "gpu",
+      "size_mb": 1458,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-large-v2",
+      "huggingface": "WindyProLabs/windy-stt-plus",
+      "description": "Premium STT with excellent accuracy. Production-grade.",
+      "cpu_variant": "windy-stt-plus-cpu"
+    },
+    {
+      "id": "windy-stt-turbo",
+      "name": "Windy STT Turbo",
+      "category": "stt",
+      "format": "gpu",
+      "size_mb": 1544,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-large-v3",
+      "huggingface": "WindyProLabs/windy-stt-turbo",
+      "description": "Latest-gen STT. State-of-the-art accuracy and robustness.",
+      "cpu_variant": "windy-stt-turbo-cpu"
+    },
+    {
+      "id": "windy-stt-pro",
+      "name": "Windy STT Pro",
+      "category": "stt",
+      "format": "gpu",
+      "size_mb": 2945,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-large-v3-turbo",
+      "huggingface": "WindyProLabs/windy-stt-pro",
+      "description": "Ultra-fast large model. Maximum speed without sacrificing quality.",
+      "cpu_variant": "windy-stt-pro-cpu"
+    },
+    {
+      "id": "windy-stt-nano-cpu",
+      "name": "Windy STT Nano (CPU)",
+      "category": "stt",
+      "format": "cpu",
+      "size_mb": 406,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-tiny",
+      "huggingface": "WindyProLabs/windy-stt-nano-cpu",
+      "description": "CPU-optimized Nano. Best for resource-constrained environments.",
+      "gpu_variant": "windy-stt-nano"
+    },
+    {
+      "id": "windy-stt-lite-cpu",
+      "name": "Windy STT Lite (CPU)",
+      "category": "stt",
+      "format": "cpu",
+      "size_mb": 668,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-small",
+      "huggingface": "WindyProLabs/windy-stt-lite-cpu",
+      "description": "CPU-optimized Lite. Good balance for CPU-only systems.",
+      "gpu_variant": "windy-stt-lite"
+    },
+    {
+      "id": "windy-stt-core-cpu",
+      "name": "Windy STT Core (CPU)",
+      "category": "stt",
+      "format": "cpu",
+      "size_mb": 1760,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-base",
+      "huggingface": "WindyProLabs/windy-stt-core-cpu",
+      "description": "CPU-optimized Core. Recommended for most CPU deployments.",
+      "gpu_variant": "windy-stt-core"
+    },
+    {
+      "id": "windy-stt-edge-cpu",
+      "name": "Windy STT Edge (CPU)",
+      "category": "stt",
+      "format": "cpu",
+      "size_mb": 3824,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-medium",
+      "huggingface": "WindyProLabs/windy-stt-edge-cpu",
+      "description": "CPU-optimized Edge. High accuracy on CPU hardware.",
+      "gpu_variant": "windy-stt-edge"
+    },
+    {
+      "id": "windy-stt-plus-cpu",
+      "name": "Windy STT Plus (CPU)",
+      "category": "stt",
+      "format": "cpu",
+      "size_mb": 4872,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-large-v2",
+      "huggingface": "WindyProLabs/windy-stt-plus-cpu",
+      "description": "CPU-optimized Plus. Premium accuracy without GPU.",
+      "gpu_variant": "windy-stt-plus"
+    },
+    {
+      "id": "windy-stt-turbo-cpu",
+      "name": "Windy STT Turbo (CPU)",
+      "category": "stt",
+      "format": "cpu",
+      "size_mb": 4200,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-large-v3",
+      "huggingface": "WindyProLabs/windy-stt-turbo-cpu",
+      "description": "CPU-optimized Turbo. State-of-the-art accuracy on CPU.",
+      "gpu_variant": "windy-stt-turbo"
+    },
+    {
+      "id": "windy-stt-pro-cpu",
+      "name": "Windy STT Pro (CPU)",
+      "category": "stt",
+      "format": "cpu",
+      "size_mb": 9456,
+      "languages": [
+        "en"
+      ],
+      "base_architecture": "whisper-large-v3-turbo",
+      "huggingface": "WindyProLabs/windy-stt-pro-cpu",
+      "description": "CPU-optimized Pro. Maximum CPU performance.",
+      "gpu_variant": "windy-stt-pro"
+    },
+    {
+      "id": "windy-translate-spark",
+      "name": "Windy Translate Spark",
+      "category": "translation",
+      "format": "gpu",
+      "size_mb": 929,
+      "languages": [
+        "en",
+        "es",
+        "fr",
+        "de",
+        "ru",
+        "fi",
+        "pt",
+        "zh",
+        "ja",
+        "ko",
+        "ar"
+      ],
+      "base_architecture": "m2m100-418M",
+      "huggingface": "WindyProLabs/windy_translate_spark",
+      "description": "Fast multilingual translation. 100+ languages. LoRA-enhanced for priority pairs."
+    },
+    {
+      "id": "windy-translate-standard",
+      "name": "Windy Translate Standard",
+      "category": "translation",
+      "format": "gpu",
+      "size_mb": 2371,
+      "languages": [
+        "en",
+        "es",
+        "fr",
+        "de",
+        "ru",
+        "fi",
+        "pt",
+        "zh",
+        "ja",
+        "ko",
+        "ar"
+      ],
+      "base_architecture": "m2m100-1.2B",
+      "huggingface": "WindyProLabs/windy_translate_standard",
+      "description": "Standard multilingual translation. 100+ languages. Higher quality than Spark."
+    }
+  ]
+}
