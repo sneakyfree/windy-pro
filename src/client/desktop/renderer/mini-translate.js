@@ -301,7 +301,10 @@ function startNextChunk() {
     recorder.onstop = () => {
         if (localChunks.length > 0) {
             const audioBlob = new Blob(localChunks, { type: mimeType });
-            enqueueChunk(audioBlob);
+            // Skip tiny chunks (<50KB) from slider changes — not enough audio to process
+            if (audioBlob.size > 50000) {
+                enqueueChunk(audioBlob);
+            }
         }
         if (!stoppedByTimer && isListening) {
             startNextChunk();

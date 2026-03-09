@@ -1119,8 +1119,8 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   } else {
 
     // ── Try local Whisper engine with retry ──
-    const MAX_RETRIES = 1;
-    const RETRY_DELAY_MS = 1000;
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY_MS = 1500;
     let lastLocalErr = null;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
