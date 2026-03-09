@@ -2686,10 +2686,16 @@ class WindyApp {
    * Toggle recording state
    * Debounced to prevent double-tap races (e.g. rapid Ctrl+Shift+Space)
    */
-  /** Play a short blip sound for start/stop feedback */
+  /** Play a short blip sound for start/stop/paste feedback.
+   *  Reuses a single AudioContext to avoid focus-steal on Linux.
+   */
   _playBlip(frequency = 880, duration = 0.08) {
     try {
-      const ctx = new AudioContext();
+      if (!this._blipAudioCtx || this._blipAudioCtx.state === 'closed') {
+        this._blipAudioCtx = new AudioContext();
+      }
+      const ctx = this._blipAudioCtx;
+      if (ctx.state === 'suspended') ctx.resume();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -2700,7 +2706,28 @@ class WindyApp {
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + duration);
-      setTimeout(() => ctx.close(), 200);
+    } catch (_) { }
+  }
+
+  /** Play a rising sweep blip for paste confirmation */
+  _playPasteBlip() {
+    try {
+      if (!this._blipAudioCtx || this._blipAudioCtx.state === 'closed') {
+        this._blipAudioCtx = new AudioContext();
+      }
+      const ctx = this._blipAudioCtx;
+      if (ctx.state === 'suspended') ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(900, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.15);
     } catch (_) { }
   }
 
@@ -2714,8 +2741,8 @@ class WindyApp {
     const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
 
     if (this.isRecording) {
-      // Stop — low blip (skip on hotkey to prevent focus steal)
-      if (!this._hotkeyTriggered) this._playBlip(440, 0.1);
+      // Stop — low blip (always plays, reusable AudioContext avoids focus steal)
+      this._playBlip(440, 0.1);
       if (this._batchRecorder) {
         this.stopBatchRecording();
       } else if (['deepgram', 'groq', 'openai'].includes(engine) && this._apiMediaRecorder) {
@@ -2726,8 +2753,8 @@ class WindyApp {
         this.stopRecording();
       }
     } else {
-      // Start — high blip (skip on hotkey to prevent focus steal)
-      if (!this._hotkeyTriggered) this._playBlip(880, 0.08);
+      // Start — high blip (always plays, reusable AudioContext avoids focus steal)
+      this._playBlip(880, 0.08);
       if (recordingMode === 'batch' || recordingMode === 'clone_capture') {
         this.startBatchRecording();
       } else if (['deepgram', 'groq', 'openai'].includes(engine)) {
@@ -3142,6 +3169,9 @@ class WindyApp {
   async pasteTranscript() {
     const text = this.getFullTranscript();
     if (!text) return;
+
+    // Paste confirmation beep (rising sweep)
+    this._playPasteBlip();
 
     window.windyAPI.sendTranscriptForPaste(text);
 
