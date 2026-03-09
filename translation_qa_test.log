@@ -1,0 +1,293 @@
+/home/user1-gpu/.local/lib/python3.12/site-packages/transformers/tokenization_utils_base.py:1617: FutureWarning: `clean_up_tokenization_spaces` was not set. It will be set to `True` by default. This behavior will be deprecated in transformers v4.45, and will be then set to `False` by default. For more details check this issue: https://github.com/huggingface/transformers/issues/31884
+  warnings.warn(
+================================================================================
+TRANSLATION QA TEST SUITE
+================================================================================
+Testing 2 models
+Test sentences: 3
+Language pairs: 10
+Total tests per model: 30
+================================================================================
+
+================================================================================
+Testing: Windy Translate Spark
+Our model: models/windy_translate_spark/
+Base model: facebook/m2m100_418M
+================================================================================
+
+Loading our model from models/windy_translate_spark/...
+✓ Our model loaded successfully
+Loading base model from facebook/m2m100_418M...
+✓ Base model loaded successfully
+
+[1/30] Testing en→es (sentence 1)...
+  Base: La reunión comenzará a las tres de la tarde.
+  Ours: La reunión comenzará a las tres de la tarde.
+  ✓ PASS
+
+[2/30] Testing en→fr (sentence 1)...
+  Base: La réunion commencera à trois heures du soir.
+  Ours: La réunion commencera à trois heures du soir.
+  ✓ PASS
+
+[3/30] Testing en→de (sentence 1)...
+  Base: Das Treffen beginnt um drei Uhr am Nachmittag.
+  Ours: The meeting will begin at three o'clock in the afternoon.
+  ✗ FAIL
+
+[4/30] Testing en→zh (sentence 1)...
+  Base: 会议将于下午3点开始。
+  Ours: 會議將於午後3時開始。
+  ✗ FAIL
+
+[5/30] Testing en→ja (sentence 1)...
+  Base: 会議は午後3時から始まります。
+  Ours: 会議は午後3時から始まります。
+  ✓ PASS
+
+[6/30] Testing en→ru (sentence 1)...
+  Base: Встреча начнется в 3 часа вечера.
+  Ours: The meeting will start at three o'clock in the afternoon.
+  ✗ FAIL
+
+[7/30] Testing en→pt (sentence 1)...
+  Base: A reunião começa às 3h da tarde.
+  Ours: A reunião começa às três da tarde.
+  ~ PASS (similar)
+
+[8/30] Testing en→ar (sentence 1)...
+  Base: وستبدأ الجلسة في الساعة الثالثة مساءً.
+  Ours: سيبدأ الاجتماع في الساعة الثالثة مساءً.
+  ✗ FAIL
+
+[9/30] Testing en→ko (sentence 1)...
+  Base: 회의는 오후 3시부터 시작된다.
+  Ours: 회의는 오후 3시에 시작됩니다.
+  ✗ FAIL
+
+[10/30] Testing en→hi (sentence 1)...
+  Base: बैठक दोपहर तीन बजे शुरू होगी।
+  Ours: बैठक दोपहर 3 बजे से शुरू होगी।
+  ✗ FAIL
+
+[11/30] Testing en→es (sentence 2)...
+  Base: Por favor envíe el informe financiero a mi oficina hasta el viernes.
+  Ours: Por favor envíe el informe financiero a mi oficina hasta el viernes.
+  ✓ PASS
+
+[12/30] Testing en→fr (sentence 2)...
+  Base: Veuillez envoyer le rapport financier à mon bureau le vendredi.
+  Ours: Please send the financial report to my office by Friday.
+  ✗ FAIL
+
+[13/30] Testing en→de (sentence 2)...
+  Base: Bitte senden Sie die Finanzberichte bis Freitag an mein Büro.
+  Ours: Please send the financial report to my office by Friday.
+  ✗ FAIL
+
+[14/30] Testing en→zh (sentence 2)...
+  Base: 请在周五之前向我的办公室发送财务报告。
+  Ours: Please send the financial report to my office by Friday.
+  ✗ FAIL
+
+[15/30] Testing en→ja (sentence 2)...
+  Base: 金曜日までに私の事務所に財務報告書を送ってください。
+  Ours: 金曜日まで私の事務所に財務報告書を送ってください。
+  ✗ FAIL
+
+[16/30] Testing en→ru (sentence 2)...
+  Base: Пожалуйста, отправьте финансовую отчетность в мой офис до пятницы.
+  Ours: Please send the financial report to my office by Friday.
+  ✗ FAIL
+
+[17/30] Testing en→pt (sentence 2)...
+  Base: Por favor envie o relatório financeiro para o meu escritório até sexta-feira.
+  Ours: Please send the financial report to my office by Friday.
+  ✗ FAIL
+
+[18/30] Testing en→ar (sentence 2)...
+  Base: يرجى إرسال التقرير المالي إلى مكتبي حتى يوم الجمعة.
+  Ours: يرجى إرسال التقرير المالي إلى مكتبي حتى يوم الجمعة.
+  ✓ PASS
+
+[19/30] Testing en→ko (sentence 2)...
+  Base: 금요일까지 내 사무실에 재무 보고서를 보내 주시기 바랍니다.
+  Ours: 금요일까지 내 사무실에 재무 보고서를 보내 주시기 바랍니다.
+  ✓ PASS
+
+[20/30] Testing en→hi (sentence 2)...
+  Base: कृपया शुक्रवार तक मेरे कार्यालय में वित्तीय रिपोर्ट भेजें।
+  Ours: कृपया शुक्रवार तक मेरे कार्यालय में वित्तीय रिपोर्ट भेजें।
+  ✓ PASS
+
+[21/30] Testing en→es (sentence 3)...
+  Base: La previsión meteorológica prevé lluvias intensas durante el fin de semana.
+  Ours: The weather forecast predicts heavy rain throughout the weekend.
+  ✗ FAIL
+
+[22/30] Testing en→fr (sentence 3)...
+  Base: Les prévisions météorologiques prévoient de fortes pluies tout au long du week-end.
+  Ours: The weather forecast predicts heavy rain throughout the weekend.
+  ✗ FAIL
+
+[23/30] Testing en→de (sentence 3)...
+  Base: Die Wettervorhersage vorausgesagt schwere Regen im Laufe des Wochenends.
+  Ours: The weather forecast predicts heavy rain throughout the weekend.
+  ✗ FAIL
+
+[24/30] Testing en→zh (sentence 3)...
+  Base: 天气预报周末预测下雨。
+  Ours: The weather forecast predicts heavy rain throughout the weekend.
+  ✗ FAIL
+
+[25/30] Testing en→ja (sentence 3)...
+  Base: 天気予報は週末に大雨を予測しています。
+  Ours: The weather forecast predicts heavy rain throughout the weekend.
+  ✗ FAIL
+
+[26/30] Testing en→ru (sentence 3)...
+  Base: Прогноз погоды прогнозирует сильные дожди в течение всего выходного дня.
+  Ours: The weather forecast predicts heavy rain throughout the weekend.
+  ✗ FAIL
+
+[27/30] Testing en→pt (sentence 3)...
+  Base: A previsão do tempo prevê fortes chuvas durante o fim de semana.
+  Ours: The weather forecast predicts heavy rain throughout the weekend.
+  ✗ FAIL
+
+[28/30] Testing en→ar (sentence 3)...
+  Base: توقعات الطقس هطول الأمطار الشديدة طوال عطلة نهاية الأسبوع
+  Ours: توقعات الطقس تتوقع هطول الأمطار الشديدة طوال عطلة نهاية الأسبوع.
+  ✗ FAIL
+
+[29/30] Testing en→ko (sentence 3)...
+  Base: 날씨 예보는 주말 동안 강한 비를 예측합니다.
+  Ours: 날씨 예보는 주말 동안 강한 비를 예측합니다.
+  ✓ PASS
+
+[30/30] Testing en→hi (sentence 3)...
+  Base: मौसम पूर्वानुमान सप्ताहांत के दौरान भारी बारिश की भविष्यवाणी करता है।
+  Ours: मौसम पूर्वानुमान सप्ताहांत के दौरान भारी बारिश की भविष्यवाणी करता है।
+  ✓ PASS
+
+
+================================================================================
+Summary for Windy Translate Spark:
+  Exact matches: 9/30 (30.0%)
+================================================================================
+
+
+================================================================================
+Testing: Windy Translate Standard
+Our model: models/windy_translate_standard/
+Base model: facebook/m2m100_1.2B
+================================================================================
+
+Loading our model from models/windy_translate_standard/...
+✓ Our model loaded successfully
+Loading base model from facebook/m2m100_1.2B...
+✓ Base model loaded successfully
+
+[1/30] Testing en→es (sentence 1)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[2/30] Testing en→fr (sentence 1)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[3/30] Testing en→de (sentence 1)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[4/30] Testing en→zh (sentence 1)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[5/30] Testing en→ja (sentence 1)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[6/30] Testing en→ru (sentence 1)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[7/30] Testing en→pt (sentence 1)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[8/30] Testing en→ar (sentence 1)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[9/30] Testing en→ko (sentence 1)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[10/30] Testing en→hi (sentence 1)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[11/30] Testing en→es (sentence 2)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[12/30] Testing en→fr (sentence 2)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[13/30] Testing en→de (sentence 2)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[14/30] Testing en→zh (sentence 2)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[15/30] Testing en→ja (sentence 2)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[16/30] Testing en→ru (sentence 2)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[17/30] Testing en→pt (sentence 2)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[18/30] Testing en→ar (sentence 2)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[19/30] Testing en→ko (sentence 2)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[20/30] Testing en→hi (sentence 2)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[21/30] Testing en→es (sentence 3)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[22/30] Testing en→fr (sentence 3)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[23/30] Testing en→de (sentence 3)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[24/30] Testing en→zh (sentence 3)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[25/30] Testing en→ja (sentence 3)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[26/30] Testing en→ru (sentence 3)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[27/30] Testing en→pt (sentence 3)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[28/30] Testing en→ar (sentence 3)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[29/30] Testing en→ko (sentence 3)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+[30/30] Testing en→hi (sentence 3)...
+  ✗ ERROR: CUDA out of memory. Tried to allocate 502.00 MiB. GPU 0 has a total capacity of 31.36 GiB of which 217.88 MiB is free. Process 4122719 has 3.71 GiB memory in use. Process 2530724 has 2.48 GiB memory in use. Process 2615864 has 9.70 GiB memory in use. Process 2619113 has 9.70 GiB memory in use. Including non-PyTorch memory, this process has 5.25 GiB memory in use. Of the allocated memory 4.63 GiB is allocated by PyTorch, and 20.66 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+
+================================================================================
+Summary for Windy Translate Standard:
+  Exact matches: 0/30 (0.0%)
+================================================================================
+
+
+Generating QA report...
+✓ Report saved to docs/TRANSLATION_QA_REPORT.md
+
+================================================================================
+TRANSLATION QA COMPLETE
+================================================================================
