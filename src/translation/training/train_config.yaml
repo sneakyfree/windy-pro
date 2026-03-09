@@ -1,0 +1,126 @@
+# Windy Pro - LoRA Fine-Tuning Configuration
+# M2M-100-418M LoRA Training Hyperparameters
+
+# Model
+model:
+  base_model_path: "models/m2m100_418M"
+  model_name: "m2m100_418M"
+
+# LoRA configuration — v1 CONSERVATIVE (light touch for legal distinctiveness)
+# See TRAINING_PHILOSOPHY.md — do NOT increase without Grant's approval
+lora:
+  rank: 16              # Small delta — enough for distinctiveness, not enough to damage
+  alpha: 32             # 2x rank standard
+  dropout: 0.05
+  target_modules:
+    # Attention only for v1 — NOT FFN layers (minimizes quality risk)
+    - "encoder.layers.*.self_attn.q_proj"
+    - "encoder.layers.*.self_attn.v_proj"
+    - "decoder.layers.*.self_attn.q_proj"
+    - "decoder.layers.*.self_attn.v_proj"
+    - "decoder.layers.*.encoder_attn.q_proj"
+    - "decoder.layers.*.encoder_attn.v_proj"
+  bias: "none"
+  task_type: "SEQ_2_SEQ_LM"
+
+# Training parameters
+training:
+  num_epochs: 1            # ONE epoch for v1 — light touch
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  effective_batch_size: 32  # batch_size * gradient_accumulation_steps
+
+  learning_rate: 5.0e-5     # Conservative — half of typical LoRA LR
+  weight_decay: 0.01
+  warmup_ratio: 0.1  # 10% of total steps
+  lr_scheduler_type: "cosine"
+
+  max_source_length: 128
+  max_target_length: 128
+
+  fp16: true
+  bf16: false  # Use fp16 for RTX 5090
+
+  # Gradient clipping
+  max_grad_norm: 1.0
+
+  # Logging
+  logging_steps: 50
+  save_steps: 1000
+  eval_steps: 500
+
+  # Evaluation
+  eval_batch_size: 16
+  prediction_loss_only: false
+
+  # Checkpointing
+  save_total_limit: 3  # Keep only 3 best checkpoints
+  load_best_model_at_end: true
+  metric_for_best_model: "bleu"
+  greater_is_better: true
+
+  # Output
+  output_dir: "models/windy_translate_lora"
+  logging_dir: "runs/translation_training"
+
+  # Performance
+  dataloader_num_workers: 4
+  dataloader_pin_memory: true
+
+  # Reproducibility
+  seed: 42
+
+# Dataset
+dataset:
+  data_dir: "data/translation/processed"
+  train_split: 0.95
+  eval_split: 0.05
+  max_train_samples: 20000  # Capped for v1 — light touch
+  max_eval_samples: 5000
+
+  # Data augmentation
+  shuffle: true
+
+# Evaluation metrics
+evaluation:
+  metrics:
+    - "bleu"
+    - "chrf"
+
+  # BLEU configuration
+  bleu_tokenize: "13a"  # Standard tokenization
+
+  # Test on Flores-200 devtest
+  test_set: "flores200_devtest"
+
+# Hardware
+hardware:
+  device: "cuda"
+  gpu_id: 0
+  mixed_precision: "fp16"
+
+  # Memory optimization
+  gradient_checkpointing: false  # Model is small, not needed
+  optim: "adamw_torch"  # Standard AdamW
+
+# W&B integration (optional)
+wandb:
+  enabled: false
+  project: "windy-pro-translation"
+  entity: null
+  run_name: "m2m100_lora_finetune"
+
+# Priority language pairs
+languages:
+  priority:
+    - "en"
+    - "ru"
+    - "fi"
+    - "pt"
+    - "es"
+    - "fr"
+    - "de"
+    - "zh"
+    - "ja"
+    - "ko"
+    - "ar"
