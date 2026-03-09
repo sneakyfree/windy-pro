@@ -103,15 +103,8 @@ class WindyApp {
   }
 
   async init() {
-    this.settingsPanel = new SettingsPanel(this);
-    this.vaultPanel = new VaultPanel(this);
-    this.historyPanel = new HistoryPanel(this);
-    this.translatePanel = typeof TranslatePanel !== 'undefined' ? new TranslatePanel(this) : null;
-    window._translatePanel = this.translatePanel; // Expose for inline TTS onclick
-    this.bindEvents();
-    this.bindIPCEvents();
-
     // ── Strand I: Effects Engine (pure observer, zero impact on recording) ──
+    // MUST be initialized BEFORE SettingsPanel so settings can wire up to it
     try {
       this.effectsEngine = typeof EffectsEngine !== 'undefined' ? new EffectsEngine() : null;
       this.widgetEngine = typeof WidgetEngine !== 'undefined' ? new WidgetEngine() : null;
@@ -119,6 +112,14 @@ class WindyApp {
       this.effectsEngine = null;
       this.widgetEngine = null;
     }
+
+    this.settingsPanel = new SettingsPanel(this);
+    this.vaultPanel = new VaultPanel(this);
+    this.historyPanel = new HistoryPanel(this);
+    this.translatePanel = typeof TranslatePanel !== 'undefined' ? new TranslatePanel(this) : null;
+    window._translatePanel = this.translatePanel; // Expose for inline TTS onclick
+    this.bindEvents();
+    this.bindIPCEvents();
 
     // ── Crash Recovery Detection (Repair 1.1) ──
     if (window.windyAPI?.checkCrashRecovery) {
