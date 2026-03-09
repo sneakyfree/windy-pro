@@ -14,12 +14,9 @@ lora:
   dropout: 0.05
   target_modules:
     # Attention only for v1 — NOT FFN layers (minimizes quality risk)
-    - "encoder.layers.*.self_attn.q_proj"
-    - "encoder.layers.*.self_attn.v_proj"
-    - "decoder.layers.*.self_attn.q_proj"
-    - "decoder.layers.*.self_attn.v_proj"
-    - "decoder.layers.*.encoder_attn.q_proj"
-    - "decoder.layers.*.encoder_attn.v_proj"
+    # Regex patterns for all layer indices
+    - "q_proj"
+    - "v_proj"
   bias: "none"
   task_type: "SEQ_2_SEQ_LM"
 
@@ -72,7 +69,7 @@ training:
 
 # Dataset
 dataset:
-  data_dir: "data/translation/processed"
+  data_dir: "data/translation/processed/processed"
   train_split: 0.95
   eval_split: 0.05
   max_train_samples: 20000  # Capped for v1 — light touch

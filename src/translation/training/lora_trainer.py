@@ -266,6 +266,7 @@ class LoRATrainer:
         target_lang = examples["target_lang"][0] if isinstance(examples["target_lang"], list) else examples["target_lang"]
 
         self.tokenizer.src_lang = source_lang
+        self.tokenizer.tgt_lang = target_lang
 
         # Tokenize source
         model_inputs = self.tokenizer(
