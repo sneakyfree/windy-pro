@@ -142,7 +142,16 @@ class WindyApp {
     const changelog = new ChangelogPopup();
     changelog.show();
 
-    await this.connect();
+    // Only auto-connect to local backend if a local engine is selected
+    // Cloud/WindyTune engines don't need the Python backend at startup
+    const startupEngine = localStorage.getItem('windy_engine') || this.transcriptionEngine || 'windytune';
+    const needsLocalBackend = !['cloud', 'windytune'].includes(startupEngine);
+    if (needsLocalBackend) {
+      await this.connect();
+    } else {
+      // Show "Connected" in status bar without attempting WebSocket
+      this.setConnectionStatus('connected');
+    }
 
     // Load UI behavior settings
     if (window.windyAPI?.getSettings) {
@@ -527,10 +536,15 @@ class WindyApp {
       this.reconnectAttempts++;
       const delay = this.reconnectDelay * Math.min(this.reconnectAttempts, 5);
       console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
-      this.showReconnectToast(`Reconnecting (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+      // Subtle status bar update instead of yellow banner
+      const connText = document.getElementById('connectionText');
+      if (connText) connText.textContent = `Reconnecting (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`;
       setTimeout(() => this.connect(), delay);
     } else {
-      this.showBackendErrorOverlay();
+      // Don't show blocking overlay — just update status bar
+      const connText = document.getElementById('connectionText');
+      if (connText) connText.textContent = 'Local engine unavailable';
+      this.setConnectionStatus('disconnected');
     }
   }
 
