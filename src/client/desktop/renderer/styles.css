@@ -5376,19 +5376,22 @@ body.light-theme .translate-history-item {
 }
 
 .slib-close-btn {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  color: #EF4444;
-  border-radius: 8px;
-  width: 32px;
-  height: 32px;
-  font-size: 16px;
+  background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+  border: none;
+  color: #fff;
+  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.15s;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
 .slib-close-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
+  background: linear-gradient(135deg, #F87171 0%, #EF4444 100%);
+  transform: scale(1.05);
 }
 
 /* Tabs */
@@ -5474,6 +5477,7 @@ body.light-theme .translate-history-item {
 .slib-table-header {
   display: flex;
   align-items: center;
+  gap: 4px;
   padding: 6px 20px;
   font-size: 10px;
   font-weight: 700;
@@ -5484,32 +5488,42 @@ body.light-theme .translate-history-item {
 }
 
 .slib-col-status {
-  width: 100px;
+  width: 110px;
+  flex-shrink: 0;
 }
 
 .slib-col-name {
   flex: 1;
-  min-width: 0;
+  min-width: 60px;
+  padding-right: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .slib-col-dur {
-  width: 65px;
-  text-align: right;
+  width: 55px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .slib-col-size {
-  width: 60px;
-  text-align: right;
+  width: 50px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .slib-col-date {
-  width: 90px;
-  text-align: right;
+  width: 100px;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: 10px;
 }
 
 .slib-col-actions {
-  width: 80px;
+  width: 90px;
   text-align: right;
+  flex-shrink: 0;
 }
 
 /* Table body */
@@ -5525,6 +5539,7 @@ body.light-theme .translate-history-item {
   display: flex;
   align-items: center;
   padding: 8px 20px;
+  gap: 4px;
   border-bottom: 1px solid rgba(100, 116, 139, 0.06);
   transition: background 0.1s;
 }
@@ -5602,30 +5617,44 @@ body.light-theme .translate-history-item {
   gap: 4px;
 }
 
+/* Play button — juicy 3D */
 .slib-action-btn {
-  background: rgba(100, 116, 139, 0.08);
-  border: 1px solid rgba(100, 116, 139, 0.15);
-  border-radius: 6px;
-  width: 28px;
-  height: 26px;
-  font-size: 12px;
+  background: linear-gradient(135deg, #22C55E 0%, #16A34A 100%);
+  border: none;
+  border-radius: 8px;
+  width: 32px;
+  height: 30px;
+  font-size: 14px;
+  color: #fff;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .slib-action-btn:hover {
-  background: rgba(100, 116, 139, 0.2);
+  background: linear-gradient(135deg, #4ADE80 0%, #22C55E 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
+.slib-action-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(34, 197, 94, 0.3);
+}
+
+/* Delete button — red tint */
 .slib-action-btn.delete {
-  border-color: rgba(239, 68, 68, 0.2);
+  background: linear-gradient(135deg, #64748B 0%, #475569 100%);
+  box-shadow: 0 2px 6px rgba(100, 116, 139, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .slib-action-btn.delete:hover {
-  background: rgba(239, 68, 68, 0.15);
+  background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+  transform: translateY(-1px);
 }
 
 /* Coming Soon */

@@ -393,6 +393,25 @@ class WindyApp {
         window.windyAPI.minimize();
       }
     });
+
+    // Maximize / Restore toggle
+    const maxBtn = document.getElementById('maximizeBtn');
+    if (maxBtn) {
+      maxBtn.addEventListener('click', async () => {
+        if (window.windyAPI?.isMaximized) {
+          const isMax = await window.windyAPI.isMaximized();
+          if (isMax) {
+            window.windyAPI.unmaximize();
+            maxBtn.textContent = '□';
+            maxBtn.title = 'Maximize';
+          } else {
+            window.windyAPI.maximize();
+            maxBtn.textContent = '⧉';
+            maxBtn.title = 'Restore';
+          }
+        }
+      });
+    }
     this.settingsBtn.addEventListener('click', () => {
       this.settingsPanel.toggle();
     });

@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('windyAPI', {
   openCheckoutUrl: (opts) => ipcRenderer.invoke('open-checkout-url', opts),
   copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
   minimize: () => ipcRenderer.send('minimize-window'),
+  maximize: () => ipcRenderer.send('maximize-window'),
+  unmaximize: () => ipcRenderer.send('unmaximize-window'),
+  isMaximized: () => ipcRenderer.invoke('is-maximized'),
 
   // Video preview window (independent)
   showVideoPreview: () => ipcRenderer.invoke('show-video-preview'),

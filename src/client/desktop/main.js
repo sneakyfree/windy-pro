@@ -453,7 +453,7 @@ function createWindow() {
     transparent: true,      // Allow CSS transparency for strobe effect
     resizable: true,
     minimizable: true,
-    maximizable: false,
+    maximizable: true,
     skipTaskbar: false,
 
     // Minimum size
@@ -3364,6 +3364,17 @@ ipcMain.handle('get-server-config', () => {
 // Minimize window
 ipcMain.on('minimize-window', () => {
   if (mainWindow) mainWindow.minimize();
+});
+
+// Maximize / Restore window
+ipcMain.on('maximize-window', () => {
+  if (mainWindow) mainWindow.maximize();
+});
+ipcMain.on('unmaximize-window', () => {
+  if (mainWindow) mainWindow.unmaximize();
+});
+ipcMain.handle('is-maximized', () => {
+  return mainWindow ? mainWindow.isMaximized() : false;
 });
 
 // Batch transcription complete notification
