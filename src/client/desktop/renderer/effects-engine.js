@@ -77,12 +77,19 @@ class SoundManager {
     /**
      * Play an audio file from a data URL (base64)
      * Manually decodes base64 → Blob → Object URL for reliable Electron playback
+     * Stops any previous custom audio to prevent overlap
      * @param {string} dataUrl - base64 data URL of audio file
      * @param {number} volume - volume multiplier (0-1)
      */
     async playAudioFile(dataUrl, volume = 0.5) {
         if (this._masterVolume === 0 || !dataUrl) return;
         try {
+            // Stop previous custom audio to prevent overlap
+            if (this._activeAudio) {
+                try { this._activeAudio.pause(); this._activeAudio.currentTime = 0; } catch (_) { }
+                this._activeAudio = null;
+            }
+
             let url = dataUrl;
             if (dataUrl.startsWith('data:')) {
                 // Manual base64 → Blob (bypasses fetch restrictions in Electron)
@@ -100,8 +107,12 @@ class SoundManager {
             const audio = new Audio();
             audio.volume = Math.min(1, Math.max(0.05, volume * this._masterVolume));
             audio.src = url;
-            audio.onended = () => { try { URL.revokeObjectURL(url); } catch (_) { } };
+            audio.onended = () => {
+                try { URL.revokeObjectURL(url); } catch (_) { }
+                if (this._activeAudio === audio) this._activeAudio = null;
+            };
             audio.onerror = (e) => console.warn('Audio error:', e);
+            this._activeAudio = audio;
             await audio.play();
         } catch (e) { console.warn('playAudioFile failed:', e); }
     }

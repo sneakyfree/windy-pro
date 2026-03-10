@@ -1252,11 +1252,13 @@ class SettingsPanel {
           const card = document.createElement('div');
           card.className = 'sfx-lib-card';
           const sizeKb = item.size ? `${Math.round(item.size / 1024)}KB` : '';
+          const durText = item.duration ? `${item.duration}s` : '';
+          const metaParts = [durText, sizeKb, item.timestamp || ''].filter(Boolean).join(' · ');
           card.innerHTML = `
             <div class="sfx-lib-card-top">
               <span class="sfx-lib-name-text">${item.name || 'Untitled'}</span>
               <button class="sfx-custom-btn sfx-lib-rename" title="Rename" style="width:22px;height:22px;font-size:10px;">✏️</button>
-              <span class="sfx-lib-card-meta" style="margin-left:auto;">${sizeKb} · ${item.timestamp || ''}</span>
+              <span class="sfx-lib-card-meta" style="margin-left:auto;">${metaParts}</span>
             </div>
             <input class="sfx-lib-name-input" type="text" value="${(item.name || '').replace(/"/g, '&quot;')}" style="display:none;" />
             <div class="sfx-lib-card-actions">
@@ -1308,11 +1310,11 @@ class SettingsPanel {
       };
 
       // ── Add to library helper ──
-      const addToLibrary = (dataUrl, name, size) => {
+      const addToLibrary = (dataUrl, name, size, duration) => {
         const now = new Date();
         const ts = now.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         const id = `snd_${Date.now()}`;
-        soundLibrary.push({ id, name: name || `Recording ${ts}`, dataUrl, timestamp: ts, size: size || 0 });
+        soundLibrary.push({ id, name: name || `Recording ${ts}`, dataUrl, timestamp: ts, size: size || 0, duration: duration || 0 });
         saveLibrary();
         renderLibrary();
         refreshHookDropdowns();
@@ -1344,6 +1346,7 @@ class SettingsPanel {
       let libMediaRec = null;
       let libRecTimer = null;
       if (libRecordBtn) {
+        let libRecSecs = 0;
         libRecordBtn.addEventListener('click', async () => {
           if (libMediaRec && libMediaRec.state === 'recording') {
             libMediaRec.stop();
@@ -1356,6 +1359,7 @@ class SettingsPanel {
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const chunks = [];
+            libRecSecs = 0;
             libMediaRec = new MediaRecorder(stream, { mimeType: 'audio/webm' });
             libMediaRec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
             libMediaRec.onstop = () => {
@@ -1365,13 +1369,13 @@ class SettingsPanel {
               const blob = new Blob(chunks, { type: 'audio/webm' });
               if (blob.size > 5 * 1024 * 1024) { alert('Recording too long (max 5MB)'); return; }
               const reader = new FileReader();
-              reader.onload = () => addToLibrary(reader.result, null, blob.size);
+              reader.onload = () => addToLibrary(reader.result, null, blob.size, libRecSecs);
               reader.readAsDataURL(blob);
             };
             libMediaRec.start();
             libRecordBtn.textContent = '⏹ Stop';
             libRecordBtn.classList.add('recording');
-            let secs = 0;
+            libRecSecs = 0;
             if (libRecStatus) {
               libRecStatus.style.display = '';
               libRecStatus.style.background = 'rgba(34,197,94,0.12)';
@@ -1379,8 +1383,8 @@ class SettingsPanel {
               libRecStatus.textContent = '🟢 Recording... 0s';
             }
             libRecTimer = setInterval(() => {
-              secs++;
-              if (libRecStatus) libRecStatus.textContent = `🟢 Recording... ${secs}s`;
+              libRecSecs++;
+              if (libRecStatus) libRecStatus.textContent = `🟢 Recording... ${libRecSecs}s`;
             }, 1000);
           } catch (_) { alert('Mic access denied'); }
         });
@@ -1488,33 +1492,39 @@ class SettingsPanel {
       renderLibrary();
     }
 
-    // Preview button — plays all 5 hooks with proper timing
+    // Preview button — plays all 6 hooks with proper timing
     const previewBtn = this.panel.querySelector('#sfxPreviewBtn');
     if (previewBtn && fx) {
       previewBtn.addEventListener('click', () => {
         const currentMode = fx._mode;
-        let pid;
-        if (currentMode === 'default') {
-          pid = 'classic-beep';
-        } else if (currentMode === 'single') {
-          pid = packSelect?.value || 'classic-beep';
-        } else if (currentMode === 'surprise') {
-          pid = fx._getNextSurprisePack()?.id || 'classic-beep';
-        } else {
-          pid = 'classic-beep';
-        }
-        // Play all 5 hooks: start → during → stop → processing → paste
         previewBtn.textContent = '🔊 Playing...';
         previewBtn.disabled = true;
-        fx.previewEffect(pid, 'start');
-        setTimeout(() => fx.previewEffect(pid, 'during'), 600);
-        setTimeout(() => fx.previewEffect(pid, 'stop'), 1200);
-        setTimeout(() => fx.previewEffect(pid, 'process'), 1800);
-        setTimeout(() => fx.previewEffect(pid, 'paste'), 2400);
+
+        if (currentMode === 'custom') {
+          // In custom mode, use trigger() which respects assigned hooks
+          fx.trigger('start');
+          setTimeout(() => fx.trigger('during'), 800);
+          setTimeout(() => fx.trigger('stop'), 1600);
+          setTimeout(() => fx.trigger('process'), 2400);
+          setTimeout(() => fx.trigger('warning'), 3200);
+          setTimeout(() => fx.trigger('paste', { wordCount: 50 }), 4000);
+        } else {
+          let pid;
+          if (currentMode === 'default') pid = 'classic-beep';
+          else if (currentMode === 'single') pid = packSelect?.value || 'classic-beep';
+          else if (currentMode === 'surprise') pid = fx._getNextSurprisePack()?.id || 'classic-beep';
+          else pid = 'classic-beep';
+          fx.previewEffect(pid, 'start');
+          setTimeout(() => fx.previewEffect(pid, 'during'), 800);
+          setTimeout(() => fx.previewEffect(pid, 'stop'), 1600);
+          setTimeout(() => fx.previewEffect(pid, 'process'), 2400);
+          setTimeout(() => fx.previewEffect(pid, 'warning'), 3200);
+          setTimeout(() => fx.previewEffect(pid, 'paste'), 4000);
+        }
         setTimeout(() => {
           previewBtn.textContent = '▶ Preview Sounds';
           previewBtn.disabled = false;
-        }, 3200);
+        }, 5000);
       });
     }
 
