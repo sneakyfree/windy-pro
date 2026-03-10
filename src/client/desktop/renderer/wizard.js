@@ -330,10 +330,10 @@ class SetupWizard {
       if (window.windyAPI?.detectHardware) {
         this._hardware = await window.windyAPI.detectHardware();
       } else {
-        this._hardware = { totalRAM: 8, cpuCores: 4, recommendedEngine: 'edge-standard', recommendation: 'We recommend Edge Standard for your system.' };
+        this._hardware = { totalRAM: 8, cpuCores: 4, recommendedEngine: 'windy-stt-core-cpu', recommendation: 'We recommend Windy STT Core (CPU) for your system.' };
       }
     } catch (_) {
-      this._hardware = { totalRAM: 8, cpuCores: 4, recommendedEngine: 'edge-standard', recommendation: 'We recommend Edge Standard for your system.' };
+      this._hardware = { totalRAM: 8, cpuCores: 4, recommendedEngine: 'windy-stt-core-cpu', recommendation: 'We recommend Windy STT Core (CPU) for your system.' };
     }
 
     const hw = this._hardware;
@@ -350,14 +350,14 @@ class SetupWizard {
 
     // Engine cards
     const engines = [
-      { key: 'edge-spark', icon: '🛡️', name: 'Edge Spark', desc: '42 MB · Ultra-light', speed: '32×', quality: '★★☆☆☆' },
-      { key: 'edge-pulse', icon: '🛡️', name: 'Edge Pulse', desc: '78 MB · Phone-friendly', speed: '16×', quality: '★★★☆☆' },
-      { key: 'edge-standard', icon: '🛡️', name: 'Edge Standard', desc: '168 MB · Best CPU balance', speed: '6×', quality: '★★★★☆' },
-      { key: 'core-standard', icon: '⚡', name: 'Core Standard', desc: '466 MB · GPU required', speed: '6×', quality: '★★★★☆', needsGPU: true },
-      { key: 'core-ultra', icon: '⚡', name: 'Core Ultra', desc: '2.9 GB · BEST accuracy', speed: '1×', quality: '★★★★★', needsGPU: true },
+      { key: 'windy-stt-nano-cpu', icon: '🛡️', name: 'Windy STT Nano (CPU)', desc: '406 MB · Ultra-light', speed: '32×', quality: '★★☆☆☆' },
+      { key: 'windy-stt-core-cpu', icon: '🛡️', name: 'Windy STT Core (CPU)', desc: '1.7 GB · Best CPU balance', speed: '6×', quality: '★★★★☆' },
+      { key: 'windy-stt-nano', icon: '⚡', name: 'Windy STT Nano', desc: '73 MB · Fastest GPU', speed: '32×', quality: '★★☆☆☆', needsGPU: true },
+      { key: 'windy-stt-core', icon: '⚡', name: 'Windy STT Core', desc: '462 MB · Recommended', speed: '6×', quality: '★★★★☆', needsGPU: true },
+      { key: 'windy-stt-pro', icon: '⚡', name: 'Windy STT Pro', desc: '2.9 GB · BEST accuracy', speed: '1×', quality: '★★★★★', needsGPU: true },
     ];
 
-    const recommended = hw.recommendedEngine || 'edge-standard';
+    const recommended = hw.recommendedEngine || 'windy-stt-core-cpu';
     this.choices.engine = recommended;
 
     engineList.innerHTML = engines.map(e => {

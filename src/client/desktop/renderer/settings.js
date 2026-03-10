@@ -520,21 +520,22 @@ class SettingsPanel {
         local: { hint: '🏠 <b>Manual mode.</b> Select your model below. Full control over which engine model runs.', color: '#22C55E', cloud: false, local: true, api: false },
         windytune: { hint: '🌪️ <b>Auto-pilot.</b> Monitors your performance in real-time. Auto-switches to the best model for your hardware. Logs every change to the status bar.', color: '#22C55E', cloud: false, local: true, api: false },
         cloud: { hint: '🔒 <b>E2E encrypted.</b> Streamed to WindyPro servers. Large-v3 on RTX 5090 GPU. Zero data retention.', color: '#4ecdc4', cloud: true, local: false, api: false },
-        'edge-spark': { hint: '🛡️ <b>Ultra-light (42 MB).</b> Fits anything. Quick dictation, real-time captions.', color: '#22C55E', cloud: false, local: true, api: false },
-        'edge-pulse': { hint: '🛡️ <b>Phone-optimized.</b> Fast & light. Mobile dictation, voice memos.', color: '#22C55E', cloud: false, local: true, api: false },
-        'edge-standard': { hint: '🛡️ <b>Best size/accuracy balance.</b> Laptop users, everyday use.', color: '#22C55E', cloud: false, local: true, api: false },
-        'edge-global': { hint: '🛡️ <b>Multilingual on CPU.</b> Great for travel & translation.', color: '#22C55E', cloud: false, local: true, api: false },
-        'edge-pro': { hint: '🛡️ <b>Best English on CPU.</b> No GPU needed.', color: '#22C55E', cloud: false, local: true, api: false },
-        'core-spark': { hint: '⚡ <b>Lightning fast GPU.</b> Quick dictation, embedded systems.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'core-pulse': { hint: '⚡ <b>Fast & reliable GPU.</b> Everyday dictation, emails.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'core-standard': { hint: '⚡ <b>The workhorse.</b> Meetings, technical dictation, content creation.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'core-global': { hint: '⚡ <b>Multilingual powerhouse.</b> Non-English, code-switching.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'core-pro': { hint: '⚡ <b>English excellence.</b> Distilled flagship at 6x speed.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'core-turbo': { hint: '⚡ <b>Near-Ultra at 2x speed.</b> Best balance of accuracy & speed.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'core-ultra': { hint: '⚡ <b>BEST accuracy. Period.</b> Broadcast, legal, medical, professional.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'lingua-es': { hint: '🌍 <b>Spanish specialist.</b> All dialects — Castilian, Mexican, Caribbean.', color: '#3B82F6', cloud: false, local: true, api: false },
-        'lingua-fr': { hint: '🌍 <b>French specialist.</b> Metropolitan, Canadian, African dialects.', color: '#3B82F6', cloud: false, local: true, api: false },
-        'lingua-hi': { hint: '🌍 <b>Hindi specialist.</b> Hindi-English code-switching.', color: '#3B82F6', cloud: false, local: true, api: false },
+        'windy-stt-nano': { hint: '⚡ <b>Fastest STT (73 MB).</b> Quick dictation on powerful hardware.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-lite': { hint: '⚡ <b>Lightweight STT (140 MB).</b> Balanced speed and quality.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-core': { hint: '⚡ <b>Core STT (462 MB).</b> Recommended for most use cases.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-edge': { hint: '⚡ <b>High-accuracy STT (1.4 GB).</b> Professional transcription.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-plus': { hint: '⚡ <b>Premium STT (1.4 GB).</b> Excellent accuracy, production-grade.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-turbo': { hint: '⚡ <b>State-of-the-art STT (1.5 GB).</b> Best balance of accuracy & speed.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-pro': { hint: '⚡ <b>BEST accuracy (2.9 GB).</b> Broadcast, legal, medical, professional.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-nano-cpu': { hint: '🛡️ <b>Ultra-light CPU (406 MB).</b> Runs on any hardware.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-stt-lite-cpu': { hint: '🛡️ <b>Lightweight CPU (668 MB).</b> Fast and efficient.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-stt-core-cpu': { hint: '🛡️ <b>Core CPU (1.7 GB).</b> Great balance, no GPU needed.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-stt-edge-cpu': { hint: '🛡️ <b>High-accuracy CPU (3.8 GB).</b> Professional-grade on CPU.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-stt-plus-cpu': { hint: '🛡️ <b>Premium CPU (4.9 GB).</b> Premium accuracy without GPU.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-stt-turbo-cpu': { hint: '🛡️ <b>State-of-the-art CPU (4.2 GB).</b> Best CPU accuracy.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-stt-pro-cpu': { hint: '🛡️ <b>Maximum CPU (9.5 GB).</b> Best possible accuracy on CPU.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-translate-spark': { hint: '🌍 <b>Fast translation (929 MB).</b> 100+ languages. LoRA-enhanced.', color: '#3B82F6', cloud: false, local: true, api: false },
+        'windy-translate-standard': { hint: '🌍 <b>Standard translation (2.4 GB).</b> 100+ languages. Higher quality.', color: '#3B82F6', cloud: false, local: true, api: false },
         cloud: { hint: '☁️ <b>WindyPro Cloud.</b> End-to-end encrypted. For when you want server-grade accuracy.', color: '#4ecdc4', cloud: true, local: false, api: false }
       };
       const info = engineInfo[engine] || engineInfo.local;
@@ -562,7 +563,7 @@ class SettingsPanel {
       } else {
         const badge = document.getElementById('modelBadge');
         if (badge) {
-          const icons = { local: '🌪️', cloud: '☁️', 'edge-spark': '🛡️', 'edge-pulse': '🛡️', 'edge-standard': '🛡️', 'edge-global': '🛡️', 'edge-pro': '🛡️', 'core-spark': '⚡', 'core-pulse': '⚡', 'core-standard': '⚡', 'core-global': '⚡', 'core-pro': '⚡', 'core-turbo': '⚡', 'core-ultra': '⚡', 'lingua-es': '🌍', 'lingua-fr': '🌍', 'lingua-hi': '🌍' };
+          const icons = { local: '🌪️', cloud: '☁️', 'windy-stt-nano': '⚡', 'windy-stt-lite': '⚡', 'windy-stt-core': '⚡', 'windy-stt-edge': '⚡', 'windy-stt-plus': '⚡', 'windy-stt-turbo': '⚡', 'windy-stt-pro': '⚡', 'windy-stt-nano-cpu': '🛡️', 'windy-stt-lite-cpu': '🛡️', 'windy-stt-core-cpu': '🛡️', 'windy-stt-edge-cpu': '🛡️', 'windy-stt-plus-cpu': '🛡️', 'windy-stt-turbo-cpu': '🛡️', 'windy-stt-pro-cpu': '🛡️', 'windy-translate-spark': '🌍', 'windy-translate-standard': '🌍' };
           badge.textContent = `${icons[engine] || '🌪️'} ${engine}`;
         }
       }

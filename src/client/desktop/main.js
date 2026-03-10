@@ -2390,20 +2390,20 @@ ipcMain.handle('detect-hardware', async () => {
 
   // Engine recommendation
   if (result.gpu && result.gpu.vramMB >= 6000) {
-    result.recommendedEngine = 'core-ultra';
-    result.recommendation = `Your ${result.gpu.name} (${Math.round(result.gpu.vramMB / 1024)}GB VRAM) can run the best model. We recommend Core Ultra for maximum accuracy.`;
+    result.recommendedEngine = 'windy-stt-pro';
+    result.recommendation = `Your ${result.gpu.name} (${Math.round(result.gpu.vramMB / 1024)}GB VRAM) can run the best model. We recommend Windy STT Pro for maximum accuracy.`;
   } else if (result.gpu && result.gpu.vramMB >= 2000) {
-    result.recommendedEngine = 'core-standard';
-    result.recommendation = `Your ${result.gpu.name} has ${Math.round(result.gpu.vramMB / 1024)}GB VRAM. We recommend Core Standard for a great balance of speed and quality.`;
+    result.recommendedEngine = 'windy-stt-core';
+    result.recommendation = `Your ${result.gpu.name} has ${Math.round(result.gpu.vramMB / 1024)}GB VRAM. We recommend Windy STT Core for a great balance of speed and quality.`;
   } else if (result.totalRAM >= 16) {
-    result.recommendedEngine = 'edge-standard';
-    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Edge Standard — great accuracy on CPU, no GPU needed.`;
+    result.recommendedEngine = 'windy-stt-edge-cpu';
+    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy STT Edge (CPU) — high accuracy on CPU, no GPU needed.`;
   } else if (result.totalRAM >= 8) {
-    result.recommendedEngine = 'edge-pulse';
-    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Edge Pulse — fast and light, perfect for your hardware.`;
+    result.recommendedEngine = 'windy-stt-core-cpu';
+    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy STT Core (CPU) — great balance of speed and quality for your hardware.`;
   } else {
-    result.recommendedEngine = 'edge-spark';
-    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Edge Spark — ultra-light, runs great on any hardware.`;
+    result.recommendedEngine = 'windy-stt-nano-cpu';
+    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy STT Nano (CPU) — ultra-light, runs great on any hardware.`;
   }
 
   return result;

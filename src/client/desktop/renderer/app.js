@@ -30,12 +30,13 @@ class WindyApp {
     this._engineModelMap = {
       'local': null, // auto-detect
       'windytune': 'small', // auto-pilot: starts with small, auto-adjusts
-      'edge-spark': 'tiny', 'edge-pulse': 'base', 'edge-standard': 'small',
-      'edge-global': 'small', 'edge-pro': 'medium.en',
-      'core-spark': 'tiny', 'core-pulse': 'base', 'core-standard': 'small',
-      'core-global': 'small', 'core-pro': 'medium.en',
-      'core-turbo': 'turbo', 'core-ultra': 'large-v3',
-      'lingua-es': 'small', 'lingua-fr': 'small', 'lingua-hi': 'small'
+      'windy-stt-nano': 'tiny', 'windy-stt-lite': 'small', 'windy-stt-core': 'base',
+      'windy-stt-edge': 'medium', 'windy-stt-plus': 'large-v2', 'windy-stt-turbo': 'large-v3',
+      'windy-stt-pro': 'large-v3-turbo',
+      'windy-stt-nano-cpu': 'tiny', 'windy-stt-lite-cpu': 'small', 'windy-stt-core-cpu': 'base',
+      'windy-stt-edge-cpu': 'medium', 'windy-stt-plus-cpu': 'large-v2', 'windy-stt-turbo-cpu': 'large-v3',
+      'windy-stt-pro-cpu': 'large-v3-turbo',
+      'windy-translate-spark': null, 'windy-translate-standard': null
     };
 
     // Web Speech API state (kept for future Chrome-tab relay)
@@ -989,9 +990,9 @@ class WindyApp {
     // Engine-specific icons
     const engineIcons = {
       stream: '🎙️', cloud: '☁️🔒', smart: '🧠',
-      'edge-spark': '🛡️', 'edge-pulse': '🛡️', 'edge-standard': '🛡️', 'edge-global': '🛡️', 'edge-pro': '🛡️',
-      'core-spark': '⚡', 'core-pulse': '⚡', 'core-standard': '⚡', 'core-global': '⚡', 'core-pro': '⚡', 'core-turbo': '⚡', 'core-ultra': '⚡',
-      'lingua-es': '🌍', 'lingua-fr': '🌍', 'lingua-hi': '🌍'
+      'windy-stt-nano': '⚡', 'windy-stt-lite': '⚡', 'windy-stt-core': '⚡', 'windy-stt-edge': '⚡', 'windy-stt-plus': '⚡', 'windy-stt-turbo': '⚡', 'windy-stt-pro': '⚡',
+      'windy-stt-nano-cpu': '🛡️', 'windy-stt-lite-cpu': '🛡️', 'windy-stt-core-cpu': '🛡️', 'windy-stt-edge-cpu': '🛡️', 'windy-stt-plus-cpu': '🛡️', 'windy-stt-turbo-cpu': '🛡️', 'windy-stt-pro-cpu': '🛡️',
+      'windy-translate-spark': '🌍', 'windy-translate-standard': '🌍'
     };
 
     if (loading) {
@@ -1010,7 +1011,7 @@ class WindyApp {
       return;
     }
 
-    // Custom named engine (core-pro, edge-standard, etc.) — ALWAYS show engine name, never raw model
+    // Custom named engine (windy-stt-pro, windy-stt-core-cpu, etc.) — ALWAYS show engine name, never raw model
     if (isCustomEngine) {
       const icon = engineIcons[activeEngine] || '⚡';
       const engineModel = this._engineModelMap[activeEngine];
@@ -1074,9 +1075,9 @@ class WindyApp {
     const isCustomEngine = this._engineModelMap && activeEngine in this._engineModelMap && activeEngine !== 'local';
     const displayName = isCustomEngine ? activeEngine : msg.model;
     const engineIcons = {
-      'edge-spark': '🛡️', 'edge-pulse': '🛡️', 'edge-standard': '🛡️', 'edge-global': '🛡️', 'edge-pro': '🛡️',
-      'core-spark': '⚡', 'core-pulse': '⚡', 'core-standard': '⚡', 'core-global': '⚡', 'core-pro': '⚡', 'core-turbo': '⚡', 'core-ultra': '⚡',
-      'lingua-es': '🌍', 'lingua-fr': '🌍', 'lingua-hi': '🌍'
+      'windy-stt-nano': '⚡', 'windy-stt-lite': '⚡', 'windy-stt-core': '⚡', 'windy-stt-edge': '⚡', 'windy-stt-plus': '⚡', 'windy-stt-turbo': '⚡', 'windy-stt-pro': '⚡',
+      'windy-stt-nano-cpu': '🛡️', 'windy-stt-lite-cpu': '🛡️', 'windy-stt-core-cpu': '🛡️', 'windy-stt-edge-cpu': '🛡️', 'windy-stt-plus-cpu': '🛡️', 'windy-stt-turbo-cpu': '🛡️', 'windy-stt-pro-cpu': '🛡️',
+      'windy-translate-spark': '🌍', 'windy-translate-standard': '🌍'
     };
     const engineIcon = engineIcons[activeEngine] || '🏠';
 
