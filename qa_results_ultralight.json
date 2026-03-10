@@ -1,0 +1,448 @@
+{
+  "test_date": "2026-03-09",
+  "test_type": "ultra_light_lora_retrain",
+  "models": {
+    "translate_spark": {
+      "model_name": "Translate Spark (418M)",
+      "model_path": "models/windy_translate_spark",
+      "total_tests": 30,
+      "passed": 30,
+      "failed": 0,
+      "pass_rate": 100.0,
+      "overall_status": "PASS",
+      "detailed_results": [
+        {
+          "language_pair": "en→es",
+          "language_name": "Spanish",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "La reunión comenzará a las tres de la tarde.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "Por favor envíe el informe financiero a mi oficina hasta el viernes.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "La previsión meteorológica prevé lluvias intensas durante el fin de semana.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→fr",
+          "language_name": "French",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "La réunion commencera à trois heures du soir.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "Veuillez envoyer le rapport financier à mon bureau le vendredi.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "Les prévisions météorologiques prévoient de fortes pluies tout au long du week-end.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→de",
+          "language_name": "German",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "Das Treffen beginnt um drei Uhr am Nachmittag.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "Bitte senden Sie die Finanzberichte bis Freitag an mein Büro.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "Die Wettervorhersage vorausgesagt schwere Regen im Laufe des Wochenends.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→zh",
+          "language_name": "Chinese",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "会议将于下午3点开始。",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "请在周五之前向我的办公室发送财务报告。",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "天气预报周末预测下雨。",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→ja",
+          "language_name": "Japanese",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "会議は午後3時から始まります。",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "金曜日までに私の事務所に財務報告書を送ってください。",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "天気予報は週末に大雨を予測しています。",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→ru",
+          "language_name": "Russian",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "Встреча начнется в 3 часа вечера.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "Пожалуйста, отправьте финансовую отчетность в мой офис до пятницы.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "Прогноз погоды прогнозирует сильные дожди в течение всего выходного дня.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→pt",
+          "language_name": "Portuguese",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "A reunião começa às 3h da tarde.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "Por favor envie o relatório financeiro para o meu escritório até sexta-feira.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "A previsão do tempo prevê fortes chuvas durante o fim de semana.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→ar",
+          "language_name": "Arabic",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "وستبدأ الجلسة في الساعة الثالثة مساءً.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "يرجى إرسال التقرير المالي إلى مكتبي حتى يوم الجمعة.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "توقعات الطقس هطول الأمطار الشديدة طوال عطلة نهاية الأسبوع",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→ko",
+          "language_name": "Korean",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "회의는 오후 3시부터 시작된다.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "금요일까지 내 사무실에 재무 보고서를 보내 주시기 바랍니다.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "날씨 예보는 주말 동안 강한 비를 예측합니다.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→hi",
+          "language_name": "Hindi",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "बैठक दोपहर तीन बजे शुरू होगी।",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "कृपया शुक्रवार तक मेरे कार्यालय में वित्तीय रिपोर्ट भेजें।",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "मौसम पूर्वानुमान सप्ताहांत के दौरान भारी बारिश की भविष्यवाणी करता है।",
+              "passed": true
+            }
+          ]
+        }
+      ]
+    },
+    "translate_standard": {
+      "model_name": "Translate Standard (1.2B)",
+      "model_path": "models/windy_translate_standard",
+      "total_tests": 30,
+      "passed": 30,
+      "failed": 0,
+      "pass_rate": 100.0,
+      "overall_status": "PASS",
+      "detailed_results": [
+        {
+          "language_pair": "en→es",
+          "language_name": "Spanish",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "La reunión comenzará a las tres de la tarde.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "Por favor, envíe el informe financiero a mi oficina antes del viernes.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "El pronóstico meteorológico prevé lluvias durante todo el fin de semana.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→fr",
+          "language_name": "French",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "La réunion commencera à trois heures de l’après-midi.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "Veuillez envoyer le rapport financier à mon bureau d'ici vendredi.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "Les prévisions météorologiques prévoient de fortes pluies tout au long du week-end.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→de",
+          "language_name": "German",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "Das Treffen beginnt um drei Uhr nachmittags.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "Bitte schicken Sie den Finanzbericht bis Freitag an mein Büro.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "Die Wettervorhersage prognostiziert für das ganze Wochenende starke Regenfälle.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→zh",
+          "language_name": "Chinese",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "会议将于下午3点开始。",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "请在周五之前将财务报告发送到我的办公室。",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "天气预报预测周末大雨。",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→ja",
+          "language_name": "Japanese",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "会議は午後3時から始まります。",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "金曜日までに財務報告書をお送りください。",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "天気予報によると、週末は激しい雨が降ります。",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→ru",
+          "language_name": "Russian",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "Встреча начнется в три часа вечера.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "Пожалуйста, отправьте финансовый отчет в мой офис до пятницы.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "Прогноз погоды прогнозирует сильные дожди на весь уик-энд.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→pt",
+          "language_name": "Portuguese",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "A reunião começa às três da tarde.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "Por favor, envie o relatório financeiro para o meu escritório até sexta-feira.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "A previsão meteorológica prevê chuvas fortes durante o fim de semana.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→ar",
+          "language_name": "Arabic",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "وسيتم البدء في الاجتماع في الساعة الثالثة مساءً.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "يرجى إرسال البيانات المالية إلى مكتبنا قبل يوم الجمعة.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "توقعات الطقس تسببت في هطول الأمطار على مدار الأسبوع.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→ko",
+          "language_name": "Korean",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "회의는 오후 3시에 시작됩니다.",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "금요일까지 내 사무실에 재무 보고서를 보내주십시오.",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "날씨 예측은 주말 동안 강한 비를 예측합니다.",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "language_pair": "en→hi",
+          "language_name": "Hindi",
+          "results": [
+            {
+              "sentence": "The meeting will begin at three o clock in the afternoon.",
+              "translation": "बैठक दोपहर 3 बजे शुरू होगी।",
+              "passed": true
+            },
+            {
+              "sentence": "Please send the financial report to my office by Friday.",
+              "translation": "शुक्रवार तक मेरे कार्यालय में रिपोर्ट भेजें।",
+              "passed": true
+            },
+            {
+              "sentence": "The weather forecast predicts heavy rain throughout the weekend.",
+              "translation": "मौसम पूर्वानुमान पूरे सप्ताहांत में भारी बारिश का अनुमान लगा रहा है।",
+              "passed": true
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -121,11 +121,14 @@ class DatasetCurator:
         src_file = None
         tgt_file = None
 
-        for file in extract_dir.rglob("*.txt"):
-            if f".{source_lang}" in file.name:
-                src_file = file
-            elif f".{target_lang}" in file.name:
-                tgt_file = file
+        # Look for .txt files first, then any files with language extensions
+        for file in list(extract_dir.rglob("*.txt")) + list(extract_dir.rglob("*")):
+            if file.is_file():
+                # Match patterns like: dataset.en-ru.en or dataset.en.gz
+                if file.name.endswith(f".{source_lang}") or file.name.endswith(f".{source_lang}.gz"):
+                    src_file = file
+                elif file.name.endswith(f".{target_lang}") or file.name.endswith(f".{target_lang}.gz"):
+                    tgt_file = file
 
         if src_file and tgt_file:
             return (src_file, tgt_file)
