@@ -407,12 +407,14 @@ class SettingsPanel {
             <p class="settings-hint" style="margin:10px 0 6px;font-weight:700;color:#E2E8F0;font-size:12px;">── 🔊 Sound Volume per Hook ──</p>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">🎬 Start Recording</span>
+              <span class="sfx-mute-label" id="sfxMuteStart" title="Toggle mute">🔊</span>
               <label class="sfx-toggle"><input type="checkbox" id="sfxHookStart"><span class="sfx-toggle-slider"></span></label>
               <input type="range" class="sfx-hook-vol" id="sfxVolStart" min="0" max="100" value="70" title="Volume">
               <span class="sfx-hook-pct" id="sfxVolStartPct">Vol: 70%</span>
             </div>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">🎤 During Recording</span>
+              <span class="sfx-mute-label" id="sfxMuteDuring" title="Toggle mute">🔊</span>
               <label class="sfx-toggle"><input type="checkbox" id="sfxHookDuring"><span class="sfx-toggle-slider"></span></label>
               <input type="range" class="sfx-hook-vol" id="sfxVolDuring" min="0" max="100" value="30" title="Volume">
               <span class="sfx-hook-pct" id="sfxVolDuringPct">Vol: 30%</span>
@@ -420,21 +422,24 @@ class SettingsPanel {
             <p class="settings-hint" style="margin:-2px 0 4px 4px;font-size:10px;color:#22C55E;font-style:italic;">💡 These beeps play through speakers only — they won't affect your transcription quality.</p>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">⏹️ Stop Recording</span>
+              <span class="sfx-mute-label" id="sfxMuteStop" title="Toggle mute">🔊</span>
               <label class="sfx-toggle"><input type="checkbox" id="sfxHookStop"><span class="sfx-toggle-slider"></span></label>
               <input type="range" class="sfx-hook-vol" id="sfxVolStop" min="0" max="100" value="70" title="Volume">
               <span class="sfx-hook-pct" id="sfxVolStopPct">Vol: 70%</span>
             </div>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">⏳ Processing</span>
+              <span class="sfx-mute-label" id="sfxMuteProcess" title="Toggle mute">🔊</span>
               <label class="sfx-toggle"><input type="checkbox" id="sfxHookProcess"><span class="sfx-toggle-slider"></span></label>
               <input type="range" class="sfx-hook-vol" id="sfxVolProcess" min="0" max="100" value="30" title="Volume">
               <span class="sfx-hook-pct" id="sfxVolProcessPct">Vol: 30%</span>
             </div>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">📋 Paste</span>
+              <span class="sfx-mute-label" id="sfxMutePaste" title="Toggle mute">🔊</span>
               <label class="sfx-toggle"><input type="checkbox" id="sfxHookPaste"><span class="sfx-toggle-slider"></span></label>
               <input type="range" class="sfx-hook-vol" id="sfxVolPaste" min="0" max="100" value="100">
-              <span class="sfx-hook-pct" id="sfxVolPastePct">100%</span>
+              <span class="sfx-hook-pct" id="sfxVolPastePct">Vol: 100%</span>
             </div>
 
             <div class="setting-row" style="margin-top:8px;">
@@ -1160,30 +1165,33 @@ class SettingsPanel {
       });
     }
 
-    // Preview button — works in all modes
+    // Preview button — plays all 5 hooks with proper timing
     const previewBtn = this.panel.querySelector('#sfxPreviewBtn');
     if (previewBtn && fx) {
       previewBtn.addEventListener('click', () => {
         const currentMode = fx._mode;
+        let pid;
         if (currentMode === 'default') {
-          // Preview default beeps
-          fx.previewEffect('classic-beep', 'start');
-          setTimeout(() => fx.previewEffect('classic-beep', 'stop'), 600);
-          setTimeout(() => fx.previewEffect('classic-beep', 'paste'), 1200);
+          pid = 'classic-beep';
         } else if (currentMode === 'single') {
-          const packId = packSelect?.value || 'classic-beep';
-          fx.previewEffect(packId, 'start');
-          setTimeout(() => fx.previewEffect(packId, 'stop'), 600);
-          setTimeout(() => fx.previewEffect(packId, 'paste'), 1200);
+          pid = packSelect?.value || 'classic-beep';
         } else if (currentMode === 'surprise') {
-          // Preview random packs from the pool
-          const pack1 = fx._getNextSurprisePack();
-          const pack2 = fx._getNextSurprisePack();
-          const pack3 = fx._getNextSurprisePack();
-          fx.previewEffect(pack1.id, 'start');
-          setTimeout(() => fx.previewEffect(pack2.id, 'stop'), 700);
-          setTimeout(() => fx.previewEffect(pack3.id, 'paste'), 1400);
+          pid = fx._getNextSurprisePack()?.id || 'classic-beep';
+        } else {
+          pid = 'classic-beep';
         }
+        // Play all 5 hooks: start → during → stop → processing → paste
+        previewBtn.textContent = '🔊 Playing...';
+        previewBtn.disabled = true;
+        fx.previewEffect(pid, 'start');
+        setTimeout(() => fx.previewEffect(pid, 'during'), 600);
+        setTimeout(() => fx.previewEffect(pid, 'stop'), 1200);
+        setTimeout(() => fx.previewEffect(pid, 'process'), 1800);
+        setTimeout(() => fx.previewEffect(pid, 'paste'), 2400);
+        setTimeout(() => {
+          previewBtn.textContent = '▶ Preview Sounds';
+          previewBtn.disabled = false;
+        }, 3200);
       });
     }
 
@@ -1197,17 +1205,36 @@ class SettingsPanel {
       });
     }
 
-    // Hook point toggles + volume sliders
+    // Hook point toggles + volume sliders + mute labels
     const hookMap = { Start: 'start', During: 'during', Stop: 'stop', Process: 'process', Paste: 'paste' };
     for (const [label, hook] of Object.entries(hookMap)) {
       const toggle = this.panel.querySelector(`#sfxHook${label}`);
       const slider = this.panel.querySelector(`#sfxVol${label}`);
       const pct = this.panel.querySelector(`#sfxVol${label}Pct`);
+      const muteLabel = this.panel.querySelector(`#sfxMute${label}`);
+
+      const updateMuteLabel = (enabled) => {
+        if (muteLabel) muteLabel.textContent = enabled ? '🔊' : '🔇';
+      };
 
       if (toggle && fx) {
         toggle.checked = fx._hookPoints[hook]?.enabled || false;
-        toggle.addEventListener('change', () => fx.setHookEnabled(hook, toggle.checked));
+        updateMuteLabel(toggle.checked);
+        toggle.addEventListener('change', () => {
+          fx.setHookEnabled(hook, toggle.checked);
+          updateMuteLabel(toggle.checked);
+        });
       }
+
+      // Click mute label to toggle
+      if (muteLabel && toggle) {
+        muteLabel.style.cursor = 'pointer';
+        muteLabel.addEventListener('click', () => {
+          toggle.checked = !toggle.checked;
+          toggle.dispatchEvent(new Event('change'));
+        });
+      }
+
       if (slider && fx) {
         slider.value = fx._hookPoints[hook]?.volume || 70;
         if (pct) pct.textContent = 'Vol: ' + slider.value + '%';

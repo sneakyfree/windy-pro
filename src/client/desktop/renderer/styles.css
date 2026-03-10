@@ -779,6 +779,20 @@ body {
   color: var(--text-secondary, #94A3B8);
 }
 
+.sfx-mute-label {
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  transition: transform 0.15s;
+}
+
+.sfx-mute-label:hover {
+  transform: scale(1.2);
+}
+
 .sfx-hook-vol {
   flex: 1 1 50px;
   max-width: 60px;
