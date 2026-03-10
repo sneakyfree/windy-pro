@@ -956,6 +956,29 @@ body {
   margin-top: 3px;
 }
 
+/* Shelf progress bar */
+.sfx-lib-progress {
+  height: 3px;
+  background: rgba(100, 116, 139, 0.15);
+  border-radius: 2px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.sfx-lib-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #22C55E, #4ADE80);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+/* Stop button in shelf */
+.sfx-lib-stop {
+  font-size: 10px !important;
+}
+
+
 /* ── Master Controls Bar ── */
 .sfx-master-controls {
   display: flex;
@@ -5521,7 +5544,7 @@ body.light-theme .translate-history-item {
 }
 
 .slib-col-actions {
-  width: 90px;
+  width: 110px;
   text-align: right;
   flex-shrink: 0;
 }
@@ -5655,6 +5678,26 @@ body.light-theme .translate-history-item {
   background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
   transform: translateY(-1px);
+}
+
+/* Modal progress bar */
+.slib-progress-row {
+  padding: 0 20px 2px;
+}
+
+.slib-progress-bar {
+  height: 3px;
+  background: rgba(100, 116, 139, 0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.slib-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #22C55E, #4ADE80);
+  border-radius: 2px;
+  transition: width 0.1s linear;
 }
 
 /* Coming Soon */

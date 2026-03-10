@@ -1197,6 +1197,68 @@ class SettingsPanel {
       // ── Render library grid ──
       let libPanelOpen = false;
 
+      // ── Shared Audio Player (single instance, no parallel spawns) ──
+      let activeAudio = null;
+      let activeAudioId = null;
+      let activeAudioInterval = null;
+
+      const stopActiveAudio = () => {
+        if (activeAudio) {
+          activeAudio.pause();
+          activeAudio.currentTime = 0;
+          activeAudio = null;
+        }
+        activeAudioId = null;
+        if (activeAudioInterval) { clearInterval(activeAudioInterval); activeAudioInterval = null; }
+        // Reset all play buttons everywhere
+        document.querySelectorAll('.sfx-lib-play, .slib-play-btn').forEach(btn => { btn.textContent = '▶'; });
+        document.querySelectorAll('.sfx-lib-progress-fill, .slib-progress-fill').forEach(bar => { bar.style.width = '0%'; });
+      };
+
+      const playAudio = (item, playBtn, progressFill) => {
+        if (!item.dataUrl) { console.warn('No dataUrl for', item.name); return; }
+
+        // Same sound already playing → toggle pause/resume
+        if (activeAudioId === item.id && activeAudio) {
+          if (activeAudio.paused) {
+            activeAudio.play().catch(() => { });
+            playBtn.textContent = '⏸';
+          } else {
+            activeAudio.pause();
+            playBtn.textContent = '▶';
+          }
+          return;
+        }
+
+        // Different sound or nothing playing → stop old, start new
+        stopActiveAudio();
+        activeAudio = new Audio(item.dataUrl);
+        activeAudio.volume = 0.7;
+        activeAudioId = item.id;
+        playBtn.textContent = '⏸';
+
+        // Progress updates
+        activeAudioInterval = setInterval(() => {
+          if (activeAudio && activeAudio.duration && progressFill) {
+            const pct = (activeAudio.currentTime / activeAudio.duration) * 100;
+            progressFill.style.width = `${pct}%`;
+          }
+        }, 100);
+
+        activeAudio.addEventListener('ended', () => {
+          playBtn.textContent = '▶';
+          if (progressFill) progressFill.style.width = '0%';
+          activeAudioId = null;
+          activeAudio = null;
+          if (activeAudioInterval) { clearInterval(activeAudioInterval); activeAudioInterval = null; }
+        });
+
+        activeAudio.play().catch(e => {
+          console.warn('Audio play failed:', e);
+          playBtn.textContent = '▶';
+        });
+      };
+
       const renderLibraryCards = (container, items, expanded) => {
         container.innerHTML = '';
         if (items.length === 0) {
@@ -1222,9 +1284,11 @@ class SettingsPanel {
             </div>
             <input class="sfx-lib-name-input" type="text" value="${(item.name || '').replace(/"/g, '&quot;')}" style="display:none;" />
             <div class="sfx-lib-card-actions">
-              <button class="sfx-custom-btn sfx-lib-play" title="Preview">▶</button>
+              <button class="sfx-custom-btn sfx-lib-play" title="Play / Pause">${activeAudioId === item.id && activeAudio && !activeAudio.paused ? '⏸' : '▶'}</button>
+              <button class="sfx-custom-btn sfx-lib-stop" title="Stop & Reset">⏹</button>
               <button class="sfx-custom-btn sfx-custom-clear sfx-lib-del" title="Delete">🗑️</button>
             </div>
+            <div class="sfx-lib-progress"><div class="sfx-lib-progress-fill"></div></div>
           `;
           container.appendChild(card);
 
@@ -1262,20 +1326,19 @@ class SettingsPanel {
           nameInput.addEventListener('blur', finishRename);
           nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') finishRename(); });
 
-          // Preview — play with fallback
-          card.querySelector('.sfx-lib-play').addEventListener('click', () => {
-            if (!item.dataUrl) { console.warn('No dataUrl for', item.name); return; }
-            try {
-              const audio = new Audio(item.dataUrl);
-              audio.volume = 0.7;
-              audio.play().catch(e => console.warn('Audio play failed:', e));
-            } catch (e) {
-              console.warn('Library preview error:', e);
-            }
+          // Play / Pause
+          const playBtn = card.querySelector('.sfx-lib-play');
+          const progressFill = card.querySelector('.sfx-lib-progress-fill');
+          playBtn.addEventListener('click', () => playAudio(item, playBtn, progressFill));
+
+          // Stop / Reset
+          card.querySelector('.sfx-lib-stop').addEventListener('click', () => {
+            if (activeAudioId === item.id) stopActiveAudio();
           });
 
           // Delete
           card.querySelector('.sfx-lib-del').addEventListener('click', () => {
+            if (activeAudioId === item.id) stopActiveAudio();
             soundLibrary = soundLibrary.filter(s => s.id !== item.id);
             saveLibrary();
             renderLibrary();
@@ -1358,11 +1421,19 @@ class SettingsPanel {
             <span class="slib-col-size slib-row-meta">${sizeKb}</span>
             <span class="slib-col-date slib-row-meta">${dateText}</span>
             <span class="slib-col-actions slib-row-actions">
-              <button class="slib-action-btn" title="Preview">▶</button>
+              <button class="slib-action-btn slib-play-btn" title="Play / Pause">${activeAudioId === item.id && activeAudio && !activeAudio.paused ? '⏸' : '▶'}</button>
+              <button class="slib-action-btn slib-stop-btn" title="Stop & Reset" style="background:linear-gradient(135deg,#64748B,#475569);">⏹</button>
               <button class="slib-action-btn delete" title="Delete">🗑️</button>
             </span>
           `;
+
+          // Progress bar row
+          const progressRow = document.createElement('div');
+          progressRow.className = 'slib-progress-row';
+          progressRow.innerHTML = '<div class="slib-progress-bar"><div class="slib-progress-fill"></div></div>';
+
           slibBody.appendChild(row);
+          slibBody.appendChild(progressRow);
 
           // Status pill toggle
           row.querySelector('.slib-status-pill').addEventListener('click', () => {
@@ -1392,16 +1463,19 @@ class SettingsPanel {
             input.addEventListener('keydown', e => { if (e.key === 'Enter') finish(); });
           });
 
-          // Play
-          row.querySelector('.slib-action-btn:not(.delete)').addEventListener('click', () => {
-            if (!item.dataUrl) return;
-            const audio = new Audio(item.dataUrl);
-            audio.volume = 0.7;
-            audio.play().catch(e => console.warn('Play failed:', e));
+          // Play / Pause
+          const playBtn = row.querySelector('.slib-play-btn');
+          const progressFill = progressRow.querySelector('.slib-progress-fill');
+          playBtn.addEventListener('click', () => playAudio(item, playBtn, progressFill));
+
+          // Stop / Reset
+          row.querySelector('.slib-stop-btn').addEventListener('click', () => {
+            if (activeAudioId === item.id) stopActiveAudio();
           });
 
           // Delete
           row.querySelector('.slib-action-btn.delete').addEventListener('click', () => {
+            if (activeAudioId === item.id) stopActiveAudio();
             soundLibrary = soundLibrary.filter(s => s.id !== item.id);
             saveLibrary();
             renderModalTable();
