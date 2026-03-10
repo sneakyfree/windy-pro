@@ -1,27 +1,16 @@
 {
-  "version": "3.0.0",
-  "generated": "2026-03-10T08:18:00-04:00",
+  "version": "4.0.0",
+  "generated": "2026-03-10T08:36:00-04:00",
   "generated_by": "Kit 0C1 Alpha",
   "summary": {
-    "total_models": 12,
+    "total_models": 19,
     "stt_gpu": 7,
-    "stt_cpu_onnx": 0,
+    "stt_ct2_cpu": 7,
+    "stt_distil": 3,
     "translation": 2,
-    "distinct_fine_tunes": 12,
-    "qa_pass": 14,
-    "qa_warn": 2,
-    "qa_fail": 0,
     "champion": "windy-stt-turbo (eval_loss=0.4563)",
-    "total_disk_gb": 35.7,
-    "stt_distil": 3
+    "total_disk_gb": 17.6
   },
-  "notes": [
-    "ONNX CPU models REMOVED — ONNX INT8 quantization produced LARGER files, not smaller.",
-    "3 Distil-Whisper forks ADDED — genuinely different architectures, faster on CPU.",
-    "CPU users should use: (a) Distil models for best CPU performance, or (b) GPU safetensors with device=cpu.",
-    "All STT fine-tuning was English-only. Multilingual capability from base models.",
-    "Distil-small and distil-medium are English-only. Distil-large-v3 is multilingual."
-  ],
   "models": [
     {
       "id": "windy-stt-nano",
@@ -29,43 +18,17 @@
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
-      "size_on_disk_mb": 73.8,
+      "size_on_disk_mb": 77.2,
       "base_model": "openai/whisper-tiny",
       "base_license": "MIT",
       "base_params": "39M",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model — fine-tuning was English-only)",
-      "lora": {
-        "rank": 4,
-        "alpha": 8,
-        "target_modules": [
-          "q_proj",
-          "v_proj"
-        ],
-        "dropout": 0.05
-      },
-      "training": {
-        "samples": 200,
-        "epochs": 2,
-        "learning_rate": "8e-6",
-        "time_seconds": 95,
-        "date": "2026-02-25",
-        "hardware": "NVIDIA RTX 5090",
-        "best_checkpoint": "lora-tiny-en-20260225T181843Z"
-      },
       "eval_loss": 3.4728,
-      "eval_rank": "5/7",
-      "speed_estimate": "~10x realtime",
+      "ct2_variant": "windy-stt-nano-ct2",
+      "huggingface": "WindyProLabs/windy-stt-nano",
       "qa": {
         "status": "PASS",
-        "date": "2026-03-09",
-        "test": "smoke"
-      },
-      "huggingface": "WindyProLabs/windy-stt-nano",
-      "cpu_variant": "windy-stt-nano-cpu",
-      "description": "Fastest STT. Best for quick dictation on powerful hardware."
+        "date": "2026-03-09"
+      }
     },
     {
       "id": "windy-stt-lite",
@@ -73,44 +36,17 @@
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
-      "size_on_disk_mb": 140.2,
+      "size_on_disk_mb": 143.6,
       "base_model": "openai/whisper-base",
       "base_license": "MIT",
       "base_params": "74M",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model — fine-tuning was English-only)",
-      "lora": {
-        "rank": 8,
-        "alpha": 16,
-        "target_modules": [
-          "q_proj",
-          "v_proj"
-        ],
-        "dropout": 0.05
-      },
-      "training": {
-        "samples": 300,
-        "epochs": 2,
-        "learning_rate": "8e-6",
-        "time_seconds": 104,
-        "date": "2026-02-25",
-        "hardware": "NVIDIA RTX 5090",
-        "best_checkpoint": "lora-base-en-20260225T182110Z"
-      },
       "eval_loss": 4.1797,
-      "eval_rank": "6/7",
-      "speed_estimate": "~6x realtime",
-      "qa": {
-        "status": "WARN",
-        "date": "2026-03-09",
-        "test": "smoke",
-        "note": "Concorde spelling divergence from reference (inherited from base model)"
-      },
+      "ct2_variant": "windy-stt-lite-ct2",
       "huggingface": "WindyProLabs/windy-stt-lite",
-      "cpu_variant": "windy-stt-lite-cpu",
-      "description": "Lightweight STT. Balanced speed/quality. ⚠️ Eval loss higher than expected."
+      "qa": {
+        "status": "PASS",
+        "date": "2026-03-09"
+      }
     },
     {
       "id": "windy-stt-core",
@@ -118,43 +54,17 @@
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
-      "size_on_disk_mb": 462.9,
+      "size_on_disk_mb": 466.3,
       "base_model": "openai/whisper-small",
       "base_license": "MIT",
       "base_params": "244M",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model — fine-tuning was English-only)",
-      "lora": {
-        "rank": 8,
-        "alpha": 16,
-        "target_modules": [
-          "q_proj",
-          "v_proj"
-        ],
-        "dropout": 0.05
-      },
-      "training": {
-        "samples": 400,
-        "epochs": 3,
-        "learning_rate": "8e-6",
-        "time_seconds": 256,
-        "date": "2026-02-25",
-        "hardware": "NVIDIA RTX 5090",
-        "best_checkpoint": "lora-small-en-20260225T182403Z"
-      },
       "eval_loss": 1.8765,
-      "eval_rank": "4/7",
-      "speed_estimate": "~5x realtime",
+      "ct2_variant": "windy-stt-core-ct2",
+      "huggingface": "WindyProLabs/windy-stt-core",
       "qa": {
         "status": "PASS",
-        "date": "2026-03-09",
-        "test": "smoke"
-      },
-      "huggingface": "WindyProLabs/windy-stt-core",
-      "cpu_variant": "windy-stt-core-cpu",
-      "description": "Core STT model. Recommended starting point for most use cases."
+        "date": "2026-03-09"
+      }
     },
     {
       "id": "windy-stt-plus",
@@ -162,43 +72,17 @@
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
-      "size_on_disk_mb": 1458.8,
+      "size_on_disk_mb": 1462.2,
       "base_model": "openai/whisper-medium",
       "base_license": "MIT",
       "base_params": "769M",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model — fine-tuning was English-only)",
-      "lora": {
-        "rank": 8,
-        "alpha": 16,
-        "target_modules": [
-          "q_proj",
-          "v_proj"
-        ],
-        "dropout": 0.05
-      },
-      "training": {
-        "samples": 500,
-        "epochs": 3,
-        "learning_rate": "8e-6",
-        "time_seconds": 382,
-        "date": "2026-02-26",
-        "hardware": "NVIDIA RTX 5090",
-        "best_checkpoint": "lora-medium-en-20260226T021334Z"
-      },
       "eval_loss": 1.5445,
-      "eval_rank": "3/7",
-      "speed_estimate": "~2x realtime",
+      "ct2_variant": "windy-stt-plus-ct2",
+      "huggingface": "WindyProLabs/windy-stt-plus",
       "qa": {
         "status": "PASS",
-        "date": "2026-03-09",
-        "test": "smoke"
-      },
-      "huggingface": "WindyProLabs/windy-stt-plus",
-      "cpu_variant": "windy-stt-plus-cpu",
-      "description": "High-accuracy STT. Professional transcription grade."
+        "date": "2026-03-09"
+      }
     },
     {
       "id": "windy-stt-turbo",
@@ -206,43 +90,17 @@
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
-      "size_on_disk_mb": 1544.7,
+      "size_on_disk_mb": 1548.2,
       "base_model": "openai/whisper-large-v3-turbo",
       "base_license": "MIT",
       "base_params": "809M",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model — fine-tuning was English-only)",
-      "lora": {
-        "rank": 8,
-        "alpha": 16,
-        "target_modules": [
-          "q_proj",
-          "v_proj"
-        ],
-        "dropout": 0.05
-      },
-      "training": {
-        "samples": 600,
-        "epochs": 2,
-        "learning_rate": "8e-6",
-        "time_seconds": 346,
-        "date": "2026-02-26",
-        "hardware": "NVIDIA RTX 5090",
-        "best_checkpoint": "lora-large-v3-turbo-en-20260226T023039Z"
-      },
       "eval_loss": 0.4563,
-      "eval_rank": "1/7",
-      "speed_estimate": "~4x realtime",
+      "ct2_variant": "windy-stt-turbo-ct2",
+      "huggingface": "WindyProLabs/windy-stt-turbo",
       "qa": {
         "status": "PASS",
-        "date": "2026-03-09",
-        "test": "smoke"
-      },
-      "huggingface": "WindyProLabs/windy-stt-turbo",
-      "cpu_variant": "windy-stt-turbo-cpu",
-      "description": "⭐ CHAMPION — Best eval loss (0.4563). Best quality-to-speed ratio in fleet."
+        "date": "2026-03-09"
+      }
     },
     {
       "id": "windy-stt-pro",
@@ -250,43 +108,17 @@
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
-      "size_on_disk_mb": 2945.9,
+      "size_on_disk_mb": 2949.4,
       "base_model": "openai/whisper-large-v3",
       "base_license": "MIT",
       "base_params": "1.55B",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model — fine-tuning was English-only)",
-      "lora": {
-        "rank": 8,
-        "alpha": 16,
-        "target_modules": [
-          "q_proj",
-          "v_proj"
-        ],
-        "dropout": 0.05
-      },
-      "training": {
-        "samples": 600,
-        "epochs": 2,
-        "learning_rate": "8e-6",
-        "time_seconds": 369,
-        "date": "2026-02-26",
-        "hardware": "NVIDIA RTX 5090",
-        "best_checkpoint": "lora-large-v3-en-20260226T022215Z"
-      },
       "eval_loss": 1.2331,
-      "eval_rank": "2/7",
-      "speed_estimate": "~1x realtime",
+      "ct2_variant": "windy-stt-pro-ct2",
+      "huggingface": "WindyProLabs/windy-stt-pro",
       "qa": {
         "status": "PASS",
-        "date": "2026-03-09",
-        "test": "smoke"
-      },
-      "huggingface": "WindyProLabs/windy-stt-pro",
-      "cpu_variant": "windy-stt-pro-cpu",
-      "description": "Maximum accuracy. Largest Whisper base. Best for archival/legal transcription."
+        "date": "2026-03-09"
+      }
     },
     {
       "id": "windy-stt-edge",
@@ -294,43 +126,225 @@
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
+      "size_on_disk_mb": 1448.1,
+      "base_model": "distil-whisper/distil-large-v3",
+      "base_license": "MIT",
+      "base_params": "756M",
+      "eval_loss": 4.814,
+      "ct2_variant": "windy-stt-edge-ct2",
+      "huggingface": "WindyProLabs/windy-stt-edge",
+      "qa": {
+        "status": "PASS",
+        "date": "2026-03-09"
+      }
+    },
+    {
+      "id": "windy-stt-nano-ct2",
+      "name": "Windy STT Nano (CPU INT8)",
+      "category": "stt",
+      "variant": "cpu-int8",
+      "format": "ctranslate2",
+      "size_on_disk_mb": 37.9,
+      "base_model": "openai/whisper-tiny",
+      "base_license": "MIT",
+      "derived_from": "windy-stt-nano",
+      "quantization": "int8 via CTranslate2 4.7.1",
+      "eval_loss": 3.4728,
+      "gpu_variant": "windy-stt-nano",
+      "huggingface": "WindyProLabs/windy-stt-nano-ct2",
+      "qa": {
+        "status": "PENDING"
+      },
+      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+    },
+    {
+      "id": "windy-stt-lite-ct2",
+      "name": "Windy STT Lite (CPU INT8)",
+      "category": "stt",
+      "variant": "cpu-int8",
+      "format": "ctranslate2",
+      "size_on_disk_mb": 71.5,
+      "base_model": "openai/whisper-base",
+      "base_license": "MIT",
+      "derived_from": "windy-stt-lite",
+      "quantization": "int8 via CTranslate2 4.7.1",
+      "eval_loss": 4.1797,
+      "gpu_variant": "windy-stt-lite",
+      "huggingface": "WindyProLabs/windy-stt-lite-ct2",
+      "qa": {
+        "status": "PENDING"
+      },
+      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+    },
+    {
+      "id": "windy-stt-core-ct2",
+      "name": "Windy STT Core (CPU INT8)",
+      "category": "stt",
+      "variant": "cpu-int8",
+      "format": "ctranslate2",
+      "size_on_disk_mb": 234.1,
+      "base_model": "openai/whisper-small",
+      "base_license": "MIT",
+      "derived_from": "windy-stt-core",
+      "quantization": "int8 via CTranslate2 4.7.1",
+      "eval_loss": 1.8765,
+      "gpu_variant": "windy-stt-core",
+      "huggingface": "WindyProLabs/windy-stt-core-ct2",
+      "qa": {
+        "status": "PENDING"
+      },
+      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+    },
+    {
+      "id": "windy-stt-plus-ct2",
+      "name": "Windy STT Plus (CPU INT8)",
+      "category": "stt",
+      "variant": "cpu-int8",
+      "format": "ctranslate2",
+      "size_on_disk_mb": 734.3,
+      "base_model": "openai/whisper-medium",
+      "base_license": "MIT",
+      "derived_from": "windy-stt-plus",
+      "quantization": "int8 via CTranslate2 4.7.1",
+      "eval_loss": 1.5445,
+      "gpu_variant": "windy-stt-plus",
+      "huggingface": "WindyProLabs/windy-stt-plus-ct2",
+      "qa": {
+        "status": "PENDING"
+      },
+      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+    },
+    {
+      "id": "windy-stt-turbo-ct2",
+      "name": "Windy STT Turbo (CPU INT8)",
+      "category": "stt",
+      "variant": "cpu-int8",
+      "format": "ctranslate2",
+      "size_on_disk_mb": 777.4,
+      "base_model": "openai/whisper-large-v3-turbo",
+      "base_license": "MIT",
+      "derived_from": "windy-stt-turbo",
+      "quantization": "int8 via CTranslate2 4.7.1",
+      "eval_loss": 0.4563,
+      "gpu_variant": "windy-stt-turbo",
+      "huggingface": "WindyProLabs/windy-stt-turbo-ct2",
+      "qa": {
+        "status": "PENDING"
+      },
+      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+    },
+    {
+      "id": "windy-stt-pro-ct2",
+      "name": "Windy STT Pro (CPU INT8)",
+      "category": "stt",
+      "variant": "cpu-int8",
+      "format": "ctranslate2",
+      "size_on_disk_mb": 1480.5,
+      "base_model": "openai/whisper-large-v3",
+      "base_license": "MIT",
+      "derived_from": "windy-stt-pro",
+      "quantization": "int8 via CTranslate2 4.7.1",
+      "eval_loss": 1.2331,
+      "gpu_variant": "windy-stt-pro",
+      "huggingface": "WindyProLabs/windy-stt-pro-ct2",
+      "qa": {
+        "status": "PENDING"
+      },
+      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+    },
+    {
+      "id": "windy-stt-edge-ct2",
+      "name": "Windy STT Edge (CPU INT8)",
+      "category": "stt",
+      "variant": "cpu-int8",
+      "format": "ctranslate2",
+      "size_on_disk_mb": 727.1,
+      "base_model": "distil-whisper/distil-large-v3",
+      "base_license": "MIT",
+      "derived_from": "windy-stt-edge",
+      "quantization": "int8 via CTranslate2 4.7.1",
+      "eval_loss": 4.814,
+      "gpu_variant": "windy-stt-edge",
+      "huggingface": "WindyProLabs/windy-stt-edge-ct2",
+      "qa": {
+        "status": "PENDING"
+      },
+      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+    },
+    {
+      "id": "windy-stt-distil-small",
+      "name": "Windy STT Distil Small",
+      "category": "stt",
+      "variant": "cpu-optimized",
+      "format": "safetensors",
+      "size_on_disk_mb": 318.6,
+      "base_model": "distil-whisper/distil-small.en",
+      "base_license": "MIT",
+      "base_params": "166M (distilled)",
+      "lora": {
+        "rank": 4,
+        "alpha": 8,
+        "target_modules": [
+          "q_proj"
+        ]
+      },
+      "eval_loss": 3.52,
+      "languages_supported": "English",
+      "huggingface": "WindyProLabs/windy-stt-distil-small",
+      "qa": {
+        "status": "PENDING"
+      },
+      "description": "Distilled architecture — genuinely faster on CPU than standard Whisper."
+    },
+    {
+      "id": "windy-stt-distil-medium",
+      "name": "Windy STT Distil Medium",
+      "category": "stt",
+      "variant": "cpu-optimized",
+      "format": "safetensors",
+      "size_on_disk_mb": 754.0,
+      "base_model": "distil-whisper/distil-medium.en",
+      "base_license": "MIT",
+      "base_params": "394M (distilled)",
+      "lora": {
+        "rank": 4,
+        "alpha": 8,
+        "target_modules": [
+          "q_proj"
+        ]
+      },
+      "eval_loss": 5.45,
+      "languages_supported": "English",
+      "huggingface": "WindyProLabs/windy-stt-distil-medium",
+      "qa": {
+        "status": "PENDING"
+      },
+      "description": "Distilled architecture — genuinely faster on CPU than standard Whisper."
+    },
+    {
+      "id": "windy-stt-distil-large",
+      "name": "Windy STT Distil Large",
+      "category": "stt",
+      "variant": "cpu-optimized",
+      "format": "safetensors",
       "size_on_disk_mb": 1444.6,
       "base_model": "distil-whisper/distil-large-v3",
       "base_license": "MIT",
       "base_params": "756M (distilled)",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model — fine-tuning was English-only)",
       "lora": {
-        "rank": 8,
-        "alpha": 16,
+        "rank": 4,
+        "alpha": 8,
         "target_modules": [
-          "q_proj",
-          "v_proj"
-        ],
-        "dropout": 0.05
+          "q_proj"
+        ]
       },
-      "training": {
-        "samples": 500,
-        "epochs": 2,
-        "learning_rate": "8e-6",
-        "time_seconds": 105,
-        "date": "2026-02-26",
-        "hardware": "NVIDIA RTX 5090",
-        "best_checkpoint": "lora-distil-whisper_distil-large-v3-en-20260226T165243Z"
-      },
-      "eval_loss": 4.814,
-      "eval_rank": "7/7",
-      "speed_estimate": "~6x realtime (distilled)",
+      "eval_loss": 4.31,
+      "languages_supported": "100+ (multilingual)",
+      "huggingface": "WindyProLabs/windy-stt-distil-large",
       "qa": {
-        "status": "PASS",
-        "date": "2026-03-09",
-        "test": "smoke"
+        "status": "PENDING"
       },
-      "huggingface": "WindyProLabs/windy-stt-edge",
-      "cpu_variant": "windy-stt-edge-cpu",
-      "description": "Distilled architecture for edge deployment. ⚠️ High eval loss — needs investigation."
+      "description": "Distilled architecture — genuinely faster on CPU than standard Whisper."
     },
     {
       "id": "windy-translate-spark",
@@ -341,41 +355,11 @@
       "size_on_disk_mb": 928.9,
       "base_model": "facebook/m2m100_418M",
       "base_license": "MIT",
-      "base_params": "418M",
-      "languages_trained": [
-        "en",
-        "es",
-        "fr",
-        "de",
-        "ru",
-        "fi",
-        "pt",
-        "zh",
-        "ja",
-        "ko",
-        "ar"
-      ],
-      "languages_supported": "100+ (via M2M-100 base)",
-      "lora": {
-        "rank": 16,
-        "alpha": 32,
-        "target_modules": [
-          "q_proj",
-          "v_proj"
-        ],
-        "epochs": 1,
-        "learning_rate": "5e-5"
-      },
-      "vram_estimate": "~1.9 GB",
-      "speed_estimate": "~117ms per translation (GPU)",
+      "huggingface": "WindyProLabs/windy_translate_spark",
       "qa": {
         "status": "PASS",
-        "date": "2026-03-09",
-        "test": "ultralight",
-        "note": "30/30 sentences, 10 language pairs, 100% pass rate"
-      },
-      "huggingface": "WindyProLabs/windy_translate_spark",
-      "description": "Fast multilingual translation. 100+ languages. LoRA-enhanced for priority pairs."
+        "date": "2026-03-09"
+      }
     },
     {
       "id": "windy-translate-standard",
@@ -386,152 +370,11 @@
       "size_on_disk_mb": 2370.1,
       "base_model": "facebook/m2m100_1.2B",
       "base_license": "MIT",
-      "base_params": "1.2B",
-      "languages_trained": [
-        "en",
-        "es",
-        "fr",
-        "de",
-        "ru",
-        "fi",
-        "pt",
-        "zh",
-        "ja",
-        "ko",
-        "ar"
-      ],
-      "languages_supported": "100+ (via M2M-100 base)",
-      "lora": {
-        "rank": 16,
-        "alpha": 32,
-        "target_modules": [
-          "q_proj",
-          "v_proj"
-        ],
-        "epochs": 1,
-        "learning_rate": "5e-5"
-      },
-      "vram_estimate": "~5 GB",
-      "speed_estimate": "~200-400ms per translation (GPU)",
+      "huggingface": "WindyProLabs/windy_translate_standard",
       "qa": {
         "status": "PASS",
-        "date": "2026-03-09",
-        "test": "ultralight",
-        "note": "30/30 sentences, 10 language pairs, 100% pass rate"
-      },
-      "huggingface": "WindyProLabs/windy_translate_standard",
-      "description": "Standard multilingual translation. Higher quality. Better rare-language pairs."
-    },
-    {
-      "id": "windy-stt-distil-small",
-      "name": "Windy STT Distil Small",
-      "category": "stt",
-      "variant": "cpu-optimized",
-      "format": "safetensors",
-      "size_on_disk_mb": 319,
-      "base_model": "distil-whisper/distil-small.en",
-      "base_license": "MIT",
-      "base_params": "166M (distilled)",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "English (distilled for English)",
-      "lora": {
-        "rank": 4,
-        "alpha": 8,
-        "target_modules": [
-          "q_proj"
-        ],
-        "dropout": 0.05
-      },
-      "training": {
-        "samples": 50,
-        "epochs": 0.5,
-        "learning_rate": "1e-5",
-        "date": "2026-03-10",
-        "hardware": "NVIDIA RTX 5090"
-      },
-      "eval_loss": 3.52,
-      "qa": {
-        "status": "PENDING",
-        "date": null
-      },
-      "huggingface": "WindyProLabs/windy-stt-distil-small",
-      "description": "Distilled architecture — genuinely faster on CPU than standard Whisper. English-optimized."
-    },
-    {
-      "id": "windy-stt-distil-medium",
-      "name": "Windy STT Distil Medium",
-      "category": "stt",
-      "variant": "cpu-optimized",
-      "format": "safetensors",
-      "size_on_disk_mb": 755,
-      "base_model": "distil-whisper/distil-medium.en",
-      "base_license": "MIT",
-      "base_params": "394M (distilled)",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "English (distilled for English)",
-      "lora": {
-        "rank": 4,
-        "alpha": 8,
-        "target_modules": [
-          "q_proj"
-        ],
-        "dropout": 0.05
-      },
-      "training": {
-        "samples": 50,
-        "epochs": 0.5,
-        "learning_rate": "1e-5",
-        "date": "2026-03-10",
-        "hardware": "NVIDIA RTX 5090"
-      },
-      "eval_loss": 5.45,
-      "qa": {
-        "status": "PENDING",
-        "date": null
-      },
-      "huggingface": "WindyProLabs/windy-stt-distil-medium",
-      "description": "Distilled medium — best English accuracy on CPU. Faster than equivalent-size Whisper."
-    },
-    {
-      "id": "windy-stt-distil-large",
-      "name": "Windy STT Distil Large",
-      "category": "stt",
-      "variant": "cpu-optimized",
-      "format": "safetensors",
-      "size_on_disk_mb": 1445,
-      "base_model": "distil-whisper/distil-large-v3",
-      "base_license": "MIT",
-      "base_params": "756M (distilled from large-v3)",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (multilingual base, distilled from large-v3)",
-      "lora": {
-        "rank": 4,
-        "alpha": 8,
-        "target_modules": [
-          "q_proj"
-        ],
-        "dropout": 0.05
-      },
-      "training": {
-        "samples": 50,
-        "epochs": 0.5,
-        "learning_rate": "1e-5",
-        "date": "2026-03-10",
-        "hardware": "NVIDIA RTX 5090"
-      },
-      "eval_loss": 4.31,
-      "qa": {
-        "status": "PENDING",
-        "date": null
-      },
-      "huggingface": "WindyProLabs/windy-stt-distil-large",
-      "description": "Distilled large-v3 — highest accuracy CPU model. Near-Pro quality at faster speeds."
+        "date": "2026-03-09"
+      }
     }
   ]
 }
