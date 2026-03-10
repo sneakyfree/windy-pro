@@ -74,6 +74,33 @@ class SoundManager {
         });
     }
 
+    /**
+     * Play an audio file from a data URL (base64)
+     * @param {string} dataUrl - base64 data URL of audio file
+     * @param {number} volume - volume multiplier (0-1)
+     */
+    async playAudioFile(dataUrl, volume = 0.5) {
+        if (this._masterVolume === 0 || !dataUrl) return;
+        try {
+            const ctx = this._ensureCtx();
+            let buffer = this._cache[dataUrl];
+            if (!buffer) {
+                // Decode base64 data URL to ArrayBuffer
+                const resp = await fetch(dataUrl);
+                const arrayBuf = await resp.arrayBuffer();
+                buffer = await ctx.decodeAudioData(arrayBuf);
+                this._cache[dataUrl] = buffer;
+            }
+            const source = ctx.createBufferSource();
+            const gain = ctx.createGain();
+            source.buffer = buffer;
+            source.connect(gain);
+            gain.connect(ctx.destination);
+            gain.gain.value = Math.min(1, volume * this._masterVolume);
+            source.start(0);
+        } catch (_) { /* fail silently */ }
+    }
+
     dispose() {
         if (this._ctx && this._ctx.state !== 'closed') {
             this._ctx.close().catch(() => { });
@@ -429,6 +456,35 @@ class EffectsEngine {
         const hp = this._hookPoints[hook];
         if (!hp || !hp.enabled) return;
 
+        // Hook-point volume (0-100 → 0-1)
+        const hookVolMul = hp.volume / 100;
+
+        // ── Custom Mode: each hook has its own chosen sound ──
+        if (this._mode === 'custom') {
+            try {
+                const customCfg = JSON.parse(localStorage.getItem('windy_customSounds') || '{}');
+                const hookCfg = customCfg[hook];
+                if (!hookCfg) return;
+
+                if (hookCfg.type === 'file' && hookCfg.dataUrl) {
+                    this.sound.playAudioFile(hookCfg.dataUrl, hookVolMul);
+                } else if (hookCfg.type === 'stock' && hookCfg.packId && hookCfg.hook) {
+                    const pack = this._packs[hookCfg.packId];
+                    if (pack) {
+                        const hookDef = pack.hooks?.[hookCfg.hook];
+                        if (hookDef?.sound) {
+                            if (Array.isArray(hookDef.sound)) {
+                                this.sound.playSequence(hookDef.sound.map(t => ({ ...t, volume: (t.volume || 0.3) * hookVolMul })));
+                            } else {
+                                this.sound.playTone({ ...hookDef.sound, volume: (hookDef.sound.volume || 0.3) * hookVolMul });
+                            }
+                        }
+                    }
+                }
+            } catch (_) { }
+            return;
+        }
+
         // Get active pack (or pick from shuffle bag for Surprise Me)
         let pack = this._activePack;
         if (this._mode === 'surprise') {
@@ -451,8 +507,7 @@ class EffectsEngine {
             else intensity = 1.0;
         }
 
-        // Hook-point volume (0-100 → 0-1)
-        const hookVolMul = hp.volume / 100;
+        // (hookVolMul already declared above)
 
         // Play sound
         if (hookDef.sound) {

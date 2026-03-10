@@ -379,6 +379,7 @@ class SettingsPanel {
               <button class="sfx-mode-pill" data-mode="default">🔔 Default</button>
               <button class="sfx-mode-pill" data-mode="single">⚡ Single Pack</button>
               <button class="sfx-mode-pill" data-mode="surprise">🎲 Surprise Me</button>
+              <button class="sfx-mode-pill" data-mode="custom">🎨 Custom</button>
             </div>
           </div>
 
@@ -401,6 +402,12 @@ class SettingsPanel {
               <option value="utilitarian">🔔 Utilitarian</option>
               <option value="favorites">⭐ Favorites</option>
             </select>
+          </div>
+
+          <div id="sfxCustomSection" style="display:none;">
+            <p class="settings-hint sfx-during-hint" style="margin:10px 0 6px;font-weight:700;font-size:12px;">── 🎨 Custom Sound Hooks ──</p>
+            <p class="settings-hint sfx-during-hint" style="margin:0 0 8px;font-size:10px;">Pick any stock sound, upload audio, or record your own for each hook.</p>
+            <div id="sfxCustomHooks"></div>
           </div>
 
           <div id="sfxHookSection" style="display:none;">
@@ -1153,10 +1160,13 @@ class SettingsPanel {
     const hookSection = this.panel.querySelector('#sfxHookSection');
     const previewRow = this.panel.querySelector('#sfxPreviewRow');
 
+    const customSection = this.panel.querySelector('#sfxCustomSection');
+
     const updateModeUI = (mode) => {
       modePills.forEach(p => p.classList.toggle('active', p.dataset.mode === mode));
       if (packRow) packRow.style.display = mode === 'single' ? 'flex' : 'none';
       if (surpriseRow) surpriseRow.style.display = mode === 'surprise' ? 'flex' : 'none';
+      if (customSection) customSection.style.display = mode === 'custom' ? '' : 'none';
       if (hookSection) hookSection.style.display = (mode === 'silent' || mode === 'default') ? 'none' : '';
       if (previewRow) previewRow.style.display = mode === 'silent' ? 'none' : '';
     };
@@ -1181,6 +1191,167 @@ class SettingsPanel {
       packSelect.addEventListener('change', () => {
         fx.setActivePack(packSelect.value);
       });
+    }
+
+    // ═══ Custom Sound Hook Builder ═══
+    const customHooksContainer = this.panel.querySelector('#sfxCustomHooks');
+    if (customHooksContainer && fx) {
+      const hookDefs = [
+        { key: 'start', label: '🎬 Start Recording', emoji: '🎬' },
+        { key: 'during', label: '🎤 During Recording', emoji: '🎤' },
+        { key: 'stop', label: '⏹️ Stop Recording', emoji: '⏹️' },
+        { key: 'process', label: '⏳ Processing', emoji: '⏳' },
+        { key: 'warning', label: '⚠️ Warning (limit)', emoji: '⚠️' },
+        { key: 'paste', label: '📋 Paste', emoji: '📋' }
+      ];
+
+      // Build stock sound options from ALL packs
+      const allPacks = fx.getPackList().filter(p => p.id !== '_silent');
+      const stockOptions = [];
+      for (const pack of allPacks) {
+        const packData = fx._packs[pack.id];
+        if (!packData?.hooks) continue;
+        for (const hookName of Object.keys(packData.hooks)) {
+          stockOptions.push({
+            packId: pack.id,
+            hook: hookName,
+            label: `${pack.name} → ${hookName}`
+          });
+        }
+      }
+
+      // Load saved config
+      let customCfg = {};
+      try { customCfg = JSON.parse(localStorage.getItem('windy_customSounds') || '{}'); } catch (_) { }
+
+      const saveCustomCfg = () => {
+        localStorage.setItem('windy_customSounds', JSON.stringify(customCfg));
+      };
+
+      // Build per-hook UI
+      for (const hd of hookDefs) {
+        const row = document.createElement('div');
+        row.className = 'sfx-custom-hook-row';
+        const current = customCfg[hd.key];
+        const statusText = current
+          ? (current.type === 'file' ? `📁 ${current.name || 'Custom file'}` : `🔊 ${current.label || 'Stock sound'}`)
+          : '—  Not set';
+
+        row.innerHTML = `
+          <div class="sfx-custom-hook-header">
+            <span class="sfx-custom-hook-label">${hd.label}</span>
+            <span class="sfx-custom-hook-status" id="customStatus_${hd.key}">${statusText}</span>
+          </div>
+          <div class="sfx-custom-hook-controls">
+            <select class="sfx-custom-select" id="customSelect_${hd.key}">
+              <option value="">-- Pick from library --</option>
+              ${stockOptions.map(s => {
+          const val = `${s.packId}|${s.hook}`;
+          const sel = (current?.type === 'stock' && current?.packId === s.packId && current?.hook === s.hook) ? 'selected' : '';
+          return `<option value="${val}" ${sel}>${s.label}</option>`;
+        }).join('')}
+            </select>
+            <button class="sfx-custom-btn" id="customUpload_${hd.key}" title="Upload audio file">📂</button>
+            <button class="sfx-custom-btn sfx-custom-record" id="customRecord_${hd.key}" title="Record with mic">🎙️</button>
+            <button class="sfx-custom-btn" id="customPreview_${hd.key}" title="Preview">▶</button>
+            <button class="sfx-custom-btn sfx-custom-clear" id="customClear_${hd.key}" title="Clear">✕</button>
+          </div>
+        `;
+        customHooksContainer.appendChild(row);
+
+        // ── Stock sound dropdown ──
+        const sel = row.querySelector(`#customSelect_${hd.key}`);
+        sel.addEventListener('change', () => {
+          if (!sel.value) return;
+          const [pid, hk] = sel.value.split('|');
+          const opt = stockOptions.find(s => s.packId === pid && s.hook === hk);
+          customCfg[hd.key] = { type: 'stock', packId: pid, hook: hk, label: opt?.label || `${pid}/${hk}` };
+          saveCustomCfg();
+          row.querySelector(`#customStatus_${hd.key}`).textContent = `🔊 ${opt?.label || 'Stock sound'}`;
+        });
+
+        // ── Upload audio file ──
+        const uploadBtn = row.querySelector(`#customUpload_${hd.key}`);
+        uploadBtn.addEventListener('click', () => {
+          const inp = document.createElement('input');
+          inp.type = 'file';
+          inp.accept = 'audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/x-m4a,.mp3,.wav,.ogg,.m4a';
+          inp.addEventListener('change', () => {
+            const file = inp.files?.[0];
+            if (!file || file.size > 5 * 1024 * 1024) {
+              alert('Max file size: 5MB');
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+              customCfg[hd.key] = { type: 'file', dataUrl: reader.result, name: file.name };
+              saveCustomCfg();
+              row.querySelector(`#customStatus_${hd.key}`).textContent = `📁 ${file.name}`;
+              sel.value = '';
+            };
+            reader.readAsDataURL(file);
+          });
+          inp.click();
+        });
+
+        // ── Record with mic ──
+        const recordBtn = row.querySelector(`#customRecord_${hd.key}`);
+        let mediaRec = null;
+        recordBtn.addEventListener('click', async () => {
+          if (mediaRec && mediaRec.state === 'recording') {
+            // Stop recording
+            mediaRec.stop();
+            recordBtn.textContent = '🎙️';
+            recordBtn.classList.remove('recording');
+            return;
+          }
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const chunks = [];
+            mediaRec = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            mediaRec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+            mediaRec.onstop = () => {
+              stream.getTracks().forEach(t => t.stop());
+              const blob = new Blob(chunks, { type: 'audio/webm' });
+              if (blob.size > 5 * 1024 * 1024) { alert('Recording too long (max 5MB)'); return; }
+              const reader = new FileReader();
+              reader.onload = () => {
+                customCfg[hd.key] = { type: 'file', dataUrl: reader.result, name: '🎙️ Recorded' };
+                saveCustomCfg();
+                row.querySelector(`#customStatus_${hd.key}`).textContent = '🎙️ Recorded';
+                sel.value = '';
+              };
+              reader.readAsDataURL(blob);
+            };
+            mediaRec.start();
+            recordBtn.textContent = '⏹️';
+            recordBtn.classList.add('recording');
+          } catch (err) {
+            alert('Mic access denied');
+          }
+        });
+
+        // ── Preview ──
+        const previewBtn2 = row.querySelector(`#customPreview_${hd.key}`);
+        previewBtn2.addEventListener('click', () => {
+          const cfg = customCfg[hd.key];
+          if (!cfg) return;
+          if (cfg.type === 'file' && cfg.dataUrl) {
+            fx.sound.playAudioFile(cfg.dataUrl, 0.7);
+          } else if (cfg.type === 'stock' && cfg.packId) {
+            fx.previewEffect(cfg.packId, cfg.hook);
+          }
+        });
+
+        // ── Clear ──
+        const clearBtn = row.querySelector(`#customClear_${hd.key}`);
+        clearBtn.addEventListener('click', () => {
+          delete customCfg[hd.key];
+          saveCustomCfg();
+          sel.value = '';
+          row.querySelector(`#customStatus_${hd.key}`).textContent = '—  Not set';
+        });
+      }
     }
 
     // Preview button — plays all 5 hooks with proper timing
