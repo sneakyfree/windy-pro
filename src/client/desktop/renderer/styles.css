@@ -773,6 +773,15 @@ body {
   padding: 5px 0;
 }
 
+.sfx-interval-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0 2px 12px;
+  margin: -2px 0 2px;
+  border-left: 2px solid rgba(34, 197, 94, 0.2);
+}
+
 .sfx-hook-label {
   flex: 1 1 100px;
   font-size: 11px;

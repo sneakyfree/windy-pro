@@ -395,7 +395,11 @@ class SettingsPanel {
             <label for="sfxSurpriseCategory">Rotate From</label>
             <select id="sfxSurpriseCategory">
               <option value="all">🎲 All Packs</option>
-              <option value="favorites">⭐ Favorites Only</option>
+              <option value="epic">⚡ Epic</option>
+              <option value="gamer">🎮 Gamer</option>
+              <option value="cultural">🌍 Cultural</option>
+              <option value="utilitarian">🔔 Utilitarian</option>
+              <option value="favorites">⭐ Favorites</option>
             </select>
           </div>
 
@@ -415,6 +419,11 @@ class SettingsPanel {
               <input type="range" class="sfx-hook-vol" id="sfxVolDuring" min="0" max="100" value="30" title="Volume">
               <span class="sfx-hook-pct" id="sfxVolDuringPct">Vol: 30%</span>
             </div>
+            <div class="sfx-interval-row">
+              <span class="sfx-hook-label" style="font-size:9px;">⏱️ Beep every</span>
+              <input type="range" class="sfx-hook-vol" id="sfxIntervalDuring" min="1" max="300" value="5" style="flex:1;">
+              <span class="sfx-hook-pct" id="sfxIntervalDuringVal" style="min-width:32px;">5s</span>
+            </div>
             <p class="settings-hint sfx-during-hint" style="margin:-2px 0 4px 4px;font-size:10px;">🎧 Periodic beeps confirm recording is active — even hands-free. Speaker-only, never captured in your transcript.</p>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">⏹️ Stop Recording</span>
@@ -430,6 +439,19 @@ class SettingsPanel {
               <input type="range" class="sfx-hook-vol" id="sfxVolProcess" min="0" max="100" value="30" title="Volume">
               <span class="sfx-hook-pct" id="sfxVolProcessPct">Vol: 30%</span>
             </div>
+            <div class="sfx-interval-row">
+              <span class="sfx-hook-label" style="font-size:9px;">⏱️ Beep every</span>
+              <input type="range" class="sfx-hook-vol" id="sfxIntervalProcess" min="1" max="60" value="10" style="flex:1;">
+              <span class="sfx-hook-pct" id="sfxIntervalProcessVal" style="min-width:32px;">10s</span>
+            </div>
+            <div class="sfx-hook-row">
+              <span class="sfx-hook-label">⚠️ Warning (near limit)</span>
+              <span class="sfx-mute-label" id="sfxMuteWarning" title="Toggle mute">🔊</span>
+              <label class="sfx-toggle"><input type="checkbox" id="sfxHookWarning"><span class="sfx-toggle-slider"></span></label>
+              <input type="range" class="sfx-hook-vol" id="sfxVolWarning" min="0" max="100" value="80">
+              <span class="sfx-hook-pct" id="sfxVolWarningPct">Vol: 80%</span>
+            </div>
+            <p class="settings-hint sfx-during-hint" style="margin:-2px 0 4px 4px;font-size:9px;">⚠️ Warns 30s & 15s before recording time limit (free/lower tiers).</p>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">📋 Paste</span>
               <span class="sfx-mute-label" id="sfxMutePaste" title="Toggle mute">🔊</span>
@@ -1202,7 +1224,7 @@ class SettingsPanel {
     }
 
     // Hook point toggles + volume sliders + mute labels
-    const hookMap = { Start: 'start', During: 'during', Stop: 'stop', Process: 'process', Paste: 'paste' };
+    const hookMap = { Start: 'start', During: 'during', Stop: 'stop', Process: 'process', Warning: 'warning', Paste: 'paste' };
     for (const [label, hook] of Object.entries(hookMap)) {
       const toggle = this.panel.querySelector(`#sfxHook${label}`);
       const slider = this.panel.querySelector(`#sfxVol${label}`);
@@ -1239,6 +1261,35 @@ class SettingsPanel {
           if (pct) pct.textContent = 'Vol: ' + slider.value + '%';
         });
       }
+    }
+
+    // Interval sliders
+    const formatInterval = (s) => s >= 60 ? `${Math.floor(s / 60)}m${s % 60 ? s % 60 + 's' : ''}` : `${s}s`;
+
+    const duringInterval = this.panel.querySelector('#sfxIntervalDuring');
+    const duringIntervalVal = this.panel.querySelector('#sfxIntervalDuringVal');
+    if (duringInterval) {
+      const saved = parseInt(localStorage.getItem('windy_duringInterval') || '5', 10);
+      duringInterval.value = saved;
+      if (duringIntervalVal) duringIntervalVal.textContent = formatInterval(saved);
+      duringInterval.addEventListener('input', () => {
+        const v = parseInt(duringInterval.value, 10);
+        localStorage.setItem('windy_duringInterval', v);
+        if (duringIntervalVal) duringIntervalVal.textContent = formatInterval(v);
+      });
+    }
+
+    const processInterval = this.panel.querySelector('#sfxIntervalProcess');
+    const processIntervalVal = this.panel.querySelector('#sfxIntervalProcessVal');
+    if (processInterval) {
+      const saved = parseInt(localStorage.getItem('windy_processInterval') || '10', 10);
+      processInterval.value = saved;
+      if (processIntervalVal) processIntervalVal.textContent = formatInterval(saved);
+      processInterval.addEventListener('input', () => {
+        const v = parseInt(processInterval.value, 10);
+        localStorage.setItem('windy_processInterval', v);
+        if (processIntervalVal) processIntervalVal.textContent = formatInterval(v);
+      });
     }
 
     // Dynamic scaling

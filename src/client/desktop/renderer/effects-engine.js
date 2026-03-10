@@ -205,6 +205,7 @@ class EffectsEngine {
             during: { enabled: false, volume: 30 },
             stop: { enabled: false, volume: 70 },
             process: { enabled: false, volume: 30 },
+            warning: { enabled: false, volume: 80 },
             paste: { enabled: false, volume: 100 }
         };
 
@@ -274,6 +275,7 @@ class EffectsEngine {
                 during: { sound: { frequency: 660, duration: 0.04, type: 'sine', volume: 0.35 } },
                 stop: { sound: { frequency: 440, duration: 0.1, type: 'sine', volume: 0.6 } },
                 process: { sound: { frequency: 550, duration: 0.2, type: 'sine', volume: 0.6 } },
+                warning: { sound: [{ frequency: 800, duration: 0.12, type: 'sine', volume: 0.7 }, { frequency: 600, duration: 0.15, type: 'sine', volume: 0.7, delay: 0.15 }] },
                 paste: { sound: { sweep: { from: 600, to: 900 }, duration: 0.15, type: 'sine', volume: 0.6 } }
             }
         });

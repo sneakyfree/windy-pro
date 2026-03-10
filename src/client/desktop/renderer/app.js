@@ -694,6 +694,11 @@ class WindyApp {
   setState(state) {
     this.currentState = state;
 
+    // Stop processing beep loop when no longer processing
+    if (state !== 'buffering') {
+      try { clearInterval(this._processEffectInterval); } catch (_) { }
+    }
+
     // Remove all state classes
     this.stateIndicator.classList.remove('idle', 'listening', 'buffering', 'error', 'injecting');
 
@@ -1885,8 +1890,17 @@ class WindyApp {
 
         // Show processing state (batch modes only)
         this.setState('buffering');
-        // Strand I: trigger process effect
-        try { if (this.effectsEngine) this.effectsEngine.trigger('process'); } catch (_) { }
+        // Strand I: trigger process effect (first beep + repeating loop)
+        try {
+          if (this.effectsEngine) this.effectsEngine.trigger('process');
+          // Start repeating processing beep loop
+          clearInterval(this._processEffectInterval);
+          const processIntervalSec = parseInt(localStorage.getItem('windy_processInterval') || '10', 10);
+          const processIntervalMs = Math.max(1000, processIntervalSec * 1000);
+          this._processEffectInterval = setInterval(() => {
+            try { if (this.effectsEngine) this.effectsEngine.trigger('process'); } catch (_) { }
+          }, processIntervalMs);
+        } catch (_) { }
         this.transcriptContent.innerHTML = '<p class="batch-processing-indicator"><span class="processing-spinner"></span> Processing your recording...<br><span style="font-size:12px;color:#888;">This may take a moment for longer recordings</span></p>';
 
         // Notify tray
@@ -2524,8 +2538,15 @@ class WindyApp {
           if (this._apiAudioChunks.length > 0) {
             const audioBlob = new Blob(this._apiAudioChunks, { type: mimeType });
             this.setState('buffering');
-            // Strand I: trigger process effect
-            try { if (this.effectsEngine) this.effectsEngine.trigger('process'); } catch (_) { }
+            // Strand I: trigger process effect (first beep + repeating loop)
+            try {
+              if (this.effectsEngine) this.effectsEngine.trigger('process');
+              clearInterval(this._processEffectInterval);
+              const pSec = parseInt(localStorage.getItem('windy_processInterval') || '10', 10);
+              this._processEffectInterval = setInterval(() => {
+                try { if (this.effectsEngine) this.effectsEngine.trigger('process'); } catch (_) { }
+              }, Math.max(1000, pSec * 1000));
+            } catch (_) { }
             try {
               const text = await this._transcribeWithApi(engine, apiKey, audioBlob);
               if (text && text.trim()) {
@@ -2863,16 +2884,18 @@ class WindyApp {
       } catch (_) { }
       // Strand I: trigger start effect (pure observer, safe to fail)
       try { if (this.effectsEngine) this.effectsEngine.trigger('start'); } catch (_) { }
-      // Strand I: start "during" effect interval (triggers every 5s while recording)
+      // Strand I: start "during" effect interval (configurable, default 5s)
       try {
         clearInterval(this._duringEffectInterval);
+        const duringIntervalSec = parseInt(localStorage.getItem('windy_duringInterval') || '5', 10);
+        const duringIntervalMs = Math.max(1000, duringIntervalSec * 1000);
         this._duringEffectInterval = setInterval(() => {
           if (this.isRecording) {
             try { this.effectsEngine.trigger('during'); } catch (_) { }
           } else {
             clearInterval(this._duringEffectInterval);
           }
-        }, 5000);
+        }, duringIntervalMs);
       } catch (_) { }
       if (recordingMode === 'batch' || recordingMode === 'clone_capture') {
         this.startBatchRecording();
