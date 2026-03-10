@@ -885,132 +885,6 @@ body {
 }
 
 /* Library controls & grid */
-.sfx-master-controls {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 8px 10px;
-  margin-bottom: 6px;
-  background: rgba(34, 197, 94, 0.06);
-  border: 1px solid rgba(34, 197, 94, 0.15);
-  border-radius: 8px;
-}
-
-/* Collapsible library */
-.sfx-lib-details {
-  margin-bottom: 6px;
-}
-
-.sfx-lib-summary {
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 12px;
-  padding: 6px 0;
-  user-select: none;
-  list-style: none;
-}
-
-.sfx-lib-summary::before {
-  content: '▸ ';
-}
-
-.sfx-lib-details[open]>.sfx-lib-summary::before {
-  content: '▾ ';
-}
-
-/* Unified hook rows */
-.sfx-unified-hook-row {
-  background: rgba(100, 116, 139, 0.08);
-  border: 1px solid rgba(100, 116, 139, 0.12);
-  border-radius: 8px;
-  padding: 6px 8px;
-  margin-bottom: 5px;
-}
-
-.sfx-unified-hook-top {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.sfx-unified-hook-label {
-  font-weight: 600;
-  font-size: 11px;
-  white-space: nowrap;
-  min-width: 75px;
-}
-
-.sfx-unified-mute {
-  font-size: 14px;
-}
-
-.sfx-unified-select {
-  flex: 1;
-  font-size: 10px;
-  padding: 2px 4px;
-  border-radius: 4px;
-  background: rgba(30, 41, 59, 0.6);
-  color: #E2E8F0;
-  border: 1px solid rgba(100, 116, 139, 0.25);
-  min-width: 0;
-}
-
-.sfx-unified-hook-bottom {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sfx-unified-hook-bottom .sfx-hook-vol {
-  flex: 1;
-}
-
-.sfx-unified-hook-bottom .sfx-hook-pct {
-  min-width: 32px;
-  font-size: 10px;
-}
-
-.sfx-unified-hook-bottom .sfx-custom-btn {
-  width: 26px;
-  height: 22px;
-  font-size: 11px;
-  padding: 0;
-}
-
-/* Light mode overrides */
-@media (prefers-color-scheme: light) {
-  .sfx-unified-hook-row {
-    background: rgba(100, 116, 139, 0.05);
-    border-color: rgba(100, 116, 139, 0.15);
-  }
-
-  .sfx-unified-select {
-    background: #fff;
-    color: #1E293B;
-    border-color: #CBD5E1;
-  }
-
-  .sfx-lib-summary {
-    color: #1E293B;
-  }
-}
-
-body.light-mode .sfx-unified-hook-row {
-  background: rgba(100, 116, 139, 0.05);
-  border-color: rgba(100, 116, 139, 0.15);
-}
-
-body.light-mode .sfx-unified-select {
-  background: #fff;
-  color: #1E293B;
-  border-color: #CBD5E1;
-}
-
-body.light-mode .sfx-lib-summary {
-  color: #1E293B;
-}
-
 .sfx-library-controls {
   display: flex;
   gap: 6px;
@@ -1068,9 +942,8 @@ body.light-mode .sfx-lib-summary {
 }
 
 .sfx-lib-card-meta {
-  font-size: 10px;
-  color: #94A3B8;
-  font-weight: 500;
+  font-size: 9px;
+  color: #64748B;
 }
 
 .sfx-lib-card-actions {
@@ -4627,14 +4500,6 @@ body.light-theme .sfx-lib-card {
 body.light-theme .sfx-lib-name-input {
   color: #1E293B;
   border-bottom-color: rgba(0, 0, 0, 0.15);
-}
-
-body.light-theme .sfx-lib-card-meta {
-  color: #475569;
-}
-
-body.light-theme .sfx-lib-name-text {
-  color: #1E293B;
 }
 
 /* Light theme — Widget mode pills + custom library */

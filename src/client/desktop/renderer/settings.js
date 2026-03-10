@@ -404,27 +404,78 @@ class SettingsPanel {
             </select>
           </div>
 
-          <div id="sfxUnifiedSection" style="display:none;">
-            <div class="sfx-master-controls">
-              <span class="sfx-custom-hook-label">🔊 Master</span>
-              <button class="sfx-custom-btn" id="sfxMasterMute" title="Mute/Unmute All" style="width:auto;padding:0 6px;font-size:12px;">🔊</button>
-              <input type="range" class="sfx-hook-vol" id="sfxMasterVol" min="0" max="100" value="70" title="Master Volume">
-              <span class="sfx-hook-pct" id="sfxMasterVolPct">70%</span>
+          <div id="sfxCustomSection" style="display:none;">
+            <p class="settings-hint sfx-during-hint" style="margin:10px 0 6px;font-weight:700;font-size:12px;">── 📚 My Sound Library ──</p>
+            <p class="settings-hint sfx-during-hint" style="margin:0 0 6px;font-size:10px;">Upload or record sounds once — use them for any hook.</p>
+            <div class="sfx-library-controls">
+              <button class="sfx-custom-btn" id="sfxLibUpload" title="Upload audio file" style="width:auto;padding:0 8px;font-size:11px;">📂 Upload</button>
+              <button class="sfx-custom-btn sfx-custom-record" id="sfxLibRecord" title="Record with mic" style="width:auto;padding:0 8px;font-size:11px;">🎙️ Record</button>
+              <span class="sfx-hook-pct" id="sfxLibCount" style="margin-left:auto;">0 sounds</span>
             </div>
+            <div id="sfxLibRecStatus" style="display:none;padding:4px 8px;margin:4px 0;border-radius:6px;font-size:11px;"></div>
+            <div id="sfxLibGrid" class="sfx-library-grid"></div>
 
-            <details id="sfxLibDetails" class="sfx-lib-details">
-              <summary class="sfx-lib-summary">📚 My Sound Library <span class="sfx-hook-pct" id="sfxLibCount" style="margin-left:4px;">0 sounds</span></summary>
-              <p class="settings-hint sfx-during-hint" style="margin:4px 0 6px;font-size:10px;">Record or import sounds. Assign them in the dropdowns below.</p>
-              <div class="sfx-library-controls">
-                <button class="sfx-custom-btn sfx-custom-record" id="sfxLibRecord" title="Record with mic" style="width:auto;padding:0 8px;font-size:11px;">🎙️ Record</button>
-                <button class="sfx-custom-btn" id="sfxLibUpload" title="Import audio from disk" style="width:auto;padding:0 8px;font-size:11px;">📥 Import</button>
-              </div>
-              <div id="sfxLibRecStatus" style="display:none;padding:4px 8px;margin:4px 0;border-radius:6px;font-size:11px;"></div>
-              <div id="sfxLibGrid" class="sfx-library-grid"></div>
-            </details>
+            <p class="settings-hint sfx-during-hint" style="margin:10px 0 6px;font-weight:700;font-size:12px;">── 🎨 Assign to Hooks ──</p>
+            <p class="settings-hint sfx-during-hint" style="margin:0 0 8px;font-size:10px;">Pick a stock sound or one from your library for each hook.</p>
+            <div id="sfxCustomHooks"></div>
+          </div>
 
-            <p class="settings-hint sfx-during-hint" style="margin:8px 0 6px;font-weight:700;font-size:12px;">── 🎛️ Sound Hooks ──</p>
-            <div id="sfxUnifiedHooks"></div>
+          <div id="sfxHookSection" style="display:none;">
+            <p class="settings-hint" style="margin:10px 0 6px;font-weight:700;color:#E2E8F0;font-size:12px;">── 🔊 Sound Volume per Hook ──</p>
+            <div class="sfx-hook-row">
+              <span class="sfx-hook-label">🎬 Start Recording</span>
+              <span class="sfx-mute-label" id="sfxMuteStart" title="Toggle mute">🔊</span>
+              <label class="sfx-toggle"><input type="checkbox" id="sfxHookStart"><span class="sfx-toggle-slider"></span></label>
+              <input type="range" class="sfx-hook-vol" id="sfxVolStart" min="0" max="100" value="70" title="Volume">
+              <span class="sfx-hook-pct" id="sfxVolStartPct">Vol: 70%</span>
+            </div>
+            <div class="sfx-hook-row">
+              <span class="sfx-hook-label">🎤 During Recording</span>
+              <span class="sfx-mute-label" id="sfxMuteDuring" title="Toggle mute">🔊</span>
+              <label class="sfx-toggle"><input type="checkbox" id="sfxHookDuring"><span class="sfx-toggle-slider"></span></label>
+              <input type="range" class="sfx-hook-vol" id="sfxVolDuring" min="0" max="100" value="30" title="Volume">
+              <span class="sfx-hook-pct" id="sfxVolDuringPct">Vol: 30%</span>
+            </div>
+            <div class="sfx-interval-row">
+              <span class="sfx-hook-label" style="font-size:9px;">⏱️ Beep every</span>
+              <input type="range" class="sfx-hook-vol" id="sfxIntervalDuring" min="1" max="300" value="5" style="flex:1;">
+              <span class="sfx-hook-pct" id="sfxIntervalDuringVal" style="min-width:32px;">5s</span>
+            </div>
+            <p class="settings-hint sfx-during-hint" style="margin:-2px 0 4px 4px;font-size:10px;">🎧 Periodic beeps confirm recording is active — even hands-free. Speaker-only, never captured in your transcript.</p>
+            <div class="sfx-hook-row">
+              <span class="sfx-hook-label">⏹️ Stop Recording</span>
+              <span class="sfx-mute-label" id="sfxMuteStop" title="Toggle mute">🔊</span>
+              <label class="sfx-toggle"><input type="checkbox" id="sfxHookStop"><span class="sfx-toggle-slider"></span></label>
+              <input type="range" class="sfx-hook-vol" id="sfxVolStop" min="0" max="100" value="70" title="Volume">
+              <span class="sfx-hook-pct" id="sfxVolStopPct">Vol: 70%</span>
+            </div>
+            <div class="sfx-hook-row">
+              <span class="sfx-hook-label">⏳ Processing</span>
+              <span class="sfx-mute-label" id="sfxMuteProcess" title="Toggle mute">🔊</span>
+              <label class="sfx-toggle"><input type="checkbox" id="sfxHookProcess"><span class="sfx-toggle-slider"></span></label>
+              <input type="range" class="sfx-hook-vol" id="sfxVolProcess" min="0" max="100" value="30" title="Volume">
+              <span class="sfx-hook-pct" id="sfxVolProcessPct">Vol: 30%</span>
+            </div>
+            <div class="sfx-interval-row">
+              <span class="sfx-hook-label" style="font-size:9px;">⏱️ Beep every</span>
+              <input type="range" class="sfx-hook-vol" id="sfxIntervalProcess" min="1" max="60" value="10" style="flex:1;">
+              <span class="sfx-hook-pct" id="sfxIntervalProcessVal" style="min-width:32px;">10s</span>
+            </div>
+            <div class="sfx-hook-row">
+              <span class="sfx-hook-label">⚠️ Warning (near limit)</span>
+              <span class="sfx-mute-label" id="sfxMuteWarning" title="Toggle mute">🔊</span>
+              <label class="sfx-toggle"><input type="checkbox" id="sfxHookWarning"><span class="sfx-toggle-slider"></span></label>
+              <input type="range" class="sfx-hook-vol" id="sfxVolWarning" min="0" max="100" value="80">
+              <span class="sfx-hook-pct" id="sfxVolWarningPct">Vol: 80%</span>
+            </div>
+            <p class="settings-hint sfx-during-hint" style="margin:-2px 0 4px 4px;font-size:9px;">⚠️ Warns 30s & 15s before recording time limit (free/lower tiers).</p>
+            <div class="sfx-hook-row">
+              <span class="sfx-hook-label">📋 Paste</span>
+              <span class="sfx-mute-label" id="sfxMutePaste" title="Toggle mute">🔊</span>
+              <label class="sfx-toggle"><input type="checkbox" id="sfxHookPaste"><span class="sfx-toggle-slider"></span></label>
+              <input type="range" class="sfx-hook-vol" id="sfxVolPaste" min="0" max="100" value="100">
+              <span class="sfx-hook-pct" id="sfxVolPastePct">Vol: 100%</span>
+            </div>
 
             <div class="setting-row" style="margin-top:8px;">
               <label for="sfxDynamicScaling">Scale paste effects with length</label>
@@ -1116,14 +1167,17 @@ class SettingsPanel {
     const modePills = this.panel.querySelectorAll('.sfx-mode-pill');
     const packRow = this.panel.querySelector('#sfxPackRow');
     const surpriseRow = this.panel.querySelector('#sfxSurpriseRow');
-    const unifiedSection = this.panel.querySelector('#sfxUnifiedSection');
+    const hookSection = this.panel.querySelector('#sfxHookSection');
     const previewRow = this.panel.querySelector('#sfxPreviewRow');
+
+    const customSection = this.panel.querySelector('#sfxCustomSection');
 
     const updateModeUI = (mode) => {
       modePills.forEach(p => p.classList.toggle('active', p.dataset.mode === mode));
       if (packRow) packRow.style.display = mode === 'single' ? 'flex' : 'none';
       if (surpriseRow) surpriseRow.style.display = mode === 'surprise' ? 'flex' : 'none';
-      if (unifiedSection) unifiedSection.style.display = mode === 'silent' ? 'none' : '';
+      if (customSection) customSection.style.display = mode === 'custom' ? '' : 'none';
+      if (hookSection) hookSection.style.display = (mode === 'silent' || mode === 'default') ? 'none' : '';
       if (previewRow) previewRow.style.display = mode === 'silent' ? 'none' : '';
     };
 
@@ -1134,44 +1188,6 @@ class SettingsPanel {
         updateModeUI(mode);
       });
     });
-    // ═══ Master Volume + Mute All ═══
-    const masterVolSlider = this.panel.querySelector('#sfxMasterVol');
-    const masterVolPct = this.panel.querySelector('#sfxMasterVolPct');
-    const masterMuteBtn = this.panel.querySelector('#sfxMasterMute');
-    let _lastMasterVol = parseInt(localStorage.getItem('windy_sfxVolume') || '70', 10);
-    if (masterVolSlider && fx) {
-      masterVolSlider.value = _lastMasterVol;
-      if (masterVolPct) masterVolPct.textContent = `${_lastMasterVol}%`;
-      if (masterMuteBtn) masterMuteBtn.textContent = _lastMasterVol === 0 ? '🔇' : '🔊';
-      masterVolSlider.addEventListener('input', () => {
-        const v = parseInt(masterVolSlider.value, 10);
-        _lastMasterVol = v;
-        fx.sound.setMasterVolume(v / 100);
-        localStorage.setItem('windy_sfxVolume', String(v));
-        if (masterVolPct) masterVolPct.textContent = `${v}%`;
-        if (masterMuteBtn) masterMuteBtn.textContent = v === 0 ? '🔇' : '🔊';
-      });
-    }
-    if (masterMuteBtn && fx) {
-      masterMuteBtn.addEventListener('click', () => {
-        const current = parseInt(masterVolSlider?.value || '70', 10);
-        if (current > 0) {
-          _lastMasterVol = current;
-          masterVolSlider.value = 0;
-          fx.sound.setMasterVolume(0);
-          localStorage.setItem('windy_sfxVolume', '0');
-          if (masterVolPct) masterVolPct.textContent = '0%';
-          masterMuteBtn.textContent = '🔇';
-        } else {
-          const restore = _lastMasterVol || 70;
-          masterVolSlider.value = restore;
-          fx.sound.setMasterVolume(restore / 100);
-          localStorage.setItem('windy_sfxVolume', String(restore));
-          if (masterVolPct) masterVolPct.textContent = `${restore}%`;
-          masterMuteBtn.textContent = '🔊';
-        }
-      });
-    }
 
     // Pack selector
     const packSelect = this.panel.querySelector('#sfxPackSelect');
@@ -1187,12 +1203,12 @@ class SettingsPanel {
       });
     }
 
-    // ═══ Unified Sound Hooks + Shared Library ═══
-    const unifiedHooksContainer = this.panel.querySelector('#sfxUnifiedHooks');
+    // ═══ Shared Sound Library + Custom Hook Builder ═══
+    const customHooksContainer = this.panel.querySelector('#sfxCustomHooks');
     const libGrid = this.panel.querySelector('#sfxLibGrid');
     const libCountEl = this.panel.querySelector('#sfxLibCount');
     const libRecStatus = this.panel.querySelector('#sfxLibRecStatus');
-    if (unifiedHooksContainer && fx) {
+    if (customHooksContainer && fx) {
       // ── Shared Library ──
       let soundLibrary = [];
       try { soundLibrary = JSON.parse(localStorage.getItem('windy_soundLibrary') || '[]'); } catch (_) { }
@@ -1204,15 +1220,15 @@ class SettingsPanel {
       const saveCustomCfg = () => localStorage.setItem('windy_customSounds', JSON.stringify(customCfg));
 
       const hookDefs = [
-        { key: 'start', label: '🎬 Start', uiKey: 'Start', defVol: 70 },
-        { key: 'during', label: '🎤 During', uiKey: 'During', defVol: 30, hasInterval: true, intKey: 'windy_duringInterval', intMin: 1, intMax: 300, intDef: 5, hint: '🎧 Periodic beeps confirm recording is active. Speaker-only.' },
-        { key: 'stop', label: '⏹️ Stop', uiKey: 'Stop', defVol: 70 },
-        { key: 'process', label: '⏳ Processing', uiKey: 'Process', defVol: 30, hasInterval: true, intKey: 'windy_processInterval', intMin: 1, intMax: 60, intDef: 10 },
-        { key: 'warning', label: '⚠️ Warning', uiKey: 'Warning', defVol: 80, hint: '⚠️ Warns 30s & 15s before time limit.' },
-        { key: 'paste', label: '📋 Paste', uiKey: 'Paste', defVol: 100 }
+        { key: 'start', label: '🎬 Start Recording' },
+        { key: 'during', label: '🎤 During Recording' },
+        { key: 'stop', label: '⏹️ Stop Recording' },
+        { key: 'process', label: '⏳ Processing' },
+        { key: 'warning', label: '⚠️ Warning (limit)' },
+        { key: 'paste', label: '📋 Paste' }
       ];
 
-      // Stock sound options from all packs
+      // Stock sound options
       const allPacks = fx.getPackList().filter(p => p.id !== '_silent');
       const stockOptions = [];
       for (const pack of allPacks) {
@@ -1229,20 +1245,18 @@ class SettingsPanel {
         if (!libGrid) return;
         libGrid.innerHTML = '';
         if (soundLibrary.length === 0) {
-          libGrid.innerHTML = '<p style="font-size:10px;color:#64748B;text-align:center;padding:8px;">No sounds yet. Record or import to start!</p>';
+          libGrid.innerHTML = '<p style="font-size:10px;color:#64748B;text-align:center;padding:8px;">No sounds yet. Upload or record to get started!</p>';
           return;
         }
         for (const item of soundLibrary) {
           const card = document.createElement('div');
           card.className = 'sfx-lib-card';
           const sizeKb = item.size ? `${Math.round(item.size / 1024)}KB` : '';
-          const durText = item.duration ? `${item.duration}s` : '';
-          const metaParts = [durText, sizeKb, item.timestamp || ''].filter(Boolean).join(' · ');
           card.innerHTML = `
             <div class="sfx-lib-card-top">
               <span class="sfx-lib-name-text">${item.name || 'Untitled'}</span>
               <button class="sfx-custom-btn sfx-lib-rename" title="Rename" style="width:22px;height:22px;font-size:10px;">✏️</button>
-              <span class="sfx-lib-card-meta" style="margin-left:auto;">${metaParts}</span>
+              <span class="sfx-lib-card-meta" style="margin-left:auto;">${sizeKb} · ${item.timestamp || ''}</span>
             </div>
             <input class="sfx-lib-name-input" type="text" value="${(item.name || '').replace(/"/g, '&quot;')}" style="display:none;" />
             <div class="sfx-lib-card-actions">
@@ -1251,77 +1265,149 @@ class SettingsPanel {
             </div>
           `;
           libGrid.appendChild(card);
+
+          // Rename
           const nameText = card.querySelector('.sfx-lib-name-text');
           const nameInput = card.querySelector('.sfx-lib-name-input');
           const renameBtn = card.querySelector('.sfx-lib-rename');
-          renameBtn.addEventListener('click', () => { nameInput.style.display = ''; nameText.style.display = 'none'; renameBtn.style.display = 'none'; nameInput.focus(); nameInput.select(); });
-          const finishRename = () => { const n = nameInput.value.trim(); if (n) { item.name = n; nameText.textContent = n; saveLibrary(); refreshHookDropdowns(); } nameInput.style.display = 'none'; nameText.style.display = ''; renameBtn.style.display = ''; };
+          renameBtn.addEventListener('click', () => {
+            nameInput.style.display = '';
+            nameText.style.display = 'none';
+            renameBtn.style.display = 'none';
+            nameInput.focus();
+            nameInput.select();
+          });
+          const finishRename = () => {
+            const newName = nameInput.value.trim();
+            if (newName) {
+              item.name = newName;
+              nameText.textContent = newName;
+              saveLibrary();
+              refreshHookDropdowns();
+            }
+            nameInput.style.display = 'none';
+            nameText.style.display = '';
+            renameBtn.style.display = '';
+          };
           nameInput.addEventListener('blur', finishRename);
           nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') finishRename(); });
-          card.querySelector('.sfx-lib-play').addEventListener('click', () => { fx.sound.playAudioFile(item.dataUrl, 0.7); });
-          card.querySelector('.sfx-lib-del').addEventListener('click', () => { soundLibrary = soundLibrary.filter(s => s.id !== item.id); saveLibrary(); renderLibrary(); refreshHookDropdowns(); });
+
+          // Preview
+          card.querySelector('.sfx-lib-play').addEventListener('click', () => {
+            fx.sound.playAudioFile(item.dataUrl, 0.7);
+          });
+
+          // Delete
+          card.querySelector('.sfx-lib-del').addEventListener('click', () => {
+            soundLibrary = soundLibrary.filter(s => s.id !== item.id);
+            saveLibrary();
+            renderLibrary();
+            refreshHookDropdowns();
+          });
         }
       };
 
-      const addToLibrary = (dataUrl, name, size, duration) => {
+      // ── Add to library helper ──
+      const addToLibrary = (dataUrl, name, size) => {
         const now = new Date();
         const ts = now.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        soundLibrary.push({ id: `snd_${Date.now()}`, name: name || `Recording ${ts}`, dataUrl, timestamp: ts, size: size || 0, duration: duration || 0 });
-        saveLibrary(); renderLibrary(); refreshHookDropdowns();
+        const id = `snd_${Date.now()}`;
+        soundLibrary.push({ id, name: name || `Recording ${ts}`, dataUrl, timestamp: ts, size: size || 0 });
+        saveLibrary();
+        renderLibrary();
+        refreshHookDropdowns();
+        return id;
       };
 
       // ── Library Upload ──
       const libUploadBtn = this.panel.querySelector('#sfxLibUpload');
       if (libUploadBtn) {
         libUploadBtn.addEventListener('click', () => {
-          const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/x-m4a,.mp3,.wav,.ogg,.m4a'; inp.multiple = true;
-          inp.addEventListener('change', () => { for (const f of (inp.files || [])) { if (f.size > 5 * 1024 * 1024) { alert(`${f.name}: Max 5MB`); continue; } const r = new FileReader(); r.onload = () => addToLibrary(r.result, f.name, f.size); r.readAsDataURL(f); } });
+          const inp = document.createElement('input');
+          inp.type = 'file';
+          inp.accept = 'audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/x-m4a,.mp3,.wav,.ogg,.m4a';
+          inp.multiple = true;
+          inp.addEventListener('change', () => {
+            for (const file of (inp.files || [])) {
+              if (file.size > 5 * 1024 * 1024) { alert(`${file.name}: Max 5MB`); continue; }
+              const reader = new FileReader();
+              reader.onload = () => addToLibrary(reader.result, file.name, file.size);
+              reader.readAsDataURL(file);
+            }
+          });
           inp.click();
         });
       }
 
       // ── Library Record ──
       const libRecordBtn = this.panel.querySelector('#sfxLibRecord');
-      let libMediaRec = null, libRecTimer = null, libRecSecs = 0;
+      let libMediaRec = null;
+      let libRecTimer = null;
       if (libRecordBtn) {
         libRecordBtn.addEventListener('click', async () => {
-          if (libMediaRec && libMediaRec.state === 'recording') { libMediaRec.stop(); libRecordBtn.textContent = '🎙️ Record'; libRecordBtn.classList.remove('recording'); clearInterval(libRecTimer); if (libRecStatus) libRecStatus.style.display = 'none'; return; }
+          if (libMediaRec && libMediaRec.state === 'recording') {
+            libMediaRec.stop();
+            libRecordBtn.textContent = '🎙️ Record';
+            libRecordBtn.classList.remove('recording');
+            clearInterval(libRecTimer);
+            if (libRecStatus) { libRecStatus.style.display = 'none'; }
+            return;
+          }
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const chunks = []; libRecSecs = 0;
+            const chunks = [];
             libMediaRec = new MediaRecorder(stream, { mimeType: 'audio/webm' });
             libMediaRec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
             libMediaRec.onstop = () => {
-              stream.getTracks().forEach(t => t.stop()); clearInterval(libRecTimer);
-              if (libRecStatus) libRecStatus.style.display = 'none';
+              stream.getTracks().forEach(t => t.stop());
+              clearInterval(libRecTimer);
+              if (libRecStatus) { libRecStatus.style.display = 'none'; }
               const blob = new Blob(chunks, { type: 'audio/webm' });
               if (blob.size > 5 * 1024 * 1024) { alert('Recording too long (max 5MB)'); return; }
-              const r = new FileReader(); r.onload = () => addToLibrary(r.result, null, blob.size, libRecSecs); r.readAsDataURL(blob);
+              const reader = new FileReader();
+              reader.onload = () => addToLibrary(reader.result, null, blob.size);
+              reader.readAsDataURL(blob);
             };
-            libMediaRec.start(); libRecordBtn.textContent = '⏹ Stop'; libRecordBtn.classList.add('recording');
-            if (libRecStatus) { libRecStatus.style.display = ''; libRecStatus.style.background = 'rgba(34,197,94,0.12)'; libRecStatus.style.color = '#22C55E'; libRecStatus.textContent = '🟢 Recording... 0s'; }
-            libRecTimer = setInterval(() => { libRecSecs++; if (libRecStatus) libRecStatus.textContent = `🟢 Recording... ${libRecSecs}s`; }, 1000);
+            libMediaRec.start();
+            libRecordBtn.textContent = '⏹ Stop';
+            libRecordBtn.classList.add('recording');
+            let secs = 0;
+            if (libRecStatus) {
+              libRecStatus.style.display = '';
+              libRecStatus.style.background = 'rgba(34,197,94,0.12)';
+              libRecStatus.style.color = '#22C55E';
+              libRecStatus.textContent = '🟢 Recording... 0s';
+            }
+            libRecTimer = setInterval(() => {
+              secs++;
+              if (libRecStatus) libRecStatus.textContent = `🟢 Recording... ${secs}s`;
+            }, 1000);
           } catch (_) { alert('Mic access denied'); }
         });
       }
 
-      // ── Build unified hook rows ──
+      // ── Per-hook dropdowns (stock + library) ──
       const hookSelectEls = {};
-      const formatInterval = (s) => s >= 60 ? `${Math.floor(s / 60)}m${s % 60 ? s % 60 + 's' : ''}` : `${s}s`;
 
       const buildHookOptions = () => {
         let libOpts = '';
         if (soundLibrary.length > 0) {
-          libOpts = `<optgroup label="📚 My Library">` + soundLibrary.map(s => `<option value="lib|${s.id}">${s.name}</option>`).join('') + `</optgroup>`;
+          libOpts = `<optgroup label="📚 My Library">` +
+            soundLibrary.map(s => `<option value="lib|${s.id}">${s.name}</option>`).join('') +
+            `</optgroup>`;
         }
-        const stockOpts = `<optgroup label="🔊 Stock Sounds">` + stockOptions.map(s => `<option value="stock|${s.packId}|${s.hook}">${s.label}</option>`).join('') + `</optgroup>`;
-        return `<option value="">— Use Pack Default —</option>` + libOpts + stockOpts;
+        const stockOpts = `<optgroup label="🔊 Stock Sounds">` +
+          stockOptions.map(s => `<option value="stock|${s.packId}|${s.hook}">${s.label}</option>`).join('') +
+          `</optgroup>`;
+        return `<option value="">— Not set —</option>` + libOpts + stockOpts;
       };
 
       const refreshHookDropdowns = () => {
         const options = buildHookOptions();
         for (const [hook, sel] of Object.entries(hookSelectEls)) {
+          const cur = sel.value;
           sel.innerHTML = options;
+          // Restore selection
           const cfg = customCfg[hook];
           if (cfg?.type === 'library') sel.value = `lib|${cfg.libId}`;
           else if (cfg?.type === 'stock') sel.value = `stock|${cfg.packId}|${cfg.hook}`;
@@ -1329,124 +1415,106 @@ class SettingsPanel {
         }
       };
 
+      // Build per-hook UI rows
       for (const hd of hookDefs) {
         const row = document.createElement('div');
-        row.className = 'sfx-unified-hook-row';
-
-        const enabled = fx._hookPoints[hd.key]?.enabled ?? true;
-        const vol = fx._hookPoints[hd.key]?.volume ?? hd.defVol;
+        row.className = 'sfx-custom-hook-row';
         const current = customCfg[hd.key];
+        let statusText = '— Not set';
+        if (current?.type === 'library') {
+          const lib = soundLibrary.find(s => s.id === current.libId);
+          statusText = `📚 ${lib?.name || 'Library sound'}`;
+        } else if (current?.type === 'stock') {
+          statusText = `🔊 ${current.label || 'Stock sound'}`;
+        }
 
         row.innerHTML = `
-          <div class="sfx-unified-hook-top">
-            <span class="sfx-unified-hook-label">${hd.label}</span>
-            <span class="sfx-unified-mute" id="uniMute_${hd.key}" title="Toggle mute" style="cursor:pointer;">${enabled ? '🔊' : '🔇'}</span>
-            <select class="sfx-custom-select sfx-unified-select" id="uniSelect_${hd.key}">
+          <div class="sfx-custom-hook-header">
+            <span class="sfx-custom-hook-label">${hd.label}</span>
+            <span class="sfx-custom-hook-status" id="customStatus_${hd.key}">${statusText}</span>
+          </div>
+          <div class="sfx-custom-hook-controls">
+            <select class="sfx-custom-select" id="customSelect_${hd.key}">
               ${buildHookOptions()}
             </select>
-          </div>
-          <div class="sfx-unified-hook-bottom">
-            <input type="range" class="sfx-hook-vol" id="uniVol_${hd.key}" min="0" max="100" value="${vol}">
-            <span class="sfx-hook-pct" id="uniVolPct_${hd.key}">${vol}%</span>
-            <button class="sfx-custom-btn" id="uniPreview_${hd.key}" title="Preview">▶</button>
+            <button class="sfx-custom-btn" id="customPreview_${hd.key}" title="Preview">▶</button>
           </div>
         `;
-        unifiedHooksContainer.appendChild(row);
+        customHooksContainer.appendChild(row);
 
-        // Sound selector
-        const sel = row.querySelector(`#uniSelect_${hd.key}`);
+        const sel = row.querySelector(`#customSelect_${hd.key}`);
         hookSelectEls[hd.key] = sel;
+
+        // Restore selection
         if (current?.type === 'library') sel.value = `lib|${current.libId}`;
         else if (current?.type === 'stock') sel.value = `stock|${current.packId}|${current.hook}`;
+
+        // Change handler
         sel.addEventListener('change', () => {
-          if (!sel.value) { delete customCfg[hd.key]; saveCustomCfg(); return; }
+          const statusSpan = row.querySelector(`#customStatus_${hd.key}`);
+          if (!sel.value) {
+            delete customCfg[hd.key];
+            saveCustomCfg();
+            if (statusSpan) statusSpan.textContent = '— Not set';
+            return;
+          }
           const parts = sel.value.split('|');
-          if (parts[0] === 'lib') { const lib = soundLibrary.find(s => s.id === parts[1]); customCfg[hd.key] = { type: 'library', libId: parts[1], name: lib?.name }; }
-          else if (parts[0] === 'stock') { const opt = stockOptions.find(s => s.packId === parts[1] && s.hook === parts[2]); customCfg[hd.key] = { type: 'stock', packId: parts[1], hook: parts[2], label: opt?.label }; }
+          if (parts[0] === 'lib') {
+            const lib = soundLibrary.find(s => s.id === parts[1]);
+            customCfg[hd.key] = { type: 'library', libId: parts[1], name: lib?.name };
+            if (statusSpan) statusSpan.textContent = `📚 ${lib?.name || 'Library sound'}`;
+          } else if (parts[0] === 'stock') {
+            const opt = stockOptions.find(s => s.packId === parts[1] && s.hook === parts[2]);
+            customCfg[hd.key] = { type: 'stock', packId: parts[1], hook: parts[2], label: opt?.label };
+            if (statusSpan) statusSpan.textContent = `🔊 ${opt?.label || 'Stock sound'}`;
+          }
           saveCustomCfg();
         });
 
-        // Volume
-        const slider = row.querySelector(`#uniVol_${hd.key}`);
-        const pct = row.querySelector(`#uniVolPct_${hd.key}`);
-        slider.addEventListener('input', () => { fx.setHookVolume(hd.key, parseInt(slider.value, 10)); pct.textContent = slider.value + '%'; });
-
-        // Mute toggle
-        const muteEl = row.querySelector(`#uniMute_${hd.key}`);
-        let hookEnabled = enabled;
-        muteEl.addEventListener('click', () => { hookEnabled = !hookEnabled; fx.setHookEnabled(hd.key, hookEnabled); muteEl.textContent = hookEnabled ? '🔊' : '🔇'; });
-
         // Preview
-        row.querySelector(`#uniPreview_${hd.key}`).addEventListener('click', () => {
+        row.querySelector(`#customPreview_${hd.key}`).addEventListener('click', () => {
           const cfg = customCfg[hd.key];
-          if (cfg?.type === 'library') { const lib = soundLibrary.find(s => s.id === cfg.libId); if (lib?.dataUrl) fx.sound.playAudioFile(lib.dataUrl, 0.7); }
-          else if (cfg?.type === 'stock') { fx.previewEffect(cfg.packId, cfg.hook); }
-          else { fx.trigger(hd.key); }
+          if (!cfg) return;
+          if (cfg.type === 'library') {
+            const lib = soundLibrary.find(s => s.id === cfg.libId);
+            if (lib?.dataUrl) fx.sound.playAudioFile(lib.dataUrl, 0.7);
+          } else if (cfg.type === 'stock' && cfg.packId) {
+            fx.previewEffect(cfg.packId, cfg.hook);
+          }
         });
-
-        // Interval sub-row (during / process)
-        if (hd.hasInterval) {
-          const intRow = document.createElement('div');
-          intRow.className = 'sfx-interval-row';
-          const savedInt = parseInt(localStorage.getItem(hd.intKey) || String(hd.intDef), 10);
-          intRow.innerHTML = `<span class="sfx-hook-label" style="font-size:9px;">⏱️ Beep every</span><input type="range" class="sfx-hook-vol" min="${hd.intMin}" max="${hd.intMax}" value="${savedInt}" style="flex:1;"><span class="sfx-hook-pct" style="min-width:32px;">${formatInterval(savedInt)}</span>`;
-          unifiedHooksContainer.appendChild(intRow);
-          const intSlider = intRow.querySelector('input[type=range]');
-          const intLabel = intRow.querySelector('.sfx-hook-pct');
-          intSlider.addEventListener('input', () => { const v = parseInt(intSlider.value, 10); localStorage.setItem(hd.intKey, v); intLabel.textContent = formatInterval(v); });
-        }
-
-        // Hint text
-        if (hd.hint) {
-          const hint = document.createElement('p');
-          hint.className = 'settings-hint sfx-during-hint';
-          hint.style.cssText = 'margin:-2px 0 4px 4px;font-size:9px;';
-          hint.textContent = hd.hint;
-          unifiedHooksContainer.appendChild(hint);
-        }
       }
 
+      // Initial render
       renderLibrary();
     }
 
-
-
-
-    // Preview button — plays all 6 hooks with proper timing
+    // Preview button — plays all 5 hooks with proper timing
     const previewBtn = this.panel.querySelector('#sfxPreviewBtn');
     if (previewBtn && fx) {
       previewBtn.addEventListener('click', () => {
         const currentMode = fx._mode;
+        let pid;
+        if (currentMode === 'default') {
+          pid = 'classic-beep';
+        } else if (currentMode === 'single') {
+          pid = packSelect?.value || 'classic-beep';
+        } else if (currentMode === 'surprise') {
+          pid = fx._getNextSurprisePack()?.id || 'classic-beep';
+        } else {
+          pid = 'classic-beep';
+        }
+        // Play all 5 hooks: start → during → stop → processing → paste
         previewBtn.textContent = '🔊 Playing...';
         previewBtn.disabled = true;
-
-        if (currentMode === 'custom') {
-          // In custom mode, use trigger() which respects assigned hooks
-          // 3s spacing so each custom sound has time to play
-          fx.trigger('start');
-          setTimeout(() => fx.trigger('during'), 3000);
-          setTimeout(() => fx.trigger('stop'), 6000);
-          setTimeout(() => fx.trigger('process'), 9000);
-          setTimeout(() => fx.trigger('warning'), 12000);
-          setTimeout(() => fx.trigger('paste', { wordCount: 50 }), 15000);
-        } else {
-          let pid;
-          if (currentMode === 'default') pid = 'classic-beep';
-          else if (currentMode === 'single') pid = packSelect?.value || 'classic-beep';
-          else if (currentMode === 'surprise') pid = fx._getNextSurprisePack()?.id || 'classic-beep';
-          else pid = 'classic-beep';
-          fx.previewEffect(pid, 'start');
-          setTimeout(() => fx.previewEffect(pid, 'during'), 800);
-          setTimeout(() => fx.previewEffect(pid, 'stop'), 1600);
-          setTimeout(() => fx.previewEffect(pid, 'process'), 2400);
-          setTimeout(() => fx.previewEffect(pid, 'warning'), 3200);
-          setTimeout(() => fx.previewEffect(pid, 'paste'), 4000);
-        }
-        const totalMs = currentMode === 'custom' ? 18000 : 5000;
+        fx.previewEffect(pid, 'start');
+        setTimeout(() => fx.previewEffect(pid, 'during'), 600);
+        setTimeout(() => fx.previewEffect(pid, 'stop'), 1200);
+        setTimeout(() => fx.previewEffect(pid, 'process'), 1800);
+        setTimeout(() => fx.previewEffect(pid, 'paste'), 2400);
         setTimeout(() => {
           previewBtn.textContent = '▶ Preview Sounds';
           previewBtn.disabled = false;
-        }, totalMs);
+        }, 3200);
       });
     }
 
@@ -1460,8 +1528,74 @@ class SettingsPanel {
       });
     }
 
+    // Hook point toggles + volume sliders + mute labels
+    const hookMap = { Start: 'start', During: 'during', Stop: 'stop', Process: 'process', Warning: 'warning', Paste: 'paste' };
+    for (const [label, hook] of Object.entries(hookMap)) {
+      const toggle = this.panel.querySelector(`#sfxHook${label}`);
+      const slider = this.panel.querySelector(`#sfxVol${label}`);
+      const pct = this.panel.querySelector(`#sfxVol${label}Pct`);
+      const muteLabel = this.panel.querySelector(`#sfxMute${label}`);
 
+      const updateMuteLabel = (enabled) => {
+        if (muteLabel) muteLabel.textContent = enabled ? '🔊' : '🔇';
+      };
 
+      if (toggle && fx) {
+        toggle.checked = fx._hookPoints[hook]?.enabled || false;
+        updateMuteLabel(toggle.checked);
+        toggle.addEventListener('change', () => {
+          fx.setHookEnabled(hook, toggle.checked);
+          updateMuteLabel(toggle.checked);
+        });
+      }
+
+      // Click mute label to toggle
+      if (muteLabel && toggle) {
+        muteLabel.style.cursor = 'pointer';
+        muteLabel.addEventListener('click', () => {
+          toggle.checked = !toggle.checked;
+          toggle.dispatchEvent(new Event('change'));
+        });
+      }
+
+      if (slider && fx) {
+        slider.value = fx._hookPoints[hook]?.volume || 70;
+        if (pct) pct.textContent = 'Vol: ' + slider.value + '%';
+        slider.addEventListener('input', () => {
+          fx.setHookVolume(hook, parseInt(slider.value, 10));
+          if (pct) pct.textContent = 'Vol: ' + slider.value + '%';
+        });
+      }
+    }
+
+    // Interval sliders
+    const formatInterval = (s) => s >= 60 ? `${Math.floor(s / 60)}m${s % 60 ? s % 60 + 's' : ''}` : `${s}s`;
+
+    const duringInterval = this.panel.querySelector('#sfxIntervalDuring');
+    const duringIntervalVal = this.panel.querySelector('#sfxIntervalDuringVal');
+    if (duringInterval) {
+      const saved = parseInt(localStorage.getItem('windy_duringInterval') || '5', 10);
+      duringInterval.value = saved;
+      if (duringIntervalVal) duringIntervalVal.textContent = formatInterval(saved);
+      duringInterval.addEventListener('input', () => {
+        const v = parseInt(duringInterval.value, 10);
+        localStorage.setItem('windy_duringInterval', v);
+        if (duringIntervalVal) duringIntervalVal.textContent = formatInterval(v);
+      });
+    }
+
+    const processInterval = this.panel.querySelector('#sfxIntervalProcess');
+    const processIntervalVal = this.panel.querySelector('#sfxIntervalProcessVal');
+    if (processInterval) {
+      const saved = parseInt(localStorage.getItem('windy_processInterval') || '10', 10);
+      processInterval.value = saved;
+      if (processIntervalVal) processIntervalVal.textContent = formatInterval(saved);
+      processInterval.addEventListener('input', () => {
+        const v = parseInt(processInterval.value, 10);
+        localStorage.setItem('windy_processInterval', v);
+        if (processIntervalVal) processIntervalVal.textContent = formatInterval(v);
+      });
+    }
 
     // Dynamic scaling
     const dynScale = this.panel.querySelector('#sfxDynamicScaling');
