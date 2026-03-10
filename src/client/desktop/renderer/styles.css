@@ -731,21 +731,23 @@ body {
 
 /* ═══ Theme Packs & Effects UI ═══ */
 .sfx-mode-pills {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
   flex: 1;
 }
 
 .sfx-mode-pill {
-  flex: 1;
-  padding: 4px 6px;
+  padding: 5px 4px;
   border: 1px solid var(--border-color, #2d3748);
   border-radius: 6px;
   background: transparent;
   color: var(--text-secondary, #94A3B8);
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
   transition: all 0.15s;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .sfx-mode-pill:hover {
@@ -762,19 +764,21 @@ body {
 
 .sfx-hook-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0;
+  gap: 4px;
+  padding: 5px 0;
 }
 
 .sfx-hook-label {
-  flex: 0 0 140px;
-  font-size: 12px;
+  flex: 1 1 100px;
+  font-size: 11px;
   color: var(--text-secondary, #94A3B8);
 }
 
 .sfx-hook-vol {
-  flex: 1;
+  flex: 1 1 50px;
+  max-width: 60px;
   height: 4px;
   -webkit-appearance: none;
   appearance: none;
