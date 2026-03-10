@@ -1277,7 +1277,7 @@ class SettingsPanel {
         const now = new Date();
         const ts = now.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         const id = `snd_${Date.now()}`;
-        soundLibrary.push({ id, name: name || `Recording ${ts}`, dataUrl, timestamp: ts, size: size || 0, duration: duration || 0, starred: true });
+        soundLibrary.unshift({ id, name: name || `Recording ${ts}`, dataUrl, timestamp: ts, size: size || 0, duration: duration || 0, starred: true });
         saveLibrary();
         renderLibrary();
         refreshHookDropdowns();

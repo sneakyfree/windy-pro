@@ -494,7 +494,7 @@ function createWindow() {
           "font-src 'self' https://fonts.gstatic.com; " +
           "connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.deepgram.com https://api.groq.com https://api.openai.com wss://api.deepgram.com; " +
           "img-src 'self' data:; " +
-          "media-src 'self' blob:;"
+          "media-src 'self' blob: data:;"
         ]
       }
     });
