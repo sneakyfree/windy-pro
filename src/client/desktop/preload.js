@@ -104,6 +104,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   installDebUpdate: () => ipcRenderer.invoke('install-deb-update'),
   updateTornadoSize: (size) => ipcRenderer.send('update-tornado-size', size),
+  updateWidget: (data) => ipcRenderer.send('update-widget', data),
   getArchiveHistory: () => ipcRenderer.invoke('get-archive-history'),
   deleteArchiveEntry: (filePath) => ipcRenderer.invoke('delete-archive-entry', filePath),
   getArchiveStats: () => ipcRenderer.invoke('get-archive-stats'),

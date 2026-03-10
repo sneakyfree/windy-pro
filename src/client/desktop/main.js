@@ -723,6 +723,12 @@ function showMiniWidget() {
     if (miniWindow && !miniWindow.isDestroyed()) {
       miniWindow.webContents.send('mini-resize', tornadoSize);
 
+      // Send saved widget data so the floating widget shows the correct icon
+      const widgetData = store.get('widgetData');
+      if (widgetData) {
+        miniWindow.webContents.send('mini-widget-change', widgetData);
+      }
+
       // Linux: can't do transparent, so round it visually with CSS border-radius
       // (setShape breaks mouse events). The dark bg is styled in mini-widget.html.
     }
@@ -779,6 +785,15 @@ ipcMain.on('update-tornado-size', (event, size) => {
     if (miniWindow.webContents && !miniWindow.webContents.isDestroyed()) {
       miniWindow.webContents.send('mini-resize', size);
     }
+  }
+});
+
+// Update widget appearance (forward from renderer to mini-widget)
+ipcMain.on('update-widget', (event, data) => {
+  // data: { type: 'stock', svg: '...' } or { type: 'custom', dataUrl: '...' }
+  store.set('widgetData', data);
+  if (miniWindow && !miniWindow.isDestroyed() && miniWindow.webContents && !miniWindow.webContents.isDestroyed()) {
+    miniWindow.webContents.send('mini-widget-change', data);
   }
 });
 

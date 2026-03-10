@@ -45,6 +45,42 @@ if (window.windyMini) {
   window.windyMini.onResize((size) => {
     tornado.style.fontSize = Math.round(size * 0.5) + 'px';
   });
+
+  // ═══ Widget change ═══
+  window.windyMini.onWidgetChange((data) => {
+    console.log('[MiniWidget] Widget change:', data?.type);
+    if (data.type === 'stock' && data.svg) {
+      tornado.innerHTML = '';
+      tornado.style.fontSize = '0';
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = data.svg;
+      wrapper.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;';
+      const svg = wrapper.querySelector('svg');
+      if (svg) {
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        svg.style.color = '#22C55E';
+      }
+      tornado.appendChild(wrapper);
+      tornado.style.width = '100%';
+      tornado.style.height = '100%';
+    } else if (data.type === 'custom' && data.dataUrl) {
+      tornado.innerHTML = '';
+      tornado.style.fontSize = '0';
+      const img = document.createElement('img');
+      img.src = data.dataUrl;
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;border-radius:50%;';
+      tornado.appendChild(img);
+      tornado.style.width = '100%';
+      tornado.style.height = '100%';
+    } else if (data.type === 'default') {
+      // Reset to original tornado emoji
+      tornado.innerHTML = '🌪️';
+      tornado.style.fontSize = '';
+      tornado.style.width = '';
+      tornado.style.height = '';
+    }
+  });
 }
 
 // ═══ Voice-reactive animation loop ═══
