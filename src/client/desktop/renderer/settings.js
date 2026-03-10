@@ -1149,11 +1149,11 @@ class SettingsPanel {
     }
 
     // ═══ Shared Sound Library + Custom Hook Builder ═══
-    const customHooksContainer = this.panel.querySelector('#sfxCustomHooks');
+    const unifiedHooksContainer = this.panel.querySelector('#sfxUnifiedHooks');
     const libGrid = this.panel.querySelector('#sfxLibGrid');
     const libCountEl = this.panel.querySelector('#sfxLibCount');
     const libRecStatus = this.panel.querySelector('#sfxLibRecStatus');
-    if (customHooksContainer && fx) {
+    if (unifiedHooksContainer && fx) {
       // ── Shared Library ──
       let soundLibrary = [];
       try { soundLibrary = JSON.parse(localStorage.getItem('windy_soundLibrary') || '[]'); } catch (_) { }
@@ -1373,73 +1373,128 @@ class SettingsPanel {
         }
       };
 
-      // Build per-hook UI rows
+      // Build per-hook UI rows (unified: dropdown + volume + mute + preview in each row)
+      const formatInterval = (s) => s >= 60 ? `${Math.floor(s / 60)}m${s % 60 ? s % 60 + 's' : ''}` : `${s}s`;
+
       for (const hd of hookDefs) {
         const row = document.createElement('div');
-        row.className = 'sfx-custom-hook-row';
+        row.className = 'sfx-unified-hook-row';
         const current = customCfg[hd.key];
-        let statusText = '— Not set';
-        if (current?.type === 'library') {
-          const lib = soundLibrary.find(s => s.id === current.libId);
-          statusText = `📚 ${lib?.name || 'Library sound'}`;
-        } else if (current?.type === 'stock') {
-          statusText = `🔊 ${current.label || 'Stock sound'}`;
-        }
+        const hookEnabled = fx._hookPoints[hd.key]?.enabled !== false;
+        const hookVol = fx._hookPoints[hd.key]?.volume || 70;
 
         row.innerHTML = `
-          <div class="sfx-custom-hook-header">
-            <span class="sfx-custom-hook-label">${hd.label}</span>
-            <span class="sfx-custom-hook-status" id="customStatus_${hd.key}">${statusText}</span>
-          </div>
-          <div class="sfx-custom-hook-controls">
-            <select class="sfx-custom-select" id="customSelect_${hd.key}">
+          <div class="sfx-unified-hook-top">
+            <span class="sfx-unified-hook-label">${hd.label}</span>
+            <button class="sfx-unified-mute" id="uniMute_${hd.key}" title="Mute/Unmute" style="background:none;border:none;cursor:pointer;">${hookEnabled ? '🔊' : '🔇'}</button>
+            <select class="sfx-unified-select" id="uniSelect_${hd.key}">
               ${buildHookOptions()}
             </select>
-            <button class="sfx-custom-btn" id="customPreview_${hd.key}" title="Preview">▶</button>
+          </div>
+          <div class="sfx-unified-hook-bottom">
+            <input type="range" class="sfx-hook-vol" id="uniVol_${hd.key}" min="0" max="100" value="${hookVol}" title="Volume">
+            <span class="sfx-hook-pct" id="uniVolPct_${hd.key}">${hookVol}%</span>
+            <button class="sfx-custom-btn" id="uniPreview_${hd.key}" title="Preview">▶</button>
           </div>
         `;
-        customHooksContainer.appendChild(row);
+        unifiedHooksContainer.appendChild(row);
 
-        const sel = row.querySelector(`#customSelect_${hd.key}`);
+        // --- Volume slider ---
+        const volSlider = row.querySelector(`#uniVol_${hd.key}`);
+        const volPct = row.querySelector(`#uniVolPct_${hd.key}`);
+        volSlider.addEventListener('input', () => {
+          fx.setHookVolume(hd.key, parseInt(volSlider.value, 10));
+          volPct.textContent = volSlider.value + '%';
+        });
+
+        // --- Mute toggle ---
+        const muteBtn = row.querySelector(`#uniMute_${hd.key}`);
+        muteBtn.addEventListener('click', () => {
+          const cur = fx._hookPoints[hd.key]?.enabled !== false;
+          fx.setHookEnabled(hd.key, !cur);
+          muteBtn.textContent = !cur ? '🔊' : '🔇';
+        });
+
+        // --- Sound dropdown ---
+        const sel = row.querySelector(`#uniSelect_${hd.key}`);
         hookSelectEls[hd.key] = sel;
-
-        // Restore selection
         if (current?.type === 'library') sel.value = `lib|${current.libId}`;
         else if (current?.type === 'stock') sel.value = `stock|${current.packId}|${current.hook}`;
 
-        // Change handler
         sel.addEventListener('change', () => {
-          const statusSpan = row.querySelector(`#customStatus_${hd.key}`);
           if (!sel.value) {
             delete customCfg[hd.key];
             saveCustomCfg();
-            if (statusSpan) statusSpan.textContent = '— Not set';
             return;
           }
           const parts = sel.value.split('|');
           if (parts[0] === 'lib') {
             const lib = soundLibrary.find(s => s.id === parts[1]);
             customCfg[hd.key] = { type: 'library', libId: parts[1], name: lib?.name };
-            if (statusSpan) statusSpan.textContent = `📚 ${lib?.name || 'Library sound'}`;
           } else if (parts[0] === 'stock') {
             const opt = stockOptions.find(s => s.packId === parts[1] && s.hook === parts[2]);
             customCfg[hd.key] = { type: 'stock', packId: parts[1], hook: parts[2], label: opt?.label };
-            if (statusSpan) statusSpan.textContent = `🔊 ${opt?.label || 'Stock sound'}`;
           }
           saveCustomCfg();
         });
 
-        // Preview
-        row.querySelector(`#customPreview_${hd.key}`).addEventListener('click', () => {
+        // --- Preview ---
+        row.querySelector(`#uniPreview_${hd.key}`).addEventListener('click', () => {
           const cfg = customCfg[hd.key];
-          if (!cfg) return;
-          if (cfg.type === 'library') {
+          if (cfg?.type === 'library') {
             const lib = soundLibrary.find(s => s.id === cfg.libId);
-            if (lib?.dataUrl) fx.sound.playAudioFile(lib.dataUrl, 0.7);
-          } else if (cfg.type === 'stock' && cfg.packId) {
+            if (lib?.dataUrl) fx.sound.playAudioFile(lib.dataUrl, volSlider.value / 100);
+          } else if (cfg?.type === 'stock' && cfg.packId) {
             fx.previewEffect(cfg.packId, cfg.hook);
+          } else {
+            // Pack default — trigger hook
+            fx.trigger(hd.key);
           }
         });
+
+        // --- Interval sub-row for during/process ---
+        if (hd.key === 'during' || hd.key === 'process') {
+          const storageKey = hd.key === 'during' ? 'windy_duringInterval' : 'windy_processInterval';
+          const defaultVal = hd.key === 'during' ? 5 : 10;
+          const maxVal = hd.key === 'during' ? 300 : 60;
+          const saved = parseInt(localStorage.getItem(storageKey) || String(defaultVal), 10);
+
+          const subRow = document.createElement('div');
+          subRow.className = 'sfx-interval-row';
+          subRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 8px;';
+          subRow.innerHTML = `
+            <span class="sfx-hook-label" style="font-size:9px;">⏱️ Beep every</span>
+            <input type="range" class="sfx-hook-vol" id="uniInterval_${hd.key}" min="1" max="${maxVal}" value="${saved}" style="flex:1;">
+            <span class="sfx-hook-pct" id="uniIntervalVal_${hd.key}" style="min-width:32px;">${formatInterval(saved)}</span>
+          `;
+          unifiedHooksContainer.appendChild(subRow);
+
+          const iSlider = subRow.querySelector(`#uniInterval_${hd.key}`);
+          const iVal = subRow.querySelector(`#uniIntervalVal_${hd.key}`);
+          iSlider.addEventListener('input', () => {
+            const v = parseInt(iSlider.value, 10);
+            localStorage.setItem(storageKey, v);
+            iVal.textContent = formatInterval(v);
+          });
+
+          // Hint text for during
+          if (hd.key === 'during') {
+            const hint = document.createElement('p');
+            hint.className = 'settings-hint sfx-during-hint';
+            hint.style.cssText = 'margin:-2px 0 4px 4px;font-size:9px;';
+            hint.textContent = '🎧 Periodic beeps confirm recording is active. Speaker-only.';
+            unifiedHooksContainer.appendChild(hint);
+          }
+        }
+
+        // Warning hint
+        if (hd.key === 'warning') {
+          const hint = document.createElement('p');
+          hint.className = 'settings-hint sfx-during-hint';
+          hint.style.cssText = 'margin:-2px 0 4px 4px;font-size:9px;';
+          hint.textContent = '⚠️ Warns 30s & 15s before recording time limit.';
+          unifiedHooksContainer.appendChild(hint);
+        }
       }
 
       // Initial render
