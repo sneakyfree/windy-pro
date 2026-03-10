@@ -395,10 +395,6 @@ class SettingsPanel {
             <label for="sfxSurpriseCategory">Rotate From</label>
             <select id="sfxSurpriseCategory">
               <option value="all">🎲 All Packs</option>
-              <option value="epic">⚡ Epic Only</option>
-              <option value="gamer">🎮 Gamer Only</option>
-              <option value="cultural">🌍 Cultural Only</option>
-              <option value="utilitarian">🔔 Utilitarian Only</option>
               <option value="favorites">⭐ Favorites Only</option>
             </select>
           </div>

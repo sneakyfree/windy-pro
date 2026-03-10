@@ -273,7 +273,7 @@ class EffectsEngine {
                 start: { sound: { frequency: 880, duration: 0.08, type: 'sine', volume: 0.6 } },
                 during: { sound: { frequency: 660, duration: 0.04, type: 'sine', volume: 0.35 } },
                 stop: { sound: { frequency: 440, duration: 0.1, type: 'sine', volume: 0.6 } },
-                process: { sound: { frequency: 550, duration: 0.06, type: 'sine', volume: 0.5 } },
+                process: { sound: { frequency: 550, duration: 0.2, type: 'sine', volume: 0.6 } },
                 paste: { sound: { sweep: { from: 600, to: 900 }, duration: 0.15, type: 'sine', volume: 0.6 } }
             }
         });
@@ -312,7 +312,7 @@ class EffectsEngine {
                 start: { sound: [{ frequency: 220, duration: 0.05, type: 'square', volume: 0.7 }, { frequency: 330, duration: 0.05, type: 'square', volume: 0.6, delay: 0.06 }], visual: { type: 'flash', color: '#EF4444', duration: 200 } },
                 during: { sound: { frequency: 180, duration: 0.04, type: 'square', volume: 0.35 }, visual: { type: 'border-glow', color: '#EF4444', duration: 300, intensity: 0.15 } },
                 stop: { sound: { sweep: { from: 600, to: 100 }, duration: 0.3, type: 'sawtooth', volume: 0.6 }, visual: { type: 'shake', intensity: 0.4, duration: 300 } },
-                process: { sound: { frequency: 280, duration: 0.1, type: 'square', volume: 0.45 }, visual: { type: 'border-glow', color: '#F59E0B', duration: 1000, intensity: 0.4 } },
+                process: { sound: { frequency: 280, duration: 0.25, type: 'square', volume: 0.55 }, visual: { type: 'border-glow', color: '#F59E0B', duration: 1000, intensity: 0.4 } },
                 paste: { sound: [{ frequency: 440, duration: 0.15, type: 'square', volume: 0.6 }, { frequency: 554, duration: 0.15, type: 'square', volume: 0.6, delay: 0.15 }, { frequency: 659, duration: 0.25, type: 'square', volume: 0.7, delay: 0.3 }], visual: { type: 'particles', color: '#F59E0B', count: 25, duration: 1500 } }
             }
         });
@@ -325,7 +325,7 @@ class EffectsEngine {
                 start: { sound: { frequency: 698, duration: 0.3, type: 'sine', volume: 0.5 }, visual: { type: 'border-glow', color: '#EC4899', duration: 500 } },
                 during: { sound: { frequency: 523, duration: 0.12, type: 'sine', volume: 0.3 }, visual: { type: 'border-glow', color: '#EC4899', duration: 400, intensity: 0.15 } },
                 stop: { sound: [{ frequency: 523, duration: 0.15, type: 'sine', volume: 0.5 }, { frequency: 392, duration: 0.2, type: 'sine', volume: 0.45, delay: 0.15 }], visual: { type: 'border-glow', color: '#6366F1', duration: 600 } },
-                process: { sound: { frequency: 587, duration: 0.15, type: 'sine', volume: 0.4 }, visual: { type: 'border-glow', color: '#F472B6', duration: 1000, intensity: 0.3 } },
+                process: { sound: { frequency: 587, duration: 0.25, type: 'sine', volume: 0.5 }, visual: { type: 'border-glow', color: '#F472B6', duration: 1000, intensity: 0.3 } },
                 paste: { sound: [{ frequency: 784, duration: 0.1, type: 'sine', volume: 0.5 }, { frequency: 988, duration: 0.08, type: 'sine', volume: 0.45, delay: 0.1 }, { frequency: 1175, duration: 0.12, type: 'sine', volume: 0.4, delay: 0.18 }, { frequency: 784, duration: 0.2, type: 'sine', volume: 0.35, delay: 0.3 }], visual: { type: 'particles', color: '#F9A8D4', count: 12, duration: 1800 } }
             }
         });
