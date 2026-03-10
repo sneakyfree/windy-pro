@@ -1688,6 +1688,13 @@ body {
   opacity: 0.7;
 }
 
+/* During Recording hint — high contrast in both modes */
+.sfx-during-hint {
+  color: #E2E8F0 !important;
+  opacity: 0.9 !important;
+  font-style: italic;
+}
+
 /* ═══ Session Timer (RP-04) ═══ */
 
 .session-timer {
@@ -4172,6 +4179,10 @@ body.light-theme .settings-panel p,
 body.light-theme .settings-panel .settings-hint {
   color: #374151 !important;
   font-weight: 500;
+}
+
+body.light-theme .sfx-during-hint {
+  color: #1E293B !important;
 }
 
 body.light-theme .settings-panel select,

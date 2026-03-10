@@ -419,7 +419,7 @@ class SettingsPanel {
               <input type="range" class="sfx-hook-vol" id="sfxVolDuring" min="0" max="100" value="30" title="Volume">
               <span class="sfx-hook-pct" id="sfxVolDuringPct">Vol: 30%</span>
             </div>
-            <p class="settings-hint" style="margin:-2px 0 4px 4px;font-size:10px;color:#22C55E;font-style:italic;">💡 These beeps play through speakers only — they won't affect your transcription quality.</p>
+            <p class="settings-hint sfx-during-hint" style="margin:-2px 0 4px 4px;font-size:10px;">🎧 Periodic beeps confirm recording is active — even hands-free. Speaker-only, never captured in your transcript.</p>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">⏹️ Stop Recording</span>
               <span class="sfx-mute-label" id="sfxMuteStop" title="Toggle mute">🔊</span>
