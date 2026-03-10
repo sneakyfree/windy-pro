@@ -2843,6 +2843,23 @@ class WindyApp {
       if (!fxMode2 || fxMode2 === 'default' || fxMode2 === 'silent') {
         this._playBlip(880, 0.08);
       }
+      // Strand I: random widget rotation on each recording start
+      try {
+        const widgetMode = localStorage.getItem('windy_widgetMode');
+        if (widgetMode === 'random-stock' && this.widgetEngine) {
+          const stockIds = Object.keys(WidgetEngine.STOCK_WIDGETS);
+          const rand = stockIds[Math.floor(Math.random() * stockIds.length)];
+          this.widgetEngine.setWidget(rand);
+        } else if (widgetMode === 'random-custom' && this.widgetEngine) {
+          try {
+            const customs = JSON.parse(localStorage.getItem('windy_customWidgets') || '[]');
+            if (customs.length > 0) {
+              const rand = customs[Math.floor(Math.random() * customs.length)];
+              this.widgetEngine.setWidget('custom', rand);
+            }
+          } catch (_) { }
+        }
+      } catch (_) { }
       // Strand I: trigger start effect (pure observer, safe to fail)
       try { if (this.effectsEngine) this.effectsEngine.trigger('start'); } catch (_) { }
       // Strand I: start "during" effect interval (triggers every 5s while recording)
