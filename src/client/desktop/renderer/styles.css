@@ -800,8 +800,9 @@ body {
 .sfx-hook-pct {
   min-width: 32px;
   text-align: right;
-  font-size: 10px;
-  color: var(--text-muted, #6B7280);
+  font-size: 11px;
+  color: #E2E8F0;
+  font-weight: 600;
 }
 
 /* Toggle switch */

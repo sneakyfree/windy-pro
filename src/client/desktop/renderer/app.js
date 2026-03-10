@@ -1884,6 +1884,8 @@ class WindyApp {
 
         // Show processing state (batch modes only)
         this.setState('buffering');
+        // Strand I: trigger process effect
+        try { if (this.effectsEngine) this.effectsEngine.trigger('process'); } catch (_) { }
         this.transcriptContent.innerHTML = '<p class="batch-processing-indicator"><span class="processing-spinner"></span> Processing your recording...<br><span style="font-size:12px;color:#888;">This may take a moment for longer recordings</span></p>';
 
         // Notify tray
@@ -2822,6 +2824,8 @@ class WindyApp {
       }
       // Strand I: trigger stop effect (pure observer, safe to fail)
       try { if (this.effectsEngine) this.effectsEngine.trigger('stop'); } catch (_) { }
+      // Strand I: stop "during" effect interval
+      clearInterval(this._duringEffectInterval);
       if (this._batchRecorder) {
         this.stopBatchRecording();
       } else if (['deepgram', 'groq', 'openai'].includes(engine) && this._apiMediaRecorder) {
@@ -2839,6 +2843,17 @@ class WindyApp {
       }
       // Strand I: trigger start effect (pure observer, safe to fail)
       try { if (this.effectsEngine) this.effectsEngine.trigger('start'); } catch (_) { }
+      // Strand I: start "during" effect interval (triggers every 5s while recording)
+      try {
+        clearInterval(this._duringEffectInterval);
+        this._duringEffectInterval = setInterval(() => {
+          if (this.isRecording) {
+            try { this.effectsEngine.trigger('during'); } catch (_) { }
+          } else {
+            clearInterval(this._duringEffectInterval);
+          }
+        }, 5000);
+      } catch (_) { }
       if (recordingMode === 'batch' || recordingMode === 'clone_capture') {
         this.startBatchRecording();
       } else if (['deepgram', 'groq', 'openai'].includes(engine)) {

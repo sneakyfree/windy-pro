@@ -271,9 +271,9 @@ class EffectsEngine {
             description: 'Simple beep on start, stop, and paste',
             hooks: {
                 start: { sound: { frequency: 880, duration: 0.08, type: 'sine' } },
-                during: null,
+                during: { sound: { frequency: 660, duration: 0.04, type: 'sine', volume: 0.1 } },
                 stop: { sound: { frequency: 440, duration: 0.1, type: 'sine' } },
-                process: null,
+                process: { sound: { frequency: 550, duration: 0.06, type: 'sine', volume: 0.15 } },
                 paste: { sound: { sweep: { from: 600, to: 900 }, duration: 0.15, type: 'sine' } }
             }
         });
@@ -284,9 +284,9 @@ class EffectsEngine {
             description: 'Gentle chime tones for a calm workflow',
             hooks: {
                 start: { sound: { frequency: 523, duration: 0.2, type: 'sine', volume: 0.2 }, visual: { type: 'border-glow', color: '#22C55E', duration: 400 } },
-                during: null,
+                during: { sound: { frequency: 440, duration: 0.15, type: 'sine', volume: 0.08 }, visual: { type: 'border-glow', color: '#22C55E', duration: 300, intensity: 0.2 } },
                 stop: { sound: { frequency: 392, duration: 0.25, type: 'sine', volume: 0.2 }, visual: { type: 'border-glow', color: '#F59E0B', duration: 400 } },
-                process: { visual: { type: 'border-glow', color: '#F59E0B', duration: 800, intensity: 0.3 } },
+                process: { sound: { frequency: 466, duration: 0.2, type: 'sine', volume: 0.12 }, visual: { type: 'border-glow', color: '#F59E0B', duration: 800, intensity: 0.3 } },
                 paste: { sound: [{ frequency: 523, duration: 0.12, type: 'sine', volume: 0.2 }, { frequency: 659, duration: 0.12, type: 'sine', volume: 0.2, delay: 0.12 }, { frequency: 784, duration: 0.15, type: 'sine', volume: 0.15, delay: 0.24 }], visual: { type: 'flash', color: '#4ECDC4', duration: 300 } }
             }
         });
@@ -297,9 +297,9 @@ class EffectsEngine {
             description: 'Arcane energy and lightning for creative sessions',
             hooks: {
                 start: { sound: { sweep: { from: 200, to: 800 }, duration: 0.3, type: 'sawtooth', volume: 0.15 }, visual: { type: 'border-glow', color: '#8B5CF6', duration: 600 } },
-                during: null,
+                during: { sound: { frequency: 350, duration: 0.08, type: 'sawtooth', volume: 0.06 }, visual: { type: 'border-glow', color: '#A78BFA', duration: 400, intensity: 0.15 } },
                 stop: { sound: { sweep: { from: 800, to: 200 }, duration: 0.4, type: 'sawtooth', volume: 0.12 }, visual: { type: 'flash', color: '#8B5CF6', duration: 300 } },
-                process: { visual: { type: 'particles', color: '#C084FC', count: 8, duration: 1500 } },
+                process: { sound: { sweep: { from: 300, to: 500 }, duration: 0.2, type: 'sawtooth', volume: 0.1 }, visual: { type: 'particles', color: '#C084FC', count: 8, duration: 1500 } },
                 paste: { sound: [{ sweep: { from: 100, to: 1200 }, duration: 0.3, type: 'sawtooth', volume: 0.2 }, { frequency: 1200, duration: 0.15, type: 'square', volume: 0.1, delay: 0.25 }], visual: { type: 'particles', color: '#A78BFA', count: 20, duration: 2000 } }
             }
         });
@@ -310,9 +310,9 @@ class EffectsEngine {
             description: 'Weapon rack, airstrike, victory horn',
             hooks: {
                 start: { sound: [{ frequency: 220, duration: 0.05, type: 'square', volume: 0.25 }, { frequency: 330, duration: 0.05, type: 'square', volume: 0.2, delay: 0.06 }], visual: { type: 'flash', color: '#EF4444', duration: 200 } },
-                during: null,
+                during: { sound: { frequency: 180, duration: 0.04, type: 'square', volume: 0.08 }, visual: { type: 'border-glow', color: '#EF4444', duration: 300, intensity: 0.15 } },
                 stop: { sound: { sweep: { from: 600, to: 100 }, duration: 0.3, type: 'sawtooth', volume: 0.15 }, visual: { type: 'shake', intensity: 0.4, duration: 300 } },
-                process: { visual: { type: 'border-glow', color: '#F59E0B', duration: 1000, intensity: 0.4 } },
+                process: { sound: { frequency: 280, duration: 0.1, type: 'square', volume: 0.1 }, visual: { type: 'border-glow', color: '#F59E0B', duration: 1000, intensity: 0.4 } },
                 paste: { sound: [{ frequency: 440, duration: 0.15, type: 'square', volume: 0.2 }, { frequency: 554, duration: 0.15, type: 'square', volume: 0.2, delay: 0.15 }, { frequency: 659, duration: 0.25, type: 'square', volume: 0.25, delay: 0.3 }], visual: { type: 'particles', color: '#F59E0B', count: 25, duration: 1500 } }
             }
         });
@@ -323,9 +323,9 @@ class EffectsEngine {
             description: 'Lo-fi tones, koto-inspired flourishes',
             hooks: {
                 start: { sound: { frequency: 698, duration: 0.3, type: 'sine', volume: 0.15 }, visual: { type: 'border-glow', color: '#EC4899', duration: 500 } },
-                during: null,
+                during: { sound: { frequency: 523, duration: 0.12, type: 'sine', volume: 0.05 }, visual: { type: 'border-glow', color: '#EC4899', duration: 400, intensity: 0.15 } },
                 stop: { sound: [{ frequency: 523, duration: 0.15, type: 'sine', volume: 0.12 }, { frequency: 392, duration: 0.2, type: 'sine', volume: 0.1, delay: 0.15 }], visual: { type: 'border-glow', color: '#6366F1', duration: 600 } },
-                process: { visual: { type: 'border-glow', color: '#F472B6', duration: 1000, intensity: 0.3 } },
+                process: { sound: { frequency: 587, duration: 0.15, type: 'sine', volume: 0.08 }, visual: { type: 'border-glow', color: '#F472B6', duration: 1000, intensity: 0.3 } },
                 paste: { sound: [{ frequency: 784, duration: 0.1, type: 'sine', volume: 0.15 }, { frequency: 988, duration: 0.08, type: 'sine', volume: 0.12, delay: 0.1 }, { frequency: 1175, duration: 0.12, type: 'sine', volume: 0.1, delay: 0.18 }, { frequency: 784, duration: 0.2, type: 'sine', volume: 0.08, delay: 0.3 }], visual: { type: 'particles', color: '#F9A8D4', count: 12, duration: 1800 } }
             }
         });
@@ -489,11 +489,22 @@ class EffectsEngine {
         const hookDef = pack.hooks?.[hook];
         if (!hookDef) return;
 
+        // Use hook-point volume when previewing so users hear the difference
+        const hp = this._hookPoints[hook];
+        const hookVolMul = hp ? hp.volume / 100 : 1;
+
         if (hookDef.sound) {
             if (Array.isArray(hookDef.sound)) {
-                this.sound.playSequence(hookDef.sound);
+                const tones = hookDef.sound.map(t => ({
+                    ...t,
+                    volume: (t.volume || 0.3) * hookVolMul
+                }));
+                this.sound.playSequence(tones);
             } else {
-                this.sound.playTone(hookDef.sound);
+                this.sound.playTone({
+                    ...hookDef.sound,
+                    volume: (hookDef.sound.volume || 0.3) * hookVolMul
+                });
             }
         }
         if (hookDef.visual) {
