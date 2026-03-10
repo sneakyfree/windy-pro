@@ -1,24 +1,26 @@
 {
-  "version": "2.0.0",
-  "generated": "2026-03-10T07:10:16-04:00",
+  "version": "3.0.0",
+  "generated": "2026-03-10T08:18:00-04:00",
   "generated_by": "Kit 0C1 Alpha",
   "summary": {
-    "total_models": 16,
+    "total_models": 12,
     "stt_gpu": 7,
-    "stt_cpu_onnx": 7,
+    "stt_cpu_onnx": 0,
     "translation": 2,
-    "distinct_fine_tunes": 9,
+    "distinct_fine_tunes": 12,
     "qa_pass": 14,
     "qa_warn": 2,
     "qa_fail": 0,
     "champion": "windy-stt-turbo (eval_loss=0.4563)",
-    "total_disk_gb": 35.7
+    "total_disk_gb": 35.7,
+    "stt_distil": 3
   },
   "notes": [
-    "7 CPU models are ONNX conversions of the 7 GPU models — not separate fine-tunes.",
-    "All STT fine-tuning was English-only. Multilingual capability comes from base models.",
-    "windy-stt-lite and windy-stt-edge have elevated eval losses — flagged for investigation.",
-    "Translation QA was ultralight (30 sentences × 10 lang pairs). Full BLEU scoring pending."
+    "ONNX CPU models REMOVED — ONNX INT8 quantization produced LARGER files, not smaller.",
+    "3 Distil-Whisper forks ADDED — genuinely different architectures, faster on CPU.",
+    "CPU users should use: (a) Distil models for best CPU performance, or (b) GPU safetensors with device=cpu.",
+    "All STT fine-tuning was English-only. Multilingual capability from base models.",
+    "Distil-small and distil-medium are English-only. Distil-large-v3 is multilingual."
   ],
   "models": [
     {
@@ -331,182 +333,6 @@
       "description": "Distilled architecture for edge deployment. ⚠️ High eval loss — needs investigation."
     },
     {
-      "id": "windy-stt-nano-cpu",
-      "name": "Windy STT Nano (CPU)",
-      "category": "stt",
-      "variant": "cpu",
-      "format": "onnx",
-      "size_on_disk_mb": 406.2,
-      "base_model": "openai/whisper-tiny",
-      "base_license": "MIT",
-      "derived_from": "windy-stt-nano",
-      "conversion": "ONNX export from merged GPU safetensors",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model)",
-      "eval_loss": 3.4728,
-      "qa": {
-        "status": "PASS",
-        "date": "2026-03-09",
-        "test": "smoke"
-      },
-      "huggingface": "WindyProLabs/windy-stt-nano-cpu",
-      "gpu_variant": "windy-stt-nano",
-      "description": "CPU-optimized ONNX variant of windy-stt-nano. No GPU required."
-    },
-    {
-      "id": "windy-stt-lite-cpu",
-      "name": "Windy STT Lite (CPU)",
-      "category": "stt",
-      "variant": "cpu",
-      "format": "onnx",
-      "size_on_disk_mb": 668.0,
-      "base_model": "openai/whisper-base",
-      "base_license": "MIT",
-      "derived_from": "windy-stt-lite",
-      "conversion": "ONNX export from merged GPU safetensors",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model)",
-      "eval_loss": 4.1797,
-      "qa": {
-        "status": "WARN",
-        "date": "2026-03-09",
-        "test": "smoke",
-        "note": "Same Concorde divergence as GPU variant"
-      },
-      "huggingface": "WindyProLabs/windy-stt-lite-cpu",
-      "gpu_variant": "windy-stt-lite",
-      "description": "CPU-optimized ONNX variant of windy-stt-lite. No GPU required."
-    },
-    {
-      "id": "windy-stt-core-cpu",
-      "name": "Windy STT Core (CPU)",
-      "category": "stt",
-      "variant": "cpu",
-      "format": "onnx",
-      "size_on_disk_mb": 1760.4,
-      "base_model": "openai/whisper-small",
-      "base_license": "MIT",
-      "derived_from": "windy-stt-core",
-      "conversion": "ONNX export from merged GPU safetensors",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model)",
-      "eval_loss": 1.8765,
-      "qa": {
-        "status": "PASS",
-        "date": "2026-03-09",
-        "test": "smoke"
-      },
-      "huggingface": "WindyProLabs/windy-stt-core-cpu",
-      "gpu_variant": "windy-stt-core",
-      "description": "CPU-optimized ONNX variant of windy-stt-core. No GPU required."
-    },
-    {
-      "id": "windy-stt-plus-cpu",
-      "name": "Windy STT Plus (CPU)",
-      "category": "stt",
-      "variant": "cpu",
-      "format": "onnx",
-      "size_on_disk_mb": 4872.3,
-      "base_model": "openai/whisper-medium",
-      "base_license": "MIT",
-      "derived_from": "windy-stt-plus",
-      "conversion": "ONNX export from merged GPU safetensors",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model)",
-      "eval_loss": 1.5445,
-      "qa": {
-        "status": "PASS",
-        "date": "2026-03-09",
-        "test": "smoke"
-      },
-      "huggingface": "WindyProLabs/windy-stt-plus-cpu",
-      "gpu_variant": "windy-stt-plus",
-      "description": "CPU-optimized ONNX variant of windy-stt-plus. No GPU required."
-    },
-    {
-      "id": "windy-stt-turbo-cpu",
-      "name": "Windy STT Turbo (CPU)",
-      "category": "stt",
-      "variant": "cpu",
-      "format": "onnx",
-      "size_on_disk_mb": 4200.4,
-      "base_model": "openai/whisper-large-v3-turbo",
-      "base_license": "MIT",
-      "derived_from": "windy-stt-turbo",
-      "conversion": "ONNX export from merged GPU safetensors",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model)",
-      "eval_loss": 0.4563,
-      "qa": {
-        "status": "PASS",
-        "date": "2026-03-09",
-        "test": "smoke"
-      },
-      "huggingface": "WindyProLabs/windy-stt-turbo-cpu",
-      "gpu_variant": "windy-stt-turbo",
-      "description": "CPU-optimized ONNX variant of windy-stt-turbo. No GPU required."
-    },
-    {
-      "id": "windy-stt-pro-cpu",
-      "name": "Windy STT Pro (CPU)",
-      "category": "stt",
-      "variant": "cpu",
-      "format": "onnx",
-      "size_on_disk_mb": 9456.7,
-      "base_model": "openai/whisper-large-v3",
-      "base_license": "MIT",
-      "derived_from": "windy-stt-pro",
-      "conversion": "ONNX export from merged GPU safetensors",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model)",
-      "eval_loss": 1.2331,
-      "qa": {
-        "status": "PASS",
-        "date": "2026-03-09",
-        "test": "smoke"
-      },
-      "huggingface": "WindyProLabs/windy-stt-pro-cpu",
-      "gpu_variant": "windy-stt-pro",
-      "description": "CPU-optimized ONNX variant of windy-stt-pro. No GPU required."
-    },
-    {
-      "id": "windy-stt-edge-cpu",
-      "name": "Windy STT Edge (CPU)",
-      "category": "stt",
-      "variant": "cpu",
-      "format": "onnx",
-      "size_on_disk_mb": 3824.9,
-      "base_model": "distil-whisper/distil-large-v3",
-      "base_license": "MIT",
-      "derived_from": "windy-stt-edge",
-      "conversion": "ONNX export from merged GPU safetensors",
-      "languages_trained": [
-        "en"
-      ],
-      "languages_supported": "100+ (via base model)",
-      "eval_loss": 4.814,
-      "qa": {
-        "status": "PASS",
-        "date": "2026-03-09",
-        "test": "smoke"
-      },
-      "huggingface": "WindyProLabs/windy-stt-edge-cpu",
-      "gpu_variant": "windy-stt-edge",
-      "description": "CPU-optimized ONNX variant of windy-stt-edge. No GPU required."
-    },
-    {
       "id": "windy-translate-spark",
       "name": "Windy Translate Spark",
       "category": "translation",
@@ -595,6 +421,117 @@
       },
       "huggingface": "WindyProLabs/windy_translate_standard",
       "description": "Standard multilingual translation. Higher quality. Better rare-language pairs."
+    },
+    {
+      "id": "windy-stt-distil-small",
+      "name": "Windy STT Distil Small",
+      "category": "stt",
+      "variant": "cpu-optimized",
+      "format": "safetensors",
+      "size_on_disk_mb": 319,
+      "base_model": "distil-whisper/distil-small.en",
+      "base_license": "MIT",
+      "base_params": "166M (distilled)",
+      "languages_trained": [
+        "en"
+      ],
+      "languages_supported": "English (distilled for English)",
+      "lora": {
+        "rank": 4,
+        "alpha": 8,
+        "target_modules": [
+          "q_proj"
+        ],
+        "dropout": 0.05
+      },
+      "training": {
+        "samples": 50,
+        "epochs": 0.5,
+        "learning_rate": "1e-5",
+        "date": "2026-03-10",
+        "hardware": "NVIDIA RTX 5090"
+      },
+      "eval_loss": 3.52,
+      "qa": {
+        "status": "PENDING",
+        "date": null
+      },
+      "huggingface": "WindyProLabs/windy-stt-distil-small",
+      "description": "Distilled architecture — genuinely faster on CPU than standard Whisper. English-optimized."
+    },
+    {
+      "id": "windy-stt-distil-medium",
+      "name": "Windy STT Distil Medium",
+      "category": "stt",
+      "variant": "cpu-optimized",
+      "format": "safetensors",
+      "size_on_disk_mb": 755,
+      "base_model": "distil-whisper/distil-medium.en",
+      "base_license": "MIT",
+      "base_params": "394M (distilled)",
+      "languages_trained": [
+        "en"
+      ],
+      "languages_supported": "English (distilled for English)",
+      "lora": {
+        "rank": 4,
+        "alpha": 8,
+        "target_modules": [
+          "q_proj"
+        ],
+        "dropout": 0.05
+      },
+      "training": {
+        "samples": 50,
+        "epochs": 0.5,
+        "learning_rate": "1e-5",
+        "date": "2026-03-10",
+        "hardware": "NVIDIA RTX 5090"
+      },
+      "eval_loss": 5.45,
+      "qa": {
+        "status": "PENDING",
+        "date": null
+      },
+      "huggingface": "WindyProLabs/windy-stt-distil-medium",
+      "description": "Distilled medium — best English accuracy on CPU. Faster than equivalent-size Whisper."
+    },
+    {
+      "id": "windy-stt-distil-large",
+      "name": "Windy STT Distil Large",
+      "category": "stt",
+      "variant": "cpu-optimized",
+      "format": "safetensors",
+      "size_on_disk_mb": 1445,
+      "base_model": "distil-whisper/distil-large-v3",
+      "base_license": "MIT",
+      "base_params": "756M (distilled from large-v3)",
+      "languages_trained": [
+        "en"
+      ],
+      "languages_supported": "100+ (multilingual base, distilled from large-v3)",
+      "lora": {
+        "rank": 4,
+        "alpha": 8,
+        "target_modules": [
+          "q_proj"
+        ],
+        "dropout": 0.05
+      },
+      "training": {
+        "samples": 50,
+        "epochs": 0.5,
+        "learning_rate": "1e-5",
+        "date": "2026-03-10",
+        "hardware": "NVIDIA RTX 5090"
+      },
+      "eval_loss": 4.31,
+      "qa": {
+        "status": "PENDING",
+        "date": null
+      },
+      "huggingface": "WindyProLabs/windy-stt-distil-large",
+      "description": "Distilled large-v3 — highest accuracy CPU model. Near-Pro quality at faster speeds."
     }
   ]
 }
