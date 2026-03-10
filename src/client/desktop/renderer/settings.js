@@ -1254,10 +1254,11 @@ class SettingsPanel {
           const sizeKb = item.size ? `${Math.round(item.size / 1024)}KB` : '';
           card.innerHTML = `
             <div class="sfx-lib-card-top">
-              <input class="sfx-lib-name-input" type="text" value="${(item.name || '').replace(/"/g, '&quot;')}" title="Click to rename" />
-              <span class="sfx-lib-card-meta">${sizeKb}</span>
+              <span class="sfx-lib-name-text">${item.name || 'Untitled'}</span>
+              <button class="sfx-custom-btn sfx-lib-rename" title="Rename" style="width:22px;height:22px;font-size:10px;">✏️</button>
+              <span class="sfx-lib-card-meta" style="margin-left:auto;">${sizeKb} · ${item.timestamp || ''}</span>
             </div>
-            <div class="sfx-lib-card-meta">${item.timestamp || ''}</div>
+            <input class="sfx-lib-name-input" type="text" value="${(item.name || '').replace(/"/g, '&quot;')}" style="display:none;" />
             <div class="sfx-lib-card-actions">
               <button class="sfx-custom-btn sfx-lib-play" title="Preview">▶</button>
               <button class="sfx-custom-btn sfx-custom-clear sfx-lib-del" title="Delete">🗑️</button>
@@ -1266,12 +1267,30 @@ class SettingsPanel {
           libGrid.appendChild(card);
 
           // Rename
+          const nameText = card.querySelector('.sfx-lib-name-text');
           const nameInput = card.querySelector('.sfx-lib-name-input');
-          nameInput.addEventListener('change', () => {
-            item.name = nameInput.value.trim() || item.name;
-            saveLibrary();
-            refreshHookDropdowns();
+          const renameBtn = card.querySelector('.sfx-lib-rename');
+          renameBtn.addEventListener('click', () => {
+            nameInput.style.display = '';
+            nameText.style.display = 'none';
+            renameBtn.style.display = 'none';
+            nameInput.focus();
+            nameInput.select();
           });
+          const finishRename = () => {
+            const newName = nameInput.value.trim();
+            if (newName) {
+              item.name = newName;
+              nameText.textContent = newName;
+              saveLibrary();
+              refreshHookDropdowns();
+            }
+            nameInput.style.display = 'none';
+            nameText.style.display = '';
+            renameBtn.style.display = '';
+          };
+          nameInput.addEventListener('blur', finishRename);
+          nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') finishRename(); });
 
           // Preview
           card.querySelector('.sfx-lib-play').addEventListener('click', () => {

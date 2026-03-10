@@ -76,17 +76,27 @@ class SoundManager {
 
     /**
      * Play an audio file from a data URL (base64)
-     * Uses HTML Audio element for broad format support (webm, mp3, wav, ogg, m4a)
+     * Converts to Blob URL for reliable Electron playback
      * @param {string} dataUrl - base64 data URL of audio file
      * @param {number} volume - volume multiplier (0-1)
      */
     async playAudioFile(dataUrl, volume = 0.5) {
         if (this._masterVolume === 0 || !dataUrl) return;
         try {
-            const audio = new Audio(dataUrl);
-            audio.volume = Math.min(1, volume * this._masterVolume);
-            audio.play().catch(() => { });
-        } catch (_) { /* fail silently */ }
+            // Convert data URL to Blob URL for reliable playback
+            let url = dataUrl;
+            if (dataUrl.startsWith('data:')) {
+                const resp = await fetch(dataUrl);
+                const blob = await resp.blob();
+                url = URL.createObjectURL(blob);
+            }
+            const audio = new Audio();
+            audio.volume = Math.min(1, Math.max(0.05, volume * this._masterVolume));
+            audio.src = url;
+            audio.onended = () => { try { URL.revokeObjectURL(url); } catch (_) { } };
+            audio.onerror = (e) => { console.warn('Audio playback error:', e); };
+            await audio.play();
+        } catch (e) { console.warn('playAudioFile failed:', e); }
     }
 
     dispose() {
