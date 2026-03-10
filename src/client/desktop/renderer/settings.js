@@ -1265,11 +1265,11 @@ class SettingsPanel {
       };
 
       // ── Add to library helper ──
-      const addToLibrary = (dataUrl, name, size) => {
+      const addToLibrary = (dataUrl, name, size, duration) => {
         const now = new Date();
         const ts = now.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         const id = `snd_${Date.now()}`;
-        soundLibrary.push({ id, name: name || `Recording ${ts}`, dataUrl, timestamp: ts, size: size || 0 });
+        soundLibrary.push({ id, name: name || `Recording ${ts}`, dataUrl, timestamp: ts, size: size || 0, duration: duration || 0, starred: true });
         saveLibrary();
         renderLibrary();
         refreshHookDropdowns();
@@ -1322,7 +1322,7 @@ class SettingsPanel {
               const blob = new Blob(chunks, { type: 'audio/webm' });
               if (blob.size > 5 * 1024 * 1024) { alert('Recording too long (max 5MB)'); return; }
               const reader = new FileReader();
-              reader.onload = () => addToLibrary(reader.result, null, blob.size);
+              reader.onload = () => addToLibrary(reader.result, null, blob.size, secs);
               reader.readAsDataURL(blob);
             };
             libMediaRec.start();
@@ -1376,21 +1376,31 @@ class SettingsPanel {
       // Build per-hook UI rows (unified: dropdown + volume + mute + preview in each row)
       const formatInterval = (s) => s >= 60 ? `${Math.floor(s / 60)}m${s % 60 ? s % 60 + 's' : ''}` : `${s}s`;
 
+      // Intro tip
+      const introTip = document.createElement('div');
+      introTip.className = 'sfx-hooks-intro';
+      introTip.innerHTML = `<strong>Every recording has 6 sound stages.</strong> Customize the sound effect, volume, or mute each one independently. Use a stock sound, pick from your library, or keep the pack default.`;
+      unifiedHooksContainer.appendChild(introTip);
+
+      let stepNum = 0;
       for (const hd of hookDefs) {
+        stepNum++;
         const row = document.createElement('div');
         row.className = 'sfx-unified-hook-row';
+        row.setAttribute('data-hook', hd.key);
         const current = customCfg[hd.key];
         const hookEnabled = fx._hookPoints[hd.key]?.enabled !== false;
         const hookVol = fx._hookPoints[hd.key]?.volume || 70;
 
         row.innerHTML = `
           <div class="sfx-unified-hook-top">
+            <span class="sfx-step-badge">${stepNum}</span>
             <span class="sfx-unified-hook-label">${hd.label}</span>
-            <button class="sfx-unified-mute" id="uniMute_${hd.key}" title="Mute/Unmute" style="background:none;border:none;cursor:pointer;">${hookEnabled ? '🔊' : '🔇'}</button>
-            <select class="sfx-unified-select" id="uniSelect_${hd.key}">
-              ${buildHookOptions()}
-            </select>
+            <button class="sfx-unified-mute" id="uniMute_${hd.key}" title="Mute/Unmute">${hookEnabled ? '🔊' : '🔇'}</button>
           </div>
+          <select class="sfx-unified-select" id="uniSelect_${hd.key}" style="margin-bottom:6px;">
+            ${buildHookOptions()}
+          </select>
           <div class="sfx-unified-hook-bottom">
             <input type="range" class="sfx-hook-vol" id="uniVol_${hd.key}" min="0" max="100" value="${hookVol}" title="Volume">
             <span class="sfx-hook-pct" id="uniVolPct_${hd.key}">${hookVol}%</span>

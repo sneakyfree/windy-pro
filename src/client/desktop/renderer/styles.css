@@ -952,6 +952,205 @@ body {
   margin-top: 3px;
 }
 
+/* ── Master Controls Bar ── */
+.sfx-master-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: rgba(34, 197, 94, 0.06);
+  border: 1px solid rgba(34, 197, 94, 0.15);
+  border-radius: 10px;
+}
+
+/* ── Unified Hook Row Cards ── */
+.sfx-unified-hook-row {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  border-left: 3px solid #22C55E;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.sfx-unified-hook-row:hover {
+  border-color: rgba(34, 197, 94, 0.35);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.08);
+}
+
+.sfx-unified-hook-row[data-hook="start"] {
+  border-left-color: #22C55E;
+}
+
+.sfx-unified-hook-row[data-hook="during"] {
+  border-left-color: #3B82F6;
+}
+
+.sfx-unified-hook-row[data-hook="stop"] {
+  border-left-color: #EF4444;
+}
+
+.sfx-unified-hook-row[data-hook="process"] {
+  border-left-color: #F59E0B;
+}
+
+.sfx-unified-hook-row[data-hook="warning"] {
+  border-left-color: #F97316;
+}
+
+.sfx-unified-hook-row[data-hook="paste"] {
+  border-left-color: #8B5CF6;
+}
+
+.sfx-unified-hook-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.sfx-step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22C55E;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.sfx-unified-hook-label {
+  font-weight: 700;
+  font-size: 12px;
+  color: #E2E8F0;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.sfx-unified-mute {
+  font-size: 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.sfx-unified-mute:hover {
+  transform: scale(1.2);
+}
+
+/* Sound dropdown — dark theme */
+.sfx-unified-select {
+  flex: 1;
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: #0F172A;
+  color: #E2E8F0;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  min-width: 0;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.sfx-unified-select:hover,
+.sfx-unified-select:focus {
+  border-color: #22C55E;
+  outline: none;
+}
+
+.sfx-unified-select option {
+  background: #1E293B;
+  color: #E2E8F0;
+}
+
+.sfx-unified-select optgroup {
+  background: #0F172A;
+  color: #94A3B8;
+  font-weight: 700;
+}
+
+.sfx-unified-hook-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sfx-unified-hook-bottom .sfx-hook-vol {
+  flex: 1;
+  max-width: none;
+}
+
+.sfx-unified-hook-bottom .sfx-hook-pct {
+  min-width: 36px;
+  font-size: 11px;
+}
+
+.sfx-unified-hook-bottom .sfx-custom-btn {
+  width: 28px;
+  height: 24px;
+  font-size: 12px;
+  padding: 0;
+}
+
+/* Hook intro tip */
+.sfx-hooks-intro {
+  background: rgba(34, 197, 94, 0.06);
+  border: 1px solid rgba(34, 197, 94, 0.12);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 10px;
+  color: #94A3B8;
+  line-height: 1.5;
+}
+
+.sfx-hooks-intro strong {
+  color: #E2E8F0;
+}
+
+/* Light mode */
+body.light-mode .sfx-unified-hook-row {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: #CBD5E1;
+}
+
+body.light-mode .sfx-unified-select {
+  background: #fff;
+  color: #1E293B;
+  border-color: #CBD5E1;
+}
+
+body.light-mode .sfx-unified-select option {
+  background: #fff;
+  color: #1E293B;
+}
+
+body.light-mode .sfx-unified-hook-label {
+  color: #1E293B;
+}
+
+body.light-mode .sfx-hooks-intro {
+  background: rgba(34, 197, 94, 0.04);
+  color: #475569;
+}
+
+body.light-mode .sfx-hooks-intro strong {
+  color: #1E293B;
+}
+
+body.light-mode .sfx-master-controls {
+  background: rgba(34, 197, 94, 0.04);
+}
+
 .sfx-hook-label {
   flex: 1 1 100px;
   font-size: 11px;
