@@ -131,18 +131,31 @@ const MAX_PYTHON_RESTARTS = 3;
 // ═══ Model Download Manifest ═══
 const MODEL_MANIFEST = {
   models: {
-    tiny: { size: '39MB', bytes: 40894464, label: 'Edge Spark', desc: 'Fastest, CPU ✅' },
-    base: { size: '142MB', bytes: 148897792, label: 'Edge Pulse', desc: 'Balanced, CPU ✅' },
-    small: { size: '466MB', bytes: 488636416, label: 'Core Standard', desc: '⚠️ GPU recommended' },
-    medium: { size: '1.5GB', bytes: 1533100032, label: 'Core Pro', desc: '⚠️ GPU only' },
-    'large-v3': { size: '3.1GB', bytes: 3087007744, label: 'Core Ultra', desc: '⚠️ GPU only' },
-    turbo: { size: '809MB', bytes: 847872000, label: 'Turbo', desc: 'Fast + accurate' }
+    // GPU STT models
+    'windy-stt-nano': { size: '73MB', bytes: 73 * 1024 * 1024, label: 'Windy STT Nano', desc: 'Fastest GPU, great for dictation' },
+    'windy-stt-lite': { size: '140MB', bytes: 140 * 1024 * 1024, label: 'Windy STT Lite', desc: 'Lightweight, balanced speed/quality' },
+    'windy-stt-core': { size: '462MB', bytes: 462 * 1024 * 1024, label: 'Windy STT Core', desc: 'Recommended for most use cases' },
+    'windy-stt-edge': { size: '1444MB', bytes: 1444 * 1024 * 1024, label: 'Windy STT Edge', desc: 'High-accuracy, professional grade' },
+    'windy-stt-plus': { size: '1458MB', bytes: 1458 * 1024 * 1024, label: 'Windy STT Plus', desc: 'Premium accuracy, production-grade' },
+    'windy-stt-turbo': { size: '1544MB', bytes: 1544 * 1024 * 1024, label: 'Windy STT Turbo', desc: 'Latest-gen, state-of-the-art' },
+    'windy-stt-pro': { size: '2945MB', bytes: 2945 * 1024 * 1024, label: 'Windy STT Pro', desc: 'Ultra-fast large model, maximum speed' },
+    // CPU STT models
+    'windy-stt-nano-cpu': { size: '406MB', bytes: 406 * 1024 * 1024, label: 'Windy STT Nano (CPU)', desc: 'CPU-optimized, resource-constrained' },
+    'windy-stt-lite-cpu': { size: '668MB', bytes: 668 * 1024 * 1024, label: 'Windy STT Lite (CPU)', desc: 'CPU-optimized, good balance' },
+    'windy-stt-core-cpu': { size: '1760MB', bytes: 1760 * 1024 * 1024, label: 'Windy STT Core (CPU)', desc: 'CPU-optimized, recommended for CPU' },
+    'windy-stt-edge-cpu': { size: '3824MB', bytes: 3824 * 1024 * 1024, label: 'Windy STT Edge (CPU)', desc: 'CPU-optimized, high accuracy' },
+    'windy-stt-plus-cpu': { size: '4872MB', bytes: 4872 * 1024 * 1024, label: 'Windy STT Plus (CPU)', desc: 'CPU-optimized, premium accuracy' },
+    'windy-stt-turbo-cpu': { size: '4200MB', bytes: 4200 * 1024 * 1024, label: 'Windy STT Turbo (CPU)', desc: 'CPU-optimized, state-of-the-art' },
+    'windy-stt-pro-cpu': { size: '9456MB', bytes: 9456 * 1024 * 1024, label: 'Windy STT Pro (CPU)', desc: 'CPU-optimized, maximum performance' },
+    // Translation models
+    'windy-translate-spark': { size: '929MB', bytes: 929 * 1024 * 1024, label: 'Windy Translate Spark', desc: 'Fast multilingual, 100+ languages' },
+    'windy-translate-standard': { size: '2371MB', bytes: 2371 * 1024 * 1024, label: 'Windy Translate Standard', desc: 'Higher quality than Spark, 100+ languages' }
   },
   tierModels: {
-    free: ['tiny', 'base', 'small'],
-    pro: ['tiny', 'base', 'small', 'medium', 'large-v3', 'turbo'],
-    translate: ['tiny', 'base', 'small', 'medium', 'large-v3', 'turbo'],
-    translate_pro: ['tiny', 'base', 'small', 'medium', 'large-v3', 'turbo']
+    free: ['windy-stt-nano', 'windy-stt-lite', 'windy-stt-core'],
+    pro: ['windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro', 'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu'],
+    translate: ['windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro', 'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu', 'windy-translate-spark'],
+    translate_pro: ['windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro', 'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu', 'windy-translate-spark', 'windy-translate-standard']
   }
 };
 let activeModelDownload = null; // Track background download process
@@ -1098,32 +1111,40 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   const windyTune = listeningModel === 'windytune';
   const userWantsCloud = listeningModel === 'cloud';
   const MODEL_INFO = {
+    // Keep special model types
     'windytune': { name: 'WindyTune Auto', size: '', specialty: 'Auto-selects best model' },
     'cloud': { name: 'Windy Cloud', size: '', specialty: 'Cloud-based transcription' },
     'local': { name: 'Local', size: '', specialty: '' },
-    'edge-spark': { name: 'Edge Spark', size: '42 MB', specialty: 'Ultra-light, 32× speed' },
-    'edge-pulse': { name: 'Edge Pulse', size: '78 MB', specialty: 'Phone-friendly, 16×' },
-    'edge-standard': { name: 'Edge Standard', size: '168 MB', specialty: 'Best CPU balance, 6×' },
-    'edge-global': { name: 'Edge Global', size: '515 MB', specialty: 'Multilingual CPU, 2×' },
-    'edge-pro': { name: 'Edge Pro', size: '515 MB', specialty: 'Best English on CPU, 4×' },
-    'core-spark': { name: 'Core Spark', size: '75 MB', specialty: 'Fastest GPU, 32×' },
-    'core-pulse': { name: 'Core Pulse', size: '142 MB', specialty: 'Reliable GPU, 16×' },
-    'core-standard': { name: 'Core Standard', size: '466 MB', specialty: 'All-rounder GPU, 6×' },
-    'core-global': { name: 'Core Global', size: '1.5 GB', specialty: 'Multilingual GPU, 2×' },
-    'core-pro': { name: 'Core Pro', size: '1.5 GB', specialty: 'English excellence, 6×' },
-    'core-turbo': { name: 'Core Turbo', size: '1.6 GB', specialty: 'Near-Ultra, 4×' },
-    'core-ultra': { name: 'Core Ultra', size: '2.9 GB', specialty: 'BEST accuracy, 1×' },
-    'lingua-es': { name: 'Lingua Español', size: '500 MB', specialty: 'Spanish specialist' },
-    'lingua-fr': { name: 'Lingua Français', size: '500 MB', specialty: 'French specialist' },
-    'lingua-hi': { name: 'Lingua हिन्दी', size: '500 MB', specialty: 'Hindi specialist' },
-    // Legacy model names → Windy Pro equivalents
-    'tiny': { name: 'Edge Spark', size: '42 MB', specialty: 'Ultra-light, 32× speed' },
-    'base': { name: 'Edge Standard', size: '168 MB', specialty: 'Best CPU balance, 6×' },
-    'small': { name: 'Core Standard', size: '466 MB', specialty: 'All-rounder GPU, 6×' },
-    'medium': { name: 'Core Pro', size: '1.5 GB', specialty: 'English excellence, 6×' },
-    'large': { name: 'Core Ultra', size: '2.9 GB', specialty: 'BEST accuracy, 1×' },
-    'large-v3': { name: 'Core Ultra', size: '2.9 GB', specialty: 'BEST accuracy, 1×' },
-    'faster-whisper-base': { name: 'Edge Standard', size: '168 MB', specialty: 'Best CPU balance, 6×' },
+
+    // Real GPU STT models from model_registry.json
+    'windy-stt-nano': { name: 'Windy STT Nano', size: '73 MB', specialty: 'Fastest STT model. Best for quick dictation on powerful hardware.' },
+    'windy-stt-lite': { name: 'Windy STT Lite', size: '140 MB', specialty: 'Lightweight STT with improved accuracy. Balanced speed/quality.' },
+    'windy-stt-core': { name: 'Windy STT Core', size: '462 MB', specialty: 'Core STT model. Recommended for most use cases.' },
+    'windy-stt-edge': { name: 'Windy STT Edge', size: '1444 MB', specialty: 'High-accuracy STT. Best for professional transcription.' },
+    'windy-stt-plus': { name: 'Windy STT Plus', size: '1458 MB', specialty: 'Premium STT with excellent accuracy. Production-grade.' },
+    'windy-stt-turbo': { name: 'Windy STT Turbo', size: '1544 MB', specialty: 'Latest-gen STT. State-of-the-art accuracy and robustness.' },
+    'windy-stt-pro': { name: 'Windy STT Pro', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
+
+    // Real CPU STT models from model_registry.json
+    'windy-stt-nano-cpu': { name: 'Windy STT Nano (CPU)', size: '406 MB', specialty: 'CPU-optimized Nano. Best for resource-constrained environments.' },
+    'windy-stt-lite-cpu': { name: 'Windy STT Lite (CPU)', size: '668 MB', specialty: 'CPU-optimized Lite. Good balance for CPU-only systems.' },
+    'windy-stt-core-cpu': { name: 'Windy STT Core (CPU)', size: '1760 MB', specialty: 'CPU-optimized Core. Recommended for most CPU deployments.' },
+    'windy-stt-edge-cpu': { name: 'Windy STT Edge (CPU)', size: '3824 MB', specialty: 'CPU-optimized Edge. High accuracy on CPU hardware.' },
+    'windy-stt-plus-cpu': { name: 'Windy STT Plus (CPU)', size: '4872 MB', specialty: 'CPU-optimized Plus. Premium accuracy without GPU.' },
+    'windy-stt-turbo-cpu': { name: 'Windy STT Turbo (CPU)', size: '4200 MB', specialty: 'CPU-optimized Turbo. State-of-the-art accuracy on CPU.' },
+    'windy-stt-pro-cpu': { name: 'Windy STT Pro (CPU)', size: '9456 MB', specialty: 'CPU-optimized Pro. Maximum CPU performance.' },
+
+    // Real Translation models from model_registry.json
+    'windy-translate-spark': { name: 'Windy Translate Spark', size: '929 MB', specialty: 'Fast multilingual translation. 100+ languages. LoRA-enhanced for priority pairs.' },
+    'windy-translate-standard': { name: 'Windy Translate Standard', size: '2371 MB', specialty: 'Standard multilingual translation. 100+ languages. Higher quality than Spark.' },
+
+    // Legacy model names → Real Windy model equivalents (based on base_architecture)
+    'tiny': { name: 'Windy STT Nano', size: '73 MB', specialty: 'Fastest STT model. Best for quick dictation on powerful hardware.' },
+    'base': { name: 'Windy STT Core', size: '462 MB', specialty: 'Core STT model. Recommended for most use cases.' },
+    'small': { name: 'Windy STT Lite', size: '140 MB', specialty: 'Lightweight STT with improved accuracy. Balanced speed/quality.' },
+    'medium': { name: 'Windy STT Edge', size: '1444 MB', specialty: 'High-accuracy STT. Best for professional transcription.' },
+    'large-v3': { name: 'Windy STT Pro', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
+    'turbo': { name: 'Windy STT Turbo', size: '1544 MB', specialty: 'Latest-gen STT. State-of-the-art accuracy and robustness.' },
   };
   const mi = MODEL_INFO[engineId] || { name: engineId, size: '', specialty: '' };
   const modelInfo = { model: mi.name, size: mi.size, windyTune, engineId, specialty: mi.specialty };
@@ -2940,44 +2961,30 @@ ipcMain.handle('validate-license', validateLicense);
 // ═══ Model Download Manager & Wizard ═══
 
 /**
- * Check which models are already downloaded (scan HuggingFace cache + local folder)
+ * Check which models are already downloaded (scan ~/.windy-pro/models/<model-id>/)
  */
 function checkModelStatus() {
   const fs = require('fs');
   const models = {};
-  const hfCache = path.join(os.homedir(), '.cache', 'huggingface', 'hub');
-  const localModelDir = path.join(os.homedir(), '.windy-pro', 'model');
-  const bundledDir = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : null;
+  const windyModelsDir = path.join(os.homedir(), '.windy-pro', 'models');
 
   for (const [name, info] of Object.entries(MODEL_MANIFEST.models)) {
-    const localPath = path.join(localModelDir, `faster-whisper-${name}`);
-    const bundledPath = bundledDir ? path.join(bundledDir, `faster-whisper-${name}`) : null;
+    const modelPath = path.join(windyModelsDir, name);
 
-    // Check local model dir
-    const localExists = fs.existsSync(path.join(localPath, 'model.bin'));
-    // Check bundled model dir
-    const bundledExists = bundledPath && fs.existsSync(path.join(bundledPath, 'model.bin'));
-    // Check HuggingFace cache (models downloaded by faster-whisper)
-    let hfExists = false;
+    // Check if model directory exists and has content
+    let downloaded = false;
     try {
-      const hfModelDir = path.join(hfCache, `models--Systran--faster-whisper-${name}`);
-      if (fs.existsSync(hfModelDir)) {
-        // Check for snapshots directory with content
-        const snapshotsDir = path.join(hfModelDir, 'snapshots');
-        if (fs.existsSync(snapshotsDir)) {
-          const snapshots = fs.readdirSync(snapshotsDir);
-          if (snapshots.length > 0) {
-            const snapDir = path.join(snapshotsDir, snapshots[0]);
-            hfExists = fs.existsSync(path.join(snapDir, 'model.bin'));
-          }
-        }
+      if (fs.existsSync(modelPath)) {
+        // Check if directory has files (at least config.json or similar)
+        const files = fs.readdirSync(modelPath);
+        downloaded = files.length > 0;
       }
     } catch (_) { }
 
     models[name] = {
       ...info,
-      downloaded: localExists || bundledExists || hfExists,
-      location: localExists ? 'local' : bundledExists ? 'bundled' : hfExists ? 'cache' : null
+      downloaded,
+      location: downloaded ? 'local' : null
     };
   }
   return models;
@@ -3001,14 +3008,26 @@ function downloadModel(modelName) {
 
     console.log(`[ModelDownload] Starting download: ${modelName}`);
 
+    // Determine HuggingFace repo name (translation models use underscores)
+    let repoName = modelName;
+    if (modelName === 'windy-translate-spark') {
+      repoName = 'windy_translate_spark';
+    } else if (modelName === 'windy-translate-standard') {
+      repoName = 'windy_translate_standard';
+    }
+
+    const localDir = path.join(os.homedir(), '.windy-pro', 'models', modelName);
+
     const proc = require('child_process').spawn(pythonExe, ['-c', `
 import sys
+import os
 print(f"DOWNLOADING {sys.argv[0]}", flush=True)
 try:
-    from faster_whisper import WhisperModel
+    from huggingface_hub import snapshot_download
     print("LOADING", flush=True)
-    model = WhisperModel("${modelName}", device="cpu", compute_type="int8")
-    del model
+    local_dir = "${localDir}"
+    os.makedirs(local_dir, exist_ok=True)
+    snapshot_download("WindyProLabs/${repoName}", local_dir=local_dir)
     print("DONE", flush=True)
 except Exception as e:
     print(f"ERROR {e}", flush=True)

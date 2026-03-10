@@ -1123,12 +1123,12 @@ class WindyApp {
         if (recordingMode !== 'batch') {
           suggestions.push('Switch to Batch mode for best accuracy');
         }
-        const modelSizeMB = { 'large-v3': 3100, 'turbo': 1600, 'medium.en': 1500, 'medium': 1500, 'small': 500, 'base': 150, 'tiny': 75 };
+        const modelSizeMB = { 'large-v3': 2945, 'windy-stt-pro': 2945, 'turbo': 1544, 'windy-stt-turbo': 1544, 'medium': 1444, 'windy-stt-edge': 1444, 'small': 140, 'windy-stt-lite': 140, 'base': 462, 'windy-stt-core': 462, 'tiny': 73, 'windy-stt-nano': 73 };
         const currentModelSize = modelSizeMB[msg.model] || 0;
         if (currentModelSize > 500) {
-          suggestions.push('Try Edge Standard (500MB, CPU-friendly)');
+          suggestions.push('Try Windy STT Core (462MB, balanced)');
         } else if (currentModelSize > 150) {
-          suggestions.push('Try Edge Pulse (150MB) for faster dictation');
+          suggestions.push('Try Windy STT Lite (140MB) for faster dictation');
         }
         const tip = suggestions.length > 0 ? ` 💡 ${suggestions[0]}` : '';
         this.showReconnectToast(`⚠️ ${displayName} is struggling.${tip}`);

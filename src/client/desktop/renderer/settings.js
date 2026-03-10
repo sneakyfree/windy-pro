@@ -177,21 +177,20 @@ class SettingsPanel {
             <select id="engineSelect">
               <option value="windytune" selected>🌪️ WindyTune — auto-pilot, monitors & optimizes</option>
               <option value="local">🏠 Local — manual model selection</option>
-              <option value="edge-spark">🛡️ Edge Spark (42 MB) — ultra-light, 32x speed</option>
-              <option value="edge-pulse">🛡️ Edge Pulse (78 MB) — phone-friendly, 16x</option>
-              <option value="edge-standard">🛡️ Edge Standard (168 MB) — best CPU balance, 6x</option>
-              <option value="edge-global">🛡️ Edge Global (515 MB) — multilingual CPU, 2x</option>
-              <option value="edge-pro">🛡️ Edge Pro (515 MB) — best English on CPU, 4x</option>
-              <option value="core-spark">⚡ Core Spark (75 MB) — fastest GPU, 32x</option>
-              <option value="core-pulse">⚡ Core Pulse (142 MB) — reliable GPU, 16x</option>
-              <option value="core-standard">⚡ Core Standard (466 MB) — all-rounder, 6x</option>
-              <option value="core-global">⚡ Core Global (1.5 GB) — multilingual GPU, 2x</option>
-              <option value="core-pro">⚡ Core Pro (1.5 GB) — English excellence, 6x</option>
-              <option value="core-turbo">⚡ Core Turbo (1.6 GB) — near-Ultra, 4x</option>
-              <option value="core-ultra">⚡ Core Ultra (2.9 GB) — BEST accuracy, 1x</option>
-              <option value="lingua-es">🌍 Lingua Español (500 MB) — Spanish specialist</option>
-              <option value="lingua-fr">🌍 Lingua Français (500 MB) — French specialist</option>
-              <option value="lingua-hi">🌍 Lingua हिन्दी (500 MB) — Hindi specialist</option>
+              <option value="windy-stt-nano">⚡ Windy STT Nano (73 MB) — fastest GPU, quick dictation</option>
+              <option value="windy-stt-lite">⚡ Windy STT Lite (140 MB) — lightweight, balanced speed/quality</option>
+              <option value="windy-stt-core">⚡ Windy STT Core (462 MB) — recommended for most use cases</option>
+              <option value="windy-stt-edge">⚡ Windy STT Edge (1444 MB) — high-accuracy, professional grade</option>
+              <option value="windy-stt-plus">⚡ Windy STT Plus (1458 MB) — premium accuracy, production-grade</option>
+              <option value="windy-stt-turbo">⚡ Windy STT Turbo (1544 MB) — latest-gen, state-of-the-art</option>
+              <option value="windy-stt-pro">⚡ Windy STT Pro (2945 MB) — ultra-fast large model</option>
+              <option value="windy-stt-nano-cpu">🛡️ Windy STT Nano CPU (406 MB) — CPU-optimized, resource-constrained</option>
+              <option value="windy-stt-lite-cpu">🛡️ Windy STT Lite CPU (668 MB) — CPU-optimized, good balance</option>
+              <option value="windy-stt-core-cpu">🛡️ Windy STT Core CPU (1760 MB) — CPU-optimized, recommended for CPU</option>
+              <option value="windy-stt-edge-cpu">🛡️ Windy STT Edge CPU (3824 MB) — CPU-optimized, high accuracy</option>
+              <option value="windy-stt-plus-cpu">🛡️ Windy STT Plus CPU (4872 MB) — CPU-optimized, premium accuracy</option>
+              <option value="windy-stt-turbo-cpu">🛡️ Windy STT Turbo CPU (4200 MB) — CPU-optimized, state-of-the-art</option>
+              <option value="windy-stt-pro-cpu">🛡️ Windy STT Pro CPU (9456 MB) — CPU-optimized, maximum performance</option>
             </select>
           </div>
           <p class="settings-hint" id="engineHint">Audio processed on your device. Nothing sent anywhere.</p>
@@ -238,11 +237,11 @@ class SettingsPanel {
           <div class="setting-row" id="modelSizeRow">
             <label for="modelSelect">Model Size</label>
             <select id="modelSelect">
-              <option value="tiny" selected>Edge Spark (75MB — fastest, CPU ✅)</option>
-              <option value="base">Edge Pulse (150MB — balanced, CPU ✅)</option>
-              <option value="small">Core Standard (500MB — ⚠️ GPU recommended)</option>
-              <option value="medium">Core Pro (1.5GB — ⚠️ GPU only)</option>
-              <option value="large-v3">Core Ultra (3GB — ⚠️ GPU only)</option>
+              <option value="tiny" selected>Windy STT Nano (73MB — fastest, GPU ✅)</option>
+              <option value="base">Windy STT Core (462MB — recommended, GPU ✅)</option>
+              <option value="small">Windy STT Lite (140MB — lightweight, GPU ✅)</option>
+              <option value="medium">Windy STT Edge (1444MB — high-accuracy, GPU ✅)</option>
+              <option value="large-v3">Windy STT Pro (2945MB — ultra-fast large model, GPU ✅)</option>
             </select>
           </div>
           <div class="setting-row">
@@ -1701,19 +1700,19 @@ class SettingsPanel {
 
   /**
    * Gray out engines/models not available on the user's plan tier.
-   * Free: WindyTune + Edge Spark + Edge Pulse (2 smallest engines)
-   * Pro: All Edge + all Core engines
-   * Translate: Pro + Lingua language specialists
+   * Free: WindyTune + smallest 3 GPU models
+   * Pro: All GPU and CPU STT models
+   * Translate: Pro + Windy Translate Spark
    * Windy Max: Everything
    */
   _applyTierGating(tier) {
     const tierEngines = {
-      free: ['windytune', 'local', 'edge-spark', 'edge-pulse'],
-      pro: ['windytune', 'local', 'edge-spark', 'edge-pulse', 'edge-standard', 'edge-global', 'edge-pro',
-        'core-spark', 'core-pulse', 'core-standard', 'core-global', 'core-pro', 'core-turbo', 'core-ultra'],
-      translate: ['windytune', 'local', 'edge-spark', 'edge-pulse', 'edge-standard', 'edge-global', 'edge-pro',
-        'core-spark', 'core-pulse', 'core-standard', 'core-global', 'core-pro', 'core-turbo', 'core-ultra',
-        'lingua-es', 'lingua-fr', 'lingua-hi'],
+      free: ['windytune', 'local', 'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core'],
+      pro: ['windytune', 'local', 'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro',
+        'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu'],
+      translate: ['windytune', 'local', 'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro',
+        'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu',
+        'windy-translate-spark'],
       translate_pro: null, // all engines
       unlimited: null  // all engines
     };
