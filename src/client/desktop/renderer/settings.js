@@ -416,7 +416,7 @@ class SettingsPanel {
             <p class="settings-hint sfx-during-hint" style="margin:0 0 6px;font-size:10px;">Record or import sounds. ⭐ Star them to show in hook dropdowns.</p>
             <div class="sfx-library-controls">
               <button class="sfx-custom-btn sfx-custom-record" id="sfxLibRecord" title="Record with mic" style="width:auto;padding:0 8px;font-size:11px;">🎙️ Record</button>
-              <button class="sfx-custom-btn" id="sfxLibUpload" title="Import audio from disk" style="width:auto;padding:0 8px;font-size:11px;">📥 Import</button>
+              <button class="sfx-custom-btn" id="sfxLibUpload" title="Import audio file from disk" style="width:auto;padding:0 8px;font-size:11px;">📂 Add File</button>
               <span class="sfx-hook-pct" id="sfxLibCount" style="margin-left:auto;">0 sounds</span>
             </div>
             <div id="sfxLibRecStatus" style="display:none;padding:4px 8px;margin:4px 0;border-radius:6px;font-size:11px;"></div>
@@ -1249,9 +1249,17 @@ class SettingsPanel {
           nameInput.addEventListener('blur', finishRename);
           nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') finishRename(); });
 
-          // Preview
+          // Preview — play with fallback
           card.querySelector('.sfx-lib-play').addEventListener('click', () => {
-            fx.sound.playAudioFile(item.dataUrl, 0.7);
+            if (!item.dataUrl) { console.warn('No dataUrl for', item.name); return; }
+            try {
+              // Direct Audio playback (most reliable for data URLs)
+              const audio = new Audio(item.dataUrl);
+              audio.volume = 0.7;
+              audio.play().catch(e => console.warn('Audio play failed:', e));
+            } catch (e) {
+              console.warn('Library preview error:', e);
+            }
           });
 
           // Delete
@@ -1453,7 +1461,11 @@ class SettingsPanel {
           const cfg = customCfg[hd.key];
           if (cfg?.type === 'library') {
             const lib = soundLibrary.find(s => s.id === cfg.libId);
-            if (lib?.dataUrl) fx.sound.playAudioFile(lib.dataUrl, volSlider.value / 100);
+            if (lib?.dataUrl) {
+              const audio = new Audio(lib.dataUrl);
+              audio.volume = Math.max(0.05, (volSlider.value / 100));
+              audio.play().catch(e => console.warn('Hook preview failed:', e));
+            }
           } else if (cfg?.type === 'stock' && cfg.packId) {
             fx.previewEffect(cfg.packId, cfg.hook);
           } else {
@@ -1471,13 +1483,13 @@ class SettingsPanel {
 
           const subRow = document.createElement('div');
           subRow.className = 'sfx-interval-row';
-          subRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 8px;';
+          subRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;margin-top:4px;';
           subRow.innerHTML = `
             <span class="sfx-hook-label" style="font-size:9px;">⏱️ Beep every</span>
             <input type="range" class="sfx-hook-vol" id="uniInterval_${hd.key}" min="1" max="${maxVal}" value="${saved}" style="flex:1;">
             <span class="sfx-hook-pct" id="uniIntervalVal_${hd.key}" style="min-width:32px;">${formatInterval(saved)}</span>
           `;
-          unifiedHooksContainer.appendChild(subRow);
+          row.appendChild(subRow);
 
           const iSlider = subRow.querySelector(`#uniInterval_${hd.key}`);
           const iVal = subRow.querySelector(`#uniIntervalVal_${hd.key}`);
@@ -1491,9 +1503,9 @@ class SettingsPanel {
           if (hd.key === 'during') {
             const hint = document.createElement('p');
             hint.className = 'settings-hint sfx-during-hint';
-            hint.style.cssText = 'margin:-2px 0 4px 4px;font-size:9px;';
+            hint.style.cssText = 'margin:4px 0 0 4px;font-size:9px;';
             hint.textContent = '🎧 Periodic beeps confirm recording is active. Speaker-only.';
-            unifiedHooksContainer.appendChild(hint);
+            row.appendChild(hint);
           }
         }
 
@@ -1501,9 +1513,9 @@ class SettingsPanel {
         if (hd.key === 'warning') {
           const hint = document.createElement('p');
           hint.className = 'settings-hint sfx-during-hint';
-          hint.style.cssText = 'margin:-2px 0 4px 4px;font-size:9px;';
+          hint.style.cssText = 'margin:4px 0 0 4px;font-size:9px;';
           hint.textContent = '⚠️ Warns 30s & 15s before recording time limit.';
-          unifiedHooksContainer.appendChild(hint);
+          row.appendChild(hint);
         }
       }
 
