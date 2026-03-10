@@ -884,6 +884,63 @@ body {
   font-weight: 700;
 }
 
+/* Library controls & grid */
+.sfx-library-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.sfx-library-grid {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.sfx-lib-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.sfx-lib-card-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sfx-lib-name-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.15);
+  color: #E2E8F0;
+  font-size: 11px;
+  padding: 1px 2px;
+  outline: none;
+  min-width: 0;
+}
+
+.sfx-lib-name-input:focus {
+  border-bottom-color: #22C55E;
+}
+
+.sfx-lib-card-meta {
+  font-size: 9px;
+  color: #64748B;
+}
+
+.sfx-lib-card-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 3px;
+}
+
 .sfx-hook-label {
   flex: 1 1 100px;
   font-size: 11px;
@@ -4422,6 +4479,16 @@ body.light-theme .sfx-custom-select option {
 body.light-theme .sfx-custom-btn {
   background: rgba(0, 0, 0, 0.06);
   color: #334155;
+}
+
+body.light-theme .sfx-lib-card {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme .sfx-lib-name-input {
+  color: #1E293B;
+  border-bottom-color: rgba(0, 0, 0, 0.15);
 }
 
 /* Light theme — Widget mode pills + custom library */

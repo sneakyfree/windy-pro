@@ -454,7 +454,13 @@ class EffectsEngine {
                 const hookCfg = customCfg[hook];
                 if (!hookCfg) return;
 
-                if (hookCfg.type === 'file' && hookCfg.dataUrl) {
+                if (hookCfg.type === 'library' && hookCfg.libId) {
+                    // Look up from shared sound library
+                    const lib = JSON.parse(localStorage.getItem('windy_soundLibrary') || '[]');
+                    const entry = lib.find(s => s.id === hookCfg.libId);
+                    if (entry?.dataUrl) this.sound.playAudioFile(entry.dataUrl, hookVolMul);
+                } else if (hookCfg.type === 'file' && hookCfg.dataUrl) {
+                    // Legacy: inline data URL
                     this.sound.playAudioFile(hookCfg.dataUrl, hookVolMul);
                 } else if (hookCfg.type === 'stock' && hookCfg.packId && hookCfg.hook) {
                     const pack = this._packs[hookCfg.packId];
