@@ -76,28 +76,16 @@ class SoundManager {
 
     /**
      * Play an audio file from a data URL (base64)
+     * Uses HTML Audio element for broad format support (webm, mp3, wav, ogg, m4a)
      * @param {string} dataUrl - base64 data URL of audio file
      * @param {number} volume - volume multiplier (0-1)
      */
     async playAudioFile(dataUrl, volume = 0.5) {
         if (this._masterVolume === 0 || !dataUrl) return;
         try {
-            const ctx = this._ensureCtx();
-            let buffer = this._cache[dataUrl];
-            if (!buffer) {
-                // Decode base64 data URL to ArrayBuffer
-                const resp = await fetch(dataUrl);
-                const arrayBuf = await resp.arrayBuffer();
-                buffer = await ctx.decodeAudioData(arrayBuf);
-                this._cache[dataUrl] = buffer;
-            }
-            const source = ctx.createBufferSource();
-            const gain = ctx.createGain();
-            source.buffer = buffer;
-            source.connect(gain);
-            gain.connect(ctx.destination);
-            gain.gain.value = Math.min(1, volume * this._masterVolume);
-            source.start(0);
+            const audio = new Audio(dataUrl);
+            audio.volume = Math.min(1, volume * this._masterVolume);
+            audio.play().catch(() => { });
         } catch (_) { /* fail silently */ }
     }
 

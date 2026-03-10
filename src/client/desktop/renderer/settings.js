@@ -1296,13 +1296,16 @@ class SettingsPanel {
 
         // ── Record with mic ──
         const recordBtn = row.querySelector(`#customRecord_${hd.key}`);
+        const statusEl = row.querySelector(`#customStatus_${hd.key}`);
         let mediaRec = null;
+        let recTimer = null;
         recordBtn.addEventListener('click', async () => {
           if (mediaRec && mediaRec.state === 'recording') {
             // Stop recording
             mediaRec.stop();
             recordBtn.textContent = '🎙️';
             recordBtn.classList.remove('recording');
+            clearInterval(recTimer);
             return;
           }
           try {
@@ -1312,20 +1315,28 @@ class SettingsPanel {
             mediaRec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
             mediaRec.onstop = () => {
               stream.getTracks().forEach(t => t.stop());
+              clearInterval(recTimer);
               const blob = new Blob(chunks, { type: 'audio/webm' });
               if (blob.size > 5 * 1024 * 1024) { alert('Recording too long (max 5MB)'); return; }
               const reader = new FileReader();
               reader.onload = () => {
-                customCfg[hd.key] = { type: 'file', dataUrl: reader.result, name: '🎙️ Recorded' };
+                customCfg[hd.key] = { type: 'file', dataUrl: reader.result, name: '🎙️ Recorded clip' };
                 saveCustomCfg();
-                row.querySelector(`#customStatus_${hd.key}`).textContent = '🎙️ Recorded';
+                if (statusEl) statusEl.textContent = '🎙️ Recorded clip';
                 sel.value = '';
               };
               reader.readAsDataURL(blob);
             };
             mediaRec.start();
-            recordBtn.textContent = '⏹️';
+            recordBtn.textContent = '⏹';
             recordBtn.classList.add('recording');
+            // Live timer in status
+            let secs = 0;
+            if (statusEl) statusEl.textContent = '🟢 Recording... 0s';
+            recTimer = setInterval(() => {
+              secs++;
+              if (statusEl) statusEl.textContent = `🟢 Recording... ${secs}s`;
+            }, 1000);
           } catch (err) {
             alert('Mic access denied');
           }
