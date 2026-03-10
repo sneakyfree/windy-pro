@@ -418,6 +418,7 @@ class SettingsPanel {
               <input type="range" class="sfx-hook-vol" id="sfxVolDuring" min="0" max="100" value="30" title="Volume">
               <span class="sfx-hook-pct" id="sfxVolDuringPct">Vol: 30%</span>
             </div>
+            <p class="settings-hint" style="margin:-2px 0 4px 4px;font-size:10px;color:#22C55E;font-style:italic;">💡 These beeps play through speakers only — they won't affect your transcription quality.</p>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">⏹️ Stop Recording</span>
               <label class="sfx-toggle"><input type="checkbox" id="sfxHookStop"><span class="sfx-toggle-slider"></span></label>
