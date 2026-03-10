@@ -942,8 +942,9 @@ body {
 }
 
 .sfx-lib-card-meta {
-  font-size: 9px;
-  color: #64748B;
+  font-size: 10px;
+  color: #94A3B8;
+  font-weight: 500;
 }
 
 .sfx-lib-card-actions {
@@ -4500,6 +4501,14 @@ body.light-theme .sfx-lib-card {
 body.light-theme .sfx-lib-name-input {
   color: #1E293B;
   border-bottom-color: rgba(0, 0, 0, 0.15);
+}
+
+body.light-theme .sfx-lib-card-meta {
+  color: #475569;
+}
+
+body.light-theme .sfx-lib-name-text {
+  color: #1E293B;
 }
 
 /* Light theme — Widget mode pills + custom library */

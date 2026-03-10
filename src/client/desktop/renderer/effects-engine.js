@@ -76,25 +76,32 @@ class SoundManager {
 
     /**
      * Play an audio file from a data URL (base64)
-     * Converts to Blob URL for reliable Electron playback
+     * Manually decodes base64 → Blob → Object URL for reliable Electron playback
      * @param {string} dataUrl - base64 data URL of audio file
      * @param {number} volume - volume multiplier (0-1)
      */
     async playAudioFile(dataUrl, volume = 0.5) {
         if (this._masterVolume === 0 || !dataUrl) return;
         try {
-            // Convert data URL to Blob URL for reliable playback
             let url = dataUrl;
             if (dataUrl.startsWith('data:')) {
-                const resp = await fetch(dataUrl);
-                const blob = await resp.blob();
+                // Manual base64 → Blob (bypasses fetch restrictions in Electron)
+                const comma = dataUrl.indexOf(',');
+                const header = dataUrl.substring(0, comma);
+                const base64 = dataUrl.substring(comma + 1);
+                const mimeMatch = header.match(/data:([^;]+)/);
+                const mime = mimeMatch ? mimeMatch[1] : 'audio/webm';
+                const binary = atob(base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                const blob = new Blob([bytes], { type: mime });
                 url = URL.createObjectURL(blob);
             }
             const audio = new Audio();
             audio.volume = Math.min(1, Math.max(0.05, volume * this._masterVolume));
             audio.src = url;
             audio.onended = () => { try { URL.revokeObjectURL(url); } catch (_) { } };
-            audio.onerror = (e) => { console.warn('Audio playback error:', e); };
+            audio.onerror = (e) => console.warn('Audio error:', e);
             await audio.play();
         } catch (e) { console.warn('playAudioFile failed:', e); }
     }
