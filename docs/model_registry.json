@@ -1,5 +1,5 @@
 {
-  "version": "4.0.0",
+  "version": "5.0.0",
   "generated": "2026-03-10T08:36:00-04:00",
   "generated_by": "Kit 0C1 Alpha",
   "summary": {
@@ -155,7 +155,7 @@
       "qa": {
         "status": "PENDING"
       },
-      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+      "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
       "id": "windy-stt-lite-ct2",
@@ -174,7 +174,7 @@
       "qa": {
         "status": "PENDING"
       },
-      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+      "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
       "id": "windy-stt-core-ct2",
@@ -193,7 +193,7 @@
       "qa": {
         "status": "PENDING"
       },
-      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+      "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
       "id": "windy-stt-plus-ct2",
@@ -212,7 +212,7 @@
       "qa": {
         "status": "PENDING"
       },
-      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+      "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
       "id": "windy-stt-turbo-ct2",
@@ -231,7 +231,7 @@
       "qa": {
         "status": "PENDING"
       },
-      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+      "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
       "id": "windy-stt-pro-ct2",
@@ -250,7 +250,7 @@
       "qa": {
         "status": "PENDING"
       },
-      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+      "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
       "id": "windy-stt-edge-ct2",
@@ -269,7 +269,7 @@
       "qa": {
         "status": "PENDING"
       },
-      "description": "CTranslate2 INT8 quantized — ~50% size of GPU version. Use with faster-whisper."
+      "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
       "id": "windy-stt-distil-small",
@@ -294,7 +294,7 @@
       "qa": {
         "status": "PENDING"
       },
-      "description": "Distilled architecture — genuinely faster on CPU than standard Whisper."
+      "description": "Distilled architecture \u2014 genuinely faster on CPU than standard Whisper."
     },
     {
       "id": "windy-stt-distil-medium",
@@ -319,7 +319,7 @@
       "qa": {
         "status": "PENDING"
       },
-      "description": "Distilled architecture — genuinely faster on CPU than standard Whisper."
+      "description": "Distilled architecture \u2014 genuinely faster on CPU than standard Whisper."
     },
     {
       "id": "windy-stt-distil-large",
@@ -344,7 +344,7 @@
       "qa": {
         "status": "PENDING"
       },
-      "description": "Distilled architecture — genuinely faster on CPU than standard Whisper."
+      "description": "Distilled architecture \u2014 genuinely faster on CPU than standard Whisper."
     },
     {
       "id": "windy-translate-spark",
@@ -375,6 +375,298 @@
         "status": "PASS",
         "date": "2026-03-09"
       }
+    }
+  ],
+  "updated": "2026-03-10",
+  "total_models": 45,
+  "lingua_models": [
+    {
+      "id": "windy-lingua-spanish",
+      "name": "Windy Lingua Spanish",
+      "type": "stt",
+      "format": "safetensors",
+      "language": "es",
+      "size_mb": 466,
+      "base": "clu-ling/whisper-small-spanish",
+      "hf_repo": "WindyProLabs/windy-lingua-spanish",
+      "requires_gpu": true
+    },
+    {
+      "id": "windy-lingua-spanish-ct2",
+      "name": "Windy Lingua Spanish (CPU)",
+      "type": "stt",
+      "format": "ctranslate2-int8",
+      "language": "es",
+      "size_mb": 235,
+      "base": "clu-ling/whisper-small-spanish",
+      "hf_repo": "WindyProLabs/windy-lingua-spanish-ct2",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-lingua-chinese",
+      "name": "Windy Lingua Chinese",
+      "type": "stt",
+      "format": "safetensors",
+      "language": "zh",
+      "size_mb": 466,
+      "base": "Jingmiao/whisper-small-chinese_base",
+      "hf_repo": "WindyProLabs/windy-lingua-chinese",
+      "requires_gpu": true
+    },
+    {
+      "id": "windy-lingua-chinese-ct2",
+      "name": "Windy Lingua Chinese (CPU)",
+      "type": "stt",
+      "format": "ctranslate2-int8",
+      "language": "zh",
+      "size_mb": 235,
+      "base": "Jingmiao/whisper-small-chinese_base",
+      "hf_repo": "WindyProLabs/windy-lingua-chinese-ct2",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-lingua-hindi",
+      "name": "Windy Lingua Hindi",
+      "type": "stt",
+      "format": "safetensors",
+      "language": "hi",
+      "size_mb": 144,
+      "base": "Oriserve/Whisper-Hindi2Hinglish-Swift",
+      "hf_repo": "WindyProLabs/windy-lingua-hindi",
+      "requires_gpu": true
+    },
+    {
+      "id": "windy-lingua-hindi-ct2",
+      "name": "Windy Lingua Hindi (CPU)",
+      "type": "stt",
+      "format": "ctranslate2-int8",
+      "language": "hi",
+      "size_mb": 72,
+      "base": "Oriserve/Whisper-Hindi2Hinglish-Swift",
+      "hf_repo": "WindyProLabs/windy-lingua-hindi-ct2",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-lingua-french",
+      "name": "Windy Lingua French",
+      "type": "stt",
+      "format": "safetensors",
+      "language": "fr",
+      "size_mb": 1462,
+      "base": "bofenghuang/whisper-medium-french",
+      "hf_repo": "WindyProLabs/windy-lingua-french",
+      "requires_gpu": true
+    },
+    {
+      "id": "windy-lingua-french-ct2",
+      "name": "Windy Lingua French (CPU)",
+      "type": "stt",
+      "format": "ctranslate2-int8",
+      "language": "fr",
+      "size_mb": 735,
+      "base": "bofenghuang/whisper-medium-french",
+      "hf_repo": "WindyProLabs/windy-lingua-french-ct2",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-lingua-arabic",
+      "name": "Windy Lingua Arabic",
+      "type": "stt",
+      "format": "safetensors",
+      "language": "ar",
+      "size_mb": 2950,
+      "base": "Byne/whisper-large-v3-arabic",
+      "hf_repo": "WindyProLabs/windy-lingua-arabic",
+      "requires_gpu": true
+    },
+    {
+      "id": "windy-lingua-arabic-ct2",
+      "name": "Windy Lingua Arabic (CPU)",
+      "type": "stt",
+      "format": "ctranslate2-int8",
+      "language": "ar",
+      "size_mb": 1481,
+      "base": "Byne/whisper-large-v3-arabic",
+      "hf_repo": "WindyProLabs/windy-lingua-arabic-ct2",
+      "requires_gpu": false
+    }
+  ],
+  "pair_models": [
+    {
+      "id": "windy-pair-en-es",
+      "name": "Windy Pair EN\u2192ES",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "en-es",
+      "size_mb": 299,
+      "base": "Helsinki-NLP/opus-mt-en-es",
+      "hf_repo": "WindyProLabs/windy-pair-en-es",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-es-en",
+      "name": "Windy Pair ES\u2192EN",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "es-en",
+      "size_mb": 299,
+      "base": "Helsinki-NLP/opus-mt-es-en",
+      "hf_repo": "WindyProLabs/windy-pair-es-en",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-en-zh",
+      "name": "Windy Pair EN\u2192ZH",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "en-zh",
+      "size_mb": 299,
+      "base": "Helsinki-NLP/opus-mt-en-zh",
+      "hf_repo": "WindyProLabs/windy-pair-en-zh",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-zh-en",
+      "name": "Windy Pair ZH\u2192EN",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "zh-en",
+      "size_mb": 299,
+      "base": "Helsinki-NLP/opus-mt-zh-en",
+      "hf_repo": "WindyProLabs/windy-pair-zh-en",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-en-fr",
+      "name": "Windy Pair EN\u2192FR",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "en-fr",
+      "size_mb": 288,
+      "base": "Helsinki-NLP/opus-mt-en-fr",
+      "hf_repo": "WindyProLabs/windy-pair-en-fr",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-fr-en",
+      "name": "Windy Pair FR\u2192EN",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "fr-en",
+      "size_mb": 288,
+      "base": "Helsinki-NLP/opus-mt-fr-en",
+      "hf_repo": "WindyProLabs/windy-pair-fr-en",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-en-de",
+      "name": "Windy Pair EN\u2192DE",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "en-de",
+      "size_mb": 285,
+      "base": "Helsinki-NLP/opus-mt-en-de",
+      "hf_repo": "WindyProLabs/windy-pair-en-de",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-de-en",
+      "name": "Windy Pair DE\u2192EN",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "de-en",
+      "size_mb": 285,
+      "base": "Helsinki-NLP/opus-mt-de-en",
+      "hf_repo": "WindyProLabs/windy-pair-de-en",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-en-ar",
+      "name": "Windy Pair EN\u2192AR",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "en-ar",
+      "size_mb": 296,
+      "base": "Helsinki-NLP/opus-mt-en-ar",
+      "hf_repo": "WindyProLabs/windy-pair-en-ar",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-ar-en",
+      "name": "Windy Pair AR\u2192EN",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "ar-en",
+      "size_mb": 296,
+      "base": "Helsinki-NLP/opus-mt-ar-en",
+      "hf_repo": "WindyProLabs/windy-pair-ar-en",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-en-hi",
+      "name": "Windy Pair EN\u2192HI",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "en-hi",
+      "size_mb": 294,
+      "base": "Helsinki-NLP/opus-mt-en-hi",
+      "hf_repo": "WindyProLabs/windy-pair-en-hi",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-hi-en",
+      "name": "Windy Pair HI\u2192EN",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "hi-en",
+      "size_mb": 292,
+      "base": "Helsinki-NLP/opus-mt-hi-en",
+      "hf_repo": "WindyProLabs/windy-pair-hi-en",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-en-pt",
+      "name": "Windy Pair EN\u2192PT",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "en-pt",
+      "size_mb": 890,
+      "base": "Helsinki-NLP/opus-mt-tc-big-en-pt",
+      "hf_repo": "WindyProLabs/windy-pair-en-pt",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-pt-en",
+      "name": "Windy Pair PT\u2192EN",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "pt-en",
+      "size_mb": 299,
+      "base": "Helsinki-NLP/opus-mt-ROMANCE-en",
+      "hf_repo": "WindyProLabs/windy-pair-pt-en",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-en-ru",
+      "name": "Windy Pair EN\u2192RU",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "en-ru",
+      "size_mb": 296,
+      "base": "Helsinki-NLP/opus-mt-en-ru",
+      "hf_repo": "WindyProLabs/windy-pair-en-ru",
+      "requires_gpu": false
+    },
+    {
+      "id": "windy-pair-ru-en",
+      "name": "Windy Pair RU\u2192EN",
+      "type": "translation",
+      "format": "pytorch",
+      "language_pair": "ru-en",
+      "size_mb": 296,
+      "base": "Helsinki-NLP/opus-mt-ru-en",
+      "hf_repo": "WindyProLabs/windy-pair-ru-en",
+      "requires_gpu": false
     }
   ]
 }
