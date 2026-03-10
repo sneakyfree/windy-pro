@@ -404,78 +404,26 @@ class SettingsPanel {
             </select>
           </div>
 
-          <div id="sfxCustomSection" style="display:none;">
-            <p class="settings-hint sfx-during-hint" style="margin:10px 0 6px;font-weight:700;font-size:12px;">── 📚 My Sound Library ──</p>
-            <p class="settings-hint sfx-during-hint" style="margin:0 0 6px;font-size:10px;">Upload or record sounds once — use them for any hook.</p>
+          <div id="sfxUnifiedSection" style="display:none;">
+            <div class="sfx-master-controls">
+              <span class="sfx-custom-hook-label">🔊 Master</span>
+              <button class="sfx-custom-btn" id="sfxMasterMute" title="Mute/Unmute All" style="width:auto;padding:0 6px;font-size:12px;">🔊</button>
+              <input type="range" class="sfx-hook-vol" id="sfxMasterVol" min="0" max="100" value="70" title="Master Volume">
+              <span class="sfx-hook-pct" id="sfxMasterVolPct">70%</span>
+            </div>
+
+            <p class="settings-hint sfx-during-hint" style="margin:8px 0 4px;font-weight:700;font-size:12px;">── 📚 My Sound Library ──</p>
+            <p class="settings-hint sfx-during-hint" style="margin:0 0 6px;font-size:10px;">Record or import sounds. ⭐ Star them to show in hook dropdowns.</p>
             <div class="sfx-library-controls">
-              <button class="sfx-custom-btn" id="sfxLibUpload" title="Upload audio file" style="width:auto;padding:0 8px;font-size:11px;">📂 Upload</button>
               <button class="sfx-custom-btn sfx-custom-record" id="sfxLibRecord" title="Record with mic" style="width:auto;padding:0 8px;font-size:11px;">🎙️ Record</button>
+              <button class="sfx-custom-btn" id="sfxLibUpload" title="Import audio from disk" style="width:auto;padding:0 8px;font-size:11px;">📥 Import</button>
               <span class="sfx-hook-pct" id="sfxLibCount" style="margin-left:auto;">0 sounds</span>
             </div>
             <div id="sfxLibRecStatus" style="display:none;padding:4px 8px;margin:4px 0;border-radius:6px;font-size:11px;"></div>
             <div id="sfxLibGrid" class="sfx-library-grid"></div>
 
-            <p class="settings-hint sfx-during-hint" style="margin:10px 0 6px;font-weight:700;font-size:12px;">── 🎨 Assign to Hooks ──</p>
-            <p class="settings-hint sfx-during-hint" style="margin:0 0 8px;font-size:10px;">Pick a stock sound or one from your library for each hook.</p>
-            <div id="sfxCustomHooks"></div>
-          </div>
-
-          <div id="sfxHookSection" style="display:none;">
-            <p class="settings-hint" style="margin:10px 0 6px;font-weight:700;color:#E2E8F0;font-size:12px;">── 🔊 Sound Volume per Hook ──</p>
-            <div class="sfx-hook-row">
-              <span class="sfx-hook-label">🎬 Start Recording</span>
-              <span class="sfx-mute-label" id="sfxMuteStart" title="Toggle mute">🔊</span>
-              <label class="sfx-toggle"><input type="checkbox" id="sfxHookStart"><span class="sfx-toggle-slider"></span></label>
-              <input type="range" class="sfx-hook-vol" id="sfxVolStart" min="0" max="100" value="70" title="Volume">
-              <span class="sfx-hook-pct" id="sfxVolStartPct">Vol: 70%</span>
-            </div>
-            <div class="sfx-hook-row">
-              <span class="sfx-hook-label">🎤 During Recording</span>
-              <span class="sfx-mute-label" id="sfxMuteDuring" title="Toggle mute">🔊</span>
-              <label class="sfx-toggle"><input type="checkbox" id="sfxHookDuring"><span class="sfx-toggle-slider"></span></label>
-              <input type="range" class="sfx-hook-vol" id="sfxVolDuring" min="0" max="100" value="30" title="Volume">
-              <span class="sfx-hook-pct" id="sfxVolDuringPct">Vol: 30%</span>
-            </div>
-            <div class="sfx-interval-row">
-              <span class="sfx-hook-label" style="font-size:9px;">⏱️ Beep every</span>
-              <input type="range" class="sfx-hook-vol" id="sfxIntervalDuring" min="1" max="300" value="5" style="flex:1;">
-              <span class="sfx-hook-pct" id="sfxIntervalDuringVal" style="min-width:32px;">5s</span>
-            </div>
-            <p class="settings-hint sfx-during-hint" style="margin:-2px 0 4px 4px;font-size:10px;">🎧 Periodic beeps confirm recording is active — even hands-free. Speaker-only, never captured in your transcript.</p>
-            <div class="sfx-hook-row">
-              <span class="sfx-hook-label">⏹️ Stop Recording</span>
-              <span class="sfx-mute-label" id="sfxMuteStop" title="Toggle mute">🔊</span>
-              <label class="sfx-toggle"><input type="checkbox" id="sfxHookStop"><span class="sfx-toggle-slider"></span></label>
-              <input type="range" class="sfx-hook-vol" id="sfxVolStop" min="0" max="100" value="70" title="Volume">
-              <span class="sfx-hook-pct" id="sfxVolStopPct">Vol: 70%</span>
-            </div>
-            <div class="sfx-hook-row">
-              <span class="sfx-hook-label">⏳ Processing</span>
-              <span class="sfx-mute-label" id="sfxMuteProcess" title="Toggle mute">🔊</span>
-              <label class="sfx-toggle"><input type="checkbox" id="sfxHookProcess"><span class="sfx-toggle-slider"></span></label>
-              <input type="range" class="sfx-hook-vol" id="sfxVolProcess" min="0" max="100" value="30" title="Volume">
-              <span class="sfx-hook-pct" id="sfxVolProcessPct">Vol: 30%</span>
-            </div>
-            <div class="sfx-interval-row">
-              <span class="sfx-hook-label" style="font-size:9px;">⏱️ Beep every</span>
-              <input type="range" class="sfx-hook-vol" id="sfxIntervalProcess" min="1" max="60" value="10" style="flex:1;">
-              <span class="sfx-hook-pct" id="sfxIntervalProcessVal" style="min-width:32px;">10s</span>
-            </div>
-            <div class="sfx-hook-row">
-              <span class="sfx-hook-label">⚠️ Warning (near limit)</span>
-              <span class="sfx-mute-label" id="sfxMuteWarning" title="Toggle mute">🔊</span>
-              <label class="sfx-toggle"><input type="checkbox" id="sfxHookWarning"><span class="sfx-toggle-slider"></span></label>
-              <input type="range" class="sfx-hook-vol" id="sfxVolWarning" min="0" max="100" value="80">
-              <span class="sfx-hook-pct" id="sfxVolWarningPct">Vol: 80%</span>
-            </div>
-            <p class="settings-hint sfx-during-hint" style="margin:-2px 0 4px 4px;font-size:9px;">⚠️ Warns 30s & 15s before recording time limit (free/lower tiers).</p>
-            <div class="sfx-hook-row">
-              <span class="sfx-hook-label">📋 Paste</span>
-              <span class="sfx-mute-label" id="sfxMutePaste" title="Toggle mute">🔊</span>
-              <label class="sfx-toggle"><input type="checkbox" id="sfxHookPaste"><span class="sfx-toggle-slider"></span></label>
-              <input type="range" class="sfx-hook-vol" id="sfxVolPaste" min="0" max="100" value="100">
-              <span class="sfx-hook-pct" id="sfxVolPastePct">Vol: 100%</span>
-            </div>
+            <p class="settings-hint sfx-during-hint" style="margin:8px 0 6px;font-weight:700;font-size:12px;">── 🎛️ Sound Hooks ──</p>
+            <div id="sfxUnifiedHooks"></div>
 
             <div class="setting-row" style="margin-top:8px;">
               <label for="sfxDynamicScaling">Scale paste effects with length</label>
@@ -1167,17 +1115,14 @@ class SettingsPanel {
     const modePills = this.panel.querySelectorAll('.sfx-mode-pill');
     const packRow = this.panel.querySelector('#sfxPackRow');
     const surpriseRow = this.panel.querySelector('#sfxSurpriseRow');
-    const hookSection = this.panel.querySelector('#sfxHookSection');
+    const unifiedSection = this.panel.querySelector('#sfxUnifiedSection');
     const previewRow = this.panel.querySelector('#sfxPreviewRow');
-
-    const customSection = this.panel.querySelector('#sfxCustomSection');
 
     const updateModeUI = (mode) => {
       modePills.forEach(p => p.classList.toggle('active', p.dataset.mode === mode));
       if (packRow) packRow.style.display = mode === 'single' ? 'flex' : 'none';
       if (surpriseRow) surpriseRow.style.display = mode === 'surprise' ? 'flex' : 'none';
-      if (customSection) customSection.style.display = mode === 'custom' ? '' : 'none';
-      if (hookSection) hookSection.style.display = (mode === 'silent' || mode === 'default') ? 'none' : '';
+      if (unifiedSection) unifiedSection.style.display = mode === 'silent' ? 'none' : '';
       if (previewRow) previewRow.style.display = mode === 'silent' ? 'none' : '';
     };
 
@@ -1249,14 +1194,18 @@ class SettingsPanel {
           return;
         }
         for (const item of soundLibrary) {
+          if (item.starred === undefined) item.starred = true; // new sounds default starred
           const card = document.createElement('div');
           card.className = 'sfx-lib-card';
           const sizeKb = item.size ? `${Math.round(item.size / 1024)}KB` : '';
+          const durText = item.duration ? `${item.duration}s` : '';
+          const metaParts = [durText, sizeKb, item.timestamp || ''].filter(Boolean).join(' · ');
           card.innerHTML = `
             <div class="sfx-lib-card-top">
+              <button class="sfx-lib-star" title="Toggle dropdown visibility" style="background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px;">${item.starred ? '⭐' : '☆'}</button>
               <span class="sfx-lib-name-text">${item.name || 'Untitled'}</span>
               <button class="sfx-custom-btn sfx-lib-rename" title="Rename" style="width:22px;height:22px;font-size:10px;">✏️</button>
-              <span class="sfx-lib-card-meta" style="margin-left:auto;">${sizeKb} · ${item.timestamp || ''}</span>
+              <span class="sfx-lib-card-meta" style="margin-left:auto;">${metaParts}</span>
             </div>
             <input class="sfx-lib-name-input" type="text" value="${(item.name || '').replace(/"/g, '&quot;')}" style="display:none;" />
             <div class="sfx-lib-card-actions">
@@ -1265,6 +1214,14 @@ class SettingsPanel {
             </div>
           `;
           libGrid.appendChild(card);
+
+          // Star toggle
+          card.querySelector('.sfx-lib-star').addEventListener('click', () => {
+            item.starred = !item.starred;
+            saveLibrary();
+            renderLibrary();
+            refreshHookDropdowns();
+          });
 
           // Rename
           const nameText = card.querySelector('.sfx-lib-name-text');
@@ -1391,9 +1348,10 @@ class SettingsPanel {
 
       const buildHookOptions = () => {
         let libOpts = '';
-        if (soundLibrary.length > 0) {
-          libOpts = `<optgroup label="📚 My Library">` +
-            soundLibrary.map(s => `<option value="lib|${s.id}">${s.name}</option>`).join('') +
+        const starredSounds = soundLibrary.filter(s => s.starred !== false);
+        if (starredSounds.length > 0) {
+          libOpts = `<optgroup label="⭐ My Library">` +
+            starredSounds.map(s => `<option value="lib|${s.id}">${s.name}</option>`).join('') +
             `</optgroup>`;
         }
         const stockOpts = `<optgroup label="🔊 Stock Sounds">` +
