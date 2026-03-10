@@ -885,6 +885,17 @@ body {
 }
 
 /* Library controls & grid */
+.sfx-master-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: rgba(34, 197, 94, 0.06);
+  border: 1px solid rgba(34, 197, 94, 0.15);
+  border-radius: 8px;
+}
+
 .sfx-library-controls {
   display: flex;
   gap: 6px;

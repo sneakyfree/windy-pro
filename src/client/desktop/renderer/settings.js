@@ -405,11 +405,18 @@ class SettingsPanel {
           </div>
 
           <div id="sfxCustomSection" style="display:none;">
+            <div class="sfx-master-controls">
+              <span class="sfx-custom-hook-label">🔊 Master Volume</span>
+              <button class="sfx-custom-btn" id="sfxMasterMute" title="Mute/Unmute All" style="width:auto;padding:0 6px;font-size:12px;">🔊</button>
+              <input type="range" class="sfx-hook-vol" id="sfxMasterVol" min="0" max="100" value="70" title="Master Volume">
+              <span class="sfx-hook-pct" id="sfxMasterVolPct">70%</span>
+            </div>
+
             <p class="settings-hint sfx-during-hint" style="margin:10px 0 6px;font-weight:700;font-size:12px;">── 📚 My Sound Library ──</p>
-            <p class="settings-hint sfx-during-hint" style="margin:0 0 6px;font-size:10px;">Upload or record sounds once — use them for any hook.</p>
+            <p class="settings-hint sfx-during-hint" style="margin:0 0 6px;font-size:10px;">Record or import sounds here. They appear below and can be assigned to any hook.</p>
             <div class="sfx-library-controls">
-              <button class="sfx-custom-btn" id="sfxLibUpload" title="Upload audio file" style="width:auto;padding:0 8px;font-size:11px;">📂 Upload</button>
               <button class="sfx-custom-btn sfx-custom-record" id="sfxLibRecord" title="Record with mic" style="width:auto;padding:0 8px;font-size:11px;">🎙️ Record</button>
+              <button class="sfx-custom-btn" id="sfxLibUpload" title="Import audio from disk" style="width:auto;padding:0 8px;font-size:11px;">📥 Import File</button>
               <span class="sfx-hook-pct" id="sfxLibCount" style="margin-left:auto;">0 sounds</span>
             </div>
             <div id="sfxLibRecStatus" style="display:none;padding:4px 8px;margin:4px 0;border-radius:6px;font-size:11px;"></div>
@@ -1188,6 +1195,44 @@ class SettingsPanel {
         updateModeUI(mode);
       });
     });
+    // ═══ Master Volume + Mute All ═══
+    const masterVolSlider = this.panel.querySelector('#sfxMasterVol');
+    const masterVolPct = this.panel.querySelector('#sfxMasterVolPct');
+    const masterMuteBtn = this.panel.querySelector('#sfxMasterMute');
+    let _lastMasterVol = parseInt(localStorage.getItem('windy_sfxVolume') || '70', 10);
+    if (masterVolSlider && fx) {
+      masterVolSlider.value = _lastMasterVol;
+      if (masterVolPct) masterVolPct.textContent = `${_lastMasterVol}%`;
+      if (masterMuteBtn) masterMuteBtn.textContent = _lastMasterVol === 0 ? '🔇' : '🔊';
+      masterVolSlider.addEventListener('input', () => {
+        const v = parseInt(masterVolSlider.value, 10);
+        _lastMasterVol = v;
+        fx.sound.setMasterVolume(v / 100);
+        localStorage.setItem('windy_sfxVolume', String(v));
+        if (masterVolPct) masterVolPct.textContent = `${v}%`;
+        if (masterMuteBtn) masterMuteBtn.textContent = v === 0 ? '🔇' : '🔊';
+      });
+    }
+    if (masterMuteBtn && fx) {
+      masterMuteBtn.addEventListener('click', () => {
+        const current = parseInt(masterVolSlider?.value || '70', 10);
+        if (current > 0) {
+          _lastMasterVol = current;
+          masterVolSlider.value = 0;
+          fx.sound.setMasterVolume(0);
+          localStorage.setItem('windy_sfxVolume', '0');
+          if (masterVolPct) masterVolPct.textContent = '0%';
+          masterMuteBtn.textContent = '🔇';
+        } else {
+          const restore = _lastMasterVol || 70;
+          masterVolSlider.value = restore;
+          fx.sound.setMasterVolume(restore / 100);
+          localStorage.setItem('windy_sfxVolume', String(restore));
+          if (masterVolPct) masterVolPct.textContent = `${restore}%`;
+          masterMuteBtn.textContent = '🔊';
+        }
+      });
+    }
 
     // Pack selector
     const packSelect = this.panel.querySelector('#sfxPackSelect');
@@ -1502,12 +1547,13 @@ class SettingsPanel {
 
         if (currentMode === 'custom') {
           // In custom mode, use trigger() which respects assigned hooks
+          // 3s spacing so each custom sound has time to play
           fx.trigger('start');
-          setTimeout(() => fx.trigger('during'), 800);
-          setTimeout(() => fx.trigger('stop'), 1600);
-          setTimeout(() => fx.trigger('process'), 2400);
-          setTimeout(() => fx.trigger('warning'), 3200);
-          setTimeout(() => fx.trigger('paste', { wordCount: 50 }), 4000);
+          setTimeout(() => fx.trigger('during'), 3000);
+          setTimeout(() => fx.trigger('stop'), 6000);
+          setTimeout(() => fx.trigger('process'), 9000);
+          setTimeout(() => fx.trigger('warning'), 12000);
+          setTimeout(() => fx.trigger('paste', { wordCount: 50 }), 15000);
         } else {
           let pid;
           if (currentMode === 'default') pid = 'classic-beep';
@@ -1521,10 +1567,11 @@ class SettingsPanel {
           setTimeout(() => fx.previewEffect(pid, 'warning'), 3200);
           setTimeout(() => fx.previewEffect(pid, 'paste'), 4000);
         }
+        const totalMs = currentMode === 'custom' ? 18000 : 5000;
         setTimeout(() => {
           previewBtn.textContent = '▶ Preview Sounds';
           previewBtn.disabled = false;
-        }, 5000);
+        }, totalMs);
       });
     }
 
