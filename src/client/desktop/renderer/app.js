@@ -108,6 +108,7 @@ class WindyApp {
     try {
       this.effectsEngine = typeof EffectsEngine !== 'undefined' ? new EffectsEngine() : null;
       this.widgetEngine = typeof WidgetEngine !== 'undefined' ? new WidgetEngine() : null;
+      if (this.widgetEngine) this.widgetEngine.mount('widgetContainer');
     } catch (_) {
       this.effectsEngine = null;
       this.widgetEngine = null;
