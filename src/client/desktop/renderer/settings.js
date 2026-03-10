@@ -448,14 +448,31 @@ class SettingsPanel {
 
         <div class="settings-section">
           <h3>🌪️ Widget</h3>
-          <div class="sfx-widget-gallery" id="sfxWidgetGallery"></div>
+          <div class="widget-mode-pills" id="widgetModePills">
+            <div class="widget-mode-pill active" data-mode="specific">📌 Pick One</div>
+            <div class="widget-mode-pill" data-mode="random-stock">🔀 Random Stock</div>
+            <div class="widget-mode-pill" data-mode="random-custom">🔀 Random Custom</div>
+          </div>
+          <div id="widgetSpecificSection">
+            <div class="sfx-widget-gallery" id="sfxWidgetGallery"></div>
+          </div>
+          <div id="widgetRandomStockInfo" style="display:none;">
+            <p class="settings-hint" style="color:#22C55E;font-weight:600;">🔀 Each prompt picks a random stock widget!</p>
+          </div>
+          <div id="widgetRandomCustomInfo" style="display:none;">
+            <p class="settings-hint" style="color:#22C55E;font-weight:600;">🔀 Each prompt picks from your custom library!</p>
+          </div>
+          <p class="settings-hint" style="font-weight:600;margin:6px 0 4px;">📁 My Custom Widgets <span id="customWidgetCount" style="color:#94A3B8;">(0/100)</span></p>
+          <div class="custom-widget-library" id="customWidgetLibrary">
+            <div class="custom-widget-grid" id="customWidgetGrid"></div>
+          </div>
+          <button id="sfxUploadWidget" class="settings-btn" style="margin-top:4px;width:100%;font-size:11px;">➕ Upload Custom Widget</button>
+          <p class="settings-hint">PNG, GIF, SVG, or WebP (max 2MB). Up to 100.</p>
           <div class="setting-row" style="margin-top:8px;">
             <label for="tornadoSize">Widget size</label>
             <input type="range" id="tornadoSize" min="32" max="128" step="8" value="56" style="flex:1;margin:0 8px;">
             <span id="tornadoSizeValue" style="min-width:36px;text-align:right;">56px</span>
           </div>
-          <button id="sfxUploadWidget" class="settings-btn" style="margin-top:6px;width:100%;">📁 Upload Custom Widget</button>
-          <p class="settings-hint">PNG, GIF, SVG, or WebP (max 2MB). Your pets, logos, or art!</p>
         </div>
 
         <div class="settings-section">
@@ -1213,6 +1230,107 @@ class SettingsPanel {
 
     // Widget gallery
     const gallery = this.panel.querySelector('#sfxWidgetGallery');
+    const customGrid = this.panel.querySelector('#customWidgetGrid');
+    const customCountEl = this.panel.querySelector('#customWidgetCount');
+
+    // Helper: load custom widgets from localStorage
+    const loadCustomWidgets = () => {
+      try { return JSON.parse(localStorage.getItem('windy_customWidgets') || '[]'); }
+      catch (_) { return []; }
+    };
+    const saveCustomWidgets = (list) => {
+      localStorage.setItem('windy_customWidgets', JSON.stringify(list));
+    };
+
+    // Helper: render custom library grid
+    const renderCustomGrid = () => {
+      const customs = loadCustomWidgets();
+      if (customCountEl) customCountEl.textContent = `(${customs.length}/100)`;
+      if (!customGrid) return;
+      customGrid.innerHTML = customs.map((dataUrl, i) => `
+        <div class="custom-widget-thumb ${wg && wg._customPath === dataUrl ? 'active' : ''}" data-idx="${i}">
+          <img src="${dataUrl}" alt="Custom ${i + 1}">
+          <button class="custom-widget-delete" data-del="${i}" title="Remove">✕</button>
+        </div>
+      `).join('');
+
+      // Click to select
+      customGrid.addEventListener('click', (e) => {
+        const del = e.target.closest('[data-del]');
+        if (del) {
+          e.stopPropagation();
+          const idx = parseInt(del.dataset.del, 10);
+          const list = loadCustomWidgets();
+          list.splice(idx, 1);
+          saveCustomWidgets(list);
+          renderCustomGrid();
+          this.showToast('🗑️ Custom widget removed');
+          return;
+        }
+        const thumb = e.target.closest('.custom-widget-thumb');
+        if (!thumb || !wg) return;
+        const idx = parseInt(thumb.dataset.idx, 10);
+        const list = loadCustomWidgets();
+        if (list[idx]) {
+          wg.setWidget('custom', list[idx]);
+          if (gallery) gallery.querySelectorAll('.sfx-widget-card').forEach(c => c.classList.remove('active'));
+          customGrid.querySelectorAll('.custom-widget-thumb').forEach(c => c.classList.remove('active'));
+          thumb.classList.add('active');
+          // Switch to Specific mode
+          setWidgetMode('specific');
+          this.showToast('✅ Custom widget selected!');
+        }
+      });
+    };
+
+    // Widget mode pills
+    const widgetModePills = this.panel.querySelector('#widgetModePills');
+    const specificSection = this.panel.querySelector('#widgetSpecificSection');
+    const randomStockInfo = this.panel.querySelector('#widgetRandomStockInfo');
+    const randomCustomInfo = this.panel.querySelector('#widgetRandomCustomInfo');
+    const savedWidgetMode = localStorage.getItem('windy_widgetMode') || 'specific';
+
+    const setWidgetMode = (mode) => {
+      localStorage.setItem('windy_widgetMode', mode);
+      if (widgetModePills) {
+        widgetModePills.querySelectorAll('.widget-mode-pill').forEach(p => {
+          p.classList.toggle('active', p.dataset.mode === mode);
+        });
+      }
+      if (specificSection) specificSection.style.display = mode === 'specific' ? '' : 'none';
+      if (randomStockInfo) randomStockInfo.style.display = mode === 'random-stock' ? '' : 'none';
+      if (randomCustomInfo) randomCustomInfo.style.display = mode === 'random-custom' ? '' : 'none';
+    };
+
+    setWidgetMode(savedWidgetMode);
+
+    if (widgetModePills) {
+      widgetModePills.addEventListener('click', (e) => {
+        const pill = e.target.closest('.widget-mode-pill');
+        if (!pill) return;
+        const mode = pill.dataset.mode;
+        setWidgetMode(mode);
+
+        if (mode === 'random-stock' && wg) {
+          // Pick a random stock widget immediately
+          const stockIds = Object.keys(WidgetEngine.STOCK_WIDGETS);
+          const rand = stockIds[Math.floor(Math.random() * stockIds.length)];
+          wg.setWidget(rand);
+          this.showToast(`🔀 Random: ${rand}`);
+        } else if (mode === 'random-custom' && wg) {
+          const customs = loadCustomWidgets();
+          if (customs.length > 0) {
+            const rand = customs[Math.floor(Math.random() * customs.length)];
+            wg.setWidget('custom', rand);
+            this.showToast(`🔀 Random custom widget!`);
+          } else {
+            this.showToast('⚠️ Upload custom widgets first!');
+          }
+        }
+      });
+    }
+
+    // Stock gallery
     if (gallery && wg) {
       const widgets = wg.getStockList();
       gallery.innerHTML = widgets.map(w => `
@@ -1229,14 +1347,24 @@ class SettingsPanel {
         wg.setWidget(widgetId);
         gallery.querySelectorAll('.sfx-widget-card').forEach(c => c.classList.remove('active'));
         card.classList.add('active');
-        this.showToast(`Widget changed to ${widgetId}`);
+        if (customGrid) customGrid.querySelectorAll('.custom-widget-thumb').forEach(c => c.classList.remove('active'));
+        setWidgetMode('specific');
+        this.showToast(`Widget: ${widgetId}`);
       });
     }
 
-    // Upload custom widget
+    // Render custom library
+    renderCustomGrid();
+
+    // Upload custom widget → add to library
     const uploadBtn = this.panel.querySelector('#sfxUploadWidget');
     if (uploadBtn) {
       uploadBtn.addEventListener('click', () => {
+        const customs = loadCustomWidgets();
+        if (customs.length >= 100) {
+          this.showToast('❌ Library full (100 max). Delete some first.');
+          return;
+        }
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.png,.gif,.svg,.webp,image/png,image/gif,image/svg+xml,image/webp';
@@ -1247,14 +1375,19 @@ class SettingsPanel {
             this.showToast('❌ File too large (max 2MB)');
             return;
           }
-          // Read as data URL for now (future: save to userData/widgets/)
           const reader = new FileReader();
           reader.onload = () => {
+            const list = loadCustomWidgets();
+            list.push(reader.result);
+            saveCustomWidgets(list);
+            renderCustomGrid();
+            // Auto-select the new widget
             if (wg) {
               wg.setWidget('custom', reader.result);
-              gallery.querySelectorAll('.sfx-widget-card').forEach(c => c.classList.remove('active'));
-              this.showToast('✅ Custom widget set!');
+              if (gallery) gallery.querySelectorAll('.sfx-widget-card').forEach(c => c.classList.remove('active'));
+              setWidgetMode('specific');
             }
+            this.showToast(`✅ Custom widget added! (${list.length}/100)`);
           };
           reader.readAsDataURL(file);
         });
