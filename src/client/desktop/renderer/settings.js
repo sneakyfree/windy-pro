@@ -413,14 +413,21 @@ class SettingsPanel {
             </div>
 
             <p class="settings-hint sfx-during-hint" style="margin:8px 0 4px;font-weight:700;font-size:12px;">── 📚 My Sound Library ──</p>
-            <p class="settings-hint sfx-during-hint" style="margin:0 0 6px;font-size:10px;">Record or import sounds. ⭐ Star them to show in hook dropdowns.</p>
             <div class="sfx-library-controls">
               <button class="sfx-custom-btn sfx-custom-record" id="sfxLibRecord" title="Record with mic" style="width:auto;padding:0 8px;font-size:11px;">🎙️ Record</button>
-              <button class="sfx-custom-btn" id="sfxLibUpload" title="Import audio file from disk" style="width:auto;padding:0 8px;font-size:11px;">📂 Add File</button>
+              <button class="sfx-custom-btn" id="sfxLibOpen" title="Open full sound library" style="width:auto;padding:0 8px;font-size:11px;">📚 Open Library</button>
               <span class="sfx-hook-pct" id="sfxLibCount" style="margin-left:auto;">0 sounds</span>
             </div>
             <div id="sfxLibRecStatus" style="display:none;padding:4px 8px;margin:4px 0;border-radius:6px;font-size:11px;"></div>
-            <div id="sfxLibGrid" class="sfx-library-grid"></div>
+            <div id="sfxLibSummary" style="font-size:10px;color:#94A3B8;margin:4px 0;"></div>
+            <div id="sfxLibPanel" style="display:none;">
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+                <button class="sfx-custom-btn" id="sfxLibUpload" title="Import audio file from disk" style="width:auto;padding:0 8px;font-size:11px;">📥 Import from Disk</button>
+                <span style="font-size:9px;color:#64748B;">Add .mp3, .wav, .m4a files</span>
+              </div>
+              <div id="sfxLibGrid" class="sfx-library-grid sfx-library-expanded"></div>
+            </div>
+            <div id="sfxLibGridInline" class="sfx-library-grid"></div>
 
             <p class="settings-hint sfx-during-hint" style="margin:8px 0 6px;font-weight:700;font-size:12px;">── 🎛️ Sound Hooks ──</p>
             <div id="sfxUnifiedHooks"></div>
@@ -1151,8 +1158,11 @@ class SettingsPanel {
     // ═══ Shared Sound Library + Custom Hook Builder ═══
     const unifiedHooksContainer = this.panel.querySelector('#sfxUnifiedHooks');
     const libGrid = this.panel.querySelector('#sfxLibGrid');
+    const libGridInline = this.panel.querySelector('#sfxLibGridInline');
     const libCountEl = this.panel.querySelector('#sfxLibCount');
     const libRecStatus = this.panel.querySelector('#sfxLibRecStatus');
+    const libSummaryEl = this.panel.querySelector('#sfxLibSummary');
+    const libPanel = this.panel.querySelector('#sfxLibPanel');
     if (unifiedHooksContainer && fx) {
       // ── Shared Library ──
       let soundLibrary = [];
@@ -1185,24 +1195,27 @@ class SettingsPanel {
       }
 
       // ── Render library grid ──
-      const renderLibrary = () => {
-        if (libCountEl) libCountEl.textContent = `${soundLibrary.length} sound${soundLibrary.length !== 1 ? 's' : ''}`;
-        if (!libGrid) return;
-        libGrid.innerHTML = '';
-        if (soundLibrary.length === 0) {
-          libGrid.innerHTML = '<p style="font-size:10px;color:#64748B;text-align:center;padding:8px;">No sounds yet. Upload or record to get started!</p>';
+      let libPanelOpen = false;
+
+      const renderLibraryCards = (container, items, expanded) => {
+        container.innerHTML = '';
+        if (items.length === 0) {
+          container.innerHTML = '<p style="font-size:10px;color:#64748B;text-align:center;padding:8px;">No sounds yet. Record or import to get started!</p>';
           return;
         }
-        for (const item of soundLibrary) {
-          if (item.starred === undefined) item.starred = true; // new sounds default starred
+        for (const item of items) {
+          if (item.starred === undefined) item.starred = true;
           const card = document.createElement('div');
           card.className = 'sfx-lib-card';
           const sizeKb = item.size ? `${Math.round(item.size / 1024)}KB` : '';
           const durText = item.duration ? `${item.duration}s` : '';
           const metaParts = [durText, sizeKb, item.timestamp || ''].filter(Boolean).join(' · ');
+          const starLabel = item.starred ? '⭐ In Dropdown' : '☆ Archived';
+          const starClass = item.starred ? 'color:#22C55E;' : 'color:#64748B;';
+
           card.innerHTML = `
             <div class="sfx-lib-card-top">
-              <button class="sfx-lib-star" title="Toggle dropdown visibility" style="background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px;">${item.starred ? '⭐' : '☆'}</button>
+              <button class="sfx-lib-star" title="${item.starred ? 'Remove from dropdowns (archive)' : 'Add to dropdowns'}" style="background:none;border:none;cursor:pointer;font-size:10px;padding:2px 4px;border-radius:4px;${starClass}white-space:nowrap;">${starLabel}</button>
               <span class="sfx-lib-name-text">${item.name || 'Untitled'}</span>
               <button class="sfx-custom-btn sfx-lib-rename" title="Rename" style="width:22px;height:22px;font-size:10px;">✏️</button>
               <span class="sfx-lib-card-meta" style="margin-left:auto;">${metaParts}</span>
@@ -1213,7 +1226,7 @@ class SettingsPanel {
               <button class="sfx-custom-btn sfx-custom-clear sfx-lib-del" title="Delete">🗑️</button>
             </div>
           `;
-          libGrid.appendChild(card);
+          container.appendChild(card);
 
           // Star toggle
           card.querySelector('.sfx-lib-star').addEventListener('click', () => {
@@ -1253,7 +1266,6 @@ class SettingsPanel {
           card.querySelector('.sfx-lib-play').addEventListener('click', () => {
             if (!item.dataUrl) { console.warn('No dataUrl for', item.name); return; }
             try {
-              // Direct Audio playback (most reliable for data URLs)
               const audio = new Audio(item.dataUrl);
               audio.volume = 0.7;
               audio.play().catch(e => console.warn('Audio play failed:', e));
@@ -1271,6 +1283,193 @@ class SettingsPanel {
           });
         }
       };
+
+      const renderLibrary = () => {
+        const starred = soundLibrary.filter(s => s.starred !== false);
+        if (libCountEl) libCountEl.textContent = `${soundLibrary.length} sound${soundLibrary.length !== 1 ? 's' : ''}`;
+        if (libSummaryEl) {
+          libSummaryEl.textContent = `⭐ ${starred.length} in dropdowns · ${soundLibrary.length} total`;
+        }
+
+        // Inline view: show 3 most recent starred sounds (compact preview)
+        if (libGridInline && !libPanelOpen) {
+          renderLibraryCards(libGridInline, starred.slice(0, 3), false);
+        } else if (libGridInline) {
+          libGridInline.innerHTML = '';
+        }
+
+        // Expanded library: show ALL sounds
+        if (libGrid && libPanelOpen) {
+          renderLibraryCards(libGrid, soundLibrary, true);
+        }
+      };
+
+      // ── Full Library Modal ──
+      const slibModal = document.getElementById('soundLibraryModal');
+      const slibBody = document.getElementById('slibTableBody');
+      const slibStats = document.getElementById('slibStats');
+      const slibSearch = document.getElementById('slibSearch');
+      const slibSort = document.getElementById('slibSort');
+      const slibClose = document.getElementById('slibClose');
+      const slibStarAll = document.getElementById('slibStarAll');
+      const slibArchiveAll = document.getElementById('slibArchiveAll');
+      const slibImportBtn = document.getElementById('slibImport');
+      const slibPacksTab = document.getElementById('slibPacksTab');
+      const slibCommunityTab = document.getElementById('slibCommunityTab');
+      const slibBulkBar = document.getElementById('slibBulkBar');
+      const slibTableHeader = slibModal?.querySelector('.slib-table-header');
+
+      const renderModalTable = () => {
+        if (!slibBody) return;
+        slibBody.innerHTML = '';
+        let items = [...soundLibrary];
+        // Search filter
+        const q = (slibSearch?.value || '').toLowerCase().trim();
+        if (q) items = items.filter(s => (s.name || '').toLowerCase().includes(q));
+        // Sort
+        const sortKey = slibSort?.value || 'newest';
+        if (sortKey === 'oldest') items.reverse();
+        else if (sortKey === 'name') items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        else if (sortKey === 'name-desc') items.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+        else if (sortKey === 'size') items.sort((a, b) => (b.size || 0) - (a.size || 0));
+        else if (sortKey === 'duration') items.sort((a, b) => (b.duration || 0) - (a.duration || 0));
+
+        // Stats
+        const starred = soundLibrary.filter(s => s.starred !== false).length;
+        if (slibStats) slibStats.textContent = `⭐ ${starred} in dropdowns · ${soundLibrary.length} total`;
+
+        if (items.length === 0) {
+          slibBody.innerHTML = '<div style="padding:40px;text-align:center;color:#64748B;">No sounds found. Record or import to get started!</div>';
+          return;
+        }
+
+        for (const item of items) {
+          const row = document.createElement('div');
+          row.className = 'slib-row';
+          const isStarred = item.starred !== false;
+          const sizeKb = item.size ? `${Math.round(item.size / 1024)}KB` : '—';
+          const durText = item.duration ? `${item.duration}s` : '—';
+          const dateText = item.timestamp || '—';
+
+          row.innerHTML = `
+            <span class="slib-col-status"><button class="slib-status-pill ${isStarred ? 'starred' : 'archived'}">${isStarred ? '⭐ In Dropdown' : '☆ Archived'}</button></span>
+            <span class="slib-col-name slib-row-name" title="Click to rename">${item.name || 'Untitled'}</span>
+            <span class="slib-col-dur slib-row-meta">${durText}</span>
+            <span class="slib-col-size slib-row-meta">${sizeKb}</span>
+            <span class="slib-col-date slib-row-meta">${dateText}</span>
+            <span class="slib-col-actions slib-row-actions">
+              <button class="slib-action-btn" title="Preview">▶</button>
+              <button class="slib-action-btn delete" title="Delete">🗑️</button>
+            </span>
+          `;
+          slibBody.appendChild(row);
+
+          // Status pill toggle
+          row.querySelector('.slib-status-pill').addEventListener('click', () => {
+            item.starred = !item.starred;
+            saveLibrary();
+            renderModalTable();
+            renderLibrary();
+            refreshHookDropdowns();
+          });
+
+          // Rename on click
+          const nameEl = row.querySelector('.slib-row-name');
+          nameEl.addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.className = 'slib-row-name-input';
+            input.value = item.name || '';
+            nameEl.replaceWith(input);
+            input.focus();
+            input.select();
+            const finish = () => {
+              const newName = input.value.trim();
+              if (newName) { item.name = newName; saveLibrary(); refreshHookDropdowns(); }
+              renderModalTable();
+              renderLibrary();
+            };
+            input.addEventListener('blur', finish);
+            input.addEventListener('keydown', e => { if (e.key === 'Enter') finish(); });
+          });
+
+          // Play
+          row.querySelector('.slib-action-btn:not(.delete)').addEventListener('click', () => {
+            if (!item.dataUrl) return;
+            const audio = new Audio(item.dataUrl);
+            audio.volume = 0.7;
+            audio.play().catch(e => console.warn('Play failed:', e));
+          });
+
+          // Delete
+          row.querySelector('.slib-action-btn.delete').addEventListener('click', () => {
+            soundLibrary = soundLibrary.filter(s => s.id !== item.id);
+            saveLibrary();
+            renderModalTable();
+            renderLibrary();
+            refreshHookDropdowns();
+          });
+        }
+      };
+
+      // Open Library button → opens modal
+      const libOpenBtn = this.panel.querySelector('#sfxLibOpen');
+      if (libOpenBtn) {
+        libOpenBtn.addEventListener('click', () => {
+          if (slibModal) {
+            slibModal.style.display = '';
+            renderModalTable();
+          }
+        });
+      }
+
+      // Close modal
+      if (slibClose) slibClose.addEventListener('click', () => { if (slibModal) slibModal.style.display = 'none'; });
+      slibModal?.querySelector('.slib-backdrop')?.addEventListener('click', () => { if (slibModal) slibModal.style.display = 'none'; });
+
+      // Search & sort
+      if (slibSearch) slibSearch.addEventListener('input', () => renderModalTable());
+      if (slibSort) slibSort.addEventListener('change', () => renderModalTable());
+
+      // Bulk actions
+      if (slibStarAll) slibStarAll.addEventListener('click', () => {
+        soundLibrary.forEach(s => s.starred = true);
+        saveLibrary(); renderModalTable(); renderLibrary(); refreshHookDropdowns();
+      });
+      if (slibArchiveAll) slibArchiveAll.addEventListener('click', () => {
+        soundLibrary.forEach(s => s.starred = false);
+        saveLibrary(); renderModalTable(); renderLibrary(); refreshHookDropdowns();
+      });
+      if (slibImportBtn) slibImportBtn.addEventListener('click', () => {
+        const inp = document.createElement('input');
+        inp.type = 'file';
+        inp.accept = 'audio/*,.mp3,.wav,.ogg,.m4a';
+        inp.multiple = true;
+        inp.addEventListener('change', () => {
+          for (const file of (inp.files || [])) {
+            if (file.size > 5 * 1024 * 1024) { alert(`${file.name}: Max 5MB`); continue; }
+            const reader = new FileReader();
+            reader.onload = () => addToLibrary(reader.result, file.name.replace(/\.[^.]+$/, ''), file.size);
+            reader.readAsDataURL(file);
+          }
+          setTimeout(() => renderModalTable(), 500);
+        });
+        inp.click();
+      });
+
+      // Tab switching
+      slibModal?.querySelectorAll('.slib-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          slibModal.querySelectorAll('.slib-tab').forEach(t => t.classList.remove('slib-tab-active'));
+          tab.classList.add('slib-tab-active');
+          const tabName = tab.dataset.tab;
+          const showMySounds = tabName === 'my-sounds';
+          if (slibBody) slibBody.style.display = showMySounds ? '' : 'none';
+          if (slibBulkBar) slibBulkBar.style.display = showMySounds ? '' : 'none';
+          if (slibTableHeader) slibTableHeader.style.display = showMySounds ? '' : 'none';
+          if (slibPacksTab) slibPacksTab.style.display = tabName === 'packs' ? '' : 'none';
+          if (slibCommunityTab) slibCommunityTab.style.display = tabName === 'community' ? '' : 'none';
+        });
+      });
 
       // ── Add to library helper ──
       const addToLibrary = (dataUrl, name, size, duration) => {

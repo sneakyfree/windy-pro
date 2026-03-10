@@ -152,6 +152,77 @@
     <span class="sfx-volume-label" id="sfxVolumeLabel">70%</span>
   </div>
 
+  <!-- ═══ FULL SOUND LIBRARY MODAL ═══ -->
+  <div id="soundLibraryModal" class="slib-modal" style="display:none;">
+    <div class="slib-backdrop"></div>
+    <div class="slib-container">
+      <!-- Header -->
+      <div class="slib-header">
+        <h2 class="slib-title">📚 Sound Library</h2>
+        <div class="slib-header-actions">
+          <input type="text" id="slibSearch" class="slib-search" placeholder="🔍 Search sounds...">
+          <select id="slibSort" class="slib-sort">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="name">Name A→Z</option>
+            <option value="name-desc">Name Z→A</option>
+            <option value="size">Largest first</option>
+            <option value="duration">Longest first</option>
+          </select>
+          <button id="slibClose" class="slib-close-btn">✕</button>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="slib-tabs">
+        <button class="slib-tab slib-tab-active" data-tab="my-sounds">🎵 My Sounds</button>
+        <button class="slib-tab" data-tab="packs">🏪 Sound Packs <span class="slib-badge">Soon</span></button>
+        <button class="slib-tab" data-tab="community">🌐 Community <span class="slib-badge">Soon</span></button>
+      </div>
+
+      <!-- Bulk actions -->
+      <div class="slib-bulk-bar" id="slibBulkBar">
+        <span id="slibStats" class="slib-stats"></span>
+        <button class="slib-bulk-btn" id="slibStarAll">⭐ Star All</button>
+        <button class="slib-bulk-btn" id="slibArchiveAll">☆ Archive All</button>
+        <button class="slib-bulk-btn slib-bulk-import" id="slibImport">📥 Import</button>
+      </div>
+
+      <!-- Table header -->
+      <div class="slib-table-header">
+        <span class="slib-col-status">Status</span>
+        <span class="slib-col-name">Name</span>
+        <span class="slib-col-dur">Duration</span>
+        <span class="slib-col-size">Size</span>
+        <span class="slib-col-date">Date</span>
+        <span class="slib-col-actions">Actions</span>
+      </div>
+
+      <!-- Scrollable table body -->
+      <div class="slib-table-body" id="slibTableBody">
+        <!-- Rows injected by JS -->
+      </div>
+
+      <!-- Coming soon tabs -->
+      <div class="slib-tab-content" id="slibPacksTab" style="display:none;">
+        <div class="slib-coming-soon">
+          <span style="font-size:48px;">🏪</span>
+          <h3>Sound Packs Store</h3>
+          <p>Celebrity packs, seasonal themes, community favorites — coming soon!</p>
+          <p style="font-size:11px;color:#64748B;">Tom Brady's Power Pack 🏈 · Halloween Spooky 🎃 · Holiday Cheer 🎄
+          </p>
+        </div>
+      </div>
+      <div class="slib-tab-content" id="slibCommunityTab" style="display:none;">
+        <div class="slib-coming-soon">
+          <span style="font-size:48px;">🌐</span>
+          <h3>Community Library</h3>
+          <p>Share your sound packs, discover power-user favorites, earn credits!</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="vault.js"></script>
   <script src="wizard.js"></script>
   <script src="changelog.js"></script>
