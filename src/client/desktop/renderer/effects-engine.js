@@ -267,8 +267,8 @@ class EffectsEngine {
 
         // Classic Beep (restore original behavior)
         this._registerPack({
-            id: 'classic-beep', name: '🔔 Classic Beep', category: 'system',
-            description: 'Simple beep on start, stop, and paste',
+            id: 'classic-beep', name: '🔔 Classic Beep (Default)', category: 'system',
+            description: 'Same sounds as Default mode — with per-hook volume control',
             hooks: {
                 start: { sound: { frequency: 880, duration: 0.08, type: 'sine', volume: 0.6 } },
                 during: { sound: { frequency: 660, duration: 0.04, type: 'sine', volume: 0.35 } },
