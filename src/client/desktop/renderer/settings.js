@@ -405,30 +405,30 @@ class SettingsPanel {
           </div>
 
           <div id="sfxHookSection" style="display:none;">
-            <p class="settings-hint" style="margin:10px 0 6px;font-weight:600;color:#94A3B8;">── Hook Points ──</p>
+            <p class="settings-hint" style="margin:10px 0 6px;font-weight:700;color:#E2E8F0;font-size:12px;">── 🔊 Sound Volume per Hook ──</p>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">🎬 Start Recording</span>
               <label class="sfx-toggle"><input type="checkbox" id="sfxHookStart"><span class="sfx-toggle-slider"></span></label>
-              <input type="range" class="sfx-hook-vol" id="sfxVolStart" min="0" max="100" value="70">
-              <span class="sfx-hook-pct" id="sfxVolStartPct">70%</span>
+              <input type="range" class="sfx-hook-vol" id="sfxVolStart" min="0" max="100" value="70" title="Volume">
+              <span class="sfx-hook-pct" id="sfxVolStartPct">Vol: 70%</span>
             </div>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">🎤 During Recording</span>
               <label class="sfx-toggle"><input type="checkbox" id="sfxHookDuring"><span class="sfx-toggle-slider"></span></label>
-              <input type="range" class="sfx-hook-vol" id="sfxVolDuring" min="0" max="100" value="30">
-              <span class="sfx-hook-pct" id="sfxVolDuringPct">30%</span>
+              <input type="range" class="sfx-hook-vol" id="sfxVolDuring" min="0" max="100" value="30" title="Volume">
+              <span class="sfx-hook-pct" id="sfxVolDuringPct">Vol: 30%</span>
             </div>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">⏹️ Stop Recording</span>
               <label class="sfx-toggle"><input type="checkbox" id="sfxHookStop"><span class="sfx-toggle-slider"></span></label>
-              <input type="range" class="sfx-hook-vol" id="sfxVolStop" min="0" max="100" value="70">
-              <span class="sfx-hook-pct" id="sfxVolStopPct">70%</span>
+              <input type="range" class="sfx-hook-vol" id="sfxVolStop" min="0" max="100" value="70" title="Volume">
+              <span class="sfx-hook-pct" id="sfxVolStopPct">Vol: 70%</span>
             </div>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">⏳ Processing</span>
               <label class="sfx-toggle"><input type="checkbox" id="sfxHookProcess"><span class="sfx-toggle-slider"></span></label>
-              <input type="range" class="sfx-hook-vol" id="sfxVolProcess" min="0" max="100" value="30">
-              <span class="sfx-hook-pct" id="sfxVolProcessPct">30%</span>
+              <input type="range" class="sfx-hook-vol" id="sfxVolProcess" min="0" max="100" value="30" title="Volume">
+              <span class="sfx-hook-pct" id="sfxVolProcessPct">Vol: 30%</span>
             </div>
             <div class="sfx-hook-row">
               <span class="sfx-hook-label">📋 Paste</span>
@@ -1192,10 +1192,10 @@ class SettingsPanel {
       }
       if (slider && fx) {
         slider.value = fx._hookPoints[hook]?.volume || 70;
-        if (pct) pct.textContent = slider.value + '%';
+        if (pct) pct.textContent = 'Vol: ' + slider.value + '%';
         slider.addEventListener('input', () => {
           fx.setHookVolume(hook, parseInt(slider.value, 10));
-          if (pct) pct.textContent = slider.value + '%';
+          if (pct) pct.textContent = 'Vol: ' + slider.value + '%';
         });
       }
     }

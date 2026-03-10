@@ -2523,6 +2523,8 @@ class WindyApp {
           if (this._apiAudioChunks.length > 0) {
             const audioBlob = new Blob(this._apiAudioChunks, { type: mimeType });
             this.setState('buffering');
+            // Strand I: trigger process effect
+            try { if (this.effectsEngine) this.effectsEngine.trigger('process'); } catch (_) { }
             try {
               const text = await this._transcribeWithApi(engine, apiKey, audioBlob);
               if (text && text.trim()) {
