@@ -1,8 +1,8 @@
 # 🧬 WINDY PRO — DNA STRAND MASTER PLAN
 
-**Version:** 1.6.0
+**Version:** 1.7.0
 **Created:** 2026-02-04
-**Last Updated:** 2026-03-09
+**Last Updated:** 2026-03-11
 **Authors:** Kit 0 + Kit-0C1Veron + Antigravity + Kit 0C3 Charlie + Grant Whitmer
 **Philosophy:** Begin with the end in mind. — Stephen R. Covey
 
@@ -50,7 +50,7 @@ maps perfectly without requiring any AI/ML knowledge. Decision by Grant, 27 Feb 
 │                                            ✅ B4 (TurboTax Installer)    │
 │                                                      │                   │
 │                                                      ▼                   │
-│                                               🟡 MVP HARDENING           │
+│                                      🟡 MVP HARDENING + PACKAGING        │
 │                                                                          │
 │  ✅ A4 (Cloud API) ──> ✅ C1 (Web Client) ──> 🟡 D1 (Deploy)             │
 │                                                                          │
@@ -460,168 +460,247 @@ CODONS:
     └── checkPermissions() for proactive UX ✅
 ```
 
-#### B4: TurboTax Installer
+#### B4: TurboTax Installer ✅
 ```
-FILE: installer-v2/screens/wizard.html + wizard-main.js + wizard-preload.js
-STATUS: 🟡 MOSTLY COMPLETE (wizard UI done, packaging not started)
+FILES: installer-v2/ (6,692 lines across 20 files)
+  ├── wizard.html (161K, 9-screen wizard UI)
+  ├── wizard-main.js (403 lines, Electron main process for wizard)
+  ├── wizard-preload.js (IPC bridge)
+  ├── core/ (14 modules, 4,605 lines)
+  │   ├── clean-slate.js (504) — prior version detection + full uninstall
+  │   ├── bundled-assets.js (362) — bundled Python/ffmpeg/model resolver
+  │   ├── dependency-installer.js (593) — full cocktail: Python→venv→pip→ffmpeg→audio→CUDA
+  │   ├── download-manager.js (452) — HuggingFace pipeline with resume/retry
+  │   ├── hardware-detect.js (378) — GPU/RAM/disk/CPU detection
+  │   ├── models.js (521) — engine catalog (CTranslate2 INT8 sizes, 45+ models)
+  │   ├── windytune.js (479) — AI-powered engine recommendation
+  │   ├── storage-aware-models.js (271) — disk-aware model filtering
+  │   ├── account-manager.js (340) — license/device management
+  │   ├── brand-content.js (239) — educational content during install wait
+  │   ├── permissions.js (232) — platform-specific permission requests
+  │   ├── language-profile.js (135) — language selection for cocktail
+  │   ├── translation-upsell.js (99) — translate tier upgrade screen
+  │   └── packaging.js (from parent dir, 109) — electron-builder config
+  └── adapters/ (7 files, 1,684 lines)
+      ├── index.js (63) — platform dispatcher
+      ├── windows.js (327) — VC++ Redist auto-install, registry cleanup
+      ├── macos.js (262) — 5-tier Python fallback chain
+      ├── linux-debian.js (378) — 30+ apt packages in one cocktail shot
+      ├── linux-fedora.js (220) — DNF cocktail + RPM Fusion auto-enable
+      ├── linux-arch.js (197) — pacman cocktail + Wayland support
+      └── linux-universal.js (237) — Miniforge standalone Python for unknown distros
+STATUS: ✅ COMPLETE (core architecture), 🟡 Packaging not E2E tested
 PRIORITY: HIGH (required for MVP)
-NOTE: Wizard v2 implemented 27 Feb 2026 — 9 screens, i18n, brand experience
+LAST UPDATED: 11 Mar 2026 by Kit 0C3 Charlie (commit 45bfd48)
 
 CODONS:
+├── B4.0 Clean Slate (Prior Version Removal) ✅ [NEW — 11 Mar 2026]
+│   │
+│   │  FILE: installer-v2/core/clean-slate.js (504 lines)
+│   │  Grant's Rule: "If you don't completely kill and uninstall the prior
+│   │  version, you have all kinds of issues."
+│   │  MUST run BEFORE any installation begins.
+│   │
+│   ├── B4.0.1 Process Termination ✅
+│   │   ├── Kill running Electron app (windy-pro, windy pro)
+│   │   ├── Kill Python server (transcriber, server.py on port 9876)
+│   │   └── Platform-aware: taskkill (Win), pkill (Linux/Mac)
+│   │
+│   ├── B4.0.2 Directory Removal ✅
+│   │   ├── Remove ~/.windy-pro/ (main install dir)
+│   │   ├── Remove ~/.config/windy-pro/ (config dir)
+│   │   ├── Option to preserve models/ (they're huge and reusable)
+│   │   └── Verify clean state before returning
+│   │
+│   ├── B4.0.3 Platform Artifact Cleanup ✅
+│   │   ├── Windows: registry keys (HKCU\Software\WindyPro), Start Menu shortcuts
+│   │   ├── macOS: ~/Library/Application Support/WindyPro, Login Items
+│   │   ├── Linux: ~/.local/share/applications/*.desktop, user systemd services
+│   │   └── ⚠️ KNOWN GAP: system-level autostart not cleaned
+│   │       (needs /etc/systemd/system/ and HKLM\...\Run checks)
+│   │
+│   └── B4.0.4 Verification ✅
+│       ├── Confirms no Windy Pro processes running
+│       ├── Confirms install directory removed
+│       └── Returns status report to wizard UI
+│
 ├── B4.1 Hardware Detection ✅
 │   │
-│   │  MODULE: installer-v2/screens/wizard.html (runHardwareScan())
+│   │  FILE: installer-v2/core/hardware-detect.js (378 lines)
 │   │
-│   ├── B4.1.1 NVIDIA GPU detection 🔲
+│   ├── B4.1.1 NVIDIA GPU Detection ✅
 │   │   ├── Run: nvidia-smi --query-gpu=name,memory.total --format=csv
-│   │   └── Parse output for GPU name and VRAM
+│   │   └── Parse VRAM in MB, detect CUDA compute capability
 │   │
-│   ├── B4.1.2 AMD GPU detection 🔲
+│   ├── B4.1.2 AMD GPU Detection ✅
 │   │   └── Check for ROCm: rocm-smi
 │   │
-│   ├── B4.1.3 Apple Silicon detection 🔲
+│   ├── B4.1.3 Apple Silicon Detection ✅
 │   │   └── Check: process.arch === 'arm64' && process.platform === 'darwin'
 │   │
-│   ├── B4.1.4 RAM detection 🔲
-│   │   └── Use os.totalmem() / (1024 ** 3) for GB
+│   ├── B4.1.4 RAM Detection ✅
+│   │   └── os.totalmem() / (1024 ** 3) for GB
 │   │
-│   ├── B4.1.5 Disk space detection 🔲
-│   │   └── Use check-disk-space package
+│   ├── B4.1.5 Disk Space Detection ✅
+│   │   └── fs.statfs or df command for free space
 │   │
-│   └── B4.1.6 Generate hardware profile JSON 🔲
-│       {
-│         "gpu": "NVIDIA RTX 5090",
-│         "vram_gb": 32,
-│         "ram_gb": 64,
-│         "disk_free_gb": 500,
-│         "platform": "win32",
-│         "arch": "x64"
-│       }
+│   └── B4.1.6 Hardware Profile JSON ✅
+│       └── Returns: { gpu, vram_gb, ram_gb, disk_free_gb, platform, arch, cpu_cores }
 │
 ├── B4.2 Engine Selection Logic ✅
 │   │
-│   │  DECISION TREE:
+│   │  FILES: installer-v2/core/windytune.js (479 lines)
+│   │         installer-v2/core/models.js (521 lines)
+│   │         installer-v2/core/storage-aware-models.js (271 lines)
 │   │
-│   │  IF NVIDIA GPU with VRAM ≥ 6GB:
-│   │      → large-v3-turbo + float16 + CUDA
-│   │      "Best quality, fastest speed"
+│   │  THREE-LAYER WIZARD UI (Grandma/Enthusiast/Gearhead):
+│   │  ├── WindyTune (default): AI auto-selects based on hardware profile
+│   │  ├── Enthusiast: user picks from filtered recommendations
+│   │  └── Gearhead: full manual model selection (15 proprietary engines)
 │   │
-│   │  ELSE IF Apple Silicon (M1/M2/M3):
-│   │      → large-v3-turbo + MLX
-│   │      "Optimized for your Mac"
+│   │  DECISION TREE (WindyTune):
+│   │  ├── GPU ≥ 6GB VRAM → GPU-tier engines (float16, CUDA)
+│   │  ├── Apple Silicon → Core-tier engines (MLX)
+│   │  ├── RAM ≥ 16GB → CPU medium/large engines (int8)
+│   │  ├── RAM ≥ 8GB → CPU small engines (int8)
+│   │  ├── RAM ≥ 4GB → CPU base engines (int8)
+│   │  └── Below minimum → Recommend Cloud mode
 │   │
-│   │  ELSE IF RAM ≥ 16GB:
-│   │      → medium + int8 + CPU
-│   │      "High accuracy, good speed"
+│   │  ENGINE CATALOG (models.js — corrected CTranslate2 INT8 sizes):
+│   │  ├── 🛡️ Edge (CPU): Spark 42MB, Pulse 78MB, Standard 168MB, Global 515MB, Pro 515MB
+│   │  ├── ⚡ Core (GPU): Spark 75MB, Pulse 142MB, Standard 466MB, Global 1.5GB,
+│   │  │                  Pro 1.5GB, Turbo 1.6GB, Ultra 2.9GB
+│   │  └── 🌍 Lingua: Language-specific specialists (~500MB each)
 │   │
-│   │  ELSE IF RAM ≥ 8GB:
-│   │      → small + int8 + CPU
-│   │      "Balanced for your hardware"
-│   │
-│   │  ELSE IF RAM ≥ 4GB:
-│   │      → base + int8 + CPU
-│   │      "Lightweight, still accurate"
-│   │
-│   │  ELSE:
-│   │      → Recommend Cloud mode
-│   │      "Your device works best with Windy Cloud"
-│   │
-│   └── Display recommendation with "Why this choice?" tooltip
+│   └── Storage-aware filtering: removes engines that won't fit on disk
 │
-├── B4.3 Dependency Installation 🟡
+├── B4.3 Dependency Installation ✅ [COMPLETELY REWRITTEN — 11 Mar 2026]
 │   │
-│   │  STRATEGY: Bundle Python via PyInstaller
+│   │  STRATEGY: Bundled Python venv + pip (NOT PyInstaller)
+│   │  Grant's Rule: "Grandma doesn't know what Python is, and she shouldn't have to."
 │   │
-│   ├── B4.3.1 Create standalone Python package 🔲
-│   │   ├── pyinstaller src/engine/server.py --onefile
-│   │   └── Creates windy-engine.exe / windy-engine (no Python needed)
+│   ├── B4.3.0 Bundled Assets Resolver ✅
+│   │   │  FILE: installer-v2/core/bundled-assets.js (362 lines)
+│   │   │  Bundled assets are PRIMARY. Internet downloads are FALLBACK only.
+│   │   ├── Resolve bundled Python (3.11.9 per platform)
+│   │   ├── Resolve bundled ffmpeg (per platform)
+│   │   ├── Resolve bundled default model (faster-whisper-base)
+│   │   └── Directory: bundled/{python,ffmpeg,model}/
 │   │
-│   ├── B4.3.2 Bundle with Electron app 🔲
-│   │   └── extraResources in electron-builder config
+│   ├── B4.3.1 Python Installation ✅
+│   │   ├── Use bundled Python 3.11.9 (extracted per platform)
+│   │   ├── Create venv in ~/.windy-pro/venv/
+│   │   └── NEVER require user to install Python manually
 │   │
-│   ├── B4.3.3 Model download manager 🔲
-│   │   ├── Download from Hugging Face
-│   │   ├── Progress bar with ETA
-│   │   ├── Resume interrupted downloads
-│   │   └── Verify checksum
+│   ├── B4.3.2 Pip Package Installation ✅
+│   │   ├── 12 pip packages: faster-whisper, torch, numpy, websockets,
+│   │   │   sounddevice, pydub, fastapi, uvicorn, python-jose, passlib,
+│   │   │   slowapi, aiofiles
+│   │   └── All installed into venv automatically
 │   │
-│   └── B4.3.4 First-run setup wizard 🔲
-│       ├── "Downloading speech recognition model..."
-│       ├── "This may take a few minutes..."
-│       └── "Setup complete! Click to start."
+│   ├── B4.3.3 ffmpeg Installation ✅
+│   │   ├── Use bundled ffmpeg binary (per platform)
+│   │   ├── Fallback: apt/brew/choco install
+│   │   └── Required for audio format conversion
+│   │
+│   ├── B4.3.4 Audio Subsystem ✅
+│   │   ├── Linux: portaudio19-dev, libasound2-dev, pulseaudio
+│   │   ├── macOS: portaudio via Homebrew (if not bundled)
+│   │   └── Windows: included in Python sounddevice wheel
+│   │
+│   ├── B4.3.5 CUDA (Optional) ✅
+│   │   ├── Detect NVIDIA GPU → install CUDA toolkit
+│   │   ├── Install torch with CUDA support
+│   │   └── Skip gracefully if no GPU
+│   │
+│   ├── B4.3.6 Model Download Manager ✅
+│   │   │  FILE: installer-v2/core/download-manager.js (452 lines)
+│   │   ├── Real HuggingFace pipeline (all 45+ models mapped)
+│   │   ├── Correct repo names from Alpha/OC1 registry:
+│   │   │   ├── STT: WindyProLabs/windy-stt-{name}[-ct2]
+│   │   │   ├── Lingua: WindyProLabs/windy-lingua-{language} (full names)
+│   │   │   ├── Pairs: WindyProLabs/windy-pair-{src}-{tgt} (ISO codes)
+│   │   │   └── Translate: WindyProLabs/windy_translate_{name} (underscores!)
+│   │   ├── Resume support (HTTP range headers)
+│   │   ├── Retry with exponential backoff (3 attempts)
+│   │   ├── Progress callbacks for UI
+│   │   └── Integrity verification (checksum)
+│   │
+│   └── B4.3.7 Platform Adapters ✅
+│       │  FILES: installer-v2/adapters/ (7 files, 1,684 lines)
+│       │  Every adapter is bundled-first, NEVER "please install manually"
+│       │
+│       ├── Windows ✅ — Auto-installs VC++ Redistributable silently
+│       ├── macOS ✅ — 5-tier Python fallback:
+│       │   bundled → Xcode CLI → Homebrew → python.org → error
+│       ├── Debian/Ubuntu ✅ — 30+ apt packages in one cocktail shot
+│       ├── Fedora/RHEL ✅ — DNF cocktail + RPM Fusion auto-enable
+│       ├── Arch ✅ — pacman cocktail + Wayland support
+│       └── Universal ✅ — Miniforge standalone Python for unknown distros
 │
-├── B4.4 Permission Requests 🔲
+├── B4.4 Permission Requests ✅
 │   │
-│   ├── B4.4.1 Windows UAC 🔲
-│   │   └── Request admin only if needed (PATH modification)
+│   │  FILE: installer-v2/core/permissions.js (232 lines)
 │   │
-│   ├── B4.4.2 macOS Microphone Permission 🔲
-│   │   ├── Trigger permission prompt on first use
+│   ├── B4.4.1 Windows UAC ✅
+│   │   └── Elevate only if needed (PATH, registry, VC++ install)
+│   │
+│   ├── B4.4.2 macOS Microphone Permission ✅
+│   │   ├── Trigger system permission prompt
 │   │   └── Show instructions if denied
 │   │
-│   ├── B4.4.3 macOS Accessibility Permission 🔲
-│   │   ├── Required for cursor injection
-│   │   ├── Show System Preferences deep link
-│   │   └── Guide: "Click the lock, then check Windy Pro"
+│   ├── B4.4.3 macOS Accessibility Permission ✅
+│   │   ├── Required for cursor injection (AppleScript)
+│   │   ├── System Preferences deep link
+│   │   └── User-friendly guide
 │   │
-│   └── B4.4.4 Linux Permissions 🔲
-│       └── Flatpak portal permissions
+│   └── B4.4.4 Linux Permissions ✅
+│       └── Audio group membership, PulseAudio access
 │
 ├── B4.5 Installer UI ✅
 │   │
-│   │  SCREENS:
+│   │  FILE: installer-v2/wizard.html (161K — 9 screens, fully i18n'd)
+│   │  + installer-v2/core/brand-content.js (239 lines — educational content)
 │   │
-│   ├── Screen 1: Welcome 🔲
-│   │   "Welcome to Windy Pro"
-│   │   "Voice-to-text that never stops."
-│   │   [Get Started]
+│   │  SCREENS (all ✅ implemented):
 │   │
-│   ├── Screen 2: Hardware Scan 🔲
-│   │   "Scanning your system..."
-│   │   [Animated progress]
-│   │   ✓ GPU: NVIDIA RTX 5090 (32GB)
-│   │   ✓ RAM: 64 GB
-│   │   ✓ Disk: 500 GB free
+│   ├── Screen 1: Welcome ✅
+│   │   Brand tornado animation, "Voice-to-text that never stops"
 │   │
-│   ├── Screen 3: Engine Recommendation 🔲
-│   │   "We recommend: Large v3 Turbo"
-│   │   "Best quality for your hardware"
-│   │   [Why this choice?]
-│   │   [Continue] [Choose Different]
+│   ├── Screen 2: Account Login/Register ✅
+│   │   Email + password, device registration (1 of 5)
 │   │
-│   ├── Screen 4: Download Progress 🔲
-│   │   "Downloading model..."
-│   │   [████████░░░░░░░░] 52% - 2.1 GB / 4.0 GB
-│   │   "About 3 minutes remaining"
+│   ├── Screen 3: Hardware Scan ✅
+│   │   Animated GPU/RAM/disk detection with checkmarks
 │   │
-│   ├── Screen 5: Permissions 🔲
-│   │   "Windy Pro needs permission to:"
-│   │   ☑ Access your microphone
-│   │   ☑ Paste text into other apps
-│   │   [Grant Permissions]
+│   ├── Screen 4: Your Languages ✅ (F1)
+│   │   Search, select, percentage sliders for language cocktail
 │   │
-│   └── Screen 6: Complete 🔲
-│       "You're ready!"
-│       "Press Ctrl+Shift+Space to start recording"
-│       [Launch Windy Pro]
+│   ├── Screen 5: Translation Upgrade ✅ (F2)
+│   │   Personalized demo, only shows if 2+ languages selected
+│   │
+│   ├── Screen 6: Engine Recommendation ✅
+│   │   WindyTune auto-select with Enthusiast/Gearhead override
+│   │
+│   ├── Screen 7: Download & Install ✅
+│   │   Progress bars with ETA, brand education during wait
+│   │
+│   ├── Screen 8: Permissions ✅
+│   │   Platform-specific permission requests with guidance
+│   │
+│   └── Screen 9: Complete ✅
+│       Quick-start guide, hotkey reference, [Launch Windy Pro]
 │
-└── B4.6 Packaging 🔲
+└── B4.6 Packaging 🟡
     │
-    ├── B4.6.1 Windows (NSIS) 🔲
-    │   ├── electron-builder --win nsis
-    │   ├── Signed with code signing cert (optional)
-    │   └── Output: Windy-Pro-Setup-1.0.0.exe
+    │  FILE: installer-v2/packaging.js (109 lines — config defined)
     │
-    ├── B4.6.2 macOS (DMG) 🔲
-    │   ├── electron-builder --mac dmg
-    │   ├── Notarized with Apple (required for Gatekeeper)
-    │   └── Output: Windy-Pro-1.0.0.dmg
-    │
-    └── B4.6.3 Linux 🔲
-        ├── electron-builder --linux AppImage deb rpm
-        ├── AppImage: Windy-Pro-1.0.0.AppImage (universal)
-        ├── Deb: windy-pro_1.0.0_amd64.deb (Debian/Ubuntu)
-        └── RPM: windy-pro-1.0.0.x86_64.rpm (Fedora/RHEL)
+    ├── B4.6.1 Windows (NSIS) 🟡 — Config defined, not E2E tested
+    ├── B4.6.2 macOS (DMG) 🟡 — Config defined, not E2E tested
+    └── B4.6.3 Linux (AppImage/deb/rpm) 🟡 — Config defined, not E2E tested
+    
+    NOTE: Packaging configs exist but have not been run against
+    the new installer architecture. E2E build testing is next.
 ```
 
 ---
@@ -661,8 +740,23 @@ CODONS:
 │   ├── Service worker (sw.js) ✅
 │   └── Offline transcription 🔲 (requires local model)
 │
-└── C1.8 404 Page ✅
-    └── NotFound component in App.jsx
+├── C1.8 404 Page ✅
+│   └── NotFound component in App.jsx
+│
+├── C1.9 Admin Dashboard ✅ [NEW — not in original plan]
+│   └── FILE: src/client/web/src/pages/Admin.jsx (15K)
+│
+├── C1.10 User Profile Page ✅ [NEW]
+│   └── FILE: src/client/web/src/pages/Profile.jsx
+│
+├── C1.11 Web Settings Page ✅ [NEW]
+│   └── FILE: src/client/web/src/pages/Settings.jsx
+│
+├── C1.12 Web Translation Page ✅ [NEW]
+│   └── FILE: src/client/web/src/pages/Translate.jsx (16K)
+│
+└── C1.13 Vault Page ✅ [NEW]
+    └── FILE: src/client/web/src/pages/Vault.jsx (12K)
 ```
 
 ---
@@ -717,14 +811,19 @@ WEEK 3 (DONE):
 └── [x] C1: Web client (React/Vite PWA) ✅
 
 WEEK 4 (DONE):
-├── [x] B4.1-B4.2: Hardware Detection + Model Selection ✅
-├── [x] B4.3: Dependency Installer (venv + pip + model download) ✅
-├── [x] B4.4-B4.5: Permissions + Installer UI ✅
-├── [x] B4.6: Packaging config (NSIS, DMG, AppImage) ✅
+├── [x] B4.1-B4.2: Hardware Detection + WindyTune Engine Selection ✅
+├── [x] B4.3: Dependency Installer (bundled Python venv + pip + model download) ✅
+├── [x] B4.4-B4.5: Permissions + 9-screen Installer UI ✅
+├── [x] B4.6: Packaging config (NSIS, DMG, AppImage) ✅ (not E2E tested)
+├── [x] B4.0: Clean Slate (prior version uninstall) ✅ [11 Mar 2026]
+├── [x] B4.3.0: Bundled Assets Resolver ✅ [11 Mar 2026]
+├── [x] 6 Platform Adapters rewritten (Win/Mac/Deb/Fed/Arch/Universal) ✅
 └── [x] MVP FEATURE COMPLETE 🎯
 
-CURRENT: MVP HARDENING
-├── [ ] Harden all features to quality 9+
+CURRENT: MVP HARDENING + STRESS TESTING
+├── [x] Installer architecture complete (6,692 lines across 20 files)
+├── [ ] AG Opus stress testing installer (IN PROGRESS — 11 Mar 2026)
+├── [ ] E2E packaging builds (NSIS/DMG/AppImage)
 ├── [ ] Infrastructure deployment (Docker, nginx, SSL)
 ├── [ ] Comprehensive testing (expand test suite)
 └── [ ] Domain & branding
@@ -1004,8 +1103,8 @@ Strand E targets full offline speech-to-speech via CTranslate2/NLLB.
 
 ### E1: Translation Engine Core
 ```
-FILE: src/engine/translator.py
-STATUS: 🔲 NOT STARTED
+FILE: services/translate-api/server.js (17K) + translate-worker.py
+STATUS: 🟡 PARTIALLY IMPLEMENTED (cloud API done, offline CTranslate2 pipeline not started)
 PRIORITY: HIGH
 
 CODONS:
@@ -1072,8 +1171,8 @@ CODONS:
 
 ### E2: Conversation Mode (The "Hand-Over" Feature)
 ```
-FILE: src/engine/conversation.py
-STATUS: 🔲 NOT STARTED
+FILE: src/client/desktop/renderer/conversation-mode.js (289 lines)
+STATUS: 🟡 PARTIALLY IMPLEMENTED (UI built, backend translation pipeline pending)
 PRIORITY: HIGH — This is the feature that sells Windy Translate
 
 CODONS:
@@ -2109,8 +2208,8 @@ LAW 3: UNIVERSAL STATE COLORS (NEVER CHANGE)
 
 ### I1: Widget Engine
 ```
-FILE: src/client/desktop/renderer/widget-engine.js [NEW]
-STATUS: 🔲 NOT STARTED
+FILE: src/client/desktop/renderer/mini-widget.js (181 lines)
+STATUS: 🟡 PARTIALLY IMPLEMENTED
 PRIORITY: MEDIUM
 
 CODONS:
@@ -2176,8 +2275,8 @@ CODONS:
 
 ### I2: Effects Engine
 ```
-FILE: src/client/desktop/renderer/effects-engine.js [NEW]
-STATUS: 🔲 NOT STARTED
+FILE: src/client/desktop/renderer/effects-engine.js (600 lines)
+STATUS: ✅ IMPLEMENTED (SoundManager + VisualOverlay + EffectsEngine)
 PRIORITY: MEDIUM
 
 ARCHITECTURE NOTE:
@@ -2635,6 +2734,102 @@ CODONS:
 
 ---
 
+## 🧬 STRAND J: ADDITIONAL IMPLEMENTED FEATURES (Uncategorized)
+
+**Added:** 11 Mar 2026 by Kit 0C3 Charlie (reconciliation audit)
+**Note:** These features were built by Antigravity and exist in the repo but were never added to any DNA strand. Cataloged here for completeness.
+
+### J1: Desktop Feature Additions (Beyond Original Strands)
+```
+STATUS: ✅ IMPLEMENTED (various dates, mostly by Antigravity)
+
+FILES:
+├── J1.1 Upgrade Panel (Stripe Checkout) ✅
+│   └── FILE: src/client/desktop/renderer/upgrade.js (541 lines)
+│   └── 4-tier pricing cards (Free/$49/$79/$149), Stripe integration
+│
+├── J1.2 Recording History Panel ✅
+│   └── FILE: src/client/desktop/renderer/history.js (~1050 lines)
+│   └── Date-grouped list, search, inline playback, export
+│
+├── J1.3 Auto-Sync Manager ✅
+│   └── FILE: src/client/desktop/renderer/auto-sync-manager.js (350 lines)
+│   └── + auto-sync.css — cloud sync status, offline queue
+│
+├── J1.4 Document Translator ✅
+│   └── FILE: src/client/desktop/renderer/document-translator.js (265 lines)
+│   └── Paste/upload text documents for batch translation
+│
+├── J1.5 Translation Memory ✅
+│   └── FILE: src/client/desktop/renderer/translation-memory.js (244 lines)
+│   └── Cache frequently translated phrases for speed
+│
+├── J1.6 Clone Data Archive ✅
+│   └── FILE: src/client/desktop/renderer/clone-data-archive.js (296 lines)
+│   └── Soul File / Clone Capture data management
+│
+├── J1.7 Phone Camera Bridge ✅
+│   └── FILE: src/client/desktop/renderer/phone-camera-bridge.js (240 lines)
+│   └── Mobile camera → desktop OCR/translation pipeline
+│
+├── J1.8 Video Preview / Clone Features ✅
+│   └── FILES: video-preview.html, video-preload.js, video-clone-features.css
+│   └── Video recording for digital twin / clone capture
+│
+├── J1.9 Changelog Display ✅
+│   └── FILE: src/client/desktop/renderer/changelog.js
+│   └── In-app changelog / version history
+│
+└── J1.10 Premium Features Styling ✅
+    └── FILE: src/client/desktop/renderer/premium-features.css (14K)
+    └── Tier-gated UI styling for paid features
+```
+
+### J2: Engine Training Pipeline (Python) ✅ [NEW]
+```
+STATUS: ✅ IMPLEMENTED (added ~9 Mar 2026 by Antigravity)
+
+FILES:
+├── J2.1 LoRA Fine-Tuning ✅
+│   └── FILE: src/engine/finetune_whisper_lora.py (327 lines)
+│   └── Fine-tune Whisper with LoRA adapters for custom vocabulary
+│
+├── J2.2 LoRA Adapter Merging ✅
+│   └── FILE: src/engine/merge_lora_adapters.py (56 lines)
+│   └── Merge LoRA adapters back into base model
+│
+├── J2.3 CTranslate2 Quantization ✅
+│   └── FILE: src/engine/quantize_to_ct2.py (90 lines)
+│   └── Quantize fine-tuned models to CTranslate2 INT8 format
+│
+└── J2.4 Opus Audio Codec ✅
+    └── FILE: src/engine/opus-codec.js (57 lines)
+    └── Opus encoding for WebSocket audio streaming
+
+NOTE: This pipeline enables WindyProLabs to create custom fine-tuned
+engines (lingua specialists, domain-specific models) and distribute
+them via HuggingFace in quantized CTranslate2 format.
+```
+
+### J3: Translation API Service ✅ [NEW]
+```
+STATUS: ✅ IMPLEMENTED
+
+FILES: services/translate-api/
+├── server.js (17K) — Express API for translation requests
+├── translate-worker.py — Python worker for CTranslate2/NLLB
+├── download-model.py — Model download utility
+├── Dockerfile — Container deployment
+├── windy-translate.service — systemd service file
+└── README.md — API documentation
+
+NOTE: This is the backend that powers Tier 2 dynamic i18n (G4)
+and serves as the dog-fooding translation API. Designed to run
+on Veron (GPU server) for production translation.
+```
+
+---
+
 ## 📝 CHANGELOG
 
 | Date | Author | Change |
@@ -2700,6 +2895,17 @@ CODONS:
 | 2026-03-09 | Antigravity | I-BUG: Identified broken start/stop beep — flagged for immediate fix |
 | 2026-03-09 | Grant | Theme pack categories: Gamer (non-infringing names), Cultural (6 countries), Everyday (4 packs) |
 | 2026-03-09 | Grant | New invariant #6: "Effects are always opt-in, never forced" |
+| 2026-03-11 | Kit 0C3 Charlie | **v1.7.0**: Full reconciliation audit — DNA plan vs actual repo state |
+| 2026-03-11 | Kit 0C3 Charlie | B4: COMPLETE REWRITE — removed stale PyInstaller strategy, documented actual architecture |
+| 2026-03-11 | Kit 0C3 Charlie | B4: Added B4.0 Clean Slate (504 lines), B4.3.0 Bundled Assets (362 lines) |
+| 2026-03-11 | Kit 0C3 Charlie | B4: Documented all 6 platform adapters (1,684 lines), download-manager.js (452 lines) |
+| 2026-03-11 | Kit 0C3 Charlie | B4: Updated engine sizes from stale ONNX float32 to correct CTranslate2 INT8 |
+| 2026-03-11 | Kit 0C3 Charlie | B4: All B4.1-B4.5 codons updated to ✅, B4.6 remains 🟡 (config exists, not E2E tested) |
+| 2026-03-11 | Kit 0C3 Charlie | C1: Added 5 new web pages (Admin, Profile, Settings, Translate, Vault) — all ✅ |
+| 2026-03-11 | Kit 0C3 Charlie | E1-E2: Updated statuses — translate-api service exists, conversation-mode.js built |
+| 2026-03-11 | Kit 0C3 Charlie | I1-I2: Updated statuses — effects-engine.js (600 lines) ✅, mini-widget.js (181 lines) 🟡 |
+| 2026-03-11 | Kit 0C3 Charlie | Added Strand J: 10 uncategorized desktop features, engine training pipeline, translate API |
+| 2026-03-11 | Kit 0C3 Charlie | Updated phase timeline to reflect current state (installer stress testing in progress) |
 
 ---
 
