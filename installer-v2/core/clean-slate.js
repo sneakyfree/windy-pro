@@ -404,16 +404,21 @@ class CleanSlate {
       try { fs.unlinkSync(autostartFile); result.removed.push('Autostart entry'); } catch (e) { /* ignore */ }
     }
 
-    // Remove systemd user service if exists
-    const systemdService = path.join(os.homedir(), '.config', 'systemd', 'user', 'windy-pro.service');
-    if (fs.existsSync(systemdService)) {
-      try {
-        execSync('systemctl --user stop windy-pro.service 2>/dev/null', { stdio: 'pipe', timeout: 5000 });
-        execSync('systemctl --user disable windy-pro.service 2>/dev/null', { stdio: 'pipe', timeout: 5000 });
-        fs.unlinkSync(systemdService);
-        result.removed.push('systemd user service');
-      } catch (e) { /* ignore */ }
+    // Remove systemd user services if exist
+    const systemdUserDir = path.join(os.homedir(), '.config', 'systemd', 'user');
+    const windyServices = ['windy-pro.service', 'windy-account-server.service', 'windy-cloud-storage.service'];
+    for (const svc of windyServices) {
+      const svcPath = path.join(systemdUserDir, svc);
+      if (fs.existsSync(svcPath)) {
+        try {
+          execSync(`systemctl --user stop ${svc} 2>/dev/null`, { stdio: 'pipe', timeout: 5000 });
+          execSync(`systemctl --user disable ${svc} 2>/dev/null`, { stdio: 'pipe', timeout: 5000 });
+          fs.unlinkSync(svcPath);
+          result.removed.push(`systemd service: ${svc}`);
+        } catch (e) { /* ignore */ }
+      }
     }
+    try { execSync('systemctl --user daemon-reload 2>/dev/null', { stdio: 'pipe', timeout: 5000 }); } catch (e) { /* ignore */ }
 
     // Remove from /usr/local/bin if symlinked
     try {
