@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windy Chat</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="chat.css">
+</head>
+<body>
+
+  <!-- ═══ LOGIN SCREEN ═══ -->
+  <div id="login-screen" class="chat-login">
+    <h1>🌪️ Windy Chat</h1>
+    <p class="subtitle">Talk to anyone, in any language — instantly</p>
+
+    <div class="features">
+      <div class="feature-card">
+        <div class="icon">🔒</div>
+        <div class="label">Military-Grade<br>Encryption</div>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🌐</div>
+        <div class="label">Auto-Translate<br>99 Languages</div>
+      </div>
+      <div class="feature-card">
+        <div class="icon">✈️</div>
+        <div class="label">100% Offline<br>Capable</div>
+      </div>
+    </div>
+
+    <div class="login-form">
+      <input type="text" id="login-username" placeholder="Username or @user:server" autocomplete="username">
+      <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
+      <button onclick="handleLogin()">🌪️ Connect to Windy Chat</button>
+      <div id="login-error" class="login-error" style="display:none;"></div>
+      <p style="font-size:12px; color:var(--chat-text-muted); margin-top:8px;">
+        Don't have an account? <a href="#" onclick="showRegister()" style="color:var(--chat-blue);">Create one</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- ═══ REGISTER SCREEN ═══ -->
+  <div id="register-screen" class="chat-login" style="display:none;">
+    <h1>🌪️ Join Windy Chat</h1>
+    <p class="subtitle">Create your Windy Chat identity</p>
+
+    <div class="login-form">
+      <input type="text" id="reg-displayname" placeholder="Display name (e.g., Grant)">
+      <input type="text" id="reg-username" placeholder="Username (e.g., grant.windy)">
+      <input type="password" id="reg-password" placeholder="Password">
+      <input type="password" id="reg-password-confirm" placeholder="Confirm password">
+      <button onclick="handleRegister()">🚀 Create Account</button>
+      <div id="reg-error" class="login-error" style="display:none;"></div>
+      <p style="font-size:12px; color:var(--chat-text-muted); margin-top:8px;">
+        Already have an account? <a href="#" onclick="showLogin()" style="color:var(--chat-blue);">Sign in</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- ═══ MAIN CHAT INTERFACE ═══ -->
+  <div id="chat-interface" style="display:none; width:100%; height:100vh;">
+    <!-- Sidebar -->
+    <div class="chat-sidebar">
+      <div class="sidebar-header">
+        <h2>🌪️ Windy Chat</h2>
+        <button onclick="showNewChat()" style="background:var(--chat-green); border:none; color:#0F1219; width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:16px; font-weight:800;" title="New conversation">+</button>
+      </div>
+      <div class="sidebar-search">
+        <input type="text" id="contact-search" placeholder="🔍 Search contacts..." oninput="filterContacts()">
+      </div>
+      <div class="contact-list" id="contact-list">
+        <!-- Contacts rendered here -->
+      </div>
+
+      <!-- User info footer -->
+      <div style="padding:12px 16px; border-top:1px solid var(--chat-border); display:flex; align-items:center; gap:8px;">
+        <div class="contact-avatar" style="width:32px; height:32px; font-size:13px;" id="my-avatar">?</div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" id="my-display-name">Connecting...</div>
+          <div style="font-size:10px; color:var(--chat-text-muted);" id="my-user-id"></div>
+        </div>
+        <button onclick="handleLogout()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:14px;" title="Sign out">⏻</button>
+      </div>
+    </div>
+
+    <!-- Chat area -->
+    <div class="chat-main" id="chat-main">
+      <!-- Empty state (no conversation selected) -->
+      <div class="chat-empty" id="chat-empty">
+        <div class="emoji">🌪️</div>
+        <h3>Welcome to Windy Chat</h3>
+        <p>Select a contact to start chatting, or click <strong>+</strong> to start a new conversation. Every message is automatically translated to your contact's language.</p>
+
+        <div style="display:flex; gap:12px; margin-top:24px;">
+          <div style="background:var(--chat-card); border:1px solid var(--chat-border); border-radius:10px; padding:14px; text-align:center; width:120px;">
+            <div style="font-size:24px; margin-bottom:6px;">📱</div>
+            <div style="font-size:11px; font-weight:600;">Your devices</div>
+            <div style="font-size:10px; color:var(--chat-text-muted); margin-top:2px;">Synced everywhere</div>
+          </div>
+          <div style="background:var(--chat-card); border:1px solid var(--chat-border); border-radius:10px; padding:14px; text-align:center; width:120px;">
+            <div style="font-size:24px; margin-bottom:6px;">🔐</div>
+            <div style="font-size:11px; font-weight:600;">E2E Encrypted</div>
+            <div style="font-size:10px; color:var(--chat-text-muted); margin-top:2px;">Government-grade</div>
+          </div>
+          <div style="background:var(--chat-card); border:1px solid var(--chat-border); border-radius:10px; padding:14px; text-align:center; width:120px;">
+            <div style="font-size:24px; margin-bottom:6px;">🌍</div>
+            <div style="font-size:11px; font-weight:600;">99 Languages</div>
+            <div style="font-size:10px; color:var(--chat-text-muted); margin-top:2px;">Auto-translated</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active conversation -->
+      <div id="active-chat" style="display:none; flex:1; display:flex; flex-direction:column; height:100vh;">
+        <!-- Header -->
+        <div class="chat-header">
+          <div class="chat-header-info">
+            <div class="contact-avatar" id="chat-partner-avatar">?</div>
+            <div>
+              <div class="chat-header-name" id="chat-partner-name">Contact Name</div>
+              <div class="chat-header-status" id="chat-partner-status">Offline</div>
+            </div>
+          </div>
+          <div class="chat-header-actions">
+            <button title="Voice call (coming soon)" disabled>📞</button>
+            <button title="Video call (coming soon)" disabled>📹</button>
+            <button title="Invite to Windy Pro" onclick="shareInvite()">📤</button>
+          </div>
+        </div>
+
+        <!-- Messages -->
+        <div class="chat-messages" id="chat-messages">
+          <!-- Messages rendered here -->
+        </div>
+
+        <!-- Typing indicator -->
+        <div class="typing-indicator" id="typing-indicator"></div>
+
+        <!-- Input -->
+        <div class="chat-input-area">
+          <div class="translate-indicator" id="translate-indicator">
+            🌐 EN → ES
+          </div>
+          <div class="chat-input-wrapper">
+            <input type="text" id="message-input" placeholder="Type a message..."
+                   onkeydown="if(event.key==='Enter')sendMessage()"
+                   oninput="handleTyping()">
+            <button class="chat-send-btn" onclick="sendMessage()" id="send-btn">➤</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ New Chat Modal ═══ -->
+  <div id="new-chat-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; display:none; align-items:center; justify-content:center;">
+    <div style="background:var(--chat-card); border:1px solid var(--chat-border); border-radius:16px; padding:24px; width:360px; max-width:90vw;">
+      <h3 style="font-size:16px; font-weight:800; margin-bottom:16px; color:var(--chat-text);">💬 New Conversation</h3>
+      <input type="text" id="new-chat-user" placeholder="Enter Windy Chat username or @user:server"
+             style="width:100%; padding:10px 14px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:14px; outline:none; margin-bottom:12px;">
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button onclick="hideNewChat()" style="padding:8px 16px; background:var(--chat-border); border:none; border-radius:8px; color:var(--chat-text-dim); cursor:pointer; font-size:13px;">Cancel</button>
+        <button onclick="startNewChat()" style="padding:8px 16px; background:var(--chat-green); border:none; border-radius:8px; color:#0F1219; cursor:pointer; font-size:13px; font-weight:700;">Start Chat</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ═══ State ═══
+    let currentRoomId = null;
+    let contacts = [];
+    let myUserId = null;
+    let myLanguage = 'en';
+
+    // ═══ Initialization ═══
+    async function init() {
+      // Try to resume existing session
+      const session = await windyChat.getSession();
+      if (session && session.success) {
+        myUserId = session.userId;
+        myLanguage = await windyChat.getUserLanguage() || 'en';
+        showChatInterface();
+        loadContacts();
+      }
+      // Otherwise stay on login screen
+
+      // Listen for incoming messages
+      windyChat.onMessage((msg) => {
+        if (msg.roomId === currentRoomId) {
+          appendMessage(msg);
+          scrollToBottom();
+        }
+        // Update contact list preview
+        loadContacts();
+      });
+
+      windyChat.onPresence((data) => {
+        updatePresence(data.userId, data.presence);
+      });
+
+      windyChat.onInvite((data) => {
+        // Auto-accept for now (MVP simplicity)
+        windyChat.acceptInvite(data.roomId);
+        setTimeout(loadContacts, 1000);
+      });
+
+      windyChat.onConnected(() => {
+        console.log('[WindyChat UI] Connected');
+      });
+    }
+
+    // ═══ Auth ═══
+    async function handleLogin() {
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+      const errorEl = document.getElementById('login-error');
+
+      if (!username || !password) {
+        errorEl.textContent = 'Please enter username and password';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      errorEl.style.display = 'none';
+      const result = await windyChat.login(username, password);
+
+      if (result.success) {
+        myUserId = result.userId;
+        myLanguage = await windyChat.getUserLanguage() || 'en';
+        showChatInterface();
+        loadContacts();
+      } else {
+        errorEl.textContent = result.error || 'Login failed';
+        errorEl.style.display = 'block';
+      }
+    }
+
+    async function handleRegister() {
+      const displayName = document.getElementById('reg-displayname').value.trim();
+      const username = document.getElementById('reg-username').value.trim();
+      const password = document.getElementById('reg-password').value;
+      const confirm = document.getElementById('reg-password-confirm').value;
+      const errorEl = document.getElementById('reg-error');
+
+      if (!username || !password || !displayName) {
+        errorEl.textContent = 'All fields are required';
+        errorEl.style.display = 'block';
+        return;
+      }
+      if (password !== confirm) {
+        errorEl.textContent = 'Passwords do not match';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      errorEl.style.display = 'none';
+      const result = await windyChat.register(username, password, displayName);
+
+      if (result.success) {
+        myUserId = result.userId;
+        myLanguage = await windyChat.getUserLanguage() || 'en';
+        showChatInterface();
+        loadContacts();
+      } else {
+        errorEl.textContent = result.error || 'Registration failed';
+        errorEl.style.display = 'block';
+      }
+    }
+
+    async function handleLogout() {
+      await windyChat.logout();
+      currentRoomId = null;
+      contacts = [];
+      document.getElementById('chat-interface').style.display = 'none';
+      document.getElementById('login-screen').style.display = 'flex';
+    }
+
+    function showLogin() {
+      document.getElementById('register-screen').style.display = 'none';
+      document.getElementById('login-screen').style.display = 'flex';
+    }
+
+    function showRegister() {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('register-screen').style.display = 'flex';
+    }
+
+    // ═══ UI Transitions ═══
+    function showChatInterface() {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('register-screen').style.display = 'none';
+      document.getElementById('chat-interface').style.display = 'flex';
+
+      // Update user info in sidebar footer
+      const displayName = myUserId ? myUserId.split(':')[0].replace('@', '') : '?';
+      document.getElementById('my-display-name').textContent = displayName;
+      document.getElementById('my-user-id').textContent = myUserId || '';
+      document.getElementById('my-avatar').textContent = displayName.charAt(0).toUpperCase();
+    }
+
+    // ═══ Contacts ═══
+    async function loadContacts() {
+      contacts = await windyChat.getContacts();
+      renderContacts(contacts);
+    }
+
+    function renderContacts(list) {
+      const container = document.getElementById('contact-list');
+      if (list.length === 0) {
+        container.innerHTML = `
+          <div style="padding:32px 16px; text-align:center; color:var(--chat-text-muted);">
+            <div style="font-size:32px; margin-bottom:8px;">👋</div>
+            <div style="font-size:13px;">No conversations yet</div>
+            <div style="font-size:11px; margin-top:4px;">Click + to start chatting</div>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(c => {
+        const initial = (c.displayName || '?').charAt(0).toUpperCase();
+        const time = c.lastTimestamp ? formatTime(c.lastTimestamp) : '';
+        const isActive = c.roomId === currentRoomId;
+        return `
+          <div class="contact-item ${isActive ? 'active' : ''}" onclick="openConversation('${c.roomId}', '${c.userId}', '${escapeHtml(c.displayName)}')">
+            <div class="contact-avatar">
+              ${initial}
+              <div class="presence-dot" id="presence-${c.userId.replace(/[^a-zA-Z0-9]/g, '_')}"></div>
+            </div>
+            <div class="contact-info">
+              <div class="contact-name">${escapeHtml(c.displayName)}</div>
+              <div class="contact-preview">${escapeHtml(c.lastMessage || 'Start a conversation')}</div>
+            </div>
+            <div class="contact-meta">
+              <div class="contact-time">${time}</div>
+              ${c.unreadCount > 0 ? `<div class="contact-unread">${c.unreadCount}</div>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function filterContacts() {
+      const query = document.getElementById('contact-search').value.toLowerCase();
+      const filtered = contacts.filter(c =>
+        (c.displayName || '').toLowerCase().includes(query) ||
+        c.userId.toLowerCase().includes(query)
+      );
+      renderContacts(filtered);
+    }
+
+    // ═══ Conversations ═══
+    async function openConversation(roomId, partnerId, partnerName) {
+      currentRoomId = roomId;
+
+      // Update header
+      document.getElementById('chat-partner-name').textContent = partnerName;
+      document.getElementById('chat-partner-avatar').textContent = partnerName.charAt(0).toUpperCase();
+
+      // Update translate indicator
+      document.getElementById('translate-indicator').textContent = `🌐 ${myLanguage.toUpperCase()} → auto`;
+
+      // Show active chat, hide empty state
+      document.getElementById('chat-empty').style.display = 'none';
+      document.getElementById('active-chat').style.display = 'flex';
+
+      // Load messages
+      const messages = await windyChat.getMessages(roomId, 50);
+      renderMessages(messages);
+      scrollToBottom();
+
+      // Highlight in contact list
+      loadContacts();
+
+      // Focus input
+      document.getElementById('message-input').focus();
+    }
+
+    function renderMessages(messages) {
+      const container = document.getElementById('chat-messages');
+      container.innerHTML = messages.map(m => {
+        const isOwn = m.isOwn;
+        const time = formatTime(m.timestamp);
+
+        let translationHtml = '';
+        if (m.wasTranslated && m.originalText) {
+          const langLabel = m.sourceLanguage ? m.sourceLanguage.toUpperCase() : '??';
+          translationHtml = `
+            <div class="message-translation">
+              <span class="lang-badge">${langLabel}</span>
+              ${escapeHtml(m.originalText)}
+            </div>`;
+        }
+
+        return `
+          <div class="message-group ${isOwn ? 'own' : ''}">
+            <div class="message-bubble ${isOwn ? 'own' : 'other'}">
+              <div class="message-text">${escapeHtml(m.body)}</div>
+              ${translationHtml}
+              <div class="message-time">${time}</div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function appendMessage(msg) {
+      const container = document.getElementById('chat-messages');
+      const time = formatTime(msg.timestamp);
+      const isOwn = msg.senderId === myUserId;
+
+      let translationHtml = '';
+      if (msg.originalText && msg.sourceLanguage) {
+        translationHtml = `
+          <div class="message-translation">
+            <span class="lang-badge">${msg.sourceLanguage.toUpperCase()}</span>
+            ${escapeHtml(msg.originalText)}
+          </div>`;
+      }
+
+      container.innerHTML += `
+        <div class="message-group ${isOwn ? 'own' : ''}">
+          <div class="message-bubble ${isOwn ? 'own' : 'other'}">
+            <div class="message-text">${escapeHtml(msg.body)}</div>
+            ${translationHtml}
+            <div class="message-time">${time}</div>
+          </div>
+        </div>`;
+    }
+
+    // ═══ Send Message ═══
+    async function sendMessage() {
+      const input = document.getElementById('message-input');
+      const text = input.value.trim();
+      if (!text || !currentRoomId) return;
+
+      input.value = '';
+      document.getElementById('send-btn').disabled = true;
+
+      try {
+        const result = await windyChat.sendMessage(currentRoomId, text);
+
+        // Optimistic UI — show our message immediately
+        appendMessage({
+          senderId: myUserId,
+          body: result.translated ? result.translatedText : text,
+          originalText: result.translated ? text : null,
+          sourceLanguage: result.translated ? myLanguage : null,
+          timestamp: Date.now()
+        });
+        scrollToBottom();
+      } catch (err) {
+        console.error('Send failed:', err);
+        // Show error in chat
+        appendMessage({
+          senderId: 'system',
+          body: '⚠️ Message failed to send. Please try again.',
+          timestamp: Date.now()
+        });
+      }
+
+      document.getElementById('send-btn').disabled = false;
+      input.focus();
+    }
+
+    // ═══ Typing ═══
+    let typingTimeout = null;
+    function handleTyping() {
+      if (!currentRoomId) return;
+      windyChat.sendTyping(currentRoomId, true);
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        windyChat.sendTyping(currentRoomId, false);
+      }, 3000);
+    }
+
+    // ═══ New Chat ═══
+    function showNewChat() {
+      document.getElementById('new-chat-modal').style.display = 'flex';
+      document.getElementById('new-chat-user').focus();
+    }
+
+    function hideNewChat() {
+      document.getElementById('new-chat-modal').style.display = 'none';
+    }
+
+    async function startNewChat() {
+      const userId = document.getElementById('new-chat-user').value.trim();
+      if (!userId) return;
+
+      const result = await windyChat.createDM(userId);
+      hideNewChat();
+
+      if (result.roomId) {
+        openConversation(result.roomId, userId, userId.split(':')[0].replace('@', ''));
+        setTimeout(loadContacts, 1000);
+      }
+    }
+
+    // ═══ Presence ═══
+    function updatePresence(userId, status) {
+      const safeId = userId.replace(/[^a-zA-Z0-9]/g, '_');
+      const dot = document.getElementById(`presence-${safeId}`);
+      if (dot) {
+        dot.className = `presence-dot ${status === 'online' ? 'online' : ''}`;
+      }
+      // Update header if viewing this contact
+      const headerName = document.getElementById('chat-partner-name');
+      if (headerName && headerName.dataset.userId === userId) {
+        document.getElementById('chat-partner-status').textContent =
+          status === 'online' ? '🟢 Online' : 'Offline';
+      }
+    }
+
+    // ═══ Share / Invite ═══
+    function shareInvite() {
+      const inviteText = `Join me on Windy Chat! Talk in any language, 100% private.\nhttps://windypro.com/chat/invite/${myUserId}`;
+      navigator.clipboard.writeText(inviteText);
+      // Brief visual feedback
+      const btn = event.target;
+      btn.textContent = '✅';
+      setTimeout(() => btn.textContent = '📤', 1500);
+    }
+
+    // ═══ Helpers ═══
+    function scrollToBottom() {
+      const container = document.getElementById('chat-messages');
+      if (container) container.scrollTop = container.scrollHeight;
+    }
+
+    function formatTime(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      const now = new Date();
+      const diff = now - d;
+
+      if (diff < 60000) return 'now';
+      if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+      if (diff < 86400000) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ═══ Start ═══
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

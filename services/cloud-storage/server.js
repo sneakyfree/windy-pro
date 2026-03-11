@@ -2,11 +2,11 @@
  * Windy Pro Cloud Storage API
  * 
  * Enterprise-grade distributed file storage for Windy Pro users.
- * Runs on each storage node. A central orchestrator (or this node in standalone mode)
- * handles routing, user management, and admin operations.
+ * Backend: Cloudflare R2 (S3-compatible, zero egress fees).
+ * Local disk used only for temp staging during upload.
  * 
  * Architecture:
- *   Client → API Gateway (this) → Storage Node(s)
+ *   Client → API Gateway (this) → Cloudflare R2
  *   Admin Dashboard → API Gateway → All operations
  */
 
@@ -23,6 +23,35 @@ const http = require('http');
 const https = require('https');
 const { URL } = require('url');
 
+// Load .env if present
+try {
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, 'utf-8').split('\n');
+    for (const line of lines) {
+      const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+      if (match && !process.env[match[1]]) {
+        process.env[match[1]] = match[2].trim();
+      }
+    }
+    console.log('[Config] Loaded .env');
+  }
+} catch (_) {}
+
+// ── Cloudflare R2 Backend ───────────────────────────────────────
+let r2 = null;
+function getR2() {
+  if (!r2) {
+    try {
+      const { R2StorageAdapter } = require('./r2-adapter');
+      r2 = new R2StorageAdapter();
+    } catch (err) {
+      console.warn('[R2] Not available — falling back to local storage:', err.message);
+    }
+  }
+  return r2;
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -34,11 +63,11 @@ const DB_PATH = path.join(DATA_ROOT, '_db');
 const UPLOADS_PATH = path.join(DATA_ROOT, 'uploads');
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'windypro-admin-2026';
-const NODE_ID = process.env.NODE_ID || 'node-01';
-const NODE_NAME = process.env.NODE_NAME || 'Unknown Node';
+const NODE_ID = process.env.NODE_ID || 'node-r2';
+const NODE_NAME = process.env.NODE_NAME || 'Cloudflare R2';
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB per file
 
-// Ensure directories
+// Ensure directories (for temp staging and DB)
 [DATA_ROOT, DB_PATH, UPLOADS_PATH].forEach(d => fs.mkdirSync(d, { recursive: true }));
 
 // ── Simple JSON DB ──────────────────────────────────────────────
@@ -203,8 +232,8 @@ app.post('/auth/login', async (req, res) => {
 
 // ── User File Routes ────────────────────────────────────────────
 
-// Upload file
-app.post('/files/upload', authMiddleware, upload.single('file'), (req, res) => {
+// Upload file (multer stages locally, then streams to R2)
+app.post('/files/upload', authMiddleware, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
   const fileId = uuidv4();
@@ -212,15 +241,29 @@ app.post('/files/upload', authMiddleware, upload.single('file'), (req, res) => {
   const user = req.user;
 
   // Check storage limit
-  if (user.storageUsed + fileSize > user.storageLimit) {
-    // Remove the uploaded file
+  if (user.storageLimit > 0 && user.storageUsed + fileSize > user.storageLimit) {
     try { fs.unlinkSync(req.file.path); } catch (_) { }
     return res.status(413).json({
       error: 'Storage limit exceeded',
       used: user.storageUsed,
       limit: user.storageLimit,
-      fileSize
+      fileSize,
+      upgradeUrl: 'https://windypro.thewindstorm.uk/upgrade'
     });
+  }
+
+  const fileType = req.body.type || 'transcript';
+  let r2Key = null;
+
+  // Upload to R2 if available
+  const storage = getR2();
+  if (storage) {
+    try {
+      const result = await storage.uploadFromMulter(user.id, req.file, fileType);
+      r2Key = result.key;
+    } catch (err) {
+      console.error('[R2] Upload failed, keeping local:', err.message);
+    }
   }
 
   const fileMeta = {
@@ -231,8 +274,9 @@ app.post('/files/upload', authMiddleware, upload.single('file'), (req, res) => {
     mimeType: req.file.mimetype,
     size: fileSize,
     nodeId: NODE_ID,
-    path: req.file.path,
-    type: req.body.type || 'transcript', // transcript, audio, video
+    path: r2Key ? null : req.file.path, // null if stored in R2
+    r2Key: r2Key, // R2 object key
+    type: fileType,
     sessionDate: req.body.sessionDate || new Date().toISOString().slice(0, 10),
     metadata: req.body.metadata ? JSON.parse(req.body.metadata) : {},
     uploadedAt: new Date().toISOString()
@@ -246,14 +290,15 @@ app.post('/files/upload', authMiddleware, upload.single('file'), (req, res) => {
   user.lastActive = new Date().toISOString();
   usersDB.set(user.id, user);
 
-  audit('file.upload', user.id, { fileId, size: fileSize, name: req.file.originalname });
+  audit('file.upload', user.id, { fileId, size: fileSize, name: req.file.originalname, r2: !!r2Key });
 
   res.json({
     ok: true,
     fileId,
     size: fileSize,
     storageUsed: user.storageUsed,
-    storageLimit: user.storageLimit
+    storageLimit: user.storageLimit,
+    backend: r2Key ? 'r2' : 'local'
   });
 });
 
@@ -281,32 +326,60 @@ app.get('/files', authMiddleware, (req, res) => {
   });
 });
 
-// Download file
-app.get('/files/:fileId', authMiddleware, (req, res) => {
+// Download file (from R2 or local fallback)
+app.get('/files/:fileId', authMiddleware, async (req, res) => {
   const file = filesDB.get(req.params.fileId);
   if (!file) return res.status(404).json({ error: 'File not found' });
   if (file.userId !== req.user.id && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Access denied' });
-  }
-
-  if (!fs.existsSync(file.path)) {
-    return res.status(404).json({ error: 'File not found on disk' });
   }
 
   audit('file.download', req.user.id, { fileId: file.id });
-  res.download(file.path, file.originalName);
+
+  // Try R2 first
+  if (file.r2Key) {
+    const storage = getR2();
+    if (storage) {
+      try {
+        const { stream, contentType } = await storage.download(file.r2Key);
+        res.setHeader('Content-Disposition', `attachment; filename="${file.originalName}"`);
+        res.setHeader('Content-Type', contentType || 'application/octet-stream');
+        stream.pipe(res);
+        return;
+      } catch (err) {
+        console.error('[R2] Download failed:', err.message);
+      }
+    }
+  }
+
+  // Fallback to local disk
+  if (file.path && fs.existsSync(file.path)) {
+    return res.download(file.path, file.originalName);
+  }
+
+  return res.status(404).json({ error: 'File not found on storage backend' });
 });
 
-// Delete file
-app.delete('/files/:fileId', authMiddleware, (req, res) => {
+// Delete file (from R2 and/or local)
+app.delete('/files/:fileId', authMiddleware, async (req, res) => {
   const file = filesDB.get(req.params.fileId);
   if (!file) return res.status(404).json({ error: 'File not found' });
   if (file.userId !== req.user.id && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  // Remove from disk
-  try { fs.unlinkSync(file.path); } catch (_) { }
+  // Remove from R2
+  if (file.r2Key) {
+    const storage = getR2();
+    if (storage) {
+      try { await storage.delete(file.r2Key); } catch (_) { }
+    }
+  }
+
+  // Remove from local disk (if exists)
+  if (file.path) {
+    try { fs.unlinkSync(file.path); } catch (_) { }
+  }
 
   // Update user storage
   const user = usersDB.get(file.userId);
@@ -319,6 +392,48 @@ app.delete('/files/:fileId', authMiddleware, (req, res) => {
   audit('file.delete', req.user.id, { fileId: file.id, name: file.originalName });
 
   res.json({ ok: true });
+});
+
+// ── Storage Usage & Health ──────────────────────────────────────
+
+// Get storage usage for a user
+app.get('/api/storage/usage/:userId', authMiddleware, async (req, res) => {
+  const targetId = req.params.userId;
+  if (targetId !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const user = usersDB.get(targetId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const userFiles = filesDB.find(f => f.userId === targetId);
+  const byType = {};
+  userFiles.forEach(f => {
+    byType[f.type] = (byType[f.type] || 0) + (f.size || 0);
+  });
+
+  res.json({
+    ok: true,
+    usage: {
+      totalBytes: user.storageUsed,
+      limitBytes: user.storageLimit,
+      usedPercent: user.storageLimit > 0 ? Math.round((user.storageUsed / user.storageLimit) * 100) : 0,
+      fileCount: userFiles.length,
+      byType,
+      tier: user.tier,
+      backend: 'r2'
+    }
+  });
+});
+
+// R2 health check
+app.get('/api/storage/health', async (req, res) => {
+  const storage = getR2();
+  if (!storage) {
+    return res.json({ ok: false, backend: 'local', error: 'R2 not configured' });
+  }
+  const health = await storage.healthCheck();
+  res.json({ ...health, backend: 'r2' });
 });
 
 // ── Admin Routes ────────────────────────────────────────────────
@@ -440,7 +555,7 @@ app.post('/admin/users/:userId/tier', adminMiddleware, (req, res) => {
     free: 500 * 1024 * 1024,        // 500MB
     pro: 5 * 1024 * 1024 * 1024,    // 5GB
     translate: 10 * 1024 * 1024 * 1024, // 10GB
-    'translate-pro': 50 * 1024 * 1024 * 1024, // 50GB
+    'translate-pro': 25 * 1024 * 1024 * 1024, // 25GB
     unlimited: -1
   };
 
@@ -596,7 +711,7 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), (req, res
       if (user && data.amount) {
         const newTier = tierByAmount[data.amount];
         if (newTier) {
-          const tierLimits = { free: 500 * 1024 * 1024, pro: 5 * 1024 * 1024 * 1024, translate: 10 * 1024 * 1024 * 1024, 'translate-pro': 50 * 1024 * 1024 * 1024, unlimited: -1 };
+          const tierLimits = { free: 500 * 1024 * 1024, pro: 5 * 1024 * 1024 * 1024, translate: 10 * 1024 * 1024 * 1024, 'translate-pro': 25 * 1024 * 1024 * 1024, unlimited: -1 };
           user.tier = newTier;
           user.storageLimit = tierLimits[newTier] || tierLimits.free;
           usersDB.set(user.id, user);
@@ -1021,7 +1136,7 @@ app.post('/admin/seed', adminMiddleware, async (req, res) => {
 
   const tierLimits = {
     free: 500 * 1024 * 1024, pro: 5 * 1024 * 1024 * 1024,
-    translate: 10 * 1024 * 1024 * 1024, 'translate-pro': 50 * 1024 * 1024 * 1024
+    translate: 10 * 1024 * 1024 * 1024, 'translate-pro': 25 * 1024 * 1024 * 1024
   };
 
   const firstNames = ['alice', 'bob', 'carol', 'dave', 'eve', 'frank', 'grace', 'henry', 'ivy', 'jack',

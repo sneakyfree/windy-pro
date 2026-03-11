@@ -92,6 +92,32 @@ services:
       start_period: 120s
       retries: 3
 
+  # ── Cloud Storage API (R2-backed file storage) ──
+  cloud-storage:
+    build: ./services/cloud-storage
+    ports:
+      - "8100:8100"
+    environment:
+      - PORT=8100
+      - JWT_SECRET=${WINDY_JWT_SECRET:?Set WINDY_JWT_SECRET in .env}
+      - ADMIN_SECRET=${WINDY_ADMIN_SECRET:-windypro-admin-2026}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_BUCKET=${R2_BUCKET:-windypro-storage}
+      - R2_ENDPOINT=${R2_ENDPOINT:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - NODE_ID=node-r2
+      - NODE_NAME=Cloudflare R2
+      - NODE_ENV=production
+    volumes:
+      - storage_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8100/health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   # ── Nginx Reverse Proxy (SSL, WS, rate limiting) ──
   nginx:
     image: nginx:1.25-alpine
@@ -106,6 +132,7 @@ services:
       - api
       - account-server
       - translate-api
+      - cloud-storage
     restart: unless-stopped
 
   # ── PostgreSQL ──
@@ -141,3 +168,4 @@ volumes:
   account_data:
   translate_models:
   translate_data:
+  storage_data:

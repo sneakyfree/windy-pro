@@ -1129,58 +1129,117 @@
     }
 
     .dl-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 15px;
-      padding: 6px 10px;
-      border-radius: 6px;
+      display: grid;
+      grid-template-columns: 24px 1fr auto;
+      grid-template-rows: auto auto;
+      gap: 2px 10px;
+      font-size: 14px;
+      padding: 10px 14px;
+      border-radius: 10px;
       background: var(--bg-card);
+      border: 1px solid transparent;
+      transition: all 0.3s;
     }
 
     .dl-item-icon {
-      font-size: 16px;
-      width: 20px;
+      font-size: 18px;
+      width: 24px;
       text-align: center;
+      grid-row: 1 / 3;
+      align-self: center;
     }
 
     .dl-item-name {
-      font-weight: 600;
-      min-width: 140px;
+      font-weight: 700;
+      color: var(--text);
+      grid-column: 2;
     }
 
     .dl-item-size {
       color: var(--text-muted);
-      min-width: 60px;
+      font-size: 12px;
+      font-weight: 600;
+      grid-column: 3;
+      grid-row: 1;
+      text-align: right;
     }
 
     .dl-item-bar {
-      flex: 1;
-      height: 4px;
-      border-radius: 2px;
-      background: var(--border);
+      grid-column: 2 / 4;
+      grid-row: 2;
+      height: 8px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.06);
       overflow: hidden;
+      position: relative;
     }
 
     .dl-item-fill {
       height: 100%;
-      border-radius: 2px;
-      background: var(--green);
-      transition: width 0.3s;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--green), #10B981);
+      transition: width 0.4s ease;
+      position: relative;
+    }
+    .dl-item.active .dl-item-fill::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%);
+      animation: dlShimmer 1.5s ease-in-out infinite;
+    }
+    @keyframes dlShimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
     }
 
     .dl-item-status {
-      color: var(--text-muted);
-      min-width: 50px;
-      text-align: right;
+      display: none;
     }
 
+    .dl-item-speed {
+      grid-column: 2 / 4;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: none;
+    }
+
+    .dl-item.done {
+      background: rgba(34, 197, 94, 0.06);
+      border-color: rgba(34, 197, 94, 0.2);
+    }
     .dl-item.done .dl-item-icon {
       color: var(--green);
     }
+    .dl-item.done .dl-item-fill {
+      background: var(--green);
+    }
+    .dl-item.done .dl-item-size {
+      color: var(--green);
+      font-weight: 700;
+    }
 
     .dl-item.active {
-      background: var(--bg-hover);
+      background: rgba(34, 197, 94, 0.04);
+      border-color: rgba(34, 197, 94, 0.4);
+      animation: dlItemPulse 2s ease-in-out infinite;
+    }
+    .dl-item.active .dl-item-speed {
+      display: block;
+    }
+    @keyframes dlItemPulse {
+      0%, 100% { border-color: rgba(34, 197, 94, 0.4); box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+      50% { border-color: rgba(34, 197, 94, 0.7); box-shadow: 0 0 12px rgba(34,197,94,0.15); }
+    }
+
+    .dl-item.queued {
+      opacity: 0.5;
+    }
+    .dl-item.queued .dl-item-name::after {
+      content: ' — waiting';
+      font-weight: 400;
+      color: var(--text-muted);
+      font-size: 12px;
     }
 
     /* Feature card (bottom section during download) */
@@ -1687,6 +1746,87 @@
     .scan-card:hover {
       border-color: var(--text-muted);
     }
+
+    /* ─── SPECIALIST PAIR UPSELL CARD ─── */
+    .specialist-upsell {
+      background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(245,158,11,0.02));
+      border: 2px solid rgba(245,158,11,0.35);
+      border-radius: 14px;
+      padding: 20px 22px;
+      margin-bottom: 14px;
+      animation: upsellGlow 3s ease-in-out infinite;
+    }
+    @keyframes upsellGlow {
+      0%, 100% { border-color: rgba(245,158,11,0.35); box-shadow: 0 0 0 rgba(245,158,11,0); }
+      50% { border-color: rgba(245,158,11,0.6); box-shadow: 0 0 20px rgba(245,158,11,0.08); }
+    }
+    .specialist-upsell-title {
+      font-size: 17px; font-weight: 800; color: #F59E0B;
+      text-align: center; margin-bottom: 6px;
+    }
+    .specialist-upsell-subtitle {
+      font-size: 13px; color: var(--text-dim); text-align: center;
+      margin-bottom: 16px; line-height: 1.5;
+    }
+    .specialist-comparison {
+      background: var(--bg-card); border-radius: 12px;
+      border: 1px solid var(--border); margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .specialist-comparison-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+    }
+    .specialist-comparison-cols {
+      display: grid; grid-template-columns: 1fr 1fr; min-height: 0;
+    }
+    .comparison-col {
+      padding: 12px 14px;
+    }
+    .comparison-col.generic {
+      border-right: 1px solid var(--border); opacity: 0.7;
+    }
+    .comparison-col.specialist {
+      background: linear-gradient(135deg, rgba(34,197,94,0.06), rgba(34,197,94,0.02));
+    }
+    .comparison-col-label {
+      font-size: 10px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.5px; margin-bottom: 6px;
+    }
+    .comparison-col.generic .comparison-col-label { color: var(--text-muted); }
+    .comparison-col.specialist .comparison-col-label { color: var(--green); }
+    .comparison-col-text {
+      font-size: 13px; line-height: 1.5; color: var(--text);
+    }
+    .comparison-col.generic .comparison-col-text {
+      text-decoration: line-through; text-decoration-color: rgba(239,68,68,0.4);
+      color: var(--text-dim);
+    }
+    .comparison-col.specialist .comparison-col-text {
+      color: #4ADE80; font-weight: 600;
+    }
+    .comparison-accuracy {
+      display: flex; justify-content: space-around; padding: 6px 14px;
+      border-top: 1px solid var(--border); font-size: 11px;
+    }
+    .comparison-accuracy .acc-generic { color: var(--text-muted); }
+    .comparison-accuracy .acc-specialist { color: var(--green); font-weight: 700; }
+    .comparison-note {
+      font-size: 11px; color: var(--text-muted); text-align: center;
+      padding: 0 14px 8px; font-style: italic;
+    }
+    .specialist-upsell-cta {
+      display: block; width: 100%; margin-top: 14px; padding: 12px;
+      background: linear-gradient(135deg, #F59E0B, #D97706);
+      color: #0A0E1A; border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 800; cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .specialist-upsell-cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(245,158,11,0.4);
+    }
   </style>
 </head>
 
@@ -1880,15 +2020,13 @@
 
         <div class="account-option" id="opt-skip" onclick="selectAccountOption('skip'); handleFreeAccount()">
           <h3 data-i18n="acct.skipTitle">⏭️ Try Free Tier</h3>
-          <p data-i18n="acct.skipDesc">Get started with 3 free engines. Create an account later.</p>
+          <p data-i18n="acct.skipDesc">Get started with 2 free engines. Create an account later.</p>
         </div>
       </div>
 
       <div class="device-limit-notice">
         <span class="notice-icon">📱</span>
-        <span class="notice-text">One account, up to 5 devices. Phone, laptop, desktop, tablet, your grandma's PC — all
-          with
-          one purchase.</span>
+        <span class="notice-text">Free tier: <strong>1 device</strong>. Upgrade to Pro for 3 devices, Ultra for 5, or Max for <strong>unlimited</strong> devices.</span>
       </div>
 
       <div class="btn-row">
@@ -1955,6 +2093,128 @@
         style="background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2); border-radius:10px; padding:10px 16px; font-size:13px; color:var(--text-dim); line-height:1.5; margin-top:12px;">
         ⓘ <strong>Why we ask:</strong> Your language profile determines which speech recognition and translation engines
         we download. This data stays on your device — never uploaded.
+      </div>
+
+      <!-- ✈️ Travel Destination Prompt -->
+      <div id="travel-prompt" style="margin-top:12px; border:1px solid rgba(59,130,246,0.3); border-radius:12px; overflow:hidden; background:linear-gradient(135deg, rgba(59,130,246,0.04), rgba(139,92,246,0.04)); transition:all 0.3s;">
+        <div onclick="toggleTravelPrompt()" style="padding:12px 16px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px;"
+          onmouseenter="this.parentElement.style.borderColor='rgba(59,130,246,0.5)'"
+          onmouseleave="this.parentElement.style.borderColor='rgba(59,130,246,0.3)'">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:20px;">✈️</span>
+            <div>
+              <div style="font-size:14px; font-weight:700; color:#60A5FA;">Traveling Soon?</div>
+              <div style="font-size:12px; color:var(--text-dim);">Add destination languages — translate offline at airports, hotels, & restaurants</div>
+            </div>
+          </div>
+          <span id="travel-toggle-icon" style="font-size:14px; color:#60A5FA; transition:transform 0.3s;">▼</span>
+        </div>
+        <div id="travel-destinations" style="display:none; padding:0 16px 14px;">
+          <!-- REGION PACKAGES -->
+          <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#60A5FA; margin-bottom:8px;">🌍 Region Packages — One Click, Every Language</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+            <!-- Europe -->
+            <div id="region-europe" onclick="addRegionPackage('europe', this)" style="background:linear-gradient(135deg, rgba(59,130,246,0.06), rgba(99,102,241,0.06)); border:1px solid rgba(59,130,246,0.3); border-radius:10px; padding:12px; cursor:pointer; transition:all 0.25s; position:relative;"
+              onmouseenter="this.style.borderColor='#3B82F6'; this.style.transform='scale(1.02)'; this.style.boxShadow='0 4px 16px rgba(59,130,246,0.2)'"
+              onmouseleave="this.style.borderColor='rgba(59,130,246,0.3)'; this.style.transform='scale(1)'; this.style.boxShadow='none'">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                <div style="font-size:14px; font-weight:800; color:#60A5FA;">🌍 Europe</div>
+                <span style="background:#3B82F6; color:white; font-size:9px; font-weight:800; padding:2px 8px; border-radius:6px;">15 languages</span>
+              </div>
+              <div style="font-size:18px; letter-spacing:2px; margin-bottom:4px;">🇫🇷🇩🇪🇮🇹🇪🇸🇵🇹🇳🇱🇵🇱🇬🇷🇨🇿🇷🇴</div>
+              <div style="font-size:10px; color:var(--text-dim); line-height:1.4;">French · German · Italian · Spanish · Portuguese · Dutch · Polish · Greek · Czech · Romanian · Hungarian · Swedish · Norwegian · Danish · Finnish</div>
+            </div>
+            <!-- Americas -->
+            <div id="region-americas" onclick="addRegionPackage('americas', this)" style="background:linear-gradient(135deg, rgba(34,197,94,0.06), rgba(16,185,129,0.06)); border:1px solid rgba(34,197,94,0.3); border-radius:10px; padding:12px; cursor:pointer; transition:all 0.25s; position:relative;"
+              onmouseenter="this.style.borderColor='#22C55E'; this.style.transform='scale(1.02)'; this.style.boxShadow='0 4px 16px rgba(34,197,94,0.2)'"
+              onmouseleave="this.style.borderColor='rgba(34,197,94,0.3)'; this.style.transform='scale(1)'; this.style.boxShadow='none'">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                <div style="font-size:14px; font-weight:800; color:#22C55E;">🌎 Americas</div>
+                <span style="background:#22C55E; color:#0F1219; font-size:9px; font-weight:800; padding:2px 8px; border-radius:6px;">4 languages</span>
+              </div>
+              <div style="font-size:18px; letter-spacing:2px; margin-bottom:4px;">🇲🇽🇧🇷🇺🇸🇫🇷</div>
+              <div style="font-size:10px; color:var(--text-dim); line-height:1.4;">Spanish · Portuguese · English · French<br><em style="color:var(--text-muted);">Mexico, Brazil, Caribbean, Quebec & more</em></div>
+            </div>
+            <!-- Asia & Pacific -->
+            <div id="region-asia" onclick="addRegionPackage('asia', this)" style="background:linear-gradient(135deg, rgba(245,158,11,0.06), rgba(249,115,22,0.06)); border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:12px; cursor:pointer; transition:all 0.25s; position:relative;"
+              onmouseenter="this.style.borderColor='#F59E0B'; this.style.transform='scale(1.02)'; this.style.boxShadow='0 4px 16px rgba(245,158,11,0.2)'"
+              onmouseleave="this.style.borderColor='rgba(245,158,11,0.3)'; this.style.transform='scale(1)'; this.style.boxShadow='none'">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                <div style="font-size:14px; font-weight:800; color:#F59E0B;">🌏 Asia & Pacific</div>
+                <span style="background:#F59E0B; color:#0F1219; font-size:9px; font-weight:800; padding:2px 8px; border-radius:6px;">12 languages</span>
+              </div>
+              <div style="font-size:18px; letter-spacing:2px; margin-bottom:4px;">🇯🇵🇰🇷🇨🇳🇹🇭🇻🇳🇮🇩🇵🇭🇲🇲🇰🇭🇱🇦</div>
+              <div style="font-size:10px; color:var(--text-dim); line-height:1.4;">Japanese · Korean · Chinese · Thai · Vietnamese · Indonesian · Malay · Tagalog · Burmese · Khmer · Lao · Mongolian</div>
+            </div>
+            <!-- Middle East & Africa -->
+            <div id="region-meaf" onclick="addRegionPackage('meaf', this)" style="background:linear-gradient(135deg, rgba(139,92,246,0.06), rgba(168,85,247,0.06)); border:1px solid rgba(139,92,246,0.3); border-radius:10px; padding:12px; cursor:pointer; transition:all 0.25s; position:relative;"
+              onmouseenter="this.style.borderColor='#8B5CF6'; this.style.transform='scale(1.02)'; this.style.boxShadow='0 4px 16px rgba(139,92,246,0.2)'"
+              onmouseleave="this.style.borderColor='rgba(139,92,246,0.3)'; this.style.transform='scale(1)'; this.style.boxShadow='none'">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                <div style="font-size:14px; font-weight:800; color:#A78BFA;">🌍 ME & Africa</div>
+                <span style="background:#8B5CF6; color:white; font-size:9px; font-weight:800; padding:2px 8px; border-radius:6px;">10 languages</span>
+              </div>
+              <div style="font-size:18px; letter-spacing:2px; margin-bottom:4px;">🇸🇦🇹🇷🇮🇱🇮🇷🇰🇪🇪🇹🇳🇬🇿🇦</div>
+              <div style="font-size:10px; color:var(--text-dim); line-height:1.4;">Arabic · Turkish · Hebrew · Persian · Swahili · Amharic · Hausa · Yoruba · Zulu · Afrikaans</div>
+            </div>
+          </div>
+
+          <!-- INDIVIDUAL DESTINATIONS -->
+          <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); margin-bottom:6px;">🎯 Or Pick a Single Destination</div>
+          <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:10px;">
+            <div class="travel-card" onclick="addTravelLanguage('Spanish','🇲🇽','Mexico',this)" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:6px; text-align:center; cursor:pointer; transition:all 0.2s;"
+              onmouseenter="this.style.borderColor='#3B82F6'; this.style.transform='scale(1.03)'"
+              onmouseleave="this.style.borderColor='var(--border)'; this.style.transform='scale(1)'">
+              <div style="font-size:20px;">🇲🇽</div>
+              <div style="font-size:10px; font-weight:700; color:var(--text);">Mexico</div>
+            </div>
+            <div class="travel-card" onclick="addTravelLanguage('French','🇫🇷','France',this)" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:6px; text-align:center; cursor:pointer; transition:all 0.2s;"
+              onmouseenter="this.style.borderColor='#3B82F6'; this.style.transform='scale(1.03)'"
+              onmouseleave="this.style.borderColor='var(--border)'; this.style.transform='scale(1)'">
+              <div style="font-size:20px;">🇫🇷</div>
+              <div style="font-size:10px; font-weight:700; color:var(--text);">France</div>
+            </div>
+            <div class="travel-card" onclick="addTravelLanguage('Japanese','🇯🇵','Japan',this)" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:6px; text-align:center; cursor:pointer; transition:all 0.2s;"
+              onmouseenter="this.style.borderColor='#3B82F6'; this.style.transform='scale(1.03)'"
+              onmouseleave="this.style.borderColor='var(--border)'; this.style.transform='scale(1)'">
+              <div style="font-size:20px;">🇯🇵</div>
+              <div style="font-size:10px; font-weight:700; color:var(--text);">Japan</div>
+            </div>
+            <div class="travel-card" onclick="addTravelLanguage('Italian','🇮🇹','Italy',this)" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:6px; text-align:center; cursor:pointer; transition:all 0.2s;"
+              onmouseenter="this.style.borderColor='#3B82F6'; this.style.transform='scale(1.03)'"
+              onmouseleave="this.style.borderColor='var(--border)'; this.style.transform='scale(1)'">
+              <div style="font-size:20px;">🇮🇹</div>
+              <div style="font-size:10px; font-weight:700; color:var(--text);">Italy</div>
+            </div>
+            <div class="travel-card" onclick="addTravelLanguage('German','🇩🇪','Germany',this)" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:6px; text-align:center; cursor:pointer; transition:all 0.2s;"
+              onmouseenter="this.style.borderColor='#3B82F6'; this.style.transform='scale(1.03)'"
+              onmouseleave="this.style.borderColor='var(--border)'; this.style.transform='scale(1)'">
+              <div style="font-size:20px;">🇩🇪</div>
+              <div style="font-size:10px; font-weight:700; color:var(--text);">Germany</div>
+            </div>
+            <div class="travel-card" onclick="addTravelLanguage('Portuguese','🇧🇷','Brazil',this)" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:6px; text-align:center; cursor:pointer; transition:all 0.2s;"
+              onmouseenter="this.style.borderColor='#3B82F6'; this.style.transform='scale(1.03)'"
+              onmouseleave="this.style.borderColor='var(--border)'; this.style.transform='scale(1)'">
+              <div style="font-size:20px;">🇧🇷</div>
+              <div style="font-size:10px; font-weight:700; color:var(--text);">Brazil</div>
+            </div>
+            <div class="travel-card" onclick="addTravelLanguage('Korean','🇰🇷','S. Korea',this)" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:6px; text-align:center; cursor:pointer; transition:all 0.2s;"
+              onmouseenter="this.style.borderColor='#3B82F6'; this.style.transform='scale(1.03)'"
+              onmouseleave="this.style.borderColor='var(--border)'; this.style.transform='scale(1)'">
+              <div style="font-size:20px;">🇰🇷</div>
+              <div style="font-size:10px; font-weight:700; color:var(--text);">S. Korea</div>
+            </div>
+            <div class="travel-card" onclick="addTravelLanguage('Thai','🇹🇭','Thailand',this)" style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:6px; text-align:center; cursor:pointer; transition:all 0.2s;"
+              onmouseenter="this.style.borderColor='#3B82F6'; this.style.transform='scale(1.03)'"
+              onmouseleave="this.style.borderColor='var(--border)'; this.style.transform='scale(1)'">
+              <div style="font-size:20px;">🇹🇭</div>
+              <div style="font-size:10px; font-weight:700; color:var(--text);">Thailand</div>
+            </div>
+          </div>
+          <div style="font-size:11px; color:var(--text-muted); text-align:center; line-height:1.5;">
+            ✈️ No internet? No problem. <strong>Windy Pro translates 100% offline</strong> — airplane, jungle, mountain, anywhere.
+          </div>
+        </div>
       </div>
 
       <div class="btn-row">
@@ -2163,6 +2423,16 @@
           <div style="font-size:16px; color:var(--text-dim); margin:4px 0;">4–5 engines</div>
           <div style="font-size:15px; color:var(--text-muted);" id="pkg-power-size">~800 MB</div>
         </div>
+        <!-- Upgrade teaser shown when free user can't access Power -->
+        <div class="pkg-option" id="pkg-power-locked" onclick="showUpgradeFromChoose()"
+          style="display:none; background:rgba(139,92,246,0.06); border:2px solid rgba(139,92,246,0.3); border-radius:12px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center;"
+          onmouseenter="this.style.borderColor='#8B5CF6'; this.style.boxShadow='0 0 16px rgba(139,92,246,0.2)'"
+          onmouseleave="this.style.borderColor='rgba(139,92,246,0.3)'; this.style.boxShadow='none'">
+          <div style="font-size:20px; margin-bottom:4px;">🔒</div>
+          <div style="font-size:14px; font-weight:800; color:#A78BFA;">Windy Power</div>
+          <div style="font-size:12px; color:var(--text-dim); margin:4px 0;">4–5 engines</div>
+          <div style="font-size:11px; color:#A78BFA; font-weight:600;">⚡ Upgrade</div>
+        </div>
       </div>
       <p style="font-size:15px; color:var(--text); line-height:1.5; margin-bottom:14px; padding:0 4px;"
         id="windytune-explanation"></p>
@@ -2176,7 +2446,7 @@
               Plan</span>
           </div>
           <div id="plan-banner-desc" style="font-size:14px; color:var(--text-dim); line-height:1.5;">
-            Includes 3 engines (Edge Spark, Edge Pulse, Core Spark). Upgrade to unlock all 15 engines, higher accuracy
+            Includes 2 engines (Edge Spark, Edge Pulse). Upgrade to unlock all 15 engines, higher accuracy
             models, and priority support.
           </div>
         </div>
@@ -2186,6 +2456,9 @@
           onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 12px rgba(59,130,246,0.3)'">⚡
           Upgrade Plan</button>
       </div>
+
+      <!-- Specialist pair upsell card (dynamic, free-tier only) -->
+      <div id="specialist-upsell-slot"></div>
 
       <!-- Translate add-on confirmation (shown if user selected translate) -->
       <div id="translate-addon-banner"
@@ -2440,7 +2713,7 @@
     // Tier hierarchy: free < plus < pro < promax
     // Engines with tier > userTier show a lock icon and can't be selected
     let userTier = 'free'; // Default until account is created/logged in
-    const TIER_RANK = { free: 0, plus: 1, pro: 2, promax: 3 };
+    const TIER_RANK = { free: 0, pro: 1, translate: 2, translate_pro: 3 };
     function canAccessEngine(engineTier) {
       return (TIER_RANK[userTier] || 0) >= (TIER_RANK[engineTier] || 0);
     }
@@ -2545,16 +2818,16 @@
             deviceType: 'laptop-standard'
           },
           models: [
-            { id: 'core-spark', family: 'core', name: 'Windy Core Spark', shortName: 'Windy Spark', sizeMB: 75, speed: '32x', description: 'Ultra-light GPU engine. Lightning fast inference.', tier: 'free' },
-            { id: 'core-pulse', family: 'core', name: 'Windy Core Pulse', shortName: 'Windy Pulse', sizeMB: 142, speed: '16x', description: 'Fast and reliable GPU transcription.', tier: 'plus' },
-            { id: 'core-standard', family: 'core', name: 'Windy Core Standard', shortName: 'Windy Standard', sizeMB: 466, speed: '6x', description: 'The workhorse. Great accuracy on GPU.', tier: 'plus' },
+            { id: 'core-spark', family: 'core', name: 'Windy Core Spark', shortName: 'Windy Spark', sizeMB: 75, speed: '32x', description: 'Ultra-light GPU engine. Lightning fast inference.', tier: 'pro' },
+            { id: 'core-pulse', family: 'core', name: 'Windy Core Pulse', shortName: 'Windy Pulse', sizeMB: 142, speed: '16x', description: 'Fast and reliable GPU transcription.', tier: 'pro' },
+            { id: 'core-standard', family: 'core', name: 'Windy Core Standard', shortName: 'Windy Standard', sizeMB: 466, speed: '6x', description: 'The workhorse. Great accuracy on GPU.', tier: 'pro' },
             { id: 'core-global', family: 'core', name: 'Windy Core Global', shortName: 'Windy Global', sizeMB: 1500, speed: '2x', description: 'Multilingual powerhouse.', tier: 'pro' },
             { id: 'core-pro', family: 'core', name: 'Windy Core Pro', shortName: 'Windy Pro', sizeMB: 1500, speed: '6x', description: 'Distilled flagship. English excellence at 6x speed.', tier: 'pro' },
             { id: 'core-turbo', family: 'core', name: 'Windy Core Turbo', shortName: 'Windy Turbo', sizeMB: 1600, speed: '4x', description: 'Near-Ultra quality at twice the speed.', tier: 'pro' },
-            { id: 'core-ultra', family: 'core', name: 'Windy Core Ultra', shortName: 'Windy Ultra', sizeMB: 2900, speed: '1x', description: 'The flagship. Best accuracy in any language.', tier: 'promax', badge: '👑 Flagship' },
+            { id: 'core-ultra', family: 'core', name: 'Windy Core Ultra', shortName: 'Windy Ultra', sizeMB: 2900, speed: '1x', description: 'The flagship. Best accuracy in any language.', tier: 'translate_pro', badge: '👑 Flagship' },
             { id: 'edge-spark', family: 'edge', name: 'Windy Edge Spark', shortName: 'Windy Spark', sizeMB: 42, speed: '32x', description: 'Smallest engine. 42 MB. Fits any phone.', tier: 'free', badge: '📱 MoboLoco' },
             { id: 'edge-pulse', family: 'edge', name: 'Windy Edge Pulse', shortName: 'Windy Pulse', sizeMB: 78, speed: '16x', description: 'Phone-optimized. Fast and light.', tier: 'free' },
-            { id: 'edge-standard', family: 'edge', name: 'Windy Edge Standard', shortName: 'Windy Standard', sizeMB: 168, speed: '6x', description: 'Best balance for laptops and phones.', tier: 'plus', badge: '⭐ Most Popular' },
+            { id: 'edge-standard', family: 'edge', name: 'Windy Edge Standard', shortName: 'Windy Standard', sizeMB: 168, speed: '6x', description: 'Best balance for laptops and phones.', tier: 'pro', badge: '⭐ Most Popular' },
             { id: 'edge-global', family: 'edge', name: 'Windy Edge Global', shortName: 'Windy Global', sizeMB: 515, speed: '2x', description: 'Multilingual on CPU. Great for travel.', tier: 'pro' },
             { id: 'edge-pro', family: 'edge', name: 'Windy Edge Pro', shortName: 'Windy Pro', sizeMB: 515, speed: '4x', description: 'Distilled English excellence on CPU.', tier: 'pro' },
             { id: 'lingua-es', family: 'lingua', name: 'Windy Lingua Español', shortName: 'Windy Español', sizeMB: 500, speed: '4x', description: 'Purpose-built for Spanish. All dialects.', tier: 'pro' },
@@ -2567,22 +2840,51 @@
         createFreeAccount: async () => ({ success: true, account: { name: 'Free User', tier: 'free' } }),
         selectModels: async (ids) => ({ selected: ids }),
         install: async () => {
-          // Simulate install with progress events
+          // Simulate install with realistic progress events
           const models = [...selectedModels];
+          // Phase 0: Dependency install simulation
+          for (let p = 0; p <= 24; p += 2) {
+            await new Promise(r => setTimeout(r, 200));
+            progressCallbacks.forEach(cb => cb({
+              percent: p,
+              message: p < 5 ? '🧹 Checking for prior installation...' : '🌪️ Installing dependencies...',
+              detail: p < 5 ? 'Ensuring a clean start' : `Dependencies: ${p}% complete`,
+              eta: `~${Math.ceil((100 - p) / 4)}s remaining`
+            }));
+          }
+          // Phase 1: Model downloads (25% to 90%)
           for (let i = 0; i < models.length; i++) {
-            for (let p = 0; p <= 100; p += 5) {
-              await new Promise(r => setTimeout(r, 80));
-              const overallPct = ((i + p / 100) / models.length) * 100;
+            const modelRange = 65;
+            const modelStart = 25;
+            const modelInfo = allModels.find(m => m.id === models[i]);
+            const modelSizeMB = modelInfo?.sizeMB || 100;
+            for (let p = 0; p <= 100; p += 2) {
+              // Simulate realistic download timing: ~500ms per 2% tick
+              await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
+              const overallPct = modelStart + (i / models.length * modelRange) + (p / 100) * (modelRange / models.length);
+              const elapsedModel = p / 2 * 0.5; // rough seconds per tick
+              const downloadedMB = (modelSizeMB * p / 100).toFixed(1);
+              const speed = elapsedModel > 0 ? (downloadedMB / elapsedModel).toFixed(1) : '0';
+              const remaining = p > 5 ? Math.ceil((100 - overallPct) / 4) : '';
               progressCallbacks.forEach(cb => cb({
-                percent: 25 + overallPct * 0.65,
+                percent: overallPct,
                 modelId: models[i],
                 modelPercent: p,
                 modelDone: p >= 100,
-                message: p >= 100 ? `✅ ${models[i]} installed` : `Downloading ${models[i]}...`,
+                message: p >= 100 ? `✅ ${modelInfo?.shortName || models[i]} installed` : `Downloading ${modelInfo?.shortName || models[i]}...`,
                 detail: `Engine ${i + 1} of ${models.length}`,
-                eta: `~${Math.ceil((models.length - i) * 2)} min remaining`
+                eta: remaining ? `~${remaining}s remaining` : ''
               }));
             }
+          }
+          // Phase 2: Configuration
+          for (let p = 90; p <= 100; p += 2) {
+            await new Promise(r => setTimeout(r, 300));
+            progressCallbacks.forEach(cb => cb({
+              percent: p,
+              message: p < 95 ? '⚙️ Configuring engines...' : '✅ Installation complete!',
+              detail: 'Almost there...'
+            }));
           }
           return { success: true, models };
         },
@@ -2609,7 +2911,7 @@
       if (n === 3) initLanguageScreen();
       if (n === 4) { buildTranslateUpsell(); setTimeout(restoreTranslateSelection, 50); }
       if (n === 5) buildEducationMatrix();
-      if (n === 6) { buildModelList(); updatePlanBanner(); updateTranslateAddonBanner(); }
+      if (n === 6) { buildModelList(); updatePlanBanner(); updateTranslateAddonBanner(); buildSpecialistUpsellCard(); }
       if (n === 7) startBrandRotations();
       if (n !== 7) stopBrandRotations();
     }
@@ -2807,7 +3109,7 @@
         const result = await window.wizardAPI.createFreeAccount();
         if (result.success) {
           userTier = 'free';
-          showAuthSuccess(`Free account activated! You have access to 3 Windy engines.`);
+          showAuthSuccess(`Free account activated! You have access to 2 Windy engines.`);
         }
       } catch (e) {
         showAuthError('Could not create free account. Please try again.');
@@ -2880,10 +3182,28 @@
       packages.recommended = filterByTier(packages.recommended);
       packages.power = filterByTier(packages.power);
 
+      // Free tier: cap at 2 engines max
+      if (userTier === 'free') {
+        packages.light = packages.light.slice(0, 2);
+        packages.recommended = packages.recommended.slice(0, 2);
+        packages.power = packages.power.slice(0, 2);
+      }
+
       // Ensure at least 1 engine in each package after filtering
       if (packages.light.length === 0) packages.light = ['edge-spark'];
       if (packages.recommended.length === 0) packages.recommended = [...packages.light];
       if (packages.power.length === 0) packages.power = [...packages.recommended];
+
+      // Show/hide Windy Power preset based on tier
+      const powerEl = document.getElementById('pkg-power');
+      const powerLockedEl = document.getElementById('pkg-power-locked');
+      if (userTier === 'free') {
+        if (powerEl) powerEl.style.display = 'none';
+        if (powerLockedEl) powerLockedEl.style.display = 'block';
+      } else {
+        if (powerEl) powerEl.style.display = 'block';
+        if (powerLockedEl) powerLockedEl.style.display = 'none';
+      }
 
       // Update size labels
       const fmtSize = (ids) => {
@@ -2892,7 +3212,9 @@
       };
       document.getElementById('pkg-light-size').textContent = fmtSize(packages.light);
       document.getElementById('pkg-rec-size').textContent = fmtSize(packages.recommended);
-      document.getElementById('pkg-power-size').textContent = fmtSize(packages.power);
+      if (powerEl && powerEl.style.display !== 'none') {
+        document.getElementById('pkg-power-size').textContent = fmtSize(packages.power);
+      }
     }
 
     function selectPackage(tier) {
@@ -3305,22 +3627,22 @@
       const planInfo = {
         free: {
           badge: '🆓 Free Plan',
-          desc: 'Includes 3 engines (Edge Spark, Edge Pulse, Core Spark). Upgrade to unlock more engines, Windy Storage, Soul File voice profiling, and more.',
-          showUpgrade: true
-        },
-        plus: {
-          badge: '⭐ Plus Plan',
-          desc: '🎉 Your plan includes: 7 engines · WindyTune smart switching · 5 GB Windy Storage · Search & replay recordings · Export transcripts (TXT, SRT, PDF)',
+          desc: '1 device · 2 engines (Edge Spark, Edge Pulse). Upgrade to unlock all 15 engines, more devices, and more.',
           showUpgrade: true
         },
         pro: {
-          badge: '🚀 Pro Plan',
-          desc: '🎉 Your plan includes: 12 engines · 50 GB Windy Storage · Video/audio archive with search · Soul File voice profiling · Speaker identification · All transcript exports',
+          badge: '⚡ Windy Pro',
+          desc: '🎉 Your plan includes: 3 devices · All 15 engines · 99 languages · 15-min recordings · Batch mode · LLM polish',
           showUpgrade: true
         },
-        promax: {
-          badge: '👑 Pro Max — You have EVERYTHING',
-          desc: '🎉 Congratulations! All 15 engines unlocked · Unlimited eternal Windy Storage · Eternal Soul File (voice DNA) · Video transcription + scene detection · Auto-tag smart search · Priority support · Early access to new engines',
+        translate: {
+          badge: '🚀 Windy Ultra',
+          desc: '🎉 Your plan includes: 5 devices · Everything in Pro · 60-min recordings · Real-time translation · 99 language pairs',
+          showUpgrade: true
+        },
+        translate_pro: {
+          badge: '👑 Windy Max — You have EVERYTHING',
+          desc: '🎉 Congratulations! Unlimited devices · Everything in Ultra · Unlimited recordings · Text-to-speech · Medical/legal glossaries · Priority support',
           showUpgrade: false
         }
       };
@@ -3331,7 +3653,148 @@
       if (btn) btn.style.display = info.showUpgrade ? 'block' : 'none';
     }
 
-    let upgradeBillingMode = 'monthly'; // 'monthly' or 'lifetime'
+    // ═══ SPECIALIST PAIR UPSELL — Personalized "What You're Missing" card ═══
+    const SPECIALIST_COMPARISONS = {
+      'windy-pair-en-es': {
+        input: 'The meeting was moved to next Thursday',
+        generic: 'La reunión fue movida al próximo jueves',
+        specialist: 'La reunión se pasó al jueves que viene',
+        note: 'Natural phrasing vs literal word-for-word'
+      },
+      'windy-pair-en-fr': {
+        input: 'I have been living here for ten years',
+        generic: 'J\'ai été vivant ici pour dix ans',
+        specialist: 'J\'habite ici depuis dix ans',
+        note: 'Correct French idiom for duration'
+      },
+      'windy-pair-en-de': {
+        input: 'She is looking forward to the concert',
+        generic: 'Sie schaut vorwärts zum Konzert',
+        specialist: 'Sie freut sich auf das Konzert',
+        note: 'Correct separable verb vs word-for-word'
+      },
+      'windy-pair-en-ar': {
+        input: 'Can you help me find the train station?',
+        generic: 'هل تستطيع مساعدتي إيجاد محطة القطار؟',
+        specialist: 'ممكن تساعدني ألاقي محطة القطار؟',
+        note: 'Conversational Arabic vs formal/stilted'
+      },
+      'windy-pair-en-hi': {
+        input: 'I need to book a doctor appointment',
+        generic: 'मुझे एक डॉक्टर अपॉइंटमेंट बुक करना है',
+        specialist: 'मुझे डॉक्टर से मिलने का समय लेना है',
+        note: 'Natural Hindi vs English loan-word heavy'
+      },
+      'windy-pair-en-zh': {
+        input: 'This restaurant has great reviews',
+        generic: '这个餐馆有很好的评论',
+        specialist: '这家餐厅口碑特别好',
+        note: 'Idiomatic Chinese vs literal translation'
+      },
+      'windy-pair-en-pt': {
+        input: 'We\'re running late for the meeting',
+        generic: 'Nós estamos correndo tarde para a reunião',
+        specialist: 'Estamos atrasados para a reunião',
+        note: 'Correct Portuguese idiom vs English calque'
+      },
+      'windy-pair-en-ru': {
+        input: 'She made a good impression on everyone',
+        generic: 'Она сделала хорошее впечатление на всех',
+        specialist: 'Она произвела хорошее впечатление на всех',
+        note: 'Correct Russian collocation'
+      }
+    };
+
+    // Re-use the AVAILABLE_PAIRS from the translate screen
+    const UPSELL_PAIRS = [
+      { id: 'windy-pair-en-es', pair: ['en', 'es'], flag: '🇪🇸', name: 'English ↔ Spanish', sizeMB: 598 },
+      { id: 'windy-pair-en-zh', pair: ['en', 'zh'], flag: '🇨🇳', name: 'English ↔ Chinese', sizeMB: 598 },
+      { id: 'windy-pair-en-fr', pair: ['en', 'fr'], flag: '🇫🇷', name: 'English ↔ French', sizeMB: 576 },
+      { id: 'windy-pair-en-de', pair: ['en', 'de'], flag: '🇩🇪', name: 'English ↔ German', sizeMB: 570 },
+      { id: 'windy-pair-en-ar', pair: ['en', 'ar'], flag: '🇸🇦', name: 'English ↔ Arabic', sizeMB: 592 },
+      { id: 'windy-pair-en-hi', pair: ['en', 'hi'], flag: '🇮🇳', name: 'English ↔ Hindi', sizeMB: 586 },
+      { id: 'windy-pair-en-pt', pair: ['en', 'pt'], flag: '🇧🇷', name: 'English ↔ Portuguese', sizeMB: 1189 },
+      { id: 'windy-pair-en-ru', pair: ['en', 'ru'], flag: '🇷🇺', name: 'English ↔ Russian', sizeMB: 592 },
+    ];
+
+    function buildSpecialistUpsellCard() {
+      const slot = document.getElementById('specialist-upsell-slot');
+      if (!slot) return;
+
+      // Only show for free tier with 2+ languages
+      if (userTier !== 'free' || userLanguages.length < 2) {
+        slot.innerHTML = '';
+        return;
+      }
+
+      // Find matching specialist pairs
+      const langCodes = new Set(userLanguages.map(l => l.code));
+      const matched = UPSELL_PAIRS.filter(p => p.pair.every(c => langCodes.has(c)));
+
+      if (matched.length === 0) {
+        slot.innerHTML = '';
+        return;
+      }
+
+      // Build comparison cards (show max 2 to keep it tight)
+      const shownPairs = matched.slice(0, 2);
+      const comparisonsHTML = shownPairs.map(p => {
+        const cmp = SPECIALIST_COMPARISONS[p.id];
+        if (!cmp) return '';
+        return `
+          <div class="specialist-comparison">
+            <div class="specialist-comparison-header">
+              <span style="font-size:18px;">${p.flag}</span>
+              <span style="font-size:14px; font-weight:700; flex:1;">${p.name}</span>
+              <span style="font-size:11px; color:var(--text-muted);">${p.sizeMB < 1024 ? p.sizeMB + ' MB' : (p.sizeMB / 1024).toFixed(1) + ' GB'}</span>
+              <span style="font-size:9px; padding:2px 8px; border-radius:6px; background:rgba(245,158,11,0.15); color:#F59E0B; font-weight:700;">SPECIALIST</span>
+            </div>
+            <div style="padding:6px 14px 2px; font-size:12px; color:var(--text-muted);">
+              🗣️ <em>"${cmp.input}"</em>
+            </div>
+            <div class="specialist-comparison-cols">
+              <div class="comparison-col generic">
+                <div class="comparison-col-label">Generic Model</div>
+                <div class="comparison-col-text">"${cmp.generic}"</div>
+              </div>
+              <div class="comparison-col specialist">
+                <div class="comparison-col-label">✨ Specialist Pair</div>
+                <div class="comparison-col-text">"${cmp.specialist}"</div>
+              </div>
+            </div>
+            <div class="comparison-accuracy">
+              <span class="acc-generic">~82% accuracy</span>
+              <span class="acc-specialist">~96% accuracy ✓</span>
+            </div>
+            <div class="comparison-note">${cmp.note}</div>
+          </div>`;
+      }).join('');
+
+      const extraCount = matched.length - shownPairs.length;
+      const extraText = extraCount > 0
+        ? `<div style="font-size:12px; color:var(--text-dim); text-align:center; margin-top:4px;">+ ${extraCount} more specialist pair${extraCount > 1 ? 's' : ''} available for your languages</div>`
+        : '';
+
+      slot.innerHTML = `
+        <div class="specialist-upsell">
+          <div class="specialist-upsell-title">🎯 Your Languages, Supercharged</div>
+          <div class="specialist-upsell-subtitle">
+            Based on your language selections, <strong>${matched.length} specialist pair model${matched.length > 1 ? 's' : ''}</strong>
+            ${matched.length > 1 ? 'are' : 'is'} available — trained specifically for your language combinations.
+            Smaller downloads, dramatically higher accuracy.
+          </div>
+          ${comparisonsHTML}
+          ${extraText}
+          <button class="specialist-upsell-cta" onclick="showUpgradeFromChoose()">
+            ⚡ Unlock Specialist Pairs — Upgrade Plan
+          </button>
+          <div style="font-size:11px; color:var(--text-muted); text-align:center; margin-top:8px;">
+            Available with Windy Pro, Ultra, or Max plans
+          </div>
+        </div>`;
+    }
+
+    let upgradeBillingMode = 'annual'; // 'monthly', 'annual', or 'lifetime'
 
     function showUpgradeFromChoose() {
       // Remove existing overlay if any
@@ -3344,30 +3807,30 @@
 
       const tierCards = [
         {
-          tier: 'plus', icon: '⭐', name: 'Plus', color: '#3B82F6',
-          monthly: '$4.99/mo', lifetime: '$49',
-          desc: '7 engines · Standard accuracy · WindyTune smart switching',
-          engines: ['7 Windy engines (Edge + Core + Lingua Spark)', 'WindyTune smart engine switching', '5 GB Windy Storage (audio/video archive)', 'Search & replay past recordings', 'Export transcripts (TXT, SRT, PDF)'],
+          tier: 'pro', icon: '⚡', name: 'Windy Pro', color: '#22C55E',
+          monthly: '$4.99/mo', annual: '$49/yr', lifetime: '$99',
+          desc: '3 devices · All 15 engines · 99 languages',
+          engines: ['📱 3 devices', 'All 15 engines', '99 languages', '15-min recordings', 'Batch mode + LLM polish'],
           highlight: false
         },
         {
-          tier: 'pro', icon: '🚀', name: 'Pro', color: '#A855F7',
-          monthly: '$9.99/mo', lifetime: '$99',
-          desc: '12 engines · High accuracy · All families · Storage + Archive',
-          engines: ['12 Windy engines (all families)', 'Everything in Plus', '50 GB Windy Storage', 'Video/audio file archive with search', 'Soul File — personal voice profile that improves accuracy over time', 'Speaker identification (who said what)'],
+          tier: 'translate', icon: '🚀', name: 'Windy Ultra', color: '#3B82F6',
+          monthly: '$8.99/mo', annual: '$79/yr', lifetime: '$199',
+          desc: '5 devices · Everything in Pro · Real-time translation',
+          engines: ['📱 5 devices', 'Everything in Pro', '60-min recordings', 'Real-time translation', 'Specialist pair engines'],
           highlight: true
         },
         {
-          tier: 'promax', icon: '👑', name: 'Pro Max', color: '#F59E0B',
-          monthly: '$19.99/mo', lifetime: '$179',
-          desc: 'All 15 engines · Max accuracy · Eternal archive · Priority support',
-          engines: ['All 15 Windy engines', 'Everything in Pro', 'Unlimited Windy Storage — eternal archive', 'Eternal Soul File — your voice DNA builds forever', 'Auto-tag & smart search across all recordings', 'Video transcription + scene detection', 'Priority support & early access to new engines'],
+          tier: 'translate_pro', icon: '👑', name: 'Windy Max', color: '#8B5CF6',
+          monthly: '$14.99/mo', annual: '$149/yr', lifetime: '$299',
+          desc: 'Unlimited devices · Everything in Ultra · TTS + glossaries',
+          engines: ['📱 Unlimited devices', 'Everything in Ultra', 'Unlimited recordings', 'Text-to-speech', 'Medical/legal glossaries'],
           highlight: false
         }
       ];
 
-      const currentIdx = ['free', 'plus', 'pro', 'promax'].indexOf(userTier);
-      const isLifetime = upgradeBillingMode === 'lifetime';
+      const currentIdx = ['free', 'pro', 'translate', 'translate_pro'].indexOf(userTier);
+      const billingMode = upgradeBillingMode || 'annual';
 
       overlay.innerHTML = `
         <div style="background:#0F1219; border:1px solid #2D3748; border-radius:16px; padding:32px; max-width:740px; width:92%; max-height:85vh; overflow-y:auto;">
@@ -3379,41 +3842,42 @@
             <button onclick="document.getElementById('upgrade-overlay').remove()" style="background:none; border:none; color:#94A3B8; font-size:26px; cursor:pointer; padding:4px 10px; line-height:1;">✕</button>
           </div>
 
-          <!-- Billing toggle -->
+          <!-- Billing toggle (3-way) -->
           <div style="display:flex; align-items:center; justify-content:center; gap:0; margin:20px 0 24px 0;">
             <button onclick="switchBilling('monthly')" style="
-              padding:10px 24px; font-size:15px; font-weight:700; border:2px solid ${!isLifetime ? '#F1F5F9' : '#334155'}; cursor:pointer; transition:all 0.3s;
+              padding:10px 20px; font-size:14px; font-weight:700; border:2px solid ${billingMode === 'monthly' ? '#F1F5F9' : '#334155'}; cursor:pointer; transition:all 0.3s;
               border-radius:10px 0 0 10px;
-              background:${!isLifetime ? 'rgba(241,245,249,0.1)' : 'transparent'};
-              color:${!isLifetime ? '#F1F5F9' : '#64748B'};
+              background:${billingMode === 'monthly' ? 'rgba(241,245,249,0.1)' : 'transparent'};
+              color:${billingMode === 'monthly' ? '#F1F5F9' : '#64748B'};
             ">Monthly</button>
-            <button onclick="switchBilling('lifetime')" style="
-              padding:10px 24px; font-size:15px; font-weight:700; border:2px solid ${isLifetime ? '#22C55E' : '#334155'}; cursor:pointer; transition:all 0.3s;
-              border-radius:0 10px 10px 0; border-left:none; position:relative;
-              background:${isLifetime ? 'rgba(34,197,94,0.15)' : 'transparent'};
-              color:${isLifetime ? '#22C55E' : '#64748B'};
-              ${!isLifetime ? 'animation:lifetimeGlow 2s ease-in-out infinite;' : ''}
+            <button onclick="switchBilling('annual')" style="
+              padding:10px 20px; font-size:14px; font-weight:700; border:2px solid ${billingMode === 'annual' ? '#22C55E' : '#334155'}; cursor:pointer; transition:all 0.3s;
+              border-left:none; border-right:none; position:relative;
+              background:${billingMode === 'annual' ? 'rgba(34,197,94,0.15)' : 'transparent'};
+              color:${billingMode === 'annual' ? '#22C55E' : '#64748B'};
             ">
-              💎 Lifetime <span style="background:linear-gradient(135deg,#22C55E,#10B981); color:#0F1219; font-size:10px; font-weight:800; padding:3px 8px; border-radius:6px; margin-left:6px;">SAVE 20-50%</span>
+              🌟 Annual <span style="background:linear-gradient(135deg,#22C55E,#10B981); color:#0F1219; font-size:9px; font-weight:800; padding:2px 6px; border-radius:4px; margin-left:4px;">BEST VALUE</span>
+            </button>
+            <button onclick="switchBilling('lifetime')" style="
+              padding:10px 20px; font-size:14px; font-weight:700; border:2px solid ${billingMode === 'lifetime' ? '#F59E0B' : '#334155'}; cursor:pointer; transition:all 0.3s;
+              border-radius:0 10px 10px 0;
+              background:${billingMode === 'lifetime' ? 'rgba(245,158,11,0.15)' : 'transparent'};
+              color:${billingMode === 'lifetime' ? '#F59E0B' : '#64748B'};
+            ">
+              💎 Lifetime
             </button>
           </div>
-          <style>
-            @keyframes lifetimeGlow {
-              0%, 100% { box-shadow: 0 0 8px rgba(34,197,94,0.2); border-color:#334155; }
-              50% { box-shadow: 0 0 20px rgba(34,197,94,0.4); border-color:#22C55E88; }
-            }
-          </style>
 
           <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:14px;">
             ${tierCards.map(t => {
         const isCurrent = t.tier === userTier;
-        const isBelow = ['free', 'plus', 'pro', 'promax'].indexOf(t.tier) <= currentIdx;
-        const price = isLifetime ? t.lifetime : t.monthly;
-        const priceLabel = isLifetime ? 'one-time · forever' : 'per month · cancel anytime';
+        const isBelow = ['free', 'pro', 'translate', 'translate_pro'].indexOf(t.tier) <= currentIdx;
+        const price = billingMode === 'lifetime' ? t.lifetime : billingMode === 'annual' ? t.annual : t.monthly;
+        const priceLabel = billingMode === 'lifetime' ? 'one-time · forever' : billingMode === 'annual' ? 'per year · cancel anytime' : 'per month · cancel anytime';
         return `
                 <div style="background:#1A1F2E; border:2px solid ${isCurrent ? t.color : t.highlight ? t.color + '80' : '#2D3748'}; border-radius:14px; padding:22px 18px; text-align:center; position:relative; ${t.highlight && !isCurrent ? 'box-shadow:0 0 25px ' + t.color + '22;' : ''} ${isCurrent ? 'box-shadow:0 0 25px ' + t.color + '33;' : ''} transition:all 0.25s;"
                   ${!isBelow ? `onmouseenter="this.style.borderColor='${t.color}'; this.style.boxShadow='0 0 30px ${t.color}33'; this.style.transform='translateY(-2px)'" onmouseleave="this.style.borderColor='${isCurrent ? t.color : t.highlight ? t.color + '80' : '#2D3748'}'; this.style.boxShadow='${t.highlight || isCurrent ? '0 0 25px ' + t.color + '22' : 'none'}'; this.style.transform='none'"` : ''}>
-                  ${t.highlight ? '<div style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:' + t.color + '; color:white; font-size:10px; font-weight:800; padding:3px 12px; border-radius:10px; letter-spacing:0.5px;">MOST POPULAR</div>' : ''}
+                  ${t.highlight ? '<div style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:' + t.color + '; color:white; font-size:10px; font-weight:800; padding:3px 12px; border-radius:10px; letter-spacing:0.5px;">RECOMMENDED</div>' : ''}
                   <div style="font-size:32px; margin-bottom:6px;">${t.icon}</div>
                   <div style="font-size:20px; font-weight:800; color:${t.color};">${t.name}</div>
                   <div style="font-size:28px; font-weight:800; color:#F1F5F9; margin:10px 0 2px 0;">${price}</div>
@@ -3423,8 +3887,8 @@
                     ${t.engines.map(e => '<div style="font-size:12px; color:#E2E8F0; line-height:1.8;">' + (e.startsWith('+') || e.startsWith('Everything') ? e : '✅ ' + e) + '</div>').join('')}
                   </div>
                   ${isCurrent ? '<div style="background:' + t.color + '22; color:' + t.color + '; border:1px solid ' + t.color + '; padding:10px 16px; border-radius:10px; font-weight:700; font-size:13px;">✓ Current Plan</div>' :
-            isBelow ? '<button onclick="handleUpgrade(\'' + t.tier + '\', \'' + (isLifetime ? 'lifetime' : 'monthly') + '\')" style="background:transparent; color:#94A3B8; border:1px solid #334155; padding:10px 20px; border-radius:10px; font-weight:600; font-size:13px; cursor:pointer; width:100%; transition:all 0.2s;" onmouseenter="this.style.borderColor=\'' + t.color + '\'; this.style.color=\'' + t.color + '\'" onmouseleave="this.style.borderColor=\'#334155\'; this.style.color=\'#94A3B8\'">Switch to ' + t.name + '</button>' :
-              '<button onclick="handleUpgrade(\'' + t.tier + '\', \'' + (isLifetime ? 'lifetime' : 'monthly') + '\')" style="background:' + t.color + '; color:white; border:none; padding:12px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; width:100%; transition:all 0.2s; box-shadow:0 2px 10px ' + t.color + '44;" onmouseenter="this.style.opacity=0.9; this.style.transform=\'scale(1.02)\'" onmouseleave="this.style.opacity=1; this.style.transform=\'none\'">Upgrade to ' + t.name + '</button>'}
+            isBelow ? '<button onclick="handleUpgrade(\'' + t.tier + '\', \'' + billingMode + '\')" style="background:transparent; color:#94A3B8; border:1px solid #334155; padding:10px 20px; border-radius:10px; font-weight:600; font-size:13px; cursor:pointer; width:100%; transition:all 0.2s;" onmouseenter="this.style.borderColor=\'' + t.color + '\'; this.style.color=\'' + t.color + '\'" onmouseleave="this.style.borderColor=\'#334155\'; this.style.color=\'#94A3B8\'">Switch to ' + t.name + '</button>' :
+              '<button onclick="handleUpgrade(\'' + t.tier + '\', \'' + billingMode + '\')" style="background:' + t.color + '; color:white; border:none; padding:12px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; width:100%; transition:all 0.2s; box-shadow:0 2px 10px ' + t.color + '44;" onmouseenter="this.style.opacity=0.9; this.style.transform=\'scale(1.02)\'" onmouseleave="this.style.opacity=1; this.style.transform=\'none\'">Upgrade to ' + t.name + '</button>'}
                 </div>`;
       }).join('')}
           </div>
@@ -3443,11 +3907,12 @@
     }
 
     function handleUpgrade(tier, billing) {
-      billing = billing || 'monthly';
+      billing = billing || 'annual';
       // Attempt Stripe checkout for the selected tier + billing
       const priceMap = {
-        'plus_monthly': 'price_plus_monthly', 'pro_monthly': 'price_pro_monthly', 'promax_monthly': 'price_promax_monthly',
-        'plus_lifetime': 'price_plus_lifetime', 'pro_lifetime': 'price_pro_lifetime', 'promax_lifetime': 'price_promax_lifetime'
+        'pro_monthly': 'price_pro_monthly', 'translate_monthly': 'price_translate_monthly', 'translate_pro_monthly': 'price_translate_pro_monthly',
+        'pro_annual': 'price_pro_annual', 'translate_annual': 'price_translate_annual', 'translate_pro_annual': 'price_translate_pro_annual',
+        'pro_lifetime': 'price_pro_lifetime', 'translate_lifetime': 'price_translate_lifetime', 'translate_pro_lifetime': 'price_translate_pro_lifetime'
       };
       const priceId = priceMap[tier + '_' + billing];
       fetch('https://api.windypro.thewindstorm.uk/create-checkout-session', {
@@ -3473,12 +3938,15 @@
           if (overlay) overlay.remove();
           autoSelectEnginesForTier();
           updatePlanBanner();
+          buildSpecialistUpsellCard();
           buildAllEnginesPicker();
           buildSelectedChecklist();
-          // Show confirmation
+          // Show confirmation with proper display name
+          const tierNames = { pro: 'Windy Pro', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
+          const displayName = tierNames[tier] || tier;
           const toast = document.createElement('div');
           toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--green); color:var(--bg); padding:12px 24px; border-radius:10px; font-weight:700; font-size:14px; z-index:1001; animation:fadeInUp 0.3s;';
-          toast.textContent = `✅ Upgraded to ${tier.charAt(0).toUpperCase() + tier.slice(1)}! All engines now available.`;
+          toast.textContent = `✅ Upgraded to ${displayName}! All engines now available.`;
           document.body.appendChild(toast);
           setTimeout(() => toast.remove(), 3000);
         });
@@ -3492,10 +3960,10 @@
         const priceEl = document.getElementById('translate-addon-price');
         const descEl = document.getElementById('translate-addon-desc');
         if (selectedTranslateTier === 'monthly') {
-          if (priceEl) priceEl.textContent = '$7.99/mo';
+          if (priceEl) priceEl.textContent = '$8.99/mo';
           if (descEl) descEl.textContent = 'All 99 languages · Offline · Real-time · Monthly subscription';
         } else {
-          if (priceEl) priceEl.textContent = '$79 lifetime';
+          if (priceEl) priceEl.textContent = '$199 lifetime';
           if (descEl) descEl.textContent = 'All 99 languages · Offline · Real-time · One-time purchase, forever';
         }
       } else {
@@ -3527,7 +3995,7 @@
       // Update tier badge
       const tierBadgeEl = document.getElementById('picker-tier-badge');
       if (tierBadgeEl) {
-        const tierLabels = { free: '🆓 Free Plan', plus: '⭐ Plus Plan', pro: '🚀 Pro Plan', promax: '👑 Pro Max' };
+        const tierLabels = { free: '🆓 Free', pro: '⚡ Windy Pro', translate: '🚀 Windy Ultra', translate_pro: '👑 Windy Max' };
         tierBadgeEl.textContent = tierLabels[userTier] || '🆓 Free Plan';
       }
 
@@ -3652,7 +4120,7 @@
       selectedArr.forEach(m => {
         const sizeTxt = m.sizeMB < 1024 ? `${m.sizeMB} MB` : `${(m.sizeMB / 1024).toFixed(1)} GB`;
         const div = document.createElement('div');
-        div.className = 'dl-item';
+        div.className = 'dl-item queued';
         div.id = `dl-${m.id}`;
         div.innerHTML = `
       <span class="dl-item-icon">⏳</span>
@@ -3660,6 +4128,7 @@
       <span class="dl-item-size">${sizeTxt}</span>
       <div class="dl-item-bar"><div class="dl-item-fill" style="width:0%"></div></div>
       <span class="dl-item-status">Queued</span>
+      <div class="dl-item-speed"></div>
     `;
         dlList.appendChild(div);
       });
@@ -3677,6 +4146,8 @@
       // Track last logged model for log entries
       let lastLoggedModel = null;
       let lastLoggedPercent = -1;
+      // Track per-model bytes for speed calculation
+      const modelDownloadStart = {};
 
       // Listen for progress
       window.wizardAPI.onProgress((data) => {
@@ -3698,13 +4169,30 @@
 
             if (data.modelPercent !== undefined) {
               fill.style.width = data.modelPercent + '%';
-              status.textContent = Math.round(data.modelPercent) + '%';
               icon.textContent = '🔄';
               dlItem.classList.add('active');
-              dlItem.classList.remove('done');
+              dlItem.classList.remove('done', 'queued');
+
+              // Calculate and show download speed
+              const speedEl = dlItem.querySelector('.dl-item-speed');
+              if (!modelDownloadStart[data.modelId]) {
+                modelDownloadStart[data.modelId] = Date.now();
+              }
+              const modelInfo = allModels.find(m => m.id === data.modelId);
+              const totalMB = modelInfo?.sizeMB || 0;
+              const downloadedMB = (data.modelPercent / 100 * totalMB).toFixed(1);
+              const elapsedSec = (Date.now() - modelDownloadStart[data.modelId]) / 1000;
+              let speedTxt = '';
+              if (elapsedSec > 0.5 && data.modelPercent > 0) {
+                const mbps = (downloadedMB / elapsedSec).toFixed(1);
+                speedTxt = `${mbps} MB/s`;
+              }
+              const sizeTxt = totalMB < 1024 ? `${totalMB} MB` : `${(totalMB / 1024).toFixed(1)} GB`;
+              if (speedEl) {
+                speedEl.textContent = `⬇ ${downloadedMB} / ${sizeTxt}  ·  ${Math.round(data.modelPercent)}%${speedTxt ? '  ·  ' + speedTxt : ''}`;
+              }
 
               // Log entry for engine download progress (every 25%)
-              const modelInfo = allModels.find(m => m.id === data.modelId);
               const mName = modelInfo?.shortName || modelInfo?.name || data.modelId;
               const mSize = modelInfo ? (modelInfo.sizeMB < 1024 ? `${modelInfo.sizeMB} MB` : `${(modelInfo.sizeMB / 1024).toFixed(1)} GB`) : '?';
               const pctRounded = Math.round(data.modelPercent);
@@ -3720,11 +4208,14 @@
             }
             if (data.modelDone) {
               fill.style.width = '100%';
-              status.textContent = '✅';
               icon.textContent = '✅';
-              dlItem.classList.remove('active');
+              dlItem.classList.remove('active', 'queued');
               dlItem.classList.add('done');
+              const speedEl = dlItem.querySelector('.dl-item-speed');
               const modelInfo = allModels.find(m => m.id === data.modelId);
+              const totalMB = modelInfo?.sizeMB || 0;
+              const sizeTxt = totalMB < 1024 ? `${totalMB} MB` : `${(totalMB / 1024).toFixed(1)} GB`;
+              if (speedEl) speedEl.textContent = `✅ ${sizeTxt} — complete`;
               addLogEntry(`✅ ${modelInfo?.shortName || modelInfo?.name || data.modelId} installed`, 'success');
               lastLoggedModel = null;
               lastLoggedPercent = -1;
@@ -4052,6 +4543,134 @@
       document.getElementById('lang-search').value = '';
     }
 
+    // ═══ TRAVEL DESTINATION PROMPT ═══
+    let travelPromptOpen = false;
+    const TRAVEL_LANG_MAP = {
+      'Spanish': 'es', 'French': 'fr', 'Japanese': 'ja', 'Italian': 'it',
+      'German': 'de', 'Portuguese': 'pt', 'Korean': 'ko', 'Chinese': 'zh',
+      'Thai': 'th', 'Greek': 'el', 'Arabic': 'ar', 'Hindi': 'hi'
+    };
+
+    function toggleTravelPrompt() {
+      travelPromptOpen = !travelPromptOpen;
+      const dest = document.getElementById('travel-destinations');
+      const icon = document.getElementById('travel-toggle-icon');
+      if (dest) dest.style.display = travelPromptOpen ? 'block' : 'none';
+      if (icon) icon.style.transform = travelPromptOpen ? 'rotate(180deg)' : 'rotate(0)';
+    }
+
+    // Region packages: region name → array of language codes
+    const REGION_PACKAGES = {
+      europe:   ['fr','de','it','es','pt','nl','pl','el','cs','ro','hu','sv','no','da','fi'],
+      americas: ['es','pt','en','fr'],
+      asia:     ['ja','ko','zh','th','vi','id','ms','tl','my','km','lo','mn'],
+      meaf:     ['ar','tr','he','fa','sw','am','ha','yo','zu','af']
+    };
+    const REGION_COLORS = {
+      europe: '#3B82F6', americas: '#22C55E', asia: '#F59E0B', meaf: '#8B5CF6'
+    };
+
+    function addRegionPackage(region, cardEl) {
+      const codes = REGION_PACKAGES[region];
+      if (!codes) return;
+      const color = REGION_COLORS[region] || '#3B82F6';
+
+      let addedCount = 0;
+      let alreadyCount = 0;
+
+      codes.forEach(code => {
+        if (userLanguages.some(l => l.code === code)) {
+          alreadyCount++;
+        } else {
+          addLanguage(code);
+          addedCount++;
+        }
+      });
+
+      // Visual feedback on the card
+      if (cardEl) {
+        if (addedCount > 0) {
+          cardEl.style.background = `rgba(34,197,94,0.12)`;
+          cardEl.style.borderColor = '#22C55E';
+          // Show count badge
+          const badge = cardEl.querySelector('span');
+          if (badge) {
+            badge.style.background = '#22C55E';
+            badge.textContent = `✅ ${addedCount} added!`;
+          }
+          setTimeout(() => {
+            cardEl.style.background = `rgba(34,197,94,0.06)`;
+            cardEl.style.borderColor = '#22C55E';
+            if (badge) {
+              badge.style.background = color;
+              badge.textContent = `${codes.length} languages`;
+            }
+          }, 2000);
+        } else {
+          // All already added — amber flash
+          cardEl.style.background = 'rgba(245,158,11,0.12)';
+          cardEl.style.borderColor = '#F59E0B';
+          const badge = cardEl.querySelector('span');
+          if (badge) {
+            badge.style.background = '#F59E0B';
+            badge.textContent = 'All added!';
+          }
+          setTimeout(() => {
+            cardEl.style.background = '';
+            cardEl.style.borderColor = '';
+            if (badge) {
+              badge.style.background = color;
+              badge.textContent = `${codes.length} languages`;
+            }
+          }, 1500);
+        }
+      }
+
+      // Refresh the left-side language list
+      const search = document.getElementById('lang-search')?.value || '';
+      buildLanguageList(search);
+    }
+
+    function addTravelLanguage(langName, flag, country, cardEl) {
+      const code = TRAVEL_LANG_MAP[langName];
+      if (!code) return;
+
+      // Check if already added
+      if (userLanguages.some(l => l.code === code)) {
+        // Flash the card to show it's already there
+        if (cardEl) {
+          cardEl.style.background = 'rgba(245,158,11,0.15)';
+          cardEl.style.borderColor = '#F59E0B';
+          setTimeout(() => {
+            cardEl.style.background = 'var(--bg-card)';
+            cardEl.style.borderColor = 'var(--border)';
+          }, 800);
+        }
+        return;
+      }
+
+      // Add the language
+      addLanguage(code);
+
+      // Visual confirmation on the card
+      if (cardEl) {
+        cardEl.style.background = 'rgba(34,197,94,0.15)';
+        cardEl.style.borderColor = '#22C55E';
+        const origHTML = cardEl.innerHTML;
+        const countryDiv = cardEl.querySelector('div:nth-child(2)');
+        if (countryDiv) countryDiv.innerHTML = '✅ Added!';
+        setTimeout(() => {
+          cardEl.innerHTML = origHTML;
+          cardEl.style.background = 'rgba(34,197,94,0.08)';
+          cardEl.style.borderColor = '#22C55E';
+        }, 1200);
+      }
+
+      // Refresh the left-side language list to show it's been added
+      const search = document.getElementById('lang-search')?.value || '';
+      buildLanguageList(search);
+    }
+
     function rebalanceLanguages() {
       if (userLanguages.length === 0) return;
       const each = Math.floor(100 / userLanguages.length);
@@ -4363,8 +4982,8 @@
 
       // Build personalized demo
       const tierSuggestion = userLanguages.length <= 5 ?
-        { name: 'Windy Translate', price: '$79', desc: 'All 99 languages' } :
-        { name: 'Windy Translate Pro', price: '$149', desc: 'All 99 languages + voice TTS + custom glossaries' };
+        { name: 'Windy Ultra', price: '$79/yr', desc: 'All 99 languages · Real-time translation' } :
+        { name: 'Windy Max', price: '$149/yr', desc: 'All 99 languages + text-to-speech + medical/legal glossaries' };
 
       // Build the "all languages" string for subtitle
       const allLangNames = userLanguages.map(l => l.name);
@@ -4462,54 +5081,111 @@
         <div style="max-width:540px; margin:0 auto 16px; background:linear-gradient(135deg, rgba(34,197,94,0.08), rgba(34,197,94,0.02)); border:1px solid rgba(34,197,94,0.2); border-radius:12px; padding:14px 18px; text-align:center;">
           <div style="font-size:14px; font-weight:700; color:var(--green); margin-bottom:4px;">🌪️ Why Windy Translate?</div>
           <div style="font-size:13px; color:var(--text-dim); line-height:1.6;">
-            Google Translate needs Wi-Fi. Pocketalk needs cell signal. iTranslate needs the cloud.<br>
+            Other translators need Wi-Fi. Cloud servers. Monthly subscriptions. A separate device.<br>
             <strong style="color:var(--green);">Windy Pro needs NOTHING.</strong> No internet. No signal. No problem.<br>
             Airplane at 35,000 feet? Remote village? Underground bunker? <em>Still translating.</em><br>
             <span style="font-size:14px; font-weight:800; color:var(--green);">That's WINDY, baby! 🌪️</span>
           </div>
         </div>
 
-        <!-- Pricing — two options side by side -->
-        <div style="max-width:540px; margin:0 auto 16px;">
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;" id="translate-pricing-cards">
-            <!-- Monthly option -->
-            <div id="tier-monthly" onclick="selectTranslateTier('monthly')" style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:18px; text-align:center; cursor:pointer; transition:all 0.2s; position:relative;">
-              <div style="font-size:14px; color:var(--text-muted); margin-bottom:4px;">Try it monthly</div>
-              <div style="font-size:24px; font-weight:900; color:var(--text);">$7.99<span style="font-size:14px; font-weight:400; color:var(--text-muted);">/mo</span></div>
-              <div style="font-size:12px; color:var(--text-dim); margin-top:6px;">${tierSuggestion.desc}</div>
-              <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">Cancel anytime. No commitment.</div>
-              <div id="tier-monthly-check" style="display:none; position:absolute; top:8px; right:8px; font-size:18px;">✅</div>
+        <!-- ═══ 3-PLAN COMPARISON STRIP ═══ -->
+        <div style="max-width:640px; margin:0 auto 16px;">
+          <!-- Billing toggle -->
+          <div style="display:flex; align-items:center; justify-content:center; gap:0; margin-bottom:16px;">
+            <button id="trans-bill-monthly" onclick="switchTranslateBilling('monthly')" style="
+              padding:8px 18px; font-size:13px; font-weight:700; border:2px solid #334155; cursor:pointer; transition:all 0.3s;
+              border-radius:10px 0 0 10px; background:transparent; color:#64748B;
+            ">Monthly</button>
+            <button id="trans-bill-annual" onclick="switchTranslateBilling('annual')" style="
+              padding:8px 18px; font-size:13px; font-weight:700; border:2px solid #22C55E; cursor:pointer; transition:all 0.3s;
+              border-left:none; border-right:none; background:rgba(34,197,94,0.15); color:#22C55E;
+            ">
+              🌟 Annual <span style="background:linear-gradient(135deg,#22C55E,#10B981); color:#0F1219; font-size:9px; font-weight:800; padding:2px 6px; border-radius:4px; margin-left:3px;">BEST</span>
+            </button>
+            <button id="trans-bill-lifetime" onclick="switchTranslateBilling('lifetime')" style="
+              padding:8px 18px; font-size:13px; font-weight:700; border:2px solid #334155; cursor:pointer; transition:all 0.3s;
+              border-radius:0 10px 10px 0; background:transparent; color:#64748B;
+            ">💎 Lifetime</button>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;" id="translate-pricing-cards">
+            <!-- Windy Pro -->
+            <div id="trans-plan-pro" class="trans-plan-card" onclick="selectTranslatePlan('pro')" style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:16px 12px; text-align:center; cursor:pointer; transition:all 0.25s; position:relative;"
+              onmouseenter="if(!this.classList.contains('trans-selected')){this.style.borderColor='#22C55E'; this.style.boxShadow='0 0 16px rgba(34,197,94,0.15)'}" onmouseleave="if(!this.classList.contains('trans-selected')){this.style.borderColor='var(--border)'; this.style.boxShadow='none'}">
+              <div style="font-size:22px; margin-bottom:4px;">⚡</div>
+              <div style="font-size:15px; font-weight:800; color:#22C55E;">Windy Pro</div>
+              <div class="trans-price" style="font-size:22px; font-weight:900; color:var(--text); margin:8px 0 2px;">$49<span style="font-size:12px; font-weight:400; color:var(--text-muted);">/yr</span></div>
+              <div class="trans-price-label" style="font-size:11px; color:var(--text-muted); margin-bottom:10px;">per year</div>
+              <div style="text-align:left; font-size:12px; color:var(--text-dim); line-height:1.7; padding:8px; background:rgba(255,255,255,0.03); border-radius:8px;">
+                ✅ 📱 3 devices<br>
+                ✅ All 15 engines<br>
+                ✅ 99 languages<br>
+                ✅ 15-min recordings<br>
+                ✅ Batch mode + LLM polish<br>
+                <span style="color:var(--text-muted);">❌ No real-time translate</span>
+              </div>
+              <div id="trans-plan-pro-check" style="display:none; position:absolute; top:6px; right:8px; font-size:16px;">✅</div>
             </div>
-            <!-- One-time option (highlighted border as best value but NOT pre-selected) -->
-            <div id="tier-onetime" onclick="selectTranslateTier('onetime')" style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:18px; text-align:center; cursor:pointer; transition:all 0.2s; position:relative;">
-              <div style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:var(--green); color:var(--bg); font-size:10px; font-weight:800; padding:2px 12px; border-radius:10px; white-space:nowrap;">⭐ BEST VALUE — Save 60%</div>
-              <div style="font-size:14px; color:var(--green); margin-bottom:4px;">Own it forever</div>
-              <div style="font-size:24px; font-weight:900; color:var(--green);">${tierSuggestion.price}<span style="font-size:14px; font-weight:400; color:var(--text-dim);"> once</span></div>
-              <div style="font-size:12px; color:var(--text-dim); margin-top:6px;">${tierSuggestion.desc}</div>
-              <div style="font-size:11px; color:var(--green); margin-top:6px; font-weight:600;">Pay once. Translate forever.</div>
-              <div id="tier-onetime-check" style="display:none; position:absolute; top:8px; right:8px; font-size:18px;">✅</div>
+            <!-- Windy Ultra (RECOMMENDED) -->
+            <div id="trans-plan-translate" class="trans-plan-card" onclick="selectTranslatePlan('translate')" style="background:var(--bg-card); border:2px solid rgba(59,130,246,0.5); border-radius:12px; padding:16px 12px; text-align:center; cursor:pointer; transition:all 0.25s; position:relative; box-shadow:0 0 16px rgba(59,130,246,0.1);"
+              onmouseenter="if(!this.classList.contains('trans-selected')){this.style.borderColor='#3B82F6'; this.style.boxShadow='0 0 20px rgba(59,130,246,0.25)'}" onmouseleave="if(!this.classList.contains('trans-selected')){this.style.borderColor='rgba(59,130,246,0.5)'; this.style.boxShadow='0 0 16px rgba(59,130,246,0.1)'}">
+              <div style="position:absolute; top:-9px; left:50%; transform:translateX(-50%); background:#3B82F6; color:white; font-size:9px; font-weight:800; padding:2px 10px; border-radius:8px; letter-spacing:0.5px;">RECOMMENDED</div>
+              <div style="font-size:22px; margin-bottom:4px;">🚀</div>
+              <div style="font-size:15px; font-weight:800; color:#3B82F6;">Windy Ultra</div>
+              <div class="trans-price" style="font-size:22px; font-weight:900; color:var(--text); margin:8px 0 2px;">$79<span style="font-size:12px; font-weight:400; color:var(--text-muted);">/yr</span></div>
+              <div class="trans-price-label" style="font-size:11px; color:var(--text-muted); margin-bottom:10px;">per year</div>
+              <div style="text-align:left; font-size:12px; color:var(--text-dim); line-height:1.7; padding:8px; background:rgba(255,255,255,0.03); border-radius:8px;">
+                ✅ 📱 5 devices<br>
+                ✅ Everything in Pro<br>
+                ✅ <strong style="color:#3B82F6;">Real-time translation</strong><br>
+                ✅ <strong style="color:#3B82F6;">Specialist pair engines</strong><br>
+                ✅ 60-min recordings<br>
+                ✅ 99 language pairs
+              </div>
+              <div id="trans-plan-translate-check" style="display:none; position:absolute; top:6px; right:8px; font-size:16px;">✅</div>
+            </div>
+            <!-- Windy Max -->
+            <div id="trans-plan-translate_pro" class="trans-plan-card" onclick="selectTranslatePlan('translate_pro')" style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:16px 12px; text-align:center; cursor:pointer; transition:all 0.25s; position:relative;"
+              onmouseenter="if(!this.classList.contains('trans-selected')){this.style.borderColor='#8B5CF6'; this.style.boxShadow='0 0 16px rgba(139,92,246,0.15)'}" onmouseleave="if(!this.classList.contains('trans-selected')){this.style.borderColor='var(--border)'; this.style.boxShadow='none'}">
+              <div style="font-size:22px; margin-bottom:4px;">👑</div>
+              <div style="font-size:15px; font-weight:800; color:#8B5CF6;">Windy Max</div>
+              <div class="trans-price" style="font-size:22px; font-weight:900; color:var(--text); margin:8px 0 2px;">$149<span style="font-size:12px; font-weight:400; color:var(--text-muted);">/yr</span></div>
+              <div class="trans-price-label" style="font-size:11px; color:var(--text-muted); margin-bottom:10px;">per year</div>
+              <div style="text-align:left; font-size:12px; color:var(--text-dim); line-height:1.7; padding:8px; background:rgba(255,255,255,0.03); border-radius:8px;">
+                ✅ 📱 <strong style="color:#8B5CF6;">Unlimited devices</strong><br>
+                ✅ Everything in Ultra<br>
+                ✅ Unlimited recordings<br>
+                ✅ <strong style="color:#8B5CF6;">Text-to-speech</strong><br>
+                ✅ <strong style="color:#8B5CF6;">Medical/legal glossaries</strong><br>
+                ✅ Priority support
+              </div>
+              <div id="trans-plan-translate_pro-check" style="display:none; position:absolute; top:6px; right:8px; font-size:16px;">✅</div>
             </div>
           </div>
-          <div style="text-align:center; margin-top:8px; font-size:11px; color:var(--text-muted);">Monthly plan = $95.88/yr · One-time = ${tierSuggestion.price} total, forever. The math speaks for itself.</div>
 
-          <!-- Competitor comparison -->
+          <div style="text-align:center; margin-top:10px; font-size:11px; color:var(--text-muted);">Annual saves ~50% vs monthly · Lifetime = own it forever · Secure Stripe checkout</div>
+
+          <!-- Windy Pro advantages (no competitor names) -->
           <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:12px; font-size:12px;">
-            <div style="background:var(--bg-card); border-radius:8px; padding:10px; text-align:center; border:1px solid var(--border);">
-              <div style="color:var(--text-muted); font-weight:600;">Google Translate</div>
-              <div style="color:var(--text-dim); margin-top:2px;">Free but cloud-only.<br>Your data = their data.</div>
+            <div style="background:linear-gradient(135deg, rgba(34,197,94,0.06), rgba(34,197,94,0.02)); border-radius:8px; padding:10px; text-align:center; border:1px solid rgba(34,197,94,0.2);">
+              <div style="font-size:16px; margin-bottom:2px;">✈️</div>
+              <div style="color:var(--green); font-weight:700;">100% Offline</div>
+              <div style="color:var(--text-dim); margin-top:2px;">No cloud. No Wi-Fi.<br>Works anywhere on Earth.</div>
             </div>
-            <div style="background:var(--bg-card); border-radius:8px; padding:10px; text-align:center; border:1px solid var(--border);">
-              <div style="color:var(--text-muted); font-weight:600;">Pocketalk</div>
-              <div style="color:var(--text-dim); margin-top:2px;">$299 separate device.<br>Mostly cloud-based.</div>
+            <div style="background:linear-gradient(135deg, rgba(59,130,246,0.06), rgba(59,130,246,0.02)); border-radius:8px; padding:10px; text-align:center; border:1px solid rgba(59,130,246,0.2);">
+              <div style="font-size:16px; margin-bottom:2px;">📱</div>
+              <div style="color:#60A5FA; font-weight:700;">Your Devices</div>
+              <div style="color:var(--text-dim); margin-top:2px;">No extra hardware.<br>Phone, laptop, tablet.</div>
             </div>
-            <div style="background:var(--bg-card); border-radius:8px; padding:10px; text-align:center; border:1px solid var(--border);">
-              <div style="color:var(--text-muted); font-weight:600;">iTranslate</div>
-              <div style="color:var(--text-dim); margin-top:2px;">$72/year subscription.<br>$360 over 5 years.</div>
+            <div style="background:linear-gradient(135deg, rgba(139,92,246,0.06), rgba(139,92,246,0.02)); border-radius:8px; padding:10px; text-align:center; border:1px solid rgba(139,92,246,0.2);">
+              <div style="font-size:16px; margin-bottom:2px;">🔒</div>
+              <div style="color:#A78BFA; font-weight:700;">Your Data Stays Yours</div>
+              <div style="color:var(--text-dim); margin-top:2px;">Zero cloud uploads.<br>100% private, always.</div>
             </div>
           </div>
         </div>
 
-        <!-- Payment button — appears after selecting a tier -->
+        <!-- Payment button — appears after selecting a plan -->
         <div id="translate-payment-section" style="display:none; text-align:center; margin-top:16px;">
           <button id="btn-pay-translate" class="btn btn-primary" style="font-size:16px; padding:14px 32px; min-width:280px;" onclick="initiateTranslatePayment()">
             💳 Purchase Now
@@ -4532,58 +5208,117 @@
     }
 
     let selectedTranslateTier = null;
-    let translatePaid = false; // tracks whether Stripe checkout completed
+    let translatePaid = false;
+    let translateBillingMode = 'annual'; // 'monthly', 'annual', 'lifetime'
+    let selectedTranslatePlan = null; // 'pro', 'translate', 'translate_pro'
 
-    function selectTranslateTier(tier) {
-      // Clicking the already-selected tier does nothing (no deselect)
-      if (selectedTranslateTier === tier) return;
+    const TRANSLATE_PLAN_PRICES = {
+      pro:           { monthly: '$4.99/mo',  annual: '$49/yr',  lifetime: '$99' },
+      translate:     { monthly: '$8.99/mo',  annual: '$79/yr',  lifetime: '$199' },
+      translate_pro: { monthly: '$14.99/mo', annual: '$149/yr', lifetime: '$299' }
+    };
+    const TRANSLATE_PLAN_NAMES = { pro: 'Windy Pro', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
+    const TRANSLATE_PLAN_COLORS = { pro: '#22C55E', translate: '#3B82F6', translate_pro: '#8B5CF6' };
 
-      selectedTranslateTier = tier;
-      translatePaid = false; // reset payment state when switching
+    function switchTranslateBilling(mode) {
+      translateBillingMode = mode;
 
-      const monthlyCard = document.getElementById('tier-monthly');
-      const onetimeCard = document.getElementById('tier-onetime');
-      const monthlyCheck = document.getElementById('tier-monthly-check');
-      const onetimeCheck = document.getElementById('tier-onetime-check');
-
-      if (tier === 'monthly') {
-        monthlyCard.style.border = '2px solid var(--green)';
-        monthlyCard.style.background = 'rgba(0,255,136,0.08)';
-        monthlyCheck.style.display = 'block';
-        onetimeCard.style.border = '2px solid var(--border)';
-        onetimeCard.style.background = 'var(--bg-card)';
-        onetimeCheck.style.display = 'none';
-      } else {
-        onetimeCard.style.border = '2px solid var(--green)';
-        onetimeCard.style.background = 'var(--green-dark)';
-        onetimeCheck.style.display = 'block';
-        monthlyCard.style.border = '2px solid var(--border)';
-        monthlyCard.style.background = 'var(--bg-card)';
-        monthlyCheck.style.display = 'none';
-      }
-
-      // Show payment button with correct price
-      const paySection = document.getElementById('translate-payment-section');
-      const payBtn = document.getElementById('btn-pay-translate');
-      if (paySection && payBtn) {
-        paySection.style.display = 'block';
-        payBtn.disabled = false;
-        payBtn.style.background = '';
-        if (tier === 'monthly') {
-          payBtn.textContent = '💳 Subscribe — $7.99/mo';
+      // Update billing toggle buttons
+      ['monthly', 'annual', 'lifetime'].forEach(m => {
+        const btn = document.getElementById('trans-bill-' + m);
+        if (!btn) return;
+        const isActive = m === mode;
+        if (m === 'annual') {
+          btn.style.borderColor = isActive ? '#22C55E' : '#334155';
+          btn.style.background = isActive ? 'rgba(34,197,94,0.15)' : 'transparent';
+          btn.style.color = isActive ? '#22C55E' : '#64748B';
+        } else if (m === 'lifetime') {
+          btn.style.borderColor = isActive ? '#F59E0B' : '#334155';
+          btn.style.background = isActive ? 'rgba(245,158,11,0.15)' : 'transparent';
+          btn.style.color = isActive ? '#F59E0B' : '#64748B';
         } else {
-          const price = userLanguages.length <= 5 ? '$79' : '$149';
-          payBtn.textContent = `💳 Purchase — ${price} One-Time`;
+          btn.style.borderColor = isActive ? '#F1F5F9' : '#334155';
+          btn.style.background = isActive ? 'rgba(241,245,249,0.1)' : 'transparent';
+          btn.style.color = isActive ? '#F1F5F9' : '#64748B';
         }
+      });
+
+      // Update prices on all plan cards
+      Object.entries(TRANSLATE_PLAN_PRICES).forEach(([plan, prices]) => {
+        const card = document.getElementById('trans-plan-' + plan);
+        if (!card) return;
+        const priceEl = card.querySelector('.trans-price');
+        const labelEl = card.querySelector('.trans-price-label');
+        if (priceEl) priceEl.innerHTML = prices[mode].replace(/\/mo|\/yr/, '<span style="font-size:12px; font-weight:400; color:var(--text-muted);">$&</span>');
+        if (labelEl) labelEl.textContent = mode === 'monthly' ? 'per month' : mode === 'annual' ? 'per year' : 'one-time · forever';
+      });
+
+      // Update payment button if a plan is selected
+      if (selectedTranslatePlan) {
+        updateTranslatePayBtn();
       }
+    }
+
+    function selectTranslatePlan(plan) {
+      if (selectedTranslatePlan === plan) return;
+      selectedTranslatePlan = plan;
+      selectedTranslateTier = plan; // backward compat
+      translatePaid = false;
+
+      // Highlight selected card, reset others
+      const plans = ['pro', 'translate', 'translate_pro'];
+      plans.forEach(p => {
+        const card = document.getElementById('trans-plan-' + p);
+        const check = document.getElementById('trans-plan-' + p + '-check');
+        if (!card) return;
+        const color = TRANSLATE_PLAN_COLORS[p];
+        if (p === plan) {
+          card.style.border = '2px solid ' + color;
+          card.style.background = 'rgba(' + (p === 'pro' ? '34,197,94' : p === 'translate' ? '59,130,246' : '139,92,246') + ',0.08)';
+          card.style.boxShadow = '0 0 20px ' + color + '22';
+          card.classList.add('trans-selected');
+          if (check) check.style.display = 'block';
+        } else {
+          card.style.border = p === 'translate' ? '2px solid rgba(59,130,246,0.5)' : '2px solid var(--border)';
+          card.style.background = 'var(--bg-card)';
+          card.style.boxShadow = p === 'translate' ? '0 0 16px rgba(59,130,246,0.1)' : 'none';
+          card.classList.remove('trans-selected');
+          if (check) check.style.display = 'none';
+        }
+      });
+
+      updateTranslatePayBtn();
 
       // Store the choice
       if (typeof window.wizardAPI !== 'undefined') {
-        window.wizardAPI.purchaseTranslate(tier === 'monthly' ? 'translate-monthly' : 'translate');
+        window.wizardAPI.purchaseTranslate(plan);
       }
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('windy-translate-tier', tier);
+        localStorage.setItem('windy-translate-tier', plan);
       }
+    }
+
+    function updateTranslatePayBtn() {
+      const paySection = document.getElementById('translate-payment-section');
+      const payBtn = document.getElementById('btn-pay-translate');
+      if (!paySection || !payBtn) return;
+      paySection.style.display = 'block';
+      payBtn.disabled = false;
+      payBtn.style.background = '';
+      const name = TRANSLATE_PLAN_NAMES[selectedTranslatePlan];
+      const price = TRANSLATE_PLAN_PRICES[selectedTranslatePlan][translateBillingMode];
+      const label = translateBillingMode === 'lifetime' ? 'Lifetime' : translateBillingMode === 'annual' ? '/yr' : '/mo';
+      payBtn.textContent = `💳 Get ${name} — ${price}`;
+    }
+
+    // Keep old function name for backward compat (translate addon banner etc)
+    function selectTranslateTier(tier) {
+      if (tier === 'monthly' || tier === 'onetime') {
+        // Legacy call from old code — map to new plan selection
+        selectedTranslateTier = tier;
+        return;
+      }
+      selectTranslatePlan(tier);
     }
 
     // Restore translate selection when navigating back to screen 4
@@ -4611,31 +5346,34 @@
       btn.disabled = true;
 
       // ═══ STRIPE CHECKOUT INTEGRATION ═══
-      // TODO: Replace with your actual Stripe publishable key and price IDs
-      // Price IDs should be created in Stripe Dashboard:
-      //   - price_translate_monthly  → $7.99/mo recurring
-      //   - price_translate_79       → $79 one-time (up to 5 langs)
-      //   - price_translate_149      → $149 one-time (all 99 langs)
+      // Price IDs map: plan + billing mode → Stripe price ID
+      const STRIPE_PRICE_MAP = {
+        'pro-monthly':           'price_pro_monthly',
+        'pro-annual':            'price_pro_annual',
+        'pro-lifetime':          'price_pro_lifetime',
+        'translate-monthly':     'price_ultra_monthly',
+        'translate-annual':      'price_ultra_annual',
+        'translate-lifetime':    'price_ultra_lifetime',
+        'translate_pro-monthly': 'price_max_monthly',
+        'translate_pro-annual':  'price_max_annual',
+        'translate_pro-lifetime':'price_max_lifetime',
+      };
       const STRIPE_CHECKOUT_URL = 'https://api.windypro.thewindstorm.uk/create-checkout-session';
 
-      const tierMap = {
-        'monthly': 'translate-monthly',
-        'onetime': userLanguages.length <= 5 ? 'translate-standard' : 'translate-pro'
-      };
+      const plan = selectedTranslatePlan || 'translate';
+      const billing = translateBillingMode || 'annual';
+      const priceId = STRIPE_PRICE_MAP[`${plan}-${billing}`] || 'price_ultra_annual';
 
       try {
         // In production: POST to your backend, which creates a Stripe Checkout Session
         // and returns a URL to redirect to.
-        // For now: open a placeholder that shows what will happen.
-        const tier = selectedTranslateTier;
-        const priceId = tierMap[tier] || 'translate-standard';
-
-        // Attempt real Stripe checkout
         const response = await fetch(STRIPE_CHECKOUT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             priceId,
+            plan,
+            billing,
             email: localStorage.getItem('windy-account-email') || '',
             successUrl: 'windypro://payment-success',
             cancelUrl: 'windypro://payment-cancel'
@@ -4668,13 +5406,14 @@
       } catch (e) {
         console.log('[Payment] Checkout not available yet:', e.message);
         // Graceful fallback: store intent, proceed to install, collect payment later
-        btn.textContent = '✅ Added — payment will be collected on launch';
+        const displayName = TRANSLATE_PLAN_NAMES[plan] || 'Windy Ultra';
+        btn.textContent = `✅ ${displayName} added — payment collected on launch`;
         btn.style.background = 'var(--green)';
         btn.disabled = true;
         translatePaid = true; // mark as "committed" even in fallback
 
         if (typeof window.wizardAPI !== 'undefined') {
-          window.wizardAPI.purchaseTranslate(selectedTranslateTier === 'monthly' ? 'translate-monthly-pending' : 'translate-pending');
+          window.wizardAPI.purchaseTranslate(`${plan}-${billing}-pending`);
         }
 
         // Auto-proceed to Learn screen after brief delay

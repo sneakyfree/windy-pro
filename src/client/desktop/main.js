@@ -58,6 +58,8 @@ const fs = require('fs');
 const os = require('os');
 const { CursorInjector } = require('./injection/injector');
 const { WindyUpdater } = require('./updater');
+const { WindyChatClient } = require('./chat/chat-client');
+const { ChatTranslator } = require('./chat/chat-translate');
 
 // Safe IPC send — guards against disposed render frames
 function safeSend(channel, ...args) {
@@ -121,6 +123,7 @@ const store = new Store({
 let mainWindow = null;
 let miniWindow = null;
 let miniTranslateWindow = null;
+let chatWindow = null;
 let tray = null;
 let isRecording = false;
 let userHiddenWindow = false;  // Tracks if user intentionally hid everything via Ctrl+Shift+W
@@ -616,6 +619,10 @@ function updateTrayMenu() {
       click: () => showMiniTranslateWindow()
     },
     {
+      label: '💬 Windy Chat',
+      click: () => showChatWindow()
+    },
+    {
       label: '📜 History',
       click: () => {
         mainWindow.show();
@@ -1091,6 +1098,158 @@ ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang
     req.write(postData);
     req.end();
   });
+});
+
+// ═══════════════════════════════════════════════════
+// ═══ WINDY CHAT ═══
+// ═══════════════════════════════════════════════════
+
+let chatClient = null;
+let chatTranslator = null;
+
+function getChatClient() {
+  if (!chatClient) {
+    chatClient = new WindyChatClient(store);
+    chatTranslator = new ChatTranslator(store);
+
+    // Wire translation function into chat client
+    chatClient.translateFn = (text, src, tgt) => chatTranslator.translate(text, src, tgt);
+
+    // Forward events to chat window
+    chatClient.on('message', (msg) => {
+      if (chatWindow && !chatWindow.isDestroyed()) {
+        chatWindow.webContents.send('chat-new-message', msg);
+      }
+    });
+    chatClient.on('presence', (data) => {
+      if (chatWindow && !chatWindow.isDestroyed()) {
+        chatWindow.webContents.send('chat-presence-update', data);
+      }
+    });
+    chatClient.on('invite', (data) => {
+      if (chatWindow && !chatWindow.isDestroyed()) {
+        chatWindow.webContents.send('chat-invite', data);
+      }
+    });
+    chatClient.on('connected', () => {
+      if (chatWindow && !chatWindow.isDestroyed()) {
+        chatWindow.webContents.send('chat-connected');
+      }
+    });
+    chatClient.on('disconnected', () => {
+      if (chatWindow && !chatWindow.isDestroyed()) {
+        chatWindow.webContents.send('chat-disconnected');
+      }
+    });
+  }
+  return chatClient;
+}
+
+function showChatWindow() {
+  // Toggle: if already open, focus it
+  if (chatWindow && !chatWindow.isDestroyed()) {
+    chatWindow.show();
+    chatWindow.focus();
+    return;
+  }
+
+  chatWindow = new BrowserWindow({
+    width: 900,
+    height: 650,
+    minWidth: 700,
+    minHeight: 500,
+    frame: true,
+    title: 'Windy Chat',
+    backgroundColor: '#0F1219',
+    icon: path.join(__dirname, '..', '..', '..', 'assets', 'icon.png'),
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      preload: path.join(__dirname, 'chat', 'chat-preload.js')
+    }
+  });
+
+  chatWindow.loadFile(path.join(__dirname, 'renderer', 'chat.html'));
+  chatWindow.on('closed', () => { chatWindow = null; });
+
+  // Open DevTools in dev mode
+  if (process.argv.includes('--dev')) {
+    chatWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+}
+
+// Chat IPC — open from renderer
+ipcMain.on('open-windy-chat', () => showChatWindow());
+
+// Chat IPC — Authentication
+ipcMain.handle('chat-login', async (event, userId, password) => {
+  return getChatClient().login(userId, password);
+});
+
+ipcMain.handle('chat-register', async (event, username, password, displayName) => {
+  return getChatClient().register(username, password, displayName);
+});
+
+ipcMain.handle('chat-logout', async () => {
+  if (chatClient) return chatClient.logout();
+  return { success: true };
+});
+
+ipcMain.handle('chat-get-session', async () => {
+  return getChatClient().resumeSession();
+});
+
+// Chat IPC — Messaging
+ipcMain.handle('chat-send-message', async (event, roomId, text) => {
+  const client = getChatClient();
+  const userLang = chatTranslator ? chatTranslator.getUserLanguage() : 'en';
+  // For MVP, we auto-detect recipient language from room or default
+  return client.sendMessage(roomId, text, userLang, null);
+});
+
+ipcMain.handle('chat-get-messages', async (event, roomId, limit) => {
+  return getChatClient().getMessages(roomId, limit || 50);
+});
+
+ipcMain.handle('chat-send-typing', async (event, roomId, isTyping) => {
+  return getChatClient().sendTyping(roomId, isTyping);
+});
+
+// Chat IPC — Contacts & Rooms
+ipcMain.handle('chat-get-contacts', async () => {
+  return getChatClient().getContacts();
+});
+
+ipcMain.handle('chat-create-dm', async (event, userId) => {
+  return getChatClient().createDM(userId);
+});
+
+ipcMain.handle('chat-accept-invite', async (event, roomId) => {
+  return getChatClient().acceptInvite(roomId);
+});
+
+ipcMain.handle('chat-decline-invite', async (event, roomId) => {
+  return getChatClient().declineInvite(roomId);
+});
+
+// Chat IPC — Profile & Presence
+ipcMain.handle('chat-set-profile', async (event, displayName, avatarUrl) => {
+  return getChatClient().setProfile(displayName, avatarUrl);
+});
+
+ipcMain.handle('chat-set-presence', async (event, status) => {
+  return getChatClient().setPresence(status);
+});
+
+// Chat IPC — Translation utilities
+ipcMain.handle('chat-get-user-language', async () => {
+  return chatTranslator ? chatTranslator.getUserLanguage() : 'en';
+});
+
+ipcMain.handle('chat-translate-text', async (event, text, srcLang, tgtLang) => {
+  if (!chatTranslator) chatTranslator = new ChatTranslator(store);
+  return chatTranslator.translate(text, srcLang, tgtLang);
 });
 
 // ── Live Listen: speech translation for Quick Translate ──
@@ -4326,9 +4485,43 @@ ipcMain.handle('get-storage-stats', async () => {
         localSize += fs.statSync(bundle.file_path).size;
       }
     }
+
+    // Query R2-backed cloud-storage service for cloud usage
+    let cloudSize = 0;
+    let cloudTier = 'free';
+    let cloudLimit = 500 * 1024 * 1024;
+    try {
+      const storageToken = store.get('auth.storageToken', '');
+      const storageUserId = store.get('auth.storageUserId', '');
+      if (storageToken && storageUserId) {
+        const http = require('http');
+        const usageData = await new Promise((resolve, reject) => {
+          const req = http.get(`http://localhost:8099/api/storage/usage/${storageUserId}`, {
+            headers: { 'Authorization': `Bearer ${storageToken}` },
+            timeout: 3000
+          }, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => {
+              try { resolve(JSON.parse(data)); } catch { resolve(null); }
+            });
+          });
+          req.on('error', () => resolve(null));
+          req.on('timeout', () => { req.destroy(); resolve(null); });
+        });
+        if (usageData?.ok) {
+          cloudSize = usageData.usage.totalBytes || 0;
+          cloudTier = usageData.usage.tier || 'free';
+          cloudLimit = usageData.usage.limitBytes || cloudLimit;
+        }
+      }
+    } catch { /* cloud service unavailable */ }
+
     return {
       local: localSize,
-      cloud: 0, // Would come from API
+      cloud: cloudSize,
+      cloudTier,
+      cloudLimit,
       bundleCount: manifest.bundles.length
     };
   } catch { return { local: 0, cloud: 0, bundleCount: 0 }; }
