@@ -1,0 +1,30 @@
+[Unit]
+Description=Windy Pro Account Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.windy-pro/services/account-server
+ExecStart=/usr/bin/node %h/.windy-pro/services/account-server/server.js
+Restart=on-failure
+RestartSec=5
+Environment=PORT=8098
+Environment=NODE_ENV=production
+Environment=DATABASE_PATH=%h/.windy-pro/data/accounts.db
+Environment=MEDIA_PATH=%h/.windy-pro/data/media
+EnvironmentFile=-%h/.windy-pro/services/account-server/.env
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=windy-account-server
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=%h/.windy-pro
+
+[Install]
+WantedBy=default.target

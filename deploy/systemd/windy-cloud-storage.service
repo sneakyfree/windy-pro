@@ -1,0 +1,28 @@
+[Unit]
+Description=Windy Pro Cloud Storage Service (R2)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.windy-pro/services/cloud-storage
+ExecStart=/usr/bin/node %h/.windy-pro/services/cloud-storage/server.js
+Restart=on-failure
+RestartSec=5
+Environment=PORT=8099
+Environment=NODE_ENV=production
+EnvironmentFile=-%h/.windy-pro/services/cloud-storage/.env
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=windy-cloud-storage
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=%h/.windy-pro
+
+[Install]
+WantedBy=default.target
