@@ -47,7 +47,14 @@ def certify_ct2(model_dir: Path) -> tuple:
     try:
         from faster_whisper import WhisperModel
         model = WhisperModel(str(model_dir), device="cpu", compute_type="int8")
-        segments, info = model.transcribe(TEST_AUDIO)
+        # Try auto language detection first; fall back to explicit lang from dir name
+        try:
+            segments, info = model.transcribe(TEST_AUDIO)
+        except (IndexError, Exception):
+            # Extract language code from dir name (e.g. windy-lingua-no-ct2 → "no")
+            parts = model_dir.name.replace("-ct2", "").split("-")
+            lang_code = parts[-1] if parts else None
+            segments, info = model.transcribe(TEST_AUDIO, language=lang_code)
         text = " ".join([s.text.strip() for s in segments])
         del model
         if len(text.strip()) > 5:
