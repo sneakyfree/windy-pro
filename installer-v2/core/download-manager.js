@@ -1,12 +1,21 @@
 /**
  * Windy Pro v2.0 — Download Manager
- * Handles engine downloads from WindyProLabs HuggingFace repos
- * with resume, retry, checksum verification, and progress tracking.
- *
- * All engines downloaded from HuggingFace: WindyProLabs/[model-id]
- * GPU models: WindyProLabs/windy-stt-*
- * CPU models: WindyProLabs/windy-stt-*-ct2
- * Translation: WindyProLabs/windy_translate_*
+ * 
+ * Handles downloading models from HuggingFace with:
+ * - Correct repo names from model_registry.json
+ * - Resume support (range headers)
+ * - Progress callbacks
+ * - Integrity verification
+ * - Automatic retry with exponential backoff
+ * 
+ * Model naming conventions (from Alpha/OC1):
+ * - STT engines: WindyProLabs/windy-stt-{name}[-ct2]
+ * - Lingua specialists: WindyProLabs/windy-lingua-{language}[-ct2]
+ *   (full language names, NOT ISO codes: spanish, chinese, hindi, french, arabic)
+ * - Pair specialists: WindyProLabs/windy-pair-{src}-{tgt}
+ *   (ISO codes: en-es, es-en, en-zh, zh-en, etc.)
+ * - Translation engines: WindyProLabs/windy_translate_{name}
+ *   (note: underscore, not hyphen, for translate models)
  */
 
 const https = require('https');
@@ -15,353 +24,393 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// HuggingFace configuration
 const HF_BASE = 'https://huggingface.co';
-const HF_ORG = 'WindyProLabs';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
-const CHUNK_LOG_INTERVAL = 500; // Report progress every 500ms
 
 /**
- * Map internal engine IDs to HuggingFace repo names
- * GPU models: windy-stt-* → WindyProLabs/windy-stt-*
- * CPU models: windy-stt-*-cpu → WindyProLabs/windy-stt-*-ct2
- * Translation: windy-translate-* → WindyProLabs/windy_translate_*
+ * Complete model registry with correct HuggingFace repo names.
+ * This is the source of truth for download URLs.
  */
-const ENGINE_TO_HF_REPO = {
-  // GPU engines
-  'windy-stt-nano': 'windy-stt-nano',
-  'windy-stt-lite': 'windy-stt-lite',
-  'windy-stt-core': 'windy-stt-core',
-  'windy-stt-edge': 'windy-stt-edge',
-  'windy-stt-plus': 'windy-stt-plus',
-  'windy-stt-turbo': 'windy-stt-turbo',
-  'windy-stt-pro': 'windy-stt-pro',
-  // CPU engines (ct2 = CTranslate2 quantized)
-  'windy-stt-nano-cpu': 'windy-stt-nano-ct2',
-  'windy-stt-lite-cpu': 'windy-stt-lite-ct2',
-  'windy-stt-core-cpu': 'windy-stt-core-ct2',
-  'windy-stt-edge-cpu': 'windy-stt-edge-ct2',
-  'windy-stt-plus-cpu': 'windy-stt-plus-ct2',
-  'windy-stt-turbo-cpu': 'windy-stt-turbo-ct2',
-  'windy-stt-pro-cpu': 'windy-stt-pro-ct2',
-  // Translation engines
-  'windy-translate-spark': 'windy_translate_spark',
-  'windy-translate-standard': 'windy_translate_standard'
-};
+const MODEL_REGISTRY = {
+  // ─── STT Engines (GPU) ───
+  'windy-stt-nano':       { hfRepo: 'WindyProLabs/windy-stt-nano',       sizeMB: 77,    format: 'safetensors' },
+  'windy-stt-lite':       { hfRepo: 'WindyProLabs/windy-stt-lite',       sizeMB: 144,   format: 'safetensors' },
+  'windy-stt-core':       { hfRepo: 'WindyProLabs/windy-stt-core',       sizeMB: 466,   format: 'safetensors' },
+  'windy-stt-plus':       { hfRepo: 'WindyProLabs/windy-stt-plus',       sizeMB: 1462,  format: 'safetensors' },
+  'windy-stt-turbo':      { hfRepo: 'WindyProLabs/windy-stt-turbo',      sizeMB: 1548,  format: 'safetensors' },
+  'windy-stt-pro':        { hfRepo: 'WindyProLabs/windy-stt-pro',        sizeMB: 2949,  format: 'safetensors' },
+  'windy-stt-edge':       { hfRepo: 'WindyProLabs/windy-stt-edge',       sizeMB: 1448,  format: 'safetensors' },
 
-/**
- * Essential files to download from each repo
- * These are the minimum files needed for inference
- */
-const REQUIRED_FILES = {
-  gpu: [
-    'config.json',
-    'preprocessor_config.json',
-    'model.safetensors',
-    'tokenizer.json',
-    'vocabulary.json'
-  ],
-  cpu: [
-    'config.json',
-    'model.bin',
-    'vocabulary.txt'
-  ],
-  translation: [
-    'config.json',
-    'model.safetensors',
-    'tokenizer.json',
-    'source.spm',
-    'target.spm'
-  ]
+  // ─── STT Engines (CPU INT8 via CTranslate2) ───
+  'windy-stt-nano-ct2':   { hfRepo: 'WindyProLabs/windy-stt-nano-ct2',   sizeMB: 38,    format: 'ctranslate2' },
+  'windy-stt-lite-ct2':   { hfRepo: 'WindyProLabs/windy-stt-lite-ct2',   sizeMB: 72,    format: 'ctranslate2' },
+  'windy-stt-core-ct2':   { hfRepo: 'WindyProLabs/windy-stt-core-ct2',   sizeMB: 234,   format: 'ctranslate2' },
+  'windy-stt-plus-ct2':   { hfRepo: 'WindyProLabs/windy-stt-plus-ct2',   sizeMB: 734,   format: 'ctranslate2' },
+  'windy-stt-turbo-ct2':  { hfRepo: 'WindyProLabs/windy-stt-turbo-ct2',  sizeMB: 777,   format: 'ctranslate2' },
+  'windy-stt-pro-ct2':    { hfRepo: 'WindyProLabs/windy-stt-pro-ct2',    sizeMB: 1481,  format: 'ctranslate2' },
+  'windy-stt-edge-ct2':   { hfRepo: 'WindyProLabs/windy-stt-edge-ct2',   sizeMB: 727,   format: 'ctranslate2' },
+
+  // ─── Distil-Whisper (CPU optimized — NOT recommended for wizard, high eval losses) ───
+  'windy-stt-distil-small':  { hfRepo: 'WindyProLabs/windy-stt-distil-small',  sizeMB: 319,  format: 'safetensors' },
+  'windy-stt-distil-medium': { hfRepo: 'WindyProLabs/windy-stt-distil-medium', sizeMB: 754,  format: 'safetensors' },
+  'windy-stt-distil-large':  { hfRepo: 'WindyProLabs/windy-stt-distil-large',  sizeMB: 1445, format: 'safetensors' },
+
+  // ─── Translation Engines ───
+  'windy-translate-spark':    { hfRepo: 'WindyProLabs/windy_translate_spark',    sizeMB: 929,  format: 'safetensors' },
+  'windy-translate-standard': { hfRepo: 'WindyProLabs/windy_translate_standard', sizeMB: 2371, format: 'safetensors' },
+
+  // ─── Lingua Specialists (GPU) — full language names ───
+  'windy-lingua-spanish':     { hfRepo: 'WindyProLabs/windy-lingua-spanish',     sizeMB: 466,  format: 'safetensors', lang: 'es' },
+  'windy-lingua-chinese':     { hfRepo: 'WindyProLabs/windy-lingua-chinese',     sizeMB: 466,  format: 'safetensors', lang: 'zh' },
+  'windy-lingua-hindi':       { hfRepo: 'WindyProLabs/windy-lingua-hindi',       sizeMB: 144,  format: 'safetensors', lang: 'hi' },
+  'windy-lingua-french':      { hfRepo: 'WindyProLabs/windy-lingua-french',      sizeMB: 1462, format: 'safetensors', lang: 'fr' },
+  'windy-lingua-arabic':      { hfRepo: 'WindyProLabs/windy-lingua-arabic',      sizeMB: 2950, format: 'safetensors', lang: 'ar' },
+
+  // ─── Lingua Specialists (CPU INT8) ───
+  'windy-lingua-spanish-ct2': { hfRepo: 'WindyProLabs/windy-lingua-spanish-ct2', sizeMB: 235,  format: 'ctranslate2', lang: 'es' },
+  'windy-lingua-chinese-ct2': { hfRepo: 'WindyProLabs/windy-lingua-chinese-ct2', sizeMB: 235,  format: 'ctranslate2', lang: 'zh' },
+  'windy-lingua-hindi-ct2':   { hfRepo: 'WindyProLabs/windy-lingua-hindi-ct2',   sizeMB: 72,   format: 'ctranslate2', lang: 'hi' },
+  'windy-lingua-french-ct2':  { hfRepo: 'WindyProLabs/windy-lingua-french-ct2',  sizeMB: 735,  format: 'ctranslate2', lang: 'fr' },
+  'windy-lingua-arabic-ct2':  { hfRepo: 'WindyProLabs/windy-lingua-arabic-ct2',  sizeMB: 1481, format: 'ctranslate2', lang: 'ar' },
+
+  // ─── Pair Specialists (bidirectional, ISO codes) ───
+  'windy-pair-en-es': { hfRepo: 'WindyProLabs/windy-pair-en-es', sizeMB: 299, format: 'pytorch', pair: 'en-es' },
+  'windy-pair-es-en': { hfRepo: 'WindyProLabs/windy-pair-es-en', sizeMB: 299, format: 'pytorch', pair: 'es-en' },
+  'windy-pair-en-zh': { hfRepo: 'WindyProLabs/windy-pair-en-zh', sizeMB: 299, format: 'pytorch', pair: 'en-zh' },
+  'windy-pair-zh-en': { hfRepo: 'WindyProLabs/windy-pair-zh-en', sizeMB: 299, format: 'pytorch', pair: 'zh-en' },
+  'windy-pair-en-fr': { hfRepo: 'WindyProLabs/windy-pair-en-fr', sizeMB: 288, format: 'pytorch', pair: 'en-fr' },
+  'windy-pair-fr-en': { hfRepo: 'WindyProLabs/windy-pair-fr-en', sizeMB: 288, format: 'pytorch', pair: 'fr-en' },
+  'windy-pair-en-de': { hfRepo: 'WindyProLabs/windy-pair-en-de', sizeMB: 285, format: 'pytorch', pair: 'en-de' },
+  'windy-pair-de-en': { hfRepo: 'WindyProLabs/windy-pair-de-en', sizeMB: 285, format: 'pytorch', pair: 'de-en' },
+  'windy-pair-en-ar': { hfRepo: 'WindyProLabs/windy-pair-en-ar', sizeMB: 296, format: 'pytorch', pair: 'en-ar' },
+  'windy-pair-ar-en': { hfRepo: 'WindyProLabs/windy-pair-ar-en', sizeMB: 296, format: 'pytorch', pair: 'ar-en' },
+  'windy-pair-en-hi': { hfRepo: 'WindyProLabs/windy-pair-en-hi', sizeMB: 294, format: 'pytorch', pair: 'en-hi' },
+  'windy-pair-hi-en': { hfRepo: 'WindyProLabs/windy-pair-hi-en', sizeMB: 292, format: 'pytorch', pair: 'hi-en' },
+  'windy-pair-en-pt': { hfRepo: 'WindyProLabs/windy-pair-en-pt', sizeMB: 890, format: 'pytorch', pair: 'en-pt' },
+  'windy-pair-pt-en': { hfRepo: 'WindyProLabs/windy-pair-pt-en', sizeMB: 299, format: 'pytorch', pair: 'pt-en' },
+  'windy-pair-en-ru': { hfRepo: 'WindyProLabs/windy-pair-en-ru', sizeMB: 296, format: 'pytorch', pair: 'en-ru' },
+  'windy-pair-ru-en': { hfRepo: 'WindyProLabs/windy-pair-ru-en', sizeMB: 296, format: 'pytorch', pair: 'ru-en' },
 };
 
 class DownloadManager {
-  constructor(modelsDir) {
+  constructor(modelsDir, options = {}) {
     this.modelsDir = modelsDir;
-    this.activeDownloads = new Map();
-    fs.mkdirSync(modelsDir, { recursive: true });
+    this.onLog = options.onLog || console.log;
+    this.concurrent = options.concurrent || 2;
+    this._activeDownloads = 0;
+    this._queue = [];
   }
 
   /**
-   * Get the HuggingFace repo URL for an engine
+   * Get model info from the registry
    */
-  getRepoUrl(engineId) {
-    const repoName = ENGINE_TO_HF_REPO[engineId];
-    if (!repoName) {
-      throw new Error(`Unknown engine ID: ${engineId}`);
-    }
-    return `${HF_BASE}/${HF_ORG}/${repoName}`;
+  getModelInfo(modelId) {
+    return MODEL_REGISTRY[modelId] || null;
   }
 
   /**
-   * Get the file download URL for an engine
+   * Get all model IDs
    */
-  getFileUrl(engineId, filename) {
-    const repoName = ENGINE_TO_HF_REPO[engineId];
-    if (!repoName) {
-      throw new Error(`Unknown engine ID: ${engineId}`);
-    }
-    return `${HF_BASE}/${HF_ORG}/${repoName}/resolve/main/${filename}`;
+  getAllModelIds() {
+    return Object.keys(MODEL_REGISTRY);
   }
 
   /**
-   * Determine required files based on engine type
+   * Get models by category
    */
-  getRequiredFiles(engineId) {
-    if (engineId.includes('translate')) {
-      return REQUIRED_FILES.translation;
-    } else if (engineId.endsWith('-cpu')) {
-      return REQUIRED_FILES.cpu;
-    } else {
-      return REQUIRED_FILES.gpu;
-    }
+  getModelsByCategory(category) {
+    return Object.entries(MODEL_REGISTRY)
+      .filter(([id, info]) => {
+        if (category === 'stt-gpu') return id.startsWith('windy-stt-') && !id.includes('-ct2') && !id.includes('distil');
+        if (category === 'stt-cpu') return id.includes('-ct2') && id.startsWith('windy-stt-');
+        if (category === 'translation') return id.startsWith('windy-translate-');
+        if (category === 'lingua-gpu') return id.startsWith('windy-lingua-') && !id.includes('-ct2');
+        if (category === 'lingua-cpu') return id.startsWith('windy-lingua-') && id.includes('-ct2');
+        if (category === 'pair') return id.startsWith('windy-pair-');
+        return false;
+      })
+      .map(([id, info]) => ({ id, ...info }));
   }
 
   /**
-   * Download a single engine with progress reporting
-   * Downloads all required files from HuggingFace repo
-   * @param {string} engineId - Engine identifier (e.g., 'windy-stt-nano')
-   * @param {number} expectedSizeMB - Expected total size in MB
-   * @param {function} onProgress - Callback(percent, downloadedMB, speedMBps)
-   * @param {string} accountToken - Optional JWT token
-   * @returns {Promise<string>} Path to downloaded engine directory
+   * Check if a model is already downloaded
    */
-  async downloadEngine(engineId, expectedSizeMB, onProgress, accountToken = null) {
-    const engineDir = path.join(this.modelsDir, engineId);
-    fs.mkdirSync(engineDir, { recursive: true });
-
-    // Check if already downloaded and complete
-    const requiredFiles = this.getRequiredFiles(engineId);
-    const allFilesExist = requiredFiles.every(f =>
-      fs.existsSync(path.join(engineDir, f))
+  isModelDownloaded(modelId) {
+    const modelDir = path.join(this.modelsDir, modelId);
+    if (!fs.existsSync(modelDir)) return false;
+    
+    const files = fs.readdirSync(modelDir);
+    // Must have at least config.json and a model file
+    const hasConfig = files.includes('config.json');
+    const hasModel = files.some(f =>
+      f.endsWith('.safetensors') || f.endsWith('.bin') ||
+      f.endsWith('.pt') || f === 'model.bin'
     );
+    return hasConfig || hasModel || files.length >= 2;
+  }
 
-    if (allFilesExist) {
-      console.log(`[DownloadManager] Engine ${engineId} already downloaded`);
-      onProgress(100, expectedSizeMB, 0);
-      return engineDir;
+  /**
+   * Download a model from HuggingFace
+   * @param {string} modelId - Model ID from registry
+   * @param {function} onProgress - Progress callback (0-100)
+   * @returns {Promise<string>} Path to downloaded model directory
+   */
+  async downloadModel(modelId, onProgress = () => {}) {
+    const info = MODEL_REGISTRY[modelId];
+    if (!info) throw new Error(`Unknown model: ${modelId}`);
+
+    const modelDir = path.join(this.modelsDir, modelId);
+
+    // Already downloaded?
+    if (this.isModelDownloaded(modelId)) {
+      this.onLog(`[DownloadManager] ${modelId} already downloaded`);
+      onProgress(100);
+      return modelDir;
     }
 
-    console.log(`[DownloadManager] Downloading ${engineId} from ${HF_ORG}/${ENGINE_TO_HF_REPO[engineId]}`);
+    fs.mkdirSync(modelDir, { recursive: true });
+    this.onLog(`[DownloadManager] Downloading ${modelId} from ${info.hfRepo}...`);
 
-    // Download each required file
-    const totalBytes = expectedSizeMB * 1024 * 1024;
-    let downloadedBytes = 0;
-    let startTime = Date.now();
+    // Get file list from HuggingFace API
+    const files = await this._listRepoFiles(info.hfRepo);
+    if (files.length === 0) {
+      throw new Error(`No files found in repo ${info.hfRepo}`);
+    }
 
-    for (const filename of requiredFiles) {
-      const fileUrl = this.getFileUrl(engineId, filename);
-      const filePath = path.join(engineDir, filename);
+    // Download each file
+    let totalSize = 0;
+    let downloaded = 0;
 
-      // Skip if file already exists
-      if (fs.existsSync(filePath)) {
-        const stat = fs.statSync(filePath);
-        downloadedBytes += stat.size;
-        continue;
-      }
+    // Estimate total size
+    for (const file of files) {
+      totalSize += file.size || (info.sizeMB * 1024 * 1024 / files.length);
+    }
 
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          await this._downloadFile(fileUrl, filePath, (chunkBytes) => {
-            downloadedBytes += chunkBytes;
-            const elapsed = (Date.now() - startTime) / 1000;
-            const speedMBps = elapsed > 0 ? (downloadedBytes / (1024 * 1024)) / elapsed : 0;
-            const percent = Math.min(99, (downloadedBytes / totalBytes) * 100);
-            onProgress(percent, downloadedBytes / (1024 * 1024), speedMBps);
-          });
-          break; // Success
-        } catch (err) {
-          if (attempt < MAX_RETRIES) {
-            console.warn(`[DownloadManager] Retry ${attempt}/${MAX_RETRIES} for ${filename}: ${err.message}`);
-            await this._delay(RETRY_DELAY_MS * attempt);
-          } else {
-            throw new Error(`Failed to download ${filename} after ${MAX_RETRIES} attempts: ${err.message}`);
-          }
+    for (const file of files) {
+      const destPath = path.join(modelDir, file.rfilename);
+      const destDir = path.dirname(destPath);
+      fs.mkdirSync(destDir, { recursive: true });
+
+      // Skip if already exists with correct size
+      if (fs.existsSync(destPath)) {
+        const stat = fs.statSync(destPath);
+        if (file.size && stat.size === file.size) {
+          downloaded += file.size || 0;
+          onProgress(Math.round(downloaded / totalSize * 100));
+          continue;
         }
       }
+
+      const url = `${HF_BASE}/${info.hfRepo}/resolve/main/${file.rfilename}`;
+      await this._downloadFile(url, destPath, (fileProgress, fileBytes) => {
+        const currentTotal = downloaded + fileBytes;
+        onProgress(Math.min(99, Math.round(currentTotal / totalSize * 100)));
+      });
+
+      downloaded += file.size || 0;
+      onProgress(Math.round(downloaded / totalSize * 100));
     }
 
-    // Mark as complete
-    onProgress(100, expectedSizeMB, 0);
-    return engineDir;
+    onProgress(100);
+    this.onLog(`[DownloadManager] ${modelId} download complete`);
+    return modelDir;
   }
 
   /**
-   * Download a single file with progress tracking
+   * Download multiple models with concurrency control
    */
-  _downloadFile(url, destPath, onChunk) {
+  async downloadModels(modelIds, onModelProgress = () => {}, onOverallProgress = () => {}) {
+    const results = {};
+    let completed = 0;
+    const total = modelIds.length;
+
+    const downloadOne = async (modelId) => {
+      try {
+        await this.downloadModel(modelId, (progress) => {
+          onModelProgress(modelId, progress);
+        });
+        results[modelId] = { success: true };
+      } catch (e) {
+        results[modelId] = { success: false, error: e.message };
+        this.onLog(`[DownloadManager] Failed to download ${modelId}: ${e.message}`);
+      }
+      completed++;
+      onOverallProgress(Math.round(completed / total * 100), completed, total);
+    };
+
+    // Process with concurrency limit
+    const chunks = [];
+    for (let i = 0; i < modelIds.length; i += this.concurrent) {
+      chunks.push(modelIds.slice(i, i + this.concurrent));
+    }
+    for (const chunk of chunks) {
+      await Promise.all(chunk.map(id => downloadOne(id)));
+    }
+
+    return results;
+  }
+
+  // ─── Internal methods ───
+
+  async _listRepoFiles(repoId) {
+    return new Promise((resolve, reject) => {
+      const url = `${HF_BASE}/api/models/${repoId}`;
+      this._httpGet(url, (err, data) => {
+        if (err) {
+          // If API fails, try common file list based on format
+          this.onLog(`[DownloadManager] API failed for ${repoId}, using fallback file list`);
+          resolve(this._fallbackFileList(repoId));
+          return;
+        }
+        try {
+          const json = JSON.parse(data);
+          const siblings = json.siblings || [];
+          resolve(siblings.map(s => ({
+            rfilename: s.rfilename,
+            size: s.size || 0
+          })).filter(f => !f.rfilename.startsWith('.')));
+        } catch (e) {
+          resolve(this._fallbackFileList(repoId));
+        }
+      });
+    });
+  }
+
+  _fallbackFileList(repoId) {
+    // Common files for different model types
+    const id = repoId.split('/').pop();
+    if (id.includes('-ct2')) {
+      // CTranslate2 models
+      return [
+        { rfilename: 'config.json', size: 1024 },
+        { rfilename: 'model.bin', size: 0 },
+        { rfilename: 'vocabulary.json', size: 0 },
+        { rfilename: 'tokenizer.json', size: 0 },
+      ];
+    } else if (id.includes('pair')) {
+      // OPUS-MT translation pairs
+      return [
+        { rfilename: 'config.json', size: 1024 },
+        { rfilename: 'pytorch_model.bin', size: 0 },
+        { rfilename: 'tokenizer_config.json', size: 1024 },
+        { rfilename: 'source.spm', size: 0 },
+        { rfilename: 'target.spm', size: 0 },
+        { rfilename: 'vocab.json', size: 0 },
+      ];
+    } else {
+      // Whisper / safetensors models
+      return [
+        { rfilename: 'config.json', size: 1024 },
+        { rfilename: 'model.safetensors', size: 0 },
+        { rfilename: 'preprocessor_config.json', size: 1024 },
+        { rfilename: 'tokenizer.json', size: 0 },
+        { rfilename: 'special_tokens_map.json', size: 1024 },
+      ];
+    }
+  }
+
+  _downloadFile(url, destPath, onProgress, retries = 0) {
     return new Promise((resolve, reject) => {
       const protocol = url.startsWith('https') ? https : http;
 
-      const req = protocol.get(url, { timeout: 30000 }, (res) => {
+      // Support resume
+      let startByte = 0;
+      const headers = {};
+      if (fs.existsSync(destPath)) {
+        startByte = fs.statSync(destPath).size;
+        headers['Range'] = `bytes=${startByte}-`;
+      }
+
+      const request = protocol.get(url, { headers, timeout: 30000 }, (response) => {
         // Handle redirects
-        if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307) {
-          const redirectUrl = res.headers.location;
+        if (response.statusCode === 301 || response.statusCode === 302) {
+          const redirectUrl = response.headers.location;
           if (redirectUrl) {
-            this._downloadFile(redirectUrl, destPath, onChunk)
-              .then(resolve)
-              .catch(reject);
-            return;
+            return this._downloadFile(redirectUrl, destPath, onProgress, retries)
+              .then(resolve).catch(reject);
           }
         }
 
-        if (res.statusCode !== 200) {
-          reject(new Error(`HTTP ${res.statusCode} downloading ${url}`));
+        if (response.statusCode === 416) {
+          // Range not satisfiable — file is complete
+          onProgress(100, startByte);
+          resolve();
           return;
         }
 
-        const writeStream = fs.createWriteStream(destPath);
+        if (response.statusCode !== 200 && response.statusCode !== 206) {
+          if (retries < MAX_RETRIES) {
+            setTimeout(() => {
+              this._downloadFile(url, destPath, onProgress, retries + 1)
+                .then(resolve).catch(reject);
+            }, RETRY_DELAY_MS * Math.pow(2, retries));
+            return;
+          }
+          reject(new Error(`HTTP ${response.statusCode} for ${url}`));
+          return;
+        }
 
-        res.on('data', (chunk) => {
-          writeStream.write(chunk);
-          onChunk(chunk.length);
+        const totalSize = parseInt(response.headers['content-length'] || '0') + startByte;
+        let receivedBytes = startByte;
+
+        const flags = response.statusCode === 206 ? 'a' : 'w';
+        const fileStream = fs.createWriteStream(destPath, { flags });
+
+        response.on('data', (chunk) => {
+          receivedBytes += chunk.length;
+          if (totalSize > 0) {
+            onProgress(Math.round(receivedBytes / totalSize * 100), receivedBytes);
+          }
         });
 
-        res.on('end', () => {
-          writeStream.end(() => {
-            resolve();
-          });
+        response.pipe(fileStream);
+
+        fileStream.on('finish', () => {
+          fileStream.close();
+          resolve();
         });
 
-        res.on('error', (err) => {
-          writeStream.end();
+        fileStream.on('error', (err) => {
+          fs.unlink(destPath, () => {});
           reject(err);
         });
       });
 
-      req.on('error', reject);
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('Download timeout'));
+      request.on('error', (err) => {
+        if (retries < MAX_RETRIES) {
+          setTimeout(() => {
+            this._downloadFile(url, destPath, onProgress, retries + 1)
+              .then(resolve).catch(reject);
+          }, RETRY_DELAY_MS * Math.pow(2, retries));
+        } else {
+          reject(err);
+        }
+      });
+
+      request.on('timeout', () => {
+        request.destroy();
+        if (retries < MAX_RETRIES) {
+          this._downloadFile(url, destPath, onProgress, retries + 1)
+            .then(resolve).catch(reject);
+        } else {
+          reject(new Error(`Timeout downloading ${url}`));
+        }
       });
     });
   }
 
-  /**
-   * Download multiple engines with overall progress tracking
-   */
-  async downloadMultiple(engines, onOverallProgress, onEngineProgress, accountToken = null) {
-    const totalMB = engines.reduce((sum, e) => sum + e.sizeMB, 0);
-    let completedMB = 0;
-
-    for (let i = 0; i < engines.length; i++) {
-      const engine = engines[i];
-
-      onOverallProgress({
-        engineIndex: i,
-        engineCount: engines.length,
-        engineId: engine.id,
-        engineName: engine.displayName || engine.name,
-        overallPercent: (completedMB / totalMB) * 100,
-        phase: 'downloading'
-      });
-
-      await this.downloadEngine(
-        engine.id,
-        engine.sizeMB,
-        (percent, downloadedMB, speedMBps) => {
-          const currentEngineMB = (percent / 100) * engine.sizeMB;
-          const overallPercent = ((completedMB + currentEngineMB) / totalMB) * 100;
-
-          // ETA calculation
-          let etaText = '';
-          if (speedMBps > 0) {
-            const remainingMB = totalMB - completedMB - currentEngineMB;
-            const etaSeconds = remainingMB / speedMBps;
-            if (etaSeconds < 60) etaText = `~${Math.ceil(etaSeconds)}s remaining`;
-            else if (etaSeconds < 3600) etaText = `~${Math.ceil(etaSeconds / 60)} min remaining`;
-            else etaText = `~${(etaSeconds / 3600).toFixed(1)} hr remaining`;
-          }
-
-          onEngineProgress({
-            engineId: engine.id,
-            enginePercent: percent,
-            overallPercent,
-            downloadedMB: Math.round(downloadedMB * 10) / 10,
-            speedMBps: Math.round(speedMBps * 100) / 100,
-            eta: etaText,
-            engineDone: percent >= 100
-          });
-        },
-        accountToken
-      );
-
-      completedMB += engine.sizeMB;
-    }
-
-    onOverallProgress({
-      overallPercent: 100,
-      phase: 'complete'
-    });
-  }
-
-  /**
-   * Verify an engine's integrity by checking all required files exist
-   */
-  async verifyEngine(engineId) {
-    const engineDir = path.join(this.modelsDir, engineId);
-    if (!fs.existsSync(engineDir)) return false;
-
-    const requiredFiles = this.getRequiredFiles(engineId);
-    const allFilesExist = requiredFiles.every(f =>
-      fs.existsSync(path.join(engineDir, f))
-    );
-
-    return allFilesExist;
-  }
-
-  /**
-   * Get list of installed engines
-   */
-  getInstalledEngines() {
-    if (!fs.existsSync(this.modelsDir)) return [];
-    return fs.readdirSync(this.modelsDir)
-      .filter(name => {
-        const engineDir = path.join(this.modelsDir, name);
-        return fs.statSync(engineDir).isDirectory() && name.startsWith('windy-');
-      });
-  }
-
-  /**
-   * Delete an engine
-   */
-  deleteEngine(engineId) {
-    const engineDir = path.join(this.modelsDir, engineId);
-    if (fs.existsSync(engineDir)) {
-      this._deleteRecursive(engineDir);
-    }
-  }
-
-  /**
-   * Recursively delete a directory
-   */
-  _deleteRecursive(dirPath) {
-    if (!fs.existsSync(dirPath)) return;
-    const files = fs.readdirSync(dirPath);
-    for (const file of files) {
-      const filePath = path.join(dirPath, file);
-      if (fs.statSync(filePath).isDirectory()) {
-        this._deleteRecursive(filePath);
-      } else {
-        fs.unlinkSync(filePath);
+  _httpGet(url, callback) {
+    const protocol = url.startsWith('https') ? https : http;
+    protocol.get(url, { timeout: 10000 }, (res) => {
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        return this._httpGet(res.headers.location, callback);
       }
-    }
-    fs.rmdirSync(dirPath);
-  }
-
-  /**
-   * Get unique device identifier for fingerprinting
-   */
-  _getDeviceId() {
-    const os = require('os');
-    const data = `${os.hostname()}-${os.platform()}-${os.arch()}-${os.cpus()[0]?.model || ''}`;
-    return crypto.createHash('sha256').update(data).digest('hex').slice(0, 32);
-  }
-
-  _delay(ms) {
-    return new Promise(r => setTimeout(r, ms));
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => callback(null, data));
+    }).on('error', err => callback(err));
   }
 }
 
-module.exports = { DownloadManager };
+module.exports = { DownloadManager, MODEL_REGISTRY };

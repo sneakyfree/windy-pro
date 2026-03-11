@@ -1,214 +1,261 @@
 /**
- * Windy Pro v2.0 — macOS Platform Adapter
- * Handles Apple Silicon (Metal GPU) and Intel Macs.
- * Uses whisper.cpp with Metal acceleration for Apple Silicon.
+ * Windy Pro v2.0 — macOS Adapter (Rewritten)
  * 
- * Key differences from Linux:
- * - Metal GPU instead of CUDA
- * - Homebrew for package management
- * - macOS-specific permissions (Mic, Accessibility)
- * - Code signing / Gatekeeper
- * - Apple Silicon vs Intel detection
+ * Strategy: Bundled first, Homebrew second, NEVER "please install manually"
+ * 
+ * Grant's Rule: "Can you imagine grandma getting told to download
+ * an obscure version of Python?"
  */
 
-const { exec, execSync } = require('child_process');
+const { execSync, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { BundledAssets } = require('../core/bundled-assets');
 
 const APP_DIR = path.join(os.homedir(), '.windy-pro');
-const VENV_DIR = path.join(APP_DIR, 'venv');
-const MODELS_DIR = path.join(APP_DIR, 'models');
-const BIN_DIR = path.join(APP_DIR, 'bin');
 
 class MacOSAdapter {
   constructor() {
-    this.isAppleSilicon = process.arch === 'arm64';
+    this.bundled = new BundledAssets();
+    this.log = console.log;
   }
 
   /**
-   * Install Python via Homebrew or Xcode command line tools
+   * Install Python — bundled first, then system, then brew
    */
-  async installPython(onProgress) {
-    onProgress(0);
-    fs.mkdirSync(APP_DIR, { recursive: true });
-    fs.mkdirSync(MODELS_DIR, { recursive: true });
-    fs.mkdirSync(BIN_DIR, { recursive: true });
+  async installPython(progressCallback) {
+    progressCallback = progressCallback || (() => {});
 
-    const pythonBin = await this._findOrInstallPython();
-    onProgress(30);
-
-    // Create venv
-    if (!fs.existsSync(path.join(VENV_DIR, 'bin', 'python3'))) {
-      await this._exec(`"${pythonBin}" -m venv "${VENV_DIR}"`, 120000);
-    }
-    onProgress(50);
-
-    const pip = path.join(VENV_DIR, 'bin', 'pip');
-    await this._exec(`"${pip}" install --upgrade pip setuptools wheel`, 120000);
-    onProgress(60);
-
-    // Install packages — MLX for Apple Silicon, standard for Intel
-    const packages = [
-      'faster-whisper',
-      'numpy',
-      'websockets',
-      'sounddevice',
-      'scipy',
-      'pydub'
-    ];
-
-    if (this.isAppleSilicon) {
-      // Apple Silicon: use MLX-optimized torch
-      packages.push('torch', 'torchaudio');
-      // TODO: Add mlx-whisper when ready for Metal-accelerated inference
-    } else {
-      packages.push('torch', 'torchaudio');
+    // Strategy 1: Bundled Python
+    progressCallback(10);
+    const bundledPy = await this.bundled.installPython(APP_DIR, this.log);
+    if (bundledPy) {
+      progressCallback(100);
+      return bundledPy;
     }
 
-    for (let i = 0; i < packages.length; i++) {
-      try {
-        await this._exec(`"${pip}" install ${packages[i]}`, 600000);
-      } catch (e) {
-        console.error(`Failed to install ${packages[i]}: ${e.message}`);
+    // Strategy 2: Check system Python (Apple ships Python 3 with Xcode CLI tools)
+    progressCallback(30);
+    const systemPy = this._findSystemPython();
+    if (systemPy) {
+      progressCallback(100);
+      return systemPy;
+    }
+
+    // Strategy 3: Xcode Command Line Tools (lightweight, includes Python 3)
+    progressCallback(40);
+    try {
+      execSync('xcode-select --install 2>/dev/null || true', { timeout: 5000, stdio: 'pipe' });
+      // Wait for install dialog — user must click Install
+      // After 60 seconds check if python3 appeared
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      const py = this._findSystemPython();
+      if (py) {
+        progressCallback(100);
+        return py;
       }
-      onProgress(60 + ((i + 1) / packages.length) * 40);
+    } catch (e) { /* move on */ }
+
+    // Strategy 4: Homebrew
+    progressCallback(50);
+    await this._ensureHomebrew();
+    progressCallback(70);
+    try {
+      execSync('brew install python@3.11 2>/dev/null || brew install python3', {
+        timeout: 300000, stdio: 'pipe'
+      });
+    } catch (e) { /* try to proceed anyway */ }
+
+    progressCallback(90);
+    const finalPy = this._findSystemPython();
+    if (finalPy) {
+      progressCallback(100);
+      return finalPy;
     }
 
-    onProgress(100);
-  }
-
-  async _findOrInstallPython() {
-    const candidates = ['python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3'];
-
-    for (const cmd of candidates) {
+    // Strategy 5: Download standalone Python.org framework build
+    this.log('[macOS] Downloading Python from python.org as last resort...');
+    const arch = process.arch === 'arm64' ? 'macos11' : 'macos10.9';
+    const pkgUrl = `https://www.python.org/ftp/python/3.11.9/python-3.11.9-${arch}.pkg`;
+    const pkgPath = path.join(os.tmpdir(), 'python-3.11.9.pkg');
+    try {
+      execSync(`curl -fsSL "${pkgUrl}" -o "${pkgPath}"`, { timeout: 120000, stdio: 'pipe' });
+      // Install silently using installer command (requires admin)
+      execSync(`installer -pkg "${pkgPath}" -target / 2>/dev/null || sudo installer -pkg "${pkgPath}" -target /`, {
+        timeout: 120000, stdio: 'pipe'
+      });
+    } catch (e) {
+      // osascript fallback for admin prompt
       try {
-        const version = execSync(`${cmd} --version 2>&1`, { timeout: 5000 }).toString().trim();
-        const match = version.match(/Python (\d+)\.(\d+)/);
-        if (match && parseInt(match[1]) >= 3 && parseInt(match[2]) >= 9) return cmd;
-      } catch (e) {}
+        execSync(`osascript -e 'do shell script "installer -pkg ${pkgPath} -target /" with administrator privileges'`, {
+          timeout: 120000, stdio: 'pipe'
+        });
+      } catch (e2) { /* fall through */ }
     }
 
-    // Try Homebrew install
-    try {
-      execSync('which brew', { timeout: 3000, stdio: 'pipe' });
-      await this._exec('brew install python@3.11', 300000);
-      return 'python3.11';
-    } catch (e) {}
+    const veryFinalPy = this._findSystemPython();
+    progressCallback(100);
+    if (veryFinalPy) return veryFinalPy;
 
-    // Install Homebrew first, then Python
-    try {
-      await this._exec('/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"', 300000);
-      await this._exec('brew install python@3.11', 300000);
-      return 'python3.11';
-    } catch (e) {}
-
-    // Xcode command line tools (includes Python 3)
-    try {
-      await this._exec('xcode-select --install', 300000);
-      return 'python3';
-    } catch (e) {}
-
-    throw new Error('Could not install Python. Please install Python 3.9+ from python.org or via Homebrew.');
+    throw new Error('Could not install Python on macOS');
   }
 
   /**
-   * Install ffmpeg via Homebrew or bundled binary
+   * Install ffmpeg — bundled first, then brew
    */
-  async installFfmpeg(onProgress) {
-    onProgress(0);
+  async installFfmpeg(progressCallback) {
+    progressCallback = progressCallback || (() => {});
 
+    // Strategy 1: Bundled ffmpeg
+    progressCallback(10);
+    const bundledFfmpeg = await this.bundled.installFfmpeg(APP_DIR, this.log);
+    if (bundledFfmpeg) {
+      progressCallback(100);
+      return bundledFfmpeg;
+    }
+
+    // Strategy 2: System ffmpeg
+    progressCallback(30);
     try {
       execSync('ffmpeg -version', { timeout: 5000, stdio: 'pipe' });
-      onProgress(100);
-      return;
-    } catch (e) {}
+      progressCallback(100);
+      return 'ffmpeg';
+    } catch (e) { /* not found */ }
 
-    // Homebrew
+    // Strategy 3: Homebrew
+    progressCallback(50);
+    await this._ensureHomebrew();
     try {
-      execSync('which brew', { timeout: 3000, stdio: 'pipe' });
-      await this._exec('brew install ffmpeg portaudio', 300000);
-      onProgress(100);
-      return;
-    } catch (e) {}
+      execSync('brew install ffmpeg', { timeout: 300000, stdio: 'pipe' });
+      progressCallback(100);
+      return 'ffmpeg';
+    } catch (e) { /* try static download */ }
 
-    // Download static ffmpeg for macOS
-    const arch = this.isAppleSilicon ? 'arm64' : 'x86_64';
-    console.error(`ffmpeg not found — please install via: brew install ffmpeg`);
-    onProgress(100);
-  }
-
-  /**
-   * macOS doesn't use CUDA — Apple Silicon uses Metal via whisper.cpp
-   */
-  async installCuda(onProgress) {
-    // No-op for macOS. Metal is available natively on Apple Silicon.
-    // whisper.cpp handles Metal acceleration automatically.
-    onProgress(100);
-  }
-
-  /**
-   * Download model (delegates to shared DownloadManager)
-   */
-  async downloadModel(modelId, modelInfo, onProgress) {
-    let progress = 0;
-    return new Promise((resolve) => {
-      const interval = setInterval(() => {
-        progress += Math.random() * 8 + 2;
-        if (progress >= 100) {
-          clearInterval(interval);
-          fs.mkdirSync(MODELS_DIR, { recursive: true });
-          fs.writeFileSync(path.join(MODELS_DIR, `${modelId}.wpr`), `WNDY0001-placeholder-${modelId}`);
-          onProgress(100);
-          resolve();
-        } else {
-          onProgress(progress);
-        }
-      }, 500 + Math.random() * 500);
-    });
-  }
-
-  async verify() {
-    const pythonPath = path.join(VENV_DIR, 'bin', 'python3');
-    if (!fs.existsSync(pythonPath)) throw new Error('Python not found');
+    // Strategy 4: Static binary download
+    progressCallback(70);
+    const binDir = path.join(APP_DIR, 'bin');
+    fs.mkdirSync(binDir, { recursive: true });
+    const ffmpegDest = path.join(binDir, 'ffmpeg');
     try {
-      execSync(`"${pythonPath}" -c "from faster_whisper import WhisperModel; print('OK')"`, { timeout: 30000, stdio: 'pipe' });
+      const url = process.arch === 'arm64'
+        ? 'https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip'
+        : 'https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip';
+      const zipPath = path.join(os.tmpdir(), 'ffmpeg.zip');
+      execSync(`curl -fsSL "${url}" -o "${zipPath}"`, { timeout: 120000, stdio: 'pipe' });
+      execSync(`unzip -o "${zipPath}" -d "${binDir}"`, { timeout: 30000, stdio: 'pipe' });
+      fs.chmodSync(ffmpegDest, 0o755);
+      progressCallback(100);
+      return ffmpegDest;
     } catch (e) {
-      console.error('Verification warning: faster-whisper import failed');
+      throw new Error('Could not install ffmpeg on macOS');
     }
   }
 
   /**
-   * Request macOS-specific permissions
+   * Install CUDA — macOS doesn't have NVIDIA anymore, but check for Apple Metal
+   */
+  async installCuda(progressCallback) {
+    progressCallback = progressCallback || (() => {});
+    // macOS uses Metal/MPS for GPU acceleration (Apple Silicon)
+    progressCallback(50);
+    const isAppleSilicon = process.arch === 'arm64';
+    progressCallback(100);
+    return {
+      success: isAppleSilicon,
+      type: isAppleSilicon ? 'Apple Metal (MPS)' : 'Intel (CPU only)',
+      detail: isAppleSilicon
+        ? 'Apple Silicon detected — PyTorch MPS acceleration available'
+        : 'Intel Mac — will use CPU inference'
+    };
+  }
+
+  /**
+   * Create application shortcuts and launch agents
    */
   async requestPermissions() {
-    // Microphone permission — Electron handles this via systemPreferences
-    // The actual prompt happens when the app first tries to access the mic
-    // We just ensure the entitlements are correct
-
-    // Accessibility permission (for cursor injection via AppleScript)
-    // Can't programmatically grant — but we can check and guide
+    // Create a .desktop-equivalent launcher
     try {
-      const result = execSync(
-        'osascript -e \'tell application "System Events" to return name of first process\'',
-        { timeout: 5000, stdio: 'pipe' }
-      ).toString();
-      // If this works, accessibility is granted
-    } catch (e) {
-      // Accessibility not granted — user needs to do it manually
-      console.log('Accessibility permission needed for cursor injection. Will prompt on first use.');
-    }
+      const appScript = `#!/bin/bash
+cd "${path.join(process.cwd())}"
+electron . &
+`;
+      const scriptPath = path.join(APP_DIR, 'bin', 'windy-pro');
+      fs.writeFileSync(scriptPath, appScript);
+      fs.chmodSync(scriptPath, 0o755);
 
-    // Install xdotool equivalent for macOS — not needed, we use AppleScript
+      // Request microphone access (will prompt user)
+      execSync('osascript -e \'tell application "System Events" to return (name of processes)\'', {
+        timeout: 5000, stdio: 'pipe'
+      });
+    } catch (e) { /* non-fatal */ }
   }
 
-  _exec(cmd, timeout = 60000) {
-    return new Promise((resolve, reject) => {
-      exec(cmd, { timeout, maxBuffer: 10 * 1024 * 1024 }, (error, stdout) => {
-        if (error) reject(error);
-        else resolve(stdout);
-      });
-    });
+  /**
+   * Verify installation
+   */
+  async verify() {
+    const results = {};
+
+    // Check Python
+    const venvPy = path.join(APP_DIR, 'venv', 'bin', 'python3');
+    const bundledPy = path.join(APP_DIR, 'python', 'bin', 'python3');
+    const py = fs.existsSync(venvPy) ? venvPy : fs.existsSync(bundledPy) ? bundledPy : 'python3';
+    try {
+      execSync(`"${py}" -c "import faster_whisper; print('ok')"`, { timeout: 15000, stdio: 'pipe' });
+      results.python = true;
+    } catch (e) {
+      results.python = false;
+    }
+
+    // Check ffmpeg
+    const ffmpegPath = path.join(APP_DIR, 'bin', 'ffmpeg');
+    try {
+      const cmd = fs.existsSync(ffmpegPath) ? `"${ffmpegPath}" -version` : 'ffmpeg -version';
+      execSync(cmd, { timeout: 5000, stdio: 'pipe' });
+      results.ffmpeg = true;
+    } catch (e) {
+      results.ffmpeg = false;
+    }
+
+    return results;
+  }
+
+  // ─── Helpers ───
+
+  _findSystemPython() {
+    const candidates = [
+      '/opt/homebrew/bin/python3',
+      '/usr/local/bin/python3',
+      '/Library/Frameworks/Python.framework/Versions/3.11/bin/python3',
+      '/Library/Frameworks/Python.framework/Versions/3.12/bin/python3',
+      'python3',
+    ];
+    for (const cmd of candidates) {
+      try {
+        const version = execSync(`"${cmd}" --version 2>&1`, { timeout: 5000, stdio: 'pipe' }).toString();
+        if (/Python 3\.(9|1[0-9]|[2-9]\d)/.test(version)) {
+          return cmd;
+        }
+      } catch (e) { /* try next */ }
+    }
+    return null;
+  }
+
+  async _ensureHomebrew() {
+    try {
+      execSync('which brew', { stdio: 'pipe', timeout: 3000 });
+    } catch (e) {
+      this.log('[macOS] Installing Homebrew...');
+      try {
+        execSync(
+          'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
+          { timeout: 300000, stdio: 'pipe' }
+        );
+      } catch (e2) {
+        this.log('[macOS] Homebrew install failed — proceeding without it');
+      }
+    }
   }
 }
 

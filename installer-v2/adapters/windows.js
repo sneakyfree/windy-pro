@@ -16,6 +16,8 @@ const path = require('path');
 const os = require('os');
 const https = require('https');
 
+const { BundledAssets } = require('../core/bundled-assets');
+
 const APP_DIR = path.join(os.homedir(), '.windy-pro');
 const VENV_DIR = path.join(APP_DIR, 'venv');
 const MODELS_DIR = path.join(APP_DIR, 'models');
@@ -23,12 +25,14 @@ const BIN_DIR = path.join(APP_DIR, 'bin');
 const PYTHON_DIR = path.join(APP_DIR, 'python');
 
 // Embedded Python (no installer needed, no system changes)
-const PYTHON_EMBED_URL = 'https://www.python.org/ftp/python/3.11.8/python-3.11.8-embed-amd64.zip';
+const PYTHON_EMBED_URL = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip';
 const GET_PIP_URL = 'https://bootstrap.pypa.io/get-pip.py';
 const FFMPEG_WIN_URL = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip';
 
 class WindowsAdapter {
-  constructor() {}
+  constructor() {
+    this.bundled = new BundledAssets();
+  }
 
   /**
    * Install Python using embedded distribution — ZERO system changes
@@ -39,10 +43,18 @@ class WindowsAdapter {
     fs.mkdirSync(MODELS_DIR, { recursive: true });
     fs.mkdirSync(BIN_DIR, { recursive: true });
 
-    const pythonExe = path.join(PYTHON_DIR, 'python.exe');
+    // Try bundled Python FIRST
+    const bundledPy = await this.bundled.installPython(APP_DIR, console.log);
+    if (bundledPy) {
+      console.log(`[Windows] Using bundled Python: ${bundledPy}`);
+      onProgress(30);
+      // Skip to venv creation
+    }
 
-    // Step 1: Download Python embedded if not present
-    if (!fs.existsSync(pythonExe)) {
+    const pythonExe = bundledPy || path.join(PYTHON_DIR, 'python.exe');
+
+    // Step 1: Download Python embedded if not present and no bundled
+    if (!bundledPy && !fs.existsSync(path.join(PYTHON_DIR, 'python.exe'))) {
       onProgress(5);
       const zipPath = path.join(APP_DIR, 'python-embed.zip');
       await this._downloadFile(PYTHON_EMBED_URL, zipPath);
@@ -107,16 +119,28 @@ class WindowsAdapter {
       onProgress(50 + ((i + 1) / packages.length) * 45);
     }
 
-    // Step 4: Check Visual C++ Redistributable
+    // Step 4: Visual C++ Redistributable — AUTO-INSTALL if missing
     try {
       const regQuery = execSync(
         'reg query "HKLM\\SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64" /v Version 2>NUL',
         { timeout: 5000, stdio: 'pipe' }
       ).toString();
       if (!regQuery.includes('Version')) throw new Error('not found');
+      console.log('Visual C++ Redistributable already installed');
     } catch (e) {
-      console.log('Visual C++ Redistributable may need to be installed for some features.');
-      // Could auto-download vc_redist.x64.exe from Microsoft here
+      console.log('Visual C++ Redistributable not found — installing...');
+      const vcRedistUrl = 'https://aka.ms/vs/17/release/vc_redist.x64.exe';
+      const vcRedistPath = path.join(APP_DIR, 'vc_redist.x64.exe');
+      try {
+        await this._downloadFile(vcRedistUrl, vcRedistPath);
+        // Silent install with no UI (/install /quiet /norestart)
+        await this._exec(`"${vcRedistPath}" /install /quiet /norestart`, 120000);
+        console.log('Visual C++ Redistributable installed successfully');
+        try { fs.unlinkSync(vcRedistPath); } catch (e2) {}
+      } catch (vcErr) {
+        console.log(`VC++ Redistributable install failed: ${vcErr.message} — may work anyway`);
+        try { fs.unlinkSync(vcRedistPath); } catch (e2) {}
+      }
     }
 
     onProgress(100);
@@ -129,14 +153,22 @@ class WindowsAdapter {
     onProgress(0);
     const ffmpegExe = path.join(BIN_DIR, 'ffmpeg.exe');
 
-    // Check PATH first
+    // Strategy 1: Bundled ffmpeg
+    const bundledFfmpeg = await this.bundled.installFfmpeg(APP_DIR, console.log);
+    if (bundledFfmpeg) {
+      process.env.PATH = `${BIN_DIR};${process.env.PATH}`;
+      onProgress(100);
+      return;
+    }
+
+    // Strategy 2: Check PATH
     try {
       execSync('ffmpeg -version', { timeout: 5000, stdio: 'pipe' });
       onProgress(100);
       return;
     } catch (e) {}
 
-    // Check our bundled dir
+    // Strategy 3: Check our bin dir
     if (fs.existsSync(ffmpegExe)) {
       process.env.PATH = `${BIN_DIR};${process.env.PATH}`;
       onProgress(100);

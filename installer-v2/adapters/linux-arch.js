@@ -1,103 +1,197 @@
 /**
- * Windy Pro v2.0 — Linux Arch/Manjaro Platform Adapter
- * Uses pacman for all dependency installation.
+ * Windy Pro v2.0 — Linux Arch/Manjaro Adapter (Rewritten)
+ * 
+ * Covers: Arch Linux, Manjaro, EndeavourOS, Garuda, Artix
+ * Strategy: Bundled first, pacman second
  */
 
 const { exec, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { BundledAssets } = require('../core/bundled-assets');
 
 const APP_DIR = path.join(os.homedir(), '.windy-pro');
 const VENV_DIR = path.join(APP_DIR, 'venv');
-const MODELS_DIR = path.join(APP_DIR, 'models');
 const BIN_DIR = path.join(APP_DIR, 'bin');
-const MODEL_CDN_BASE = 'https://models.windypro.thewindstorm.uk/v2';
+
+const PACMAN_COCKTAIL = [
+  'python', 'python-pip', 'python-virtualenv',
+  'base-devel', 'gcc', 'cmake',
+  'ffmpeg',
+  'portaudio', 'alsa-utils', 'alsa-lib',
+  'pulseaudio', 'libpulse',
+  'sox', 'libsndfile',
+  'gstreamer', 'gst-plugins-good', 'gst-plugins-base',
+  'xdotool', 'xclip', 'xsel', 'xdg-utils',
+  'curl', 'wget', 'ca-certificates',
+  'openblas', 'lapack',
+];
 
 class LinuxArchAdapter {
-    constructor() { this.sudoPassword = null; }
+  constructor() {
+    this.bundled = new BundledAssets();
+    this.log = console.log;
+  }
 
-    async installPython(onProgress) {
-        onProgress(0);
-        for (const d of [APP_DIR, MODELS_DIR, BIN_DIR]) fs.mkdirSync(d, { recursive: true });
-        const venvPy = path.join(VENV_DIR, 'bin', 'python3');
-        if (fs.existsSync(venvPy)) {
-            try {
-                if (execSync(`"${venvPy}" -c "import faster_whisper, torch, sounddevice, websockets; print('OK')"`, { timeout: 15000, stdio: 'pipe' }).toString().trim() === 'OK') { onProgress(100); return; }
-            } catch (_) { }
-        }
-        const pyBin = await this._findPython();
-        onProgress(30);
-        if (!fs.existsSync(venvPy)) await this._exec(`"${pyBin}" -m venv "${VENV_DIR}"`, 120000);
-        onProgress(50);
-        const pip = path.join(VENV_DIR, 'bin', 'pip');
-        await this._exec(`"${pip}" install --upgrade pip setuptools wheel`, 120000);
-        onProgress(65);
-        const pkgs = ['faster-whisper', 'torch', 'torchaudio', 'sounddevice', 'numpy', 'websockets', 'scipy', 'librosa', 'pydub'];
-        for (let i = 0; i < pkgs.length; i++) {
-            try { await this._exec(`"${pip}" install ${pkgs[i]}`, 300000); } catch (e) { console.error(`${pkgs[i]} failed`); }
-            onProgress(65 + ((i + 1) / pkgs.length) * 35);
-        }
-        onProgress(100);
+  async installPython(onProgress) {
+    onProgress = onProgress || (() => {});
+
+    onProgress(5);
+    const bundledPy = await this.bundled.installPython(APP_DIR, this.log);
+    if (bundledPy) {
+      onProgress(60);
+      await this._setupVenv(bundledPy);
+      onProgress(100);
+      return bundledPy;
     }
 
-    async _findPython() {
-        for (const cmd of ['python3', 'python']) {
-            try {
-                const v = execSync(`${cmd} --version 2>&1`, { timeout: 5000 }).toString();
-                const m = v.match(/Python (\d+)\.(\d+)/);
-                if (m && parseInt(m[1]) >= 3 && parseInt(m[2]) >= 9) return cmd;
-            } catch (_) { }
+    onProgress(10);
+    this.log('[Arch] Installing complete cocktail via pacman...');
+    try {
+      await this._execSudo(`pacman -Sy --noconfirm ${PACMAN_COCKTAIL.join(' ')} || true`, 600000);
+    } catch (e) {
+      this.log(`[Arch] Some packages failed: ${e.message}`);
+    }
+    onProgress(50);
+
+    // Wayland tools from AUR or direct
+    if (process.env.XDG_SESSION_TYPE === 'wayland') {
+      try {
+        await this._execSudo('pacman -Sy --noconfirm ydotool wl-clipboard || true', 60000);
+      } catch (e) {}
+    }
+
+    const py = this._findPython();
+    if (!py) throw new Error('Could not install Python');
+    await this._setupVenv(py);
+    onProgress(100);
+    return py;
+  }
+
+  async installFfmpeg(onProgress) {
+    onProgress = onProgress || (() => {});
+
+    const bundledFfmpeg = await this.bundled.installFfmpeg(APP_DIR, this.log);
+    if (bundledFfmpeg) { onProgress(100); return bundledFfmpeg; }
+
+    try {
+      execSync('ffmpeg -version', { timeout: 5000, stdio: 'pipe' });
+      onProgress(100);
+      return 'ffmpeg';
+    } catch (e) {
+      // Static binary fallback
+      const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
+      fs.mkdirSync(BIN_DIR, { recursive: true });
+      try {
+        const tarPath = path.join(os.tmpdir(), 'ffmpeg-static.tar.xz');
+        execSync(`curl -fsSL "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${arch}-static.tar.xz" -o "${tarPath}"`, { timeout: 120000, stdio: 'pipe' });
+        const extractDir = path.join(os.tmpdir(), 'ffmpeg-extract');
+        fs.mkdirSync(extractDir, { recursive: true });
+        execSync(`tar xJf "${tarPath}" -C "${extractDir}"`, { timeout: 60000, stdio: 'pipe' });
+        const found = execSync(`find "${extractDir}" -name ffmpeg -type f | head -1`, { timeout: 5000, stdio: 'pipe' }).toString().trim();
+        if (found) {
+          fs.copyFileSync(found, path.join(BIN_DIR, 'ffmpeg'));
+          fs.chmodSync(path.join(BIN_DIR, 'ffmpeg'), 0o755);
+          fs.rmSync(extractDir, { recursive: true, force: true });
+          fs.unlinkSync(tarPath);
+          onProgress(100);
+          return path.join(BIN_DIR, 'ffmpeg');
         }
-        await this._execSudo('pacman -Sy --noconfirm python python-pip python-virtualenv base-devel libffi openssl || true');
-        for (const cmd of ['python3', 'python']) {
-            try {
-                const v = execSync(`${cmd} --version 2>&1`, { timeout: 5000 }).toString();
-                const m = v.match(/Python (\d+)\.(\d+)/);
-                if (m && parseInt(m[1]) >= 3 && parseInt(m[2]) >= 9) return cmd;
-            } catch (_) { }
-        }
-        throw new Error('Python 3.9+ required. Run: sudo pacman -S python');
+      } catch (e2) {}
+      throw new Error('Could not install ffmpeg');
     }
+  }
 
-    async installFfmpeg(onProgress) {
-        onProgress(0);
-        try { execSync('ffmpeg -version', { timeout: 5000, stdio: 'pipe' }); onProgress(100); return; } catch (_) { }
-        try { await this._execSudo('pacman -Sy --noconfirm ffmpeg portaudio alsa-utils pulseaudio libpulse sox gstreamer gst-plugins-good || true', 300000); } catch (_) { }
-        onProgress(100);
+  async installCuda(onProgress) {
+    onProgress = onProgress || (() => {});
+    try {
+      execSync('nvidia-smi 2>/dev/null', { timeout: 10000, stdio: 'pipe' });
+      onProgress(100);
+      return { success: true, type: 'NVIDIA CUDA' };
+    } catch (e) {
+      onProgress(100);
+      return { success: false, type: 'CPU' };
     }
+  }
 
-    async installCuda(onProgress) {
-        onProgress(0);
-        try { execSync('nvcc --version', { timeout: 5000, stdio: 'pipe' }); onProgress(100); return; } catch (_) { }
-        try { await this._execSudo('pacman -Sy --noconfirm cuda cudnn || true', 600000); } catch (_) { }
-        onProgress(100);
+  async requestPermissions() {
+    const desktopDir = path.join(os.homedir(), '.local', 'share', 'applications');
+    try {
+      fs.mkdirSync(desktopDir, { recursive: true });
+      fs.writeFileSync(path.join(desktopDir, 'windy-pro.desktop'), `[Desktop Entry]
+Type=Application
+Name=Windy Pro
+Exec=electron ${process.cwd()}
+Terminal=false
+Categories=Audio;Utility;
+`);
+    } catch (e) {}
+  }
+
+  async verify() {
+    const results = {};
+    const venvPy = path.join(VENV_DIR, 'bin', 'python3');
+    try {
+      execSync(`"${venvPy}" -c "import faster_whisper; print('ok')"`, { timeout: 15000, stdio: 'pipe' });
+      results.python = true;
+    } catch (e) { results.python = false; }
+    try {
+      const fp = path.join(BIN_DIR, 'ffmpeg');
+      execSync(fs.existsSync(fp) ? `"${fp}" -version` : 'ffmpeg -version', { timeout: 5000, stdio: 'pipe' });
+      results.ffmpeg = true;
+    } catch (e) { results.ffmpeg = false; }
+    return results;
+  }
+
+  _findPython() {
+    for (const cmd of ['python3.12', 'python3.11', 'python3', 'python']) {
+      try {
+        const v = execSync(`${cmd} --version 2>&1`, { timeout: 5000, stdio: 'pipe' }).toString();
+        if (/Python 3\.(9|1[0-9]|[2-9]\d)/.test(v)) return cmd;
+      } catch (e) {}
     }
+    return null;
+  }
 
-    async downloadModel(modelId, modelInfo, onProgress) {
-        const modelPath = path.join(MODELS_DIR, `${modelId}.wpr`);
-        if (fs.existsSync(modelPath) && fs.statSync(modelPath).size > 1000) { onProgress(100); return; }
-        let p = 0;
-        return new Promise(r => {
-            const i = setInterval(() => { p += Math.random() * 8 + 2; if (p >= 100) { clearInterval(i); fs.writeFileSync(modelPath, `WNDY0001-${modelId}`); onProgress(100); r(); } else onProgress(p); }, 600);
+  async _setupVenv(pythonPath) {
+    const venvPy = path.join(VENV_DIR, 'bin', 'python3');
+    if (fs.existsSync(venvPy)) {
+      try {
+        execSync(`"${venvPy}" -c "import faster_whisper; print('OK')"`, { timeout: 15000, stdio: 'pipe' });
+        return;
+      } catch (e) {}
+    }
+    if (!fs.existsSync(venvPy)) {
+      execSync(`"${pythonPath}" -m venv "${VENV_DIR}"`, { timeout: 120000, stdio: 'pipe' });
+    }
+    const pip = path.join(VENV_DIR, 'bin', 'pip');
+    execSync(`"${pip}" install --upgrade pip setuptools wheel`, { timeout: 120000, stdio: 'pipe' });
+    for (const pkg of ['faster-whisper', 'torch', 'torchaudio', 'sounddevice', 'numpy', 'websockets', 'scipy', 'pydub', 'ctranslate2', 'sentencepiece', 'transformers']) {
+      try { execSync(`"${pip}" install ${pkg}`, { timeout: 600000, stdio: 'pipe' }); } catch (e) {
+        this.log(`[Arch] Warning: ${pkg} failed`);
+      }
+    }
+  }
+
+  async _execSudo(cmd, timeout = 120000) {
+    return new Promise((resolve, reject) => {
+      const tries = [
+        `pkexec bash -c '${cmd.replace(/'/g, "'\\''")}'`,
+        `sudo bash -c '${cmd.replace(/'/g, "'\\''")}'`,
+        cmd
+      ];
+      const tryNext = (i) => {
+        if (i >= tries.length) { reject(new Error(`Failed: ${cmd}`)); return; }
+        exec(tries[i], { timeout, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+          if (err && i < tries.length - 1) tryNext(i + 1);
+          else if (err) reject(err);
+          else resolve(stdout);
         });
-    }
-
-    async verify() {
-        const py = path.join(VENV_DIR, 'bin', 'python3');
-        if (!fs.existsSync(py)) throw new Error('Python env not found');
-        try { execSync(`"${py}" -c "from faster_whisper import WhisperModel; print('OK')"`, { timeout: 30000, stdio: 'pipe' }); } catch (_) { }
-        try { execSync('ffmpeg -version', { timeout: 5000, stdio: 'pipe' }); } catch (_) { }
-    }
-
-    async requestPermissions() {
-        const tool = (process.env.XDG_SESSION_TYPE || 'x11') === 'wayland' ? 'ydotool' : 'xdotool';
-        try { execSync(`which ${tool}`, { timeout: 3000, stdio: 'pipe' }); } catch (_) { try { await this._execSudo(`pacman -Sy --noconfirm ${tool} || true`); } catch (_) { } }
-        try { await this._execSudo('pacman -Sy --noconfirm xclip xsel wl-clipboard || true'); } catch (_) { }
-    }
-
-    async _execSudo(cmd, timeout = 120000) { return this._exec(`pkexec bash -c '${cmd.replace(/'/g, "'\\''")}' `, timeout); }
-    _exec(cmd, timeout = 60000) { return new Promise((res, rej) => { exec(cmd, { timeout, maxBuffer: 10 * 1024 * 1024 }, (e, out) => e ? rej(e) : res(out)); }); }
+      };
+      tryNext(0);
+    });
+  }
 }
 
 module.exports = { LinuxArchAdapter };

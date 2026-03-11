@@ -17,6 +17,9 @@ const { recommend, estimateDownloadTime } = require('./core/windytune');
 const { INSTALL_STEP_MESSAGES, getRandomLoadingMessage } = require('./core/brand-content');
 const { DownloadManager } = require('./core/download-manager');
 const { AccountManager } = require('./core/account-manager');
+const { CleanSlate } = require('./core/clean-slate');
+const { DependencyInstaller } = require('./core/dependency-installer');
+const { BundledAssets } = require('./core/bundled-assets');
 
 const APP_DIR = path.join(os.homedir(), '.windy-pro');
 const ENGINES_DIR = path.join(APP_DIR, 'engines');
@@ -116,6 +119,13 @@ class InstallWizard {
   }
 
   setupIPC() {
+    // ─── Prior Version Check ───
+    ipcMain.handle('wizard-check-prior-install', async () => {
+      const cleanSlate = new CleanSlate({ preserveModels: true });
+      const detection = cleanSlate._detect();
+      return detection;
+    });
+
     // ─── Hardware Scan ───
     ipcMain.handle('wizard-scan-hardware', async () => {
       this.hardware = await this.detector.detect();
@@ -187,55 +197,62 @@ class InstallWizard {
       console.log('[InstallWizard] Starting install for models:', models);
 
       try {
-        // Phase 1: Dependencies
+        // ═══ Phase 0: CLEAN SLATE — Remove any prior installation ═══
         this.sendProgress({
-          percent: 2,
-          message: INSTALL_STEP_MESSAGES['check-deps']?.title || '🌪️ Preparing the Windy Ecosystem',
-          detail: INSTALL_STEP_MESSAGES['check-deps']?.detail || 'Setting up everything...'
+          percent: 1,
+          message: '🧹 Checking for prior Windy Pro installation...',
+          detail: 'Ensuring a clean start — removing any old files, processes, or configs'
         });
-        console.log('[InstallWizard] Phase 1: Dependencies');
+        console.log('[InstallWizard] Phase 0: Clean Slate');
 
-        if (this.platformAdapter) {
-          console.log('[InstallWizard] Platform adapter found, installing deps...');
-          try {
-            // Install Python environment
-            this.sendProgress({
-              percent: 5,
-              message: INSTALL_STEP_MESSAGES['install-python'].title,
-              detail: INSTALL_STEP_MESSAGES['install-python'].detail
-            });
-            await this.platformAdapter.installPython((pct) => {
-              this.sendProgress({ percent: 5 + pct * 0.1 });
-            });
+        const cleanSlate = new CleanSlate({
+          preserveModels: true, // Don't re-download gigabytes of models
+          onProgress: (pct) => this.sendProgress({ percent: 1 + pct * 0.04 }),
+          onLog: (msg) => console.log(msg)
+        });
+        const cleanResult = await cleanSlate.run();
 
-            // Install ffmpeg
-            this.sendProgress({
-              percent: 15,
-              message: INSTALL_STEP_MESSAGES['install-ffmpeg'].title,
-              detail: INSTALL_STEP_MESSAGES['install-ffmpeg'].detail
-            });
-            await this.platformAdapter.installFfmpeg((pct) => {
-              this.sendProgress({ percent: 15 + pct * 0.05 });
-            });
-
-            // Install CUDA if NVIDIA GPU
-            if (this.hardware?.gpu?.nvidia) {
-              this.sendProgress({
-                percent: 20,
-                message: INSTALL_STEP_MESSAGES['install-cuda'].title,
-                detail: INSTALL_STEP_MESSAGES['install-cuda'].detail
-              });
-              await this.platformAdapter.installCuda((pct) => {
-                this.sendProgress({ percent: 20 + pct * 0.05 });
-              });
-            }
-          } catch (adapterErr) {
-            console.log('[InstallWizard] Platform adapter error (skipping deps):', adapterErr.message);
-            this.sendProgress({ percent: 24, message: '🌪️ Dependencies already installed — moving to engines!' });
-          }
+        if (!cleanResult.wasClean) {
+          console.log(`[InstallWizard] Removed prior installation: ${cleanResult.removed.join(', ')}`);
+          this.sendProgress({
+            percent: 5,
+            message: '🧹 Prior installation removed!',
+            detail: `Cleaned: ${cleanResult.removed.length} items. ${cleanResult.preserved.length} models preserved.`
+          });
         } else {
-          console.log('[InstallWizard] No platform adapter — skipping deps phase');
-          this.sendProgress({ percent: 24, message: '🌪️ Moving straight to Windy engines!' });
+          console.log('[InstallWizard] No prior installation found — clean slate confirmed');
+        }
+
+        // ═══ Phase 1: Dependencies (using bundled assets + new installer) ═══
+        this.sendProgress({
+          percent: 5,
+          message: INSTALL_STEP_MESSAGES['check-deps']?.title || '🌪️ Preparing the Windy Ecosystem',
+          detail: INSTALL_STEP_MESSAGES['check-deps']?.detail || 'Installing Python, ffmpeg, audio tools, and everything you need...'
+        });
+        console.log('[InstallWizard] Phase 1: Dependencies (bundled-first strategy)');
+
+        const depInstaller = new DependencyInstaller({
+          onLog: (msg) => console.log(msg),
+          onProgress: (pct) => {
+            this.sendProgress({
+              percent: 5 + pct * 0.19, // 5% to 24%
+              message: '🌪️ Installing dependencies...',
+              detail: `${pct}% complete`
+            });
+          }
+        });
+
+        const depResult = await depInstaller.installAll();
+        if (!depResult.success) {
+          console.log('[InstallWizard] Some deps failed but continuing:', depResult.errors);
+          this.sendProgress({
+            percent: 24,
+            message: '⚠️ Some dependencies had issues — continuing with available tools',
+            detail: depResult.errors.join('; ')
+          });
+        } else {
+          console.log('[InstallWizard] All dependencies installed successfully');
+          this.sendProgress({ percent: 24, message: '✅ All dependencies installed!' });
         }
 
         console.log('[InstallWizard] Phase 2: Download models');
