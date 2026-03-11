@@ -42,7 +42,7 @@ process.on('unhandledRejection', (reason) => {
  * DNA Strand: B1.1
  */
 
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog, Notification, shell, session } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog, Notification, shell, session, nativeTheme } = require('electron');
 
 // Fix: bake in --no-sandbox for Linux AppImage (chrome-sandbox SUID issue)
 if (process.platform === 'linux') {
@@ -640,6 +640,103 @@ function updateTrayMenu() {
   ]);
 
   tray.setContextMenu(contextMenu);
+}
+
+/**
+ * Create macOS application menu bar
+ * Required for standard Cmd+Q, Cmd+H, Cmd+M, and Edit menu shortcuts
+ */
+function createMacOSMenu() {
+  if (process.platform !== 'darwin') return;
+
+  const template = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        {
+          label: 'Settings…',
+          accelerator: 'Cmd+,',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.show();
+              safeSend('open-settings');
+            }
+          }
+        },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        {
+          label: 'Quit Windy Pro',
+          accelerator: 'Cmd+Q',
+          click: () => {
+            app.isQuitting = true;
+            app.quit();
+          }
+        }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'pasteAndMatchStyle' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' },
+        { type: 'separator' },
+        { role: 'window' }
+      ]
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Windy Pro Website',
+          click: () => shell.openExternal('https://thewindstorm.uk')
+        },
+        {
+          label: 'Report a Bug',
+          click: () => shell.openExternal('https://github.com/sneakyfree/windy-pro/issues')
+        }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
 }
 
 /**
@@ -4014,8 +4111,20 @@ app.whenReady().then(async () => {
   startPythonServer();
   createWindow();
   createTray();
+  createMacOSMenu();  // macOS application menu bar (Cmd+Q, Cmd+H, Cmd+M, Edit menu)
   sanitizeHotkeys();  // Reset any accidentally-bound system shortcuts (e.g. Ctrl+V)
   registerHotkeys();
+
+  // macOS dark mode: forward system theme changes to renderer
+  if (process.platform === 'darwin') {
+    const sendTheme = () => {
+      const isDark = nativeTheme.shouldUseDarkColors;
+      safeSend('system-theme-changed', isDark ? 'dark' : 'light');
+    };
+    nativeTheme.on('updated', sendTheme);
+    // Send initial theme after window loads
+    mainWindow.webContents.on('did-finish-load', sendTheme);
+  }
 
   // Validate license on launch (non-blocking)
   validateLicense().catch(e => console.error('[License] Validation error:', e.message));

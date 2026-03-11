@@ -96,9 +96,30 @@ class MacOSAdapter {
     }
 
     const veryFinalPy = this._findSystemPython();
-    progressCallback(100);
-    if (veryFinalPy) return veryFinalPy;
+    if (veryFinalPy) {
+      progressCallback(100);
+      return veryFinalPy;
+    }
 
+    // Strategy 6: Miniforge (conda-forge) — lightweight conda for Apple Silicon
+    this.log('[macOS] Trying Miniforge as last resort...');
+    try {
+      const miniforgeDir = path.join(os.homedir(), 'miniforge3');
+      const miniforgeInstaller = path.join(os.tmpdir(), 'Miniforge3.sh');
+      const arch = process.arch === 'arm64' ? 'arm64' : 'x86_64';
+      const url = `https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-${arch}.sh`;
+      execSync(`curl -fsSL "${url}" -o "${miniforgeInstaller}"`, { timeout: 120000, stdio: 'pipe' });
+      execSync(`bash "${miniforgeInstaller}" -b -p "${miniforgeDir}"`, { timeout: 300000, stdio: 'pipe' });
+      const miniPy = path.join(miniforgeDir, 'bin', 'python3');
+      if (fs.existsSync(miniPy)) {
+        progressCallback(100);
+        return miniPy;
+      }
+    } catch (e) {
+      this.log('[macOS] Miniforge install failed:', e.message);
+    }
+
+    progressCallback(100);
     throw new Error('Could not install Python on macOS');
   }
 
@@ -226,9 +247,14 @@ electron . &
   _findSystemPython() {
     const candidates = [
       '/opt/homebrew/bin/python3',
+      '/opt/homebrew/opt/python@3.13/bin/python3',
+      '/opt/homebrew/opt/python@3.12/bin/python3',
+      '/opt/homebrew/opt/python@3.11/bin/python3',
       '/usr/local/bin/python3',
-      '/Library/Frameworks/Python.framework/Versions/3.11/bin/python3',
+      '/Library/Frameworks/Python.framework/Versions/3.13/bin/python3',
       '/Library/Frameworks/Python.framework/Versions/3.12/bin/python3',
+      '/Library/Frameworks/Python.framework/Versions/3.11/bin/python3',
+      path.join(os.homedir(), 'miniforge3', 'bin', 'python3'),
       'python3',
     ];
     for (const cmd of candidates) {

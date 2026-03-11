@@ -82,7 +82,8 @@
         {
           "target": "dmg",
           "arch": [
-            "x64"
+            "x64",
+            "arm64"
           ]
         }
       ],
@@ -92,7 +93,11 @@
       "identity": null,
       "notarize": false,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Windy Pro needs microphone access for voice-to-text transcription.",
+        "NSCameraUsageDescription": "Windy Pro needs camera access for the video preview feature."
+      }
     },
     "win": {
       "target": [
