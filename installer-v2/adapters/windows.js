@@ -232,24 +232,12 @@ class WindowsAdapter {
   }
 
   /**
-   * Download model (placeholder — real downloads via shared DownloadManager)
+   * Download model — delegates to shared DownloadManager
    */
   async downloadModel(modelId, modelInfo, onProgress) {
-    let progress = 0;
-    return new Promise((resolve) => {
-      const interval = setInterval(() => {
-        progress += Math.random() * 8 + 2;
-        if (progress >= 100) {
-          clearInterval(interval);
-          fs.mkdirSync(MODELS_DIR, { recursive: true });
-          fs.writeFileSync(path.join(MODELS_DIR, `${modelId}.wpr`), `WNDY0001-placeholder-${modelId}`);
-          onProgress(100);
-          resolve();
-        } else {
-          onProgress(progress);
-        }
-      }, 500 + Math.random() * 500);
-    });
+    const { DownloadManager } = require('../core/download-manager');
+    const dm = new DownloadManager(MODELS_DIR);
+    await dm.downloadModel(modelId, onProgress);
   }
 
   async verify() {

@@ -4,6 +4,13 @@
  * 
  * This is the shared core that all platform wizards use.
  * Platform-specific adapters handle dependency installation.
+ * 
+ * ARCHITECTURE NOTE (M1): Some adapter pip installs use execSync which
+ * blocks the Node event loop. This is intentional for sequential dependency
+ * ordering but means the UI cannot update during long pip installs.
+ * A future refactor should use exec() with streaming output for all
+ * pip operations. For now, DependencyInstaller._exec is async and
+ * handles the heavy lifting.
  */
 
 const { BrowserWindow, ipcMain, app } = require('electron');
@@ -286,8 +293,8 @@ class InstallWizard {
         // Phase 3: Verify
         this.sendProgress({
           percent: 92,
-          message: INSTALL_STEP_MESSAGES['verify'].title,
-          detail: INSTALL_STEP_MESSAGES['verify'].detail
+          message: INSTALL_STEP_MESSAGES['verify']?.title || '🔍 Verifying Installation',
+          detail: INSTALL_STEP_MESSAGES['verify']?.detail || 'Checking all components are working...'
         });
 
         if (this.platformAdapter) {
@@ -297,8 +304,8 @@ class InstallWizard {
         // Phase 4: Permissions
         this.sendProgress({
           percent: 96,
-          message: INSTALL_STEP_MESSAGES['permissions'].title,
-          detail: INSTALL_STEP_MESSAGES['permissions'].detail
+          message: INSTALL_STEP_MESSAGES['permissions']?.title || '🔐 Setting up permissions',
+          detail: INSTALL_STEP_MESSAGES['permissions']?.detail || 'Configuring system access...'
         });
 
         if (this.platformAdapter) {
@@ -308,24 +315,40 @@ class InstallWizard {
         // Done!
         this.sendProgress({
           percent: 100,
-          message: INSTALL_STEP_MESSAGES['complete'].title,
-          detail: INSTALL_STEP_MESSAGES['complete'].detail
+          message: INSTALL_STEP_MESSAGES['complete']?.title || '🎉 Installation Complete!',
+          detail: INSTALL_STEP_MESSAGES['complete']?.detail || 'Windy Pro is ready to use.'
         });
 
         // Write config.json to mark installation as complete
         const configPath = path.join(APP_DIR, 'config.json');
         fs.mkdirSync(APP_DIR, { recursive: true });
+        // Read version from package.json rather than hardcoding
+        let appVersion = '0.5.0';
+        try {
+          const pkgPath = path.join(__dirname, '..', 'package.json');
+          if (fs.existsSync(pkgPath)) {
+            appVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version || appVersion;
+          }
+        } catch (_) { /* use default */ }
         fs.writeFileSync(configPath, JSON.stringify({
-          version: '0.5.0',
+          version: appVersion,
           installedAt: new Date().toISOString(),
           models: models,
-          defaultModel: models[0] || 'edge-pulse'
+          defaultModel: models[0] || 'windy-stt-lite-ct2'
         }, null, 2));
 
         return { success: true, models };
 
       } catch (error) {
-        return { success: false, error: error.message };
+        console.error('[InstallWizard] Install failed:', error);
+        // Surface a user-friendly error to the wizard UI
+        const userMessage = this._friendlyError(error);
+        this.sendProgress({
+          percent: -1,
+          message: '❌ Installation failed',
+          detail: userMessage
+        });
+        return { success: false, error: userMessage };
       }
     });
 
@@ -379,6 +402,15 @@ class InstallWizard {
       }
       return true;
     });
+
+    // ─── Cancel (abort downloads and close) ───
+    ipcMain.handle('wizard-cancel', async () => {
+      this.downloadManager.abort();
+      if (this.window && !this.window.isDestroyed()) {
+        this.window.close();
+      }
+      return true;
+    });
   }
 
   /**
@@ -394,9 +426,53 @@ class InstallWizard {
    * Check if first-run setup is needed
    */
   static needsSetup(appDataDir) {
-    const fs = require('fs');
     const configPath = path.join(appDataDir, 'config.json');
     return !fs.existsSync(configPath);
+  }
+
+  /**
+   * Convert raw errors into user-friendly messages
+   */
+  _friendlyError(error) {
+    const msg = error.message || String(error);
+
+    // Network errors
+    if (msg.includes('No internet connection') || msg.includes('ENOTFOUND') || msg.includes('ENETUNREACH')) {
+      return 'No internet connection detected. Please connect to the internet and try again.';
+    }
+    if (msg.includes('Network timeout') || msg.includes('ETIMEDOUT') || msg.includes('ESOCKETTIMEDOUT')) {
+      return 'Network connection timed out. Please check your internet connection and try again.';
+    }
+    if (msg.includes('Too many redirects')) {
+      return 'A download server is misconfigured. Please try again later.';
+    }
+    if (msg.includes('HTTP 4') || msg.includes('HTTP 5')) {
+      return `A download server returned an error (${msg}). Please try again later.`;
+    }
+
+    // Disk errors
+    if (msg.includes('ENOSPC') || msg.includes('no space left')) {
+      return 'Not enough disk space to complete the installation. Please free up space and try again.';
+    }
+
+    // Permission errors
+    if (msg.includes('EACCES') || msg.includes('permission denied') || msg.includes('EPERM')) {
+      return 'Permission denied. Try running the installer with administrator/sudo privileges.';
+    }
+
+    // Python/pip errors
+    if (msg.includes('Could not install Python')) {
+      return 'Could not install Python automatically. Please install Python 3.9+ manually and try again.';
+    }
+    if (msg.includes('pip') && msg.includes('install')) {
+      return `A Python package failed to install: ${msg.substring(0, 200)}`;
+    }
+
+    // Generic fallback — truncate very long error messages
+    if (msg.length > 300) {
+      return msg.substring(0, 300) + '…';
+    }
+    return msg;
   }
 }
 

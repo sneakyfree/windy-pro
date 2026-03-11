@@ -225,7 +225,7 @@ class DependencyInstaller {
         execSync('which brew', { stdio: 'pipe', timeout: 3000 });
       } catch (e) {
         this.onLog('[DependencyInstaller] Installing Homebrew (required for macOS Python)...');
-        await this._exec('/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"', 300000);
+        await this._exec('NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"', 300000);
       }
       await this._exec('brew install python@3.11 || brew install python3', 300000);
       return this._findSystemPython() || 'python3';

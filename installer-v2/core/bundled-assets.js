@@ -293,7 +293,10 @@ class BundledAssets {
   _isPythonWorking(pyExe) {
     try {
       const output = execSync(`"${pyExe}" --version 2>&1`, { timeout: 5000, stdio: 'pipe' }).toString();
-      return output.includes('Python 3');
+      if (!output.includes('Python 3')) return false;
+      // Also verify venv module is available (required for setup)
+      execSync(`"${pyExe}" -c "import venv; print('ok')"`, { timeout: 5000, stdio: 'pipe' });
+      return true;
     } catch (e) {
       return false;
     }

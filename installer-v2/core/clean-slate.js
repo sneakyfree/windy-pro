@@ -457,7 +457,10 @@ class CleanSlate {
 
     // Check port 9876 is free
     try {
-      if (this.platform !== 'win32') {
+      if (this.platform === 'win32') {
+        const netstat = execSync('netstat -ano | findstr ":9876" 2>NUL', { stdio: 'pipe', timeout: 3000 }).toString().trim();
+        if (netstat.includes('LISTENING')) issues.push('Port 9876 still in use');
+      } else {
         const lsof = execSync('lsof -ti:9876 2>/dev/null || true', { stdio: 'pipe', timeout: 3000 }).toString().trim();
         if (lsof) issues.push('Port 9876 still in use');
       }

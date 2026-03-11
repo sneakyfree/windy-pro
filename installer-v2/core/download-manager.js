@@ -97,9 +97,20 @@ class DownloadManager {
   constructor(modelsDir, options = {}) {
     this.modelsDir = modelsDir;
     this.onLog = options.onLog || console.log;
-    this.concurrent = options.concurrent || 2;
+    this.concurrent = options.concurrent || 3;
     this._activeDownloads = 0;
     this._queue = [];
+    this._aborted = false;
+    this._logBuffer = [];
+    this._maxLogLines = 500;
+  }
+
+  /**
+   * Abort all pending downloads
+   */
+  abort() {
+    this._aborted = true;
+    this.onLog('[DownloadManager] Abort requested');
   }
 
   /**
@@ -192,6 +203,11 @@ class DownloadManager {
     }
 
     for (const file of files) {
+      // Check abort before each file download
+      if (this._aborted) {
+        throw new Error('Download cancelled by user');
+      }
+
       const destPath = path.join(modelDir, file.rfilename);
       const destDir = path.dirname(destPath);
       fs.mkdirSync(destDir, { recursive: true });
@@ -283,33 +299,37 @@ class DownloadManager {
 
   _fallbackFileList(repoId) {
     // Common files for different model types
+    // Estimate individual file sizes from registry total so progress bars are meaningful
     const id = repoId.split('/').pop();
+    const registryEntry = MODEL_REGISTRY[id];
+    const totalBytes = registryEntry ? registryEntry.sizeMB * 1024 * 1024 : 100 * 1024 * 1024;
+
     if (id.includes('-ct2')) {
-      // CTranslate2 models
+      // CTranslate2 models — model.bin is ~95% of total
       return [
-        { rfilename: 'config.json', size: 1024 },
-        { rfilename: 'model.bin', size: 0 },
-        { rfilename: 'vocabulary.json', size: 0 },
-        { rfilename: 'tokenizer.json', size: 0 },
+        { rfilename: 'config.json', size: 2048 },
+        { rfilename: 'model.bin', size: Math.round(totalBytes * 0.95) },
+        { rfilename: 'vocabulary.json', size: Math.round(totalBytes * 0.03) },
+        { rfilename: 'tokenizer.json', size: Math.round(totalBytes * 0.02) },
       ];
     } else if (id.includes('pair')) {
-      // OPUS-MT translation pairs
+      // OPUS-MT translation pairs — pytorch_model.bin is ~85% of total
       return [
-        { rfilename: 'config.json', size: 1024 },
-        { rfilename: 'pytorch_model.bin', size: 0 },
-        { rfilename: 'tokenizer_config.json', size: 1024 },
-        { rfilename: 'source.spm', size: 0 },
-        { rfilename: 'target.spm', size: 0 },
-        { rfilename: 'vocab.json', size: 0 },
+        { rfilename: 'config.json', size: 2048 },
+        { rfilename: 'pytorch_model.bin', size: Math.round(totalBytes * 0.85) },
+        { rfilename: 'tokenizer_config.json', size: 2048 },
+        { rfilename: 'source.spm', size: Math.round(totalBytes * 0.05) },
+        { rfilename: 'target.spm', size: Math.round(totalBytes * 0.05) },
+        { rfilename: 'vocab.json', size: Math.round(totalBytes * 0.05) },
       ];
     } else {
-      // Whisper / safetensors models
+      // Whisper / safetensors models — model file is ~95% of total
       return [
-        { rfilename: 'config.json', size: 1024 },
-        { rfilename: 'model.safetensors', size: 0 },
-        { rfilename: 'preprocessor_config.json', size: 1024 },
-        { rfilename: 'tokenizer.json', size: 0 },
-        { rfilename: 'special_tokens_map.json', size: 1024 },
+        { rfilename: 'config.json', size: 2048 },
+        { rfilename: 'model.safetensors', size: Math.round(totalBytes * 0.95) },
+        { rfilename: 'preprocessor_config.json', size: 2048 },
+        { rfilename: 'tokenizer.json', size: Math.round(totalBytes * 0.03) },
+        { rfilename: 'special_tokens_map.json', size: 2048 },
       ];
     }
   }

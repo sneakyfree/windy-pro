@@ -47,13 +47,14 @@ class MacOSAdapter {
     progressCallback(40);
     try {
       execSync('xcode-select --install 2>/dev/null || true', { timeout: 5000, stdio: 'pipe' });
-      // Wait for install dialog — user must click Install
-      // After 60 seconds check if python3 appeared
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      const py = this._findSystemPython();
-      if (py) {
-        progressCallback(100);
-        return py;
+      // Poll for up to 120s — user must click Install in the macOS dialog
+      for (let i = 0; i < 12; i++) {
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        const py = this._findSystemPython();
+        if (py) {
+          progressCallback(100);
+          return py;
+        }
       }
     } catch (e) { /* move on */ }
 
