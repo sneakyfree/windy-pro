@@ -2079,7 +2079,7 @@
 
       <div
         style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px;">
-        <div style="font-size:17px; font-weight:800; margin-bottom:8px; color:var(--text);">📊 All 15 Engines at a
+        <div style="font-size:17px; font-weight:800; margin-bottom:8px; color:var(--text);">📊 All Engines at a
           Glance</div>
         <div style="max-height:340px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
           <table id="model-matrix" style="width:100%; border-collapse:collapse; font-size:13px;">
@@ -2985,35 +2985,45 @@
       const tbody = document.getElementById('matrix-body');
       if (!tbody) return;
       tbody.innerHTML = '';
-      const familyColors = { core: '#3B82F6', edge: '#22C55E', lingua: '#A855F7' };
-      const familyLabels = { core: '⚡ Windy Core', edge: '🛡️ Windy Edge', lingua: '🌍 Windy Lingua' };
+      const familyColors = { gpu: '#3B82F6', cpu: '#22C55E', translation: '#A855F7', pair: '#F59E0B' };
+      const familyLabels = { gpu: '⚡ GPU-Accelerated', cpu: '🛡️ CPU-Optimized', translation: '🌍 Translation', pair: '🎯 Specialist Pair' };
       const ENGINE_STRENGTHS = {
-        'core-spark': 'Ultra-fast English',
-        'core-pulse': 'Fast & reliable',
-        'core-standard': 'Great all-rounder',
-        'core-global': 'Multilingual powerhouse',
-        'core-pro': 'English excellence',
-        'core-turbo': 'Near-Ultra at 2x speed',
-        'core-ultra': 'BEST accuracy. Period.',
-        'edge-spark': '42 MB! Fits anything',
-        'edge-pulse': 'Phone-optimized',
-        'edge-standard': 'Best balance',
-        'edge-global': 'Multilingual on CPU',
-        'edge-pro': 'English on CPU',
-        'lingua-es': 'Spanish specialist',
-        'lingua-fr': 'French specialist',
-        'lingua-hi': 'Hindi specialist',
+        'windy-stt-nano': 'Ultra-fast, smallest engine',
+        'windy-stt-lite': 'Fast & reliable everyday',
+        'windy-stt-core': 'Great all-rounder ⭐',
+        'windy-stt-edge': 'Professional-grade',
+        'windy-stt-plus': 'Premium accuracy',
+        'windy-stt-turbo': 'Best speed/quality 🏆',
+        'windy-stt-pro': 'Maximum accuracy 👑',
+        'windy-stt-nano-cpu': 'Tiny, runs anywhere',
+        'windy-stt-lite-cpu': 'Laptop-friendly',
+        'windy-stt-core-cpu': 'Best CPU engine ⭐',
+        'windy-stt-edge-cpu': 'Pro quality, no GPU',
+        'windy-stt-plus-cpu': 'Premium on CPU',
+        'windy-stt-turbo-cpu': 'CPU champion 🏆',
+        'windy-stt-pro-cpu': 'CPU flagship 👑',
+        'windy-translate-spark': 'Fast 100+ languages',
+        'windy-translate-standard': 'Pro translation 🌍',
+        'windy-pair-en-es': 'English ↔ Spanish',
+        'windy-pair-en-zh': 'English ↔ Chinese',
+        'windy-pair-en-fr': 'English ↔ French',
+        'windy-pair-en-de': 'English ↔ German',
+        'windy-pair-en-ar': 'English ↔ Arabic',
+        'windy-pair-en-hi': 'English ↔ Hindi',
+        'windy-pair-en-pt': 'English ↔ Portuguese',
+        'windy-pair-en-ru': 'English ↔ Russian',
       };
 
       allModels.forEach(m => {
         const fit = getEngineFit(m.id);
         const req = ENGINE_REQUIREMENTS[m.id] || {};
-        const strength = ENGINE_STRENGTHS[m.id] || '';
+        const strength = ENGINE_STRENGTHS[m.id] || m.bestFor || '';
+        const engineName = m.displayName || m.name || m.id;
         const tr = document.createElement('tr');
         tr.style.cssText = 'border-bottom:1px solid var(--border); cursor:default;';
         tr.innerHTML = `
           <td style="padding:8px 6px; font-size:14px; text-align:center;" title="${fit.label}"><span style="color:${fit.color}">${fit.icon}</span></td>
-          <td style="padding:8px 6px; font-weight:700; color:var(--text);">${m.family === 'lingua' ? m.shortName : (m.family.charAt(0).toUpperCase() + m.family.slice(1) + ' ' + m.shortName)}</td>
+          <td style="padding:8px 6px; font-weight:700; color:var(--text);">${engineName}</td>
           <td style="padding:8px 6px; color:${familyColors[m.family] || '#888'};">${familyLabels[m.family] || m.family}</td>
           <td style="padding:8px 6px; color:var(--text-dim);">${m.sizeMB >= 1000 ? (m.sizeMB / 1000).toFixed(1) + ' GB' : m.sizeMB + ' MB'}</td>
           <td style="padding:8px 6px; color:var(--text-dim);">${m.speed || '—'}</td>
