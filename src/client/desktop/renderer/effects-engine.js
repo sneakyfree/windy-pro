@@ -449,10 +449,11 @@ class EffectsEngine {
      * @param {Object} metadata - { wordCount, recordingDuration }
      */
     trigger(hook, metadata = {}) {
+        console.log(`[EffectsEngine] trigger(${hook}): mode=${this._mode}, hookEnabled=${this._hookPoints[hook]?.enabled}, hookVol=${this._hookPoints[hook]?.volume}`);
         if (this._mode === 'silent' || this._mode === 'default') return;
 
         const hp = this._hookPoints[hook];
-        if (!hp || !hp.enabled) return;
+        if (!hp || !hp.enabled) { console.log(`[EffectsEngine] Hook ${hook} skipped: hp=${!!hp}, enabled=${hp?.enabled}`); return; }
 
         // Hook-point volume (0-100 → 0-1)
         const hookVolMul = hp.volume / 100;
@@ -462,12 +463,24 @@ class EffectsEngine {
             try {
                 const customCfg = JSON.parse(localStorage.getItem('windy_customSounds') || '{}');
                 const hookCfg = customCfg[hook];
-                if (!hookCfg) return;
+                console.log(`[EffectsEngine] Custom trigger: hook=${hook}, hookCfg=`, hookCfg);
+                if (!hookCfg) { console.log(`[EffectsEngine] No custom config for hook: ${hook}`); return; }
 
-                if (hookCfg.type === 'library' && hookCfg.libId) {
+                if (hookCfg.type === 'shuffle') {
+                    // Shuffle mode: pick a random sound from the pool
+                    const lib = JSON.parse(localStorage.getItem('windy_soundLibrary') || '[]');
+                    const pool = hookCfg.pool === 'all' ? lib : lib.filter(s => s.starred !== false);
+                    console.log(`[EffectsEngine] Shuffle mode: pool=${hookCfg.pool}, poolSize=${pool.length}`);
+                    if (pool.length > 0) {
+                        const pick = pool[Math.floor(Math.random() * pool.length)];
+                        console.log(`[EffectsEngine] Shuffle picked: "${pick.name}", dataUrlLen=${pick.dataUrl?.length || 0}`);
+                        if (pick?.dataUrl) this.sound.playAudioFile(pick.dataUrl, hookVolMul);
+                    }
+                } else if (hookCfg.type === 'library' && hookCfg.libId) {
                     // Look up from shared sound library
                     const lib = JSON.parse(localStorage.getItem('windy_soundLibrary') || '[]');
                     const entry = lib.find(s => s.id === hookCfg.libId);
+                    console.log(`[EffectsEngine] Library lookup: libId=${hookCfg.libId}, found=${!!entry}, hasDataUrl=${!!entry?.dataUrl}, dataUrlLen=${entry?.dataUrl?.length || 0}`);
                     if (entry?.dataUrl) this.sound.playAudioFile(entry.dataUrl, hookVolMul);
                 } else if (hookCfg.type === 'file' && hookCfg.dataUrl) {
                     // Legacy: inline data URL
@@ -485,7 +498,7 @@ class EffectsEngine {
                         }
                     }
                 }
-            } catch (_) { }
+            } catch (e) { console.error('[EffectsEngine] Custom trigger error:', e); }
             return;
         }
 

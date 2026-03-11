@@ -1604,6 +1604,10 @@ body.light-mode .sfx-master-controls {
   right: 0;
 }
 
+.settings-panel.settings-maximized {
+  width: 100%;
+}
+
 .settings-header {
   display: flex;
   justify-content: space-between;
@@ -5330,7 +5334,8 @@ body.light-theme .translate-history-item {
 
 .slib-container {
   position: relative;
-  width: min(95vw, 700px);
+  z-index: 1;
+  width: min(95vw, 850px);
   max-height: 85vh;
   background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
   border: 1px solid rgba(34, 197, 94, 0.2);
@@ -5339,6 +5344,13 @@ body.light-theme .translate-history-item {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 0.3s ease, max-height 0.3s ease, border-radius 0.3s ease;
+}
+
+.slib-container.slib-maximized {
+  width: 98vw;
+  max-height: 96vh;
+  border-radius: 4px;
 }
 
 /* Header */

@@ -170,6 +170,12 @@
             <option value="size">Largest first</option>
             <option value="duration">Longest first</option>
           </select>
+          <button id="slibFontDown" class="slib-close-btn" title="Decrease font size"
+            style="font-size:11px;background:rgba(99,102,241,0.3);margin-right:2px;">A-</button>
+          <button id="slibFontUp" class="slib-close-btn" title="Increase font size"
+            style="font-size:13px;font-weight:700;background:rgba(99,102,241,0.3);margin-right:2px;">A+</button>
+          <button id="slibMaximize" class="slib-close-btn" title="Toggle fullscreen"
+            style="background:rgba(139,92,246,0.3);margin-right:2px;">⛶</button>
           <button id="slibClose" class="slib-close-btn">✕</button>
         </div>
       </div>
@@ -184,10 +190,15 @@
       <!-- Bulk actions -->
       <div class="slib-bulk-bar" id="slibBulkBar">
         <span id="slibStats" class="slib-stats"></span>
-        <button class="slib-bulk-btn" id="slibStarAll">⭐ Star All</button>
-        <button class="slib-bulk-btn" id="slibArchiveAll">☆ Archive All</button>
+        <button class="slib-bulk-btn" id="slibStarAll" title="Add all sounds to hook dropdowns">⭐ All →
+          Dropdown</button>
+        <button class="slib-bulk-btn" id="slibArchiveAll"
+          title="Remove all sounds from hook dropdowns (keep in storage)">📦 All → Storage</button>
         <button class="slib-bulk-btn slib-bulk-import" id="slibImport">📥 Import</button>
+        <button class="slib-bulk-btn" id="slibIdentifyAll" title="Auto-identify all songs using music recognition"
+          style="background:linear-gradient(135deg,#8B5CF6,#6D28D9);color:#fff;">🎵 Identify All</button>
       </div>
+      <!-- Identification is now automatic via Chromaprint — no setup needed -->
 
       <!-- Table header -->
       <div class="slib-table-header">

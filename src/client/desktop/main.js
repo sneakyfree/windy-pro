@@ -492,7 +492,7 @@ function createWindow() {
           "script-src 'self'; " +
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
           "font-src 'self' https://fonts.gstatic.com; " +
-          "connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.deepgram.com https://api.groq.com https://api.openai.com wss://api.deepgram.com; " +
+          "connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.deepgram.com https://api.groq.com https://api.openai.com wss://api.deepgram.com https://api.audd.io; " +
           "img-src 'self' data:; " +
           "media-src 'self' blob: data:;"
         ]
@@ -1683,40 +1683,95 @@ ipcMain.handle('open-external-url', async (event, url) => {
     return { ok: false, error: 'Invalid URL' };
   }
 
-  // On Linux (AppImage), shell.openExternal silently fails — use BrowserWindow directly
+  // Linux: BrowserWindow is the most reliable on AppImage
   if (process.platform === 'linux') {
+    // Method 1: BrowserWindow (opens inside app — with OAuth support)
     try {
-      const checkoutWin = new BrowserWindow({
+      const extWin = new BrowserWindow({
         width: 1100,
         height: 750,
-        title: 'Windy Pro',
+        title: 'Windy Pro — Browser',
         autoHideMenuBar: true,
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
           sandbox: false,
           javascript: true,
-          // Use separate session so main window CSP doesn't block Stripe
           partition: 'persist:checkout'
         }
       });
-      checkoutWin.loadURL(url);
-      checkoutWin.focus();
-      console.log('[Main] ✅ Opened URL in Electron BrowserWindow (Linux primary)');
+
+      // Allow OAuth popups — open them in new BrowserWindows
+      extWin.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
+        console.log('[ExtBrowser] Popup requested:', popupUrl);
+        // Open OAuth popups in a new BrowserWindow
+        const popupWin = new BrowserWindow({
+          width: 600,
+          height: 700,
+          title: 'Sign In',
+          autoHideMenuBar: true,
+          parent: extWin,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: false,
+            javascript: true,
+            partition: 'persist:checkout'
+          }
+        });
+        popupWin.loadURL(popupUrl);
+        popupWin.focus();
+        // Allow popups inside popups (OAuth redirect chains)
+        popupWin.webContents.setWindowOpenHandler(({ url: nestedUrl }) => {
+          popupWin.loadURL(nestedUrl);
+          return { action: 'deny' };
+        });
+        return { action: 'deny' }; // deny default, we handled it manually
+      });
+
+      // Allow cross-domain navigation (OAuth redirects)
+      extWin.webContents.on('will-navigate', (event, navUrl) => {
+        console.log('[ExtBrowser] Navigating to:', navUrl);
+        // Allow all navigation — needed for OAuth flows
+      });
+
+      extWin.loadURL(url);
+      extWin.focus();
+      console.log('[Main] ✅ Opened URL in BrowserWindow (Linux primary)');
       return { ok: true };
     } catch (e) {
       console.error('[Main] BrowserWindow failed:', e.message);
-      // Fall through to shell.openExternal as last resort
+    }
+
+    // Method 2: xdg-open fallback
+    try {
+      const { spawn } = require('child_process');
+      const child = spawn('xdg-open', [url], { detached: true, stdio: 'ignore' });
+      child.unref();
+      console.log('[Main] ✅ Opened URL via xdg-open (Linux fallback)');
+      return { ok: true };
+    } catch (e) {
+      console.warn('[Main] xdg-open failed:', e.message);
+    }
+
+    // Method 3: shell.openExternal
+    try {
+      await shell.openExternal(url);
+      console.log('[Main] ✅ Opened URL via shell.openExternal');
+      return { ok: true };
+    } catch (e) {
+      console.error('[Main] All methods failed on Linux');
+      return { ok: false, error: e.message };
     }
   }
 
-  // macOS/Windows: use shell.openExternal (works reliably on these platforms)
+  // macOS/Windows: shell.openExternal works reliably
   try {
     await shell.openExternal(url);
     console.log('[Main] ✅ Opened URL via shell.openExternal');
     return { ok: true };
   } catch (e) {
-    console.error('[Main] ❌ shell.openExternal failed:', e.message);
+    console.error('[Main] shell.openExternal failed:', e.message);
     return { ok: false, error: e.message };
   }
 });
@@ -3375,6 +3430,174 @@ ipcMain.on('unmaximize-window', () => {
 });
 ipcMain.handle('is-maximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false;
+});
+
+// ── Song Identification (Chromaprint/AcoustID + AudD fallback) ──
+const { execFile } = require('child_process');
+const https = require('https');
+const http = require('http');
+
+// Check if fpcalc is available
+ipcMain.handle('check-fpcalc', async () => {
+  return new Promise((resolve) => {
+    execFile('fpcalc', ['-version'], (err) => {
+      resolve(!err);
+    });
+  });
+});
+
+// Helper: HTTP GET as promise
+function httpGet(url) {
+  return new Promise((resolve, reject) => {
+    const mod = url.startsWith('https') ? https : http;
+    mod.get(url, { headers: { 'User-Agent': 'WindyPro/1.6.0 (music identification)' } }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+      });
+    }).on('error', reject);
+  });
+}
+
+// Identify a song from a base64 data URL
+ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
+  const tmpDir = require('os').tmpdir();
+  const tmpFile = require('path').join(tmpDir, `windy_identify_${Date.now()}.webm`);
+
+  try {
+    // Write data URL to temp file
+    const base64Match = dataUrl.match(/^data:[^;]+;base64,(.+)$/);
+    if (!base64Match) {
+      console.log('[Identify] ❌ No base64 match in dataUrl (first 100 chars):', dataUrl.substring(0, 100));
+      return { error: 'Invalid audio format' };
+    }
+    const buffer = Buffer.from(base64Match[1], 'base64');
+    require('fs').writeFileSync(tmpFile, buffer);
+    console.log(`[Identify] ✅ Wrote ${buffer.length} bytes to ${tmpFile}`);
+
+    // Method 1: Try fpcalc + AcoustID (free, no API key needed)
+    try {
+      console.log('[Identify] Running fpcalc on:', tmpFile);
+      const fingerprint = await new Promise((resolve, reject) => {
+        execFile('fpcalc', ['-json', tmpFile], { timeout: 30000 }, (err, stdout, stderr) => {
+          if (err) {
+            console.log('[Identify] ❌ fpcalc error:', err.message);
+            if (stderr) console.log('[Identify] fpcalc stderr:', stderr);
+            return reject(err);
+          }
+          console.log('[Identify] fpcalc raw output length:', stdout.length);
+          try { resolve(JSON.parse(stdout)); } catch (e) { reject(e); }
+        });
+      });
+
+      console.log('[Identify] fpcalc result: duration=', fingerprint?.duration, 'fingerprint length=', fingerprint?.fingerprint?.length);
+
+      if (fingerprint && fingerprint.fingerprint && fingerprint.duration) {
+        // Look up on AcoustID (free API — client ID is for open-source apps)
+        const acoustUrl = `https://api.acoustid.org/v2/lookup?client=8XaBELgH&duration=${Math.round(fingerprint.duration)}&fingerprint=${encodeURIComponent(fingerprint.fingerprint)}&meta=recordings+releasegroups`;
+        console.log('[Identify] Querying AcoustID... duration=', Math.round(fingerprint.duration));
+        const acoustResult = await httpGet(acoustUrl);
+        console.log('[Identify] AcoustID response status=', acoustResult?.status, 'results count=', acoustResult?.results?.length);
+
+        if (acoustResult.status === 'ok' && acoustResult.results && acoustResult.results.length > 0) {
+          const best = acoustResult.results[0];
+          console.log('[Identify] Best match score=', best.score, 'recordings=', best.recordings?.length);
+          if (best.recordings && best.recordings.length > 0) {
+            const rec = best.recordings[0];
+            const title = rec.title || 'Unknown Title';
+            const artists = rec.artists ? rec.artists.map(a => a.name).join(', ') : 'Unknown Artist';
+            const album = (rec.releasegroups && rec.releasegroups[0]) ? rec.releasegroups[0].title : '';
+            const score = Math.round((best.score || 0) * 100);
+
+            // Clean up temp file
+            try { require('fs').unlinkSync(tmpFile); } catch (_) { }
+
+            console.log(`[Identify] ✅ IDENTIFIED: ${artists} — ${title} (${score}% confidence)`);
+            return {
+              success: true,
+              method: 'chromaprint',
+              title,
+              artist: artists,
+              album,
+              confidence: score,
+              newName: `${artists} — ${title}`
+            };
+          } else {
+            console.log('[Identify] ⚠️ AcoustID returned results but no recordings in best match');
+          }
+        } else {
+          console.log('[Identify] ⚠️ AcoustID returned no matching results. Error:', acoustResult?.error?.message);
+        }
+      } else {
+        console.log('[Identify] ⚠️ fpcalc returned no fingerprint or duration');
+      }
+    } catch (fpcalcErr) {
+      console.log('[Identify] ❌ fpcalc/AcoustID failed:', fpcalcErr.message);
+    }
+
+    // Method 2: AudD API fallback (requires API key)
+    if (auddApiKey) {
+      try {
+        const FormData = require('form-data') || null;
+        // Use Node.js https to POST to AudD
+        const boundary = '----WindyPro' + Date.now();
+        const audioData = require('fs').readFileSync(tmpFile);
+
+        const body = Buffer.concat([
+          Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="api_token"\r\n\r\n${auddApiKey}\r\n`),
+          Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="return"\r\n\r\napple_music,spotify\r\n`),
+          Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.webm"\r\nContent-Type: audio/webm\r\n\r\n`),
+          audioData,
+          Buffer.from(`\r\n--${boundary}--\r\n`)
+        ]);
+
+        const auddResult = await new Promise((resolve, reject) => {
+          const req = https.request({
+            hostname: 'api.audd.io',
+            path: '/',
+            method: 'POST',
+            headers: {
+              'Content-Type': `multipart/form-data; boundary=${boundary}`,
+              'Content-Length': body.length
+            }
+          }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+              try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+            });
+          });
+          req.on('error', reject);
+          req.write(body);
+          req.end();
+        });
+
+        if (auddResult.status === 'success' && auddResult.result) {
+          const r = auddResult.result;
+          try { require('fs').unlinkSync(tmpFile); } catch (_) { }
+          return {
+            success: true,
+            method: 'audd',
+            title: r.title || 'Unknown',
+            artist: r.artist || 'Unknown',
+            album: r.album || '',
+            newName: `${r.artist || 'Unknown'} — ${r.title || 'Unknown'}`
+          };
+        }
+      } catch (auddErr) {
+        console.log('[Identify] AudD fallback failed:', auddErr.message);
+      }
+    }
+
+    // Clean up
+    try { require('fs').unlinkSync(tmpFile); } catch (_) { }
+    return { error: 'Could not identify this song' };
+
+  } catch (e) {
+    try { require('fs').unlinkSync(tmpFile); } catch (_) { }
+    return { error: e.message };
+  }
 });
 
 // Batch transcription complete notification

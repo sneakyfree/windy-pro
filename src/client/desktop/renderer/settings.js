@@ -31,7 +31,12 @@ class SettingsPanel {
     return `
       <div class="settings-header">
         <h2>⚙️ Settings</h2>
-        <button class="settings-close" id="settingsClose">✕</button>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <button class="settings-close" id="settingsFontDown" title="Decrease font size" style="font-size:12px;background:rgba(99,102,241,0.3);">A-</button>
+          <button class="settings-close" id="settingsFontUp" title="Increase font size" style="font-size:14px;font-weight:700;background:rgba(99,102,241,0.3);">A+</button>
+          <button class="settings-close" id="settingsMaximize" title="Toggle fullscreen" style="background:rgba(139,92,246,0.3);">⛶</button>
+          <button class="settings-close" id="settingsClose">✕</button>
+        </div>
       </div>
       <div class="settings-body">
         <div class="settings-section settings-plan-section" id="settingsPlanSection">
@@ -490,6 +495,23 @@ class SettingsPanel {
   bindEvents() {
     // Close button
     this.panel.querySelector('#settingsClose').addEventListener('click', () => this.close());
+
+    // Font size buttons (zoom webContents)
+    this.panel.querySelector('#settingsFontDown')?.addEventListener('click', () => {
+      if (window.windyAPI?.zoomOut) window.windyAPI.zoomOut();
+      else document.body.style.zoom = (parseFloat(document.body.style.zoom || '1') - 0.1).toFixed(1);
+    });
+    this.panel.querySelector('#settingsFontUp')?.addEventListener('click', () => {
+      if (window.windyAPI?.zoomIn) window.windyAPI.zoomIn();
+      else document.body.style.zoom = (parseFloat(document.body.style.zoom || '1') + 0.1).toFixed(1);
+    });
+
+    // Maximize/restore settings panel
+    this.panel.querySelector('#settingsMaximize')?.addEventListener('click', () => {
+      const isMaxed = this.panel.classList.toggle('settings-maximized');
+      const btn = this.panel.querySelector('#settingsMaximize');
+      if (btn) { btn.textContent = isMaxed ? '⧉' : '⛶'; btn.title = isMaxed ? 'Restore' : 'Fullscreen'; }
+    });
 
     // Upgrade button
     const upgradeBtn = this.panel.querySelector('#settingsUpgradeBtn');
@@ -1500,6 +1522,24 @@ class SettingsPanel {
       if (slibClose) slibClose.addEventListener('click', () => { if (slibModal) slibModal.style.display = 'none'; });
       slibModal?.querySelector('.slib-backdrop')?.addEventListener('click', () => { if (slibModal) slibModal.style.display = 'none'; });
 
+      // Font size buttons for Sound Library
+      document.getElementById('slibFontDown')?.addEventListener('click', () => {
+        document.body.style.zoom = (parseFloat(document.body.style.zoom || '1') - 0.1).toFixed(1);
+      });
+      document.getElementById('slibFontUp')?.addEventListener('click', () => {
+        document.body.style.zoom = (parseFloat(document.body.style.zoom || '1') + 0.1).toFixed(1);
+      });
+
+      // Maximize / restore toggle
+      const slibMaximize = document.getElementById('slibMaximize');
+      if (slibMaximize) slibMaximize.addEventListener('click', () => {
+        const container = slibModal?.querySelector('.slib-container');
+        if (!container) return;
+        const isMaxed = container.classList.toggle('slib-maximized');
+        slibMaximize.textContent = isMaxed ? '⧉' : '⛶';
+        slibMaximize.title = isMaxed ? 'Restore size' : 'Toggle fullscreen';
+      });
+
       // Search & sort
       if (slibSearch) slibSearch.addEventListener('input', () => renderModalTable());
       if (slibSort) slibSort.addEventListener('change', () => renderModalTable());
@@ -1528,6 +1568,61 @@ class SettingsPanel {
           setTimeout(() => renderModalTable(), 500);
         });
         inp.click();
+      });
+
+      // ── Music Recognition (Chromaprint — free, no setup needed) ──
+      const slibIdentifyAll = document.getElementById('slibIdentifyAll');
+
+      // Core identify function (uses main-process IPC → Chromaprint + AcoustID)
+      const identifySong = async (item) => {
+        if (!item.dataUrl) return null;
+        try {
+          if (window.windyAPI?.identifySong) {
+            const result = await window.windyAPI.identifySong({ dataUrl: item.dataUrl, auddApiKey: '' });
+            console.log('[Identify]', item.name, '→', result);
+            if (result?.success) return result;
+            if (result?.error) console.warn('[Identify] Error:', result.error);
+          }
+          return null;
+        } catch (e) {
+          console.error('[Identify] Error:', e);
+          return null;
+        }
+      };
+
+      // Identify All button — just works, no setup
+      if (slibIdentifyAll) slibIdentifyAll.addEventListener('click', async () => {
+
+        slibIdentifyAll.textContent = '🎵 Identifying...';
+        slibIdentifyAll.disabled = true;
+
+        let identified = 0;
+        let method = '';
+        for (let i = 0; i < soundLibrary.length; i++) {
+          const item = soundLibrary[i];
+          // Skip already-identified items (those with ' — ' in the name)
+          if (item.name && item.name.includes(' — ')) continue;
+
+          slibIdentifyAll.textContent = `🎵 ${i + 1}/${soundLibrary.length}...`;
+          const result = await identifySong(item);
+          if (result) {
+            item.name = result.newName;
+            method = result.method || '';
+            identified++;
+            saveLibrary();
+            renderModalTable();
+            refreshHookDropdowns();
+          }
+
+          // Rate limit: ~1 req/sec for both APIs
+          await new Promise(r => setTimeout(r, 1200));
+        }
+
+        const via = method === 'chromaprint' ? ' via Chromaprint' : method === 'audd' ? ' via AudD' : '';
+        slibIdentifyAll.textContent = `🎵 Done! ${identified} identified${via}`;
+        slibIdentifyAll.disabled = false;
+        setTimeout(() => { slibIdentifyAll.textContent = '🎵 Identify All'; }, 4000);
+        renderLibrary();
       });
 
       // Tab switching
@@ -1628,6 +1723,12 @@ class SettingsPanel {
       const hookSelectEls = {};
 
       const buildHookOptions = () => {
+        // Shuffle options
+        const shuffleOpts = `<optgroup label="🔀 Shuffle / Playlist">
+          <option value="shuffle|starred">🔀 Shuffle Starred (${soundLibrary.filter(s => s.starred !== false).length} sounds)</option>
+          <option value="shuffle|all">🔀 Shuffle All Library (${soundLibrary.length} sounds)</option>
+        </optgroup>`;
+
         let libOpts = '';
         const starredSounds = soundLibrary.filter(s => s.starred !== false);
         if (starredSounds.length > 0) {
@@ -1638,7 +1739,7 @@ class SettingsPanel {
         const stockOpts = `<optgroup label="🔊 Stock Sounds">` +
           stockOptions.map(s => `<option value="stock|${s.packId}|${s.hook}">${s.label}</option>`).join('') +
           `</optgroup>`;
-        return `<option value="">— Not set —</option>` + libOpts + stockOpts;
+        return `<option value="">— Not set —</option>` + shuffleOpts + libOpts + stockOpts;
       };
 
       const refreshHookDropdowns = () => {
@@ -1648,7 +1749,8 @@ class SettingsPanel {
           sel.innerHTML = options;
           // Restore selection
           const cfg = customCfg[hook];
-          if (cfg?.type === 'library') sel.value = `lib|${cfg.libId}`;
+          if (cfg?.type === 'shuffle') sel.value = `shuffle|${cfg.pool || 'starred'}`;
+          else if (cfg?.type === 'library') sel.value = `lib|${cfg.libId}`;
           else if (cfg?.type === 'stock') sel.value = `stock|${cfg.packId}|${cfg.hook}`;
           else sel.value = '';
         }
@@ -1709,7 +1811,8 @@ class SettingsPanel {
         // --- Sound dropdown ---
         const sel = row.querySelector(`#uniSelect_${hd.key}`);
         hookSelectEls[hd.key] = sel;
-        if (current?.type === 'library') sel.value = `lib|${current.libId}`;
+        if (current?.type === 'shuffle') sel.value = `shuffle|${current.pool || 'starred'}`;
+        else if (current?.type === 'library') sel.value = `lib|${current.libId}`;
         else if (current?.type === 'stock') sel.value = `stock|${current.packId}|${current.hook}`;
 
         sel.addEventListener('change', () => {
@@ -1719,7 +1822,9 @@ class SettingsPanel {
             return;
           }
           const parts = sel.value.split('|');
-          if (parts[0] === 'lib') {
+          if (parts[0] === 'shuffle') {
+            customCfg[hd.key] = { type: 'shuffle', pool: parts[1] }; // 'starred' or 'all'
+          } else if (parts[0] === 'lib') {
             const lib = soundLibrary.find(s => s.id === parts[1]);
             customCfg[hd.key] = { type: 'library', libId: parts[1], name: lib?.name };
           } else if (parts[0] === 'stock') {
@@ -1727,12 +1832,27 @@ class SettingsPanel {
             customCfg[hd.key] = { type: 'stock', packId: parts[1], hook: parts[2], label: opt?.label };
           }
           saveCustomCfg();
+
+          // Auto-enable the hook when user selects a sound
+          fx.setHookEnabled(hd.key, true);
+          muteBtn.textContent = '🔊';
         });
 
         // --- Preview ---
         row.querySelector(`#uniPreview_${hd.key}`).addEventListener('click', () => {
           const cfg = customCfg[hd.key];
-          if (cfg?.type === 'library') {
+          if (cfg?.type === 'shuffle') {
+            // Preview: play a random pick
+            const pool = cfg.pool === 'all' ? soundLibrary : soundLibrary.filter(s => s.starred !== false);
+            if (pool.length > 0) {
+              const pick = pool[Math.floor(Math.random() * pool.length)];
+              if (pick?.dataUrl) {
+                const audio = new Audio(pick.dataUrl);
+                audio.volume = Math.max(0.05, (volSlider.value / 100));
+                audio.play().catch(e => console.warn('Shuffle preview failed:', e));
+              }
+            }
+          } else if (cfg?.type === 'library') {
             const lib = soundLibrary.find(s => s.id === cfg.libId);
             if (lib?.dataUrl) {
               const audio = new Audio(lib.dataUrl);
@@ -1751,7 +1871,7 @@ class SettingsPanel {
         if (hd.key === 'during' || hd.key === 'process') {
           const storageKey = hd.key === 'during' ? 'windy_duringInterval' : 'windy_processInterval';
           const defaultVal = hd.key === 'during' ? 5 : 10;
-          const maxVal = hd.key === 'during' ? 300 : 60;
+          const maxVal = hd.key === 'during' ? 300 : 600;
           const saved = parseInt(localStorage.getItem(storageKey) || String(defaultVal), 10);
 
           const subRow = document.createElement('div');

@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld('windyAPI', {
   maximize: () => ipcRenderer.send('maximize-window'),
   unmaximize: () => ipcRenderer.send('unmaximize-window'),
   isMaximized: () => ipcRenderer.invoke('is-maximized'),
+  identifySong: (opts) => ipcRenderer.invoke('identify-song', opts),
+  checkFpcalc: () => ipcRenderer.invoke('check-fpcalc'),
 
   // Video preview window (independent)
   showVideoPreview: () => ipcRenderer.invoke('show-video-preview'),

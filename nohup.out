@@ -1,0 +1,21 @@
+[Main] needsSetup: false
+[Python] Starting server with: /home/sneakyfree/.windy-pro/venv/bin/python
+[Python] cwd: /tmp/.mount_Windy OpcByM/resources, module: engine.server
+[Performance] Using "small" model — runtime monitoring will check if it keeps up
+[Hotkey] Toggle recording (CommandOrControl+Space): OK
+[Hotkey] Paste transcript (CommandOrControl+Shift+V): OK
+[Hotkey] Paste clipboard (CommandOrControl+Shift+B): OK
+[Hotkey] Show/Hide (CommandOrControl+Shift+W): OK
+[Hotkey] Quick Translate (CommandOrControl+Shift+T): OK
+[License] Lifetime license — no validation needed
+[Updater] Skipping — checked within last 6h
+[Python] Loading transcription model...
+[Python] Loading model: small on cpu (int8)
+[Python] Model loaded successfully
+[Python] [Server] Killing stale process 546747 on port 9876
+[Python] ==================================================
+  Windy Pro Server v0.3.0
+  ws://127.0.0.1:9876
+  Model: small | Device: auto
+==================================================
+[Python] Server running. Waiting for connections...
