@@ -26,8 +26,14 @@ contextBridge.exposeInMainWorld('windyChat', {
   declineInvite: (roomId) => ipcRenderer.invoke('chat-decline-invite', roomId),
 
   // ═══ Profile ═══
-  setProfile: (displayName, avatarUrl) => ipcRenderer.invoke('chat-set-profile', displayName, avatarUrl),
+  setDisplayName: (displayName) => ipcRenderer.invoke('chat-set-display-name', displayName),
   setPresence: (status) => ipcRenderer.invoke('chat-set-presence', status),
+  getUserProfile: (userId) => ipcRenderer.invoke('chat-get-user-profile', userId),
+  getTotalUnread: () => ipcRenderer.invoke('chat-get-total-unread'),
+
+  // ═══ Settings ═══
+  getChatSettings: () => ipcRenderer.invoke('chat-get-settings'),
+  setChatSettings: (settings) => ipcRenderer.invoke('chat-set-settings', settings),
 
   // ═══ Events (renderer listens) ═══
   onMessage: (callback) => {
@@ -35,6 +41,9 @@ contextBridge.exposeInMainWorld('windyChat', {
   },
   onPresence: (callback) => {
     ipcRenderer.on('chat-presence-update', (event, data) => callback(data));
+  },
+  onTyping: (callback) => {
+    ipcRenderer.on('chat-typing', (event, data) => callback(data));
   },
   onInvite: (callback) => {
     ipcRenderer.on('chat-invite', (event, data) => callback(data));
@@ -44,6 +53,9 @@ contextBridge.exposeInMainWorld('windyChat', {
   },
   onDisconnected: (callback) => {
     ipcRenderer.on('chat-disconnected', () => callback());
+  },
+  onUnreadUpdate: (callback) => {
+    ipcRenderer.on('chat-unread-update', (event, count) => callback(count));
   },
 
   // ═══ Utilities ═══

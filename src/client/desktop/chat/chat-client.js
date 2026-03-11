@@ -5,6 +5,9 @@
  * message sending/receiving, and presence. All messages pass through
  * the translation middleware before delivery.
  * 
+ * Translation metadata format (cross-platform standard):
+ * { "body": "translated text", "windy_original": "original text", "windy_lang": "es" }
+ * 
  * License: Proprietary (Windy Pro)
  * Matrix JS SDK: Apache 2.0
  */
@@ -21,39 +24,55 @@ class WindyChatClient extends EventEmitter {
     this.client = null;
     this.isConnected = false;
     this.translateFn = null; // Set externally by chat-translate.js
+    this.presenceMap = new Map(); // userId → { presence, lastActive }
 
-    // Default homeserver — will be configurable
-    this.homeserverUrl = store.get('chat.homeserver', 'https://chat.windypro.com');
+    // Default homeserver — configurable in settings
+    this.homeserverUrl = store.get('chat.homeserver', 'https://matrix.org');
   }
 
   /**
    * Lazy-load the Matrix SDK (ESM module)
+   * matrix-js-sdk v31+ is ESM-only, so we must use dynamic import()
    */
   async _getSDK() {
     if (!_matrixSdk) {
-      _matrixSdk = await import('matrix-js-sdk');
+      try {
+        _matrixSdk = await import('matrix-js-sdk');
+      } catch (err) {
+        // Fallback: try require for older CJS builds bundled with the app
+        try {
+          _matrixSdk = require('matrix-js-sdk');
+        } catch (e2) {
+          throw new Error(`Cannot load matrix-js-sdk: ${err.message}. Fallback: ${e2.message}`);
+        }
+      }
     }
     return _matrixSdk;
   }
 
   /**
    * Initialize Matrix client and log in
-   * Uses stored credentials or creates new account
    */
   async login(userId, password) {
     try {
       const sdk = await this._getSDK();
       const hostname = require('os').hostname();
 
+      // Support both @user:server and plain username formats
+      let fullUserId = userId;
+      if (!userId.startsWith('@')) {
+        const domain = new URL(this.homeserverUrl).hostname;
+        fullUserId = `@${userId}:${domain}`;
+      }
+
       this.client = sdk.createClient({
         baseUrl: this.homeserverUrl,
-        userId: userId,
         deviceId: `windy-pro-${hostname}`
       });
 
       // Try login
       const loginResponse = await this.client.login('m.login.password', {
-        user: userId,
+        user: fullUserId,
         password: password,
         device_id: `windy-pro-${hostname}`,
         initial_device_display_name: 'Windy Pro Desktop'
@@ -69,7 +88,8 @@ class WindyChatClient extends EventEmitter {
         baseUrl: this.homeserverUrl,
         accessToken: loginResponse.access_token,
         userId: loginResponse.user_id,
-        deviceId: loginResponse.device_id
+        deviceId: loginResponse.device_id,
+        timelineSupport: true
       });
 
       await this._startSync();
@@ -98,14 +118,14 @@ class WindyChatClient extends EventEmitter {
         baseUrl: this.homeserverUrl,
         accessToken: accessToken,
         userId: userId,
-        deviceId: deviceId
+        deviceId: deviceId,
+        timelineSupport: true
       });
 
       await this._startSync();
       return { success: true, userId: userId };
     } catch (err) {
       console.error('[WindyChat] Session resume failed:', err.message);
-      // Clear stale credentials
       this.store.delete('chat.accessToken');
       return { success: false, error: err.message };
     }
@@ -124,7 +144,8 @@ class WindyChatClient extends EventEmitter {
       });
 
       // Now login with the new account
-      const loginResult = await this.login(`@${username}:${new URL(this.homeserverUrl).hostname}`, password);
+      const domain = new URL(this.homeserverUrl).hostname;
+      const loginResult = await this.login(`@${username}:${domain}`, password);
 
       if (loginResult.success && displayName) {
         await this.client.setDisplayName(displayName);
@@ -132,9 +153,9 @@ class WindyChatClient extends EventEmitter {
 
       return loginResult;
     } catch (err) {
-      // If registration requires more auth flows, handle gracefully
       if (err.data && err.data.session) {
         console.log('[WindyChat] Registration requires additional auth:', err.data.flows);
+        return { success: false, error: 'Registration requires CAPTCHA or email verification. Please register at ' + this.homeserverUrl };
       }
       console.error('[WindyChat] Registration failed:', err.message);
       return { success: false, error: err.message };
@@ -147,27 +168,48 @@ class WindyChatClient extends EventEmitter {
   async _startSync() {
     if (!this.client) return;
 
+    const userLang = this._getUserLanguage();
+
     // Listen for incoming messages
-    this.client.on('Room.timeline', (event, room, toStartOfTimeline) => {
-      if (toStartOfTimeline) return; // Skip backfill
+    this.client.on('Room.timeline', async (event, room, toStartOfTimeline) => {
+      if (toStartOfTimeline) return;
       if (event.getType() !== 'm.room.message') return;
-      if (event.getSender() === this.client.getUserId()) return; // Skip own messages
+      if (event.getSender() === this.client.getUserId()) return;
 
       const content = event.getContent();
       const senderId = event.getSender();
       const roomId = room.roomId;
       const timestamp = event.getTs();
 
-      // Extract translation metadata if present
-      const originalText = content['windy.original_text'] || null;
-      const sourceLanguage = content['windy.source_language'] || null;
+      // Extract standard Windy translation metadata
+      const windyOriginal = content.windy_original || null;
+      const windyLang = content.windy_lang || null;
+
+      let displayText = content.body || '';
+      let translatedText = null;
+
+      // Auto-translate if message is in a foreign language
+      if (this.translateFn && windyLang && windyLang !== userLang) {
+        try {
+          // Translate the original text (not the already-translated body)
+          const sourceText = windyOriginal || content.body;
+          translatedText = await this.translateFn(sourceText, windyLang, userLang);
+          displayText = translatedText;
+        } catch (e) {
+          console.warn('[WindyChat] Auto-translate failed:', e.message);
+        }
+      } else if (!windyLang && this.translateFn) {
+        // Unknown language — body is the only text, try detect + translate
+        // For now just show as-is; future: add language detection
+      }
 
       this.emit('message', {
         roomId,
         senderId,
-        body: content.body,
-        originalText,
-        sourceLanguage,
+        senderName: room.getMember(senderId)?.name || senderId,
+        body: displayText,
+        originalText: windyOriginal || (translatedText ? content.body : null),
+        originalLang: windyLang || null,
         timestamp,
         eventId: event.getId()
       });
@@ -175,10 +217,26 @@ class WindyChatClient extends EventEmitter {
 
     // Listen for presence changes
     this.client.on('User.presence', (event, user) => {
+      const presence = user.presence; // 'online', 'offline', 'unavailable'
+      this.presenceMap.set(user.userId, {
+        presence,
+        lastActive: user.lastActiveAgo
+      });
       this.emit('presence', {
         userId: user.userId,
-        presence: user.presence, // 'online', 'offline', 'unavailable'
+        presence: presence,
         lastActive: user.lastActiveAgo
+      });
+    });
+
+    // Listen for typing indicators
+    this.client.on('RoomMember.typing', (event, member) => {
+      if (member.userId === this.client.getUserId()) return;
+      this.emit('typing', {
+        roomId: member.roomId,
+        userId: member.userId,
+        displayName: member.name || member.userId,
+        typing: member.typing
       });
     });
 
@@ -201,46 +259,28 @@ class WindyChatClient extends EventEmitter {
   }
 
   /**
-   * Send a message (with auto-translation)
-   * @param {string} roomId - Matrix room ID
-   * @param {string} text - Message text in sender's language
-   * @param {string} senderLang - Sender's language code (e.g., 'en')
-   * @param {string} recipientLang - Recipient's language code (e.g., 'es')
+   * Send a message with Windy translation metadata
+   * Standard format: { body, windy_original, windy_lang }
    */
-  async sendMessage(roomId, text, senderLang, recipientLang) {
+  async sendMessage(roomId, text) {
     if (!this.client) throw new Error('Not connected');
 
-    let translatedText = text;
-    let wasTranslated = false;
+    const userLang = this._getUserLanguage();
 
-    // Auto-translate if languages differ and translate function is available
-    if (this.translateFn && senderLang && recipientLang && senderLang !== recipientLang) {
-      try {
-        translatedText = await this.translateFn(text, senderLang, recipientLang);
-        wasTranslated = true;
-      } catch (err) {
-        console.warn('[WindyChat] Translation failed, sending original:', err.message);
-        translatedText = text; // Fallback to original
-      }
-    }
-
-    // Build message content with Windy metadata
+    // Build message with standard Windy metadata
     const content = {
       msgtype: 'm.text',
-      body: translatedText,
-      format: 'org.matrix.custom.html',
-      // Windy-specific metadata for the recipient to show original + translated
-      'windy.original_text': text,
-      'windy.source_language': senderLang,
-      'windy.target_language': recipientLang,
-      'windy.translated': wasTranslated
+      body: text,
+      windy_original: text,
+      windy_lang: userLang
     };
 
     const result = await this.client.sendEvent(roomId, 'm.room.message', content);
     return {
       eventId: result.event_id,
-      translated: wasTranslated,
-      translatedText
+      body: text,
+      originalText: text,
+      originalLang: userLang
     };
   }
 
@@ -256,20 +296,22 @@ class WindyChatClient extends EventEmitter {
       return { roomId: existingRoom.roomId, existing: true };
     }
 
-    // Create new DM room
+    // Create new DM room with encryption
     const room = await this.client.createRoom({
       is_direct: true,
       invite: [userId],
       preset: 'trusted_private_chat',
-      visibility: 'private'
+      visibility: 'private',
+      initial_state: [{
+        type: 'm.room.encryption',
+        state_key: '',
+        content: { algorithm: 'm.megolm.v1.aes-sha2' }
+      }]
     });
 
     return { roomId: room.room_id, existing: false };
   }
 
-  /**
-   * Find an existing DM room with a user
-   */
   _findExistingDM(userId) {
     if (!this.client) return null;
     const rooms = this.client.getRooms();
@@ -283,7 +325,7 @@ class WindyChatClient extends EventEmitter {
   }
 
   /**
-   * Get all DM rooms (contacts)
+   * Get all DM rooms (contacts) with presence info
    */
   getContacts() {
     if (!this.client) return [];
@@ -297,6 +339,8 @@ class WindyChatClient extends EventEmitter {
         const other = members.find(m => m.userId !== myUserId);
         if (other) {
           const lastEvent = room.timeline[room.timeline.length - 1];
+          const presenceInfo = this.presenceMap.get(other.userId);
+
           contacts.push({
             roomId: room.roomId,
             userId: other.userId,
@@ -304,19 +348,32 @@ class WindyChatClient extends EventEmitter {
             avatarUrl: other.getAvatarUrl(this.homeserverUrl, 48, 48, 'crop'),
             lastMessage: lastEvent ? lastEvent.getContent().body : '',
             lastTimestamp: lastEvent ? lastEvent.getTs() : 0,
-            unreadCount: room.getUnreadNotificationCount('total') || 0
+            unreadCount: room.getUnreadNotificationCount('total') || 0,
+            presence: presenceInfo?.presence || 'offline',
+            lastActive: presenceInfo?.lastActive || null
           });
         }
       }
     }
 
-    // Sort by most recent message
     contacts.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
     return contacts;
   }
 
   /**
-   * Get message history for a room
+   * Get total unread count across all rooms
+   */
+  getTotalUnread() {
+    if (!this.client) return 0;
+    let total = 0;
+    for (const room of this.client.getRooms()) {
+      total += room.getUnreadNotificationCount('total') || 0;
+    }
+    return total;
+  }
+
+  /**
+   * Get message history for a room with translation metadata
    */
   getMessages(roomId, limit = 50) {
     if (!this.client) return [];
@@ -327,17 +384,40 @@ class WindyChatClient extends EventEmitter {
     return room.timeline
       .filter(event => event.getType() === 'm.room.message')
       .slice(-limit)
-      .map(event => ({
-        eventId: event.getId(),
-        senderId: event.getSender(),
-        body: event.getContent().body,
-        originalText: event.getContent()['windy.original_text'] || null,
-        sourceLanguage: event.getContent()['windy.source_language'] || null,
-        targetLanguage: event.getContent()['windy.target_language'] || null,
-        wasTranslated: event.getContent()['windy.translated'] || false,
-        timestamp: event.getTs(),
-        isOwn: event.getSender() === myUserId
-      }));
+      .map(event => {
+        const content = event.getContent();
+        return {
+          eventId: event.getId(),
+          senderId: event.getSender(),
+          senderName: room.getMember(event.getSender())?.name || event.getSender(),
+          body: content.body,
+          originalText: content.windy_original || null,
+          originalLang: content.windy_lang || null,
+          timestamp: event.getTs(),
+          isOwn: event.getSender() === myUserId
+        };
+      });
+  }
+
+  /**
+   * Get user profile info
+   */
+  async getUserProfile(userId) {
+    if (!this.client) return null;
+    try {
+      const profile = await this.client.getProfileInfo(userId);
+      const presenceInfo = this.presenceMap.get(userId);
+      return {
+        userId,
+        displayName: profile.displayname || userId,
+        avatarUrl: profile.avatar_url ?
+          this.client.mxcUrlToHttp(profile.avatar_url, 96, 96, 'crop') : null,
+        presence: presenceInfo?.presence || 'offline',
+        lastActive: presenceInfo?.lastActive || null
+      };
+    } catch (e) {
+      return { userId, displayName: userId, avatarUrl: null, presence: 'offline' };
+    }
   }
 
   /**
@@ -345,16 +425,28 @@ class WindyChatClient extends EventEmitter {
    */
   async setPresence(status) {
     if (!this.client) return;
-    await this.client.setPresence({ presence: status }); // 'online', 'offline', 'unavailable'
+    await this.client.setPresence({ presence: status });
   }
 
   /**
-   * Set display name and avatar
+   * Set display name
    */
-  async setProfile(displayName, avatarUrl) {
+  async setDisplayName(displayName) {
     if (!this.client) return;
-    if (displayName) await this.client.setDisplayName(displayName);
-    // Avatar upload would require file handling — Phase 2
+    await this.client.setDisplayName(displayName);
+    this.store.set('chat.displayName', displayName);
+  }
+
+  /**
+   * Upload avatar and set it
+   */
+  async setAvatar(buffer, mimeType) {
+    if (!this.client) return;
+    const uploadResponse = await this.client.uploadContent(buffer, {
+      type: mimeType,
+      name: 'avatar'
+    });
+    await this.client.setAvatarUrl(uploadResponse.content_uri);
   }
 
   /**
@@ -395,6 +487,7 @@ class WindyChatClient extends EventEmitter {
       this.client = null;
     }
     this.isConnected = false;
+    this.presenceMap.clear();
     this.store.delete('chat.accessToken');
     this.store.delete('chat.userId');
     this.store.delete('chat.deviceId');
@@ -406,6 +499,17 @@ class WindyChatClient extends EventEmitter {
    */
   getUserId() {
     return this.client ? this.client.getUserId() : null;
+  }
+
+  /**
+   * Get user's preferred language
+   */
+  _getUserLanguage() {
+    const languages = this.store.get('wizard.userLanguages', []);
+    if (languages.length > 0) {
+      return languages.sort((a, b) => (b.weight || 0) - (a.weight || 0))[0].code;
+    }
+    return this.store.get('chat.language', 'en');
   }
 }
 

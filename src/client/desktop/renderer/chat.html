@@ -30,7 +30,7 @@
     </div>
 
     <div class="login-form">
-      <input type="text" id="login-username" placeholder="Username or @user:server" autocomplete="username">
+      <input type="text" id="login-username" placeholder="Username or @user:matrix.org" autocomplete="username">
       <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
       <button onclick="handleLogin()">🌪️ Connect to Windy Chat</button>
       <div id="login-error" class="login-error" style="display:none;"></div>
@@ -64,7 +64,10 @@
     <div class="chat-sidebar">
       <div class="sidebar-header">
         <h2>🌪️ Windy Chat</h2>
-        <button onclick="showNewChat()" style="background:var(--chat-green); border:none; color:#0F1219; width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:16px; font-weight:800;" title="New conversation">+</button>
+        <div style="display:flex;gap:4px;">
+          <button onclick="showSettings()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:16px;" title="Settings">⚙️</button>
+          <button onclick="showNewChat()" style="background:var(--chat-green); border:none; color:#0F1219; width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:16px; font-weight:800;" title="New conversation">+</button>
+        </div>
       </div>
       <div class="sidebar-search">
         <input type="text" id="contact-search" placeholder="🔍 Search contacts..." oninput="filterContacts()">
@@ -115,17 +118,19 @@
       <div id="active-chat" style="display:none; flex:1; display:flex; flex-direction:column; height:100vh;">
         <!-- Header -->
         <div class="chat-header">
-          <div class="chat-header-info">
-            <div class="contact-avatar" id="chat-partner-avatar">?</div>
+          <div class="chat-header-info" onclick="showProfilePanel()" style="cursor:pointer;">
+            <div class="contact-avatar" id="chat-partner-avatar">?
+              <div class="presence-dot" id="header-presence-dot"></div>
+            </div>
             <div>
-              <div class="chat-header-name" id="chat-partner-name">Contact Name</div>
-              <div class="chat-header-status" id="chat-partner-status">Offline</div>
+              <div class="chat-header-name" id="chat-partner-name" data-userid="">Contact Name</div>
+              <div class="chat-header-status" id="chat-partner-status">Click for profile</div>
             </div>
           </div>
           <div class="chat-header-actions">
             <button title="Voice call (coming soon)" disabled>📞</button>
             <button title="Video call (coming soon)" disabled>📹</button>
-            <button title="Invite to Windy Pro" onclick="shareInvite()">📤</button>
+            <button title="Profile" onclick="showProfilePanel()">👤</button>
           </div>
         </div>
 
@@ -135,12 +140,15 @@
         </div>
 
         <!-- Typing indicator -->
-        <div class="typing-indicator" id="typing-indicator"></div>
+        <div class="typing-indicator" id="typing-indicator" style="display:none;">
+          <div class="typing-dots"><span></span><span></span><span></span></div>
+          <span id="typing-name">Someone</span> is typing...
+        </div>
 
         <!-- Input -->
         <div class="chat-input-area">
           <div class="translate-indicator" id="translate-indicator">
-            🌐 EN → ES
+            🌐 EN → Auto
           </div>
           <div class="chat-input-wrapper">
             <input type="text" id="message-input" placeholder="Type a message..."
@@ -153,12 +161,104 @@
     </div>
   </div>
 
+  <!-- ═══ Profile Panel Overlay ═══ -->
+  <div id="profile-panel" style="display:none; position:fixed; right:0; top:0; width:320px; height:100vh; background:var(--chat-sidebar); border-left:1px solid var(--chat-border); z-index:200; overflow-y:auto; box-shadow:-4px 0 20px rgba(0,0,0,0.3);">
+    <div style="padding:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--chat-border);">
+      <h3 style="font-size:14px; font-weight:700; margin:0;">👤 Contact Profile</h3>
+      <button onclick="hideProfilePanel()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:18px;">✕</button>
+    </div>
+    <div style="padding:24px; text-align:center;">
+      <div id="profile-avatar" style="width:80px; height:80px; border-radius:50%; margin:0 auto 12px; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:800; background:linear-gradient(135deg, #667eea, #764ba2); color:#fff;"></div>
+      <div id="profile-display-name" style="font-size:18px; font-weight:800; margin-bottom:4px;"></div>
+      <div id="profile-user-id" style="font-size:12px; color:var(--chat-text-muted); margin-bottom:8px;"></div>
+      <div id="profile-presence-badge" style="display:inline-block; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:600;"></div>
+    </div>
+    <div style="padding:0 24px 24px;">
+      <div style="background:var(--chat-card); border:1px solid var(--chat-border); border-radius:10px; padding:12px;">
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--chat-text-muted); margin-bottom:8px; font-weight:600;">Details</div>
+        <div id="profile-details" style="font-size:13px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Settings Panel Overlay ═══ -->
+  <div id="settings-panel" style="display:none; position:fixed; right:0; top:0; width:360px; height:100vh; background:var(--chat-sidebar); border-left:1px solid var(--chat-border); z-index:200; overflow-y:auto; box-shadow:-4px 0 20px rgba(0,0,0,0.3);">
+    <div style="padding:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--chat-border);">
+      <h3 style="font-size:14px; font-weight:700; margin:0;">⚙️ Chat Settings</h3>
+      <button onclick="hideSettings()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:18px;">✕</button>
+    </div>
+    <div style="padding:20px;">
+      <!-- Homeserver -->
+      <div style="margin-bottom:20px;">
+        <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">Matrix Homeserver</label>
+        <input id="settings-homeserver" type="text" placeholder="https://matrix.org"
+               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px; outline:none;">
+        <div style="font-size:10px; color:var(--chat-text-muted); margin-top:4px;">Standard Matrix federation server</div>
+      </div>
+
+      <!-- Display Name -->
+      <div style="margin-bottom:20px;">
+        <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">Display Name</label>
+        <input id="settings-display-name" type="text" placeholder="Your display name"
+               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px; outline:none;">
+      </div>
+
+      <!-- Language Preference -->
+      <div style="margin-bottom:20px;">
+        <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">My Language</label>
+        <select id="settings-language"
+               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px; outline:none;">
+          <option value="en">English</option>
+          <option value="es">Español</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="it">Italiano</option>
+          <option value="pt">Português</option>
+          <option value="zh">中文</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="ar">العربية</option>
+          <option value="ru">Русский</option>
+          <option value="hi">हिन्दी</option>
+          <option value="nl">Nederlands</option>
+          <option value="pl">Polski</option>
+          <option value="tr">Türkçe</option>
+          <option value="uk">Українська</option>
+          <option value="vi">Tiếng Việt</option>
+          <option value="th">ไทย</option>
+          <option value="sv">Svenska</option>
+          <option value="da">Dansk</option>
+          <option value="no">Norsk</option>
+          <option value="fi">Suomi</option>
+          <option value="cs">Čeština</option>
+          <option value="ro">Română</option>
+          <option value="hu">Magyar</option>
+        </select>
+      </div>
+
+      <!-- User ID (read-only) -->
+      <div style="margin-bottom:20px;">
+        <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">Your User ID</label>
+        <input id="settings-user-id" type="text" readonly
+               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text-muted); font-size:13px; outline:none; cursor:default;">
+      </div>
+
+      <!-- Save button -->
+      <button onclick="saveSettings()" id="settings-save-btn"
+              style="width:100%; padding:12px; background:linear-gradient(135deg, #667eea, #764ba2); border:none; border-radius:8px; color:#fff; font-size:14px; font-weight:700; cursor:pointer;">
+        💾 Save Settings
+      </button>
+      <div id="settings-status" style="font-size:12px; text-align:center; margin-top:8px; color:var(--chat-green); display:none;"></div>
+    </div>
+  </div>
+
   <!-- ═══ New Chat Modal ═══ -->
-  <div id="new-chat-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; display:none; align-items:center; justify-content:center;">
+  <div id="new-chat-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; align-items:center; justify-content:center;">
     <div style="background:var(--chat-card); border:1px solid var(--chat-border); border-radius:16px; padding:24px; width:360px; max-width:90vw;">
       <h3 style="font-size:16px; font-weight:800; margin-bottom:16px; color:var(--chat-text);">💬 New Conversation</h3>
-      <input type="text" id="new-chat-user" placeholder="Enter Windy Chat username or @user:server"
-             style="width:100%; padding:10px 14px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:14px; outline:none; margin-bottom:12px;">
+      <input type="text" id="new-chat-user" placeholder="Enter @user:matrix.org"
+             style="width:100%; padding:10px 14px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:14px; outline:none; margin-bottom:12px;"
+             onkeydown="if(event.key==='Enter')startNewChat()">
       <div style="display:flex; gap:8px; justify-content:flex-end;">
         <button onclick="hideNewChat()" style="padding:8px 16px; background:var(--chat-border); border:none; border-radius:8px; color:var(--chat-text-dim); cursor:pointer; font-size:13px;">Cancel</button>
         <button onclick="startNewChat()" style="padding:8px 16px; background:var(--chat-green); border:none; border-radius:8px; color:#0F1219; cursor:pointer; font-size:13px; font-weight:700;">Start Chat</button>
@@ -169,6 +269,7 @@
   <script>
     // ═══ State ═══
     let currentRoomId = null;
+    let currentPartnerId = null;
     let contacts = [];
     let myUserId = null;
     let myLanguage = 'en';
@@ -183,7 +284,6 @@
         showChatInterface();
         loadContacts();
       }
-      // Otherwise stay on login screen
 
       // Listen for incoming messages
       windyChat.onMessage((msg) => {
@@ -191,16 +291,23 @@
           appendMessage(msg);
           scrollToBottom();
         }
-        // Update contact list preview
-        loadContacts();
+        loadContacts(); // Update sidebar preview + unread
       });
 
+      // Presence updates
       windyChat.onPresence((data) => {
         updatePresence(data.userId, data.presence);
       });
 
+      // Typing indicators
+      windyChat.onTyping((data) => {
+        if (data.roomId === currentRoomId) {
+          showTyping(data.displayName, data.typing);
+        }
+      });
+
+      // Room invites
       windyChat.onInvite((data) => {
-        // Auto-accept for now (MVP simplicity)
         windyChat.acceptInvite(data.roomId);
         setTimeout(loadContacts, 1000);
       });
@@ -271,6 +378,7 @@
     async function handleLogout() {
       await windyChat.logout();
       currentRoomId = null;
+      currentPartnerId = null;
       contacts = [];
       document.getElementById('chat-interface').style.display = 'none';
       document.getElementById('login-screen').style.display = 'flex';
@@ -292,7 +400,6 @@
       document.getElementById('register-screen').style.display = 'none';
       document.getElementById('chat-interface').style.display = 'flex';
 
-      // Update user info in sidebar footer
       const displayName = myUserId ? myUserId.split(':')[0].replace('@', '') : '?';
       document.getElementById('my-display-name').textContent = displayName;
       document.getElementById('my-user-id').textContent = myUserId || '';
@@ -321,11 +428,12 @@
         const initial = (c.displayName || '?').charAt(0).toUpperCase();
         const time = c.lastTimestamp ? formatTime(c.lastTimestamp) : '';
         const isActive = c.roomId === currentRoomId;
+        const isOnline = c.presence === 'online';
         return `
-          <div class="contact-item ${isActive ? 'active' : ''}" onclick="openConversation('${c.roomId}', '${c.userId}', '${escapeHtml(c.displayName)}')">
+          <div class="contact-item ${isActive ? 'active' : ''}" onclick="openConversation('${c.roomId}', '${escapeAttr(c.userId)}', '${escapeAttr(c.displayName)}')">
             <div class="contact-avatar">
               ${initial}
-              <div class="presence-dot" id="presence-${c.userId.replace(/[^a-zA-Z0-9]/g, '_')}"></div>
+              <div class="presence-dot ${isOnline ? 'online' : ''}" id="presence-${c.userId.replace(/[^a-zA-Z0-9]/g, '_')}"></div>
             </div>
             <div class="contact-info">
               <div class="contact-name">${escapeHtml(c.displayName)}</div>
@@ -351,13 +459,23 @@
     // ═══ Conversations ═══
     async function openConversation(roomId, partnerId, partnerName) {
       currentRoomId = roomId;
+      currentPartnerId = partnerId;
 
       // Update header
       document.getElementById('chat-partner-name').textContent = partnerName;
-      document.getElementById('chat-partner-avatar').textContent = partnerName.charAt(0).toUpperCase();
+      document.getElementById('chat-partner-name').dataset.userid = partnerId;
+      document.getElementById('chat-partner-avatar').textContent = (partnerName || '?').charAt(0).toUpperCase();
+
+      // Update presence in header
+      const contact = contacts.find(c => c.userId === partnerId);
+      if (contact) {
+        const isOnline = contact.presence === 'online';
+        document.getElementById('chat-partner-status').textContent = isOnline ? '🟢 Online' : '⚫ Offline';
+        document.getElementById('header-presence-dot').className = `presence-dot ${isOnline ? 'online' : ''}`;
+      }
 
       // Update translate indicator
-      document.getElementById('translate-indicator').textContent = `🌐 ${myLanguage.toUpperCase()} → auto`;
+      document.getElementById('translate-indicator').textContent = `🌐 ${myLanguage.toUpperCase()} → Auto`;
 
       // Show active chat, hide empty state
       document.getElementById('chat-empty').style.display = 'none';
@@ -377,53 +495,48 @@
 
     function renderMessages(messages) {
       const container = document.getElementById('chat-messages');
-      container.innerHTML = messages.map(m => {
-        const isOwn = m.isOwn;
-        const time = formatTime(m.timestamp);
-
-        let translationHtml = '';
-        if (m.wasTranslated && m.originalText) {
-          const langLabel = m.sourceLanguage ? m.sourceLanguage.toUpperCase() : '??';
-          translationHtml = `
-            <div class="message-translation">
-              <span class="lang-badge">${langLabel}</span>
-              ${escapeHtml(m.originalText)}
-            </div>`;
-        }
-
-        return `
-          <div class="message-group ${isOwn ? 'own' : ''}">
-            <div class="message-bubble ${isOwn ? 'own' : 'other'}">
-              <div class="message-text">${escapeHtml(m.body)}</div>
-              ${translationHtml}
-              <div class="message-time">${time}</div>
-            </div>
-          </div>`;
-      }).join('');
+      container.innerHTML = messages.map(m => buildMessageHtml(m)).join('');
     }
 
-    function appendMessage(msg) {
-      const container = document.getElementById('chat-messages');
-      const time = formatTime(msg.timestamp);
-      const isOwn = msg.senderId === myUserId;
+    function buildMessageHtml(m) {
+      const isOwn = m.isOwn || m.senderId === myUserId;
+      const time = formatTime(m.timestamp);
 
+      // Dual-text bubble: show original + translation if from another language
       let translationHtml = '';
-      if (msg.originalText && msg.sourceLanguage) {
+      if (m.originalText && m.originalLang && m.originalLang !== myLanguage) {
+        const langLabel = m.originalLang.toUpperCase();
         translationHtml = `
           <div class="message-translation">
-            <span class="lang-badge">${msg.sourceLanguage.toUpperCase()}</span>
-            ${escapeHtml(msg.originalText)}
+            <span class="lang-badge">${langLabel}</span>
+            <span class="translation-text">${escapeHtml(m.originalText)}</span>
           </div>`;
       }
 
-      container.innerHTML += `
+      const senderHtml = !isOwn && m.senderName ? `<div class="message-sender">${escapeHtml(m.senderName)}</div>` : '';
+
+      return `
         <div class="message-group ${isOwn ? 'own' : ''}">
           <div class="message-bubble ${isOwn ? 'own' : 'other'}">
-            <div class="message-text">${escapeHtml(msg.body)}</div>
+            ${senderHtml}
+            <div class="message-text">${escapeHtml(m.body)}</div>
             ${translationHtml}
             <div class="message-time">${time}</div>
           </div>
         </div>`;
+    }
+
+    function appendMessage(msg) {
+      const container = document.getElementById('chat-messages');
+      const isOwn = msg.senderId === myUserId;
+      container.innerHTML += buildMessageHtml({
+        ...msg,
+        isOwn,
+        body: msg.body,
+        originalText: msg.originalText,
+        originalLang: msg.originalLang,
+        senderName: msg.senderName
+      });
     }
 
     // ═══ Send Message ═══
@@ -441,15 +554,14 @@
         // Optimistic UI — show our message immediately
         appendMessage({
           senderId: myUserId,
-          body: result.translated ? result.translatedText : text,
-          originalText: result.translated ? text : null,
-          sourceLanguage: result.translated ? myLanguage : null,
+          body: text,
+          originalText: text,
+          originalLang: myLanguage,
           timestamp: Date.now()
         });
         scrollToBottom();
       } catch (err) {
         console.error('Send failed:', err);
-        // Show error in chat
         appendMessage({
           senderId: 'system',
           body: '⚠️ Message failed to send. Please try again.',
@@ -461,8 +573,10 @@
       input.focus();
     }
 
-    // ═══ Typing ═══
+    // ═══ Typing Indicator ═══
     let typingTimeout = null;
+    let typingClearTimeout = null;
+
     function handleTyping() {
       if (!currentRoomId) return;
       windyChat.sendTyping(currentRoomId, true);
@@ -470,6 +584,103 @@
       typingTimeout = setTimeout(() => {
         windyChat.sendTyping(currentRoomId, false);
       }, 3000);
+    }
+
+    function showTyping(name, isTyping) {
+      const el = document.getElementById('typing-indicator');
+      if (isTyping) {
+        document.getElementById('typing-name').textContent = name || 'Someone';
+        el.style.display = 'flex';
+        clearTimeout(typingClearTimeout);
+        typingClearTimeout = setTimeout(() => { el.style.display = 'none'; }, 6000);
+      } else {
+        el.style.display = 'none';
+      }
+    }
+
+    // ═══ Presence ═══
+    function updatePresence(userId, status) {
+      const safeId = userId.replace(/[^a-zA-Z0-9]/g, '_');
+      const dot = document.getElementById(`presence-${safeId}`);
+      if (dot) {
+        dot.className = `presence-dot ${status === 'online' ? 'online' : ''}`;
+      }
+      // Update header if viewing this contact
+      if (currentPartnerId === userId) {
+        document.getElementById('chat-partner-status').textContent =
+          status === 'online' ? '🟢 Online' : '⚫ Offline';
+        document.getElementById('header-presence-dot').className =
+          `presence-dot ${status === 'online' ? 'online' : ''}`;
+      }
+      // Update contact in list
+      const contact = contacts.find(c => c.userId === userId);
+      if (contact) contact.presence = status;
+    }
+
+    // ═══ Profile Panel ═══
+    async function showProfilePanel() {
+      if (!currentPartnerId) return;
+      const panel = document.getElementById('profile-panel');
+      const profile = await windyChat.getUserProfile(currentPartnerId);
+
+      if (profile) {
+        const initial = (profile.displayName || '?').charAt(0).toUpperCase();
+        document.getElementById('profile-avatar').textContent = initial;
+        if (profile.avatarUrl) {
+          document.getElementById('profile-avatar').style.backgroundImage = `url(${profile.avatarUrl})`;
+          document.getElementById('profile-avatar').textContent = '';
+          document.getElementById('profile-avatar').style.backgroundSize = 'cover';
+        }
+        document.getElementById('profile-display-name').textContent = profile.displayName;
+        document.getElementById('profile-user-id').textContent = profile.userId;
+
+        const presenceBadge = document.getElementById('profile-presence-badge');
+        const isOnline = profile.presence === 'online';
+        presenceBadge.textContent = isOnline ? '🟢 Online' : '⚫ Offline';
+        presenceBadge.style.background = isOnline ? 'rgba(0,200,100,0.15)' : 'rgba(255,255,255,0.05)';
+        presenceBadge.style.color = isOnline ? '#00cc66' : 'var(--chat-text-muted)';
+
+        document.getElementById('profile-details').innerHTML = `
+          <div style="margin-bottom:6px;"><strong>Handle:</strong> ${escapeHtml(profile.userId)}</div>
+          <div style="margin-bottom:6px;"><strong>Status:</strong> ${isOnline ? 'Online now' : profile.lastActive ? 'Last seen ' + formatTimeAgo(profile.lastActive) : 'Offline'}</div>
+        `;
+      }
+
+      panel.style.display = 'block';
+    }
+
+    function hideProfilePanel() {
+      document.getElementById('profile-panel').style.display = 'none';
+    }
+
+    // ═══ Settings Panel ═══
+    async function showSettings() {
+      const settings = await windyChat.getChatSettings();
+      document.getElementById('settings-homeserver').value = settings.homeserver || 'https://matrix.org';
+      document.getElementById('settings-display-name').value = settings.displayName || '';
+      document.getElementById('settings-language').value = settings.language || 'en';
+      document.getElementById('settings-user-id').value = settings.userId || '';
+      document.getElementById('settings-panel').style.display = 'block';
+    }
+
+    function hideSettings() {
+      document.getElementById('settings-panel').style.display = 'none';
+    }
+
+    async function saveSettings() {
+      const settings = {
+        homeserver: document.getElementById('settings-homeserver').value.trim(),
+        displayName: document.getElementById('settings-display-name').value.trim(),
+        language: document.getElementById('settings-language').value
+      };
+
+      await windyChat.setChatSettings(settings);
+      myLanguage = settings.language;
+
+      const status = document.getElementById('settings-status');
+      status.textContent = '✅ Settings saved!';
+      status.style.display = 'block';
+      setTimeout(() => { status.style.display = 'none'; }, 2000);
     }
 
     // ═══ New Chat ═══
@@ -495,26 +706,10 @@
       }
     }
 
-    // ═══ Presence ═══
-    function updatePresence(userId, status) {
-      const safeId = userId.replace(/[^a-zA-Z0-9]/g, '_');
-      const dot = document.getElementById(`presence-${safeId}`);
-      if (dot) {
-        dot.className = `presence-dot ${status === 'online' ? 'online' : ''}`;
-      }
-      // Update header if viewing this contact
-      const headerName = document.getElementById('chat-partner-name');
-      if (headerName && headerName.dataset.userId === userId) {
-        document.getElementById('chat-partner-status').textContent =
-          status === 'online' ? '🟢 Online' : 'Offline';
-      }
-    }
-
     // ═══ Share / Invite ═══
     function shareInvite() {
       const inviteText = `Join me on Windy Chat! Talk in any language, 100% private.\nhttps://windypro.com/chat/invite/${myUserId}`;
       navigator.clipboard.writeText(inviteText);
-      // Brief visual feedback
       const btn = event.target;
       btn.textContent = '✅';
       setTimeout(() => btn.textContent = '📤', 1500);
@@ -538,9 +733,22 @@
       return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
 
+    function formatTimeAgo(ms) {
+      if (!ms) return 'a while ago';
+      if (ms < 60000) return 'just now';
+      if (ms < 3600000) return `${Math.floor(ms / 60000)} min ago`;
+      if (ms < 86400000) return `${Math.floor(ms / 3600000)}h ago`;
+      return `${Math.floor(ms / 86400000)}d ago`;
+    }
+
     function escapeHtml(text) {
       if (!text) return '';
       return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function escapeAttr(text) {
+      if (!text) return '';
+      return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
     }
 
     // ═══ Start ═══

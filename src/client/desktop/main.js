@@ -1184,11 +1184,17 @@ ipcMain.on('open-windy-chat', () => showChatWindow());
 
 // Chat IPC — Authentication
 ipcMain.handle('chat-login', async (event, userId, password) => {
-  return getChatClient().login(userId, password);
+  const client = getChatClient();
+  const result = await client.login(userId, password);
+  if (result.success) _setupChatForwarding(client);
+  return result;
 });
 
 ipcMain.handle('chat-register', async (event, username, password, displayName) => {
-  return getChatClient().register(username, password, displayName);
+  const client = getChatClient();
+  const result = await client.register(username, password, displayName);
+  if (result.success) _setupChatForwarding(client);
+  return result;
 });
 
 ipcMain.handle('chat-logout', async () => {
@@ -1197,15 +1203,15 @@ ipcMain.handle('chat-logout', async () => {
 });
 
 ipcMain.handle('chat-get-session', async () => {
-  return getChatClient().resumeSession();
+  const client = getChatClient();
+  const result = await client.resumeSession();
+  if (result.success) _setupChatForwarding(client);
+  return result;
 });
 
-// Chat IPC — Messaging
+// Chat IPC — Messaging (client handles translation metadata internally)
 ipcMain.handle('chat-send-message', async (event, roomId, text) => {
-  const client = getChatClient();
-  const userLang = chatTranslator ? chatTranslator.getUserLanguage() : 'en';
-  // For MVP, we auto-detect recipient language from room or default
-  return client.sendMessage(roomId, text, userLang, null);
+  return getChatClient().sendMessage(roomId, text);
 });
 
 ipcMain.handle('chat-get-messages', async (event, roomId, limit) => {
@@ -1234,23 +1240,103 @@ ipcMain.handle('chat-decline-invite', async (event, roomId) => {
 });
 
 // Chat IPC — Profile & Presence
-ipcMain.handle('chat-set-profile', async (event, displayName, avatarUrl) => {
-  return getChatClient().setProfile(displayName, avatarUrl);
+ipcMain.handle('chat-set-display-name', async (event, displayName) => {
+  return getChatClient().setDisplayName(displayName);
 });
 
 ipcMain.handle('chat-set-presence', async (event, status) => {
   return getChatClient().setPresence(status);
 });
 
+ipcMain.handle('chat-get-user-profile', async (event, userId) => {
+  return getChatClient().getUserProfile(userId);
+});
+
+ipcMain.handle('chat-get-total-unread', async () => {
+  return getChatClient().getTotalUnread();
+});
+
+// Chat IPC — Settings
+ipcMain.handle('chat-get-settings', async () => {
+  return {
+    homeserver: store.get('chat.homeserver', 'https://matrix.org'),
+    displayName: store.get('chat.displayName', ''),
+    language: store.get('chat.language', 'en'),
+    userId: store.get('chat.userId', '')
+  };
+});
+
+ipcMain.handle('chat-set-settings', async (event, settings) => {
+  if (settings.homeserver) store.set('chat.homeserver', settings.homeserver);
+  if (settings.displayName) {
+    store.set('chat.displayName', settings.displayName);
+    try { getChatClient().setDisplayName(settings.displayName); } catch (e) { /* not connected */ }
+  }
+  if (settings.language) store.set('chat.language', settings.language);
+  return { ok: true };
+});
+
 // Chat IPC — Translation utilities
 ipcMain.handle('chat-get-user-language', async () => {
-  return chatTranslator ? chatTranslator.getUserLanguage() : 'en';
+  return chatTranslator ? chatTranslator.getUserLanguage() : store.get('chat.language', 'en');
 });
 
 ipcMain.handle('chat-translate-text', async (event, text, srcLang, tgtLang) => {
   if (!chatTranslator) chatTranslator = new ChatTranslator(store);
   return chatTranslator.translate(text, srcLang, tgtLang);
 });
+
+// Forward events from Matrix client → chat BrowserWindow
+let _chatForwardingSetup = false;
+function _setupChatForwarding(client) {
+  if (_chatForwardingSetup) return;
+  _chatForwardingSetup = true;
+
+  client.on('message', (msg) => {
+    if (chatWindow && !chatWindow.isDestroyed()) {
+      chatWindow.webContents.send('chat-new-message', msg);
+    }
+    // Update tray icon unread badge
+    _updateTrayUnread(client.getTotalUnread());
+  });
+
+  client.on('presence', (data) => {
+    if (chatWindow && !chatWindow.isDestroyed()) {
+      chatWindow.webContents.send('chat-presence-update', data);
+    }
+  });
+
+  client.on('typing', (data) => {
+    if (chatWindow && !chatWindow.isDestroyed()) {
+      chatWindow.webContents.send('chat-typing', data);
+    }
+  });
+
+  client.on('invite', (data) => {
+    if (chatWindow && !chatWindow.isDestroyed()) {
+      chatWindow.webContents.send('chat-invite', data);
+    }
+  });
+
+  client.on('disconnected', () => {
+    _chatForwardingSetup = false;
+  });
+}
+
+function _updateTrayUnread(count) {
+  try {
+    if (tray && !tray.isDestroyed()) {
+      tray.setToolTip(count > 0 ? `Windy Pro (${count} unread)` : 'Windy Pro');
+    }
+    // Set dock badge (macOS) or taskbar overlay (Windows)
+    if (app.dock && typeof app.dock.setBadge === 'function') {
+      app.dock.setBadge(count > 0 ? String(count) : '');
+    }
+    if (mainWindow && !mainWindow.isDestroyed() && typeof mainWindow.setOverlayIcon === 'function') {
+      // On Windows, would set overlay icon — skip for now
+    }
+  } catch (e) { /* ignore badge errors */ }
+}
 
 // ── Live Listen: speech translation for Quick Translate ──
 ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, targetLang, apiKeys, options) => {
