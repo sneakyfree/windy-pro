@@ -12,7 +12,7 @@ const MONIKERS = [
   { emoji: '🟢', text: 'The Green Strobe Never Lies.', sub: 'If it\'s green, you\'re recording. Always. No guessing.' },
   { emoji: '🔒', text: 'Stay Local. Stay Private.', sub: 'Unlike competitors who upload your voice to the cloud — we don\'t.' },
   { emoji: '💊', text: 'Get Voice-Pilled.', sub: 'Once you try fully local voice-to-text, you can\'t go back.' },
-  { emoji: '🐕', text: '"WindyPro make me go MoboLoco!"', sub: '42 MB model on your phone. Smaller than most selfies.' },
+  { emoji: '🐕', text: '"WindyPro make me go MoboLoco!"', sub: '406 MB engine on your phone. Runs anywhere, no GPU needed.' },
   { emoji: '💰', text: 'Pay Once. Use Forever.', sub: 'No subscription. No monthly fees. This is yours for life.' },
   { emoji: '🧬', text: 'Talk Today. Live Forever.', sub: 'Build your voice clone dataset automatically while you work.' },
   { emoji: '⌨️', text: 'Never Touch a Keyboard Again.', sub: 'Dictate everything. Paste anywhere. One hotkey.' },
@@ -23,7 +23,7 @@ const MONIKERS = [
   { emoji: '✈️', text: 'Airplane Mode? No Problem.', sub: '35,000 feet, no Wi-Fi, perfect transcription. Always.' },
   { emoji: '📱', text: 'One Download. A Partner for Life.', sub: '15 models. One mission. Your words, perfectly.' },
   { emoji: '🏔️', text: 'Zero Bars? No Problem.', sub: 'Mountains, countryside, off-grid — your voice still works.' },
-  { emoji: '🔄', text: '15 Models. One Mission.', sub: 'Your words, perfectly. On any device. In any language.' }
+  { emoji: '🔄', text: '16 Engines. One Mission.', sub: 'Your words, perfectly. On any device. In any language.' }
 ];
 
 /**
@@ -66,13 +66,13 @@ const FEATURE_CARDS = [
     category: 'privacy'
   },
   {
-    title: '💎 15 Proprietary Models',
-    body: 'Developed in our lab. Fine-tuned by our engineers. Not available anywhere else. From a 42 MB model on your phone to a 2.9 GB flagship on your workstation — every model is encrypted, fingerprinted, and continually refined.',
+    title: '💎 16 Proprietary Engines',
+    body: 'Developed by Windy Pro Labs. Fine-tuned by our engineers. Not available anywhere else. From a 73 MB GPU engine to a 9.5 GB CPU flagship — every engine is optimized, encrypted, and continually refined.',
     category: 'technology'
   },
   {
     title: '🐕 MoboLoco — Mobile Local Power',
-    body: '42 megabytes. That\'s our smallest model. Smaller than most selfies. Install it on your phone and forget it. It\'s always there when you need it. No internet required. Ever.',
+    body: '406 megabytes for our CPU-optimized Windy Nano. Runs beautifully on any device. Install it and forget it. It\'s always there when you need it. No internet required. Ever.',
     category: 'mobile'
   },
   {
@@ -169,9 +169,9 @@ const INSTALL_STEP_MESSAGES = {
     tip: 'GPU + Windy Core = instant transcription. That\'s WINDY, baby! 🌪️'
   },
   'download-model': {
-    title: '🧠 Downloading Windy Pro Model',
-    detail: 'Pulling your encrypted model from our servers. This model was fine-tuned in our lab specifically for Windy Pro.',
-    tip: 'Models are encrypted and fingerprinted to your account. Nobody else has these.'
+    title: '🧠 Downloading Windy Pro Engine',
+    detail: 'Pulling your engine from WindyProLabs on HuggingFace. This engine was fine-tuned by our team specifically for Windy Pro.',
+    tip: 'Engines are optimized for local, private transcription. Nobody else has these configurations.'
   },
   'verify': {
     title: '✅ Verifying Installation',

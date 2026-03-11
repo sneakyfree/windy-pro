@@ -1,308 +1,464 @@
 /**
- * Windy Pro v2.0 — Model Catalog
- * 15 proprietary models in 3 families: Core (GPU), Edge (CPU), Lingua (language specialists)
- * All models are .wpr encrypted, fingerprinted per account, steganographically watermarked.
- * 
- * THESE ARE OUR MODELS. Developed in our lab. Fine-tuned by our engineers on Veron 1.
- * Not available anywhere else.
+ * Windy Pro v2.0 — Engine Catalog
+ * 16 proprietary engines in 2 families: GPU-Accelerated + CPU-Optimized
+ * All engines developed by Windy Pro Labs. Fine-tuned, optimized, and secured.
+ *
+ * USER-FACING NAMES: No "STT" in any displayed name
+ * INTERNAL IDs: windy-stt-* for code/downloads
+ *
+ * 7 ENGINE NAMES (GPU + CPU variants):
+ * - Windy Nano, Windy Lite, Windy Core (FREE tier)
+ * - Windy Edge, Windy Plus, Windy Turbo, Windy Pro (PAID tiers)
+ *
+ * 2 TRANSLATION ENGINES:
+ * - Windy Translate Spark, Windy Translate Standard
  */
 
-const MODEL_FAMILIES = {
-  core: {
-    name: 'Windy Core',
+const ENGINE_FAMILIES = {
+  gpu: {
+    name: 'GPU-Accelerated',
     emoji: '⚡',
-    tagline: 'GPU-Accelerated Power',
-    description: 'Seven models for desktops and workstations with dedicated GPUs. Maximum speed. Maximum accuracy.',
+    tagline: 'For machines with dedicated graphics cards',
+    description: 'Blazing-fast inference with CUDA/Metal acceleration. Recommended for desktops and workstations.',
     color: '#3B82F6',
     requiresGPU: true
   },
-  edge: {
-    name: 'Windy Edge',
+  cpu: {
+    name: 'CPU-Optimized',
     emoji: '🛡️',
-    tagline: 'Runs Anywhere. No GPU Required.',
-    description: 'Five models optimized for laptops, phones, tablets, and older hardware. Fully local, fully private, fully offline.',
+    tagline: 'Runs on any machine',
+    description: 'No graphics card needed. Optimized for laptops, older hardware, and resource-constrained devices.',
     color: '#22C55E',
     requiresGPU: false
   },
-  lingua: {
-    name: 'Windy Lingua',
+  translation: {
+    name: 'Translation',
     emoji: '🌍',
-    tagline: 'Dedicated Language Excellence',
-    description: 'Purpose-built models for specific languages. Not a generalist — a specialist.',
+    tagline: 'Real-time multilingual translation',
+    description: 'Live translation across 100+ language pairs. Local, private, instant.',
     color: '#A855F7',
     requiresGPU: false
   }
 };
 
 /**
- * All 15 proprietary Windy Pro models
- * Sizes are approximate .wpr file sizes
+ * All 16 proprietary Windy Pro engines
+ * Sizes match MODEL_MANIFEST from Electron app main.js:134
  */
-const MODEL_CATALOG = [
-  // ─── WINDY CORE (GPU-Accelerated) ───
+const ENGINE_CATALOG = [
+  // ─── GPU-ACCELERATED ENGINES ───
   {
-    id: 'core-spark',
-    family: 'core',
-    name: 'Windy Core Spark',
-    shortName: 'Windy Spark',
-    sizeMB: 75,
+    id: 'windy-stt-nano',
+    family: 'gpu',
+    name: 'Windy Nano',
+    displayName: 'Windy Nano',
+    sizeMB: 73,
+    sizeDisplay: '73 MB',
     vramGB: 1,
     ramGB: 4,
-    speed: '32x',
-    quality: 'Basic',
+    speed: '32×',
+    speedRating: 32,
+    quality: 3,
+    qualityLabel: 'Good',
+    parameters: '39M',
     languages: 99,
-    description: 'Ultra-light GPU model. Lightning fast inference.',
-    bestFor: 'Quick dictation, real-time captions, embedded systems',
-    tier: 'free' // Available on free tier
+    description: 'Fastest GPU engine. Lightning-fast dictation and real-time captions.',
+    bestFor: 'Quick dictation, real-time captions, speed-first workflows',
+    tier: 'free',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    format: 'Safetensors',
+    badge: '⚡ Fastest'
   },
   {
-    id: 'core-pulse',
-    family: 'core',
-    name: 'Windy Core Pulse',
-    shortName: 'Windy Pulse',
-    sizeMB: 142,
+    id: 'windy-stt-lite',
+    family: 'gpu',
+    name: 'Windy Lite',
+    displayName: 'Windy Lite',
+    sizeMB: 140,
+    sizeDisplay: '140 MB',
     vramGB: 1,
     ramGB: 4,
-    speed: '16x',
-    quality: 'Good',
+    speed: '16×',
+    speedRating: 16,
+    quality: 3.5,
+    qualityLabel: 'Great',
+    parameters: '74M',
     languages: 99,
-    description: 'Fast and reliable GPU transcription.',
-    bestFor: 'Everyday dictation, emails, casual notes',
-    tier: 'plus'
+    description: 'Lightweight, balanced speed and quality. Excellent for everyday use.',
+    bestFor: 'Emails, casual notes, meetings, everyday dictation',
+    tier: 'free',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    format: 'Safetensors'
   },
   {
-    id: 'core-standard',
-    family: 'core',
-    name: 'Windy Core Standard',
-    shortName: 'Windy Standard',
-    sizeMB: 466,
+    id: 'windy-stt-core',
+    family: 'gpu',
+    name: 'Windy Core',
+    displayName: 'Windy Core',
+    sizeMB: 462,
+    sizeDisplay: '462 MB',
     vramGB: 2,
     ramGB: 8,
-    speed: '6x',
-    quality: 'Accurate',
+    speed: '6×',
+    speedRating: 6,
+    quality: 4,
+    qualityLabel: 'Excellent',
+    parameters: '244M',
     languages: 99,
-    description: 'The workhorse. Great accuracy on GPU.',
-    bestFor: 'Meetings, technical dictation, content creation',
-    tier: 'plus'
+    description: 'Recommended for most users. Great accuracy on GPU hardware.',
+    bestFor: 'Meetings, technical dictation, content creation, professional use',
+    tier: 'free',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    format: 'Safetensors',
+    badge: '⭐ Recommended'
   },
   {
-    id: 'core-global',
-    family: 'core',
-    name: 'Windy Core Global',
-    shortName: 'Windy Global',
-    sizeMB: 1500,
+    id: 'windy-stt-edge',
+    family: 'gpu',
+    name: 'Windy Edge',
+    displayName: 'Windy Edge',
+    sizeMB: 1444,
+    sizeDisplay: '1.4 GB',
     vramGB: 5,
     ramGB: 16,
-    speed: '2x',
-    quality: 'High',
+    speed: '4×',
+    speedRating: 4,
+    quality: 4.5,
+    qualityLabel: 'Outstanding',
+    parameters: '1550M',
     languages: 99,
-    description: 'Multilingual powerhouse. Best for non-English and code-switching.',
-    bestFor: 'Multilingual users, international meetings, translation prep',
-    tier: 'pro'
+    description: 'High-accuracy, professional-grade transcription.',
+    bestFor: 'Professional meetings, multilingual content, broadcast quality',
+    tier: 'pro',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    format: 'Safetensors'
   },
   {
-    id: 'core-pro',
-    family: 'core',
-    name: 'Windy Core Pro',
-    shortName: 'Windy Pro',
-    sizeMB: 1500,
+    id: 'windy-stt-plus',
+    family: 'gpu',
+    name: 'Windy Plus',
+    displayName: 'Windy Plus',
+    sizeMB: 1458,
+    sizeDisplay: '1.5 GB',
     vramGB: 5,
     ramGB: 16,
-    speed: '6x',
-    quality: 'Excellent',
-    languages: 1, // English-optimized
-    description: 'Distilled flagship. English excellence at 6x speed.',
-    bestFor: 'English power users, professionals, long sessions',
-    tier: 'pro'
+    speed: '5×',
+    speedRating: 5,
+    quality: 4.5,
+    qualityLabel: 'Outstanding',
+    parameters: '1550M',
+    languages: 99,
+    description: 'Premium accuracy, production-grade quality.',
+    bestFor: 'Production workflows, legal, medical, technical documentation',
+    tier: 'pro',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    format: 'Safetensors'
   },
   {
-    id: 'core-turbo',
-    family: 'core',
-    name: 'Windy Core Turbo',
-    shortName: 'Windy Turbo',
-    sizeMB: 1600,
+    id: 'windy-stt-turbo',
+    family: 'gpu',
+    name: 'Windy Turbo',
+    displayName: 'Windy Turbo',
+    sizeMB: 1544,
+    sizeDisplay: '1.5 GB',
     vramGB: 6,
     ramGB: 16,
-    speed: '4x',
-    quality: 'Excellent',
+    speed: '4×',
+    speedRating: 4,
+    quality: 5,
+    qualityLabel: 'Champion',
+    parameters: '809M',
     languages: 99,
-    description: 'Near-Ultra quality at twice the speed.',
-    bestFor: 'When you want the best but need it faster',
-    tier: 'pro'
+    description: 'Champion engine. Best balance of speed and quality.',
+    bestFor: 'Power users who want the best without compromises',
+    tier: 'pro',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    format: 'Safetensors',
+    badge: '🏆 Champion'
   },
   {
-    id: 'core-ultra',
-    family: 'core',
-    name: 'Windy Core Ultra',
-    shortName: 'Windy Ultra',
-    sizeMB: 2900,
+    id: 'windy-stt-pro',
+    family: 'gpu',
+    name: 'Windy Pro',
+    displayName: 'Windy Pro',
+    sizeMB: 2945,
+    sizeDisplay: '2.9 GB',
     vramGB: 10,
     ramGB: 24,
-    speed: '1x',
-    quality: 'Maximum',
+    speed: '1×',
+    speedRating: 1,
+    quality: 5,
+    qualityLabel: 'Flagship',
+    parameters: '1550M',
     languages: 99,
-    description: 'The flagship. Best accuracy in any language. No compromises.',
-    bestFor: 'Broadcast, legal, medical, professional, multilingual',
-    tier: 'promax',
+    description: 'The flagship. Maximum accuracy in any language. No compromises.',
+    bestFor: 'Broadcast, legal, medical, multilingual professionals, maximum quality',
+    tier: 'translate_pro',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    format: 'Safetensors',
     badge: '👑 Flagship'
   },
 
-  // ─── WINDY EDGE (CPU, No GPU Required) ───
+  // ─── CPU-OPTIMIZED ENGINES ───
   {
-    id: 'edge-spark',
-    family: 'edge',
-    name: 'Windy Edge Spark',
-    shortName: 'Windy Spark',
-    sizeMB: 42,
+    id: 'windy-stt-nano-cpu',
+    family: 'cpu',
+    name: 'Windy Nano',
+    displayName: 'Windy Nano (CPU)',
+    sizeMB: 406,
+    sizeDisplay: '406 MB',
     vramGB: 0,
     ramGB: 2,
-    speed: '32x',
-    quality: 'Basic',
+    speed: '8×',
+    speedRating: 8,
+    quality: 3,
+    qualityLabel: 'Good',
+    parameters: '39M',
     languages: 99,
-    description: 'Smallest model. 42 MB. Fits any phone.',
-    bestFor: 'Phones, tablets, budget devices, offline emergencies',
+    description: 'CPU-optimized for resource-constrained devices.',
+    bestFor: 'Older hardware, low-RAM devices, offline emergencies',
     tier: 'free',
-    badge: '📱 MoboLoco'
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    format: 'INT8 Quantized',
+    badge: '📱 Mobile-Ready'
   },
   {
-    id: 'edge-pulse',
-    family: 'edge',
-    name: 'Windy Edge Pulse',
-    shortName: 'Windy Pulse',
-    sizeMB: 78,
+    id: 'windy-stt-lite-cpu',
+    family: 'cpu',
+    name: 'Windy Lite',
+    displayName: 'Windy Lite (CPU)',
+    sizeMB: 668,
+    sizeDisplay: '668 MB',
     vramGB: 0,
     ramGB: 3,
-    speed: '16x',
-    quality: 'Good',
+    speed: '6×',
+    speedRating: 6,
+    quality: 3.5,
+    qualityLabel: 'Great',
+    parameters: '74M',
     languages: 99,
-    description: 'Phone-optimized. Fast and light.',
-    bestFor: 'Mobile dictation, voice memos on the go',
-    tier: 'free'
+    description: 'CPU-optimized, good balance for everyday use.',
+    bestFor: 'Laptop users, coffee shop dictation, mobile workflows',
+    tier: 'free',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    format: 'INT8 Quantized'
   },
   {
-    id: 'edge-standard',
-    family: 'edge',
-    name: 'Windy Edge Standard',
-    shortName: 'Windy Standard',
-    sizeMB: 168,
+    id: 'windy-stt-core-cpu',
+    family: 'cpu',
+    name: 'Windy Core',
+    displayName: 'Windy Core (CPU)',
+    sizeMB: 1760,
+    sizeDisplay: '1.7 GB',
     vramGB: 0,
     ramGB: 4,
-    speed: '6x',
-    quality: 'Accurate',
+    speed: '3×',
+    speedRating: 3,
+    quality: 4,
+    qualityLabel: 'Excellent',
+    parameters: '244M',
     languages: 99,
-    description: 'Best balance for laptops and phones with 4GB+ RAM.',
-    bestFor: 'Laptop users, coffee shop dictation, everyday use',
-    tier: 'plus',
-    badge: '⭐ Most Popular'
+    description: 'Recommended CPU engine. No GPU needed.',
+    bestFor: 'Laptops, desktops without GPU, everyday professional use',
+    tier: 'free',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    format: 'INT8 Quantized',
+    badge: '⭐ CPU Recommended'
   },
   {
-    id: 'edge-global',
-    family: 'edge',
-    name: 'Windy Edge Global',
-    shortName: 'Windy Global',
-    sizeMB: 515,
+    id: 'windy-stt-edge-cpu',
+    family: 'cpu',
+    name: 'Windy Edge',
+    displayName: 'Windy Edge (CPU)',
+    sizeMB: 3824,
+    sizeDisplay: '3.8 GB',
     vramGB: 0,
     ramGB: 8,
-    speed: '2x',
-    quality: 'High',
+    speed: '2×',
+    speedRating: 2,
+    quality: 4.5,
+    qualityLabel: 'Outstanding',
+    parameters: '1550M',
     languages: 99,
-    description: 'Multilingual on CPU. Great for travel and translation.',
-    bestFor: 'Travelers, multilingual users, translation prep',
-    tier: 'pro'
+    description: 'CPU-optimized, high accuracy for professional work.',
+    bestFor: 'Professional CPU workflows, high-quality transcription',
+    tier: 'pro',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    format: 'INT8 Quantized'
   },
   {
-    id: 'edge-pro',
-    family: 'edge',
-    name: 'Windy Edge Pro',
-    shortName: 'Windy Pro',
-    sizeMB: 515,
+    id: 'windy-stt-plus-cpu',
+    family: 'cpu',
+    name: 'Windy Plus',
+    displayName: 'Windy Plus (CPU)',
+    sizeMB: 4872,
+    sizeDisplay: '4.9 GB',
     vramGB: 0,
     ramGB: 8,
-    speed: '4x',
-    quality: 'Excellent',
-    languages: 1, // English-optimized
-    description: 'Distilled English excellence on CPU. No GPU needed.',
-    bestFor: 'English-first laptop and tablet users',
-    tier: 'pro'
+    speed: '2×',
+    speedRating: 2,
+    quality: 4.5,
+    qualityLabel: 'Outstanding',
+    parameters: '1550M',
+    languages: 99,
+    description: 'CPU-optimized premium accuracy.',
+    bestFor: 'Production CPU workflows, legal, medical transcription',
+    tier: 'pro',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    format: 'INT8 Quantized'
+  },
+  {
+    id: 'windy-stt-turbo-cpu',
+    family: 'cpu',
+    name: 'Windy Turbo',
+    displayName: 'Windy Turbo (CPU)',
+    sizeMB: 4200,
+    sizeDisplay: '4.2 GB',
+    vramGB: 0,
+    ramGB: 8,
+    speed: '2×',
+    speedRating: 2,
+    quality: 5,
+    qualityLabel: 'Champion',
+    parameters: '809M',
+    languages: 99,
+    description: 'CPU-optimized state-of-the-art quality.',
+    bestFor: 'Power CPU users who demand maximum quality',
+    tier: 'pro',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    format: 'INT8 Quantized',
+    badge: '🏆 CPU Champion'
+  },
+  {
+    id: 'windy-stt-pro-cpu',
+    family: 'cpu',
+    name: 'Windy Pro',
+    displayName: 'Windy Pro (CPU)',
+    sizeMB: 9456,
+    sizeDisplay: '9.5 GB',
+    vramGB: 0,
+    ramGB: 16,
+    speed: '1×',
+    speedRating: 1,
+    quality: 5,
+    qualityLabel: 'Flagship',
+    parameters: '1550M',
+    languages: 99,
+    description: 'CPU-optimized flagship. Maximum performance without GPU.',
+    bestFor: 'Broadcast, legal, medical on CPU hardware',
+    tier: 'translate_pro',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    format: 'INT8 Quantized',
+    badge: '👑 CPU Flagship'
   },
 
-  // ─── WINDY LINGUA (Language Specialists) ───
+  // ─── TRANSLATION ENGINES ───
   {
-    id: 'lingua-es',
-    family: 'lingua',
-    name: 'Windy Lingua Español',
-    shortName: 'Windy Español',
-    sizeMB: 500,
+    id: 'windy-translate-spark',
+    family: 'translation',
+    name: 'Windy Translate Spark',
+    displayName: 'Windy Translate Spark',
+    sizeMB: 929,
+    sizeDisplay: '929 MB',
     vramGB: 0,
-    ramGB: 6,
-    speed: '4x',
-    quality: 'Specialist',
-    languages: 1,
-    languageName: 'Spanish',
-    description: 'Purpose-built for Spanish. All dialects — Castilian, Mexican, Caribbean, Andean.',
-    bestFor: 'Native Spanish speakers, Spanish-English code-switching',
-    tier: 'pro'
+    ramGB: 4,
+    speed: '8×',
+    speedRating: 8,
+    quality: 4,
+    qualityLabel: 'Fast & Accurate',
+    parameters: '418M',
+    languages: 100,
+    description: 'Fast multilingual translation across 100+ languages.',
+    bestFor: 'Quick translations, real-time conversation, travelers',
+    tier: 'translate',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'Multilingual by Windy Pro Labs',
+    format: 'Safetensors'
   },
   {
-    id: 'lingua-fr',
-    family: 'lingua',
-    name: 'Windy Lingua Français',
-    shortName: 'Windy Français',
-    sizeMB: 500,
+    id: 'windy-translate-standard',
+    family: 'translation',
+    name: 'Windy Translate Standard',
+    displayName: 'Windy Translate Standard',
+    sizeMB: 2371,
+    sizeDisplay: '2.4 GB',
     vramGB: 0,
-    ramGB: 6,
-    speed: '4x',
-    quality: 'Specialist',
-    languages: 1,
-    languageName: 'French',
-    description: 'Purpose-built for French. Metropolitan, Canadian, African dialects.',
-    bestFor: 'Native French speakers, French-English environments',
-    tier: 'promax'
-  },
-  {
-    id: 'lingua-hi',
-    family: 'lingua',
-    name: 'Windy Lingua हिन्दी',
-    shortName: 'Windy हिन्दी',
-    sizeMB: 500,
-    vramGB: 0,
-    ramGB: 6,
-    speed: '4x',
-    quality: 'Specialist',
-    languages: 1,
-    languageName: 'Hindi',
-    description: 'Purpose-built for Hindi. Handles Hindi-English code-switching natively.',
-    bestFor: 'Hindi speakers, Hinglish environments, Indian professionals',
-    tier: 'promax'
+    ramGB: 8,
+    speed: '4×',
+    speedRating: 4,
+    quality: 5,
+    qualityLabel: 'Professional',
+    parameters: '1200M',
+    languages: 100,
+    description: 'Higher quality than Spark. Professional-grade translation.',
+    bestFor: 'Professional translation, business meetings, documentation',
+    tier: 'translate_pro',
+    architecture: 'Proprietary encoder-decoder',
+    fineTuned: 'Multilingual by Windy Pro Labs',
+    format: 'Safetensors',
+    badge: '🌍 Pro Translation'
   }
 ];
 
 /**
- * Tier access rules — which models are available at each tier
+ * Tier access rules — which engines are available at each tier
+ * Matches Electron app's MODEL_MANIFEST.tierModels
  */
 const TIER_ACCESS = {
-  free:    ['core-spark', 'edge-spark', 'edge-pulse'],
-  plus:    ['core-spark', 'core-pulse', 'core-standard', 'edge-spark', 'edge-pulse', 'edge-standard'],
-  pro:     MODEL_CATALOG.map(m => m.id), // All 15
-  promax:  MODEL_CATALOG.map(m => m.id), // All 15 + priority updates
-  lifetime: MODEL_CATALOG.map(m => m.id),
-  lifetimeplus: MODEL_CATALOG.map(m => m.id)
+  free: [
+    'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core',
+    'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu'
+  ],
+  pro: [
+    'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core',
+    'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro',
+    'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu',
+    'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu'
+  ],
+  translate: [
+    'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core',
+    'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro',
+    'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu',
+    'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu',
+    'windy-translate-spark'
+  ],
+  translate_pro: [
+    'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core',
+    'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro',
+    'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu',
+    'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu',
+    'windy-translate-spark', 'windy-translate-standard'
+  ]
 };
 
 /**
- * Get models available for a given tier
+ * Get engines available for a given tier
  */
-function getModelsForTier(tier) {
+function getEnginesForTier(tier) {
   const ids = TIER_ACCESS[tier] || TIER_ACCESS.free;
-  return MODEL_CATALOG.filter(m => ids.includes(m.id));
+  return ENGINE_CATALOG.filter(m => ids.includes(m.id));
 }
 
 /**
- * Get total download size for a set of model IDs (in MB)
+ * Get total download size for a set of engine IDs (in MB)
  */
-function getTotalSize(modelIds) {
-  return MODEL_CATALOG
-    .filter(m => modelIds.includes(m.id))
+function getTotalSize(engineIds) {
+  return ENGINE_CATALOG
+    .filter(m => engineIds.includes(m.id))
     .reduce((sum, m) => sum + m.sizeMB, 0);
 }
 
@@ -310,8 +466,56 @@ function getTotalSize(modelIds) {
  * Format size for display
  */
 function formatSize(mb) {
-  if (mb < 1024) return `${mb} MB`;
+  if (mb < 1024) return `${Math.round(mb)} MB`;
   return `${(mb / 1024).toFixed(1)} GB`;
 }
 
-module.exports = { MODEL_FAMILIES, MODEL_CATALOG, TIER_ACCESS, getModelsForTier, getTotalSize, formatSize };
+/**
+ * Get engine by ID
+ */
+function getEngineById(id) {
+  return ENGINE_CATALOG.find(e => e.id === id);
+}
+
+/**
+ * Get GPU variants of all engines
+ */
+function getGPUEngines() {
+  return ENGINE_CATALOG.filter(e => e.family === 'gpu');
+}
+
+/**
+ * Get CPU variants of all engines
+ */
+function getCPUEngines() {
+  return ENGINE_CATALOG.filter(e => e.family === 'cpu');
+}
+
+/**
+ * Get translation engines
+ */
+function getTranslationEngines() {
+  return ENGINE_CATALOG.filter(e => e.family === 'translation');
+}
+
+/**
+ * Check if user has access to an engine based on tier
+ */
+function hasAccessToEngine(engineId, userTier) {
+  const tierEngines = TIER_ACCESS[userTier] || TIER_ACCESS.free;
+  return tierEngines.includes(engineId);
+}
+
+module.exports = {
+  ENGINE_FAMILIES,
+  ENGINE_CATALOG,
+  TIER_ACCESS,
+  getEnginesForTier,
+  getTotalSize,
+  formatSize,
+  getEngineById,
+  getGPUEngines,
+  getCPUEngines,
+  getTranslationEngines,
+  hasAccessToEngine
+};

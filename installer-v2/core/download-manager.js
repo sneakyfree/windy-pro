@@ -1,10 +1,12 @@
 /**
  * Windy Pro v2.0 — Download Manager
- * Handles model downloads with resume, retry, checksum verification,
- * parallel downloads, and progress tracking.
- * 
- * Models are .wpr encrypted files downloaded from our CDN.
- * Each download is fingerprinted to the user's account.
+ * Handles engine downloads from WindyProLabs HuggingFace repos
+ * with resume, retry, checksum verification, and progress tracking.
+ *
+ * All engines downloaded from HuggingFace: WindyProLabs/[model-id]
+ * GPU models: WindyProLabs/windy-stt-*
+ * CPU models: WindyProLabs/windy-stt-*-ct2
+ * Translation: WindyProLabs/windy_translate_*
  */
 
 const https = require('https');
@@ -13,58 +15,66 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// CDN configuration
-// Production: const CDN_BASE = 'https://models.windypro.thewindstorm.uk/v2';
-const CDN_BASE = process.env.MODEL_CDN || 'http://localhost:8099/v2';
+// HuggingFace configuration
+const HF_BASE = 'https://huggingface.co';
+const HF_ORG = 'WindyProLabs';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 const CHUNK_LOG_INTERVAL = 500; // Report progress every 500ms
 
-// ═══════════════════════════════════════════════════════════════════
-// LOCAL MODEL CACHE — Map engine IDs to HuggingFace faster-whisper models
-// When a model exists in ~/.cache/huggingface, use it instead of CDN.
-// This is how it works in dev AND for users who pre-downloaded models.
-// ═══════════════════════════════════════════════════════════════════
-const os = require('os');
-const HF_CACHE = path.join(os.homedir(), '.cache', 'huggingface', 'hub');
-const ENGINE_TO_HF = {
-  'edge-spark':    'models--Systran--faster-whisper-tiny',
-  'edge-pulse':    'models--Systran--faster-whisper-base',
-  'edge-standard': 'models--Systran--faster-whisper-small',
-  'edge-global':   'models--Systran--faster-whisper-medium',
-  'edge-pro':      'models--Systran--faster-whisper-medium.en',
-  'core-spark':    'models--Systran--faster-whisper-tiny',
-  'core-pulse':    'models--Systran--faster-whisper-base',
-  'core-standard': 'models--Systran--faster-whisper-small',
-  'core-global':   'models--Systran--faster-whisper-large-v3',
-  'core-pro':      'models--Systran--faster-whisper-large-v3',
-  'core-turbo':    'models--Systran--faster-whisper-large-v3-turbo',
-  'core-ultra':    'models--Systran--faster-whisper-large-v3',
-  'lingua-es':     'models--Systran--faster-whisper-medium',
-  'lingua-fr':     'models--Systran--faster-whisper-medium',
-  'lingua-hi':     'models--Systran--faster-whisper-medium',
+/**
+ * Map internal engine IDs to HuggingFace repo names
+ * GPU models: windy-stt-* → WindyProLabs/windy-stt-*
+ * CPU models: windy-stt-*-cpu → WindyProLabs/windy-stt-*-ct2
+ * Translation: windy-translate-* → WindyProLabs/windy_translate_*
+ */
+const ENGINE_TO_HF_REPO = {
+  // GPU engines
+  'windy-stt-nano': 'windy-stt-nano',
+  'windy-stt-lite': 'windy-stt-lite',
+  'windy-stt-core': 'windy-stt-core',
+  'windy-stt-edge': 'windy-stt-edge',
+  'windy-stt-plus': 'windy-stt-plus',
+  'windy-stt-turbo': 'windy-stt-turbo',
+  'windy-stt-pro': 'windy-stt-pro',
+  // CPU engines (ct2 = CTranslate2 quantized)
+  'windy-stt-nano-cpu': 'windy-stt-nano-ct2',
+  'windy-stt-lite-cpu': 'windy-stt-lite-ct2',
+  'windy-stt-core-cpu': 'windy-stt-core-ct2',
+  'windy-stt-edge-cpu': 'windy-stt-edge-ct2',
+  'windy-stt-plus-cpu': 'windy-stt-plus-ct2',
+  'windy-stt-turbo-cpu': 'windy-stt-turbo-ct2',
+  'windy-stt-pro-cpu': 'windy-stt-pro-ct2',
+  // Translation engines
+  'windy-translate-spark': 'windy_translate_spark',
+  'windy-translate-standard': 'windy_translate_standard'
 };
 
 /**
- * Check if a model is already available in the HuggingFace cache
- * @returns {string|null} Path to cached model dir, or null
+ * Essential files to download from each repo
+ * These are the minimum files needed for inference
  */
-function findCachedModel(modelId) {
-  const hfName = ENGINE_TO_HF[modelId];
-  if (!hfName) return null;
-  const hfDir = path.join(HF_CACHE, hfName, 'snapshots');
-  try {
-    if (!fs.existsSync(hfDir)) return null;
-    const snapshots = fs.readdirSync(hfDir);
-    if (snapshots.length === 0) return null;
-    const snapPath = path.join(hfDir, snapshots[0]);
-    // Verify it has at least a config.json
-    if (fs.existsSync(path.join(snapPath, 'config.json'))) {
-      return snapPath;
-    }
-  } catch (e) { /* ignore */ }
-  return null;
-}
+const REQUIRED_FILES = {
+  gpu: [
+    'config.json',
+    'preprocessor_config.json',
+    'model.safetensors',
+    'tokenizer.json',
+    'vocabulary.json'
+  ],
+  cpu: [
+    'config.json',
+    'model.bin',
+    'vocabulary.txt'
+  ],
+  translation: [
+    'config.json',
+    'model.safetensors',
+    'tokenizer.json',
+    'source.spm',
+    'target.spm'
+  ]
+};
 
 class DownloadManager {
   constructor(modelsDir) {
@@ -74,161 +84,143 @@ class DownloadManager {
   }
 
   /**
-   * Download a single model with progress reporting
-   * Supports resume from partial downloads
-   * @param {string} modelId - Model identifier
-   * @param {number} expectedSizeMB - Expected file size in MB
-   * @param {function} onProgress - Callback(percent, downloadedMB, speedMBps)
-   * @param {string} accountToken - JWT token for fingerprinting
-   * @returns {Promise<string>} Path to downloaded file
+   * Get the HuggingFace repo URL for an engine
    */
-  async downloadModel(modelId, expectedSizeMB, onProgress, accountToken = null) {
-    const filePath = path.join(this.modelsDir, `${modelId}.wpr`);
-    const tempPath = `${filePath}.partial`;
-    const expectedBytes = expectedSizeMB * 1024 * 1024;
-
-    // Check if already downloaded as .wpr
-    if (fs.existsSync(filePath)) {
-      const stat = fs.statSync(filePath);
-      if (stat.size >= expectedBytes * 0.95) {
-        onProgress(100, expectedSizeMB, 0);
-        return filePath;
-      }
+  getRepoUrl(engineId) {
+    const repoName = ENGINE_TO_HF_REPO[engineId];
+    if (!repoName) {
+      throw new Error(`Unknown engine ID: ${engineId}`);
     }
+    return `${HF_BASE}/${HF_ORG}/${repoName}`;
+  }
 
-    // ═══ Check HuggingFace cache (local models) ═══
-    const cachedPath = findCachedModel(modelId);
-    if (cachedPath) {
-      console.log(`[DownloadManager] Found cached model for ${modelId}: ${cachedPath}`);
-      // Create a symlink or marker so the app knows where the model is
-      const linkPath = path.join(this.modelsDir, `${modelId}.local`);
-      try {
-        // Write a JSON pointer to the cached model
-        fs.writeFileSync(linkPath, JSON.stringify({
-          type: 'huggingface-cache',
-          modelId: modelId,
-          path: cachedPath,
-          detectedAt: new Date().toISOString()
-        }, null, 2));
-      } catch (e) { /* ignore */ }
-
-      // Simulate download progress for UI satisfaction (fast — 50ms per tick)
-      const steps = 10;
-      for (let i = 1; i <= steps; i++) {
-        await new Promise(r => setTimeout(r, 50));
-        onProgress((i / steps) * 100, expectedSizeMB * (i / steps), 999);
-      }
-      onProgress(100, expectedSizeMB, 0);
-      return cachedPath;
+  /**
+   * Get the file download URL for an engine
+   */
+  getFileUrl(engineId, filename) {
+    const repoName = ENGINE_TO_HF_REPO[engineId];
+    if (!repoName) {
+      throw new Error(`Unknown engine ID: ${engineId}`);
     }
+    return `${HF_BASE}/${HF_ORG}/${repoName}/resolve/main/${filename}`;
+  }
 
-    // Check for partial download (resume support)
-    let startByte = 0;
-    if (fs.existsSync(tempPath)) {
-      const stat = fs.statSync(tempPath);
-      startByte = stat.size;
-    }
-
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        await this._downloadWithResume(modelId, tempPath, filePath, expectedBytes, startByte, onProgress, accountToken);
-        return filePath;
-      } catch (err) {
-        if (attempt < MAX_RETRIES) {
-          // Update startByte for resume
-          if (fs.existsSync(tempPath)) {
-            startByte = fs.statSync(tempPath).size;
-          }
-          await this._delay(RETRY_DELAY_MS * attempt);
-        } else {
-          throw new Error(`Failed to download ${modelId} after ${MAX_RETRIES} attempts: ${err.message}`);
-        }
-      }
+  /**
+   * Determine required files based on engine type
+   */
+  getRequiredFiles(engineId) {
+    if (engineId.includes('translate')) {
+      return REQUIRED_FILES.translation;
+    } else if (engineId.endsWith('-cpu')) {
+      return REQUIRED_FILES.cpu;
+    } else {
+      return REQUIRED_FILES.gpu;
     }
   }
 
   /**
-   * Download with HTTP Range header for resume support
+   * Download a single engine with progress reporting
+   * Downloads all required files from HuggingFace repo
+   * @param {string} engineId - Engine identifier (e.g., 'windy-stt-nano')
+   * @param {number} expectedSizeMB - Expected total size in MB
+   * @param {function} onProgress - Callback(percent, downloadedMB, speedMBps)
+   * @param {string} accountToken - Optional JWT token
+   * @returns {Promise<string>} Path to downloaded engine directory
    */
-  _downloadWithResume(modelId, tempPath, finalPath, expectedBytes, startByte, onProgress, token) {
+  async downloadEngine(engineId, expectedSizeMB, onProgress, accountToken = null) {
+    const engineDir = path.join(this.modelsDir, engineId);
+    fs.mkdirSync(engineDir, { recursive: true });
+
+    // Check if already downloaded and complete
+    const requiredFiles = this.getRequiredFiles(engineId);
+    const allFilesExist = requiredFiles.every(f =>
+      fs.existsSync(path.join(engineDir, f))
+    );
+
+    if (allFilesExist) {
+      console.log(`[DownloadManager] Engine ${engineId} already downloaded`);
+      onProgress(100, expectedSizeMB, 0);
+      return engineDir;
+    }
+
+    console.log(`[DownloadManager] Downloading ${engineId} from ${HF_ORG}/${ENGINE_TO_HF_REPO[engineId]}`);
+
+    // Download each required file
+    const totalBytes = expectedSizeMB * 1024 * 1024;
+    let downloadedBytes = 0;
+    let startTime = Date.now();
+
+    for (const filename of requiredFiles) {
+      const fileUrl = this.getFileUrl(engineId, filename);
+      const filePath = path.join(engineDir, filename);
+
+      // Skip if file already exists
+      if (fs.existsSync(filePath)) {
+        const stat = fs.statSync(filePath);
+        downloadedBytes += stat.size;
+        continue;
+      }
+
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          await this._downloadFile(fileUrl, filePath, (chunkBytes) => {
+            downloadedBytes += chunkBytes;
+            const elapsed = (Date.now() - startTime) / 1000;
+            const speedMBps = elapsed > 0 ? (downloadedBytes / (1024 * 1024)) / elapsed : 0;
+            const percent = Math.min(99, (downloadedBytes / totalBytes) * 100);
+            onProgress(percent, downloadedBytes / (1024 * 1024), speedMBps);
+          });
+          break; // Success
+        } catch (err) {
+          if (attempt < MAX_RETRIES) {
+            console.warn(`[DownloadManager] Retry ${attempt}/${MAX_RETRIES} for ${filename}: ${err.message}`);
+            await this._delay(RETRY_DELAY_MS * attempt);
+          } else {
+            throw new Error(`Failed to download ${filename} after ${MAX_RETRIES} attempts: ${err.message}`);
+          }
+        }
+      }
+    }
+
+    // Mark as complete
+    onProgress(100, expectedSizeMB, 0);
+    return engineDir;
+  }
+
+  /**
+   * Download a single file with progress tracking
+   */
+  _downloadFile(url, destPath, onChunk) {
     return new Promise((resolve, reject) => {
-      const url = `${CDN_BASE}/${modelId}.wpr`;
-      const headers = {};
-
-      if (startByte > 0) {
-        headers['Range'] = `bytes=${startByte}-`;
-      }
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-        headers['X-Device-Id'] = this._getDeviceId();
-      }
-
       const protocol = url.startsWith('https') ? https : http;
 
-      const req = protocol.get(url, { headers, timeout: 30000 }, (res) => {
+      const req = protocol.get(url, { timeout: 30000 }, (res) => {
         // Handle redirects
         if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307) {
           const redirectUrl = res.headers.location;
           if (redirectUrl) {
-            // Follow redirect
-            this._downloadFromUrl(redirectUrl, tempPath, finalPath, expectedBytes, startByte, onProgress)
-              .then(resolve).catch(reject);
+            this._downloadFile(redirectUrl, destPath, onChunk)
+              .then(resolve)
+              .catch(reject);
             return;
           }
         }
 
-        // 416 = Range not satisfiable (file complete or server doesn't support range)
-        if (res.statusCode === 416) {
-          // File might be complete
-          if (fs.existsSync(tempPath)) {
-            fs.renameSync(tempPath, finalPath);
-            onProgress(100, expectedBytes / (1024 * 1024), 0);
-            resolve();
-            return;
-          }
-        }
-
-        if (res.statusCode !== 200 && res.statusCode !== 206) {
-          reject(new Error(`HTTP ${res.statusCode} downloading ${modelId}`));
+        if (res.statusCode !== 200) {
+          reject(new Error(`HTTP ${res.statusCode} downloading ${url}`));
           return;
         }
 
-        const totalBytes = startByte + parseInt(res.headers['content-length'] || expectedBytes - startByte);
-        let downloadedBytes = startByte;
-        let lastReportTime = Date.now();
-        let lastReportBytes = startByte;
-
-        const writeStream = fs.createWriteStream(tempPath, { flags: startByte > 0 ? 'a' : 'w' });
+        const writeStream = fs.createWriteStream(destPath);
 
         res.on('data', (chunk) => {
           writeStream.write(chunk);
-          downloadedBytes += chunk.length;
-
-          const now = Date.now();
-          if (now - lastReportTime >= CHUNK_LOG_INTERVAL) {
-            const elapsed = (now - lastReportTime) / 1000;
-            const bytesSinceReport = downloadedBytes - lastReportBytes;
-            const speedMBps = (bytesSinceReport / (1024 * 1024)) / elapsed;
-            const percent = Math.min(99, (downloadedBytes / totalBytes) * 100);
-            const downloadedMB = downloadedBytes / (1024 * 1024);
-
-            onProgress(percent, downloadedMB, speedMBps);
-
-            lastReportTime = now;
-            lastReportBytes = downloadedBytes;
-          }
+          onChunk(chunk.length);
         });
 
         res.on('end', () => {
           writeStream.end(() => {
-            // Rename temp to final
-            try {
-              fs.renameSync(tempPath, finalPath);
-              onProgress(100, downloadedBytes / (1024 * 1024), 0);
-              resolve();
-            } catch (e) {
-              reject(e);
-            }
+            resolve();
           });
         });
 
@@ -236,7 +228,6 @@ class DownloadManager {
           writeStream.end();
           reject(err);
         });
-
       });
 
       req.on('error', reject);
@@ -248,111 +239,55 @@ class DownloadManager {
   }
 
   /**
-   * Download from a specific URL (for redirect following)
+   * Download multiple engines with overall progress tracking
    */
-  _downloadFromUrl(url, tempPath, finalPath, expectedBytes, startByte, onProgress) {
-    return new Promise((resolve, reject) => {
-      const headers = {};
-      if (startByte > 0) headers['Range'] = `bytes=${startByte}-`;
-
-      const protocol = url.startsWith('https') ? https : http;
-
-      const req = protocol.get(url, { headers, timeout: 30000 }, (res) => {
-        if (res.statusCode !== 200 && res.statusCode !== 206) {
-          reject(new Error(`HTTP ${res.statusCode}`));
-          return;
-        }
-
-        const totalBytes = startByte + parseInt(res.headers['content-length'] || expectedBytes - startByte);
-        let downloadedBytes = startByte;
-        let lastReportTime = Date.now();
-        let lastReportBytes = startByte;
-
-        const writeStream = fs.createWriteStream(tempPath, { flags: startByte > 0 ? 'a' : 'w' });
-
-        res.on('data', (chunk) => {
-          writeStream.write(chunk);
-          downloadedBytes += chunk.length;
-
-          const now = Date.now();
-          if (now - lastReportTime >= CHUNK_LOG_INTERVAL) {
-            const elapsed = (now - lastReportTime) / 1000;
-            const speedMBps = ((downloadedBytes - lastReportBytes) / (1024 * 1024)) / elapsed;
-            const percent = Math.min(99, (downloadedBytes / totalBytes) * 100);
-            onProgress(percent, downloadedBytes / (1024 * 1024), speedMBps);
-            lastReportTime = now;
-            lastReportBytes = downloadedBytes;
-          }
-        });
-
-        res.on('end', () => {
-          writeStream.end(() => {
-            try {
-              fs.renameSync(tempPath, finalPath);
-              onProgress(100, downloadedBytes / (1024 * 1024), 0);
-              resolve();
-            } catch (e) { reject(e); }
-          });
-        });
-
-        res.on('error', (err) => { writeStream.end(); reject(err); });
-      });
-
-      req.on('error', reject);
-      req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-    });
-  }
-
-  /**
-   * Download multiple models with overall progress tracking
-   */
-  async downloadMultiple(models, onOverallProgress, onModelProgress, accountToken = null) {
-    const totalMB = models.reduce((sum, m) => sum + m.sizeMB, 0);
+  async downloadMultiple(engines, onOverallProgress, onEngineProgress, accountToken = null) {
+    const totalMB = engines.reduce((sum, e) => sum + e.sizeMB, 0);
     let completedMB = 0;
 
-    for (let i = 0; i < models.length; i++) {
-      const model = models[i];
+    for (let i = 0; i < engines.length; i++) {
+      const engine = engines[i];
 
       onOverallProgress({
-        modelIndex: i,
-        modelCount: models.length,
-        modelId: model.id,
-        modelName: model.shortName || model.name,
+        engineIndex: i,
+        engineCount: engines.length,
+        engineId: engine.id,
+        engineName: engine.displayName || engine.name,
         overallPercent: (completedMB / totalMB) * 100,
         phase: 'downloading'
       });
 
-      await this.downloadModel(
-        model.id,
-        model.sizeMB,
+      await this.downloadEngine(
+        engine.id,
+        engine.sizeMB,
         (percent, downloadedMB, speedMBps) => {
-          const currentModelMB = (percent / 100) * model.sizeMB;
-          const overallPercent = ((completedMB + currentModelMB) / totalMB) * 100;
+          const currentEngineMB = (percent / 100) * engine.sizeMB;
+          const overallPercent = ((completedMB + currentEngineMB) / totalMB) * 100;
 
           // ETA calculation
           let etaText = '';
           if (speedMBps > 0) {
-            const remainingMB = totalMB - completedMB - currentModelMB;
+            const remainingMB = totalMB - completedMB - currentEngineMB;
             const etaSeconds = remainingMB / speedMBps;
             if (etaSeconds < 60) etaText = `~${Math.ceil(etaSeconds)}s remaining`;
             else if (etaSeconds < 3600) etaText = `~${Math.ceil(etaSeconds / 60)} min remaining`;
             else etaText = `~${(etaSeconds / 3600).toFixed(1)} hr remaining`;
           }
 
-          onModelProgress({
-            modelId: model.id,
-            modelPercent: percent,
+          onEngineProgress({
+            engineId: engine.id,
+            enginePercent: percent,
             overallPercent,
             downloadedMB: Math.round(downloadedMB * 10) / 10,
             speedMBps: Math.round(speedMBps * 100) / 100,
             eta: etaText,
-            modelDone: percent >= 100
+            engineDone: percent >= 100
           });
         },
         accountToken
       );
 
-      completedMB += model.sizeMB;
+      completedMB += engine.sizeMB;
     }
 
     onOverallProgress({
@@ -362,37 +297,57 @@ class DownloadManager {
   }
 
   /**
-   * Verify a downloaded model's integrity
+   * Verify an engine's integrity by checking all required files exist
    */
-  async verifyModel(modelId) {
-    const filePath = path.join(this.modelsDir, `${modelId}.wpr`);
-    if (!fs.existsSync(filePath)) return false;
+  async verifyEngine(engineId) {
+    const engineDir = path.join(this.modelsDir, engineId);
+    if (!fs.existsSync(engineDir)) return false;
 
-    // Check .wpr magic bytes
-    const fd = fs.openSync(filePath, 'r');
-    const header = Buffer.alloc(8);
-    fs.readSync(fd, header, 0, 8, 0);
-    fs.closeSync(fd);
+    const requiredFiles = this.getRequiredFiles(engineId);
+    const allFilesExist = requiredFiles.every(f =>
+      fs.existsSync(path.join(engineDir, f))
+    );
 
-    return header.toString('ascii', 0, 8) === 'WNDY0001';
+    return allFilesExist;
   }
 
   /**
-   * Get list of installed models
+   * Get list of installed engines
    */
-  getInstalledModels() {
+  getInstalledEngines() {
     if (!fs.existsSync(this.modelsDir)) return [];
     return fs.readdirSync(this.modelsDir)
-      .filter(f => f.endsWith('.wpr'))
-      .map(f => f.replace('.wpr', ''));
+      .filter(name => {
+        const engineDir = path.join(this.modelsDir, name);
+        return fs.statSync(engineDir).isDirectory() && name.startsWith('windy-');
+      });
   }
 
   /**
-   * Delete a model
+   * Delete an engine
    */
-  deleteModel(modelId) {
-    const filePath = path.join(this.modelsDir, `${modelId}.wpr`);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  deleteEngine(engineId) {
+    const engineDir = path.join(this.modelsDir, engineId);
+    if (fs.existsSync(engineDir)) {
+      this._deleteRecursive(engineDir);
+    }
+  }
+
+  /**
+   * Recursively delete a directory
+   */
+  _deleteRecursive(dirPath) {
+    if (!fs.existsSync(dirPath)) return;
+    const files = fs.readdirSync(dirPath);
+    for (const file of files) {
+      const filePath = path.join(dirPath, file);
+      if (fs.statSync(filePath).isDirectory()) {
+        this._deleteRecursive(filePath);
+      } else {
+        fs.unlinkSync(filePath);
+      }
+    }
+    fs.rmdirSync(dirPath);
   }
 
   /**

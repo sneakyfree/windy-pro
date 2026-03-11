@@ -1,31 +1,32 @@
 /**
- * Windy Pro v2.0 — Storage-Aware Model Recommendations
- * 
+ * Windy Pro v2.0 — Storage-Aware Engine Recommendations
+ *
  * Detects available disk space and RAM, then:
- * 1. Auto-recommends models based on storage/RAM thresholds
- * 2. Tracks running total as models are checked/unchecked
+ * 1. Auto-recommends engines based on storage/RAM thresholds
+ * 2. Tracks running total as engines are checked/unchecked
  * 3. Warns at 90% capacity (yellow) or over capacity (red, disables install)
- * 4. Grays out models that exceed RAM requirements
+ * 4. Grays out engines that exceed RAM requirements
  * 5. Estimates download time based on measured network speed
- * 
+ *
  * Works on all platforms: Linux, macOS, Windows desktop + mobile (Expo)
  */
 
-const { MODEL_CATALOG, getTotalSize, formatSize } = require('./models');
+const { ENGINE_CATALOG, getTotalSize, formatSize } = require('./models');
 
 // ─── Storage Thresholds ───
-// How much free space is needed to recommend each tier of models
+// How much free space is needed to recommend each tier of engines
 const STORAGE_THRESHOLDS = [
-    { maxFreeMB: 500, maxModelSizeMB: 100, label: 'Very low storage — only tiny models' },
-    { maxFreeMB: 2000, maxModelSizeMB: 200, label: 'Limited storage — lightweight models only' },
-    { maxFreeMB: 5000, maxModelSizeMB: 600, label: 'Moderate storage — standard models OK' },
-    { maxFreeMB: 10000, maxModelSizeMB: 1600, label: 'Good storage — large models OK' },
-    { maxFreeMB: Infinity, maxModelSizeMB: Infinity, label: 'Plenty of storage — all models available' }
+    { maxFreeMB: 500, maxEngineSizeMB: 150, label: 'Very low storage — only tiny engines' },
+    { maxFreeMB: 2000, maxEngineSizeMB: 700, label: 'Limited storage — lightweight engines only' },
+    { maxFreeMB: 5000, maxEngineSizeMB: 1800, label: 'Moderate storage — standard engines OK' },
+    { maxFreeMB: 10000, maxEngineSizeMB: 4900, label: 'Good storage — large engines OK' },
+    { maxFreeMB: Infinity, maxEngineSizeMB: Infinity, label: 'Plenty of storage — all engines available' }
 ];
 
 // ─── RAM Requirements ───
-// Models are grayed out if the system doesn't meet RAM minimums
+// Engines are grayed out if the system doesn't meet RAM minimums
 const RAM_GATES = [
+    { minRAMGB: 2, tooltip: 'Requires 2GB+ RAM' },
     { minRAMGB: 4, tooltip: 'Requires 4GB+ RAM' },
     { minRAMGB: 8, tooltip: 'Requires 8GB+ RAM' },
     { minRAMGB: 16, tooltip: 'Requires 16GB+ RAM' },
@@ -37,13 +38,13 @@ const STORAGE_RESERVE_FACTOR = 0.10;
 // Warn when selected models exceed this fraction of available space
 const STORAGE_WARN_THRESHOLD = 0.90;
 
-class StorageAwareModels {
+class StorageAwareEngines {
     constructor() {
         this.freeStorageMB = 0;
         this.totalRAMGB = 0;
         this.freeRAMGB = 0;
         this.networkSpeedMBps = 0;
-        this.selectedModelIds = [];
+        this.selectedEngineIds = [];
     }
 
     /**
@@ -80,7 +81,7 @@ class StorageAwareModels {
      */
     getStorageStatus() {
         const usable = this.getUsableStorageMB();
-        const selectedMB = getTotalSize(this.selectedModelIds);
+        const selectedMB = getTotalSize(this.selectedEngineIds);
         const usedPercent = usable > 0 ? selectedMB / usable : 1;
 
         let status = 'ok';
@@ -90,11 +91,11 @@ class StorageAwareModels {
         if (selectedMB > usable) {
             status = 'error';
             const deficit = selectedMB - usable;
-            message = `Not enough storage. Deselect some models or free up ${this.formatStorage(deficit)}.`;
+            message = `Not enough storage. Deselect some engines or free up ${this.formatStorage(deficit)}.`;
             canInstall = false;
         } else if (usedPercent > STORAGE_WARN_THRESHOLD) {
             status = 'warning';
-            message = 'Low storage — selected models may not leave room for recordings.';
+            message = 'Low storage — selected engines may not leave room for recordings.';
         }
 
         return {
@@ -111,43 +112,43 @@ class StorageAwareModels {
     }
 
     /**
-     * Auto-recommend models based on available storage and RAM
-     * Returns array of model IDs that fit the hardware profile
+     * Auto-recommend engines based on available storage and RAM
+     * Returns array of engine IDs that fit the hardware profile
      */
-    getRecommendedModels() {
+    getRecommendedEngines() {
         const usable = this.getUsableStorageMB();
         const ram = this.totalRAMGB;
 
         // Find the appropriate storage threshold
-        let maxModelSize = 0;
+        let maxEngineSize = 0;
         for (const t of STORAGE_THRESHOLDS) {
             if (usable < t.maxFreeMB) {
-                maxModelSize = t.maxModelSizeMB;
+                maxEngineSize = t.maxEngineSizeMB;
                 break;
             }
         }
 
-        // Filter models that fit both storage AND RAM
-        const candidates = MODEL_CATALOG.filter(m => {
-            if (m.sizeMB > maxModelSize) return false;
-            if (m.ramGB > ram) return false;
+        // Filter engines that fit both storage AND RAM
+        const candidates = ENGINE_CATALOG.filter(e => {
+            if (e.sizeMB > maxEngineSize) return false;
+            if (e.ramGB > ram) return false;
             return true;
         });
 
-        // Select the best model per family, prioritizing quality
+        // Select the best engine per family, prioritizing quality
         const recommended = [];
-        const families = ['edge', 'core', 'lingua'];
+        const families = ['gpu', 'cpu', 'translation'];
         let totalMB = 0;
 
         for (const family of families) {
-            const familyModels = candidates
-                .filter(m => m.family === family)
-                .sort((a, b) => b.sizeMB - a.sizeMB); // Largest (best quality) first
+            const familyEngines = candidates
+                .filter(e => e.family === family)
+                .sort((a, b) => b.quality - a.quality); // Best quality first
 
-            for (const model of familyModels) {
-                if (totalMB + model.sizeMB <= usable) {
-                    recommended.push(model.id);
-                    totalMB += model.sizeMB;
+            for (const engine of familyEngines) {
+                if (totalMB + engine.sizeMB <= usable) {
+                    recommended.push(engine.id);
+                    totalMB += engine.sizeMB;
                     break; // One per family
                 }
             }
@@ -157,45 +158,45 @@ class StorageAwareModels {
     }
 
     /**
-     * Get per-model status: whether it can be selected based on RAM/storage
+     * Get per-engine status: whether it can be selected based on RAM/storage
      * @returns {Object.<string, { selectable: boolean, reason: string|null, ramOk: boolean }>}
      */
-    getModelStatuses() {
+    getEngineStatuses() {
         const usable = this.getUsableStorageMB();
         const ram = this.totalRAMGB;
-        const currentSelectedMB = getTotalSize(this.selectedModelIds);
+        const currentSelectedMB = getTotalSize(this.selectedEngineIds);
         const statuses = {};
 
-        for (const model of MODEL_CATALOG) {
-            const isSelected = this.selectedModelIds.includes(model.id);
-            const ramOk = ram >= model.ramGB;
+        for (const engine of ENGINE_CATALOG) {
+            const isSelected = this.selectedEngineIds.includes(engine.id);
+            const ramOk = ram >= engine.ramGB;
             const fitsStorage = isSelected
                 ? true // Already selected, don't block
-                : (currentSelectedMB + model.sizeMB) <= usable;
+                : (currentSelectedMB + engine.sizeMB) <= usable;
 
             let reason = null;
             let selectable = true;
 
             if (!ramOk) {
                 selectable = false;
-                reason = `Requires ${model.ramGB}GB+ RAM (you have ${ram}GB)`;
+                reason = `Requires ${engine.ramGB}GB+ RAM (you have ${ram}GB)`;
             } else if (!fitsStorage && !isSelected) {
                 selectable = false;
-                reason = `Not enough storage (need ${formatSize(model.sizeMB)} more)`;
+                reason = `Not enough storage (need ${formatSize(engine.sizeMB)} more)`;
             }
 
-            statuses[model.id] = { selectable, reason, ramOk, isSelected };
+            statuses[engine.id] = { selectable, reason, ramOk, isSelected };
         }
 
         return statuses;
     }
 
     /**
-     * Estimate download time for selected models
+     * Estimate download time for selected engines
      * @returns {{ totalMB: number, estimatedSeconds: number, estimatedDisplay: string }}
      */
     getDownloadEstimate() {
-        const totalMB = getTotalSize(this.selectedModelIds);
+        const totalMB = getTotalSize(this.selectedEngineIds);
         const speed = this.networkSpeedMBps || 0;
 
         if (speed <= 0) {
@@ -213,43 +214,43 @@ class StorageAwareModels {
     }
 
     /**
-     * Select/deselect a model and return updated status
-     * @param {string} modelId
+     * Select/deselect an engine and return updated status
+     * @param {string} engineId
      * @param {boolean} selected
      */
-    toggleModel(modelId, selected) {
-        if (selected && !this.selectedModelIds.includes(modelId)) {
-            this.selectedModelIds.push(modelId);
+    toggleEngine(engineId, selected) {
+        if (selected && !this.selectedEngineIds.includes(engineId)) {
+            this.selectedEngineIds.push(engineId);
         } else if (!selected) {
-            this.selectedModelIds = this.selectedModelIds.filter(id => id !== modelId);
+            this.selectedEngineIds = this.selectedEngineIds.filter(id => id !== engineId);
         }
         return {
             storageStatus: this.getStorageStatus(),
-            modelStatuses: this.getModelStatuses(),
+            engineStatuses: this.getEngineStatuses(),
             downloadEstimate: this.getDownloadEstimate()
         };
     }
 
     /**
-     * Set all selected models at once
-     * @param {string[]} modelIds
+     * Set all selected engines at once
+     * @param {string[]} engineIds
      */
-    setSelectedModels(modelIds) {
-        this.selectedModelIds = [...modelIds];
+    setSelectedEngines(engineIds) {
+        this.selectedEngineIds = [...engineIds];
         return {
             storageStatus: this.getStorageStatus(),
-            modelStatuses: this.getModelStatuses(),
+            engineStatuses: this.getEngineStatuses(),
             downloadEstimate: this.getDownloadEstimate()
         };
     }
 
     /**
-     * Get the full initial state for the model selection screen
+     * Get the full initial state for the engine selection screen
      * @returns {object} Complete state for rendering
      */
     getInitialState() {
-        const recommended = this.getRecommendedModels();
-        this.selectedModelIds = [...recommended];
+        const recommended = this.getRecommendedEngines();
+        this.selectedEngineIds = [...recommended];
 
         return {
             hardware: {
@@ -259,12 +260,12 @@ class StorageAwareModels {
                 freeRAMGB: this.freeRAMGB,
                 networkSpeedMBps: this.networkSpeedMBps
             },
-            recommendedModels: recommended,
+            recommendedEngines: recommended,
             storageStatus: this.getStorageStatus(),
-            modelStatuses: this.getModelStatuses(),
+            engineStatuses: this.getEngineStatuses(),
             downloadEstimate: this.getDownloadEstimate()
         };
     }
 }
 
-module.exports = { StorageAwareModels, STORAGE_THRESHOLDS, RAM_GATES };
+module.exports = { StorageAwareEngines, STORAGE_THRESHOLDS, RAM_GATES };

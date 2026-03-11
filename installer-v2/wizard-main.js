@@ -11,15 +11,15 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const { HardwareDetector } = require('./core/hardware-detect');
-const { MODEL_CATALOG, MODEL_FAMILIES, getTotalSize, formatSize } = require('./core/models');
-const { StorageAwareModels } = require('./core/storage-aware-models');
+const { ENGINE_CATALOG, ENGINE_FAMILIES, getTotalSize, formatSize } = require('./core/models');
+const { StorageAwareEngines } = require('./core/storage-aware-models');
 const { recommend, estimateDownloadTime } = require('./core/windytune');
 const { INSTALL_STEP_MESSAGES, getRandomLoadingMessage } = require('./core/brand-content');
 const { DownloadManager } = require('./core/download-manager');
 const { AccountManager } = require('./core/account-manager');
 
 const APP_DIR = path.join(os.homedir(), '.windy-pro');
-const MODELS_DIR = path.join(APP_DIR, 'models');
+const ENGINES_DIR = path.join(APP_DIR, 'engines');
 
 /**
  * Auto-detect Linux distro and return the appropriate platform adapter
@@ -50,10 +50,10 @@ class InstallWizard {
     this.detector = new HardwareDetector();
     this.hardware = null;
     this.recommendation = null;
-    this.selectedModels = [];
-    this.storageModels = new StorageAwareModels();
+    this.selectedEngines = [];
+    this.storageEngines = new StorageAwareEngines();
     this.platformAdapter = opts.platformAdapter || (process.platform === 'linux' ? getLinuxAdapter() : null);
-    this.downloadManager = new DownloadManager(MODELS_DIR);
+    this.downloadManager = new DownloadManager(ENGINES_DIR);
     this.accountManager = new AccountManager(APP_DIR);
   }
 
