@@ -1,6 +1,6 @@
 {
   "name": "windy-pro",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Voice-to-text desktop app powered by the Windy Pro Engine",
   "main": "src/client/desktop/main.js",
   "author": {

@@ -2,6 +2,41 @@
 
 All notable changes to Windy Pro are documented here.
 
+## [1.6.1] — 2026-03-11
+
+### Desktop Hardening — 20 Bug Fixes
+
+#### Chat System (12 fixes)
+- **Critical**: Added try/catch to 8 unguarded async methods (`sendMessage`, `createDM`, `setPresence`, `setDisplayName`, `setAvatar`, `acceptInvite`, `declineInvite`, `sendTyping`) — prevents crash on network disconnect
+- **Input validation**: 4000-character message limit with inline warning
+- **Double-send guard**: `_sending` flag prevents duplicate messages on rapid Enter
+- **Log levels**: Converted 2 `console.log` to `console.debug` for production
+- **Translation engine**: Rewritten to use persistent WebSocket (was creating new connection per call), request-id tracking, auto-reconnect, `destroy()` cleanup
+
+#### Cloud Storage (5 fixes)
+- **Critical**: CORS wildcard (`*`) → origin whitelist (windypro.thewindstorm.uk + localhost + Electron)
+- **Critical**: Safe `JSON.parse` on user-supplied metadata field (was crashing server on bad JSON)
+- **Email validation**: Regex format check on `/auth/register`
+- **Admin delete**: Now async, deletes R2 objects before removing user records
+- **R2 cleanup**: Admin user deletion no longer orphans cloud files
+
+#### Wizard (3 fixes)
+- Stepper labels: 15px → 11px with `text-overflow: ellipsis` (9 labels fit)
+- Feature card descriptions: 16px → 13px (reduced vertical overflow)
+- Welcome quote: 20px → 14px (Get Started button visible without scrolling)
+
+### Security Audit — All Clear
+- 0 `eval()` usage, 0 npm vulnerabilities
+- CSP set, `contextIsolation: true` + `sandbox: true` on all windows
+- `escapeHtml()`/`escapeAttr()` applied to all user-generated content
+- `.env` files properly in `.gitignore`
+- 119 IPC handlers with client-side guards
+- 7 installer adapters: all pass syntax, 26-43 error handlers each
+
+### Packaging
+- AppImage: 107 MB, .deb: 74 MB, unpacked: 281 MB
+- Build config verified: appId, productName, icon, extraResources all correct
+
 ## [1.6.0] — 2026-03-04
 
 ### Phase 5: Rebrand, API Fixes & Release Prep
