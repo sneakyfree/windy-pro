@@ -234,8 +234,15 @@
     }
 
     @keyframes glow-pulse {
-      0%, 100% { opacity: 0.3; }
-      50% { opacity: 0.7; }
+
+      0%,
+      100% {
+        opacity: 0.3;
+      }
+
+      50% {
+        opacity: 0.7;
+      }
     }
 
     /* ═══ THE GREEN STROBE — Uniform, dynamic, unmistakable ═══ */
@@ -248,11 +255,15 @@
       animation: strobe-pulse 1.5s ease-in-out infinite;
       display: inline-block;
     }
+
     @keyframes strobe-pulse {
-      0%, 100% {
+
+      0%,
+      100% {
         box-shadow: 0 0 12px #22C55E, 0 0 24px rgba(34, 197, 94, 0.5), 0 0 48px rgba(34, 197, 94, 0.25);
         transform: scale(1);
       }
+
       50% {
         box-shadow: 0 0 20px #22C55E, 0 0 40px rgba(34, 197, 94, 0.7), 0 0 80px rgba(34, 197, 94, 0.4);
         transform: scale(1.1);
@@ -268,11 +279,15 @@
     /* Floating wind particles across the entire welcome screen */
     .welcome-ambient {
       position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
       pointer-events: none;
       z-index: 0;
       overflow: hidden;
     }
+
     .welcome-ambient .amb {
       position: absolute;
       opacity: 0;
@@ -280,52 +295,168 @@
       animation: ambientDrift linear infinite;
       filter: blur(0.5px);
     }
+
     /* Leaves */
-    .welcome-ambient .amb.leaf1 { top: 15%; left: -5%; font-size: 14px; animation-duration: 8s; animation-delay: 0s; }
-    .welcome-ambient .amb.leaf2 { top: 45%; left: -5%; font-size: 18px; animation-duration: 10s; animation-delay: 2s; }
-    .welcome-ambient .amb.leaf3 { top: 75%; left: -5%; font-size: 12px; animation-duration: 7s; animation-delay: 4.5s; }
+    .welcome-ambient .amb.leaf1 {
+      top: 15%;
+      left: -5%;
+      font-size: 14px;
+      animation-duration: 8s;
+      animation-delay: 0s;
+    }
+
+    .welcome-ambient .amb.leaf2 {
+      top: 45%;
+      left: -5%;
+      font-size: 18px;
+      animation-duration: 10s;
+      animation-delay: 2s;
+    }
+
+    .welcome-ambient .amb.leaf3 {
+      top: 75%;
+      left: -5%;
+      font-size: 12px;
+      animation-duration: 7s;
+      animation-delay: 4.5s;
+    }
+
     /* Wind swirls */
-    .welcome-ambient .amb.wind1 { top: 25%; left: -5%; font-size: 20px; animation-duration: 6s; animation-delay: 1s; filter: none; }
-    .welcome-ambient .amb.wind2 { top: 60%; left: -5%; font-size: 16px; animation-duration: 9s; animation-delay: 3.5s; filter: none; }
+    .welcome-ambient .amb.wind1 {
+      top: 25%;
+      left: -5%;
+      font-size: 20px;
+      animation-duration: 6s;
+      animation-delay: 1s;
+      filter: none;
+    }
+
+    .welcome-ambient .amb.wind2 {
+      top: 60%;
+      left: -5%;
+      font-size: 16px;
+      animation-duration: 9s;
+      animation-delay: 3.5s;
+      filter: none;
+    }
+
     /* Electric sparks */
-    .welcome-ambient .amb.spark1 { top: 10%; left: 20%; animation: sparkBurst 3s ease-in-out infinite; animation-delay: 0.5s; }
-    .welcome-ambient .amb.spark2 { top: 35%; right: 15%; left: auto; animation: sparkBurst 4s ease-in-out infinite; animation-delay: 2s; }
-    .welcome-ambient .amb.spark3 { top: 80%; left: 40%; animation: sparkBurst 3.5s ease-in-out infinite; animation-delay: 1s; }
+    .welcome-ambient .amb.spark1 {
+      top: 10%;
+      left: 20%;
+      animation: sparkBurst 3s ease-in-out infinite;
+      animation-delay: 0.5s;
+    }
+
+    .welcome-ambient .amb.spark2 {
+      top: 35%;
+      right: 15%;
+      left: auto;
+      animation: sparkBurst 4s ease-in-out infinite;
+      animation-delay: 2s;
+    }
+
+    .welcome-ambient .amb.spark3 {
+      top: 80%;
+      left: 40%;
+      animation: sparkBurst 3.5s ease-in-out infinite;
+      animation-delay: 1s;
+    }
 
     @keyframes ambientDrift {
-      0% { opacity: 0; transform: translateX(0) translateY(0) rotate(0deg); }
-      10% { opacity: 0.5; }
-      50% { opacity: 0.35; transform: translateX(45vw) translateY(-30px) rotate(180deg); }
-      90% { opacity: 0.15; }
-      100% { opacity: 0; transform: translateX(110vw) translateY(-60px) rotate(400deg); }
+      0% {
+        opacity: 0;
+        transform: translateX(0) translateY(0) rotate(0deg);
+      }
+
+      10% {
+        opacity: 0.5;
+      }
+
+      50% {
+        opacity: 0.35;
+        transform: translateX(45vw) translateY(-30px) rotate(180deg);
+      }
+
+      90% {
+        opacity: 0.15;
+      }
+
+      100% {
+        opacity: 0;
+        transform: translateX(110vw) translateY(-60px) rotate(400deg);
+      }
     }
 
     @keyframes sparkBurst {
-      0%, 70%, 100% { opacity: 0; transform: scale(0.3); }
-      75% { opacity: 0.9; transform: scale(1.4); text-shadow: 0 0 12px rgba(34,197,94,0.8); }
-      80% { opacity: 0.2; transform: scale(0.8); }
-      85% { opacity: 0.7; transform: scale(1.2); text-shadow: 0 0 20px rgba(34,197,94,1); }
-      90% { opacity: 0; transform: scale(0.5); }
+
+      0%,
+      70%,
+      100% {
+        opacity: 0;
+        transform: scale(0.3);
+      }
+
+      75% {
+        opacity: 0.9;
+        transform: scale(1.4);
+        text-shadow: 0 0 12px rgba(34, 197, 94, 0.8);
+      }
+
+      80% {
+        opacity: 0.2;
+        transform: scale(0.8);
+      }
+
+      85% {
+        opacity: 0.7;
+        transform: scale(1.2);
+        text-shadow: 0 0 20px rgba(34, 197, 94, 1);
+      }
+
+      90% {
+        opacity: 0;
+        transform: scale(0.5);
+      }
     }
 
     /* Green electric arc across top */
     .welcome-arc {
       position: absolute;
-      top: 0; left: 0; right: 0;
+      top: 0;
+      left: 0;
+      right: 0;
       height: 3px;
-      background: linear-gradient(90deg, transparent 0%, rgba(34,197,94,0) 10%, rgba(34,197,94,0.6) 30%, rgba(34,197,94,1) 50%, rgba(34,197,94,0.6) 70%, rgba(34,197,94,0) 90%, transparent 100%);
+      background: linear-gradient(90deg, transparent 0%, rgba(34, 197, 94, 0) 10%, rgba(34, 197, 94, 0.6) 30%, rgba(34, 197, 94, 1) 50%, rgba(34, 197, 94, 0.6) 70%, rgba(34, 197, 94, 0) 90%, transparent 100%);
       animation: arcSweep 4s ease-in-out infinite;
       pointer-events: none;
       z-index: 1;
-      box-shadow: 0 0 10px rgba(34,197,94,0.5), 0 0 20px rgba(34,197,94,0.3);
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.5), 0 0 20px rgba(34, 197, 94, 0.3);
       filter: blur(1px);
     }
+
     @keyframes arcSweep {
-      0% { opacity: 0; transform: scaleX(0.3) translateX(-100%); }
-      30% { opacity: 1; }
-      50% { transform: scaleX(1) translateX(0); }
-      70% { opacity: 1; }
-      100% { opacity: 0; transform: scaleX(0.3) translateX(100%); }
+      0% {
+        opacity: 0;
+        transform: scaleX(0.3) translateX(-100%);
+      }
+
+      30% {
+        opacity: 1;
+      }
+
+      50% {
+        transform: scaleX(1) translateX(0);
+      }
+
+      70% {
+        opacity: 1;
+      }
+
+      100% {
+        opacity: 0;
+        transform: scaleX(0.3) translateX(100%);
+      }
     }
 
     /* ─── SCREEN 0: WELCOME ─── */
@@ -427,8 +558,15 @@
     }
 
     @keyframes greenPulse {
-      0%, 100% { text-shadow: 0 0 20px rgba(34,197,94,0.6), 0 0 60px rgba(34,197,94,0.3); }
-      50% { text-shadow: 0 0 30px rgba(34,197,94,0.9), 0 0 80px rgba(34,197,94,0.5), 0 0 120px rgba(34,197,94,0.2); }
+
+      0%,
+      100% {
+        text-shadow: 0 0 20px rgba(34, 197, 94, 0.6), 0 0 60px rgba(34, 197, 94, 0.3);
+      }
+
+      50% {
+        text-shadow: 0 0 30px rgba(34, 197, 94, 0.9), 0 0 80px rgba(34, 197, 94, 0.5), 0 0 120px rgba(34, 197, 94, 0.2);
+      }
     }
 
     /* Electric sparks / arcs around the quote */
@@ -439,13 +577,15 @@
       font-size: 14px;
       opacity: 0;
       animation: sparkFlash 2.5s ease-in-out infinite;
-      filter: drop-shadow(0 0 6px rgba(34,197,94,0.8));
+      filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.8));
     }
+
     .welcome-quote::before {
       left: 10%;
       top: 20%;
       animation-delay: 0s;
     }
+
     .welcome-quote::after {
       right: 12%;
       bottom: 15%;
@@ -453,10 +593,28 @@
     }
 
     @keyframes sparkFlash {
-      0%, 85%, 100% { opacity: 0; transform: scale(0.5); }
-      88% { opacity: 1; transform: scale(1.3); }
-      92% { opacity: 0.3; transform: scale(0.8); }
-      95% { opacity: 0.8; transform: scale(1.1); }
+
+      0%,
+      85%,
+      100% {
+        opacity: 0;
+        transform: scale(0.5);
+      }
+
+      88% {
+        opacity: 1;
+        transform: scale(1.3);
+      }
+
+      92% {
+        opacity: 0.3;
+        transform: scale(0.8);
+      }
+
+      95% {
+        opacity: 0.8;
+        transform: scale(1.1);
+      }
     }
 
     /* Windy swirl particles */
@@ -464,6 +622,7 @@
       position: relative;
       overflow: hidden;
     }
+
     .windy-particles .wind-particle {
       position: absolute;
       font-size: 12px;
@@ -471,16 +630,49 @@
       animation: windDrift 4s ease-in-out infinite;
       pointer-events: none;
     }
-    .windy-particles .wind-particle:nth-child(1) { left: 5%; top: 40%; animation-delay: 0s; }
-    .windy-particles .wind-particle:nth-child(2) { right: 8%; top: 30%; animation-delay: 1.5s; }
-    .windy-particles .wind-particle:nth-child(3) { left: 15%; bottom: 20%; animation-delay: 3s; }
-    .windy-particles .wind-particle:nth-child(4) { right: 15%; top: 55%; animation-delay: 0.8s; }
+
+    .windy-particles .wind-particle:nth-child(1) {
+      left: 5%;
+      top: 40%;
+      animation-delay: 0s;
+    }
+
+    .windy-particles .wind-particle:nth-child(2) {
+      right: 8%;
+      top: 30%;
+      animation-delay: 1.5s;
+    }
+
+    .windy-particles .wind-particle:nth-child(3) {
+      left: 15%;
+      bottom: 20%;
+      animation-delay: 3s;
+    }
+
+    .windy-particles .wind-particle:nth-child(4) {
+      right: 15%;
+      top: 55%;
+      animation-delay: 0.8s;
+    }
 
     @keyframes windDrift {
-      0% { opacity: 0; transform: translateX(-20px) rotate(0deg); }
-      20% { opacity: 0.6; }
-      80% { opacity: 0.4; }
-      100% { opacity: 0; transform: translateX(40px) rotate(180deg); }
+      0% {
+        opacity: 0;
+        transform: translateX(-20px) rotate(0deg);
+      }
+
+      20% {
+        opacity: 0.6;
+      }
+
+      80% {
+        opacity: 0.4;
+      }
+
+      100% {
+        opacity: 0;
+        transform: translateX(40px) rotate(180deg);
+      }
     }
 
     /* ─── SCREEN 1: HARDWARE SCAN ─── */
@@ -543,14 +735,14 @@
     }
 
     .scan-summary {
-      background: linear-gradient(135deg, rgba(0,200,83,0.12) 0%, rgba(0,200,83,0.04) 50%, rgba(0,200,83,0.12) 100%);
+      background: linear-gradient(135deg, rgba(0, 200, 83, 0.12) 0%, rgba(0, 200, 83, 0.04) 50%, rgba(0, 200, 83, 0.12) 100%);
       border-radius: 12px;
       padding: 20px 24px;
       border: 2px solid var(--green);
       margin-top: auto;
       position: relative;
       overflow: hidden;
-      box-shadow: 0 0 20px rgba(0,200,83,0.15), inset 0 0 30px rgba(0,200,83,0.05);
+      box-shadow: 0 0 20px rgba(0, 200, 83, 0.15), inset 0 0 30px rgba(0, 200, 83, 0.05);
       animation: summaryPulse 3s ease-in-out infinite;
     }
 
@@ -561,18 +753,27 @@
       left: -50%;
       width: 200%;
       height: 200%;
-      background: conic-gradient(from 0deg, transparent, rgba(0,200,83,0.08), transparent, rgba(0,200,83,0.08), transparent);
+      background: conic-gradient(from 0deg, transparent, rgba(0, 200, 83, 0.08), transparent, rgba(0, 200, 83, 0.08), transparent);
       animation: summaryRotate 8s linear infinite;
       pointer-events: none;
     }
 
     @keyframes summaryPulse {
-      0%, 100% { box-shadow: 0 0 20px rgba(0,200,83,0.15), inset 0 0 30px rgba(0,200,83,0.05); }
-      50% { box-shadow: 0 0 35px rgba(0,200,83,0.25), inset 0 0 40px rgba(0,200,83,0.08); }
+
+      0%,
+      100% {
+        box-shadow: 0 0 20px rgba(0, 200, 83, 0.15), inset 0 0 30px rgba(0, 200, 83, 0.05);
+      }
+
+      50% {
+        box-shadow: 0 0 35px rgba(0, 200, 83, 0.25), inset 0 0 40px rgba(0, 200, 83, 0.08);
+      }
     }
 
     @keyframes summaryRotate {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     .scan-summary-title {
@@ -580,7 +781,7 @@
       font-weight: 800;
       color: var(--green);
       margin-bottom: 8px;
-      text-shadow: 0 0 10px rgba(0,200,83,0.4);
+      text-shadow: 0 0 10px rgba(0, 200, 83, 0.4);
       position: relative;
       z-index: 1;
     }
@@ -1543,7 +1744,9 @@
 
       <div class="welcome-features">
         <div class="wf-card">
-          <div class="wf-card-emoji"><div class="green-strobe-live"></div></div>
+          <div class="wf-card-emoji">
+            <div class="green-strobe-live"></div>
+          </div>
           <div class="wf-card-title" data-i18n="welcome.greenTitle">The Green Strobe</div>
           <div class="wf-card-desc" data-i18n="welcome.greenDesc">If it's green, you're recording. Always. No guessing.
             No "wait, was that on?" panic.</div>
@@ -1622,7 +1825,8 @@
       </div>
 
       <div class="scan-summary" id="scan-summary" style="display:none">
-        <div class="scan-summary-title" id="scan-summary-title" data-i18n="hw.summaryTitle">✅ Your Machine is Windy-Ready!
+        <div class="scan-summary-title" id="scan-summary-title" data-i18n="hw.summaryTitle">✅ Your Machine is
+          Windy-Ready!
         </div>
         <div class="scan-summary-text" id="scan-summary-text"></div>
       </div>
@@ -1776,23 +1980,28 @@
     <div class="screen" id="screen-5">
 
       <!-- ★ GOLDEN PATH — "Just Set Me Up" ★ -->
-      <div style="background:linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.04)); border:2px solid var(--green); border-radius:16px; padding:28px 32px; margin-bottom:20px; text-align:center;">
+      <div
+        style="background:linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.04)); border:2px solid var(--green); border-radius:16px; padding:28px 32px; margin-bottom:20px; text-align:center;">
         <div style="font-size:32px; margin-bottom:8px;">🌪️</div>
-        <div style="font-size:22px; font-weight:800; color:var(--green); margin-bottom:6px;">Don't Want to Think About It?</div>
-        <div style="font-size:15px; color:var(--text-dim); margin-bottom:18px; max-width:500px; margin-left:auto; margin-right:auto;">
+        <div style="font-size:22px; font-weight:800; color:var(--green); margin-bottom:6px;">Don't Want to Think About
+          It?</div>
+        <div
+          style="font-size:15px; color:var(--text-dim); margin-bottom:18px; max-width:500px; margin-left:auto; margin-right:auto;">
           WindyTune already analyzed your hardware and picked the perfect engines. One click and you're done.
         </div>
         <button onclick="selectRecommended(); goToScreen(6);"
           style="background:linear-gradient(135deg, #22C55E, #16A34A); color:white; border:none; border-radius:12px; padding:16px 40px; font-size:18px; font-weight:800; cursor:pointer; transition:all 0.2s; box-shadow:0 4px 20px rgba(34,197,94,0.4); letter-spacing:0.5px;"
           onmouseenter="this.style.transform='scale(1.05)'; this.style.boxShadow='0 6px 30px rgba(34,197,94,0.6)'"
-          onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 20px rgba(34,197,94,0.4)'"
-        >🌪️ Just Set Me Up →</button>
-        <div style="font-size:12px; color:var(--text-muted); margin-top:12px;">Recommended by WindyTune based on your hardware · You can always change later</div>
+          onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 20px rgba(34,197,94,0.4)'">🌪️ Just
+          Set Me Up →</button>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:12px;">Recommended by WindyTune based on your
+          hardware · You can always change later</div>
       </div>
 
-      <div style="display:flex; align-items:center; gap:16px; margin-bottom:20px; opacity:0.5;">
+      <div style="display:flex; align-items:center; gap:16px; margin-bottom:20px; opacity:0.85;">
         <div style="flex:1; height:1px; background:var(--border);"></div>
-        <span style="font-size:13px; color:var(--text-muted); white-space:nowrap;">🔍 Want to geek out? Keep scrolling</span>
+        <span style="font-size:13px; color:var(--text-dim); white-space:nowrap;">🔍 Want to geek out? Keep
+          scrolling</span>
         <div style="flex:1; height:1px; background:var(--border);"></div>
       </div>
 
@@ -1929,7 +2138,8 @@
         <div class="pkg-option" id="pkg-light" onclick="selectPackage('light')"
           style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center;">
           <div style="font-size:20px; margin-bottom:4px;">🍃</div>
-          <div style="font-size:15px; font-weight:800; color:var(--text);" data-i18n="choose.lightLabel">Windy Light</div>
+          <div style="font-size:15px; font-weight:800; color:var(--text);" data-i18n="choose.lightLabel">Windy Light
+          </div>
           <div style="font-size:16px; color:var(--text-dim); margin:4px 0;">1–2 engines</div>
           <div style="font-size:15px; color:var(--text-muted);" id="pkg-light-size">~120 MB</div>
         </div>
@@ -1939,7 +2149,8 @@
             style="position:absolute; top:-8px; left:50%; transform:translateX(-50%); background:var(--green); color:var(--bg); font-size:9px; font-weight:800; padding:2px 10px; border-radius:10px;"
             data-i18n="choose.recommended">★ RECOMMENDED</div>
           <div style="font-size:20px; margin-bottom:4px;">🌪️</div>
-          <div style="font-size:15px; font-weight:800; color:var(--green);" data-i18n="choose.optimalLabel">Windy Optimal
+          <div style="font-size:15px; font-weight:800; color:var(--green);" data-i18n="choose.optimalLabel">Windy
+            Optimal
           </div>
           <div style="font-size:16px; color:var(--text-dim); margin:4px 0;">2–3 engines</div>
           <div style="font-size:15px; color:var(--text-muted);" id="pkg-rec-size">~288 MB</div>
@@ -1947,7 +2158,8 @@
         <div class="pkg-option" id="pkg-power" onclick="selectPackage('power')"
           style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center;">
           <div style="font-size:20px; margin-bottom:4px;">⚡</div>
-          <div style="font-size:15px; font-weight:800; color:var(--text);" data-i18n="choose.powerLabel">Windy Power</div>
+          <div style="font-size:15px; font-weight:800; color:var(--text);" data-i18n="choose.powerLabel">Windy Power
+          </div>
           <div style="font-size:16px; color:var(--text-dim); margin:4px 0;">4–5 engines</div>
           <div style="font-size:15px; color:var(--text-muted);" id="pkg-power-size">~800 MB</div>
         </div>
@@ -1956,30 +2168,35 @@
         id="windytune-explanation"></p>
 
       <!-- Plan info banner -->
-      <div id="plan-info-banner" style="background:linear-gradient(135deg, rgba(34,197,94,0.08), rgba(34,197,94,0.02)); border:1px solid var(--green); border-radius:12px; padding:16px 20px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; gap:16px;">
+      <div id="plan-info-banner"
+        style="background:linear-gradient(135deg, rgba(34,197,94,0.08), rgba(34,197,94,0.02)); border:1px solid var(--green); border-radius:12px; padding:16px 20px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; gap:16px;">
         <div style="flex:1;">
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
-            <span id="plan-banner-badge" style="font-size:16px; font-weight:800; color:var(--green);">🆓 Free Plan</span>
+            <span id="plan-banner-badge" style="font-size:16px; font-weight:800; color:var(--green);">🆓 Free
+              Plan</span>
           </div>
           <div id="plan-banner-desc" style="font-size:14px; color:var(--text-dim); line-height:1.5;">
-            Includes 3 engines (Edge Spark, Edge Pulse, Core Spark). Upgrade to unlock all 15 engines, higher accuracy models, and priority support.
+            Includes 3 engines (Edge Spark, Edge Pulse, Core Spark). Upgrade to unlock all 15 engines, higher accuracy
+            models, and priority support.
           </div>
         </div>
         <button id="plan-upgrade-btn" onclick="showUpgradeFromChoose()"
           style="background:linear-gradient(135deg, #3B82F6, #8B5CF6); color:white; border:none; border-radius:10px; padding:10px 20px; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap; transition:all 0.2s; box-shadow:0 2px 12px rgba(59,130,246,0.3);"
           onmouseenter="this.style.transform='scale(1.05)'; this.style.boxShadow='0 4px 20px rgba(59,130,246,0.5)'"
-          onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 12px rgba(59,130,246,0.3)'"
-        >⚡ Upgrade Plan</button>
+          onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 12px rgba(59,130,246,0.3)'">⚡
+          Upgrade Plan</button>
       </div>
 
       <!-- Translate add-on confirmation (shown if user selected translate) -->
-      <div id="translate-addon-banner" style="display:none; background:linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08)); border:1px solid #3B82F6; border-radius:12px; padding:14px 20px; margin-bottom:14px; display:none;">
+      <div id="translate-addon-banner"
+        style="display:none; background:linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08)); border:1px solid #3B82F6; border-radius:12px; padding:14px 20px; margin-bottom:14px; display:none;">
         <div style="display:flex; align-items:center; justify-content:space-between;">
           <div style="display:flex; align-items:center; gap:10px;">
             <span style="font-size:22px;">🌍</span>
             <div>
               <div style="font-size:15px; font-weight:700; color:#60A5FA;">Windy Translate — Added ✓</div>
-              <div id="translate-addon-desc" style="font-size:13px; color:var(--text-dim); margin-top:2px;">All 99 languages · Offline · Real-time</div>
+              <div id="translate-addon-desc" style="font-size:13px; color:var(--text-dim); margin-top:2px;">All 99
+                languages · Offline · Real-time</div>
             </div>
           </div>
           <div id="translate-addon-price" style="font-size:14px; font-weight:700; color:#60A5FA;"></div>
@@ -1990,7 +2207,8 @@
       <div
         style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-          <div style="font-size:16px; font-weight:800; color:var(--text);" data-i18n="choose.yourSelection">📦 Your Selection</div>
+          <div style="font-size:16px; font-weight:800; color:var(--text);" data-i18n="choose.yourSelection">📦 Your
+            Selection</div>
           <div style="font-size:12px; color:var(--text-muted);">Pick any combination your plan allows</div>
         </div>
         <div id="selected-models-checklist" style="font-size:15px; color:var(--text); line-height:2.0;">
@@ -2014,17 +2232,21 @@
 
       <!-- Expandable all-engines picker (hidden by default) -->
       <div id="all-engines-picker" style="display:none; margin-bottom:14px;">
-        <div style="background:var(--bg-card); border:1px solid var(--green); border-radius:12px; padding:20px; box-shadow:0 4px 20px rgba(34,197,94,0.1);">
+        <div
+          style="background:var(--bg-card); border:1px solid var(--green); border-radius:12px; padding:20px; box-shadow:0 4px 20px rgba(34,197,94,0.1);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <div>
               <div style="font-size:16px; font-weight:800; color:var(--green);">🌪️ All 15 Windy Engines</div>
-              <div style="font-size:13px; color:var(--text-dim); margin-top:2px;">Pick any combination your plan allows. 🔒 = upgrade required.</div>
+              <div style="font-size:13px; color:var(--text-dim); margin-top:2px;">Pick any combination your plan allows.
+                🔒 = upgrade required.</div>
             </div>
-            <div style="font-size:12px; color:var(--text-muted); background:var(--bg); padding:4px 10px; border-radius:6px; border:1px solid var(--border);">
+            <div
+              style="font-size:12px; color:var(--text-muted); background:var(--bg); padding:4px 10px; border-radius:6px; border:1px solid var(--border);">
               <span id="picker-tier-badge">Free Plan</span>
             </div>
           </div>
-          <div id="all-engines-list" style="font-size:14px; color:var(--text); display:grid; grid-template-columns:1fr; gap:0;">
+          <div id="all-engines-list"
+            style="font-size:14px; color:var(--text); display:grid; grid-template-columns:1fr; gap:0;">
             <!-- Populated by JS -->
           </div>
         </div>
@@ -3174,11 +3396,11 @@
 
           <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:14px;">
             ${tierCards.map(t => {
-              const isCurrent = t.tier === userTier;
-              const isBelow = ['free', 'plus', 'pro', 'promax'].indexOf(t.tier) <= currentIdx;
-              const price = isLifetime ? t.lifetime : t.monthly;
-              const priceLabel = isLifetime ? 'one-time · forever' : 'per month · cancel anytime';
-              return `
+        const isCurrent = t.tier === userTier;
+        const isBelow = ['free', 'plus', 'pro', 'promax'].indexOf(t.tier) <= currentIdx;
+        const price = isLifetime ? t.lifetime : t.monthly;
+        const priceLabel = isLifetime ? 'one-time · forever' : 'per month · cancel anytime';
+        return `
                 <div style="background:#1A1F2E; border:2px solid ${isCurrent ? t.color : t.highlight ? t.color + '80' : '#2D3748'}; border-radius:14px; padding:22px 18px; text-align:center; position:relative; ${t.highlight && !isCurrent ? 'box-shadow:0 0 25px ' + t.color + '22;' : ''} ${isCurrent ? 'box-shadow:0 0 25px ' + t.color + '33;' : ''} transition:all 0.25s;"
                   ${!isBelow ? `onmouseenter="this.style.borderColor='${t.color}'; this.style.boxShadow='0 0 30px ${t.color}33'; this.style.transform='translateY(-2px)'" onmouseleave="this.style.borderColor='${isCurrent ? t.color : t.highlight ? t.color + '80' : '#2D3748'}'; this.style.boxShadow='${t.highlight || isCurrent ? '0 0 25px ' + t.color + '22' : 'none'}'; this.style.transform='none'"` : ''}>
                   ${t.highlight ? '<div style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:' + t.color + '; color:white; font-size:10px; font-weight:800; padding:3px 12px; border-radius:10px; letter-spacing:0.5px;">MOST POPULAR</div>' : ''}
@@ -3191,10 +3413,10 @@
                     ${t.engines.map(e => '<div style="font-size:12px; color:#E2E8F0; line-height:1.8;">' + (e.startsWith('+') || e.startsWith('Everything') ? e : '✅ ' + e) + '</div>').join('')}
                   </div>
                   ${isCurrent ? '<div style="background:' + t.color + '22; color:' + t.color + '; border:1px solid ' + t.color + '; padding:10px 16px; border-radius:10px; font-weight:700; font-size:13px;">✓ Current Plan</div>' :
-                    isBelow ? '<button onclick="handleUpgrade(\'' + t.tier + '\', \'' + (isLifetime ? 'lifetime' : 'monthly') + '\')" style="background:transparent; color:#94A3B8; border:1px solid #334155; padding:10px 20px; border-radius:10px; font-weight:600; font-size:13px; cursor:pointer; width:100%; transition:all 0.2s;" onmouseenter="this.style.borderColor=\'' + t.color + '\'; this.style.color=\'' + t.color + '\'" onmouseleave="this.style.borderColor=\'#334155\'; this.style.color=\'#94A3B8\'">Switch to ' + t.name + '</button>' :
-                    '<button onclick="handleUpgrade(\'' + t.tier + '\', \'' + (isLifetime ? 'lifetime' : 'monthly') + '\')" style="background:' + t.color + '; color:white; border:none; padding:12px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; width:100%; transition:all 0.2s; box-shadow:0 2px 10px ' + t.color + '44;" onmouseenter="this.style.opacity=0.9; this.style.transform=\'scale(1.02)\'" onmouseleave="this.style.opacity=1; this.style.transform=\'none\'">Upgrade to ' + t.name + '</button>'}
+            isBelow ? '<button onclick="handleUpgrade(\'' + t.tier + '\', \'' + (isLifetime ? 'lifetime' : 'monthly') + '\')" style="background:transparent; color:#94A3B8; border:1px solid #334155; padding:10px 20px; border-radius:10px; font-weight:600; font-size:13px; cursor:pointer; width:100%; transition:all 0.2s;" onmouseenter="this.style.borderColor=\'' + t.color + '\'; this.style.color=\'' + t.color + '\'" onmouseleave="this.style.borderColor=\'#334155\'; this.style.color=\'#94A3B8\'">Switch to ' + t.name + '</button>' :
+              '<button onclick="handleUpgrade(\'' + t.tier + '\', \'' + (isLifetime ? 'lifetime' : 'monthly') + '\')" style="background:' + t.color + '; color:white; border:none; padding:12px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; width:100%; transition:all 0.2s; box-shadow:0 2px 10px ' + t.color + '44;" onmouseenter="this.style.opacity=0.9; this.style.transform=\'scale(1.02)\'" onmouseleave="this.style.opacity=1; this.style.transform=\'none\'">Upgrade to ' + t.name + '</button>'}
                 </div>`;
-            }).join('')}
+      }).join('')}
           </div>
           <div style="text-align:center; margin-top:18px; font-size:13px; color:#94A3B8;">
             🔒 Secure checkout via Stripe · 💳 Visa, Mastercard, Apple Pay · Instant engine unlock
@@ -3223,33 +3445,33 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priceId, tier, billing })
       })
-      .then(r => r.json())
-      .then(data => {
-        if (data.url && window.wizardAPI?.openExternal) {
-          window.wizardAPI.openExternal(data.url);
-        } else if (data.url) {
-          window.open(data.url, '_blank');
-        }
-        // Close overlay
-        const overlay = document.getElementById('upgrade-overlay');
-        if (overlay) overlay.remove();
-      })
-      .catch(() => {
-        // API not deployed yet — store pending upgrade
-        userTier = tier;
-        const overlay = document.getElementById('upgrade-overlay');
-        if (overlay) overlay.remove();
-        autoSelectEnginesForTier();
-        updatePlanBanner();
-        buildAllEnginesPicker();
-        buildSelectedChecklist();
-        // Show confirmation
-        const toast = document.createElement('div');
-        toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--green); color:var(--bg); padding:12px 24px; border-radius:10px; font-weight:700; font-size:14px; z-index:1001; animation:fadeInUp 0.3s;';
-        toast.textContent = `✅ Upgraded to ${tier.charAt(0).toUpperCase() + tier.slice(1)}! All engines now available.`;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
-      });
+        .then(r => r.json())
+        .then(data => {
+          if (data.url && window.wizardAPI?.openExternal) {
+            window.wizardAPI.openExternal(data.url);
+          } else if (data.url) {
+            window.open(data.url, '_blank');
+          }
+          // Close overlay
+          const overlay = document.getElementById('upgrade-overlay');
+          if (overlay) overlay.remove();
+        })
+        .catch(() => {
+          // API not deployed yet — store pending upgrade
+          userTier = tier;
+          const overlay = document.getElementById('upgrade-overlay');
+          if (overlay) overlay.remove();
+          autoSelectEnginesForTier();
+          updatePlanBanner();
+          buildAllEnginesPicker();
+          buildSelectedChecklist();
+          // Show confirmation
+          const toast = document.createElement('div');
+          toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--green); color:var(--bg); padding:12px 24px; border-radius:10px; font-weight:700; font-size:14px; z-index:1001; animation:fadeInUp 0.3s;';
+          toast.textContent = `✅ Upgraded to ${tier.charAt(0).toUpperCase() + tier.slice(1)}! All engines now available.`;
+          document.body.appendChild(toast);
+          setTimeout(() => toast.remove(), 3000);
+        });
     }
 
     function updateTranslateAddonBanner() {
@@ -3329,8 +3551,8 @@
 
           const tierBadge = m.tier === 'free' ? '' :
             m.tier === 'plus' ? '<span style="background:#3B82F6; color:white; font-size:10px; padding:1px 5px; border-radius:4px; margin-left:4px;">PLUS</span>' :
-            m.tier === 'pro' ? '<span style="background:#A855F7; color:white; font-size:10px; padding:1px 5px; border-radius:4px; margin-left:4px;">PRO</span>' :
-            '<span style="background:#F59E0B; color:black; font-size:10px; padding:1px 5px; border-radius:4px; margin-left:4px;">PRO MAX</span>';
+              m.tier === 'pro' ? '<span style="background:#A855F7; color:white; font-size:10px; padding:1px 5px; border-radius:4px; margin-left:4px;">PRO</span>' :
+                '<span style="background:#F59E0B; color:black; font-size:10px; padding:1px 5px; border-radius:4px; margin-left:4px;">PRO MAX</span>';
 
           const isLocked = !canAccessEngine(m.tier || 'free');
           const checkbox = document.createElement('input');
@@ -3339,7 +3561,7 @@
           checkbox.checked = isSelected && !isLocked;
           checkbox.disabled = isLocked;
           checkbox.style.cssText = `width:18px; height:18px; accent-color:#22C55E; cursor:${isLocked ? 'not-allowed' : 'pointer'}; flex-shrink:0; opacity:${isLocked ? '0.4' : '1'};`;
-          checkbox.addEventListener('change', function() {
+          checkbox.addEventListener('change', function () {
             toggleEngine(m.id, this.checked);
           });
 
@@ -3356,7 +3578,7 @@
           row.insertBefore(checkbox, row.firstChild);
 
           // Click anywhere on the row to toggle
-          row.addEventListener('click', function(e) {
+          row.addEventListener('click', function (e) {
             if (e.target !== checkbox) {
               checkbox.checked = !checkbox.checked;
               toggleEngine(m.id, checkbox.checked);
@@ -3437,7 +3659,9 @@
       setTimeout(() => addLogEntry('✅ Windy audio capture configured', 'success'), 600);
       setTimeout(() => addLogEntry("✅ Windy media processor ready — let's get Windy, baby! 🌪️", 'success'), 1200);
 
-      // Send selected engines to main process
+      // Send selected engines to main process — include specialist pairs
+      const specialistPairs = getSelectedSpecialistPairs();
+      specialistPairs.forEach(pairId => selectedModels.add(pairId));
       await window.wizardAPI.selectModels([...selectedModels]);
 
       // Track last logged model for log entries
@@ -4002,7 +4226,7 @@
     // ═══ 75-LANGUAGE PHARMACY CONVERSATION ═══
     // Real translations for "Where is the nearest pharmacy?" in every supported language.
     // This powers the personalized demo — users see their ACTUAL languages, not a generic placeholder.
-    const PHARMACY_TRANSLATIONS = {"af":["Waar is die naaste apteek?","Twee blokke noord, in die hoofstraat.","Dankie, is dit nou oop?"],"am":["በአቅራቢያ ያለው ፋርማሲ የት ነው?","ሁለት ብሎኮች ወደ ሰሜን፣ በዋናው ጎዳና ላይ።","አመሰግናለሁ፣ አሁን ክፍት ነው?"],"ar":["أين أقرب صيدلية؟","على بعد مبنيين شمالاً، في الشارع الرئيسي.","شكراً، هل هي مفتوحة الآن؟"],"az":["Ən yaxın aptek haradadır?","İki blok şimalda, əsas küçədə.","Təşəkkür edirəm, indi açıqdır?"],"be":["Дзе бліжэйшая аптэка?","Два кварталы на поўнач, на галоўнай вуліцы.","Дзякуй, яна зараз адчынена?"],"bg":["Къде е най-близката аптека?","Два квартала на север, на главната улица.","Благодаря, отворена ли е сега?"],"bn":["নিকটতম ফার্মেসি কোথায়?","দুই ব্লক উত্তরে, প্রধান রাস্তায়।","ধন্যবাদ, এটা কি এখন খোলা?"],"bs":["Gdje je najbliža apoteka?","Dva bloka sjeverno, na glavnoj ulici.","Hvala, je li sada otvorena?"],"ca":["On és la farmàcia més propera?","Dues illes al nord, al carrer principal.","Gràcies, és oberta ara?"],"cs":["Kde je nejbližší lékárna?","Dva bloky na sever, na hlavní ulici.","Děkuji, je teď otevřená?"],"cy":["Ble mae'r fferyllfa agosaf?","Dau floc i'r gogledd, ar y brif stryd.","Diolch, ydy hi ar agor nawr?"],"da":["Hvor er det nærmeste apotek?","To blokke mod nord, på hovedgaden.","Tak, er det åbent nu?"],"de":["Wo ist die nächste Apotheke?","Zwei Blocks nördlich, an der Hauptstraße.","Danke, ist sie jetzt geöffnet?"],"el":["Πού είναι το πλησιέστερο φαρμακείο;","Δύο τετράγωνα βόρεια, στον κεντρικό δρόμο.","Ευχαριστώ, είναι ανοιχτό τώρα;"],"es":["¿Dónde está la farmacia más cercana?","Dos cuadras al norte, en la calle principal.","Gracias, ¿está abierta ahora?"],"et":["Kus on lähim apteek?","Kaks kvartalit põhja poole, peatänaval.","Aitäh, kas see on praegu avatud?"],"fa":["نزدیکترین داروخانه کجاست؟","دو بلوک به سمت شمال، در خیابان اصلی.","ممنون، الان باز است؟"],"fi":["Missä on lähin apteekki?","Kaksi korttelia pohjoiseen, pääkadulla.","Kiitos, onko se nyt auki?"],"fr":["Où est la pharmacie la plus proche ?","Deux rues au nord, sur la rue principale.","Merci, est-elle ouverte maintenant ?"],"ga":["Cá bhfuil an chógaslann is gaire?","Dhá bhloc ó thuaidh, ar an bpríomhshráid.","Go raibh maith agat, an bhfuil sé oscailte anois?"],"gl":["Onde está a farmacia máis próxima?","Dúas rúas ao norte, na rúa principal.","Grazas, está aberta agora?"],"gu":["નજીકની ફાર્મસી ક્યાં છે?","બે બ્લોક ઉત્તરે, મુખ્ય રસ્તા પર.","આભાર, શું તે હમણાં ખુલ્લી છે?"],"he":["?איפה בית המרקחת הקרוב","שני בלוקים צפונה, ברחוב הראשי.","?תודה, האם הוא פתוח עכשיו"],"hi":["निकटतम फार्मेसी कहाँ है?","दो ब्लॉक उत्तर में, मुख्य सड़क पर।","धन्यवाद, क्या अभी खुली है?"],"hr":["Gdje je najbliža ljekarna?","Dva bloka sjeverno, na glavnoj ulici.","Hvala, je li sada otvorena?"],"hu":["Hol van a legközelebbi gyógyszertár?","Két háztömbbel északra, a fő utcán.","Köszönöm, most nyitva van?"],"id":["Di mana apotek terdekat?","Dua blok ke utara, di jalan utama.","Terima kasih, apakah sekarang buka?"],"is":["Hvar er næsta apótek?","Tveir blokkir norður, á aðalgötunni.","Takk, er það opið núna?"],"it":["Dov'è la farmacia più vicina?","Due isolati a nord, sulla strada principale.","Grazie, è aperta adesso?"],"ja":["一番近い薬局はどこですか？","2ブロック北、メインストリート沿いです。","ありがとう、今開いていますか？"],"ka":["სად არის უახლოესი აფთიაქი?","ორი კვარტალი ჩრდილოეთით, მთავარ ქუჩაზე.","გმადლობთ, ახლა ღიაა?"],"kk":["Ең жақын дәріхана қайда?","Екі квартал солтүстікке, негізгі көшеде.","Рахмет, қазір ашық па?"],"kn":["ಹತ್ತಿರದ ಔಷಧಾಲಯ ಎಲ್ಲಿದೆ?","ಎರಡು ಬ್ಲಾಕ್ ಉತ್ತರಕ್ಕೆ, ಮುಖ್ಯ ರಸ್ತೆಯಲ್ಲಿ.","ಧನ್ಯವಾದ, ಈಗ ತೆರೆದಿದೆಯೇ?"],"ko":["가장 가까운 약국이 어디인가요?","북쪽으로 두 블록, 큰길에 있어요.","감사합니다, 지금 열려있나요?"],"lt":["Kur yra artimiausia vaistinė?","Du kvartalai į šiaurę, pagrindinėje gatvėje.","Ačiū, ar dabar atidaryta?"],"lv":["Kur ir tuvākā aptieka?","Divus kvartālus uz ziemeļiem, uz galvenās ielas.","Paldies, vai tagad ir atvērta?"],"mk":["Каде е најблиската аптека?","Два блока северно, на главната улица.","Благодарам, дали е сега отворена?"],"ml":["ഏറ്റവും അടുത്തുള്ള ഫാർമസി എവിടെയാണ്?","രണ്ട് ബ്ലോക്ക് വടക്കോട്ട്, പ്രധാന റോഡിൽ.","നന്ദി, ഇപ്പോൾ തുറന്നിട്ടുണ്ടോ?"],"mr":["जवळची फार्मसी कुठे आहे?","दोन ब्लॉक उत्तरेला, मुख्य रस्त्यावर.","धन्यवाद, आता उघडी आहे का?"],"ms":["Di mana farmasi terdekat?","Dua blok ke utara, di jalan utama.","Terima kasih, adakah ia buka sekarang?"],"nb":["Hvor er nærmeste apotek?","To kvartaler nordover, i hovedgata.","Takk, er det åpent nå?"],"ne":["नजिकको फार्मेसी कहाँ छ?","दुई ब्लक उत्तरतिर, मुख्य सडकमा।","धन्यवाद, अहिले खुला छ?"],"nl":["Waar is de dichtstbijzijnde apotheek?","Twee blokken naar het noorden, aan de hoofdstraat.","Dank u, is het nu open?"],"pa":["ਸਭ ਤੋਂ ਨੇੜੇ ਦੀ ਫਾਰਮੇਸੀ ਕਿੱਥੇ ਹੈ?","ਦੋ ਬਲਾਕ ਉੱਤਰ ਵੱਲ, ਮੁੱਖ ਸੜਕ ਤੇ।","ਧੰਨਵਾਦ, ਕੀ ਇਹ ਹੁਣ ਖੁੱਲ੍ਹੀ ਹੈ?"],"pl":["Gdzie jest najbliższa apteka?","Dwa bloki na północ, przy głównej ulicy.","Dziękuję, czy jest teraz otwarta?"],"pt":["Onde fica a farmácia mais próxima?","Dois quarteirões ao norte, na rua principal.","Obrigado, está aberta agora?"],"ro":["Unde este cea mai apropiată farmacie?","Două blocuri spre nord, pe strada principală.","Mulțumesc, este deschisă acum?"],"ru":["Где ближайшая аптека?","Два квартала на север, на главной улице.","Спасибо, она сейчас открыта?"],"sk":["Kde je najbližšia lekáreň?","Dva bloky na sever, na hlavnej ulici.","Ďakujem, je teraz otvorená?"],"sl":["Kje je najbližja lekarna?","Dva bloka proti severu, na glavni ulici.","Hvala, je zdaj odprta?"],"sq":["Ku është farmacia më e afërt?","Dy blloqe në veri, në rrugën kryesore.","Faleminderit, a është hapur tani?"],"sr":["Где је најближа апотека?","Два блока северно, на главној улици.","Хвала, да ли је сада отворена?"],"sv":["Var ligger närmaste apotek?","Två kvarter norrut, på huvudgatan.","Tack, är det öppet nu?"],"sw":["Duka la dawa lililo karibu zaidi liko wapi?","Vitalu viwili kaskazini, katika barabara kuu.","Asante, je, limefunguliwa sasa?"],"ta":["அருகிலுள்ள மருந்தகம் எங்கே?","வடக்கே இரண்டு தொகுதிகள், முக்கிய சாலையில்.","நன்றி, இப்போது திறந்திருக்கிறதா?"],"te":["సమీపంలోని ఫార్మసీ ఎక్కడ ఉంది?","రెండు బ్లాక్‌లు ఉత్తరంగా, ప్రధాన రోడ్డులో.","ధన్యవాదాలు, ఇప్పుడు తెరిచి ఉందా?"],"th":["ร้านขายยาที่ใกล้ที่สุดอยู่ที่ไหน?","สองช่วงตึกไปทางเหนือ บนถนนสายหลัก","ขอบคุณครับ ตอนนี้เปิดอยู่ไหม?"],"tl":["Nasaan ang pinakamalapit na botika?","Dalawang bloke pahilaga, sa pangunahing kalye.","Salamat, bukas ba ngayon?"],"tr":["En yakın eczane nerede?","İki blok kuzeyde, ana caddede.","Teşekkürler, şu an açık mı?"],"uk":["Де найближча аптека?","Два квартали на північ, на головній вулиці.","Дякую, вона зараз відчинена?"],"ur":["قریب ترین فارمیسی کہاں ہے؟","دو بلاک شمال میں، مرکزی سڑک پر۔","شکریہ، کیا ابھی کھلی ہے؟"],"vi":["Hiệu thuốc gần nhất ở đâu?","Hai block về phía bắc, trên đường chính.","Cảm ơn, bây giờ có mở không?"],"zh":["最近的药房在哪里？","往北两个街区，在主街上。","谢谢，现在开门吗？"],"zu":["Iphi ikhemisi eliseduze kakhulu?","Amabhulokhi amabili enyakatho, emgwaqweni omkhulu.","Ngiyabonga, ivuliwe manje?"]};
+    const PHARMACY_TRANSLATIONS = { "af": ["Waar is die naaste apteek?", "Twee blokke noord, in die hoofstraat.", "Dankie, is dit nou oop?"], "am": ["በአቅራቢያ ያለው ፋርማሲ የት ነው?", "ሁለት ብሎኮች ወደ ሰሜን፣ በዋናው ጎዳና ላይ።", "አመሰግናለሁ፣ አሁን ክፍት ነው?"], "ar": ["أين أقرب صيدلية؟", "على بعد مبنيين شمالاً، في الشارع الرئيسي.", "شكراً، هل هي مفتوحة الآن؟"], "az": ["Ən yaxın aptek haradadır?", "İki blok şimalda, əsas küçədə.", "Təşəkkür edirəm, indi açıqdır?"], "be": ["Дзе бліжэйшая аптэка?", "Два кварталы на поўнач, на галоўнай вуліцы.", "Дзякуй, яна зараз адчынена?"], "bg": ["Къде е най-близката аптека?", "Два квартала на север, на главната улица.", "Благодаря, отворена ли е сега?"], "bn": ["নিকটতম ফার্মেসি কোথায়?", "দুই ব্লক উত্তরে, প্রধান রাস্তায়।", "ধন্যবাদ, এটা কি এখন খোলা?"], "bs": ["Gdje je najbliža apoteka?", "Dva bloka sjeverno, na glavnoj ulici.", "Hvala, je li sada otvorena?"], "ca": ["On és la farmàcia més propera?", "Dues illes al nord, al carrer principal.", "Gràcies, és oberta ara?"], "cs": ["Kde je nejbližší lékárna?", "Dva bloky na sever, na hlavní ulici.", "Děkuji, je teď otevřená?"], "cy": ["Ble mae'r fferyllfa agosaf?", "Dau floc i'r gogledd, ar y brif stryd.", "Diolch, ydy hi ar agor nawr?"], "da": ["Hvor er det nærmeste apotek?", "To blokke mod nord, på hovedgaden.", "Tak, er det åbent nu?"], "de": ["Wo ist die nächste Apotheke?", "Zwei Blocks nördlich, an der Hauptstraße.", "Danke, ist sie jetzt geöffnet?"], "el": ["Πού είναι το πλησιέστερο φαρμακείο;", "Δύο τετράγωνα βόρεια, στον κεντρικό δρόμο.", "Ευχαριστώ, είναι ανοιχτό τώρα;"], "es": ["¿Dónde está la farmacia más cercana?", "Dos cuadras al norte, en la calle principal.", "Gracias, ¿está abierta ahora?"], "et": ["Kus on lähim apteek?", "Kaks kvartalit põhja poole, peatänaval.", "Aitäh, kas see on praegu avatud?"], "fa": ["نزدیکترین داروخانه کجاست؟", "دو بلوک به سمت شمال، در خیابان اصلی.", "ممنون، الان باز است؟"], "fi": ["Missä on lähin apteekki?", "Kaksi korttelia pohjoiseen, pääkadulla.", "Kiitos, onko se nyt auki?"], "fr": ["Où est la pharmacie la plus proche ?", "Deux rues au nord, sur la rue principale.", "Merci, est-elle ouverte maintenant ?"], "ga": ["Cá bhfuil an chógaslann is gaire?", "Dhá bhloc ó thuaidh, ar an bpríomhshráid.", "Go raibh maith agat, an bhfuil sé oscailte anois?"], "gl": ["Onde está a farmacia máis próxima?", "Dúas rúas ao norte, na rúa principal.", "Grazas, está aberta agora?"], "gu": ["નજીકની ફાર્મસી ક્યાં છે?", "બે બ્લોક ઉત્તરે, મુખ્ય રસ્તા પર.", "આભાર, શું તે હમણાં ખુલ્લી છે?"], "he": ["?איפה בית המרקחת הקרוב", "שני בלוקים צפונה, ברחוב הראשי.", "?תודה, האם הוא פתוח עכשיו"], "hi": ["निकटतम फार्मेसी कहाँ है?", "दो ब्लॉक उत्तर में, मुख्य सड़क पर।", "धन्यवाद, क्या अभी खुली है?"], "hr": ["Gdje je najbliža ljekarna?", "Dva bloka sjeverno, na glavnoj ulici.", "Hvala, je li sada otvorena?"], "hu": ["Hol van a legközelebbi gyógyszertár?", "Két háztömbbel északra, a fő utcán.", "Köszönöm, most nyitva van?"], "id": ["Di mana apotek terdekat?", "Dua blok ke utara, di jalan utama.", "Terima kasih, apakah sekarang buka?"], "is": ["Hvar er næsta apótek?", "Tveir blokkir norður, á aðalgötunni.", "Takk, er það opið núna?"], "it": ["Dov'è la farmacia più vicina?", "Due isolati a nord, sulla strada principale.", "Grazie, è aperta adesso?"], "ja": ["一番近い薬局はどこですか？", "2ブロック北、メインストリート沿いです。", "ありがとう、今開いていますか？"], "ka": ["სად არის უახლოესი აფთიაქი?", "ორი კვარტალი ჩრდილოეთით, მთავარ ქუჩაზე.", "გმადლობთ, ახლა ღიაა?"], "kk": ["Ең жақын дәріхана қайда?", "Екі квартал солтүстікке, негізгі көшеде.", "Рахмет, қазір ашық па?"], "kn": ["ಹತ್ತಿರದ ಔಷಧಾಲಯ ಎಲ್ಲಿದೆ?", "ಎರಡು ಬ್ಲಾಕ್ ಉತ್ತರಕ್ಕೆ, ಮುಖ್ಯ ರಸ್ತೆಯಲ್ಲಿ.", "ಧನ್ಯವಾದ, ಈಗ ತೆರೆದಿದೆಯೇ?"], "ko": ["가장 가까운 약국이 어디인가요?", "북쪽으로 두 블록, 큰길에 있어요.", "감사합니다, 지금 열려있나요?"], "lt": ["Kur yra artimiausia vaistinė?", "Du kvartalai į šiaurę, pagrindinėje gatvėje.", "Ačiū, ar dabar atidaryta?"], "lv": ["Kur ir tuvākā aptieka?", "Divus kvartālus uz ziemeļiem, uz galvenās ielas.", "Paldies, vai tagad ir atvērta?"], "mk": ["Каде е најблиската аптека?", "Два блока северно, на главната улица.", "Благодарам, дали е сега отворена?"], "ml": ["ഏറ്റവും അടുത്തുള്ള ഫാർമസി എവിടെയാണ്?", "രണ്ട് ബ്ലോക്ക് വടക്കോട്ട്, പ്രധാന റോഡിൽ.", "നന്ദി, ഇപ്പോൾ തുറന്നിട്ടുണ്ടോ?"], "mr": ["जवळची फार्मसी कुठे आहे?", "दोन ब्लॉक उत्तरेला, मुख्य रस्त्यावर.", "धन्यवाद, आता उघडी आहे का?"], "ms": ["Di mana farmasi terdekat?", "Dua blok ke utara, di jalan utama.", "Terima kasih, adakah ia buka sekarang?"], "nb": ["Hvor er nærmeste apotek?", "To kvartaler nordover, i hovedgata.", "Takk, er det åpent nå?"], "ne": ["नजिकको फार्मेसी कहाँ छ?", "दुई ब्लक उत्तरतिर, मुख्य सडकमा।", "धन्यवाद, अहिले खुला छ?"], "nl": ["Waar is de dichtstbijzijnde apotheek?", "Twee blokken naar het noorden, aan de hoofdstraat.", "Dank u, is het nu open?"], "pa": ["ਸਭ ਤੋਂ ਨੇੜੇ ਦੀ ਫਾਰਮੇਸੀ ਕਿੱਥੇ ਹੈ?", "ਦੋ ਬਲਾਕ ਉੱਤਰ ਵੱਲ, ਮੁੱਖ ਸੜਕ ਤੇ।", "ਧੰਨਵਾਦ, ਕੀ ਇਹ ਹੁਣ ਖੁੱਲ੍ਹੀ ਹੈ?"], "pl": ["Gdzie jest najbliższa apteka?", "Dwa bloki na północ, przy głównej ulicy.", "Dziękuję, czy jest teraz otwarta?"], "pt": ["Onde fica a farmácia mais próxima?", "Dois quarteirões ao norte, na rua principal.", "Obrigado, está aberta agora?"], "ro": ["Unde este cea mai apropiată farmacie?", "Două blocuri spre nord, pe strada principală.", "Mulțumesc, este deschisă acum?"], "ru": ["Где ближайшая аптека?", "Два квартала на север, на главной улице.", "Спасибо, она сейчас открыта?"], "sk": ["Kde je najbližšia lekáreň?", "Dva bloky na sever, na hlavnej ulici.", "Ďakujem, je teraz otvorená?"], "sl": ["Kje je najbližja lekarna?", "Dva bloka proti severu, na glavni ulici.", "Hvala, je zdaj odprta?"], "sq": ["Ku është farmacia më e afërt?", "Dy blloqe në veri, në rrugën kryesore.", "Faleminderit, a është hapur tani?"], "sr": ["Где је најближа апотека?", "Два блока северно, на главној улици.", "Хвала, да ли је сада отворена?"], "sv": ["Var ligger närmaste apotek?", "Två kvarter norrut, på huvudgatan.", "Tack, är det öppet nu?"], "sw": ["Duka la dawa lililo karibu zaidi liko wapi?", "Vitalu viwili kaskazini, katika barabara kuu.", "Asante, je, limefunguliwa sasa?"], "ta": ["அருகிலுள்ள மருந்தகம் எங்கே?", "வடக்கே இரண்டு தொகுதிகள், முக்கிய சாலையில்.", "நன்றி, இப்போது திறந்திருக்கிறதா?"], "te": ["సమీపంలోని ఫార్మసీ ఎక్కడ ఉంది?", "రెండు బ్లాక్‌లు ఉత్తరంగా, ప్రధాన రోడ్డులో.", "ధన్యవాదాలు, ఇప్పుడు తెరిచి ఉందా?"], "th": ["ร้านขายยาที่ใกล้ที่สุดอยู่ที่ไหน?", "สองช่วงตึกไปทางเหนือ บนถนนสายหลัก", "ขอบคุณครับ ตอนนี้เปิดอยู่ไหม?"], "tl": ["Nasaan ang pinakamalapit na botika?", "Dalawang bloke pahilaga, sa pangunahing kalye.", "Salamat, bukas ba ngayon?"], "tr": ["En yakın eczane nerede?", "İki blok kuzeyde, ana caddede.", "Teşekkürler, şu an açık mı?"], "uk": ["Де найближча аптека?", "Два квартали на північ, на головній вулиці.", "Дякую, вона зараз відчинена?"], "ur": ["قریب ترین فارمیسی کہاں ہے؟", "دو بلاک شمال میں، مرکزی سڑک پر۔", "شکریہ، کیا ابھی کھلی ہے؟"], "vi": ["Hiệu thuốc gần nhất ở đâu?", "Hai block về phía bắc, trên đường chính.", "Cảm ơn, bây giờ có mở không?"], "zh": ["最近的药房在哪里？", "往北两个街区，在主街上。", "谢谢，现在开门吗？"], "zu": ["Iphi ikhemisi eliseduze kakhulu?", "Amabhulokhi amabili enyakatho, emgwaqweni omkhulu.", "Ngiyabonga, ivuliwe manje?"] };
 
     const TRANSLATION_EXAMPLES = {
       'en-es': [
@@ -4099,7 +4323,7 @@
         const primTrans = PHARMACY_TRANSLATIONS[primary.code];
         const secTrans = PHARMACY_TRANSLATIONS[secondary.code];
         const enTrans = PHARMACY_TRANSLATIONS['en'] || ["Where is the nearest pharmacy?", "Two blocks north, on the main street.", "Thank you, is it open now?"];
-        
+
         if (primTrans && secTrans) {
           // Both languages have translations — show real bilingual conversation
           examples = [
@@ -4132,10 +4356,57 @@
         { name: 'Windy Translate', price: '$79', desc: 'All 99 languages' } :
         { name: 'Windy Translate Pro', price: '$149', desc: 'All 99 languages + voice TTS + custom glossaries' };
 
+      // Build the "all languages" string for subtitle
+      const allLangNames = userLanguages.map(l => l.name);
+      let langListStr;
+      if (allLangNames.length === 2) {
+        langListStr = allLangNames.join(' and ');
+      } else {
+        langListStr = allLangNames.slice(0, -1).join(', ') + ', and ' + allLangNames[allLangNames.length - 1];
+      }
+
+      // Detect specialist pairs that match user's languages
+      const langCodes = userLanguages.map(l => l.code);
+      const AVAILABLE_PAIRS = [
+        { id: 'windy-pair-en-es', pair: ['en', 'es'], flag: '\ud83c\uddea\ud83c\uddf8', name: 'English \u2194 Spanish', sizeMB: 598 },
+        { id: 'windy-pair-en-zh', pair: ['en', 'zh'], flag: '\ud83c\udde8\ud83c\uddf3', name: 'English \u2194 Chinese', sizeMB: 598 },
+        { id: 'windy-pair-en-fr', pair: ['en', 'fr'], flag: '\ud83c\uddeb\ud83c\uddf7', name: 'English \u2194 French', sizeMB: 576 },
+        { id: 'windy-pair-en-de', pair: ['en', 'de'], flag: '\ud83c\udde9\ud83c\uddea', name: 'English \u2194 German', sizeMB: 570 },
+        { id: 'windy-pair-en-ar', pair: ['en', 'ar'], flag: '\ud83c\uddf8\ud83c\udde6', name: 'English \u2194 Arabic', sizeMB: 592 },
+        { id: 'windy-pair-en-hi', pair: ['en', 'hi'], flag: '\ud83c\uddee\ud83c\uddf3', name: 'English \u2194 Hindi', sizeMB: 586 },
+        { id: 'windy-pair-en-pt', pair: ['en', 'pt'], flag: '\ud83c\udde7\ud83c\uddf7', name: 'English \u2194 Portuguese', sizeMB: 1189 },
+        { id: 'windy-pair-en-ru', pair: ['en', 'ru'], flag: '\ud83c\uddf7\ud83c\uddfa', name: 'English \u2194 Russian', sizeMB: 592 },
+      ];
+      const codeSet = new Set(langCodes);
+      const matchedPairs = AVAILABLE_PAIRS.filter(p => p.pair.every(c => codeSet.has(c)));
+
+      // Build specialist pairs section
+      let specialistHTML = '';
+      if (matchedPairs.length > 0) {
+        specialistHTML = `
+          <div style="max-width:540px; margin:0 auto 20px; background:linear-gradient(135deg, rgba(245,158,11,0.1), rgba(245,158,11,0.03)); border:2px solid rgba(245,158,11,0.4); border-radius:14px; padding:18px 22px;">
+            <div style="font-size:16px; font-weight:800; color:#F59E0B; margin-bottom:8px; text-align:center;">\ud83c\udfaf Specialist Pairs Available!</div>
+            <div style="font-size:13px; color:var(--text-dim); text-align:center; margin-bottom:12px; line-height:1.5;">We have dedicated engines built specifically for your language pairs.<br>Smaller downloads, higher accuracy than the generic translator.</div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              ${matchedPairs.map(p => `
+                <label style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--bg-card); border-radius:10px; border:1px solid rgba(245,158,11,0.3); cursor:pointer; transition:all 0.2s;" onmouseenter="this.style.borderColor='#F59E0B'" onmouseleave="this.style.borderColor='rgba(245,158,11,0.3)'">
+                  <input type="checkbox" class="specialist-pair-check" data-pair-id="${p.id}" checked style="width:18px; height:18px; accent-color:#F59E0B;">
+                  <span style="font-size:18px;">${p.flag}</span>
+                  <span style="flex:1; font-size:14px; font-weight:600; color:var(--text);">${p.name}</span>
+                  <span style="font-size:12px; color:var(--text-muted); font-weight:600;">${p.sizeMB < 1024 ? p.sizeMB + ' MB' : (p.sizeMB / 1024).toFixed(1) + ' GB'}</span>
+                  <span style="font-size:10px; padding:2px 8px; border-radius:6px; background:rgba(245,158,11,0.15); color:#F59E0B; font-weight:700;">SPECIALIST</span>
+                </label>
+              `).join('')}
+            </div>
+            <div style="font-size:11px; color:var(--text-muted); text-align:center; margin-top:10px;">These are auto-selected based on your language choices. Uncheck any you don't need.</div>
+          </div>
+        `;
+      }
+
       content.innerHTML = `
         <div style="text-align:center; margin-bottom:20px;">
-          <h1 style="font-size:22px; margin-bottom:4px;">🎯 You Speak ${userLanguages.length} Languages!</h1>
-          <p style="font-size:15px; color:var(--text-dim);">Unlock real-time conversation translation between ${primary.name} and ${secondary.name}.</p>
+          <h1 style="font-size:22px; margin-bottom:4px;">\ud83c\udfaf You Speak ${userLanguages.length} Languages!</h1>
+          <p style="font-size:15px; color:var(--text-dim);">Unlock real-time conversation translation between ${langListStr}.</p>
         </div>
 
         <!-- Conversation Demo -->
@@ -4155,6 +4426,8 @@
             `).join('')}
           </div>
         </div>
+
+        ${specialistHTML}
 
         <!-- Feature highlights -->
         <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:24px; max-width:600px; margin-left:auto; margin-right:auto;">
@@ -4397,6 +4670,27 @@
         // Auto-proceed to Learn screen after brief delay
         setTimeout(() => goToScreen(5), 2000);
       }
+    }
+
+    /**
+     * Read checked specialist pair checkboxes from translate upsell screen.
+     * Returns array of model IDs (both directions, e.g. 'windy-pair-en-es' + 'windy-pair-es-en').
+     */
+    function getSelectedSpecialistPairs() {
+      const checks = document.querySelectorAll('.specialist-pair-check:checked');
+      const ids = [];
+      checks.forEach(cb => {
+        const pairId = cb.dataset.pairId;
+        if (pairId) {
+          ids.push(pairId);
+          // Also add reverse direction (en-es → es-en)
+          const parts = pairId.replace('windy-pair-', '').split('-');
+          if (parts.length === 2) {
+            ids.push(`windy-pair-${parts[1]}-${parts[0]}`);
+          }
+        }
+      });
+      return ids;
     }
 
     function skipTranslation() {

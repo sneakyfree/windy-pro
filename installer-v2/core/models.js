@@ -38,6 +38,14 @@ const ENGINE_FAMILIES = {
     description: 'Live translation across 100+ language pairs. Local, private, instant.',
     color: '#A855F7',
     requiresGPU: false
+  },
+  pair: {
+    name: 'Specialist Pair',
+    emoji: '🎯',
+    tagline: 'Dedicated language-pair engines',
+    description: 'Purpose-built for a single language pair. Smaller, faster, and higher quality than generic translation for that specific pair.',
+    color: '#F59E0B',
+    requiresGPU: false
   }
 };
 
@@ -411,6 +419,200 @@ const ENGINE_CATALOG = [
     fineTuned: 'Multilingual by Windy Pro Labs',
     format: 'Safetensors',
     badge: '🌍 Pro Translation'
+  },
+
+  // ─── SPECIALIST PAIR ENGINES (bidirectional, ~300 MB each direction) ───
+  {
+    id: 'windy-pair-en-es',
+    family: 'pair',
+    name: 'English ↔ Spanish',
+    displayName: 'English ↔ Spanish Specialist',
+    sizeMB: 598,
+    sizeDisplay: '598 MB',
+    vramGB: 0,
+    ramGB: 4,
+    speed: '10×',
+    speedRating: 10,
+    quality: 5,
+    qualityLabel: 'Native-Level',
+    parameters: '77M × 2',
+    languages: 2,
+    pair: ['en', 'es'],
+    description: 'Purpose-built for English↔Spanish. Higher accuracy than generic translation.',
+    bestFor: 'Spanish speakers, Latin American business, travel to Spain/LATAM',
+    tier: 'translate',
+    architecture: 'OPUS-MT fine-tuned',
+    fineTuned: 'Specialist pair by Windy Pro Labs',
+    format: 'PyTorch',
+    badge: '🇲🇽 Specialist'
+  },
+  {
+    id: 'windy-pair-en-zh',
+    family: 'pair',
+    name: 'English ↔ Chinese',
+    displayName: 'English ↔ Chinese Specialist',
+    sizeMB: 598,
+    sizeDisplay: '598 MB',
+    vramGB: 0,
+    ramGB: 4,
+    speed: '10×',
+    speedRating: 10,
+    quality: 5,
+    qualityLabel: 'Native-Level',
+    parameters: '77M × 2',
+    languages: 2,
+    pair: ['en', 'zh'],
+    description: 'Purpose-built for English↔Chinese (Simplified & Traditional).',
+    bestFor: 'Mandarin speakers, China/Taiwan/Singapore business',
+    tier: 'translate',
+    architecture: 'OPUS-MT fine-tuned',
+    fineTuned: 'Specialist pair by Windy Pro Labs',
+    format: 'PyTorch',
+    badge: '🇨🇳 Specialist'
+  },
+  {
+    id: 'windy-pair-en-fr',
+    family: 'pair',
+    name: 'English ↔ French',
+    displayName: 'English ↔ French Specialist',
+    sizeMB: 576,
+    sizeDisplay: '576 MB',
+    vramGB: 0,
+    ramGB: 4,
+    speed: '10×',
+    speedRating: 10,
+    quality: 5,
+    qualityLabel: 'Native-Level',
+    parameters: '77M × 2',
+    languages: 2,
+    pair: ['en', 'fr'],
+    description: 'Purpose-built for English↔French translation.',
+    bestFor: 'French speakers, EU business, Francophone Africa',
+    tier: 'translate',
+    architecture: 'OPUS-MT fine-tuned',
+    fineTuned: 'Specialist pair by Windy Pro Labs',
+    format: 'PyTorch',
+    badge: '🇫🇷 Specialist'
+  },
+  {
+    id: 'windy-pair-en-de',
+    family: 'pair',
+    name: 'English ↔ German',
+    displayName: 'English ↔ German Specialist',
+    sizeMB: 570,
+    sizeDisplay: '570 MB',
+    vramGB: 0,
+    ramGB: 4,
+    speed: '10×',
+    speedRating: 10,
+    quality: 5,
+    qualityLabel: 'Native-Level',
+    parameters: '77M × 2',
+    languages: 2,
+    pair: ['en', 'de'],
+    description: 'Purpose-built for English↔German translation.',
+    bestFor: 'German speakers, DACH region business, engineering docs',
+    tier: 'translate',
+    architecture: 'OPUS-MT fine-tuned',
+    fineTuned: 'Specialist pair by Windy Pro Labs',
+    format: 'PyTorch',
+    badge: '🇩🇪 Specialist'
+  },
+  {
+    id: 'windy-pair-en-ar',
+    family: 'pair',
+    name: 'English ↔ Arabic',
+    displayName: 'English ↔ Arabic Specialist',
+    sizeMB: 592,
+    sizeDisplay: '592 MB',
+    vramGB: 0,
+    ramGB: 4,
+    speed: '10×',
+    speedRating: 10,
+    quality: 5,
+    qualityLabel: 'Native-Level',
+    parameters: '77M × 2',
+    languages: 2,
+    pair: ['en', 'ar'],
+    description: 'Purpose-built for English↔Arabic (MSA + dialects).',
+    bestFor: 'Arabic speakers, MENA region business, religious texts',
+    tier: 'translate',
+    architecture: 'OPUS-MT fine-tuned',
+    fineTuned: 'Specialist pair by Windy Pro Labs',
+    format: 'PyTorch',
+    badge: '🇸🇦 Specialist'
+  },
+  {
+    id: 'windy-pair-en-hi',
+    family: 'pair',
+    name: 'English ↔ Hindi',
+    displayName: 'English ↔ Hindi Specialist',
+    sizeMB: 586,
+    sizeDisplay: '586 MB',
+    vramGB: 0,
+    ramGB: 4,
+    speed: '10×',
+    speedRating: 10,
+    quality: 5,
+    qualityLabel: 'Native-Level',
+    parameters: '77M × 2',
+    languages: 2,
+    pair: ['en', 'hi'],
+    description: 'Purpose-built for English↔Hindi translation.',
+    bestFor: 'Hindi speakers, India business, Bollywood content',
+    tier: 'translate',
+    architecture: 'OPUS-MT fine-tuned',
+    fineTuned: 'Specialist pair by Windy Pro Labs',
+    format: 'PyTorch',
+    badge: '🇮🇳 Specialist'
+  },
+  {
+    id: 'windy-pair-en-pt',
+    family: 'pair',
+    name: 'English ↔ Portuguese',
+    displayName: 'English ↔ Portuguese Specialist',
+    sizeMB: 1189,
+    sizeDisplay: '1.2 GB',
+    vramGB: 0,
+    ramGB: 4,
+    speed: '8×',
+    speedRating: 8,
+    quality: 5,
+    qualityLabel: 'Native-Level',
+    parameters: '77M × 2',
+    languages: 2,
+    pair: ['en', 'pt'],
+    description: 'Purpose-built for English↔Portuguese (BR + PT).',
+    bestFor: 'Portuguese speakers, Brazil/Portugal business',
+    tier: 'translate',
+    architecture: 'OPUS-MT fine-tuned',
+    fineTuned: 'Specialist pair by Windy Pro Labs',
+    format: 'PyTorch',
+    badge: '🇧🇷 Specialist'
+  },
+  {
+    id: 'windy-pair-en-ru',
+    family: 'pair',
+    name: 'English ↔ Russian',
+    displayName: 'English ↔ Russian Specialist',
+    sizeMB: 592,
+    sizeDisplay: '592 MB',
+    vramGB: 0,
+    ramGB: 4,
+    speed: '10×',
+    speedRating: 10,
+    quality: 5,
+    qualityLabel: 'Native-Level',
+    parameters: '77M × 2',
+    languages: 2,
+    pair: ['en', 'ru'],
+    description: 'Purpose-built for English↔Russian translation.',
+    bestFor: 'Russian speakers, CIS region business, technical documentation',
+    tier: 'translate',
+    architecture: 'OPUS-MT fine-tuned',
+    fineTuned: 'Specialist pair by Windy Pro Labs',
+    format: 'PyTorch',
+    badge: '🇷🇺 Specialist'
   }
 ];
 
@@ -434,14 +636,18 @@ const TIER_ACCESS = {
     'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro',
     'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu',
     'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu',
-    'windy-translate-spark'
+    'windy-translate-spark',
+    'windy-pair-en-es', 'windy-pair-en-zh', 'windy-pair-en-fr', 'windy-pair-en-de',
+    'windy-pair-en-ar', 'windy-pair-en-hi', 'windy-pair-en-pt', 'windy-pair-en-ru'
   ],
   translate_pro: [
     'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core',
     'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro',
     'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu',
     'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu',
-    'windy-translate-spark', 'windy-translate-standard'
+    'windy-translate-spark', 'windy-translate-standard',
+    'windy-pair-en-es', 'windy-pair-en-zh', 'windy-pair-en-fr', 'windy-pair-en-de',
+    'windy-pair-en-ar', 'windy-pair-en-hi', 'windy-pair-en-pt', 'windy-pair-en-ru'
   ]
 };
 
@@ -499,6 +705,25 @@ function getTranslationEngines() {
 }
 
 /**
+ * Get specialist pair engines
+ */
+function getPairEngines() {
+  return ENGINE_CATALOG.filter(e => e.family === 'pair');
+}
+
+/**
+ * Given a list of user language codes (e.g. ['en','es','ar']),
+ * return the pair engine IDs that match any combination of their languages.
+ * Each pair ID maps to both directions (en-es downloads both en→es and es→en).
+ */
+function getMatchingPairs(langCodes) {
+  const codeSet = new Set(langCodes.map(c => c.toLowerCase()));
+  return ENGINE_CATALOG
+    .filter(e => e.family === 'pair' && e.pair && e.pair.every(code => codeSet.has(code)))
+    .map(e => e.id);
+}
+
+/**
  * Check if user has access to an engine based on tier
  */
 function hasAccessToEngine(engineId, userTier) {
@@ -517,5 +742,7 @@ module.exports = {
   getGPUEngines,
   getCPUEngines,
   getTranslationEngines,
+  getPairEngines,
+  getMatchingPairs,
   hasAccessToEngine
 };
