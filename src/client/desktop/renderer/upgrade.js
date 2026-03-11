@@ -311,7 +311,11 @@ class UpgradePanel {
                         </div>
                     `;
                 } else {
-                    status.innerHTML = `<div style="text-align:center;color:#EF4444;">${openResult?.error || 'Could not open checkout'}</div>`;
+                    const errDiv = document.createElement('div');
+                    errDiv.style.cssText = 'text-align:center;color:#EF4444;';
+                    errDiv.textContent = openResult?.error || 'Could not open checkout';
+                    status.innerHTML = '';
+                    status.appendChild(errDiv);
                 }
             }
 
@@ -323,7 +327,10 @@ class UpgradePanel {
             if (msg.includes('Payment system not configured') || msg.includes('Not available')) {
                 status.innerHTML = `❌ <strong>Stripe API key not set.</strong><br><span style="font-size:11px;color:#9CA3AF;">Set STRIPE_SECRET_KEY environment variable or configure in Settings → Advanced → Stripe Secret Key</span>`;
             } else {
-                status.innerHTML = `❌ ${msg}`;
+                const errSpan = document.createElement('span');
+                errSpan.textContent = '❌ ' + msg;
+                status.innerHTML = '';
+                status.appendChild(errSpan);
             }
             status.className = 'upgrade-status upgrade-status-error';
         }

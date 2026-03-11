@@ -883,7 +883,8 @@ class WindyApp {
       if (this.transcriptContent) {
         const pre = document.createElement('div');
         pre.className = 'transcript-segment recovered';
-        pre.innerHTML = `<span style="color:#22C55E;font-size:11px;opacity:0.7">🔄 Recovered session:</span><br>${content.replace(/\n/g, '<br>')}`;
+        const _escHtml = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        pre.innerHTML = `<span style="color:#22C55E;font-size:11px;opacity:0.7">🔄 Recovered session:</span><br>${_escHtml(content).replace(/\n/g, '<br>')}`;
         this.transcriptContent.appendChild(pre);
         this.transcriptContent.scrollTop = this.transcriptContent.scrollHeight;
       }

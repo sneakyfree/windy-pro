@@ -221,7 +221,8 @@ class ConversationMode {
             // Show translation in the other pane
             const transEl = document.createElement('div');
             transEl.className = 'conv-entry conv-translated';
-            transEl.innerHTML = `<span class="conv-trans-badge">🌍 ${sourceLang.toUpperCase()} → ${targetLang.toUpperCase()}</span> ${translatedText}`;
+            const _esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            transEl.innerHTML = `<span class="conv-trans-badge">🌍 ${sourceLang.toUpperCase()} → ${targetLang.toUpperCase()}</span> ${_esc(translatedText)}`;
             otherTranscriptEl.appendChild(transEl);
             otherTranscriptEl.scrollTop = otherTranscriptEl.scrollHeight;
 
