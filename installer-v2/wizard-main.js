@@ -268,6 +268,10 @@ class InstallWizard {
         const modelStart = 25;
         const token = this.accountManager.getToken();
 
+        // Track download start time for ETA calculation
+        const downloadStart = Date.now();
+        let completedModels = 0;
+
         await this.downloadManager.downloadModels(
           models,
           // Per-model progress callback
@@ -275,17 +279,53 @@ class InstallWizard {
             const modelInfo = ENGINE_CATALOG.find(m => m.id === modelId);
             const modelName = modelInfo?.shortName || modelInfo?.name || modelId;
             const modelSize = modelInfo ? formatSize(modelInfo.sizeMB) : '?';
+
+            // Calculate ETA based on elapsed time and overall progress
+            const elapsed = (Date.now() - downloadStart) / 1000;
+            const overallPct = modelStart + (progress / 100) * modelRange * 0.8 / models.length + (completedModels / models.length * modelRange);
+            let eta = '';
+            if (overallPct > 2 && elapsed > 3) {
+              const remaining = (elapsed / overallPct) * (100 - overallPct);
+              if (remaining < 60) eta = `~${Math.ceil(remaining)}s remaining`;
+              else if (remaining < 3600) eta = `~${Math.ceil(remaining / 60)}m remaining`;
+              else eta = `~${(remaining / 3600).toFixed(1)}h remaining`;
+            }
+
             this.sendProgress({
-              percent: modelStart + (progress / 100) * modelRange * 0.8,
+              percent: modelStart + (completedModels / models.length * modelRange) + (progress / 100) * (modelRange / models.length),
               message: `${INSTALL_STEP_MESSAGES['download-model']?.title || 'Downloading'} — ${modelName}`,
-              detail: `Downloading ${modelName} (${modelSize})`,
+              detail: `Downloading ${modelName} (${modelSize}) — ${Math.round(progress)}%`,
+              modelId: modelId,
+              modelPercent: progress,
+              eta: eta,
             });
+
+            // When this model hits 100%, mark it done
+            if (progress >= 100) {
+              completedModels++;
+              this.sendProgress({
+                modelId: modelId,
+                modelDone: true,
+                percent: modelStart + (completedModels / models.length * modelRange),
+                detail: `Model ${completedModels} of ${models.length} complete`,
+              });
+            }
           },
           // Overall progress callback
           (overallPercent, completed, total) => {
+            const elapsed = (Date.now() - downloadStart) / 1000;
+            const pct = modelStart + (overallPercent / 100) * modelRange;
+            let eta = '';
+            if (pct > 2 && elapsed > 3) {
+              const remaining = (elapsed / pct) * (100 - pct);
+              if (remaining < 60) eta = `~${Math.ceil(remaining)}s remaining`;
+              else if (remaining < 3600) eta = `~${Math.ceil(remaining / 60)}m remaining`;
+              else eta = `~${(remaining / 3600).toFixed(1)}h remaining`;
+            }
             this.sendProgress({
-              percent: modelStart + (overallPercent / 100) * modelRange,
+              percent: pct,
               detail: `Model ${completed} of ${total} complete`,
+              eta: eta,
             });
           }
         );
