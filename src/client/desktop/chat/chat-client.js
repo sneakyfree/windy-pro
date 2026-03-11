@@ -154,7 +154,7 @@ class WindyChatClient extends EventEmitter {
       return loginResult;
     } catch (err) {
       if (err.data && err.data.session) {
-        console.log('[WindyChat] Registration requires additional auth:', err.data.flows);
+        console.debug('[WindyChat] Registration requires additional auth:', err.data.flows);
         return { success: false, error: 'Registration requires CAPTCHA or email verification. Please register at ' + this.homeserverUrl };
       }
       console.error('[WindyChat] Registration failed:', err.message);
@@ -255,7 +255,7 @@ class WindyChatClient extends EventEmitter {
     await this.client.startClient({ initialSyncLimit: 20 });
     this.isConnected = true;
     this.emit('connected');
-    console.log('[WindyChat] Connected and syncing');
+    console.debug('[WindyChat] Connected and syncing');
   }
 
   /**
@@ -275,13 +275,18 @@ class WindyChatClient extends EventEmitter {
       windy_lang: userLang
     };
 
-    const result = await this.client.sendEvent(roomId, 'm.room.message', content);
-    return {
-      eventId: result.event_id,
-      body: text,
-      originalText: text,
-      originalLang: userLang
-    };
+    try {
+      const result = await this.client.sendEvent(roomId, 'm.room.message', content);
+      return {
+        eventId: result.event_id,
+        body: text,
+        originalText: text,
+        originalLang: userLang
+      };
+    } catch (err) {
+      console.error('[WindyChat] Send failed:', err.message);
+      throw err; // Re-throw so UI can show error
+    }
   }
 
   /**
@@ -296,20 +301,24 @@ class WindyChatClient extends EventEmitter {
       return { roomId: existingRoom.roomId, existing: true };
     }
 
-    // Create new DM room with encryption
-    const room = await this.client.createRoom({
-      is_direct: true,
-      invite: [userId],
-      preset: 'trusted_private_chat',
-      visibility: 'private',
-      initial_state: [{
-        type: 'm.room.encryption',
-        state_key: '',
-        content: { algorithm: 'm.megolm.v1.aes-sha2' }
-      }]
-    });
-
-    return { roomId: room.room_id, existing: false };
+    try {
+      // Create new DM room with encryption
+      const room = await this.client.createRoom({
+        is_direct: true,
+        invite: [userId],
+        preset: 'trusted_private_chat',
+        visibility: 'private',
+        initial_state: [{
+          type: 'm.room.encryption',
+          state_key: '',
+          content: { algorithm: 'm.megolm.v1.aes-sha2' }
+        }]
+      });
+      return { roomId: room.room_id, existing: false };
+    } catch (err) {
+      console.error('[WindyChat] createDM failed:', err.message);
+      return { roomId: null, error: err.message };
+    }
   }
 
   _findExistingDM(userId) {
@@ -425,7 +434,11 @@ class WindyChatClient extends EventEmitter {
    */
   async setPresence(status) {
     if (!this.client) return;
-    await this.client.setPresence({ presence: status });
+    try {
+      await this.client.setPresence({ presence: status });
+    } catch (err) {
+      console.warn('[WindyChat] setPresence failed:', err.message);
+    }
   }
 
   /**
@@ -433,8 +446,12 @@ class WindyChatClient extends EventEmitter {
    */
   async setDisplayName(displayName) {
     if (!this.client) return;
-    await this.client.setDisplayName(displayName);
-    this.store.set('chat.displayName', displayName);
+    try {
+      await this.client.setDisplayName(displayName);
+      this.store.set('chat.displayName', displayName);
+    } catch (err) {
+      console.warn('[WindyChat] setDisplayName failed:', err.message);
+    }
   }
 
   /**
@@ -442,11 +459,16 @@ class WindyChatClient extends EventEmitter {
    */
   async setAvatar(buffer, mimeType) {
     if (!this.client) return;
-    const uploadResponse = await this.client.uploadContent(buffer, {
-      type: mimeType,
-      name: 'avatar'
-    });
-    await this.client.setAvatarUrl(uploadResponse.content_uri);
+    try {
+      const uploadResponse = await this.client.uploadContent(buffer, {
+        type: mimeType,
+        name: 'avatar'
+      });
+      await this.client.setAvatarUrl(uploadResponse.content_uri);
+    } catch (err) {
+      console.error('[WindyChat] setAvatar failed:', err.message);
+      throw err;
+    }
   }
 
   /**
@@ -454,7 +476,11 @@ class WindyChatClient extends EventEmitter {
    */
   async acceptInvite(roomId) {
     if (!this.client) return;
-    await this.client.joinRoom(roomId);
+    try {
+      await this.client.joinRoom(roomId);
+    } catch (err) {
+      console.warn('[WindyChat] acceptInvite failed:', err.message);
+    }
   }
 
   /**
@@ -462,7 +488,11 @@ class WindyChatClient extends EventEmitter {
    */
   async declineInvite(roomId) {
     if (!this.client) return;
-    await this.client.leave(roomId);
+    try {
+      await this.client.leave(roomId);
+    } catch (err) {
+      console.warn('[WindyChat] declineInvite failed:', err.message);
+    }
   }
 
   /**
@@ -470,7 +500,11 @@ class WindyChatClient extends EventEmitter {
    */
   async sendTyping(roomId, isTyping) {
     if (!this.client) return;
-    await this.client.sendTyping(roomId, isTyping, isTyping ? 5000 : undefined);
+    try {
+      await this.client.sendTyping(roomId, isTyping, isTyping ? 5000 : undefined);
+    } catch (err) {
+      // Typing indicators are best-effort — don't crash on failure
+    }
   }
 
   /**
