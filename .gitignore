@@ -35,6 +35,17 @@ models/
 *.temp
 windy_session.txt
 
+# Training artifacts & large data
+artifacts/
+data/
+runs/
+temp_training_*/
+test_audio/
+
+# Build logs (keep scripts, skip logs)
+*.log
+upload_log*.txt
+
 # Secrets / env files
 .env
 deploy/.env
