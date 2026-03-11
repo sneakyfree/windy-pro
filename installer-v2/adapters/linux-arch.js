@@ -35,7 +35,7 @@ class LinuxArchAdapter {
   }
 
   async installPython(onProgress) {
-    onProgress = onProgress || (() => {});
+    onProgress = onProgress || (() => { });
 
     onProgress(5);
     const bundledPy = await this.bundled.installPython(APP_DIR, this.log);
@@ -59,7 +59,7 @@ class LinuxArchAdapter {
     if (process.env.XDG_SESSION_TYPE === 'wayland') {
       try {
         await this._execSudo('pacman -Sy --noconfirm ydotool wl-clipboard || true', 60000);
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const py = this._findPython();
@@ -70,7 +70,7 @@ class LinuxArchAdapter {
   }
 
   async installFfmpeg(onProgress) {
-    onProgress = onProgress || (() => {});
+    onProgress = onProgress || (() => { });
 
     const bundledFfmpeg = await this.bundled.installFfmpeg(APP_DIR, this.log);
     if (bundledFfmpeg) { onProgress(100); return bundledFfmpeg; }
@@ -98,13 +98,13 @@ class LinuxArchAdapter {
           onProgress(100);
           return path.join(BIN_DIR, 'ffmpeg');
         }
-      } catch (e2) {}
+      } catch (e2) { }
       throw new Error('Could not install ffmpeg');
     }
   }
 
   async installCuda(onProgress) {
-    onProgress = onProgress || (() => {});
+    onProgress = onProgress || (() => { });
     try {
       execSync('nvidia-smi 2>/dev/null', { timeout: 10000, stdio: 'pipe' });
       onProgress(100);
@@ -122,11 +122,11 @@ class LinuxArchAdapter {
       fs.writeFileSync(path.join(desktopDir, 'windy-pro.desktop'), `[Desktop Entry]
 Type=Application
 Name=Windy Pro
-Exec=electron ${process.cwd()}
+Exec=${process.execPath} ${process.cwd()}
 Terminal=false
 Categories=Audio;Utility;
 `);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   async verify() {
@@ -149,7 +149,7 @@ Categories=Audio;Utility;
       try {
         const v = execSync(`${cmd} --version 2>&1`, { timeout: 5000, stdio: 'pipe' }).toString();
         if (/Python 3\.(9|1[0-9]|[2-9]\d)/.test(v)) return cmd;
-      } catch (e) {}
+      } catch (e) { }
     }
     return null;
   }
@@ -160,7 +160,7 @@ Categories=Audio;Utility;
       try {
         execSync(`"${venvPy}" -c "import faster_whisper; print('OK')"`, { timeout: 15000, stdio: 'pipe' });
         return;
-      } catch (e) {}
+      } catch (e) { }
     }
     if (!fs.existsSync(venvPy)) {
       execSync(`"${pythonPath}" -m venv "${VENV_DIR}"`, { timeout: 120000, stdio: 'pipe' });
@@ -176,11 +176,14 @@ Categories=Audio;Utility;
 
   async _execSudo(cmd, timeout = 120000) {
     return new Promise((resolve, reject) => {
-      const tries = [
-        `pkexec bash -c '${cmd.replace(/'/g, "'\\''")}'`,
-        `sudo bash -c '${cmd.replace(/'/g, "'\\''")}'`,
+      const tries = [];
+      if (process.env.DISPLAY || process.env.WAYLAND_DISPLAY) {
+        tries.push(`pkexec bash -c '${cmd.replace(/'/g, "'\\''")}'`);
+      }
+      tries.push(
+        `sudo -n bash -c '${cmd.replace(/'/g, "'\\''")}'`,
         cmd
-      ];
+      );
       const tryNext = (i) => {
         if (i >= tries.length) { reject(new Error(`Failed: ${cmd}`)); return; }
         exec(tries[i], { timeout, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {

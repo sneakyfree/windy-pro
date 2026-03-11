@@ -25,7 +25,7 @@ class MacOSAdapter {
    * Install Python — bundled first, then system, then brew
    */
   async installPython(progressCallback) {
-    progressCallback = progressCallback || (() => {});
+    progressCallback = progressCallback || (() => { });
 
     // Strategy 1: Bundled Python
     progressCallback(10);
@@ -105,7 +105,7 @@ class MacOSAdapter {
    * Install ffmpeg — bundled first, then brew
    */
   async installFfmpeg(progressCallback) {
-    progressCallback = progressCallback || (() => {});
+    progressCallback = progressCallback || (() => { });
 
     // Strategy 1: Bundled ffmpeg
     progressCallback(10);
@@ -138,9 +138,8 @@ class MacOSAdapter {
     fs.mkdirSync(binDir, { recursive: true });
     const ffmpegDest = path.join(binDir, 'ffmpeg');
     try {
-      const url = process.arch === 'arm64'
-        ? 'https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip'
-        : 'https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip';
+      // evermeet.cx serves universal binaries — same URL works for Intel and Apple Silicon
+      const url = 'https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip';
       const zipPath = path.join(os.tmpdir(), 'ffmpeg.zip');
       execSync(`curl -fsSL "${url}" -o "${zipPath}"`, { timeout: 120000, stdio: 'pipe' });
       execSync(`unzip -o "${zipPath}" -d "${binDir}"`, { timeout: 30000, stdio: 'pipe' });
@@ -156,7 +155,7 @@ class MacOSAdapter {
    * Install CUDA — macOS doesn't have NVIDIA anymore, but check for Apple Metal
    */
   async installCuda(progressCallback) {
-    progressCallback = progressCallback || (() => {});
+    progressCallback = progressCallback || (() => { });
     // macOS uses Metal/MPS for GPU acceleration (Apple Silicon)
     progressCallback(50);
     const isAppleSilicon = process.arch === 'arm64';

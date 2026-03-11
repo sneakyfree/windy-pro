@@ -25,9 +25,15 @@ const BIN_DIR = path.join(APP_DIR, 'bin');
 const PYTHON_DIR = path.join(APP_DIR, 'python');
 
 // Embedded Python (no installer needed, no system changes)
-const PYTHON_EMBED_URL = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip';
+const PYTHON_EMBED_URLS = {
+  x64: 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip',
+  arm64: 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-arm64.zip',
+};
+const PYTHON_EMBED_URL = PYTHON_EMBED_URLS[process.arch] || PYTHON_EMBED_URLS.x64;
 const GET_PIP_URL = 'https://bootstrap.pypa.io/get-pip.py';
-const FFMPEG_WIN_URL = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip';
+const FFMPEG_WIN_URL = process.arch === 'arm64'
+  ? 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' // ARM64 runs x64 via emulation
+  : 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip';
 
 class WindowsAdapter {
   constructor() {
@@ -87,8 +93,8 @@ class WindowsAdapter {
       onProgress(30);
 
       // Cleanup
-      try { fs.unlinkSync(zipPath); } catch (e) {}
-      try { fs.unlinkSync(getPipPath); } catch (e) {}
+      try { fs.unlinkSync(zipPath); } catch (e) { }
+      try { fs.unlinkSync(getPipPath); } catch (e) { }
     } else {
       onProgress(30);
     }
@@ -136,10 +142,10 @@ class WindowsAdapter {
         // Silent install with no UI (/install /quiet /norestart)
         await this._exec(`"${vcRedistPath}" /install /quiet /norestart`, 120000);
         console.log('Visual C++ Redistributable installed successfully');
-        try { fs.unlinkSync(vcRedistPath); } catch (e2) {}
+        try { fs.unlinkSync(vcRedistPath); } catch (e2) { }
       } catch (vcErr) {
         console.log(`VC++ Redistributable install failed: ${vcErr.message} — may work anyway`);
-        try { fs.unlinkSync(vcRedistPath); } catch (e2) {}
+        try { fs.unlinkSync(vcRedistPath); } catch (e2) { }
       }
     }
 
@@ -166,7 +172,7 @@ class WindowsAdapter {
       execSync('ffmpeg -version', { timeout: 5000, stdio: 'pipe' });
       onProgress(100);
       return;
-    } catch (e) {}
+    } catch (e) { }
 
     // Strategy 3: Check our bin dir
     if (fs.existsSync(ffmpegExe)) {
@@ -194,8 +200,8 @@ class WindowsAdapter {
       await this._findAndCopy(tempDir, 'ffprobe.exe', path.join(BIN_DIR, 'ffprobe.exe'));
 
       // Cleanup
-      try { fs.unlinkSync(zipPath); } catch (e) {}
-      try { this._rmdir(tempDir); } catch (e) {}
+      try { fs.unlinkSync(zipPath); } catch (e) { }
+      try { this._rmdir(tempDir); } catch (e) { }
 
       process.env.PATH = `${BIN_DIR};${process.env.PATH}`;
     } catch (e) {
@@ -218,7 +224,7 @@ class WindowsAdapter {
         onProgress(100);
         return;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // No NVIDIA driver — CPU inference
     console.log('No NVIDIA GPU driver — will use CPU inference');
@@ -292,7 +298,7 @@ class WindowsAdapter {
         try {
           await this._findAndCopy(full, filename, dest);
           return;
-        } catch (e) {}
+        } catch (e) { }
       } else if (entry.name.toLowerCase() === filename.toLowerCase()) {
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.copyFileSync(full, dest);

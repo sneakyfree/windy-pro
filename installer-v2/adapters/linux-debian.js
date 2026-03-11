@@ -62,7 +62,7 @@ class LinuxDebianAdapter {
    * Install Python — bundled first, then apt
    */
   async installPython(onProgress) {
-    onProgress = onProgress || (() => {});
+    onProgress = onProgress || (() => { });
 
     // Strategy 1: Bundled Python
     onProgress(5);
@@ -78,7 +78,7 @@ class LinuxDebianAdapter {
     // Strategy 2: Install everything via apt
     onProgress(10);
     this.log('[Debian] Installing complete dependency cocktail via apt...');
-    
+
     try {
       // Update package list first
       await this._execSudo('apt-get update -qq');
@@ -127,7 +127,7 @@ class LinuxDebianAdapter {
    * Install ffmpeg — bundled first, then apt
    */
   async installFfmpeg(onProgress) {
-    onProgress = onProgress || (() => {});
+    onProgress = onProgress || (() => { });
 
     // Strategy 1: Bundled ffmpeg
     onProgress(10);
@@ -191,8 +191,8 @@ class LinuxDebianAdapter {
       } catch (e2) {
         throw new Error('Could not install ffmpeg');
       } finally {
-        try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch (e3) {}
-        try { fs.unlinkSync(tarPath); } catch (e3) {}
+        try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch (e3) { }
+        try { fs.unlinkSync(tarPath); } catch (e3) { }
       }
     }
 
@@ -204,7 +204,7 @@ class LinuxDebianAdapter {
    * Install CUDA — detect NVIDIA GPU and note PyTorch handles CUDA
    */
   async installCuda(onProgress) {
-    onProgress = onProgress || (() => {});
+    onProgress = onProgress || (() => { });
     onProgress(30);
 
     try {
@@ -234,7 +234,7 @@ class LinuxDebianAdapter {
 Type=Application
 Name=Windy Pro
 Comment=AI-powered speech recognition and translation
-Exec=electron ${process.cwd()}
+Exec=${process.execPath} ${process.cwd()}
 Icon=${path.join(process.cwd(), 'assets', 'icon.png')}
 Terminal=false
 Categories=Audio;Utility;
@@ -347,12 +347,15 @@ Categories=Audio;Utility;
 
   async _execSudo(cmd, timeout = 120000) {
     return new Promise((resolve, reject) => {
-      // Try pkexec first (GUI prompt), then sudo, then direct
-      const tryCommands = [
-        `pkexec bash -c '${cmd.replace(/'/g, "'\\''")}'`,
-        `sudo bash -c '${cmd.replace(/'/g, "'\\''")}'`,
+      // Build escalation strategies — only use pkexec if DISPLAY is set
+      const tryCommands = [];
+      if (process.env.DISPLAY || process.env.WAYLAND_DISPLAY) {
+        tryCommands.push(`pkexec bash -c '${cmd.replace(/'/g, "'\\''")}'`);
+      }
+      tryCommands.push(
+        `sudo -n bash -c '${cmd.replace(/'/g, "'\\''")}'`, // non-interactive sudo
         cmd // last resort: direct (may work if already root)
-      ];
+      );
 
       const tryNext = (index) => {
         if (index >= tryCommands.length) {

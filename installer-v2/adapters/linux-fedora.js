@@ -38,13 +38,13 @@ class LinuxFedoraAdapter {
   }
 
   _detectPkgMgr() {
-    try { execSync('which dnf', { stdio: 'pipe' }); return 'dnf'; } catch (e) {}
-    try { execSync('which yum', { stdio: 'pipe' }); return 'yum'; } catch (e) {}
+    try { execSync('which dnf', { stdio: 'pipe' }); return 'dnf'; } catch (e) { }
+    try { execSync('which yum', { stdio: 'pipe' }); return 'yum'; } catch (e) { }
     return 'dnf';
   }
 
   async installPython(onProgress) {
-    onProgress = onProgress || (() => {});
+    onProgress = onProgress || (() => { });
 
     // Strategy 1: Bundled
     onProgress(5);
@@ -88,7 +88,7 @@ class LinuxFedoraAdapter {
   }
 
   async installFfmpeg(onProgress) {
-    onProgress = onProgress || (() => {});
+    onProgress = onProgress || (() => { });
 
     const bundledFfmpeg = await this.bundled.installFfmpeg(APP_DIR, this.log);
     if (bundledFfmpeg) { onProgress(100); return bundledFfmpeg; }
@@ -120,13 +120,13 @@ class LinuxFedoraAdapter {
         }
         fs.rmSync(extractDir, { recursive: true, force: true });
       } catch (e2) { /* fall through */ }
-      try { fs.unlinkSync(tarPath); } catch (e2) {}
+      try { fs.unlinkSync(tarPath); } catch (e2) { }
       throw new Error('Could not install ffmpeg');
     }
   }
 
   async installCuda(onProgress) {
-    onProgress = onProgress || (() => {});
+    onProgress = onProgress || (() => { });
     try {
       execSync('nvidia-smi 2>/dev/null', { timeout: 10000, stdio: 'pipe' });
       onProgress(100);
@@ -144,11 +144,11 @@ class LinuxFedoraAdapter {
       fs.writeFileSync(path.join(desktopDir, 'windy-pro.desktop'), `[Desktop Entry]
 Type=Application
 Name=Windy Pro
-Exec=electron ${process.cwd()}
+Exec=${process.execPath} ${process.cwd()}
 Terminal=false
 Categories=Audio;Utility;
 `);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   async verify() {
@@ -172,7 +172,7 @@ Categories=Audio;Utility;
       try {
         const v = execSync(`${cmd} --version 2>&1`, { timeout: 5000, stdio: 'pipe' }).toString();
         if (/Python 3\.(9|1[0-9]|[2-9]\d)/.test(v)) return cmd;
-      } catch (e) {}
+      } catch (e) { }
     }
     return null;
   }
@@ -183,7 +183,7 @@ Categories=Audio;Utility;
       try {
         execSync(`"${venvPy}" -c "import faster_whisper; print('OK')"`, { timeout: 15000, stdio: 'pipe' });
         return;
-      } catch (e) {}
+      } catch (e) { }
     }
     if (!fs.existsSync(venvPy)) {
       execSync(`"${pythonPath}" -m venv "${VENV_DIR}"`, { timeout: 120000, stdio: 'pipe' });
@@ -199,11 +199,14 @@ Categories=Audio;Utility;
 
   async _execSudo(cmd, timeout = 120000) {
     return new Promise((resolve, reject) => {
-      const tries = [
-        `pkexec bash -c '${cmd.replace(/'/g, "'\\''")}'`,
-        `sudo bash -c '${cmd.replace(/'/g, "'\\''")}'`,
+      const tries = [];
+      if (process.env.DISPLAY || process.env.WAYLAND_DISPLAY) {
+        tries.push(`pkexec bash -c '${cmd.replace(/'/g, "'\\''")}'`);
+      }
+      tries.push(
+        `sudo -n bash -c '${cmd.replace(/'/g, "'\\''")}'`,
         cmd
-      ];
+      );
       const tryNext = (i) => {
         if (i >= tries.length) { reject(new Error(`Failed: ${cmd}`)); return; }
         exec(tries[i], { timeout, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {

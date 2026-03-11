@@ -38,7 +38,7 @@ class DependencyInstaller {
     this.platform = process.platform;
     this.bundled = new BundledAssets();
     this.onLog = options.onLog || console.log;
-    this.onProgress = options.onProgress || (() => {});
+    this.onProgress = options.onProgress || (() => { });
     this.results = {};
     this.adapter = null; // Set by wizard-main to the platform adapter
   }
@@ -514,10 +514,10 @@ class DependencyInstaller {
     } catch (e) { /* ignore */ }
 
     // Fallback: check which package managers exist
-    try { execSync('which apt-get', { stdio: 'pipe' }); return 'debian'; } catch (e) {}
-    try { execSync('which dnf', { stdio: 'pipe' }); return 'fedora'; } catch (e) {}
-    try { execSync('which pacman', { stdio: 'pipe' }); return 'arch'; } catch (e) {}
-    try { execSync('which zypper', { stdio: 'pipe' }); return 'suse'; } catch (e) {}
+    try { execSync('which apt-get', { stdio: 'pipe' }); return 'debian'; } catch (e) { }
+    try { execSync('which dnf', { stdio: 'pipe' }); return 'fedora'; } catch (e) { }
+    try { execSync('which pacman', { stdio: 'pipe' }); return 'arch'; } catch (e) { }
+    try { execSync('which zypper', { stdio: 'pipe' }); return 'suse'; } catch (e) { }
 
     return 'unknown';
   }
@@ -532,17 +532,18 @@ class DependencyInstaller {
   }
 
   async _execSudo(cmd, timeout = 120000) {
-    // Try pkexec (GUI prompt), then sudo, then direct
+    // Try pkexec (GUI prompt) only if display available, then non-interactive sudo, then direct
     if (this.platform !== 'win32') {
-      try {
-        return await this._exec(`pkexec bash -c '${cmd.replace(/'/g, "'\\''")}'`, timeout);
-      } catch (e) {
+      if (process.env.DISPLAY || process.env.WAYLAND_DISPLAY) {
         try {
-          return await this._exec(`sudo bash -c '${cmd.replace(/'/g, "'\\''")}'`, timeout);
-        } catch (e2) {
-          // Last resort: try without sudo (may work if packages already installed)
-          return await this._exec(cmd, timeout);
-        }
+          return await this._exec(`pkexec bash -c '${cmd.replace(/'/g, "'\\''")}'`, timeout);
+        } catch (e) { /* fall through */ }
+      }
+      try {
+        return await this._exec(`sudo -n bash -c '${cmd.replace(/'/g, "'\\''")}'`, timeout);
+      } catch (e2) {
+        // Last resort: try without sudo (may work if packages already installed)
+        return await this._exec(cmd, timeout);
       }
     }
     return await this._exec(cmd, timeout);

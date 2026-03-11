@@ -28,7 +28,7 @@ class LinuxUniversalAdapter {
    * Install Python — bundled or Miniforge standalone
    */
   async installPython(onProgress) {
-    onProgress = onProgress || (() => {});
+    onProgress = onProgress || (() => { });
 
     // Strategy 1: Bundled Python
     onProgress(5);
@@ -65,7 +65,7 @@ class LinuxUniversalAdapter {
       onProgress(40);
       execSync(`bash "${installerPath}" -b -p "${pythonDir}"`, { timeout: 300000, stdio: 'pipe' });
       onProgress(60);
-      try { fs.unlinkSync(installerPath); } catch (e) {}
+      try { fs.unlinkSync(installerPath); } catch (e) { }
 
       const pyExe = path.join(pythonDir, 'bin', 'python3');
       if (fs.existsSync(pyExe)) {
@@ -75,7 +75,7 @@ class LinuxUniversalAdapter {
       }
     } catch (e) {
       this.log(`[Universal] Miniforge install failed: ${e.message}`);
-      try { fs.unlinkSync(installerPath); } catch (e2) {}
+      try { fs.unlinkSync(installerPath); } catch (e2) { }
     }
 
     throw new Error('Could not install Python. No package manager available and Miniforge download failed.');
@@ -85,7 +85,7 @@ class LinuxUniversalAdapter {
    * Install ffmpeg — bundled or static binary
    */
   async installFfmpeg(onProgress) {
-    onProgress = onProgress || (() => {});
+    onProgress = onProgress || (() => { });
 
     // Strategy 1: Bundled
     onProgress(10);
@@ -139,13 +139,13 @@ class LinuxUniversalAdapter {
       }
       fs.rmSync(extractDir, { recursive: true, force: true });
     } catch (e) { /* fall through */ }
-    try { fs.unlinkSync(tarPath); } catch (e) {}
+    try { fs.unlinkSync(tarPath); } catch (e) { }
 
     throw new Error('Could not install ffmpeg');
   }
 
   async installCuda(onProgress) {
-    onProgress = onProgress || (() => {});
+    onProgress = onProgress || (() => { });
     try {
       execSync('nvidia-smi 2>/dev/null', { timeout: 10000, stdio: 'pipe' });
       onProgress(100);
@@ -165,7 +165,7 @@ class LinuxUniversalAdapter {
 Type=Application
 Name=Windy Pro
 Comment=AI-powered speech recognition and translation
-Exec=electron ${process.cwd()}
+Exec=${process.execPath} ${process.cwd()}
 Terminal=false
 Categories=Audio;Utility;
 `);

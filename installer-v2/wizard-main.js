@@ -132,17 +132,17 @@ class InstallWizard {
       this.recommendation = recommend(this.hardware);
 
       // Initialize storage-aware model system with detected hardware
-      this.storageModels.loadHardwareProfile(this.hardware);
-      const storageState = this.storageModels.getInitialState();
+      this.storageEngines.loadHardwareProfile(this.hardware);
+      const storageState = this.storageEngines.getInitialState();
 
       // Auto-select recommended models based on storage/RAM
-      this.selectedModels = storageState.recommendedModels;
+      this.selectedEngines = storageState.recommendedModels;
 
       // Annotate models with hardware compatibility
-      const annotatedModels = MODEL_CATALOG.map(m => ({
+      const annotatedModels = ENGINE_CATALOG.map(m => ({
         ...m,
         hardwareOk: this.hardware.ram.totalGB >= m.ramGB,
-        familyInfo: MODEL_FAMILIES[m.family]
+        familyInfo: ENGINE_FAMILIES[m.family]
       }));
 
       return {
@@ -155,16 +155,16 @@ class InstallWizard {
 
     // ─── Model Selection (set all) ───
     ipcMain.handle('wizard-select-models', async (event, modelIds) => {
-      this.selectedModels = Array.isArray(modelIds) ? modelIds : [modelIds];
-      const result = this.storageModels.setSelectedModels(this.selectedModels);
-      return { selected: this.selectedModels, ...result };
+      this.selectedEngines = Array.isArray(modelIds) ? modelIds : [modelIds];
+      const result = this.storageEngines.setSelectedModels(this.selectedEngines);
+      return { selected: this.selectedEngines, ...result };
     });
 
     // ─── Model Toggle (check/uncheck individual model) ───
     ipcMain.handle('wizard-toggle-model', async (event, modelId, selected) => {
-      const result = this.storageModels.toggleModel(modelId, selected);
-      this.selectedModels = [...this.storageModels.selectedModelIds];
-      return { selected: this.selectedModels, ...result };
+      const result = this.storageEngines.toggleModel(modelId, selected);
+      this.selectedEngines = [...this.storageEngines.selectedModelIds];
+      return { selected: this.selectedEngines, ...result };
     });
 
     // ─── Account ───
@@ -193,7 +193,7 @@ class InstallWizard {
 
     // ─── Install ───
     ipcMain.handle('wizard-install', async () => {
-      const models = this.selectedModels.length > 0 ? this.selectedModels : this.recommendation?.recommended || ['edge-spark'];
+      const models = this.selectedEngines.length > 0 ? this.selectedEngines : this.recommendation?.recommended || ['windy-stt-lite-ct2'];
       console.log('[InstallWizard] Starting install for models:', models);
 
       try {
@@ -259,35 +259,28 @@ class InstallWizard {
         // Phase 2: Download models (this is the long part — 25% to 90%)
         const modelRange = 65; // 25% to 90%
         const modelStart = 25;
-        const modelObjects = models.map(id => MODEL_CATALOG.find(m => m.id === id)).filter(Boolean);
         const token = this.accountManager.getToken();
 
-        await this.downloadManager.downloadMultiple(
-          modelObjects,
-          // Overall progress callback
-          (data) => {
-            if (data.phase === 'downloading') {
-              const modelInfo = MODEL_CATALOG.find(m => m.id === data.modelId);
-              const modelName = modelInfo?.shortName || modelInfo?.name || data.modelId;
-              const modelSize = modelInfo ? formatSize(modelInfo.sizeMB) : '?';
-              this.sendProgress({
-                percent: modelStart + (data.overallPercent / 100) * modelRange,
-                message: `${INSTALL_STEP_MESSAGES['download-model'].title} — ${modelName}`,
-                detail: `Downloading ${modelName} (${modelSize}) · Model ${data.modelIndex + 1} of ${data.modelCount}`,
-              });
-            }
-          },
+        await this.downloadManager.downloadModels(
+          models,
           // Per-model progress callback
-          (data) => {
+          (modelId, progress) => {
+            const modelInfo = ENGINE_CATALOG.find(m => m.id === modelId);
+            const modelName = modelInfo?.shortName || modelInfo?.name || modelId;
+            const modelSize = modelInfo ? formatSize(modelInfo.sizeMB) : '?';
             this.sendProgress({
-              percent: modelStart + (data.overallPercent / 100) * modelRange,
-              modelId: data.modelId,
-              modelPercent: data.modelPercent,
-              modelDone: data.modelDone,
-              eta: data.eta
+              percent: modelStart + (progress / 100) * modelRange * 0.8,
+              message: `${INSTALL_STEP_MESSAGES['download-model']?.title || 'Downloading'} — ${modelName}`,
+              detail: `Downloading ${modelName} (${modelSize})`,
             });
           },
-          token
+          // Overall progress callback
+          (overallPercent, completed, total) => {
+            this.sendProgress({
+              percent: modelStart + (overallPercent / 100) * modelRange,
+              detail: `Model ${completed} of ${total} complete`,
+            });
+          }
         );
 
         // Phase 3: Verify
@@ -339,7 +332,6 @@ class InstallWizard {
     // ─── Language Profile ───
     ipcMain.handle('wizard-save-language-profile', async (event, languages) => {
       try {
-        const fs = require('fs');
         const profilePath = path.join(APP_DIR, 'language-profile.json');
         fs.mkdirSync(APP_DIR, { recursive: true });
         fs.writeFileSync(profilePath, JSON.stringify({
@@ -358,7 +350,6 @@ class InstallWizard {
       // TODO: Integrate with account server for actual purchase
       // For now, store the selection locally
       try {
-        const fs = require('fs');
         const configPath = path.join(APP_DIR, 'translate-config.json');
         fs.writeFileSync(configPath, JSON.stringify({
           tier, // 'translate' ($79) or 'translate-pro' ($149) or 'deferred'

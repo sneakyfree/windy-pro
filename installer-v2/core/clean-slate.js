@@ -28,7 +28,7 @@ class CleanSlate {
   constructor(options = {}) {
     // If true, preserve downloaded models (they're huge and reusable)
     this.preserveModels = options.preserveModels !== false;
-    this.onProgress = options.onProgress || (() => {});
+    this.onProgress = options.onProgress || (() => { });
     this.onLog = options.onLog || console.log;
     this.platform = process.platform; // win32, darwin, linux
   }
@@ -333,7 +333,7 @@ class CleanSlate {
     } catch (e) { /* not found */ }
 
     // Remove Electron app data
-    const electronData = path.join(process.env.APPDATA || '', 'windy-pro');
+    const electronData = path.join(process.env.APPDATA || os.homedir(), 'windy-pro');
     if (fs.existsSync(electronData)) {
       try {
         fs.rmSync(electronData, { recursive: true, force: true });
@@ -473,8 +473,10 @@ class CleanSlate {
     if (!fs.existsSync(MODELS_DIR)) return [];
     try {
       return fs.readdirSync(MODELS_DIR).filter(f => {
-        const stat = fs.statSync(path.join(MODELS_DIR, f));
-        return stat.size > 1000; // Only real model files, not placeholders
+        const fullPath = path.join(MODELS_DIR, f);
+        const stat = fs.statSync(fullPath);
+        // Models are directories (e.g., windy-stt-nano/) or large files
+        return stat.isDirectory() || stat.size > 1000;
       });
     } catch (e) {
       return [];

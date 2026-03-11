@@ -328,7 +328,10 @@ class BundledAssets {
 
     if (ext.endsWith('.zip')) {
       if (this.platform === 'win32') {
-        execSync(`powershell -Command "Expand-Archive -Force '${archivePath}' '${destDir}'"`, {
+        // Escape single quotes for PowerShell to prevent path injection
+        const safeSrc = archivePath.replace(/'/g, "''");
+        const safeDest = destDir.replace(/'/g, "''");
+        execSync(`powershell -Command "Expand-Archive -Force '${safeSrc}' '${safeDest}'"`, {
           timeout: 120000, stdio: 'pipe'
         });
       } else {

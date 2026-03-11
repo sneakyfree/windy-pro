@@ -34,45 +34,45 @@ const RETRY_DELAY_MS = 2000;
  */
 const MODEL_REGISTRY = {
   // ─── STT Engines (GPU) ───
-  'windy-stt-nano':       { hfRepo: 'WindyProLabs/windy-stt-nano',       sizeMB: 77,    format: 'safetensors' },
-  'windy-stt-lite':       { hfRepo: 'WindyProLabs/windy-stt-lite',       sizeMB: 144,   format: 'safetensors' },
-  'windy-stt-core':       { hfRepo: 'WindyProLabs/windy-stt-core',       sizeMB: 466,   format: 'safetensors' },
-  'windy-stt-plus':       { hfRepo: 'WindyProLabs/windy-stt-plus',       sizeMB: 1462,  format: 'safetensors' },
-  'windy-stt-turbo':      { hfRepo: 'WindyProLabs/windy-stt-turbo',      sizeMB: 1548,  format: 'safetensors' },
-  'windy-stt-pro':        { hfRepo: 'WindyProLabs/windy-stt-pro',        sizeMB: 2949,  format: 'safetensors' },
-  'windy-stt-edge':       { hfRepo: 'WindyProLabs/windy-stt-edge',       sizeMB: 1448,  format: 'safetensors' },
+  'windy-stt-nano': { hfRepo: 'WindyProLabs/windy-stt-nano', sizeMB: 77, format: 'safetensors' },
+  'windy-stt-lite': { hfRepo: 'WindyProLabs/windy-stt-lite', sizeMB: 144, format: 'safetensors' },
+  'windy-stt-core': { hfRepo: 'WindyProLabs/windy-stt-core', sizeMB: 466, format: 'safetensors' },
+  'windy-stt-plus': { hfRepo: 'WindyProLabs/windy-stt-plus', sizeMB: 1462, format: 'safetensors' },
+  'windy-stt-turbo': { hfRepo: 'WindyProLabs/windy-stt-turbo', sizeMB: 1548, format: 'safetensors' },
+  'windy-stt-pro': { hfRepo: 'WindyProLabs/windy-stt-pro', sizeMB: 2949, format: 'safetensors' },
+  'windy-stt-edge': { hfRepo: 'WindyProLabs/windy-stt-edge', sizeMB: 1448, format: 'safetensors' },
 
   // ─── STT Engines (CPU INT8 via CTranslate2) ───
-  'windy-stt-nano-ct2':   { hfRepo: 'WindyProLabs/windy-stt-nano-ct2',   sizeMB: 38,    format: 'ctranslate2' },
-  'windy-stt-lite-ct2':   { hfRepo: 'WindyProLabs/windy-stt-lite-ct2',   sizeMB: 72,    format: 'ctranslate2' },
-  'windy-stt-core-ct2':   { hfRepo: 'WindyProLabs/windy-stt-core-ct2',   sizeMB: 234,   format: 'ctranslate2' },
-  'windy-stt-plus-ct2':   { hfRepo: 'WindyProLabs/windy-stt-plus-ct2',   sizeMB: 734,   format: 'ctranslate2' },
-  'windy-stt-turbo-ct2':  { hfRepo: 'WindyProLabs/windy-stt-turbo-ct2',  sizeMB: 777,   format: 'ctranslate2' },
-  'windy-stt-pro-ct2':    { hfRepo: 'WindyProLabs/windy-stt-pro-ct2',    sizeMB: 1481,  format: 'ctranslate2' },
-  'windy-stt-edge-ct2':   { hfRepo: 'WindyProLabs/windy-stt-edge-ct2',   sizeMB: 727,   format: 'ctranslate2' },
+  'windy-stt-nano-ct2': { hfRepo: 'WindyProLabs/windy-stt-nano-ct2', sizeMB: 38, format: 'ctranslate2' },
+  'windy-stt-lite-ct2': { hfRepo: 'WindyProLabs/windy-stt-lite-ct2', sizeMB: 72, format: 'ctranslate2' },
+  'windy-stt-core-ct2': { hfRepo: 'WindyProLabs/windy-stt-core-ct2', sizeMB: 234, format: 'ctranslate2' },
+  'windy-stt-plus-ct2': { hfRepo: 'WindyProLabs/windy-stt-plus-ct2', sizeMB: 734, format: 'ctranslate2' },
+  'windy-stt-turbo-ct2': { hfRepo: 'WindyProLabs/windy-stt-turbo-ct2', sizeMB: 777, format: 'ctranslate2' },
+  'windy-stt-pro-ct2': { hfRepo: 'WindyProLabs/windy-stt-pro-ct2', sizeMB: 1481, format: 'ctranslate2' },
+  'windy-stt-edge-ct2': { hfRepo: 'WindyProLabs/windy-stt-edge-ct2', sizeMB: 727, format: 'ctranslate2' },
 
   // ─── Distil-Whisper (CPU optimized — NOT recommended for wizard, high eval losses) ───
-  'windy-stt-distil-small':  { hfRepo: 'WindyProLabs/windy-stt-distil-small',  sizeMB: 319,  format: 'safetensors' },
-  'windy-stt-distil-medium': { hfRepo: 'WindyProLabs/windy-stt-distil-medium', sizeMB: 754,  format: 'safetensors' },
-  'windy-stt-distil-large':  { hfRepo: 'WindyProLabs/windy-stt-distil-large',  sizeMB: 1445, format: 'safetensors' },
+  'windy-stt-distil-small': { hfRepo: 'WindyProLabs/windy-stt-distil-small', sizeMB: 319, format: 'safetensors' },
+  'windy-stt-distil-medium': { hfRepo: 'WindyProLabs/windy-stt-distil-medium', sizeMB: 754, format: 'safetensors' },
+  'windy-stt-distil-large': { hfRepo: 'WindyProLabs/windy-stt-distil-large', sizeMB: 1445, format: 'safetensors' },
 
   // ─── Translation Engines ───
-  'windy-translate-spark':    { hfRepo: 'WindyProLabs/windy_translate_spark',    sizeMB: 929,  format: 'safetensors' },
+  'windy-translate-spark': { hfRepo: 'WindyProLabs/windy_translate_spark', sizeMB: 929, format: 'safetensors' },
   'windy-translate-standard': { hfRepo: 'WindyProLabs/windy_translate_standard', sizeMB: 2371, format: 'safetensors' },
 
   // ─── Lingua Specialists (GPU) — full language names ───
-  'windy-lingua-spanish':     { hfRepo: 'WindyProLabs/windy-lingua-spanish',     sizeMB: 466,  format: 'safetensors', lang: 'es' },
-  'windy-lingua-chinese':     { hfRepo: 'WindyProLabs/windy-lingua-chinese',     sizeMB: 466,  format: 'safetensors', lang: 'zh' },
-  'windy-lingua-hindi':       { hfRepo: 'WindyProLabs/windy-lingua-hindi',       sizeMB: 144,  format: 'safetensors', lang: 'hi' },
-  'windy-lingua-french':      { hfRepo: 'WindyProLabs/windy-lingua-french',      sizeMB: 1462, format: 'safetensors', lang: 'fr' },
-  'windy-lingua-arabic':      { hfRepo: 'WindyProLabs/windy-lingua-arabic',      sizeMB: 2950, format: 'safetensors', lang: 'ar' },
+  'windy-lingua-spanish': { hfRepo: 'WindyProLabs/windy-lingua-spanish', sizeMB: 466, format: 'safetensors', lang: 'es' },
+  'windy-lingua-chinese': { hfRepo: 'WindyProLabs/windy-lingua-chinese', sizeMB: 466, format: 'safetensors', lang: 'zh' },
+  'windy-lingua-hindi': { hfRepo: 'WindyProLabs/windy-lingua-hindi', sizeMB: 144, format: 'safetensors', lang: 'hi' },
+  'windy-lingua-french': { hfRepo: 'WindyProLabs/windy-lingua-french', sizeMB: 1462, format: 'safetensors', lang: 'fr' },
+  'windy-lingua-arabic': { hfRepo: 'WindyProLabs/windy-lingua-arabic', sizeMB: 2950, format: 'safetensors', lang: 'ar' },
 
   // ─── Lingua Specialists (CPU INT8) ───
-  'windy-lingua-spanish-ct2': { hfRepo: 'WindyProLabs/windy-lingua-spanish-ct2', sizeMB: 235,  format: 'ctranslate2', lang: 'es' },
-  'windy-lingua-chinese-ct2': { hfRepo: 'WindyProLabs/windy-lingua-chinese-ct2', sizeMB: 235,  format: 'ctranslate2', lang: 'zh' },
-  'windy-lingua-hindi-ct2':   { hfRepo: 'WindyProLabs/windy-lingua-hindi-ct2',   sizeMB: 72,   format: 'ctranslate2', lang: 'hi' },
-  'windy-lingua-french-ct2':  { hfRepo: 'WindyProLabs/windy-lingua-french-ct2',  sizeMB: 735,  format: 'ctranslate2', lang: 'fr' },
-  'windy-lingua-arabic-ct2':  { hfRepo: 'WindyProLabs/windy-lingua-arabic-ct2',  sizeMB: 1481, format: 'ctranslate2', lang: 'ar' },
+  'windy-lingua-spanish-ct2': { hfRepo: 'WindyProLabs/windy-lingua-spanish-ct2', sizeMB: 235, format: 'ctranslate2', lang: 'es' },
+  'windy-lingua-chinese-ct2': { hfRepo: 'WindyProLabs/windy-lingua-chinese-ct2', sizeMB: 235, format: 'ctranslate2', lang: 'zh' },
+  'windy-lingua-hindi-ct2': { hfRepo: 'WindyProLabs/windy-lingua-hindi-ct2', sizeMB: 72, format: 'ctranslate2', lang: 'hi' },
+  'windy-lingua-french-ct2': { hfRepo: 'WindyProLabs/windy-lingua-french-ct2', sizeMB: 735, format: 'ctranslate2', lang: 'fr' },
+  'windy-lingua-arabic-ct2': { hfRepo: 'WindyProLabs/windy-lingua-arabic-ct2', sizeMB: 1481, format: 'ctranslate2', lang: 'ar' },
 
   // ─── Pair Specialists (bidirectional, ISO codes) ───
   'windy-pair-en-es': { hfRepo: 'WindyProLabs/windy-pair-en-es', sizeMB: 299, format: 'pytorch', pair: 'en-es' },
@@ -139,7 +139,7 @@ class DownloadManager {
   isModelDownloaded(modelId) {
     const modelDir = path.join(this.modelsDir, modelId);
     if (!fs.existsSync(modelDir)) return false;
-    
+
     const files = fs.readdirSync(modelDir);
     // Must have at least config.json and a model file
     const hasConfig = files.includes('config.json');
@@ -156,7 +156,7 @@ class DownloadManager {
    * @param {function} onProgress - Progress callback (0-100)
    * @returns {Promise<string>} Path to downloaded model directory
    */
-  async downloadModel(modelId, onProgress = () => {}) {
+  async downloadModel(modelId, onProgress = () => { }) {
     const info = MODEL_REGISTRY[modelId];
     if (!info) throw new Error(`Unknown model: ${modelId}`);
 
@@ -170,6 +170,10 @@ class DownloadManager {
     }
 
     fs.mkdirSync(modelDir, { recursive: true });
+
+    // Check connectivity before attempting downloads
+    await this._checkConnectivity();
+
     this.onLog(`[DownloadManager] Downloading ${modelId} from ${info.hfRepo}...`);
 
     // Get file list from HuggingFace API
@@ -220,7 +224,7 @@ class DownloadManager {
   /**
    * Download multiple models with concurrency control
    */
-  async downloadModels(modelIds, onModelProgress = () => {}, onOverallProgress = () => {}) {
+  async downloadModels(modelIds, onModelProgress = () => { }, onOverallProgress = () => { }) {
     const results = {};
     let completed = 0;
     const total = modelIds.length;
@@ -310,7 +314,7 @@ class DownloadManager {
     }
   }
 
-  _downloadFile(url, destPath, onProgress, retries = 0) {
+  _downloadFile(url, destPath, onProgress, retries = 0, redirectCount = 0) {
     return new Promise((resolve, reject) => {
       const protocol = url.startsWith('https') ? https : http;
 
@@ -323,12 +327,16 @@ class DownloadManager {
       }
 
       const request = protocol.get(url, { headers, timeout: 30000 }, (response) => {
-        // Handle redirects
+        // Handle redirects (with depth limit)
         if (response.statusCode === 301 || response.statusCode === 302) {
           const redirectUrl = response.headers.location;
-          if (redirectUrl) {
-            return this._downloadFile(redirectUrl, destPath, onProgress, retries)
+          if (redirectUrl && redirectCount < 10) {
+            return this._downloadFile(redirectUrl, destPath, onProgress, retries, redirectCount + 1)
               .then(resolve).catch(reject);
+          }
+          if (redirectCount >= 10) {
+            reject(new Error(`Too many redirects for ${url}`));
+            return;
           }
         }
 
@@ -372,7 +380,7 @@ class DownloadManager {
         });
 
         fileStream.on('error', (err) => {
-          fs.unlink(destPath, () => {});
+          // Don't delete partial file — resume logic can recover from it
           reject(err);
         });
       });
@@ -400,16 +408,44 @@ class DownloadManager {
     });
   }
 
-  _httpGet(url, callback) {
+  _httpGet(url, callback, redirectCount = 0) {
+    if (redirectCount >= 10) {
+      callback(new Error(`Too many redirects for ${url}`));
+      return;
+    }
     const protocol = url.startsWith('https') ? https : http;
     protocol.get(url, { timeout: 10000 }, (res) => {
       if (res.statusCode === 301 || res.statusCode === 302) {
-        return this._httpGet(res.headers.location, callback);
+        return this._httpGet(res.headers.location, callback, redirectCount + 1);
       }
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => callback(null, data));
     }).on('error', err => callback(err));
+  }
+
+  /**
+   * Quick connectivity check before starting downloads.
+   * Fails fast with a clear error instead of timing out on every file.
+   */
+  _checkConnectivity() {
+    return new Promise((resolve, reject) => {
+      const req = https.get(`${HF_BASE}/api/models`, { timeout: 8000 }, (res) => {
+        res.resume(); // drain the response
+        if (res.statusCode >= 200 && res.statusCode < 500) {
+          resolve();
+        } else {
+          reject(new Error(`HuggingFace returned HTTP ${res.statusCode}. The service may be down.`));
+        }
+      });
+      req.on('error', () => {
+        reject(new Error('No internet connection. Cannot download models. Please check your network and try again.'));
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Network timeout. Cannot reach HuggingFace. Please check your connection.'));
+      });
+    });
   }
 }
 
