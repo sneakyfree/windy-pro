@@ -151,7 +151,7 @@
             🌐 EN → Auto
           </div>
           <div class="chat-input-wrapper">
-            <input type="text" id="message-input" placeholder="Type a message..."
+            <input type="text" id="message-input" placeholder="Type a message..." maxlength="4000"
                    onkeydown="if(event.key==='Enter')sendMessage()"
                    oninput="handleTyping()">
             <button class="chat-send-btn" onclick="sendMessage()" id="send-btn">➤</button>
@@ -540,12 +540,19 @@
     }
 
     // ═══ Send Message ═══
+    let _sending = false;
     async function sendMessage() {
+      if (_sending) return; // Prevent double-send
       const input = document.getElementById('message-input');
       const text = input.value.trim();
       if (!text || !currentRoomId) return;
+      if (text.length > 4000) {
+        appendMessage({ senderId: 'system', body: '⚠️ Message too long (max 4000 characters).', timestamp: Date.now() });
+        return;
+      }
 
       input.value = '';
+      _sending = true;
       document.getElementById('send-btn').disabled = true;
 
       try {
@@ -569,6 +576,7 @@
         });
       }
 
+      _sending = false;
       document.getElementById('send-btn').disabled = false;
       input.focus();
     }
