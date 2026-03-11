@@ -4,10 +4,12 @@
  * Hooks into the chat message pipeline to auto-translate messages
  * using Windy Pro's on-device translation engines. All translation
  * happens locally — nothing leaves the user's device.
+ * 
+ * Uses a persistent WebSocket connection to the Python server
+ * with request-id tracking and auto-reconnect.
  */
 
 const path = require('path');
-const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 
@@ -16,6 +18,11 @@ class ChatTranslator {
     this.store = store;
     this.cache = new Map(); // LRU cache for repeated phrases
     this.maxCacheSize = 500;
+    this._ws = null;
+    this._wsReady = false;
+    this._pending = new Map(); // requestId → { resolve, reject, timeout }
+    this._requestCounter = 0;
+    this._reconnectTimer = null;
   }
 
   /**
@@ -37,11 +44,10 @@ class ChatTranslator {
     }
 
     try {
-      const translated = await this._callTranslationEngine(text, srcLang, tgtLang);
+      const translated = await this._sendTranslationRequest(text, srcLang, tgtLang);
       
-      // Cache the result
+      // Cache the result (LRU eviction)
       if (this.cache.size >= this.maxCacheSize) {
-        // Remove oldest entry
         const firstKey = this.cache.keys().next().value;
         this.cache.delete(firstKey);
       }
@@ -55,67 +61,145 @@ class ChatTranslator {
   }
 
   /**
-   * Call the local Windy translation engine via the Python server
+   * Send a translation request over the persistent WebSocket
    */
-  async _callTranslationEngine(text, srcLang, tgtLang) {
-    const serverHost = this.store.get('server.host', '127.0.0.1');
-    const serverPort = this.store.get('server.port', 9876);
+  async _sendTranslationRequest(text, srcLang, tgtLang) {
+    const ws = await this._getWebSocket();
+    const requestId = `tr_${++this._requestCounter}`;
 
-    // Use the existing WebSocket connection to the Python server
-    // The translation request is sent as a JSON-RPC style message
     return new Promise((resolve, reject) => {
-      const WebSocket = require('ws');
-      const ws = new WebSocket(`ws://${serverHost}:${serverPort}`);
-      let settled = false;
-
       const timeout = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          ws.close();
-          reject(new Error('Translation timeout'));
-        }
+        this._pending.delete(requestId);
+        reject(new Error('Translation timeout (10s)'));
       }, 10000);
 
+      this._pending.set(requestId, { resolve, reject, timeout });
+
+      ws.send(JSON.stringify({
+        type: 'translate',
+        request_id: requestId,
+        text: text,
+        source_lang: srcLang,
+        target_lang: tgtLang
+      }));
+    });
+  }
+
+  /**
+   * Get or create a persistent WebSocket connection
+   */
+  async _getWebSocket() {
+    if (this._ws && this._wsReady) {
+      return this._ws;
+    }
+
+    // If connection is in progress, wait for it
+    if (this._connectPromise) {
+      return this._connectPromise;
+    }
+
+    this._connectPromise = this._createWebSocket();
+    try {
+      const ws = await this._connectPromise;
+      return ws;
+    } finally {
+      this._connectPromise = null;
+    }
+  }
+
+  /**
+   * Create a new WebSocket connection with event handlers
+   */
+  _createWebSocket() {
+    const serverHost = this.store.get('server.host', '127.0.0.1');
+    const serverPort = this.store.get('server.port', 9876);
+    const WebSocket = require('ws');
+
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(`ws://${serverHost}:${serverPort}`);
+      let connectTimeout = setTimeout(() => {
+        ws.close();
+        reject(new Error('WebSocket connect timeout'));
+      }, 5000);
+
       ws.on('open', () => {
-        ws.send(JSON.stringify({
-          type: 'translate',
-          text: text,
-          source_lang: srcLang,
-          target_lang: tgtLang
-        }));
+        clearTimeout(connectTimeout);
+        this._ws = ws;
+        this._wsReady = true;
+        resolve(ws);
       });
 
       ws.on('message', (data) => {
-        if (settled) return;
         try {
           const response = JSON.parse(data.toString());
-          if (response.type === 'translation_result' && response.translated_text) {
-            settled = true;
+
+          // Match response to pending request by request_id
+          if (response.request_id && this._pending.has(response.request_id)) {
+            const { resolve: res, timeout } = this._pending.get(response.request_id);
+            this._pending.delete(response.request_id);
             clearTimeout(timeout);
-            ws.close();
-            resolve(response.translated_text);
+
+            if (response.type === 'translation_result' && response.translated_text) {
+              res(response.translated_text);
+            }
+            return;
+          }
+
+          // Fallback: if server doesn't echo request_id, resolve the oldest pending
+          if (response.type === 'translation_result' && response.translated_text) {
+            const oldest = this._pending.entries().next().value;
+            if (oldest) {
+              const [id, { resolve: res, timeout }] = oldest;
+              this._pending.delete(id);
+              clearTimeout(timeout);
+              res(response.translated_text);
+            }
           }
         } catch (e) {
-          // Not a translation response, ignore
+          // Not a JSON message, ignore
         }
       });
 
       ws.on('error', (err) => {
-        if (!settled) {
-          settled = true;
+        clearTimeout(connectTimeout);
+        this._wsReady = false;
+        // Reject all pending requests
+        for (const [id, { reject: rej, timeout }] of this._pending) {
           clearTimeout(timeout);
-          reject(err);
+          rej(err);
         }
+        this._pending.clear();
+
+        if (!this._ws) {
+          reject(err); // Connection never established
+        }
+        this._ws = null;
+        this._scheduleReconnect();
       });
 
       ws.on('close', () => {
-        if (!settled) {
-          settled = true;
+        this._wsReady = false;
+        // Reject all pending requests
+        for (const [id, { reject: rej, timeout }] of this._pending) {
           clearTimeout(timeout);
-          reject(new Error('WebSocket closed before response'));
+          rej(new Error('WebSocket closed'));
         }
+        this._pending.clear();
+        this._ws = null;
+        this._scheduleReconnect();
       });
     });
+  }
+
+  /**
+   * Schedule a reconnect attempt after disconnect
+   */
+  _scheduleReconnect() {
+    if (this._reconnectTimer) return;
+    this._reconnectTimer = setTimeout(() => {
+      this._reconnectTimer = null;
+      // Will reconnect on next translate() call
+    }, 2000);
   }
 
   /**
@@ -124,16 +208,33 @@ class ChatTranslator {
   getUserLanguage() {
     const languages = this.store.get('wizard.userLanguages', []);
     if (languages.length > 0) {
-      // Return the highest-weight language
       return languages.sort((a, b) => (b.weight || 0) - (a.weight || 0))[0].code;
     }
-    return 'en'; // Default to English
+    return 'en';
   }
 
   /**
    * Clear translation cache
    */
   clearCache() {
+    this.cache.clear();
+  }
+
+  /**
+   * Disconnect and cleanup
+   */
+  destroy() {
+    if (this._ws) {
+      try { this._ws.close(); } catch (e) { /* ignore */ }
+      this._ws = null;
+    }
+    this._wsReady = false;
+    clearTimeout(this._reconnectTimer);
+    for (const [id, { reject, timeout }] of this._pending) {
+      clearTimeout(timeout);
+      reject(new Error('Translator destroyed'));
+    }
+    this._pending.clear();
     this.cache.clear();
   }
 }
