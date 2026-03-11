@@ -1575,8 +1575,8 @@
     <!-- ═══ SCREEN 5: LEARN ABOUT MODELS ═══ -->
     <div class="screen" id="screen-5">
       <div class="model-header">
-        <h1 data-i18n="learn.title">📖 Meet Your 15 Voice Engines</h1>
-        <p>Windy Pro ships 15 proprietary voice engines in 3 families. Here's how they work.</p>
+        <h1 data-i18n="learn.title">📖 Meet Your 16 Voice Engines</h1>
+        <p>Windy Pro ships 16 proprietary voice engines — 7 GPU, 7 CPU, and 2 Translation. Here's how they work.</p>
       </div>
 
       <!-- Lighter vs Heavier -->
@@ -1603,31 +1603,31 @@
         </div>
       </div>
 
-      <!-- 3 Families -->
+      <!-- 3 Engine Types -->
       <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:16px;">
         <div
           style="background:var(--bg-card); border:1px solid #3B82F6; border-radius:10px; padding:14px; text-align:center;">
           <div style="font-size:24px;">⚡</div>
-          <div style="font-size:15px; font-weight:800; color:#3B82F6;">Windy Core</div>
-          <div style="font-size:14px; color:var(--text-dim);">7 GPU engines</div>
+          <div style="font-size:15px; font-weight:800; color:#3B82F6;">GPU-Accelerated</div>
+          <div style="font-size:14px; color:var(--text-dim);">7 engines (Nano → Pro)</div>
           <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">Maximum speed & accuracy.<br>Requires
             dedicated GPU.</div>
         </div>
         <div
           style="background:var(--bg-card); border:1px solid #22C55E; border-radius:10px; padding:14px; text-align:center;">
           <div style="font-size:24px;">🛡️</div>
-          <div style="font-size:15px; font-weight:800; color:#22C55E;">Windy Edge</div>
-          <div style="font-size:14px; color:var(--text-dim);">5 CPU engines</div>
-          <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">Runs anywhere. No GPU needed.<br>Phones,
-            laptops, tablets.</div>
+          <div style="font-size:15px; font-weight:800; color:#22C55E;">CPU-Optimized</div>
+          <div style="font-size:14px; color:var(--text-dim);">7 engines (Nano → Pro)</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">Runs anywhere. No GPU needed.<br>Laptops,
+            phones, tablets.</div>
         </div>
         <div
           style="background:var(--bg-card); border:1px solid #A855F7; border-radius:10px; padding:14px; text-align:center;">
           <div style="font-size:24px;">🌍</div>
-          <div style="font-size:15px; font-weight:800; color:#A855F7;">Windy Lingua</div>
-          <div style="font-size:14px; color:var(--text-dim);">3 language specialists</div>
-          <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">Spanish, French, Hindi.<br>Purpose-built
-            for each.</div>
+          <div style="font-size:15px; font-weight:800; color:#A855F7;">Translation</div>
+          <div style="font-size:14px; color:var(--text-dim);">2 engines (Spark + Standard)</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">Real-time offline translation<br>across
+            100+ languages.</div>
         </div>
       </div>
 
@@ -1648,7 +1648,7 @@
 
       <div
         style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px;">
-        <div style="font-size:17px; font-weight:800; margin-bottom:8px; color:var(--text);">📊 All 15 Engines at a
+        <div style="font-size:17px; font-weight:800; margin-bottom:8px; color:var(--text);">📊 All 16 Engines at a
           Glance</div>
         <div style="max-height:340px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
           <table id="model-matrix" style="width:100%; border-collapse:collapse; font-size:13px;">
@@ -1679,7 +1679,7 @@
         <strong>Can I change my mind?</strong> Yes! Delete one, try another. No judgment. 🔬<br>
         <strong>Do I have to switch engines manually?</strong> Never. WindyTune reads your hardware and picks the best
         one automatically. 🎧<br>
-        <strong>Can I select all 15?</strong> If your plan includes them — YES! Go full Pokédex. 🎯
+        <strong>Can I select all 16?</strong> If your plan includes them — YES! Go full Pokédex. 🎯
       </div>
 
       <div
@@ -1695,69 +1695,151 @@
       </div>
     </div>
 
-    <!-- ═══ SCREEN 6: CHOOSE & SELECT MODELS ═══ -->
+    <!-- ═══ SCREEN 6: CHOOSE & SELECT ENGINES — 3-LAYER PROGRESSIVE DISCLOSURE ═══ -->
     <div class="screen" id="screen-6">
-      <div class="model-header">
-        <h1 data-i18n="choose.title">🌪️ Choose Your Engines</h1>
-        <p id="model-explanation">WindyTune analyzed your hardware. Here's what we recommend.</p>
+      <div class="model-header" style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+        <div>
+          <h1 data-i18n="choose.title">🌪️ Choose Your Engines</h1>
+          <p id="model-explanation" style="font-size:15px; color:var(--text-dim);">WindyTune analyzed your hardware. Here's what we recommend.</p>
+        </div>
+        <!-- Layer Toggle -->
+        <div id="layer-toggle" style="display:flex; gap:4px; background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:3px; flex-shrink:0;">
+          <button class="layer-btn active" data-layer="1" onclick="switchLayer(1)" title="Simple — we pick for you" style="padding:6px 14px; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s; font-family:inherit; background:var(--green); color:var(--bg);">🍃 Simple</button>
+          <button class="layer-btn" data-layer="2" onclick="switchLayer(2)" title="Browse all engines" style="padding:6px 14px; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s; font-family:inherit; background:transparent; color:var(--text-dim);">🚗 Browse</button>
+          <button class="layer-btn" data-layer="3" onclick="switchLayer(3)" title="Deep technical specs" style="padding:6px 14px; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s; font-family:inherit; background:transparent; color:var(--text-dim);">⚙️ Specs</button>
+        </div>
       </div>
 
-      <!-- 3-Tier Package Selector -->
-      <div id="package-selector" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px;">
-        <div class="pkg-option" id="pkg-light" onclick="selectPackage('light')"
-          style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center;">
-          <div style="font-size:20px; margin-bottom:4px;">🍃</div>
-          <div style="font-size:15px; font-weight:800; color:var(--text);" data-i18n="choose.lightLabel">Light</div>
-          <div style="font-size:16px; color:var(--text-dim); margin:4px 0;">1–2 engines</div>
-          <div style="font-size:15px; color:var(--text-muted);" id="pkg-light-size">~120 MB</div>
+      <!-- ═══ LAYER 1: GRANDMA MODE — Auto-Recommend ═══ -->
+      <div id="layer-1" class="engine-layer">
+        <!-- Recommendation card -->
+        <div id="grandma-rec-card" style="background:var(--green-dark); border:2px solid var(--green); border-radius:14px; padding:20px; margin-bottom:16px; text-align:center;">
+          <div style="font-size:32px; margin-bottom:8px;">🌪️</div>
+          <div style="font-size:20px; font-weight:900; color:var(--green); margin-bottom:6px;">We picked the best engines for you</div>
+          <div id="grandma-hw-summary" style="font-size:14px; color:var(--text-dim); margin-bottom:12px; line-height:1.6;"></div>
+          <div id="grandma-engine-list" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:16px;"></div>
+          <div id="grandma-total" style="font-size:14px; color:var(--text-dim); margin-bottom:16px;"></div>
+          <button class="btn btn-primary" id="btn-grandma-install" style="padding:14px 48px; font-size:18px; font-weight:900;" onclick="startInstall()">
+            Install Recommended 🌪️
+          </button>
         </div>
-        <div class="pkg-option pkg-selected" id="pkg-recommended" onclick="selectPackage('recommended')"
-          style="background:var(--green-dark); border:2px solid var(--green); border-radius:12px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center; position:relative;">
-          <div
-            style="position:absolute; top:-8px; left:50%; transform:translateX(-50%); background:var(--green); color:var(--bg); font-size:9px; font-weight:800; padding:2px 10px; border-radius:10px;"
-            data-i18n="choose.recommended">★ RECOMMENDED</div>
-          <div style="font-size:20px; margin-bottom:4px;">🌪️</div>
-          <div style="font-size:15px; font-weight:800; color:var(--green);" data-i18n="choose.optimalLabel">Optimal
+
+        <!-- WindyTune explanation -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px;">
+          <div style="font-size:15px; font-weight:800; color:var(--green); margin-bottom:6px;">🎛️ WindyTune — Your Engine Auto-Pilot</div>
+          <div id="windytune-explanation" style="font-size:14px; color:var(--text-dim); line-height:1.6;"></div>
+        </div>
+
+        <!-- WindyTune mode selector -->
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px;">
+          <div class="wt-mode selected" id="wt-auto" onclick="selectWindyTuneMode('auto')" style="background:var(--green-dark); border:2px solid var(--green); border-radius:10px; padding:12px; text-align:center; cursor:pointer; transition:all 0.2s;">
+            <div style="font-size:18px;">🤖</div>
+            <div style="font-size:14px; font-weight:800; color:var(--green);">Auto</div>
+            <div style="font-size:12px; color:var(--text-dim);">WindyTune handles everything</div>
           </div>
-          <div style="font-size:16px; color:var(--text-dim); margin:4px 0;">2–3 engines</div>
-          <div style="font-size:15px; color:var(--text-muted);" id="pkg-rec-size">~288 MB</div>
+          <div class="wt-mode" id="wt-hybrid" onclick="selectWindyTuneMode('hybrid')" style="background:var(--bg-card); border:2px solid var(--border); border-radius:10px; padding:12px; text-align:center; cursor:pointer; transition:all 0.2s;">
+            <div style="font-size:18px;">🤝</div>
+            <div style="font-size:14px; font-weight:800; color:var(--text);">Hybrid</div>
+            <div style="font-size:12px; color:var(--text-dim);">Asks before switching</div>
+          </div>
+          <div class="wt-mode" id="wt-manual" onclick="selectWindyTuneMode('manual')" style="background:var(--bg-card); border:2px solid var(--border); border-radius:10px; padding:12px; text-align:center; cursor:pointer; transition:all 0.2s;">
+            <div style="font-size:18px;">🎯</div>
+            <div style="font-size:14px; font-weight:800; color:var(--text);">Manual</div>
+            <div style="font-size:12px; color:var(--text-dim);">You pick, WindyTune stays out</div>
+          </div>
         </div>
-        <div class="pkg-option" id="pkg-power" onclick="selectPackage('power')"
-          style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center;">
-          <div style="font-size:20px; margin-bottom:4px;">⚡</div>
-          <div style="font-size:15px; font-weight:800; color:var(--text);" data-i18n="choose.powerLabel">Power</div>
-          <div style="font-size:16px; color:var(--text-dim); margin:4px 0;">4–5 engines</div>
-          <div style="font-size:15px; color:var(--text-muted);" id="pkg-power-size">~800 MB</div>
-        </div>
-      </div>
-      <p style="font-size:15px; color:var(--text); line-height:1.5; margin-bottom:14px; padding:0 4px;"
-        id="windytune-explanation"></p>
 
-      <!-- Selected models checklist — clean and simple -->
-      <div
-        style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px;">
-        <div style="font-size:16px; font-weight:800; margin-bottom:10px; color:var(--text);"
-          data-i18n="choose.yourSelection">📦 Your Selection</div>
-        <div id="selected-models-checklist" style="font-size:15px; color:var(--text); line-height:2.0;">
-          <!-- Populated by JS -->
+        <div style="text-align:center; font-size:13px; color:var(--text-muted);">
+          Want more control? Switch to <a href="#" onclick="event.preventDefault(); switchLayer(2);" style="color:var(--green); text-decoration:none; font-weight:600;">Browse Mode</a> to see all engines.
         </div>
       </div>
 
+      <!-- ═══ LAYER 2: CAR ENTHUSIAST MODE — Browse All Engines ═══ -->
+      <div id="layer-2" class="engine-layer" style="display:none;">
+
+        <!-- GPU Section -->
+        <div style="margin-bottom:16px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-bottom:6px; border-bottom:2px solid #3B82F6;">
+            <span style="font-size:20px;">⚡</span>
+            <span style="font-size:17px; font-weight:900; color:#3B82F6;">GPU-Accelerated Engines</span>
+            <span style="font-size:12px; color:var(--text-muted); margin-left:auto;">Requires dedicated graphics card</span>
+          </div>
+          <div id="gpu-engine-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+        </div>
+
+        <!-- CPU Section -->
+        <div style="margin-bottom:16px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-bottom:6px; border-bottom:2px solid #22C55E;">
+            <span style="font-size:20px;">🛡️</span>
+            <span style="font-size:17px; font-weight:900; color:#22C55E;">CPU-Optimized Engines</span>
+            <span style="font-size:12px; color:var(--text-muted); margin-left:auto;">Runs on any machine — no GPU needed</span>
+          </div>
+          <div id="cpu-engine-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+        </div>
+
+        <!-- Translation Section -->
+        <div style="margin-bottom:14px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-bottom:6px; border-bottom:2px solid #A855F7;">
+            <span style="font-size:20px;">🌍</span>
+            <span style="font-size:17px; font-weight:900; color:#A855F7;">Translation Engines</span>
+            <span style="font-size:12px; color:var(--text-muted); margin-left:auto;">Real-time multilingual translation</span>
+          </div>
+          <div id="translate-engine-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+        </div>
+
+        <div style="text-align:center; font-size:13px; color:var(--text-muted); margin-bottom:8px;">
+          Need more details? Switch to <a href="#" onclick="event.preventDefault(); switchLayer(3);" style="color:var(--green); text-decoration:none; font-weight:600;">Specs Mode</a> for full technical data.
+        </div>
+      </div>
+
+      <!-- ═══ LAYER 3: GEARHEAD MODE — Deep Technical Specs ═══ -->
+      <div id="layer-3" class="engine-layer" style="display:none;">
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px;">
+          <div style="font-size:17px; font-weight:900; margin-bottom:8px;">⚙️ Full Technical Specifications</div>
+          <div style="font-size:13px; color:var(--text-dim); margin-bottom:12px;">All 16 engines. Deep specs. No marketing — just data.</div>
+          <div style="max-height:420px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
+            <table id="gearhead-table" style="width:100%; border-collapse:collapse; font-size:12px;">
+              <thead style="position:sticky; top:0; background:var(--bg-card); z-index:1;">
+                <tr style="border-bottom:2px solid var(--border); text-align:left;">
+                  <th style="padding:8px 6px; color:var(--green); width:30px;">Sel</th>
+                  <th style="padding:8px 6px; color:var(--green);">Engine</th>
+                  <th style="padding:8px 6px; color:var(--text-dim);">Type</th>
+                  <th style="padding:8px 6px; color:var(--text-dim);">Size</th>
+                  <th style="padding:8px 6px; color:var(--text-dim);">Speed</th>
+                  <th style="padding:8px 6px; color:var(--text-dim);">Params</th>
+                  <th style="padding:8px 6px; color:var(--text-dim);">RAM</th>
+                  <th style="padding:8px 6px; color:var(--text-dim);">VRAM</th>
+                  <th style="padding:8px 6px; color:var(--text-dim);">Quality</th>
+                  <th style="padding:8px 6px; color:var(--text-dim);">Architecture</th>
+                  <th style="padding:8px 6px; color:var(--text-dim);">Format</th>
+                  <th style="padding:8px 6px; color:var(--text-dim);">Tier</th>
+                </tr>
+              </thead>
+              <tbody id="gearhead-body"><!-- JS populates --></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Benchmark comparison -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px;">
+          <div style="font-size:15px; font-weight:800; margin-bottom:10px;">📊 Speed vs Quality Benchmark</div>
+          <div id="benchmark-chart" style="display:flex; flex-direction:column; gap:4px;"></div>
+        </div>
+
+        <div style="text-align:center; font-size:13px; color:var(--text-muted); margin-bottom:8px;">
+          All engines use proprietary encoder-decoder architecture. Developed by Windy Pro Labs.
+        </div>
+      </div>
+
+      <!-- Summary bar (shared across all layers) -->
       <div class="model-summary-bar">
         <span id="model-count">0 engines selected</span>
-        <span>Total: <span class="total" id="model-total-size">0 MB</span> · <span id="model-dl-time">~0
-            min</span></span>
-      </div>
-
-      <div style="text-align:center; margin-bottom:10px;">
-        <span style="font-size:13px; color:var(--text-muted);">Want to customize? Go back to the Learn page and read
-          about each engine, then pick a different package.</span>
+        <span>Total: <span class="total" id="model-total-size">0 MB</span> · <span id="model-dl-time">~0 min</span></span>
       </div>
 
       <div class="btn-row">
         <button class="btn btn-ghost" onclick="goToScreen(5)" data-i18n="btn.back">← Back</button>
-        <button class="btn btn-primary" id="btn-install" disabled onclick="startInstall()"
-          data-i18n="btn.installSelected">Install Selected →</button>
+        <button class="btn btn-primary" id="btn-install" disabled onclick="startInstall()" data-i18n="btn.installSelected">Install Selected →</button>
       </div>
     </div>
 
@@ -2026,27 +2108,31 @@
             platform: 'linux'
           },
           recommendation: {
-            recommended: ['edge-standard', 'edge-pulse', 'edge-spark'],
-            optional: ['edge-global', 'edge-pro'],
-            explanation: 'Intel UHD 620 (no dedicated GPU) with 15.5 GB RAM — Edge Standard and Pulse are perfect for your hardware. Great accuracy, efficient on CPU. WindyTune switches to Spark if memory gets tight.',
+            recommended: ['windy-stt-core-cpu', 'windy-stt-lite-cpu', 'windy-stt-nano-cpu'],
+            optional: ['windy-stt-edge-cpu', 'windy-stt-turbo-cpu'],
+            explanation: 'Intel UHD 620 (no dedicated GPU) with 15.5 GB RAM — CPU-optimized engines are perfect for your hardware. Windy Core (CPU) gives excellent accuracy, Lite for everyday speed, and Nano as a lightweight fallback. WindyTune switches between them automatically based on load.',
             deviceType: 'laptop-standard'
           },
           models: [
-            { id: 'core-spark', family: 'core', name: 'Windy Core Spark', shortName: 'Spark', sizeMB: 75, speed: '32x', description: 'Ultra-light GPU engine. Lightning fast inference.', tier: 'free' },
-            { id: 'core-pulse', family: 'core', name: 'Windy Core Pulse', shortName: 'Pulse', sizeMB: 142, speed: '16x', description: 'Fast and reliable GPU transcription.', tier: 'plus' },
-            { id: 'core-standard', family: 'core', name: 'Windy Core Standard', shortName: 'Standard', sizeMB: 466, speed: '6x', description: 'The workhorse. Great accuracy on GPU.', tier: 'plus' },
-            { id: 'core-global', family: 'core', name: 'Windy Core Global', shortName: 'Global', sizeMB: 1500, speed: '2x', description: 'Multilingual powerhouse.', tier: 'pro' },
-            { id: 'core-pro', family: 'core', name: 'Windy Core Pro', shortName: 'Pro', sizeMB: 1500, speed: '6x', description: 'Distilled flagship. English excellence at 6x speed.', tier: 'pro' },
-            { id: 'core-turbo', family: 'core', name: 'Windy Core Turbo', shortName: 'Turbo', sizeMB: 1600, speed: '4x', description: 'Near-Ultra quality at twice the speed.', tier: 'pro' },
-            { id: 'core-ultra', family: 'core', name: 'Windy Core Ultra', shortName: 'Ultra', sizeMB: 2900, speed: '1x', description: 'The flagship. Best accuracy in any language.', tier: 'promax', badge: '👑 Flagship' },
-            { id: 'edge-spark', family: 'edge', name: 'Windy Edge Spark', shortName: 'Spark', sizeMB: 42, speed: '32x', description: 'Smallest engine. 42 MB. Fits any phone.', tier: 'free', badge: '📱 MoboLoco' },
-            { id: 'edge-pulse', family: 'edge', name: 'Windy Edge Pulse', shortName: 'Pulse', sizeMB: 78, speed: '16x', description: 'Phone-optimized. Fast and light.', tier: 'free' },
-            { id: 'edge-standard', family: 'edge', name: 'Windy Edge Standard', shortName: 'Standard', sizeMB: 168, speed: '6x', description: 'Best balance for laptops and phones.', tier: 'plus', badge: '⭐ Most Popular' },
-            { id: 'edge-global', family: 'edge', name: 'Windy Edge Global', shortName: 'Global', sizeMB: 515, speed: '2x', description: 'Multilingual on CPU. Great for travel.', tier: 'pro' },
-            { id: 'edge-pro', family: 'edge', name: 'Windy Edge Pro', shortName: 'Pro', sizeMB: 515, speed: '4x', description: 'Distilled English excellence on CPU.', tier: 'pro' },
-            { id: 'lingua-es', family: 'lingua', name: 'Windy Lingua Español', shortName: 'Español', sizeMB: 500, speed: '4x', description: 'Purpose-built for Spanish. All dialects.', tier: 'pro' },
-            { id: 'lingua-fr', family: 'lingua', name: 'Windy Lingua Français', shortName: 'Français', sizeMB: 500, speed: '4x', description: 'Purpose-built for French. All dialects.', tier: 'pro' },
-            { id: 'lingua-hi', family: 'lingua', name: 'Windy Lingua हिन्दी', shortName: 'हिन्दी', sizeMB: 500, speed: '4x', description: 'Purpose-built for Hindi.', tier: 'pro' }
+            // GPU-Accelerated (7 engines)
+            { id: 'windy-stt-nano', family: 'gpu', name: 'Windy Nano', displayName: 'Windy Nano', sizeMB: 73, speed: '32×', speedRating: 32, quality: 3, qualityLabel: 'Good', parameters: '39M', ramGB: 4, vramGB: 1, description: 'Fastest GPU engine. Lightning-fast dictation and real-time captions.', bestFor: 'Quick dictation, real-time captions, speed-first workflows', tier: 'free', architecture: 'Proprietary encoder-decoder', format: 'Safetensors', badge: '⚡ Fastest' },
+            { id: 'windy-stt-lite', family: 'gpu', name: 'Windy Lite', displayName: 'Windy Lite', sizeMB: 140, speed: '16×', speedRating: 16, quality: 3.5, qualityLabel: 'Great', parameters: '74M', ramGB: 4, vramGB: 1, description: 'Lightweight, balanced speed and quality for everyday use.', bestFor: 'Emails, casual notes, meetings', tier: 'free', architecture: 'Proprietary encoder-decoder', format: 'Safetensors' },
+            { id: 'windy-stt-core', family: 'gpu', name: 'Windy Core', displayName: 'Windy Core', sizeMB: 466, speed: '8×', speedRating: 8, quality: 4, qualityLabel: 'Excellent', parameters: '244M', ramGB: 8, vramGB: 2, description: 'Recommended for most users. Great accuracy on GPU hardware.', bestFor: 'Meetings, technical dictation, content creation', tier: 'free', architecture: 'Proprietary encoder-decoder', format: 'Safetensors', badge: '⭐ Recommended' },
+            { id: 'windy-stt-edge', family: 'gpu', name: 'Windy Edge', displayName: 'Windy Edge', sizeMB: 1400, speed: '6×', speedRating: 6, quality: 4.5, qualityLabel: 'Outstanding', parameters: '1550M', ramGB: 16, vramGB: 5, description: 'High-accuracy, professional-grade transcription.', bestFor: 'Professional meetings, multilingual content', tier: 'pro', architecture: 'Proprietary encoder-decoder', format: 'Safetensors' },
+            { id: 'windy-stt-plus', family: 'gpu', name: 'Windy Plus', displayName: 'Windy Plus', sizeMB: 1500, speed: '4×', speedRating: 4, quality: 4.5, qualityLabel: 'Outstanding', parameters: '1550M', ramGB: 16, vramGB: 5, description: 'Premium accuracy, production-grade quality.', bestFor: 'Production workflows, legal, medical', tier: 'pro', architecture: 'Proprietary encoder-decoder', format: 'Safetensors' },
+            { id: 'windy-stt-turbo', family: 'gpu', name: 'Windy Turbo', displayName: 'Windy Turbo', sizeMB: 1500, speed: '5×', speedRating: 5, quality: 5, qualityLabel: 'Champion', parameters: '809M', ramGB: 16, vramGB: 6, description: 'Champion engine. Best balance of speed and quality.', bestFor: 'Power users who want the best', tier: 'pro', architecture: 'Proprietary encoder-decoder', format: 'Safetensors', badge: '🏆 Champion' },
+            { id: 'windy-stt-pro', family: 'gpu', name: 'Windy Pro', displayName: 'Windy Pro', sizeMB: 2900, speed: '2×', speedRating: 2, quality: 5, qualityLabel: 'Flagship', parameters: '1550M', ramGB: 24, vramGB: 10, description: 'The flagship. Maximum accuracy in any language.', bestFor: 'Broadcast, legal, medical, maximum quality', tier: 'translate_pro', architecture: 'Proprietary encoder-decoder', format: 'Safetensors', badge: '👑 Flagship' },
+            // CPU-Optimized (7 engines)
+            { id: 'windy-stt-nano-cpu', family: 'cpu', name: 'Windy Nano', displayName: 'Windy Nano (CPU)', sizeMB: 38, speed: '20×', speedRating: 20, quality: 3, qualityLabel: 'Good', parameters: '39M', ramGB: 2, vramGB: 0, description: 'CPU-optimized for resource-constrained devices.', bestFor: 'Older hardware, low-RAM devices, offline emergencies', tier: 'free', architecture: 'Proprietary encoder-decoder', format: 'INT8 Quantized', badge: '📱 Mobile-Ready' },
+            { id: 'windy-stt-lite-cpu', family: 'cpu', name: 'Windy Lite', displayName: 'Windy Lite (CPU)', sizeMB: 72, speed: '12×', speedRating: 12, quality: 3.5, qualityLabel: 'Great', parameters: '74M', ramGB: 3, vramGB: 0, description: 'CPU-optimized, good balance for everyday use.', bestFor: 'Laptop users, coffee shop dictation', tier: 'free', architecture: 'Proprietary encoder-decoder', format: 'INT8 Quantized' },
+            { id: 'windy-stt-core-cpu', family: 'cpu', name: 'Windy Core', displayName: 'Windy Core (CPU)', sizeMB: 234, speed: '5×', speedRating: 5, quality: 4, qualityLabel: 'Excellent', parameters: '244M', ramGB: 4, vramGB: 0, description: 'Recommended CPU engine. No GPU needed.', bestFor: 'Laptops, desktops without GPU', tier: 'free', architecture: 'Proprietary encoder-decoder', format: 'INT8 Quantized', badge: '⭐ CPU Recommended' },
+            { id: 'windy-stt-edge-cpu', family: 'cpu', name: 'Windy Edge', displayName: 'Windy Edge (CPU)', sizeMB: 727, speed: '3×', speedRating: 3, quality: 4.5, qualityLabel: 'Outstanding', parameters: '1550M', ramGB: 8, vramGB: 0, description: 'CPU-optimized, high accuracy for professional work.', bestFor: 'Professional CPU workflows', tier: 'pro', architecture: 'Proprietary encoder-decoder', format: 'INT8 Quantized' },
+            { id: 'windy-stt-plus-cpu', family: 'cpu', name: 'Windy Plus', displayName: 'Windy Plus (CPU)', sizeMB: 734, speed: '2.5×', speedRating: 2.5, quality: 4.5, qualityLabel: 'Outstanding', parameters: '1550M', ramGB: 8, vramGB: 0, description: 'CPU-optimized premium accuracy.', bestFor: 'Production CPU workflows, legal, medical', tier: 'pro', architecture: 'Proprietary encoder-decoder', format: 'INT8 Quantized' },
+            { id: 'windy-stt-turbo-cpu', family: 'cpu', name: 'Windy Turbo', displayName: 'Windy Turbo (CPU)', sizeMB: 777, speed: '3×', speedRating: 3, quality: 5, qualityLabel: 'Champion', parameters: '809M', ramGB: 8, vramGB: 0, description: 'CPU-optimized state-of-the-art quality.', bestFor: 'Power CPU users who demand maximum quality', tier: 'pro', architecture: 'Proprietary encoder-decoder', format: 'INT8 Quantized', badge: '🏆 CPU Champion' },
+            { id: 'windy-stt-pro-cpu', family: 'cpu', name: 'Windy Pro', displayName: 'Windy Pro (CPU)', sizeMB: 1481, speed: '1×', speedRating: 1, quality: 5, qualityLabel: 'Flagship', parameters: '1550M', ramGB: 16, vramGB: 0, description: 'CPU-optimized flagship. Maximum performance without GPU.', bestFor: 'Broadcast, legal, medical on CPU', tier: 'translate_pro', architecture: 'Proprietary encoder-decoder', format: 'INT8 Quantized', badge: '👑 CPU Flagship' },
+            // Translation (2 engines)
+            { id: 'windy-translate-spark', family: 'translation', name: 'Windy Translate Spark', displayName: 'Windy Translate Spark', sizeMB: 929, speed: '8×', speedRating: 8, quality: 4, qualityLabel: 'Fast & Accurate', parameters: '418M', ramGB: 4, vramGB: 0, description: 'Fast multilingual translation across 100+ languages.', bestFor: 'Quick translations, real-time conversation', tier: 'translate', architecture: 'Proprietary encoder-decoder', format: 'Safetensors' },
+            { id: 'windy-translate-standard', family: 'translation', name: 'Windy Translate Standard', displayName: 'Windy Translate Standard', sizeMB: 2371, speed: '4×', speedRating: 4, quality: 5, qualityLabel: 'Professional', parameters: '1200M', ramGB: 8, vramGB: 0, description: 'Professional-grade translation for business use.', bestFor: 'Professional translation, business meetings', tier: 'translate_pro', architecture: 'Proprietary encoder-decoder', format: 'Safetensors', badge: '🌍 Pro Translation' }
           ]
         }),
         login: async () => ({ success: true, account: { email: 'demo@windypro.com', name: 'Demo User', tier: 'pro' } }),
@@ -2304,23 +2390,9 @@
 
     // ─── SCREEN 3: MODEL PICKER ───
     // Extended model details for education
-    const MODEL_DETAILS = {
-      'core-spark': { pros: ['Fastest GPU engine — 32x real-time', 'Only 75 MB', 'Great for quick notes'], cons: ['Basic accuracy', 'Struggles with accents'], bestFor: 'Quick dictation, real-time captions, embedded systems', ramNeeded: '4 GB', gpuNeeded: 'Any NVIDIA GPU' },
-      'core-pulse': { pros: ['Fast and reliable on GPU', 'Good everyday accuracy'], cons: ['Not great for technical jargon'], bestFor: 'Emails, casual notes, everyday dictation', ramNeeded: '4 GB', gpuNeeded: 'Any NVIDIA GPU' },
-      'core-standard': { pros: ['Strong accuracy', 'Handles accents well', 'Good for meetings'], cons: ['Needs 2 GB VRAM', 'Moderate speed (6x)'], bestFor: 'Meetings, technical content, content creation', ramNeeded: '8 GB', gpuNeeded: '2+ GB VRAM' },
-      'core-global': { pros: ['Best multilingual GPU engine', 'Handles code-switching (mixing languages)'], cons: ['1.5 GB download', 'Needs 5 GB VRAM', 'Slower (2x)'], bestFor: 'Multilingual users, international meetings, translation prep', ramNeeded: '16 GB', gpuNeeded: '5+ GB VRAM' },
-      'core-pro': { pros: ['Flagship English accuracy on GPU', 'Fast (6x)', 'Distilled from Ultra'], cons: ['English only', '1.5 GB download'], bestFor: 'English power users, professionals, long recording sessions', ramNeeded: '16 GB', gpuNeeded: '5+ GB VRAM' },
-      'core-turbo': { pros: ['Near-Ultra quality', '2x faster than Ultra', 'All 99 languages'], cons: ['1.6 GB download', 'Needs 6 GB VRAM'], bestFor: 'When you want the best but need it faster', ramNeeded: '16 GB', gpuNeeded: '6+ GB VRAM' },
-      'core-ultra': { pros: ['BEST accuracy available. Period.', 'All 99 languages', 'Broadcast/legal/medical quality'], cons: ['2.9 GB download', 'Needs 10 GB VRAM', 'Slowest (1x real-time)'], bestFor: 'Broadcast, legal transcription, medical, professional multilingual', ramNeeded: '24 GB', gpuNeeded: '10+ GB VRAM' },
-      'edge-spark': { pros: ['Only 42 MB — smaller than a selfie!', 'Runs on ANY device', 'Perfect for phones'], cons: ['Basic accuracy', 'Not for accents or jargon'], bestFor: 'Phones, tablets, offline emergencies, budget devices', ramNeeded: '2 GB', gpuNeeded: 'None' },
-      'edge-pulse': { pros: ['Fast and light (78 MB)', 'Good phone performance', 'No GPU needed'], cons: ['Occasional errors on fast speech'], bestFor: 'Mobile dictation, voice memos, on-the-go notes', ramNeeded: '3 GB', gpuNeeded: 'None' },
-      'edge-standard': { pros: ['Best balance of size vs accuracy', 'Only 168 MB', 'No GPU needed', 'Our most popular engine'], cons: ['Not quite as accurate as Pro/Ultra', 'Moderate speed (6x)'], bestFor: 'Laptops, everyday use, coffee shop dictation', ramNeeded: '4 GB', gpuNeeded: 'None' },
-      'edge-global': { pros: ['Multilingual on CPU', 'All 99 languages', 'Great for travel'], cons: ['515 MB download', 'Needs 8 GB RAM', 'Slower (2x)'], bestFor: 'Travelers, multilingual professionals, translation work', ramNeeded: '8 GB', gpuNeeded: 'None' },
-      'edge-pro': { pros: ['Best English accuracy without a GPU', 'Fast (4x)', 'Professional quality on CPU'], cons: ['English only', '515 MB download'], bestFor: 'English-first professionals on laptops/tablets', ramNeeded: '8 GB', gpuNeeded: 'None' },
-      'lingua-es': { pros: ['Trained specifically on Spanish dialects', 'Castilian, Mexican, Caribbean, Andean', 'Handles Spanglish code-switching'], cons: ['Spanish only', '500 MB'], bestFor: 'Native Spanish speakers, bilingual environments', ramNeeded: '6 GB', gpuNeeded: 'None' },
-      'lingua-fr': { pros: ['All French dialects — Metropolitan, Canadian, African', 'Handles Franglais'], cons: ['French only', '500 MB'], bestFor: 'Native French speakers, French-English workplaces', ramNeeded: '6 GB', gpuNeeded: 'None' },
-      'lingua-hi': { pros: ['Hindi + Hinglish code-switching', 'Trained on Indian English accents too'], cons: ['Hindi only', '500 MB'], bestFor: 'Hindi speakers, Indian professionals, Hinglish environments', ramNeeded: '6 GB', gpuNeeded: 'None' },
-    };
+    // MODEL_DETAILS now embedded in each model object (displayName, bestFor, etc.)
+    // Legacy lookup kept for compatibility with Screen 5 education matrix
+    const MODEL_DETAILS = {};
 
     // 3-tier packages based on hardware + always include English-optimized model
     let packages = { light: [], recommended: [], power: [] };
@@ -2331,8 +2403,8 @@
       const opt = recommendation.optional || [];
       const hasGPU = hardwareData?.gpu?.nvidia || hardwareData?.gpu?.appleSilicon;
 
-      // Always try to include our English-optimized model (faster-whisper replacement)
-      const englishModel = hasGPU ? 'core-pro' : 'edge-pro';
+      // Always try to include our best-fit model
+      const englishModel = hasGPU ? 'windy-stt-turbo' : 'windy-stt-turbo-cpu';
       const englishAvail = allModels.find(m => m.id === englishModel);
 
       // LIGHT: 1-2 models — smallest viable set
@@ -2393,45 +2465,30 @@
     }
 
     // Requirements per engine: { ramGB, gpuVramGB (0=no GPU needed) }
-    const ENGINE_REQUIREMENTS = {
-      'core-spark': { ramGB: 4, gpuVramGB: 1, needs: '4 GB RAM + 1 GB GPU' },
-      'core-pulse': { ramGB: 4, gpuVramGB: 1, needs: '4 GB RAM + 1 GB GPU' },
-      'core-standard': { ramGB: 8, gpuVramGB: 2, needs: '8 GB RAM + 2 GB GPU' },
-      'core-global': { ramGB: 16, gpuVramGB: 5, needs: '16 GB RAM + 5 GB GPU' },
-      'core-pro': { ramGB: 16, gpuVramGB: 5, needs: '16 GB RAM + 5 GB GPU' },
-      'core-turbo': { ramGB: 16, gpuVramGB: 6, needs: '16 GB RAM + 6 GB GPU' },
-      'core-ultra': { ramGB: 24, gpuVramGB: 10, needs: '24 GB RAM + 10 GB GPU' },
-      'edge-spark': { ramGB: 2, gpuVramGB: 0, needs: '2 GB RAM' },
-      'edge-pulse': { ramGB: 3, gpuVramGB: 0, needs: '3 GB RAM' },
-      'edge-standard': { ramGB: 4, gpuVramGB: 0, needs: '4 GB RAM' },
-      'edge-global': { ramGB: 8, gpuVramGB: 0, needs: '8 GB RAM' },
-      'edge-pro': { ramGB: 8, gpuVramGB: 0, needs: '8 GB RAM' },
-      'lingua-es': { ramGB: 6, gpuVramGB: 0, needs: '6 GB RAM' },
-      'lingua-fr': { ramGB: 6, gpuVramGB: 0, needs: '6 GB RAM' },
-      'lingua-hi': { ramGB: 6, gpuVramGB: 0, needs: '6 GB RAM' },
-    };
+    // ENGINE_REQUIREMENTS now derived from model data (ramGB, vramGB fields)
+    // Legacy function getEngineFit uses model objects directly
+    const ENGINE_REQUIREMENTS = {};
 
     function getEngineFit(engineId) {
-      const req = ENGINE_REQUIREMENTS[engineId];
-      if (!req || !hardwareData) return { icon: '❓', color: 'var(--text-muted)', label: '?' };
+      const model = allModels.find(m => m.id === engineId);
+      if (!model || !hardwareData) return { icon: '❓', color: 'var(--text-muted)', label: '?' };
 
       const userRAM = hardwareData.ram?.totalGB || 0;
       const userVRAM = hardwareData.gpu?.vramGB || 0;
       const hasNvidiaGPU = hardwareData.gpu?.nvidia || false;
+      const reqRAM = model.ramGB || 2;
+      const reqVRAM = model.vramGB || 0;
 
-      // Check RAM
-      const ramOk = userRAM >= req.ramGB;
-      const ramTight = userRAM >= req.ramGB * 0.75; // Within 75%
+      const ramOk = userRAM >= reqRAM;
+      const ramTight = userRAM >= reqRAM * 0.75;
 
-      // Check GPU (if needed)
-      if (req.gpuVramGB > 0) {
+      if (reqVRAM > 0) {
         if (!hasNvidiaGPU) return { icon: '❌', color: '#EF4444', label: 'No GPU' };
-        if (userVRAM >= req.gpuVramGB && ramOk) return { icon: '✅', color: '#22C55E', label: 'Great fit' };
-        if (userVRAM >= req.gpuVramGB && ramTight) return { icon: '⚠️', color: '#F59E0B', label: 'Tight RAM' };
-        if (userVRAM < req.gpuVramGB) return { icon: '❌', color: '#EF4444', label: 'Need more GPU' };
+        if (userVRAM >= reqVRAM && ramOk) return { icon: '✅', color: '#22C55E', label: 'Great fit' };
+        if (userVRAM >= reqVRAM && ramTight) return { icon: '⚠️', color: '#F59E0B', label: 'Tight RAM' };
+        if (userVRAM < reqVRAM) return { icon: '❌', color: '#EF4444', label: 'Need more GPU' };
       }
 
-      // CPU-only engines
       if (ramOk) return { icon: '✅', color: '#22C55E', label: 'Great fit' };
       if (ramTight) return { icon: '⚠️', color: '#F59E0B', label: 'Tight fit' };
       return { icon: '❌', color: '#EF4444', label: 'Need more RAM' };
@@ -2458,223 +2515,280 @@
       const tbody = document.getElementById('matrix-body');
       if (!tbody) return;
       tbody.innerHTML = '';
-      const familyColors = { core: '#3B82F6', edge: '#22C55E', lingua: '#A855F7' };
-      const familyLabels = { core: '⚡ Core', edge: '🛡️ Edge', lingua: '🌍 Lingua' };
-      const ENGINE_STRENGTHS = {
-        'core-spark': 'Ultra-fast English',
-        'core-pulse': 'Fast & reliable',
-        'core-standard': 'Great all-rounder',
-        'core-global': 'Multilingual powerhouse',
-        'core-pro': 'English excellence',
-        'core-turbo': 'Near-Ultra at 2x speed',
-        'core-ultra': 'BEST accuracy. Period.',
-        'edge-spark': '42 MB! Fits anything',
-        'edge-pulse': 'Phone-optimized',
-        'edge-standard': 'Best balance',
-        'edge-global': 'Multilingual on CPU',
-        'edge-pro': 'English on CPU',
-        'lingua-es': 'Spanish specialist',
-        'lingua-fr': 'French specialist',
-        'lingua-hi': 'Hindi specialist',
-      };
+      const familyColors = { gpu: '#3B82F6', cpu: '#22C55E', translation: '#A855F7' };
+      const familyLabels = { gpu: '⚡ GPU', cpu: '🛡️ CPU', translation: '🌍 Translation' };
 
       allModels.forEach(m => {
         const fit = getEngineFit(m.id);
-        const req = ENGINE_REQUIREMENTS[m.id] || {};
-        const strength = ENGINE_STRENGTHS[m.id] || '';
+        const needsStr = m.vramGB > 0 ? `${m.ramGB} GB RAM + ${m.vramGB} GB GPU` : `${m.ramGB} GB RAM`;
         const tr = document.createElement('tr');
         tr.style.cssText = 'border-bottom:1px solid var(--border); cursor:default;';
         tr.innerHTML = `
           <td style="padding:8px 6px; font-size:14px; text-align:center;" title="${fit.label}"><span style="color:${fit.color}">${fit.icon}</span></td>
-          <td style="padding:8px 6px; font-weight:700; color:var(--text);">${m.family === 'lingua' ? m.shortName : (m.family.charAt(0).toUpperCase() + m.family.slice(1) + ' ' + m.shortName)}</td>
+          <td style="padding:8px 6px; font-weight:700; color:var(--text);">${m.displayName || m.name}</td>
           <td style="padding:8px 6px; color:${familyColors[m.family] || '#888'};">${familyLabels[m.family] || m.family}</td>
-          <td style="padding:8px 6px; color:var(--text-dim);">${m.sizeMB >= 1000 ? (m.sizeMB / 1000).toFixed(1) + ' GB' : m.sizeMB + ' MB'}</td>
+          <td style="padding:8px 6px; color:var(--text-dim);">${m.sizeMB >= 1000 ? (m.sizeMB / 1024).toFixed(1) + ' GB' : m.sizeMB + ' MB'}</td>
           <td style="padding:8px 6px; color:var(--text-dim);">${m.speed || '—'}</td>
-          <td style="padding:8px 6px; color:var(--text-dim); font-size:12px;">${req.needs || '—'}</td>
-          <td style="padding:8px 6px; color:#4ADE80;">${strength}</td>
+          <td style="padding:8px 6px; color:var(--text-dim); font-size:12px;">${needsStr}</td>
+          <td style="padding:8px 6px; color:#4ADE80;">${m.bestFor ? m.bestFor.split(',')[0] : m.description}</td>
         `;
         tbody.appendChild(tr);
+      });
+    }
+
+    let currentLayer = 1;
+    let windyTuneMode = 'auto';
+
+    function switchLayer(n) {
+      currentLayer = n;
+      [1, 2, 3].forEach(i => {
+        const el = document.getElementById(`layer-${i}`);
+        if (el) el.style.display = i === n ? 'block' : 'none';
+      });
+      // Update toggle buttons
+      document.querySelectorAll('#layer-toggle .layer-btn').forEach(btn => {
+        const layer = parseInt(btn.dataset.layer);
+        if (layer === n) {
+          btn.style.background = 'var(--green)';
+          btn.style.color = 'var(--bg)';
+        } else {
+          btn.style.background = 'transparent';
+          btn.style.color = 'var(--text-dim)';
+        }
+      });
+      // Build layer content on first visit
+      if (n === 2) buildLayer2();
+      if (n === 3) buildLayer3();
+    }
+
+    function selectWindyTuneMode(mode) {
+      windyTuneMode = mode;
+      ['auto', 'hybrid', 'manual'].forEach(m => {
+        const el = document.getElementById(`wt-${m}`);
+        if (!el) return;
+        if (m === mode) {
+          el.style.background = 'var(--green-dark)';
+          el.style.borderColor = 'var(--green)';
+          el.querySelector('div:nth-child(2)').style.color = 'var(--green)';
+        } else {
+          el.style.background = 'var(--bg-card)';
+          el.style.borderColor = 'var(--border)';
+          el.querySelector('div:nth-child(2)').style.color = 'var(--text)';
+        }
       });
     }
 
     async function buildModelList() {
-      // Ensure models are loaded (handles race condition with async hardware scan)
       if (!allModels.length && !hardwareData) {
         await runHardwareScan();
       }
       buildPackages();
-      if (recommendation) {
-        document.getElementById('windytune-explanation').textContent = recommendation.explanation + ' You can also select individual models below, or download more anytime from Settings → Engine Manager.';
-      }
+
+      // Layer 1: Grandma Mode
+      buildGrandmaMode();
+
+      // Pre-select recommended
       if (selectedModels.size === 0 || (recommendation && selectedModels.size === recommendation.recommended.length)) {
         selectedModels = new Set(packages.recommended);
       }
-      buildSelectedChecklist();
-    }
-
-    function buildSelectedChecklist() {
-      const checklist = document.getElementById('selected-models-checklist');
-      if (!checklist) return;
-      checklist.innerHTML = '';
-      const familyIcons = { core: '⚡', edge: '🛡️', lingua: '🌍' };
-      allModels.filter(m => selectedModels.has(m.id)).forEach(m => {
-        const div = document.createElement('div');
-        div.style.cssText = 'display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--border);';
-        const sizeStr = m.sizeMB >= 1000 ? (m.sizeMB / 1000).toFixed(1) + ' GB' : m.sizeMB + ' MB';
-        div.innerHTML = `<span style="color:var(--green); font-size:18px;">✅</span>
-          <span style="flex:1; font-weight:700;">${familyIcons[m.family] || ''} ${m.name}</span>
-          <span style="color:var(--text-dim); font-size:14px;">${sizeStr}</span>
-          <span style="color:var(--text-dim); font-size:14px;">${m.speed || ''}</span>`;
-        checklist.appendChild(div);
-      });
-      if (checklist.children.length === 0) {
-        checklist.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:20px;">No engines selected. Choose a package above.</div>';
-      }
       updateModelSummary();
     }
 
-    function buildMatrix() {
-      const tbody = document.getElementById('matrix-body');
-      if (!tbody) return;
-      tbody.innerHTML = '';
+    function buildGrandmaMode() {
+      // Hardware summary
+      const hwSum = document.getElementById('grandma-hw-summary');
+      if (hardwareData && recommendation) {
+        const hw = hardwareData;
+        const gpuText = hw.gpu.nvidia ? `${hw.gpu.name} (${hw.gpu.vramGB} GB VRAM)` :
+          hw.gpu.type !== 'none' ? `${hw.gpu.name} (integrated)` : 'No dedicated GPU';
+        hwSum.innerHTML = `Based on your <strong>${hw.cpu.model.split(' ').slice(0,4).join(' ')}</strong> with <strong>${hw.ram.totalGB} GB RAM</strong> and <strong>${gpuText}</strong>:`;
 
-      const shortStrength = {
-        'core-spark': 'Fastest GPU engine', 'core-pulse': 'Reliable everyday GPU', 'core-standard': 'Handles accents well',
-        'core-global': 'Best multilingual (GPU)', 'core-pro': 'Flagship English (GPU)', 'core-turbo': 'Near-Ultra, 2x faster',
-        'core-ultra': 'BEST accuracy. Period.', 'edge-spark': 'Only 42 MB!', 'edge-pulse': 'Fast & phone-friendly',
-        'edge-standard': 'Best size/accuracy balance', 'edge-global': 'Multilingual on CPU', 'edge-pro': 'Best English on CPU',
-        'lingua-es': 'All Spanish dialects', 'lingua-fr': 'All French dialects', 'lingua-hi': 'Hindi + Hinglish'
-      };
-      const shortWeakness = {
-        'core-spark': 'Basic accuracy', 'core-pulse': 'Not for jargon', 'core-standard': 'Needs 2GB VRAM',
-        'core-global': 'Slower (2x)', 'core-pro': 'English only', 'core-turbo': 'Needs 6GB VRAM',
-        'core-ultra': '2.9 GB, needs 10GB VRAM', 'edge-spark': 'Basic accuracy', 'edge-pulse': 'Occasional errors',
-        'edge-standard': 'Not Pro/Ultra level', 'edge-global': 'Slower (2x), 515 MB', 'edge-pro': 'English only',
-        'lingua-es': 'Spanish only', 'lingua-fr': 'French only', 'lingua-hi': 'Hindi only'
-      };
-      const ramNeeded = {
-        'core-spark': '4 GB', 'core-pulse': '4 GB', 'core-standard': '8 GB', 'core-global': '16 GB', 'core-pro': '16 GB',
-        'core-turbo': '16 GB', 'core-ultra': '24 GB', 'edge-spark': '2 GB', 'edge-pulse': '3 GB', 'edge-standard': '4 GB',
-        'edge-global': '8 GB', 'edge-pro': '8 GB', 'lingua-es': '6 GB', 'lingua-fr': '6 GB', 'lingua-hi': '6 GB'
-      };
-      const gpuNeeded = {
-        'core-spark': 'Yes', 'core-pulse': 'Yes', 'core-standard': 'Yes (2GB)', 'core-global': 'Yes (5GB)', 'core-pro': 'Yes (5GB)',
-        'core-turbo': 'Yes (6GB)', 'core-ultra': 'Yes (10GB)', 'edge-spark': 'No', 'edge-pulse': 'No', 'edge-standard': 'No',
-        'edge-global': 'No', 'edge-pro': 'No', 'lingua-es': 'No', 'lingua-fr': 'No', 'lingua-hi': 'No'
-      };
-      const bestFor = {
-        'core-spark': 'Quick dictation', 'core-pulse': 'Emails, casual notes', 'core-standard': 'Meetings, content',
-        'core-global': 'Multilingual meetings', 'core-pro': 'English professionals', 'core-turbo': 'Best quality, faster',
-        'core-ultra': 'Broadcast, legal, medical', 'edge-spark': 'Phones, emergencies', 'edge-pulse': 'Mobile dictation',
-        'edge-standard': 'Laptops, everyday', 'edge-global': 'Travel, translation', 'edge-pro': 'English on laptop',
-        'lingua-es': 'Spanish speakers', 'lingua-fr': 'French speakers', 'lingua-hi': 'Hindi speakers'
-      };
+        document.getElementById('windytune-explanation').textContent = recommendation.explanation +
+          ' WindyTune will automatically switch engines based on your hardware load, GPU temperature, and battery level.';
+      }
+
+      // Engine pills
+      const engineList = document.getElementById('grandma-engine-list');
+      engineList.innerHTML = '';
+      const familyColors = { gpu: '#3B82F6', cpu: '#22C55E', translation: '#A855F7' };
+      const familyIcons = { gpu: '⚡', cpu: '🛡️', translation: '🌍' };
+
+      const recEngines = allModels.filter(m => selectedModels.has(m.id));
+      recEngines.forEach(m => {
+        const sizeStr = m.sizeMB >= 1000 ? (m.sizeMB / 1024).toFixed(1) + ' GB' : m.sizeMB + ' MB';
+        const pill = document.createElement('div');
+        pill.style.cssText = `display:inline-flex; align-items:center; gap:8px; background:var(--bg-card); border:1px solid ${familyColors[m.family] || 'var(--border)'}; border-radius:10px; padding:8px 14px;`;
+        pill.innerHTML = `<span style="font-size:14px;">${familyIcons[m.family] || ''}</span>
+          <strong style="font-size:14px; color:var(--text);">${m.displayName || m.name}</strong>
+          <span style="font-size:12px; color:var(--text-dim);">${sizeStr}</span>
+          <span style="font-size:12px; color:var(--text-dim);">${m.speed}</span>`;
+        engineList.appendChild(pill);
+      });
+
+      // Total
+      const totalMB = recEngines.reduce((s, m) => s + m.sizeMB, 0);
+      const totalStr = totalMB >= 1024 ? (totalMB / 1024).toFixed(1) + ' GB' : totalMB + ' MB';
+      const speed = hardwareData?.network?.speedMBps || 1;
+      const secs = totalMB / speed;
+      const timeStr = secs < 60 ? `~${Math.ceil(secs)}s` : `~${Math.ceil(secs / 60)} min`;
+      document.getElementById('grandma-total').innerHTML = `<strong>${recEngines.length} engines</strong> · <strong style="color:var(--green);">${totalStr}</strong> total · ${timeStr} download`;
+
+      document.getElementById('btn-grandma-install').disabled = false;
+    }
+
+    // ─── LAYER 2: Car Enthusiast Mode ───
+    function buildLayer2() {
+      const gpuList = document.getElementById('gpu-engine-list');
+      const cpuList = document.getElementById('cpu-engine-list');
+      const translateList = document.getElementById('translate-engine-list');
+      gpuList.innerHTML = '';
+      cpuList.innerHTML = '';
+      translateList.innerHTML = '';
+
+      const tierLabels = { free: '🟢 FREE', pro: '🔒 PRO', translate: '🔒 ULTRA', translate_pro: '🔒 MAX' };
+      const tierColors = { free: '#22C55E', pro: '#F59E0B', translate: '#A855F7', translate_pro: '#A855F7' };
+
+      allModels.forEach(m => {
+        const target = m.family === 'gpu' ? gpuList : m.family === 'cpu' ? cpuList : translateList;
+        const isSelected = selectedModels.has(m.id);
+        const sizeStr = m.sizeMB >= 1000 ? (m.sizeMB / 1024).toFixed(1) + ' GB' : m.sizeMB + ' MB';
+        const isLocked = m.tier !== 'free'; // Simplified — real logic uses account tier
+
+        const card = document.createElement('div');
+        card.dataset.id = m.id;
+        card.style.cssText = `display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:10px; border:2px solid ${isSelected ? 'var(--green)' : 'transparent'}; background:${isSelected ? 'var(--green-dark)' : 'var(--bg-card)'}; cursor:pointer; transition:all 0.2s; ${isLocked && !isSelected ? 'opacity:0.6;' : ''}`;
+        card.onmouseenter = () => { if (!selectedModels.has(m.id)) card.style.background = 'var(--bg-hover)'; };
+        card.onmouseleave = () => { if (!selectedModels.has(m.id)) { card.style.background = 'var(--bg-card)'; } };
+        card.onclick = () => {
+          toggleModel(m.id);
+          refreshLayer2();
+        };
+
+        // Quality bar
+        const qualityBars = '█'.repeat(Math.round(m.quality)) + '░'.repeat(5 - Math.round(m.quality));
+
+        card.innerHTML = `
+          <div style="width:22px; height:22px; border-radius:6px; border:2px solid ${isSelected ? 'var(--green)' : 'var(--text-muted)'}; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; color:var(--bg); ${isSelected ? 'background:var(--green);' : ''} flex-shrink:0;">${isSelected ? '✓' : ''}</div>
+          <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <strong style="font-size:14px;">${m.displayName || m.name}</strong>
+              ${m.badge ? `<span style="font-size:10px; padding:2px 8px; border-radius:12px; background:rgba(34,197,94,0.15); color:var(--green); font-weight:600;">${m.badge}</span>` : ''}
+              <span style="font-size:11px; padding:2px 8px; border-radius:12px; background:rgba(0,0,0,0.3); color:${tierColors[m.tier] || '#888'}; font-weight:700;">${tierLabels[m.tier] || m.tier}</span>
+            </div>
+            <div style="font-size:13px; color:var(--text-dim); margin-top:2px;">${m.description}</div>
+            <div style="font-size:12px; color:var(--text-muted); margin-top:3px;">Best for: ${m.bestFor}</div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px; flex-shrink:0; min-width:80px;">
+            <div style="font-size:13px; font-weight:700; color:var(--text);">${sizeStr}</div>
+            <div style="font-size:13px; color:var(--text-dim);">${m.speed} speed</div>
+            <div style="font-size:11px; color:var(--text-muted); font-family:monospace; letter-spacing:1px;">${qualityBars}</div>
+          </div>
+        `;
+        target.appendChild(card);
+      });
+    }
+
+    function refreshLayer2() {
+      document.querySelectorAll('#layer-2 [data-id]').forEach(card => {
+        const id = card.dataset.id;
+        const sel = selectedModels.has(id);
+        card.style.borderColor = sel ? 'var(--green)' : 'transparent';
+        card.style.background = sel ? 'var(--green-dark)' : 'var(--bg-card)';
+        const chk = card.querySelector('div:first-child');
+        if (chk) {
+          chk.style.borderColor = sel ? 'var(--green)' : 'var(--text-muted)';
+          chk.style.background = sel ? 'var(--green)' : 'transparent';
+          chk.textContent = sel ? '✓' : '';
+        }
+      });
+      // Also update grandma mode pills
+      buildGrandmaMode();
+    }
+
+    // ─── LAYER 3: Gearhead Mode ───
+    function buildLayer3() {
+      const tbody = document.getElementById('gearhead-body');
+      tbody.innerHTML = '';
+      const tierLabels = { free: 'Free', pro: 'Pro', translate: 'Ultra', translate_pro: 'Max' };
+      const familyLabels = { gpu: '⚡ GPU', cpu: '🛡️ CPU', translation: '🌍 Trans.' };
 
       allModels.forEach(m => {
         const sel = selectedModels.has(m.id);
-        const sizeTxt = m.sizeMB < 1024 ? `${m.sizeMB} MB` : `${(m.sizeMB / 1024).toFixed(1)} GB`;
-        const familyLabel = m.family === 'core' ? '⚡ GPU' : m.family === 'edge' ? '🛡️ CPU' : '🌍 Lang';
-        const langs = m.family === 'lingua' ? '1' : '99';
+        const sizeStr = m.sizeMB >= 1000 ? (m.sizeMB / 1024).toFixed(1) + ' GB' : m.sizeMB + ' MB';
         const tr = document.createElement('tr');
-        tr.style.cssText = `border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.2s; ${sel ? 'background:#162B1F;' : ''}`;
         tr.dataset.id = m.id;
+        tr.style.cssText = `border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; ${sel ? 'background:#162B1F;' : ''}`;
         tr.onmouseenter = () => { if (!selectedModels.has(m.id)) tr.style.background = '#1A2332'; };
         tr.onmouseleave = () => { if (!selectedModels.has(m.id)) tr.style.background = ''; };
-        tr.onclick = () => {
-          toggleModel(m.id);
-          refreshMatrix();
-        };
+        tr.onclick = () => { toggleModel(m.id); refreshLayer3(); refreshLayer2(); buildGrandmaMode(); };
         tr.innerHTML = `
-          <td style="padding:9px 6px; color:var(--green); font-weight:800; font-size:16px;">${sel ? '✅' : '⬜'}</td>
-          <td style="padding:9px 6px; font-weight:700; color:${sel ? 'var(--green)' : 'var(--text)'};">${familyLabel} ${m.shortName || m.name}</td>
-          <td style="padding:9px 6px; color:var(--text);">${sizeTxt}</td>
-          <td style="padding:9px 6px; color:var(--text);">${m.speed}</td>
-          <td style="padding:9px 6px; color:${gpuNeeded[m.id]?.startsWith('Yes') ? 'var(--yellow)' : 'var(--green)'};">${gpuNeeded[m.id] || '?'}</td>
-          <td style="padding:9px 6px; color:#4ADE80;">${shortStrength[m.id] || ''}</td>
-          <td style="padding:9px 6px; color:#F87171;">${shortWeakness[m.id] || ''}</td>
+          <td style="padding:7px 6px; font-size:15px; text-align:center; color:var(--green);">${sel ? '✅' : '⬜'}</td>
+          <td style="padding:7px 6px; font-weight:700; color:${sel ? 'var(--green)' : 'var(--text)'};">${m.displayName || m.name}</td>
+          <td style="padding:7px 6px; color:${m.family === 'gpu' ? '#3B82F6' : m.family === 'cpu' ? '#22C55E' : '#A855F7'};">${familyLabels[m.family]}</td>
+          <td style="padding:7px 6px; color:var(--text-dim);">${sizeStr}</td>
+          <td style="padding:7px 6px; color:var(--text-dim);">${m.speed}</td>
+          <td style="padding:7px 6px; color:var(--text-dim);">${m.parameters || '—'}</td>
+          <td style="padding:7px 6px; color:var(--text-dim);">${m.ramGB} GB</td>
+          <td style="padding:7px 6px; color:${m.vramGB > 0 ? 'var(--yellow)' : 'var(--green)'};">${m.vramGB > 0 ? m.vramGB + ' GB' : 'None'}</td>
+          <td style="padding:7px 6px; color:var(--text-dim);">${m.qualityLabel} (${m.quality}/5)</td>
+          <td style="padding:7px 6px; color:var(--text-dim); font-size:11px;">${m.architecture || 'Proprietary encoder-decoder'}</td>
+          <td style="padding:7px 6px; color:var(--text-dim); font-size:11px;">${m.format || 'Safetensors'}</td>
+          <td style="padding:7px 6px; color:var(--text-dim);">${tierLabels[m.tier] || m.tier}</td>
         `;
         tbody.appendChild(tr);
       });
+
+      // Benchmark chart
+      buildBenchmarkChart();
     }
 
-    function refreshMatrix() {
-      document.querySelectorAll('#matrix-body tr').forEach(tr => {
+    function refreshLayer3() {
+      document.querySelectorAll('#gearhead-body tr').forEach(tr => {
         const id = tr.dataset.id;
         const sel = selectedModels.has(id);
         tr.style.background = sel ? '#162B1F' : '';
-        tr.cells[0].textContent = sel ? '✅' : '⬜';
-        tr.cells[1].style.color = sel ? 'var(--green)' : 'var(--text)';
+        if (tr.cells[0]) tr.cells[0].textContent = sel ? '✅' : '⬜';
+        if (tr.cells[1]) tr.cells[1].style.color = sel ? 'var(--green)' : 'var(--text)';
       });
     }
 
-    function filterFamily(family) {
-      document.querySelectorAll('.family-tab').forEach(t => t.classList.toggle('active', t.dataset.family === family));
-
-      const list = document.getElementById('model-list');
-      list.innerHTML = '';
-
-      const models = family === 'all' ? allModels : allModels.filter(m => m.family === family);
-
-      models.forEach(m => {
-        const isSelected = selectedModels.has(m.id);
-        const isRecommended = recommendation?.recommended.includes(m.id);
-        const details = MODEL_DETAILS[m.id] || {};
-
-        const wrapper = document.createElement('div');
-        wrapper.style.cssText = 'margin-bottom: 4px;';
-
-        const card = document.createElement('div');
-        card.className = `model-card ${isSelected ? 'selected' : ''} ${isRecommended ? 'recommended' : ''}`;
-        card.dataset.id = m.id;
-
-        const sizeTxt = m.sizeMB < 1024 ? `${m.sizeMB} MB` : `${(m.sizeMB / 1024).toFixed(1)} GB`;
-        const badgeHtml = m.badge ? `<span class="model-badge ${m.badge.includes('Flagship') ? 'flagship' : 'popular'}">${m.badge}</span>` :
-          isRecommended ? '<span class="model-badge">★ Recommended</span>' : '';
-
-        const familyEmoji = m.family === 'core' ? '⚡' : m.family === 'edge' ? '🛡️' : '🌍';
-        const familyLabel = m.family === 'core' ? 'GPU' : m.family === 'edge' ? 'CPU' : 'Specialist';
-
-        card.innerHTML = `
-          <div class="model-chk">${isSelected ? '✓' : ''}</div>
-          <div class="model-info">
-            <div class="model-name">${m.shortName || m.name} ${badgeHtml} <span style="font-size:15px;color:var(--text-muted);font-weight:400;">${familyEmoji} ${familyLabel}</span></div>
-            <div class="model-desc">${m.description}</div>
+    function buildBenchmarkChart() {
+      const chart = document.getElementById('benchmark-chart');
+      if (!chart) return;
+      chart.innerHTML = '';
+      const maxSpeed = Math.max(...allModels.map(m => m.speedRating));
+      allModels.forEach(m => {
+        const speedPct = (m.speedRating / maxSpeed) * 100;
+        const qualPct = (m.quality / 5) * 100;
+        const sel = selectedModels.has(m.id);
+        const familyIcon = m.family === 'gpu' ? '⚡' : m.family === 'cpu' ? '🛡️' : '🌍';
+        const row = document.createElement('div');
+        row.style.cssText = `display:grid; grid-template-columns:130px 1fr 1fr; gap:8px; align-items:center; padding:3px 0; font-size:12px; ${sel ? 'opacity:1;' : 'opacity:0.6;'}`;
+        row.innerHTML = `
+          <div style="font-weight:700; color:${sel ? 'var(--green)' : 'var(--text-dim)'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${familyIcon} ${m.name.replace('Windy ','')}</div>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <span style="color:var(--text-muted); width:36px;">Spd</span>
+            <div style="flex:1; height:6px; background:var(--border); border-radius:3px; overflow:hidden;">
+              <div style="height:100%; width:${speedPct}%; background:#3B82F6; border-radius:3px;"></div>
+            </div>
+            <span style="color:var(--text-dim); width:30px; text-align:right;">${m.speed}</span>
           </div>
-          <div class="model-meta">
-            <div class="model-meta-item">💾 <span class="val">${sizeTxt}</span></div>
-            <div class="model-meta-item">⚡ <span class="val">${m.speed}</span></div>
-            <button class="expand-btn" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-size:16px;padding:3px 8px;cursor:pointer;font-family:inherit;" onclick="event.stopPropagation(); toggleExpand('${m.id}')">▼ Details</button>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <span style="color:var(--text-muted); width:36px;">Qual</span>
+            <div style="flex:1; height:6px; background:var(--border); border-radius:3px; overflow:hidden;">
+              <div style="height:100%; width:${qualPct}%; background:#22C55E; border-radius:3px;"></div>
+            </div>
+            <span style="color:var(--text-dim); width:30px; text-align:right;">${m.quality}/5</span>
           </div>
         `;
-
-        card.onclick = () => toggleModel(m.id);
-
-        // Expandable detail panel
-        const detail = document.createElement('div');
-        detail.id = `detail-${m.id}`;
-        detail.style.cssText = 'display:none; background:var(--bg-card); border:1px solid var(--border); border-top:none; border-radius:0 0 10px 10px; padding:12px 14px; margin-top:-2px; font-size:16px; line-height:1.6;';
-
-        const prosHtml = (details.pros || []).map(p => `<div style="color:#4ADE80;">✅ ${p}</div>`).join('');
-        const consHtml = (details.cons || []).map(c => `<div style="color:#F87171;">⚠️ ${c}</div>`).join('');
-
-        detail.innerHTML = `
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 16px;">
-            <div><strong style="color:var(--green);font-size:15px;">Strengths</strong>${prosHtml}</div>
-            <div><strong style="color:var(--yellow);font-size:15px;">Considerations</strong>${consHtml}</div>
-          </div>
-          <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border); color:var(--text-dim);">
-            <strong>Best for:</strong> ${details.bestFor || m.description}<br>
-            <strong>RAM needed:</strong> ${details.ramNeeded || '?'} · <strong>GPU:</strong> ${details.gpuNeeded || 'None'}
-          </div>
-        `;
-
-        wrapper.appendChild(card);
-        wrapper.appendChild(detail);
-        list.appendChild(wrapper);
+        chart.appendChild(row);
       });
-
-      updateModelSummary();
     }
+
+    // Legacy stubs — replaced by Layer 2/3 in new 3-layer UI
+    function buildMatrix() { buildLayer3(); }
+    function refreshMatrix() { refreshLayer3(); }
+    function filterFamily() { /* No longer used — replaced by Layer 2 sections */ }
 
     function toggleExpand(modelId) {
       const detail = document.getElementById(`detail-${modelId}`);
