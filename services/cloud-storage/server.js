@@ -53,7 +53,16 @@ function getR2() {
 }
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://windypro.thewindstorm.uk',
+    'http://localhost:8098',
+    'http://localhost:8099',
+    'http://localhost:8100',
+    'file://' // Electron app
+  ],
+  credentials: true
+}));
 app.use(express.json());
 
 // ── Config ──────────────────────────────────────────────────────
@@ -180,6 +189,7 @@ app.get('/health', (req, res) => {
 app.post('/auth/register', async (req, res) => {
   const { email, password, deviceId } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
 
   // Check if user exists
   const existing = Object.values(usersDB.all()).find(u => u.email === email);
@@ -278,7 +288,7 @@ app.post('/files/upload', authMiddleware, upload.single('file'), async (req, res
     r2Key: r2Key, // R2 object key
     type: fileType,
     sessionDate: req.body.sessionDate || new Date().toISOString().slice(0, 10),
-    metadata: req.body.metadata ? JSON.parse(req.body.metadata) : {},
+    metadata: req.body.metadata ? (() => { try { return JSON.parse(req.body.metadata); } catch (_) { return {}; } })() : {},
     uploadedAt: new Date().toISOString()
   };
 
@@ -526,16 +536,24 @@ app.post('/admin/users/:userId/freeze', adminMiddleware, (req, res) => {
 });
 
 // Delete user and all their data
-app.delete('/admin/users/:userId', adminMiddleware, (req, res) => {
+app.delete('/admin/users/:userId', adminMiddleware, async (req, res) => {
   const user = usersDB.get(req.params.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  // Delete all user files
+  // Delete all user files (from R2 and/or local)
   const files = filesDB.find(f => f.userId === user.id);
-  files.forEach(f => {
-    try { fs.unlinkSync(f.path); } catch (_) { }
+  const storage = getR2();
+  for (const f of files) {
+    // Clean R2 if file has an R2 key
+    if (f.r2Key && storage) {
+      try { await storage.delete(f.r2Key); } catch (_) { }
+    }
+    // Clean local if path exists
+    if (f.path) {
+      try { fs.unlinkSync(f.path); } catch (_) { }
+    }
     filesDB.delete(f.id);
-  });
+  }
 
   // Remove user upload directory
   const userDir = path.join(UPLOADS_PATH, user.id);
