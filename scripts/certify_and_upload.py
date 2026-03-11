@@ -46,7 +46,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 MODELS_DIR = "/home/user1-gpu/Desktop/grants_folder/windy-pro/models"
-ORG = "WindyProLabs"
+ORG = "sneakyfree"  # Staging on personal account; transfer to WindyProLabs later
 TEST_AUDIO = "/home/user1-gpu/Desktop/grants_folder/windy-pro/test_audio/librispeech_sample.wav"
 GROUND_TRUTH = "mister quilter is the apostle of the middle classes and we are glad to welcome his gospel"
 CERT_REPORT_PATH = "/home/user1-gpu/Desktop/grants_folder/windy-pro/docs/CERTIFICATION_REPORT.md"
