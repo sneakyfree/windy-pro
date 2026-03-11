@@ -1,0 +1,2389 @@
+{
+  "uploads": [
+    {
+      "model_id": "windy-lingua-bg",
+      "repo_id": "sneakyfree/windy-lingua-bg",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:05:55.184427",
+      "upload_verified": true
+    },
+    {
+      "model_id": "windy-lingua-bg-ct2",
+      "repo_id": "sneakyfree/windy-lingua-bg-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": "SKIP",
+      "verify_output": "CT2 models require ctranslate2 library",
+      "verify_date": "2026-03-11T19:05:59.673679",
+      "upload_verified": false
+    },
+    {
+      "model_id": "windy-lingua-da",
+      "repo_id": "sneakyfree/windy-lingua-da",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:06:13.412245",
+      "upload_verified": true
+    },
+    {
+      "model_id": "windy-lingua-da-ct2",
+      "repo_id": "sneakyfree/windy-lingua-da-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": "SKIP",
+      "verify_output": "CT2 models require ctranslate2 library",
+      "verify_date": "2026-03-11T19:06:17.317095",
+      "upload_verified": false
+    },
+    {
+      "model_id": "windy-lingua-el",
+      "repo_id": "sneakyfree/windy-lingua-el",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:06:28.931141",
+      "upload_verified": true
+    },
+    {
+      "model_id": "windy-lingua-el-ct2",
+      "repo_id": "sneakyfree/windy-lingua-el-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": "SKIP",
+      "verify_output": "CT2 models require ctranslate2 library",
+      "verify_date": "2026-03-11T19:06:32.610839",
+      "upload_verified": false
+    },
+    {
+      "model_id": "windy-lingua-ga",
+      "repo_id": "sneakyfree/windy-lingua-ga",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:06:43.567696",
+      "upload_verified": true
+    },
+    {
+      "model_id": "windy-lingua-ga-ct2",
+      "repo_id": "sneakyfree/windy-lingua-ga-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": "SKIP",
+      "verify_output": "CT2 models require ctranslate2 library",
+      "verify_date": "2026-03-11T19:06:46.891976",
+      "upload_verified": false
+    },
+    {
+      "model_id": "windy-lingua-ha",
+      "repo_id": "sneakyfree/windy-lingua-ha",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-ha-ct2",
+      "repo_id": "sneakyfree/windy-lingua-ha-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-id",
+      "repo_id": "sneakyfree/windy-lingua-id",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-id-ct2",
+      "repo_id": "sneakyfree/windy-lingua-id-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-is",
+      "repo_id": "sneakyfree/windy-lingua-is",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-is-ct2",
+      "repo_id": "sneakyfree/windy-lingua-is-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-jv",
+      "repo_id": "sneakyfree/windy-lingua-jv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-jv-ct2",
+      "repo_id": "sneakyfree/windy-lingua-jv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-ko",
+      "repo_id": "sneakyfree/windy-lingua-ko",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-lo",
+      "repo_id": "sneakyfree/windy-lingua-lo",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-lo-ct2",
+      "repo_id": "sneakyfree/windy-lingua-lo-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-lv",
+      "repo_id": "sneakyfree/windy-lingua-lv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-lv-ct2",
+      "repo_id": "sneakyfree/windy-lingua-lv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-my",
+      "repo_id": "sneakyfree/windy-lingua-my",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-my-ct2",
+      "repo_id": "sneakyfree/windy-lingua-my-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-pl",
+      "repo_id": "sneakyfree/windy-lingua-pl",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-pl-ct2",
+      "repo_id": "sneakyfree/windy-lingua-pl-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-ru",
+      "repo_id": "sneakyfree/windy-lingua-ru",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-sl",
+      "repo_id": "sneakyfree/windy-lingua-sl",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-sl-ct2",
+      "repo_id": "sneakyfree/windy-lingua-sl-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-sw",
+      "repo_id": "sneakyfree/windy-lingua-sw",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-sw-ct2",
+      "repo_id": "sneakyfree/windy-lingua-sw-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-vi",
+      "repo_id": "sneakyfree/windy-lingua-vi",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-lingua-vi-ct2",
+      "repo_id": "sneakyfree/windy-lingua-vi-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-NORTH_EU-NORTH_EU",
+      "repo_id": "sneakyfree/windy-pair-NORTH_EU-NORTH_EU",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-NORTH_EU-NORTH_EU-ct2",
+      "repo_id": "sneakyfree/windy-pair-NORTH_EU-NORTH_EU-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-SCANDINAVIA-SCANDINAVIA",
+      "repo_id": "sneakyfree/windy-pair-SCANDINAVIA-SCANDINAVIA",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-SCANDINAVIA-SCANDINAVIA-ct2",
+      "repo_id": "sneakyfree/windy-pair-SCANDINAVIA-SCANDINAVIA-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-aav-en",
+      "repo_id": "sneakyfree/windy-pair-aav-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-aav-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-aav-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-aed-es",
+      "repo_id": "sneakyfree/windy-pair-aed-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-aed-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-aed-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-de",
+      "repo_id": "sneakyfree/windy-pair-af-de",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-de-ct2",
+      "repo_id": "sneakyfree/windy-pair-af-de-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-en",
+      "repo_id": "sneakyfree/windy-pair-af-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-af-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-eo",
+      "repo_id": "sneakyfree/windy-pair-af-eo",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-eo-ct2",
+      "repo_id": "sneakyfree/windy-pair-af-eo-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-es",
+      "repo_id": "sneakyfree/windy-pair-af-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-af-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-fi",
+      "repo_id": "sneakyfree/windy-pair-af-fi",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-fi-ct2",
+      "repo_id": "sneakyfree/windy-pair-af-fi-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-fr",
+      "repo_id": "sneakyfree/windy-pair-af-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-af-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-nl",
+      "repo_id": "sneakyfree/windy-pair-af-nl",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-nl-ct2",
+      "repo_id": "sneakyfree/windy-pair-af-nl-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-ru",
+      "repo_id": "sneakyfree/windy-pair-af-ru",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-ru-ct2",
+      "repo_id": "sneakyfree/windy-pair-af-ru-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-sv",
+      "repo_id": "sneakyfree/windy-pair-af-sv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-af-sv-ct2",
+      "repo_id": "sneakyfree/windy-pair-af-sv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-afa-afa",
+      "repo_id": "sneakyfree/windy-pair-afa-afa",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-afa-afa-ct2",
+      "repo_id": "sneakyfree/windy-pair-afa-afa-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-afa-en",
+      "repo_id": "sneakyfree/windy-pair-afa-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-afa-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-afa-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-alv-en",
+      "repo_id": "sneakyfree/windy-pair-alv-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-alv-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-alv-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-am-sv",
+      "repo_id": "sneakyfree/windy-pair-am-sv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-am-sv-ct2",
+      "repo_id": "sneakyfree/windy-pair-am-sv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-de",
+      "repo_id": "sneakyfree/windy-pair-ar-de",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-de-ct2",
+      "repo_id": "sneakyfree/windy-pair-ar-de-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-el",
+      "repo_id": "sneakyfree/windy-pair-ar-el",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-el-ct2",
+      "repo_id": "sneakyfree/windy-pair-ar-el-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-eo",
+      "repo_id": "sneakyfree/windy-pair-ar-eo",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-eo-ct2",
+      "repo_id": "sneakyfree/windy-pair-ar-eo-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-es",
+      "repo_id": "sneakyfree/windy-pair-ar-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-ar-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-he",
+      "repo_id": "sneakyfree/windy-pair-ar-he",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-he-ct2",
+      "repo_id": "sneakyfree/windy-pair-ar-he-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-it",
+      "repo_id": "sneakyfree/windy-pair-ar-it",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-it-ct2",
+      "repo_id": "sneakyfree/windy-pair-ar-it-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-pl",
+      "repo_id": "sneakyfree/windy-pair-ar-pl",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-pl-ct2",
+      "repo_id": "sneakyfree/windy-pair-ar-pl-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-ru",
+      "repo_id": "sneakyfree/windy-pair-ar-ru",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-ru-ct2",
+      "repo_id": "sneakyfree/windy-pair-ar-ru-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-tr",
+      "repo_id": "sneakyfree/windy-pair-ar-tr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ar-tr-ct2",
+      "repo_id": "sneakyfree/windy-pair-ar-tr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-art-en",
+      "repo_id": "sneakyfree/windy-pair-art-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-art-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-art-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ase-de",
+      "repo_id": "sneakyfree/windy-pair-ase-de",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ase-de-ct2",
+      "repo_id": "sneakyfree/windy-pair-ase-de-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ase-es",
+      "repo_id": "sneakyfree/windy-pair-ase-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ase-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-ase-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ase-fr",
+      "repo_id": "sneakyfree/windy-pair-ase-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ase-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-ase-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ase-sv",
+      "repo_id": "sneakyfree/windy-pair-ase-sv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ase-sv-ct2",
+      "repo_id": "sneakyfree/windy-pair-ase-sv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-az-en",
+      "repo_id": "sneakyfree/windy-pair-az-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-az-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-az-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-az-es",
+      "repo_id": "sneakyfree/windy-pair-az-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-az-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-az-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-az-tr",
+      "repo_id": "sneakyfree/windy-pair-az-tr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-az-tr-ct2",
+      "repo_id": "sneakyfree/windy-pair-az-tr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bat-en",
+      "repo_id": "sneakyfree/windy-pair-bat-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bat-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-bat-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bcl-de",
+      "repo_id": "sneakyfree/windy-pair-bcl-de",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bcl-de-ct2",
+      "repo_id": "sneakyfree/windy-pair-bcl-de-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bcl-en",
+      "repo_id": "sneakyfree/windy-pair-bcl-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bcl-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-bcl-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bcl-es",
+      "repo_id": "sneakyfree/windy-pair-bcl-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bcl-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-bcl-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bcl-fi",
+      "repo_id": "sneakyfree/windy-pair-bcl-fi",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bcl-fi-ct2",
+      "repo_id": "sneakyfree/windy-pair-bcl-fi-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bcl-fr",
+      "repo_id": "sneakyfree/windy-pair-bcl-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bcl-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-bcl-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bcl-sv",
+      "repo_id": "sneakyfree/windy-pair-bcl-sv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bcl-sv-ct2",
+      "repo_id": "sneakyfree/windy-pair-bcl-sv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-be-es",
+      "repo_id": "sneakyfree/windy-pair-be-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-be-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-be-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bem-en",
+      "repo_id": "sneakyfree/windy-pair-bem-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bem-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-bem-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bem-es",
+      "repo_id": "sneakyfree/windy-pair-bem-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bem-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-bem-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bem-fi",
+      "repo_id": "sneakyfree/windy-pair-bem-fi",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bem-fi-ct2",
+      "repo_id": "sneakyfree/windy-pair-bem-fi-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bem-fr",
+      "repo_id": "sneakyfree/windy-pair-bem-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bem-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-bem-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bem-sv",
+      "repo_id": "sneakyfree/windy-pair-bem-sv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bem-sv-ct2",
+      "repo_id": "sneakyfree/windy-pair-bem-sv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ber-en",
+      "repo_id": "sneakyfree/windy-pair-ber-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ber-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-ber-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ber-es",
+      "repo_id": "sneakyfree/windy-pair-ber-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ber-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-ber-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ber-fr",
+      "repo_id": "sneakyfree/windy-pair-ber-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ber-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-ber-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-de",
+      "repo_id": "sneakyfree/windy-pair-bg-de",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-de-ct2",
+      "repo_id": "sneakyfree/windy-pair-bg-de-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-eo",
+      "repo_id": "sneakyfree/windy-pair-bg-eo",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-eo-ct2",
+      "repo_id": "sneakyfree/windy-pair-bg-eo-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-es",
+      "repo_id": "sneakyfree/windy-pair-bg-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-bg-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-fi",
+      "repo_id": "sneakyfree/windy-pair-bg-fi",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-fi-ct2",
+      "repo_id": "sneakyfree/windy-pair-bg-fi-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-fr",
+      "repo_id": "sneakyfree/windy-pair-bg-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-bg-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-it",
+      "repo_id": "sneakyfree/windy-pair-bg-it",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-it-ct2",
+      "repo_id": "sneakyfree/windy-pair-bg-it-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-ru",
+      "repo_id": "sneakyfree/windy-pair-bg-ru",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-ru-ct2",
+      "repo_id": "sneakyfree/windy-pair-bg-ru-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-sv",
+      "repo_id": "sneakyfree/windy-pair-bg-sv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-sv-ct2",
+      "repo_id": "sneakyfree/windy-pair-bg-sv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-tr",
+      "repo_id": "sneakyfree/windy-pair-bg-tr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-tr-ct2",
+      "repo_id": "sneakyfree/windy-pair-bg-tr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-uk",
+      "repo_id": "sneakyfree/windy-pair-bg-uk",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bg-uk-ct2",
+      "repo_id": "sneakyfree/windy-pair-bg-uk-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bi-en",
+      "repo_id": "sneakyfree/windy-pair-bi-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bi-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-bi-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bi-es",
+      "repo_id": "sneakyfree/windy-pair-bi-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bi-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-bi-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bi-fr",
+      "repo_id": "sneakyfree/windy-pair-bi-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bi-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-bi-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bi-sv",
+      "repo_id": "sneakyfree/windy-pair-bi-sv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bi-sv-ct2",
+      "repo_id": "sneakyfree/windy-pair-bi-sv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bn-en",
+      "repo_id": "sneakyfree/windy-pair-bn-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bn-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-bn-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bnt-en",
+      "repo_id": "sneakyfree/windy-pair-bnt-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bnt-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-bnt-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bzs-en",
+      "repo_id": "sneakyfree/windy-pair-bzs-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bzs-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-bzs-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bzs-es",
+      "repo_id": "sneakyfree/windy-pair-bzs-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bzs-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-bzs-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bzs-fi",
+      "repo_id": "sneakyfree/windy-pair-bzs-fi",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bzs-fi-ct2",
+      "repo_id": "sneakyfree/windy-pair-bzs-fi-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bzs-fr",
+      "repo_id": "sneakyfree/windy-pair-bzs-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bzs-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-bzs-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bzs-sv",
+      "repo_id": "sneakyfree/windy-pair-bzs-sv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-bzs-sv-ct2",
+      "repo_id": "sneakyfree/windy-pair-bzs-sv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ca-de",
+      "repo_id": "sneakyfree/windy-pair-ca-de",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ca-de-ct2",
+      "repo_id": "sneakyfree/windy-pair-ca-de-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ca-en",
+      "repo_id": "sneakyfree/windy-pair-ca-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ca-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-ca-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ca-fr",
+      "repo_id": "sneakyfree/windy-pair-ca-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ca-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-ca-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ca-nl",
+      "repo_id": "sneakyfree/windy-pair-ca-nl",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ca-nl-ct2",
+      "repo_id": "sneakyfree/windy-pair-ca-nl-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ca-pt",
+      "repo_id": "sneakyfree/windy-pair-ca-pt",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ca-pt-ct2",
+      "repo_id": "sneakyfree/windy-pair-ca-pt-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ca-uk",
+      "repo_id": "sneakyfree/windy-pair-ca-uk",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ca-uk-ct2",
+      "repo_id": "sneakyfree/windy-pair-ca-uk-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-caenes-eo",
+      "repo_id": "sneakyfree/windy-pair-caenes-eo",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-caenes-eo-ct2",
+      "repo_id": "sneakyfree/windy-pair-caenes-eo-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cau-en",
+      "repo_id": "sneakyfree/windy-pair-cau-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cau-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-cau-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ccs-en",
+      "repo_id": "sneakyfree/windy-pair-ccs-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ccs-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-ccs-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ceb-en",
+      "repo_id": "sneakyfree/windy-pair-ceb-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ceb-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-ceb-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ceb-es",
+      "repo_id": "sneakyfree/windy-pair-ceb-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ceb-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-ceb-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ceb-fi",
+      "repo_id": "sneakyfree/windy-pair-ceb-fi",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ceb-fi-ct2",
+      "repo_id": "sneakyfree/windy-pair-ceb-fi-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ceb-fr",
+      "repo_id": "sneakyfree/windy-pair-ceb-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ceb-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-ceb-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ceb-sv",
+      "repo_id": "sneakyfree/windy-pair-ceb-sv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-ceb-sv-ct2",
+      "repo_id": "sneakyfree/windy-pair-ceb-sv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cel-en",
+      "repo_id": "sneakyfree/windy-pair-cel-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cel-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-cel-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-chk-en",
+      "repo_id": "sneakyfree/windy-pair-chk-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-chk-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-chk-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-chk-es",
+      "repo_id": "sneakyfree/windy-pair-chk-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-chk-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-chk-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-chk-fr",
+      "repo_id": "sneakyfree/windy-pair-chk-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-chk-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-chk-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-chk-sv",
+      "repo_id": "sneakyfree/windy-pair-chk-sv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-chk-sv-ct2",
+      "repo_id": "sneakyfree/windy-pair-chk-sv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cpf-en",
+      "repo_id": "sneakyfree/windy-pair-cpf-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cpf-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-cpf-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cpp-en",
+      "repo_id": "sneakyfree/windy-pair-cpp-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cpp-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-cpp-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-crs-de",
+      "repo_id": "sneakyfree/windy-pair-crs-de",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-crs-de-ct2",
+      "repo_id": "sneakyfree/windy-pair-crs-de-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-crs-en",
+      "repo_id": "sneakyfree/windy-pair-crs-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-crs-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-crs-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-crs-es",
+      "repo_id": "sneakyfree/windy-pair-crs-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-crs-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-crs-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-crs-fi",
+      "repo_id": "sneakyfree/windy-pair-crs-fi",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-crs-fi-ct2",
+      "repo_id": "sneakyfree/windy-pair-crs-fi-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-crs-fr",
+      "repo_id": "sneakyfree/windy-pair-crs-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-crs-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-crs-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-crs-sv",
+      "repo_id": "sneakyfree/windy-pair-crs-sv",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-crs-sv-ct2",
+      "repo_id": "sneakyfree/windy-pair-crs-sv-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cs-eo",
+      "repo_id": "sneakyfree/windy-pair-cs-eo",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cs-eo-ct2",
+      "repo_id": "sneakyfree/windy-pair-cs-eo-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cs-fr",
+      "repo_id": "sneakyfree/windy-pair-cs-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cs-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-cs-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cs-uk",
+      "repo_id": "sneakyfree/windy-pair-cs-uk",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cs-uk-ct2",
+      "repo_id": "sneakyfree/windy-pair-cs-uk-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-csg-es",
+      "repo_id": "sneakyfree/windy-pair-csg-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-csg-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-csg-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-csn-es",
+      "repo_id": "sneakyfree/windy-pair-csn-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-csn-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-csn-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cus-en",
+      "repo_id": "sneakyfree/windy-pair-cus-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cus-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-cus-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cy-en",
+      "repo_id": "sneakyfree/windy-pair-cy-en",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-cy-en-ct2",
+      "repo_id": "sneakyfree/windy-pair-cy-en-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-de",
+      "repo_id": "sneakyfree/windy-pair-da-de",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-de-ct2",
+      "repo_id": "sneakyfree/windy-pair-da-de-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-eo",
+      "repo_id": "sneakyfree/windy-pair-da-eo",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-eo-ct2",
+      "repo_id": "sneakyfree/windy-pair-da-eo-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-es",
+      "repo_id": "sneakyfree/windy-pair-da-es",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-es-ct2",
+      "repo_id": "sneakyfree/windy-pair-da-es-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-fi",
+      "repo_id": "sneakyfree/windy-pair-da-fi",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-fi-ct2",
+      "repo_id": "sneakyfree/windy-pair-da-fi-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-fr",
+      "repo_id": "sneakyfree/windy-pair-da-fr",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-fr-ct2",
+      "repo_id": "sneakyfree/windy-pair-da-fr-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-no",
+      "repo_id": "sneakyfree/windy-pair-da-no",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-no-ct2",
+      "repo_id": "sneakyfree/windy-pair-da-no-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-ru",
+      "repo_id": "sneakyfree/windy-pair-da-ru",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-da-ru-ct2",
+      "repo_id": "sneakyfree/windy-pair-da-ru-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-de-ZH",
+      "repo_id": "sneakyfree/windy-pair-de-ZH",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-de-ZH-ct2",
+      "repo_id": "sneakyfree/windy-pair-de-ZH-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-de-af",
+      "repo_id": "sneakyfree/windy-pair-de-af",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-de-af-ct2",
+      "repo_id": "sneakyfree/windy-pair-de-af-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-de-ar",
+      "repo_id": "sneakyfree/windy-pair-de-ar",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-de-ar-ct2",
+      "repo_id": "sneakyfree/windy-pair-de-ar-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-de-ase",
+      "repo_id": "sneakyfree/windy-pair-de-ase",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    },
+    {
+      "model_id": "windy-pair-de-ase-ct2",
+      "repo_id": "sneakyfree/windy-pair-de-ase-ct2",
+      "upload_date": null,
+      "verified": false,
+      "verify_status": null,
+      "verify_output": null,
+      "verify_date": null
+    }
+  ],
+  "last_updated": "2026-03-11T19:06:46.891987"
+}

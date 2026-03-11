@@ -108,9 +108,24 @@ def verify_stt_model(model_path, model_id):
 
         # Determine if CT2 or standard
         if "-ct2" in model_id:
-            # CT2 models require ctranslate2
-            logger.info(f"Skipping CT2 model {model_id} (requires ctranslate2)")
-            return "SKIP", "CT2 models require ctranslate2 library"
+            try:
+                from faster_whisper import WhisperModel
+                test_audio = "/home/user1-gpu/Desktop/grants_folder/windy-pro/test_audio/librispeech_sample.wav"
+                ct2_model = WhisperModel(str(model_path), device="cpu", compute_type="int8")
+                # Extract lang code from model_id (e.g. windy-lingua-da-ct2 -> "da")
+                parts = model_id.replace("-ct2", "").split("-")
+                lang_code = parts[-1] if parts else None
+                try:
+                    segs, _ = ct2_model.transcribe(test_audio)
+                except Exception:
+                    segs, _ = ct2_model.transcribe(test_audio, language=lang_code)
+                text = " ".join(s.text.strip() for s in segs)
+                del ct2_model
+                if len(text.strip()) > 5:
+                    return "PASS", text.strip()[:80]
+                return "FAIL", "Empty transcription"
+            except Exception as e:
+                return "FAIL", str(e)[:100]
 
         # Load model and processor
         device = "cuda" if torch.cuda.is_available() else "cpu"
