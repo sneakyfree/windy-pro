@@ -220,6 +220,10 @@ class AutoSyncManager {
         const localBundles = await window.windyAPI.getCloneBundles();
         const bundles = localBundles?.bundles || [];
 
+        const cloudUsedPct = stats.cloudLimit > 0 ? Math.min(100, Math.round((stats.cloud / stats.cloudLimit) * 100)) : 0;
+        const tierLabel = { free: 'Free', pro: 'Pro', translate: 'Translate', 'translate-pro': 'Translate Pro' }[stats.cloudTier] || 'Free';
+        const barColor = cloudUsedPct >= 90 ? '#ff4444' : cloudUsedPct >= 70 ? '#ffaa00' : '#00cc66';
+
         container.innerHTML = `
       <div class="sync-dashboard" id="sync-dashboard">
         <div class="sync-header">
@@ -230,6 +234,26 @@ class AutoSyncManager {
             <span class="sync-last">Last sync: ${this.lastSyncTimestamp ? new Date(this.lastSyncTimestamp).toLocaleString() : 'Never'}</span>
           </div>
           <button class="conv-close-btn" id="sync-close">✕</button>
+        </div>
+
+        <!-- Cloud Storage Usage Bar -->
+        <div class="sync-storage-bar" style="margin:12px 0;padding:12px 16px;background:rgba(255,255,255,0.04);border-radius:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-weight:600;font-size:13px;">☁️ Windy Pro Storage</span>
+            <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;background:rgba(0,200,100,0.15);color:#00cc66;">${tierLabel}</span>
+          </div>
+          <div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">
+            <div style="width:${cloudUsedPct}%;height:100%;background:${barColor};border-radius:4px;transition:width 0.5s ease;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:11px;opacity:0.6;">
+            <span>${this.formatBytes(stats.cloud)} / ${this.formatBytes(stats.cloudLimit)}</span>
+            <span>${cloudUsedPct}% used${stats.cloudFileCount ? ` · ${stats.cloudFileCount} files` : ''}</span>
+          </div>
+          ${stats.cloudTier === 'free' || !stats.cloudTier ? `
+            <button id="sync-upgrade-btn" style="margin-top:8px;width:100%;padding:8px;border:none;border-radius:8px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:600;font-size:12px;cursor:pointer;">
+              ⬆️ Upgrade for More Storage
+            </button>
+          ` : ''}
         </div>
 
         <!-- Storage Stats -->
@@ -256,6 +280,23 @@ class AutoSyncManager {
                 </div>
               `).join('')}
           </div>
+        </div>
+
+        <!-- File Sync Status -->
+        <div class="sync-section" style="max-height:200px;overflow-y:auto;">
+          <h3>📂 Files (${bundles.length})</h3>
+          ${bundles.slice(0, 20).map(b => {
+            const icon = b.sync_status === 'cloud_synced' ? '☁️✅' : b.sync_status === 'cloud_only' ? '☁️' : '💾';
+            const label = b.sync_status === 'cloud_synced' ? 'Synced' : b.sync_status === 'cloud_only' ? 'Cloud Only' : 'Local';
+            return `
+            <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.04);">
+              <span>${icon}</span>
+              <span style="flex:1;opacity:0.8;">${b.bundle_id?.slice(0, 12) || 'unknown'}...</span>
+              <span style="font-size:11px;opacity:0.5;">${label}</span>
+              <span style="font-size:11px;opacity:0.4;">${b.duration_seconds ? Math.round(b.duration_seconds) + 's' : ''}</span>
+            </div>`;
+          }).join('')}
+          ${bundles.length > 20 ? `<p style="font-size:11px;opacity:0.4;text-align:center;margin-top:4px;">+ ${bundles.length - 20} more</p>` : ''}
         </div>
 
         <!-- Download Progress -->
@@ -299,6 +340,14 @@ class AutoSyncManager {
 
     bindDashboardEvents(container) {
         document.getElementById('sync-close').addEventListener('click', () => container.innerHTML = '');
+
+        // Upgrade button (only exists for free tier)
+        const upgradeBtn = document.getElementById('sync-upgrade-btn');
+        if (upgradeBtn) {
+            upgradeBtn.addEventListener('click', () => {
+                window.windyAPI.openExternalUrl('https://windypro.thewindstorm.uk/upgrade');
+            });
+        }
 
         document.getElementById('sync-clean-local').addEventListener('click', async () => {
             const localBundles = await window.windyAPI.getCloneBundles();

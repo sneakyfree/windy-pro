@@ -2269,7 +2269,7 @@ ipcMain.handle('delete-archive-entry', async (event, filePath) => {
 });
 
 // ── Windy Pro Cloud Storage helpers ──────────────────────────────
-const CLOUD_STORAGE_DEFAULT_URL = 'http://192.168.4.126:8099'; // OC5 iMac
+const CLOUD_STORAGE_DEFAULT_URL = 'https://windypro.thewindstorm.uk/api/storage';
 
 async function getCloudStorageToken() {
   const engine = store.get('engine', {});
@@ -2311,6 +2311,7 @@ async function getCloudStorageToken() {
         req.end();
       });
       store.set('engine.cloudStorageToken', token);
+      store.set('auth.storageToken', token); // also save for sync manager
       console.log(`[CloudStorage] Authenticated via ${endpoint}`);
       return token;
     } catch (e) {
@@ -4416,56 +4417,127 @@ ipcMain.handle('save-sync-state', async (event, state) => {
 
 ipcMain.handle('fetch-remote-bundles', async (event, since) => {
   try {
-    const settings = store.get('server', {});
-    const token = store.get('auth.token', '');
-    const baseUrl = settings.url || 'http://localhost:8098';
-    const res = await require('node-fetch')(`${baseUrl}/api/v1/recordings/list?since=${encodeURIComponent(since)}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+    const token = store.get('auth.storageToken', '') || store.get('auth.token', '');
+    if (!token) return { bundles: [] };
+
+    const https = require('https');
+    const data = await new Promise((resolve, reject) => {
+      const req = https.get('https://windypro.thewindstorm.uk/api/storage/files', {
+        headers: { 'Authorization': `Bearer ${token}` },
+        timeout: 10000
+      }, (res) => {
+        let body = '';
+        res.on('data', c => body += c);
+        res.on('end', () => {
+          try { resolve(JSON.parse(body)); } catch { resolve({ ok: false }); }
+        });
+      });
+      req.on('error', () => resolve({ ok: false }));
+      req.on('timeout', () => { req.destroy(); resolve({ ok: false }); });
     });
-    return await res.json();
+
+    if (!data?.ok) return { bundles: [] };
+
+    // Map cloud storage files to bundle format
+    const bundles = (data.files || []).map(f => ({
+      bundle_id: f.id,
+      id: f.id,
+      file_size: f.size,
+      type: f.type,
+      originalName: f.name,
+      uploadedAt: f.uploadedAt,
+      sessionDate: f.sessionDate,
+      sync_status: 'cloud_synced'
+    }));
+
+    return { bundles, storageUsed: data.storageUsed, storageLimit: data.storageLimit };
   } catch { return { bundles: [] }; }
 });
 
 ipcMain.handle('download-remote-bundle', async (event, bundleId) => {
   try {
-    const settings = store.get('server', {});
-    const token = store.get('auth.token', '');
-    const baseUrl = settings.url || 'http://localhost:8098';
-    const res = await require('node-fetch')(`${baseUrl}/api/v1/recordings/${bundleId}/video`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+    const token = store.get('auth.storageToken', '') || store.get('auth.token', '');
+    if (!token) return { success: false };
+
+    const https = require('https');
+    const chunks = [];
+    const result = await new Promise((resolve, reject) => {
+      const req = https.get(`https://windypro.thewindstorm.uk/api/storage/files/${bundleId}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        timeout: 30000
+      }, (res) => {
+        if (res.statusCode !== 200) return resolve({ success: false });
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          resolve({ success: true, mediaBase64: buffer.toString('base64') });
+        });
+      });
+      req.on('error', () => resolve({ success: false }));
+      req.on('timeout', () => { req.destroy(); resolve({ success: false }); });
     });
-    if (!res.ok) return { success: false };
-    const buffer = await res.buffer();
-    return { success: true, mediaBase64: buffer.toString('base64') };
+
+    return result;
   } catch { return { success: false }; }
 });
 
 ipcMain.handle('upload-bundle-to-cloud', async (event, bundleData) => {
   try {
-    const settings = store.get('server', {});
-    const token = store.get('auth.token', '');
-    const baseUrl = settings.url || 'http://localhost:8098';
+    const token = store.get('auth.storageToken', '') || store.get('auth.token', '');
+    if (!token) return { success: false, error: 'Not authenticated' };
 
     const FormData = require('form-data');
     const form = new FormData();
-    form.append('bundle_id', bundleData.bundle_id);
-    form.append('duration_seconds', String(bundleData.duration_seconds || 0));
-    form.append('has_video', String(!!bundleData.video));
-    form.append('transcript_text', bundleData.transcript?.text || '');
-    form.append('clone_training_ready', String(!!bundleData.clone_training_ready));
-    form.append('device_platform', 'desktop');
+    form.append('type', bundleData.type || 'transcript');
 
+    if (bundleData.sessionDate) form.append('sessionDate', bundleData.sessionDate);
+    if (bundleData.metadata) form.append('metadata', JSON.stringify(bundleData.metadata || {}));
+
+    // Attach the file
     if (bundleData.file_path && fs.existsSync(bundleData.file_path)) {
-      form.append('media', fs.createReadStream(bundleData.file_path));
+      form.append('file', fs.createReadStream(bundleData.file_path));
+    } else if (bundleData.buffer) {
+      form.append('file', Buffer.from(bundleData.buffer), {
+        filename: bundleData.filename || 'upload.bin',
+        contentType: bundleData.contentType || 'application/octet-stream'
+      });
+    } else if (bundleData.text) {
+      // Upload text content (transcript)
+      form.append('file', Buffer.from(bundleData.text, 'utf-8'), {
+        filename: bundleData.filename || 'transcript.txt',
+        contentType: 'text/plain'
+      });
+    } else {
+      return { success: false, error: 'No file data' };
     }
 
-    const res = await require('node-fetch')(`${baseUrl}/api/v1/recordings/upload`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, ...form.getHeaders() },
-      body: form
+    const https = require('https');
+    const url = new URL('https://windypro.thewindstorm.uk/api/storage/files/upload');
+
+    const result = await new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: url.hostname,
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...form.getHeaders()
+        },
+        timeout: 60000
+      }, (res) => {
+        let body = '';
+        res.on('data', c => body += c);
+        res.on('end', () => {
+          try { resolve(JSON.parse(body)); } catch { resolve({ success: false }); }
+        });
+      });
+      req.on('error', (err) => resolve({ success: false, error: err.message }));
+      req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Upload timeout' }); });
+      form.pipe(req);
     });
-    return await res.json();
-  } catch { return { success: false }; }
+
+    return result;
+  } catch (err) { return { success: false, error: err.message }; }
 });
 
 ipcMain.handle('show-sync-notification', async (event, message) => {
@@ -4486,19 +4558,20 @@ ipcMain.handle('get-storage-stats', async () => {
       }
     }
 
-    // Query R2-backed cloud-storage service for cloud usage
+    // Query live R2-backed cloud-storage API for cloud usage
     let cloudSize = 0;
     let cloudTier = 'free';
     let cloudLimit = 500 * 1024 * 1024;
+    let cloudFileCount = 0;
     try {
-      const storageToken = store.get('auth.storageToken', '');
+      const storageToken = store.get('auth.storageToken', '') || store.get('auth.token', '');
       const storageUserId = store.get('auth.storageUserId', '');
       if (storageToken && storageUserId) {
-        const http = require('http');
-        const usageData = await new Promise((resolve, reject) => {
-          const req = http.get(`http://localhost:8099/api/storage/usage/${storageUserId}`, {
+        const https = require('https');
+        const usageData = await new Promise((resolve) => {
+          const req = https.get(`https://windypro.thewindstorm.uk/api/storage/usage/${storageUserId}`, {
             headers: { 'Authorization': `Bearer ${storageToken}` },
-            timeout: 3000
+            timeout: 5000
           }, (res) => {
             let data = '';
             res.on('data', c => data += c);
@@ -4513,6 +4586,7 @@ ipcMain.handle('get-storage-stats', async () => {
           cloudSize = usageData.usage.totalBytes || 0;
           cloudTier = usageData.usage.tier || 'free';
           cloudLimit = usageData.usage.limitBytes || cloudLimit;
+          cloudFileCount = usageData.usage.fileCount || 0;
         }
       }
     } catch { /* cloud service unavailable */ }
@@ -4522,6 +4596,7 @@ ipcMain.handle('get-storage-stats', async () => {
       cloud: cloudSize,
       cloudTier,
       cloudLimit,
+      cloudFileCount,
       bundleCount: manifest.bundles.length
     };
   } catch { return { local: 0, cloud: 0, bundleCount: 0 }; }
