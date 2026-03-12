@@ -48,7 +48,11 @@ class ChatTranslator {
     // Check cache first
     const cacheKey = `${srcLang}:${tgtLang}:${text}`;
     if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey);
+      const value = this.cache.get(cacheKey);
+      // P2-M4: Move to end (most recently used) for proper LRU
+      this.cache.delete(cacheKey);
+      this.cache.set(cacheKey, value);
+      return value;
     }
 
     try {
@@ -111,13 +115,9 @@ class ChatTranslator {
       return this._connectPromise;
     }
 
+    // P0-R1: Don't clear _connectPromise in finally — let close/error handlers clear it
     this._connectPromise = this._createWebSocket();
-    try {
-      const ws = await this._connectPromise;
-      return ws;
-    } finally {
-      this._connectPromise = null;
-    }
+    return this._connectPromise;
   }
 
   /**
@@ -159,16 +159,8 @@ class ChatTranslator {
             return;
           }
 
-          // Fallback: if server doesn't echo request_id, resolve the oldest pending
-          if (response.type === 'translation_result' && response.translated_text) {
-            const oldest = this._pending.entries().next().value;
-            if (oldest) {
-              const [id, { resolve: res, timeout }] = oldest;
-              this._pending.delete(id);
-              clearTimeout(timeout);
-              res(response.translated_text);
-            }
-          }
+          // P1-R2: Removed unsafe FIFO fallback — unmatched responses are dropped
+          // If server doesn't echo request_id, the request will timeout after 10s
         } catch (e) {
           console.debug('[ChatTranslator] Non-JSON message received');
         }
@@ -177,7 +169,7 @@ class ChatTranslator {
       ws.on('error', (err) => {
         clearTimeout(connectTimeout);
         this._wsReady = false;
-        // Reject all pending requests
+        this._connectPromise = null; // P0-R1: Allow reconnect on next call
         for (const [id, { reject: rej, timeout }] of this._pending) {
           clearTimeout(timeout);
           rej(err);
@@ -193,7 +185,7 @@ class ChatTranslator {
 
       ws.on('close', () => {
         this._wsReady = false;
-        // Reject all pending requests
+        this._connectPromise = null; // P0-R1: Allow reconnect on next call
         for (const [id, { reject: rej, timeout }] of this._pending) {
           clearTimeout(timeout);
           rej(new Error('WebSocket closed'));

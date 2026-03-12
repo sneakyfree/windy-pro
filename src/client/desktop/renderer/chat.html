@@ -281,17 +281,12 @@
     let myLanguage = 'en';
     let isConnected = false;
     let offlineQueue = []; // Messages waiting to be sent
+    let _loginInProgress = false; // P1-R3: Prevent double-click login
 
     // ═══ Initialization ═══
     async function init() {
-      // Try to resume existing session
-      const session = await windyChat.getSession();
-      if (session && session.success) {
-        myUserId = session.userId;
-        myLanguage = await windyChat.getUserLanguage() || 'en';
-        showChatInterface();
-        loadContacts();
-      }
+      // P2-R4: Register event listeners BEFORE session resume
+      // to prevent messages arriving between startClient() and listener registration
 
       // Listen for incoming messages
       windyChat.onMessage((msg) => {
@@ -314,10 +309,9 @@
         }
       });
 
-      // Room invites
+      // P2-R5: Room invites — show confirmation instead of auto-accepting
       windyChat.onInvite((data) => {
-        windyChat.acceptInvite(data.roomId);
-        setTimeout(loadContacts, 1000);
+        showInviteNotification(data);
       });
 
       windyChat.onConnected(() => {
@@ -337,10 +331,23 @@
       windyChat.onConnectionStatus((status) => {
         updateConnectionBanner(status.state);
       });
+
+      // NOW attempt session resume (after listeners are ready)
+      const session = await windyChat.getSession();
+      if (session && session.success) {
+        myUserId = session.userId;
+        myLanguage = await windyChat.getUserLanguage() || 'en';
+        showChatInterface();
+        loadContacts();
+      }
     }
 
     // ═══ Auth ═══
     async function handleLogin() {
+      // P1-R3: Prevent double-click triggering multiple logins
+      if (_loginInProgress) return;
+      _loginInProgress = true;
+
       const username = document.getElementById('login-username').value.trim();
       const password = document.getElementById('login-password').value;
       const errorEl = document.getElementById('login-error');
@@ -348,6 +355,7 @@
       if (!username || !password) {
         errorEl.textContent = 'Please enter username and password';
         errorEl.style.display = 'block';
+        _loginInProgress = false;
         return;
       }
 
@@ -357,24 +365,31 @@
       loginBtn.textContent = '⏳ Connecting...';
       errorEl.style.display = 'none';
 
-      const result = await windyChat.login(username, password);
+      try {
+        const result = await windyChat.login(username, password);
 
-      loginBtn.disabled = false;
-      loginBtn.textContent = '🌪️ Connect to Windy Chat';
-
-      if (result.success) {
-        myUserId = result.userId;
-        myLanguage = await windyChat.getUserLanguage() || 'en';
-        isConnected = true;
-        showChatInterface();
-        loadContacts();
-      } else {
-        errorEl.textContent = result.error || 'Login failed';
-        errorEl.style.display = 'block';
+        if (result.success) {
+          myUserId = result.userId;
+          myLanguage = await windyChat.getUserLanguage() || 'en';
+          isConnected = true;
+          showChatInterface();
+          loadContacts();
+        } else {
+          errorEl.textContent = result.error || 'Login failed';
+          errorEl.style.display = 'block';
+        }
+      } finally {
+        _loginInProgress = false;
+        loginBtn.disabled = false;
+        loginBtn.textContent = '🌪️ Connect to Windy Chat';
       }
     }
 
     async function handleRegister() {
+      // P1-R3: Prevent double-click on register too
+      if (_loginInProgress) return;
+      _loginInProgress = true;
+
       const displayName = document.getElementById('reg-displayname').value.trim();
       const username = document.getElementById('reg-username').value.trim();
       const password = document.getElementById('reg-password').value;
@@ -384,25 +399,31 @@
       if (!username || !password || !displayName) {
         errorEl.textContent = 'All fields are required';
         errorEl.style.display = 'block';
+        _loginInProgress = false;
         return;
       }
       if (password !== confirm) {
         errorEl.textContent = 'Passwords do not match';
         errorEl.style.display = 'block';
+        _loginInProgress = false;
         return;
       }
 
       errorEl.style.display = 'none';
-      const result = await windyChat.register(username, password, displayName);
+      try {
+        const result = await windyChat.register(username, password, displayName);
 
-      if (result.success) {
-        myUserId = result.userId;
-        myLanguage = await windyChat.getUserLanguage() || 'en';
-        showChatInterface();
-        loadContacts();
-      } else {
-        errorEl.textContent = result.error || 'Registration failed';
-        errorEl.style.display = 'block';
+        if (result.success) {
+          myUserId = result.userId;
+          myLanguage = await windyChat.getUserLanguage() || 'en';
+          showChatInterface();
+          loadContacts();
+        } else {
+          errorEl.textContent = result.error || 'Registration failed';
+          errorEl.style.display = 'block';
+        }
+      } finally {
+        _loginInProgress = false;
       }
     }
 
@@ -563,17 +584,18 @@
         </div>`;
     }
 
+    // P2-R6: Use insertAdjacentHTML instead of innerHTML += to prevent DOM thrashing
     function appendMessage(msg) {
       const container = document.getElementById('chat-messages');
       const isOwn = msg.senderId === myUserId;
-      container.innerHTML += buildMessageHtml({
+      container.insertAdjacentHTML('beforeend', buildMessageHtml({
         ...msg,
         isOwn,
         body: msg.body,
         originalText: msg.originalText,
         originalLang: msg.originalLang,
         senderName: msg.senderName
-      });
+      }));
     }
 
     // ═══ Send Message ═══
@@ -838,9 +860,41 @@
       return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    // P2-R7: Proper HTML entity encoding for attribute contexts (prevents XSS breakout)
     function escapeAttr(text) {
       if (!text) return '';
-      return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+      return text.replace(/&/g, '&amp;').replace(/'/g, '&#39;')
+                 .replace(/"/g, '&quot;').replace(/</g, '&lt;')
+                 .replace(/>/g, '&gt;').replace(/\\/g, '\\\\');
+    }
+
+    // P2-R5: Invite confirmation UI
+    function showInviteNotification(data) {
+      const container = document.getElementById('contact-list');
+      const inviterName = escapeHtml(data.roomName || data.inviterId || 'Unknown');
+      const roomId = escapeAttr(data.roomId);
+      const inviteHtml = `
+        <div class="invite-card" id="invite-${roomId}" style="padding:12px 16px; background:rgba(59,130,246,0.08); border-left:3px solid var(--chat-blue); margin:4px 0;">
+          <div style="font-size:13px;">📩 <strong>${inviterName}</strong> invited you</div>
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button onclick="acceptInviteUI('${roomId}')" style="padding:4px 12px; background:var(--chat-green); border:none; border-radius:6px; color:#0F1219; cursor:pointer; font-size:12px; font-weight:700;">✅ Accept</button>
+            <button onclick="declineInviteUI('${roomId}')" style="padding:4px 12px; background:var(--chat-border); border:none; border-radius:6px; color:var(--chat-text-dim); cursor:pointer; font-size:12px;">❌ Decline</button>
+          </div>
+        </div>`;
+      container.insertAdjacentHTML('afterbegin', inviteHtml);
+    }
+
+    async function acceptInviteUI(roomId) {
+      await windyChat.acceptInvite(roomId);
+      const el = document.getElementById('invite-' + escapeAttr(roomId));
+      if (el) el.remove();
+      setTimeout(loadContacts, 1000);
+    }
+
+    async function declineInviteUI(roomId) {
+      await windyChat.declineInvite(roomId);
+      const el = document.getElementById('invite-' + escapeAttr(roomId));
+      if (el) el.remove();
     }
 
     // ═══ Start ═══

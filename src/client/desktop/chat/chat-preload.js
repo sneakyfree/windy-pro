@@ -43,27 +43,36 @@ contextBridge.exposeInMainWorld('windyChat', {
 
   // ═══ Events (renderer listens) ═══
   onMessage: (callback) => {
+    // P2-M3: Remove prior listener to prevent accumulation on re-init
+    ipcRenderer.removeAllListeners('chat-new-message');
     ipcRenderer.on('chat-new-message', (event, msg) => callback(msg));
   },
   onPresence: (callback) => {
+    ipcRenderer.removeAllListeners('chat-presence-update');
     ipcRenderer.on('chat-presence-update', (event, data) => callback(data));
   },
   onTyping: (callback) => {
+    ipcRenderer.removeAllListeners('chat-typing');
     ipcRenderer.on('chat-typing', (event, data) => callback(data));
   },
   onInvite: (callback) => {
+    ipcRenderer.removeAllListeners('chat-invite');
     ipcRenderer.on('chat-invite', (event, data) => callback(data));
   },
   onConnected: (callback) => {
+    ipcRenderer.removeAllListeners('chat-connected');
     ipcRenderer.on('chat-connected', () => callback());
   },
   onDisconnected: (callback) => {
+    ipcRenderer.removeAllListeners('chat-disconnected');
     ipcRenderer.on('chat-disconnected', () => callback());
   },
   onConnectionStatus: (callback) => {
+    ipcRenderer.removeAllListeners('chat-connection-status');
     ipcRenderer.on('chat-connection-status', (event, data) => callback(data));
   },
   onUnreadUpdate: (callback) => {
+    ipcRenderer.removeAllListeners('chat-unread-update');
     ipcRenderer.on('chat-unread-update', (event, count) => callback(count));
   },
 

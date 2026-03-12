@@ -267,8 +267,12 @@ class WindyChatClient extends EventEmitter {
       const sdk = await this._getSDK();
       const tempClient = sdk.createClient({ baseUrl: validatedUrl });
 
-      await tempClient.register(username, password, null, {
-        type: 'm.login.dummy'
+      // P2-C4: Use registerRequest instead of deprecated register()
+      await tempClient.registerRequest({
+        username,
+        password,
+        auth: { type: 'm.login.dummy' },
+        initial_device_display_name: 'Windy Pro Desktop'
       });
 
       // Now login with the new account
@@ -291,6 +295,9 @@ class WindyChatClient extends EventEmitter {
       if (err.errcode === 'M_INVALID_USERNAME') {
         return { success: false, error: 'Invalid username. Use only lowercase letters, numbers, and underscores.' };
       }
+      if (err.httpStatus === 429) {
+        return { success: false, error: 'Too many requests. Please wait and try again.' };
+      }
       console.error('[WindyChat] Registration failed:', err.message);
       return { success: false, error: this._classifyLoginError(err) };
     }
@@ -307,6 +314,13 @@ class WindyChatClient extends EventEmitter {
     if (!this.client) return;
 
     const userLang = this._getUserLanguage();
+
+    // P1-C1: Remove any prior listeners from a previous sync to prevent double-registration
+    this.client.removeAllListeners('sync');
+    this.client.removeAllListeners('Room.timeline');
+    this.client.removeAllListeners('User.presence');
+    this.client.removeAllListeners('RoomMember.typing');
+    this.client.removeAllListeners('Room.myMembership');
 
     // Listen for sync state changes (reconnection, errors)
     this.client.on('sync', (state, prevState) => {
@@ -526,18 +540,26 @@ class WindyChatClient extends EventEmitter {
     }
 
     try {
-      // Create new DM room with encryption
+      // P1-C7: Do NOT set room encryption until Olm/Vodozemac is properly configured
+      // Setting m.room.encryption without proper crypto causes messages to fail
       const room = await this.client.createRoom({
         is_direct: true,
         invite: [userId],
         preset: 'trusted_private_chat',
-        visibility: 'private',
-        initial_state: [{
-          type: 'm.room.encryption',
-          state_key: '',
-          content: { algorithm: 'm.megolm.v1.aes-sha2' }
-        }]
+        visibility: 'private'
       });
+
+      // P2-C3: Update m.direct account data so DM detection works
+      try {
+        const directEvent = this.client.getAccountData('m.direct');
+        const directMap = directEvent ? { ...directEvent.getContent() } : {};
+        if (!directMap[userId]) directMap[userId] = [];
+        directMap[userId].push(room.room_id);
+        await this.client.setAccountData('m.direct', directMap);
+      } catch (e) {
+        console.warn('[WindyChat] Failed to update m.direct:', e.message);
+      }
+
       return { roomId: room.room_id, existing: false };
     } catch (err) {
       console.error('[WindyChat] createDM failed:', err.message);
@@ -551,8 +573,26 @@ class WindyChatClient extends EventEmitter {
     }
   }
 
+  // P2-C2: Use Matrix m.direct account data for DM detection (spec-compliant)
   _findExistingDM(userId) {
     if (!this.client) return null;
+
+    // First try m.direct account data (proper Matrix spec way)
+    try {
+      const directEvent = this.client.getAccountData('m.direct');
+      if (directEvent) {
+        const directMap = directEvent.getContent(); // { userId: [roomId, ...] }
+        const dmRoomIds = directMap[userId] || [];
+        for (const roomId of dmRoomIds) {
+          const room = this.client.getRoom(roomId);
+          if (room) return room;
+        }
+      }
+    } catch (e) {
+      console.debug('[WindyChat] m.direct lookup failed:', e.message);
+    }
+
+    // Fallback to member-count heuristic
     const rooms = this.client.getRooms();
     for (const room of rooms) {
       const members = room.getJoinedMembers();
@@ -672,7 +712,8 @@ class WindyChatClient extends EventEmitter {
   async setPresence(status) {
     if (!this.client) return;
     try {
-      await this.client.setPresence({ presence: status });
+      // P2-C6: Use direct string arg — object form deprecated in SDK v31+
+      await this.client.setPresence(status); // 'online', 'offline', 'unavailable'
     } catch (err) {
       console.warn('[WindyChat] setPresence failed:', err.message);
     }
@@ -767,6 +808,8 @@ class WindyChatClient extends EventEmitter {
   async logout() {
     if (this.client) {
       try {
+        // P1-M1: Clean up ALL event listeners to prevent memory leaks
+        this.client.removeAllListeners();
         this.client.stopClient();
         await this.client.logout();
       } catch (err) {
