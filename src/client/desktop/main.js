@@ -55,11 +55,21 @@ process.on('unhandledRejection', (reason) => {
  * DNA Strand: B1.1
  */
 
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog, Notification, shell, session, nativeTheme } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog, Notification, shell, session, nativeTheme, safeStorage } = require('electron');
 
-// Fix: bake in --no-sandbox for Linux AppImage (chrome-sandbox SUID issue)
+// SEC-10: --no-sandbox required for Linux AppImage (chrome-sandbox SUID issue).
+// Without this, the app won't launch from AppImage on most Linux distros.
+// This is a known Electron limitation: https://github.com/electron/electron/issues/17972
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('no-sandbox');
+}
+
+// SEC-06: URL validation helper — only allow safe protocols for shell.openExternal
+function isSafeURL(url) {
+  try {
+    const parsed = new URL(url);
+    return ['https:', 'http:', 'mailto:'].includes(parsed.protocol);
+  } catch { return false; }
 }
 // Enable Web Speech API support
 app.commandLine.appendSwitch('enable-speech-dispatcher');
@@ -191,8 +201,14 @@ let activeModelDownload = null; // Track background download process
           const m = line.match(/^(STRIPE_\w+)=(.+)$/);
           if (m) {
             process.env[m[1]] = m[2].trim();
-            // Persist to electron-store so it works on subsequent launches without .env
-            if (m[1] === 'STRIPE_SECRET_KEY') store.set('stripe.secretKey', m[2].trim());
+            // SEC-02: Persist Stripe key encrypted with safeStorage (not plaintext)
+            if (m[1] === 'STRIPE_SECRET_KEY') {
+              if (safeStorage.isEncryptionAvailable()) {
+                const encrypted = safeStorage.encryptString(m[2].trim());
+                store.set('stripe.secretKeyEncrypted', encrypted.toString('base64'));
+              }
+              store.delete('stripe.secretKey'); // Remove any old plaintext key
+            }
           }
         }
         break;
@@ -200,8 +216,16 @@ let activeModelDownload = null; // Track background download process
     }
   } catch (_) { }
 })();
-// Secret key: env var → electron-store → empty
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || store.get('stripe.secretKey', '');
+// SEC-02: Secret key: env var → encrypted store → empty
+let STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+if (!STRIPE_SECRET_KEY) {
+  try {
+    const encB64 = store.get('stripe.secretKeyEncrypted', '');
+    if (encB64 && safeStorage.isEncryptionAvailable()) {
+      STRIPE_SECRET_KEY = safeStorage.decryptString(Buffer.from(encB64, 'base64'));
+    }
+  } catch (_) { }
+}
 const STRIPE_PRICES = {
   // Monthly subscriptions
   pro_monthly: { id: 'price_1T60GeBXIOBasDQi4aitcq8O', mode: 'subscription', tier: 'pro', amount: 499, billing: 'monthly' },
@@ -679,7 +703,8 @@ function showAboutWindow() {
   // Handle link clicks from the about window via postMessage (contextIsolation safe)
   aboutWin.webContents.on('did-finish-load', () => {
     aboutWin.webContents.on('ipc-message', (event, channel, url) => {
-      if (channel === 'open-url') shell.openExternal(url);
+      // SEC-06: Validate URL protocol before opening externally
+      if (channel === 'open-url' && isSafeURL(url)) shell.openExternal(url);
     });
   });
 
@@ -1283,8 +1308,10 @@ function showMiniTranslateWindow() {
     minWidth: 340,
     minHeight: 350,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      preload: path.join(__dirname, 'mini-translate-preload.js')
     }
   });
 
@@ -2236,8 +2263,8 @@ ipcMain.handle('open-external-url', async (event, url) => {
 
     // Method 3: shell.openExternal
     try {
-      await shell.openExternal(url);
-      console.log('[Main] ✅ Opened URL via shell.openExternal');
+      // SEC-06: Validate URL before shell.openExternal
+      if (isSafeURL(url)) await shell.openExternal(url);
       return { ok: true };
     } catch (e) {
       console.error('[Main] All methods failed on Linux');
@@ -2247,8 +2274,8 @@ ipcMain.handle('open-external-url', async (event, url) => {
 
   // macOS/Windows: shell.openExternal works reliably
   try {
-    await shell.openExternal(url);
-    console.log('[Main] ✅ Opened URL via shell.openExternal');
+    // SEC-06: Validate URL before shell.openExternal
+    if (isSafeURL(url)) await shell.openExternal(url);
     return { ok: true };
   } catch (e) {
     console.error('[Main] shell.openExternal failed:', e.message);
@@ -2289,9 +2316,10 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
       }
     }
 
-    // Convert to WAV using ffmpeg
-    const devnull = process.platform === 'win32' ? '2>NUL' : '2>/dev/null';
-    execSync(`${ffmpegCmd} -y -i "${webmPath}" -ar 16000 -ac 1 -acodec pcm_s16le "${wavPath}" ${devnull}`);
+    // SEC-05: Convert to WAV using execFileSync with array args (no shell injection)
+    const { execFileSync } = require('child_process');
+    const ffmpegBin = ffmpegCmd.replace(/^"|"$/g, ''); // strip quotes for execFileSync
+    execFileSync(ffmpegBin, ['-y', '-i', webmPath, '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', wavPath], { timeout: 30000, stdio: 'pipe' });
 
     // Find the Python venv — check multiple locations
     const appRoot = path.resolve(__dirname, '..', '..', '..');
@@ -3610,8 +3638,8 @@ ipcMain.handle('open-billing-portal', async () => {
       customer: license.stripeCustomerId,
       return_url: 'https://windypro.thewindstorm.uk/dashboard'
     });
-    const { shell } = require('electron');
-    shell.openExternal(portalSession.url);
+    // SEC-06: Validate Stripe portal URL before opening
+    if (isSafeURL(portalSession.url)) shell.openExternal(portalSession.url);
     return { ok: true, url: portalSession.url };
   } catch (err) {
     console.error('[Stripe] Billing portal error:', err.message);

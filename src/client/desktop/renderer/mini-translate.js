@@ -2,7 +2,8 @@
  * Mini Translate – external script (required for CSP: script-src 'self')
  * Supports two modes: Text translation + Live Listen (continuous voice translation)
  */
-const { ipcRenderer } = require('electron');
+// IPC access provided by mini-translate-preload.js via contextBridge
+const miniAPI = window.miniTranslateAPI;
 
 // ── DOM refs ──
 const closeBtn = document.getElementById('closeBtn');
@@ -116,7 +117,7 @@ const LANG_NAMES = {
 // ── Close ──
 function closeWindow() {
     stopListening();
-    ipcRenderer.send('mini-translate-close');
+    miniAPI.close();
 }
 closeBtn.addEventListener('click', closeWindow);
 document.addEventListener('keydown', (e) => {
@@ -228,7 +229,7 @@ async function doTranslate() {
     textInput.value = '';
 
     try {
-        const result = await ipcRenderer.invoke('mini-translate-text', text, sourceLang.value, targetLang.value);
+        const result = await miniAPI.translate(text, sourceLang.value, targetLang.value);
         if (result.translatedText) {
             appendChunk(`${result.translatedText}`);
         } else {
@@ -383,7 +384,7 @@ async function processChunk(audioBlob) {
             groq: localStorage.getItem('windy_groqApiKey') || '',
             openai: localStorage.getItem('windy_openaiApiKey') || ''
         };
-        const result = await ipcRenderer.invoke('mini-translate-speech',
+        const result = await miniAPI.translateSpeech(
             Array.from(new Uint8Array(arrayBuf)),
             sourceLang.value,
             targetLang.value,

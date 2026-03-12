@@ -418,9 +418,9 @@ class SetupWizard {
         status.textContent = '✅ Account created! You can sign in from any device.';
         status.className = 'wiz-acc-status wiz-acc-ok';
 
-        // Also save to localStorage for settings panel
+        // Also save email to localStorage for settings panel
+        // SEC-03: Do NOT store password in localStorage — it's plaintext and extractable
         localStorage.setItem('windy_cloudEmail', email);
-        localStorage.setItem('windy_cloudPassword', password);
 
         // Auto-advance after a moment
         setTimeout(() => this._showStep(this.step + 1), 1500);

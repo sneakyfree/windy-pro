@@ -250,12 +250,12 @@ class WindyApp {
       const lsCloudUrl = localStorage.getItem('windy_cloudUrl');
       const lsCloudToken = localStorage.getItem('windy_cloudToken');
       const lsCloudEmail = localStorage.getItem('windy_cloudEmail');
-      const lsCloudPassword = localStorage.getItem('windy_cloudPassword');
+      // SEC-03: Do NOT read password from localStorage — it should never be stored there
+      localStorage.removeItem('windy_cloudPassword'); // Clean up any old stored password
       if (lsEngine) this.transcriptionEngine = lsEngine;
       if (lsCloudUrl) this.cloudUrl = lsCloudUrl;
       if (lsCloudToken) this.cloudToken = lsCloudToken;
       if (lsCloudEmail) this.cloudEmail = lsCloudEmail;
-      if (lsCloudPassword) this.cloudPassword = lsCloudPassword;
       console.debug(`[Init] Final: Engine=${this.transcriptionEngine}, CloudToken=${this.cloudToken ? '✅' : '❌'}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
     } catch (_) { }
 

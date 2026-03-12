@@ -78,8 +78,15 @@ class WindyChatClient extends EventEmitter {
         initial_device_display_name: 'Windy Pro Desktop'
       });
 
-      // Store access token
-      this.store.set('chat.accessToken', loginResponse.access_token);
+      // SEC-04: Encrypt access token with safeStorage before storing
+      const { safeStorage } = require('electron');
+      if (safeStorage.isEncryptionAvailable()) {
+        const encrypted = safeStorage.encryptString(loginResponse.access_token);
+        this.store.set('chat.accessTokenEncrypted', encrypted.toString('base64'));
+      } else {
+        this.store.set('chat.accessToken', loginResponse.access_token);
+      }
+      this.store.delete('chat.accessToken'); // Remove any old plaintext token
       this.store.set('chat.userId', loginResponse.user_id);
       this.store.set('chat.deviceId', loginResponse.device_id);
 
@@ -104,7 +111,17 @@ class WindyChatClient extends EventEmitter {
    * Resume session from stored access token
    */
   async resumeSession() {
-    const accessToken = this.store.get('chat.accessToken');
+    // SEC-04: Decrypt access token from safeStorage
+    let accessToken = null;
+    try {
+      const { safeStorage } = require('electron');
+      const encB64 = this.store.get('chat.accessTokenEncrypted', '');
+      if (encB64 && safeStorage.isEncryptionAvailable()) {
+        accessToken = safeStorage.decryptString(Buffer.from(encB64, 'base64'));
+      }
+    } catch (_) { }
+    // Fallback: try old plaintext token for migration
+    if (!accessToken) accessToken = this.store.get('chat.accessToken', null);
     const userId = this.store.get('chat.userId');
     const deviceId = this.store.get('chat.deviceId');
 
@@ -523,6 +540,7 @@ class WindyChatClient extends EventEmitter {
     this.isConnected = false;
     this.presenceMap.clear();
     this.store.delete('chat.accessToken');
+    this.store.delete('chat.accessTokenEncrypted');
     this.store.delete('chat.userId');
     this.store.delete('chat.deviceId');
     this.emit('disconnected');

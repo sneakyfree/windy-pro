@@ -568,11 +568,6 @@ class SettingsPanel {
       }
       if (apiKeySection) {
         apiKeySection.style.display = info.api ? 'block' : 'none';
-        /* Legacy API key visibility removed — Windy Pro engines only */
-        [].forEach(k => {
-          const row = this.panel.querySelector('#apiKey_' + k + '_row');
-          if (row) row.style.display = (k === info.api) ? 'block' : 'none';
-        });
       }
       // Update badge with model size info
       if (this.app && this.app.updateModelBadge) {
