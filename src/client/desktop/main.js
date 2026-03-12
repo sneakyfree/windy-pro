@@ -676,6 +676,13 @@ function showAboutWindow() {
     }
   });
 
+  // Handle link clicks from the about window via postMessage (contextIsolation safe)
+  aboutWin.webContents.on('did-finish-load', () => {
+    aboutWin.webContents.on('ipc-message', (event, channel, url) => {
+      if (channel === 'open-url') shell.openExternal(url);
+    });
+  });
+
   const version = app.getVersion();
   const electronVersion = process.versions.electron;
   const nodeVersion = process.versions.node;
@@ -701,16 +708,23 @@ function showAboutWindow() {
   <div class="built">Built by WindyPro Labs</div>
   <div class="tech">Electron ${electronVersion} · Node ${nodeVersion} · ${process.arch}</div>
   <div class="links">
-    <a onclick="require('electron').shell.openExternal('https://thewindstorm.uk')">Website</a>
-    <a onclick="require('electron').shell.openExternal('mailto:dev@thewindstorm.uk')">Support</a>
-    <a onclick="require('electron').shell.openExternal('https://github.com/sneakyfree/windy-pro')">GitHub</a>
+    <a onclick="window.postMessage({type:'open-url',url:'https://thewindstorm.uk'})">Website</a>
+    <a onclick="window.postMessage({type:'open-url',url:'mailto:dev@thewindstorm.uk'})">Support</a>
+    <a onclick="window.postMessage({type:'open-url',url:'https://github.com/sneakyfree/windy-pro'})">GitHub</a>
   </div>
   <button class="close-btn" onclick="window.close()">Close</button>
   <div class="copyright">&copy; 2026 WindyPro Labs. All rights reserved.</div>
+<script>window.addEventListener('message',(e)=>{if(e.data&&e.data.type==='open-url'){window.open(e.data.url);}});</script>
 </body></html>`;
 
   aboutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   aboutWin.center();
+
+  // Handle window.open calls from the about window to open in system browser
+  aboutWin.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
 }
 
 /**
@@ -3034,16 +3048,23 @@ ipcMain.handle('detect-hardware', async () => {
     diskFreeGB: null
   };
 
-  // Detect NVIDIA GPU
-  try {
-    const { execSync } = require('child_process');
-    const gpuInfo = execSync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits', { timeout: 5000 }).toString().trim();
-    if (gpuInfo) {
-      const [name, vramMB] = gpuInfo.split(', ');
-      result.gpu = { name: name.trim(), vramMB: parseInt(vramMB) || 0, type: 'cuda' };
+  // Detect GPU — NVIDIA on Linux/Windows, Apple Metal/MPS on macOS
+  if (process.platform === 'darwin') {
+    // macOS: Apple Silicon gets MPS acceleration, Intel gets CPU only
+    if (process.arch === 'arm64') {
+      result.gpu = { name: 'Apple Silicon (Metal/MPS)', vramMB: 0, type: 'mps' };
     }
-  } catch (_) {
-    // No NVIDIA GPU or nvidia-smi not available
+  } else {
+    try {
+      const { execSync } = require('child_process');
+      const gpuInfo = execSync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits', { timeout: 5000 }).toString().trim();
+      if (gpuInfo) {
+        const [name, vramMB] = gpuInfo.split(', ');
+        result.gpu = { name: name.trim(), vramMB: parseInt(vramMB) || 0, type: 'cuda' };
+      }
+    } catch (_) {
+      // No NVIDIA GPU or nvidia-smi not available
+    }
   }
 
   // Check disk space
@@ -3055,7 +3076,12 @@ ipcMain.handle('detect-hardware', async () => {
       const out = execSync(`wmic logicaldisk where "DeviceID='${drive}:'" get FreeSpace /value`, { timeout: 3000 }).toString();
       const match = out.match(/FreeSpace=(\d+)/);
       if (match) result.diskFreeGB = Math.round(parseInt(match[1]) / (1024 * 1024 * 1024));
+    } else if (process.platform === 'darwin') {
+      // macOS: df -g shows in GB (BSD df, no -B flag)
+      const out = execSync(`df -g "${homeDir}" | tail -1 | awk '{print $4}'`, { timeout: 3000 }).toString().trim();
+      result.diskFreeGB = parseInt(out) || null;
     } else {
+      // Linux: df -BG shows in GB (GNU df)
       const out = execSync(`df -BG "${homeDir}" | tail -1 | awk '{print $4}'`, { timeout: 3000 }).toString().trim();
       result.diskFreeGB = parseInt(out) || null;
     }

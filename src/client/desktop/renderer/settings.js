@@ -125,7 +125,7 @@ class SettingsPanel {
           <div class="setting-row" title="Where to save files on this device.">
             <label for="archiveFolder">Local folder</label>
             <div class="setting-inline">
-              <input type="text" id="archiveFolder" placeholder="/home/user/Documents/WindyProArchive" style="width:160px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;font-size:11px;">
+              <input type="text" id="archiveFolder" placeholder="~/Documents/WindyProArchive" style="width:160px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;font-size:11px;">
               <button id="browseArchive" class="settings-btn">Browse</button>
             </div>
           </div>

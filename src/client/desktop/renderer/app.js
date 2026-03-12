@@ -216,6 +216,19 @@ class WindyApp {
       window.windyAPI.onFontSizeChange((percent) => this._applyFontSize(percent));
     }
 
+    // Sync with macOS system dark/light mode changes
+    if (window.windyAPI?.onSystemThemeChanged) {
+      window.windyAPI.onSystemThemeChanged((theme) => {
+        const isLight = theme === 'light';
+        document.body.classList.toggle('light-theme', isLight);
+        localStorage.setItem('windy_theme', isLight ? 'light' : 'dark');
+        const themeBtn2 = document.getElementById('themeQuickToggle');
+        if (themeBtn2) themeBtn2.textContent = isLight ? '\u2600\ufe0f' : '\ud83c\udf19';
+        const themeSelect = document.querySelector('#themeToggle');
+        if (themeSelect) themeSelect.value = isLight ? 'light' : 'dark';
+      });
+    }
+
     // Keyboard shortcuts: Ctrl+= (zoom in), Ctrl+- (zoom out), Ctrl+0 (reset)
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
