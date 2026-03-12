@@ -101,7 +101,7 @@ class VaultPanel {
                     this.renderSessionList();
                     this.app.ws.removeEventListener('message', handler);
                 }
-            } catch (e) { }
+            } catch (e) { console.warn('[Vault] Message load error:', e.message); }
         };
         this.app.ws.addEventListener('message', handler);
     }
@@ -155,7 +155,7 @@ class VaultPanel {
                     this.renderSessionDetail(msg.session);
                     this.app.ws.removeEventListener('message', handler);
                 }
-            } catch (e) { }
+            } catch (e) { console.warn('[Vault] Message send error:', e.message); }
         };
         this.app.ws.addEventListener('message', handler);
     }
@@ -211,7 +211,7 @@ class VaultPanel {
                     this.renderSearchResults(msg.results || []);
                     this.app.ws.removeEventListener('message', handler);
                 }
-            } catch (e) { }
+            } catch (e) { console.warn('[Vault] Chat history error:', e.message); }
         };
         this.app.ws.addEventListener('message', handler);
     }
@@ -251,7 +251,7 @@ class VaultPanel {
                     });
                     this.app.ws.removeEventListener('message', handler);
                 }
-            } catch (e) { }
+            } catch (e) { console.warn('[Vault] Clipboard copy error:', e.message); }
         };
         this.app.ws.addEventListener('message', handler);
     }

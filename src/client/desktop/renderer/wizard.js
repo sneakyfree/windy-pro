@@ -30,7 +30,7 @@ class SetupWizard {
         if (state?.completed) return false;
         this.step = state?.currentStep || 0;
       }
-    } catch (_) { }
+    } catch (e) { console.debug('[Wizard] Prior install check failed:', e.message); }
     // Also check localStorage fallback
     if (localStorage.getItem('windy_wizardComplete') === 'true') return false;
     // Skip for v0.5.0 upgraders — they already have settings configured
@@ -40,7 +40,7 @@ class SetupWizard {
         const settings = await window.windyAPI.getSettings();
         if (settings?.model && settings.model !== 'base') return false;
       }
-    } catch (_) { }
+    } catch (e) { console.debug('[Wizard] Settings probe failed:', e.message); }
     return true;
   }
 
@@ -217,7 +217,7 @@ class SetupWizard {
           completedSteps
         });
       }
-    } catch (_) { }
+    } catch (e) { console.debug('[Wizard] State save error:', e.message); }
   }
 
   _bindEvents() {
@@ -308,7 +308,7 @@ class SetupWizard {
 
   _stopMicTest() {
     if (this._micInterval) { clearInterval(this._micInterval); this._micInterval = null; }
-    if (this._micCtx) { try { this._micCtx.close(); } catch (_) { } this._micCtx = null; }
+    if (this._micCtx) { try { this._micCtx.close(); } catch (e) { console.debug('[Wizard] Mic cleanup error:', e.message); } this._micCtx = null; }
     if (this._micStream) { this._micStream.getTracks().forEach(t => t.stop()); this._micStream = null; }
   }
 
@@ -520,13 +520,13 @@ class SetupWizard {
             link.click();
           }
         }
-      } catch (_) { }
+      } catch (e) { console.debug('[Wizard] Checkout session error:', e.message); }
     }
 
     // Setup autostart
     const autostart = this.overlay.querySelector('#wizAutostart');
     if (autostart?.checked && window.windyAPI?.setupAutostart) {
-      try { await window.windyAPI.setupAutostart(true); } catch (_) { }
+      try { await window.windyAPI.setupAutostart(true); } catch (e) { console.debug('[Wizard] Autostart setup error:', e.message); }
     }
 
     // Stop mic test cleanup

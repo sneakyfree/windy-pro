@@ -76,9 +76,12 @@ app.commandLine.appendSwitch('enable-speech-dispatcher');
 app.commandLine.appendSwitch('enable-features', 'WebSpeechAPI');
 const path = require('path');
 const Store = require('electron-store');
-const { spawn } = require('child_process');
+const { spawn, exec, execFile } = require('child_process');
 const fs = require('fs');
+const fsp = fs.promises;
 const os = require('os');
+const util = require('util');
+const execFileAsync = util.promisify(execFile);
 const { CursorInjector } = require('./injection/injector');
 const { WindyUpdater } = require('./updater');
 const { WindyChatClient } = require('./chat/chat-client');
@@ -2284,25 +2287,20 @@ ipcMain.handle('open-external-url', async (event, url) => {
 });
 
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
-  const fs = require('fs');
-  const os = require('os');
-  const { execSync } = require('child_process');
-
   const tmpDir = os.tmpdir();
-  const webmPath = `${tmpDir}/windy-batch-${Date.now()}.webm`;
-  const wavPath = `${tmpDir}/windy-batch-${Date.now()}.wav`;
+  const ts = Date.now();
+  const webmPath = path.join(tmpDir, `windy-batch-${ts}.webm`);
+  const wavPath = path.join(tmpDir, `windy-batch-${ts}.wav`);
 
   try {
     // Save base64 audio to temp file
     const buffer = Buffer.from(base64Audio, 'base64');
-    fs.writeFileSync(webmPath, buffer);
+    await fsp.writeFile(webmPath, buffer);
 
     // Find ffmpeg — check bundled location (.windy-pro), userData, then PATH
-    const path = require('path');
-    const os = require('os');
     const appDataDir = app.getPath('userData');
     const homeDataDir = path.join(os.homedir(), '.windy-pro');
-    let ffmpegCmd = 'ffmpeg';
+    let ffmpegBin = 'ffmpeg';
     const ffmpegExeName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
     const ffmpegSearchPaths = [
       path.join(homeDataDir, 'ffmpeg', ffmpegExeName),
@@ -2311,15 +2309,13 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     ];
     for (const fp of ffmpegSearchPaths) {
       if (fs.existsSync(fp)) {
-        ffmpegCmd = `"${fp}"`;
+        ffmpegBin = fp;
         break;
       }
     }
 
-    // SEC-05: Convert to WAV using execFileSync with array args (no shell injection)
-    const { execFileSync } = require('child_process');
-    const ffmpegBin = ffmpegCmd.replace(/^"|"$/g, ''); // strip quotes for execFileSync
-    execFileSync(ffmpegBin, ['-y', '-i', webmPath, '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', wavPath], { timeout: 30000, stdio: 'pipe' });
+    // P0-1: Convert to WAV using async execFile (non-blocking)
+    await execFileAsync(ffmpegBin, ['-y', '-i', webmPath, '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', wavPath], { timeout: 30000 });
 
     // Find the Python venv — check multiple locations
     const appRoot = path.resolve(__dirname, '..', '..', '..');
@@ -2341,7 +2337,6 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
 
     // Run faster-whisper transcription via temp script
     const modelName = store.get('engine.model') || 'base';
-    // Check for bundled model first
     const localModelDir = path.join(os.homedir(), '.windy-pro', 'model', `faster-whisper-${modelName}`);
     let bundledModelDir = '';
     if (process.resourcesPath) {
@@ -2353,7 +2348,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     } else if (bundledModelDir && fs.existsSync(path.join(bundledModelDir, 'model.bin'))) {
       modelRef = `"${bundledModelDir.replace(/\\/g, '/')}"`;
     }
-    const scriptPath = `${tmpDir}/windy-batch-transcribe-${Date.now()}.py`;
+    const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${ts}.py`);
     const scriptContent = [
       'from faster_whisper import WhisperModel',
       `model = WhisperModel(${modelRef}, device="cpu", compute_type="int8")`,
@@ -2361,23 +2356,24 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
       'text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())',
       'print(text)'
     ].join('\n');
-    fs.writeFileSync(scriptPath, scriptContent);
+    await fsp.writeFile(scriptPath, scriptContent);
 
-    const result = execSync(`${pythonPath} "${scriptPath}"`, {
+    // P0-1: Use async execFile for Python transcription (non-blocking)
+    const { stdout } = await execFileAsync(pythonPath, [scriptPath], {
       timeout: 120000,
       maxBuffer: 10 * 1024 * 1024
     });
 
-    try { fs.unlinkSync(scriptPath); } catch (_) { }
+    try { await fsp.unlink(scriptPath); } catch (_) { }
 
-    return result.toString().trim();
+    return stdout.trim();
   } catch (err) {
     console.error('[Batch Local] Error:', err.message);
     throw new Error(`Local transcription failed: ${err.message}`);
   } finally {
     // Cleanup temp files
-    try { fs.unlinkSync(webmPath); } catch (_) { }
-    try { fs.unlinkSync(wavPath); } catch (_) { }
+    try { await fsp.unlink(webmPath); } catch (_) { }
+    try { await fsp.unlink(wavPath); } catch (_) { }
   }
 });
 
@@ -2401,13 +2397,13 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
     // Wait for the target app to be the active/focused app
     await new Promise(r => setTimeout(r, 200));
 
-    // Simulate Ctrl+V at current cursor position in the now-active app
+    // P0-1: Simulate Ctrl+V using async exec (non-blocking)
     if (process.platform === 'linux') {
-      require('child_process').execSync('xdotool key --clearmodifiers ctrl+v', { timeout: 5000 });
+      await new Promise((resolve) => exec('xdotool key --clearmodifiers ctrl+v', { timeout: 5000 }, resolve));
     } else if (process.platform === 'darwin') {
-      require('child_process').execSync('osascript -e \'tell application "System Events" to keystroke "v" using command down\'', { timeout: 5000 });
+      await new Promise((resolve) => exec('osascript -e \'tell application "System Events" to keystroke "v" using command down\'', { timeout: 5000 }, resolve));
     } else {
-      require('child_process').execSync('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"', { timeout: 5000 });
+      await new Promise((resolve) => exec('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"', { timeout: 5000 }, resolve));
     }
 
     // Restore window visibility
@@ -2836,56 +2832,64 @@ ipcMain.handle('read-archive-video', async (event, filePath) => {
   }
 });
 
-// ═══ Archive Stats & Export IPC Handlers ═══
+// P0-2: Archive stats cache (30s TTL)
+let _archiveStatsCache = null;
+let _archiveStatsCacheTime = 0;
+const ARCHIVE_STATS_CACHE_TTL = 30000;
 
 ipcMain.handle('get-archive-stats', async () => {
+  if (_archiveStatsCache && Date.now() - _archiveStatsCacheTime < ARCHIVE_STATS_CACHE_TTL) {
+    return _archiveStatsCache;
+  }
   try {
     const archiveRoot = getArchiveFolder();
-    if (!fs.existsSync(archiveRoot)) return { totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0 };
+    try { await fsp.access(archiveRoot); } catch { return { totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0 }; }
+
     let totalFiles = 0, totalSize = 0, days = new Set();
     let audioBytes = 0, videoBytes = 0, totalWords = 0, totalSessions = 0, totalChars = 0;
-    const items = fs.readdirSync(archiveRoot);
+
+    const items = await fsp.readdir(archiveRoot);
     for (const item of items) {
       const itemPath = path.join(archiveRoot, item);
-      const stat = fs.statSync(itemPath);
-      if (stat.isDirectory()) {
-        days.add(item);
-        const files = fs.readdirSync(itemPath);
-        for (const file of files) {
-          totalFiles++;
-          try {
-            const fSize = fs.statSync(path.join(itemPath, file)).size;
-            totalSize += fSize;
-            if (file.endsWith('.webm') && file.includes('-video')) {
-              videoBytes += fSize;
-            } else if (file.endsWith('.webm') || file.endsWith('.wav')) {
-              audioBytes += fSize;
-            } else if (file.endsWith('.md') && file !== `${item}.md`) {
-              totalSessions++;
-              try {
-                const content = fs.readFileSync(path.join(itemPath, file), 'utf-8');
-                // Strip frontmatter lines (starting with #, **, ---)
-                const textLines = content.split('\n').filter(l => !l.startsWith('#') && !l.startsWith('**') && l.trim() !== '---' && l.trim() !== '');
-                const text = textLines.join(' ').trim();
-                const words = text.split(/\s+/).filter(Boolean).length;
-                totalWords += words;
-                totalChars += text.length;
-              } catch (_) { }
-            }
-          } catch (_) { }
-        }
+      const stat = await fsp.stat(itemPath);
+      if (!stat.isDirectory()) continue;
+
+      days.add(item);
+      const files = await fsp.readdir(itemPath);
+      for (const file of files) {
+        totalFiles++;
+        try {
+          const fStat = await fsp.stat(path.join(itemPath, file));
+          totalSize += fStat.size;
+          if (file.endsWith('.webm') && file.includes('-video')) {
+            videoBytes += fStat.size;
+          } else if (file.endsWith('.webm') || file.endsWith('.wav')) {
+            audioBytes += fStat.size;
+          } else if (file.endsWith('.md') && file !== `${item}.md`) {
+            totalSessions++;
+            try {
+              const content = await fsp.readFile(path.join(itemPath, file), 'utf-8');
+              const textLines = content.split('\n').filter(l => !l.startsWith('#') && !l.startsWith('**') && l.trim() !== '---' && l.trim() !== '');
+              const text = textLines.join(' ').trim();
+              totalWords += text.split(/\s+/).filter(Boolean).length;
+              totalChars += text.length;
+            } catch (_) { }
+          }
+        } catch (_) { }
       }
     }
-    // Estimate hours from file sizes (opus webm ~16KB/s, video ~100KB/s)
     const audioHours = (audioBytes / 1024 / 16) / 3600;
     const videoHours = (videoBytes / 1024 / 100) / 3600;
-    return {
+    const result = {
       totalFiles, totalSizeMB: Math.round(totalSize / (1024 * 1024) * 10) / 10,
       days: days.size,
       audioHours: Math.round(audioHours * 100) / 100,
       videoHours: Math.round(videoHours * 100) / 100,
       totalWords, totalSessions, totalChars
     };
+    _archiveStatsCache = result;
+    _archiveStatsCacheTime = Date.now();
+    return result;
   } catch (err) {
     return { totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0, error: err.message };
   }
@@ -3215,8 +3219,8 @@ ipcMain.handle('create-checkout-session', async (event, priceId, email) => {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: priceConfig.mode,
-      success_url: 'https://windypro.thewindstorm.uk/payment-success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: 'https://windypro.thewindstorm.uk/payment-cancel',
+      success_url: process.env.STRIPE_SUCCESS_URL || 'https://windypro.thewindstorm.uk/payment-success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: process.env.STRIPE_CANCEL_URL || 'https://windypro.thewindstorm.uk/payment-cancel',
       allow_promotion_codes: true,
       metadata: { deviceId: machineId, tier: priceConfig.tier }
     };
@@ -3597,7 +3601,7 @@ ipcMain.handle('check-payment-status', async (event, sessionId) => {
     return { ok: true, paid, tier, status: session.payment_status };
   } catch (err) {
     console.error('[Stripe] Payment check error:', err.message);
-    return { ok: false, error: err.message };
+    return { ok: false, error: 'Payment system error. Please try again or contact support.' };
   }
 });
 
@@ -3636,14 +3640,14 @@ ipcMain.handle('open-billing-portal', async () => {
     if (!license.stripeCustomerId) throw new Error('No Stripe customer found. Purchase a plan first.');
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: license.stripeCustomerId,
-      return_url: 'https://windypro.thewindstorm.uk/dashboard'
+      return_url: process.env.STRIPE_RETURN_URL || 'https://windypro.thewindstorm.uk/dashboard'
     });
     // SEC-06: Validate Stripe portal URL before opening
     if (isSafeURL(portalSession.url)) shell.openExternal(portalSession.url);
     return { ok: true, url: portalSession.url };
   } catch (err) {
     console.error('[Stripe] Billing portal error:', err.message);
-    return { ok: false, error: err.message };
+    return { ok: false, error: 'Billing portal unavailable. Please try again later.' };
   }
 });
 
@@ -4145,7 +4149,7 @@ ipcMain.handle('is-maximized', () => {
 });
 
 // ── Song Identification (Chromaprint/AcoustID + AudD fallback) ──
-const { execFile } = require('child_process');
+// P2-3: execFile already imported at top level (line 79)
 const https = require('https');
 const http = require('http');
 
@@ -4551,7 +4555,7 @@ app.whenReady().then(async () => {
     try {
       const https = require('https');
       const debUrl = `https://github.com/sneakyfree/windy-pro/releases/latest/download/windy-pro_${version}_amd64.deb`;
-      const debPath = '/tmp/windy-pro-update.deb';
+      const debPath = path.join(os.tmpdir(), 'windy-pro-update.deb');
 
       console.log(`[Updater] Downloading .deb from ${debUrl}...`);
       safeSend('update-toast', { message: '⬇️ Downloading update…', canRestart: false });
@@ -4999,7 +5003,7 @@ ipcMain.handle('fetch-remote-bundles', async (event, since) => {
 
     const https = require('https');
     const data = await new Promise((resolve, reject) => {
-      const req = https.get('https://windypro.thewindstorm.uk/api/storage/files', {
+      const req = https.get(`${CLOUD_STORAGE_DEFAULT_URL}/files`, {
         headers: { 'Authorization': `Bearer ${token}` },
         timeout: 10000
       }, (res) => {
@@ -5039,7 +5043,7 @@ ipcMain.handle('download-remote-bundle', async (event, bundleId) => {
     const https = require('https');
     const chunks = [];
     const result = await new Promise((resolve, reject) => {
-      const req = https.get(`https://windypro.thewindstorm.uk/api/storage/files/${bundleId}`, {
+      const req = https.get(`${CLOUD_STORAGE_DEFAULT_URL}/files/${bundleId}`, {
         headers: { 'Authorization': `Bearer ${token}` },
         timeout: 30000
       }, (res) => {
@@ -5089,7 +5093,7 @@ ipcMain.handle('upload-bundle-to-cloud', async (event, bundleData) => {
     }
 
     const https = require('https');
-    const url = new URL('https://windypro.thewindstorm.uk/api/storage/files/upload');
+    const url = new URL(`${CLOUD_STORAGE_DEFAULT_URL}/files/upload`);
 
     const result = await new Promise((resolve, reject) => {
       const req = https.request({
@@ -5146,7 +5150,7 @@ ipcMain.handle('get-storage-stats', async () => {
       if (storageToken && storageUserId) {
         const https = require('https');
         const usageData = await new Promise((resolve) => {
-          const req = https.get(`https://windypro.thewindstorm.uk/api/storage/usage/${storageUserId}`, {
+          const req = https.get(`${CLOUD_STORAGE_DEFAULT_URL}/usage/${storageUserId}`, {
             headers: { 'Authorization': `Bearer ${storageToken}` },
             timeout: 5000
           }, (res) => {

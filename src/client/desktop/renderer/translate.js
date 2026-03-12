@@ -185,6 +185,11 @@ class TranslatePanel {
         this._panel.classList.remove('open');
         this.isOpen = false;
         if (this.isRecording) this._stopSpeechCapture();
+        // P2-4: Clear health check interval when panel is closed
+        if (this._healthInterval) {
+            clearInterval(this._healthInterval);
+            this._healthInterval = null;
+        }
     }
 
     toggle() {

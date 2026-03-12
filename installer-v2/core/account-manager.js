@@ -212,7 +212,7 @@ class AccountManager {
         this._saveAccount();
         return true;
       }
-    } catch (e) { }
+    } catch (e) { console.debug('[Account] Token refresh error:', e.message); }
 
     return false;
   }
@@ -269,7 +269,7 @@ class AccountManager {
       if (fs.existsSync(this.configPath)) {
         return JSON.parse(fs.readFileSync(this.configPath, 'utf-8'));
       }
-    } catch (e) { }
+    } catch (e) { console.debug('[Account] Token load error:', e.message); }
     return null;
   }
 

@@ -29,7 +29,7 @@ class WindySync {
         // Load user from storage
         try {
             this.user = JSON.parse(localStorage.getItem('windy_cloud_user'));
-        } catch (_) { }
+        } catch (e) { console.warn('[Sync] Init error:', e.message); }
 
         // Process queue based on frequency
         if (this.queue.length > 0 && this.syncFrequency === 'immediate') {
@@ -54,7 +54,7 @@ class WindySync {
             if (parts.length !== 3) return false;
             const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
             return payload.exp && payload.exp > Date.now() / 1000;
-        } catch {
+        } catch (e) {
             return false;
         }
     }
@@ -96,7 +96,7 @@ class WindySync {
             fetch(`${this.baseUrl}/api/v1/auth/logout`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${this.token}` }
-            }).catch(() => { });
+            }).catch(e => console.debug('[Sync] Logout request failed:', e.message));
         }
         this.token = null;
         this.refreshToken = null;
@@ -122,7 +122,7 @@ class WindySync {
             this.user = data.user;
             this._saveCredentials();
             return true;
-        } catch {
+        } catch (e) {
             return false;
         }
     }
@@ -243,7 +243,7 @@ class WindySync {
                 } else {
                     item.attempts++;
                 }
-            } catch {
+            } catch (e) {
                 item.attempts++;
             }
         }
@@ -295,7 +295,7 @@ class WindySync {
         try {
             const res = await this._authedFetch('/api/v1/recordings/stats');
             if (res.ok) return (await res.json()).stats;
-        } catch (_) { }
+        } catch (e) { console.warn('[Sync] Queue process error:', e.message); }
         return null;
     }
 

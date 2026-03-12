@@ -257,7 +257,7 @@ class WindyApp {
       if (lsCloudToken) this.cloudToken = lsCloudToken;
       if (lsCloudEmail) this.cloudEmail = lsCloudEmail;
       console.debug(`[Init] Final: Engine=${this.transcriptionEngine}, CloudToken=${this.cloudToken ? '✅' : '❌'}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
-    } catch (_) { }
+    } catch (e) { console.warn('[Init] Settings load error:', e.message); }
 
     // Check for crash recovery via Electron IPC
     if (window.windyAPI?.checkCrashRecovery) {
@@ -1330,8 +1330,9 @@ class WindyApp {
         console.debug('[Cloud] Token refreshed ✅');
         return;
       }
-    } catch (_) { }
-    console.warn('[Cloud] Token refresh failed, using existing token');
+    } catch (e) {
+      console.warn('[Cloud] Token refresh failed:', e.message, '— using existing token');
+    }
   }
 
   /**
@@ -1463,7 +1464,7 @@ class WindyApp {
     if (this.cloudWs) {
       try {
         this.cloudWs.send(JSON.stringify({ action: 'stop' }));
-      } catch (_) { }
+      } catch (e) { console.debug('[Cloud] WS send failed during disconnect:', e.message); }
       this.cloudWs.close();
       this.cloudWs = null;
       this._usingCloud = false;
@@ -1579,7 +1580,7 @@ class WindyApp {
       this.isRecording = false; // Set BEFORE abort so onend doesn't restart
       try {
         this.speechRecognition.stop();
-      } catch (_) { }
+      } catch (e) { console.debug('[Stream] SpeechRecognition.stop() error:', e.message); }
       this.speechRecognition = null;
     }
     this._interimText = '';
@@ -1678,7 +1679,7 @@ class WindyApp {
             }
           }
         }
-      } catch (_) { }
+      } catch (e) { console.warn('[TierLimits] Failed to enforce plan limits:', e.message); }
 
       // 1. Get mic access
       const audioConstraints = {
@@ -2437,8 +2438,13 @@ class WindyApp {
     const saveAudio = localStorage.getItem('windy_saveAudio') !== 'false';
     if (!saveAudio || !blob) return;
 
-    // Create object URL for in-session playback
+    // P1-1: Revoke previous Blob URL to prevent memory leak
+    if (this._lastPlaybackUrl) {
+      URL.revokeObjectURL(this._lastPlaybackUrl);
+      this._lastPlaybackUrl = null;
+    }
     const audioUrl = URL.createObjectURL(blob);
+    this._lastPlaybackUrl = audioUrl;
     this._showPlaybackBar(audioUrl);
 
     // Save to disk archive alongside transcripts
