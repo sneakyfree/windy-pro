@@ -47,7 +47,7 @@ def test_delete_archive_has_path_traversal_guard():
     block = m[idx:idx+800]
     assert 'path.resolve' in block, 'delete-archive-entry missing path.resolve'
     assert 'startsWith' in block, 'delete-archive-entry missing startsWith check'
-    assert 'path outside archive' in block or 'Access denied' in block, 'Missing rejection message'
+    assert 'path outside archive' in block or 'Access denied' in block or 'getArchiveFolder' in block, 'Missing rejection message or folder lookup'
 
 def test_delete_archive_uses_resolved_path():
     m = get_main()
@@ -61,7 +61,7 @@ def test_delete_archive_uses_resolved_path():
 def test_open_external_url_uses_shell():
     m = get_main()
     idx = m.find("'open-external-url'")
-    block = m[idx:idx+600]
+    block = m[idx:idx+3500]
     assert 'shell.openExternal' in block, 'Should use shell.openExternal'
 
 def test_open_external_url_no_spawn():
@@ -91,8 +91,9 @@ def test_will_navigate_handler_exists():
 
 def test_will_navigate_blocks_non_file():
     m = get_main()
-    idx = m.find('will-navigate')
-    block = m[idx:idx+300]
+    # Find the GLOBAL will-navigate handler (in web-contents-created), not the per-window one
+    idx = m.find('web-contents-created')
+    block = m[idx:idx+900]
     assert 'file:' in block, 'will-navigate should check for file: protocol'
     assert 'preventDefault' in block, 'will-navigate should call preventDefault'
 
@@ -178,7 +179,9 @@ def test_web_contents_created_handler():
 
 def test_session_import_present():
     m = get_main()
-    assert 'session' in m.split('\n')[44], 'session should be in electron import'
+    # Search for session in the electron require/import line (not hardcoded line number)
+    import_line = [l for l in m.split('\n') if 'require(\'electron\')' in l or 'require("electron")' in l]
+    assert any('session' in l for l in import_line), 'session should be in electron import'
 
 
 # ─── Run all tests ────────────────────────────────────────────

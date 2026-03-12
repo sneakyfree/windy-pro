@@ -157,6 +157,12 @@ body {
   cursor: pointer;
   transition: background 0.12s;
   overflow: visible;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  width: 100%;
 }
 
 .translate-menu-option:hover {
@@ -342,8 +348,11 @@ body {
 }
 
 .transcript-content[contenteditable="true"] {
-  outline: none;
   caret-color: var(--green);
+}
+
+.transcript-content[contenteditable="true"]:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .transcript-content[contenteditable="false"] {
@@ -707,6 +716,9 @@ body {
   height: 80px;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
+}
+
+.sfx-slider:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -926,8 +938,11 @@ body {
   color: #E2E8F0;
   font-size: 11px;
   padding: 3px 6px;
-  outline: none;
   min-width: 0;
+}
+
+.sfx-lib-name-input:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .sfx-lib-name-input:focus {
@@ -1091,6 +1106,9 @@ body {
 .sfx-unified-select:hover,
 .sfx-unified-select:focus {
   border-color: #22C55E;
+}
+
+.sfx-unified-select:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -1206,6 +1224,9 @@ body.light-mode .sfx-master-controls {
   appearance: none;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
+}
+
+.sfx-hook-vol:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -1873,6 +1894,9 @@ body.light-mode .sfx-master-controls {
   border-radius: 6px;
   color: var(--text-primary);
   font-size: 13px;
+}
+
+.vault-search:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -3039,6 +3063,9 @@ body.light-mode .sfx-master-controls {
 .shortcut-capture:focus {
   border-color: var(--color-listening);
   color: var(--color-listening);
+}
+
+.shortcut-capture:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -3131,6 +3158,9 @@ body.light-mode .sfx-master-controls {
   border-color: #F59E0B !important;
   color: #FBBF24 !important;
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35), 0 3px 6px rgba(0, 0, 0, 0.4);
+}
+
+.shortcut-btn:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -3603,8 +3633,11 @@ select:focus-visible,
   border-radius: 6px;
   color: var(--text-primary, #e6edf3);
   font-size: 12px;
-  outline: none;
   transition: border-color 0.2s;
+}
+
+.history-search:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .history-search:focus {
@@ -4266,6 +4299,9 @@ select:focus-visible,
   border-radius: 8px;
   color: var(--text-primary, #e6edf3);
   font-size: 12px;
+}
+
+.upgrade-coupon-input:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -5383,8 +5419,11 @@ body.light-theme .translate-history-item {
   font-size: 12px;
   color: #E2E8F0;
   width: 180px;
-  outline: none;
   transition: border-color 0.15s;
+}
+
+.slib-search:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .slib-search:focus {
@@ -5638,8 +5677,11 @@ body.light-theme .translate-history-item {
   color: #E2E8F0;
   font-size: 12px;
   padding: 2px 6px;
-  outline: none;
   min-width: 0;
+}
+
+.slib-row-name-input:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .slib-row-meta {
@@ -5766,4 +5808,72 @@ body.light-mode .slib-tab {
 body.light-mode .slib-tab-active {
   color: #16A34A;
   border-bottom-color: #16A34A;
+}
+
+/* ═══ Accessibility: Reduced Motion ═══ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ═══ Accessibility: High Contrast (macOS) ═══ */
+@media (prefers-contrast: high) {
+  :root {
+    --text-muted: #C1C7CF;
+    --text-secondary: #E5E7EB;
+    --bg-tertiary: #6B7280;
+  }
+
+  .title-btn,
+  .control-btn,
+  .archive-path-btn {
+    border: 1px solid var(--text-secondary);
+  }
+
+  .status-dot {
+    border: 2px solid var(--text-primary);
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible {
+    outline-width: 3px;
+  }
+}
+
+/* ═══ Accessibility: Forced Colors (Windows High Contrast) ═══ */
+@media (forced-colors: active) {
+  .title-btn,
+  .control-btn,
+  .archive-path-btn,
+  .slib-close-btn,
+  .slib-bulk-btn {
+    border: 1px solid ButtonText;
+  }
+
+  .state-glow {
+    display: none;
+  }
+
+  .status-dot {
+    forced-color-adjust: none;
+    border: 2px solid CanvasText;
+  }
+
+  .control-btn.primary {
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible {
+    outline: 3px solid Highlight;
+  }
 }

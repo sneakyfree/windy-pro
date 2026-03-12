@@ -61,13 +61,21 @@ class WindySync {
     }
 
     async login(email, password) {
-        const res = await fetch(`${this.baseUrl}/api/v1/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Login failed');
+        let res, data;
+        try {
+            res = await fetch(`${this.baseUrl}/api/v1/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Login failed');
+        } catch (e) {
+            if (e.name === 'TypeError' && (e.message.includes('fetch') || e.message.includes('network'))) {
+                throw new Error('You\'re offline. Sign in requires an internet connection — try again when connected.');
+            }
+            throw e;
+        }
 
         this.token = data.token;
         this.refreshToken = data.refreshToken;
@@ -77,13 +85,21 @@ class WindySync {
     }
 
     async register(email, password, name) {
-        const res = await fetch(`${this.baseUrl}/api/v1/auth/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, name })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Registration failed');
+        let res, data;
+        try {
+            res = await fetch(`${this.baseUrl}/api/v1/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, name })
+            });
+            data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Registration failed');
+        } catch (e) {
+            if (e.name === 'TypeError' && (e.message.includes('fetch') || e.message.includes('network'))) {
+                throw new Error('You\'re offline. Account creation requires an internet connection — try again when connected.');
+            }
+            throw e;
+        }
 
         this.token = data.token;
         this.user = data.user;

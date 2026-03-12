@@ -69,8 +69,11 @@ body {
   border-radius: 8px;
   color: var(--chat-text);
   font-size: 13px;
-  outline: none;
   transition: border-color 0.2s;
+}
+
+.sidebar-search input:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .sidebar-search input:focus {
@@ -360,8 +363,11 @@ body {
   border: none;
   color: var(--chat-text);
   font-size: 14px;
-  outline: none;
   padding: 8px 0;
+}
+
+.chat-input-wrapper input:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .chat-input-wrapper input::placeholder {
@@ -493,6 +499,9 @@ body {
   border-radius: 10px;
   color: var(--chat-text);
   font-size: 14px;
+}
+
+.login-form input:focus:not(:focus-visible) {
   outline: none;
 }
 

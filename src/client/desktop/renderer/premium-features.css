@@ -92,6 +92,9 @@
     padding: 6px 10px;
     border-radius: 6px;
     font-size: 13px;
+}
+
+.conv-lang-select:focus:not(:focus-visible) {
     outline: none;
 }
 
@@ -546,8 +549,11 @@
     padding: 10px 14px;
     border-radius: 8px;
     font-size: 13px;
-    outline: none;
     margin-bottom: 12px;
+}
+
+.tm-search-input:focus:not(:focus-visible) {
+    outline: none;
 }
 
 .tm-search-input:focus {
@@ -675,9 +681,12 @@
     padding: 8px 12px;
     border-radius: 6px;
     font-size: 13px;
-    outline: none;
     margin-bottom: 12px;
     box-sizing: border-box;
+}
+
+.vc-input:focus:not(:focus-visible) {
+    outline: none;
 }
 
 .vc-input:focus {

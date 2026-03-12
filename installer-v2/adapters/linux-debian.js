@@ -230,12 +230,19 @@ class LinuxDebianAdapter {
     // Create desktop file for easy launching
     const desktopDir = path.join(os.homedir(), '.local', 'share', 'applications');
     fs.mkdirSync(desktopDir, { recursive: true });
+    // PLAT-C: Use process.execPath (not process.cwd which is unreliable in AppImage)
+    const iconCandidates = [
+      path.join(path.dirname(process.execPath), 'resources', 'app', 'assets', 'icon.png'),
+      path.join(path.dirname(process.execPath), 'resources', 'assets', 'icon.png'),
+      path.join(process.cwd(), 'assets', 'icon.png'),
+    ];
+    const iconPath = iconCandidates.find(p => fs.existsSync(p)) || 'windy-pro';
     fs.writeFileSync(path.join(desktopDir, 'windy-pro.desktop'), `[Desktop Entry]
 Type=Application
 Name=Windy Pro
 Comment=AI-powered speech recognition and translation
-Exec=${process.execPath} ${process.cwd()}
-Icon=${path.join(process.cwd(), 'assets', 'icon.png')}
+Exec=${process.execPath}
+Icon=${iconPath}
 Terminal=false
 Categories=Audio;Utility;
 `);
@@ -272,9 +279,9 @@ Categories=Audio;Utility;
       results.ffmpeg = false;
     }
 
-    // Check audio
+    // PLAT-D: Check audio (ALSA, PulseAudio, and PipeWire)
     try {
-      execSync('aplay -l 2>/dev/null || pactl list sinks short 2>/dev/null', { timeout: 5000, stdio: 'pipe' });
+      execSync('aplay -l 2>/dev/null || pactl list sinks short 2>/dev/null || pw-cli list-objects 2>/dev/null', { timeout: 5000, stdio: 'pipe' });
       results.audio = true;
     } catch (e) {
       results.audio = false;

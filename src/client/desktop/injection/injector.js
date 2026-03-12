@@ -165,7 +165,7 @@ class CursorInjector {
             exec('ydotool key 29:1 47:1 47:0 29:0', { timeout: 3000 }, (error) => {
                 if (error) {
                     if (error.message.includes('not found') || error.message.includes('No such file')) {
-                        reject(new Error('ydotool is required for Wayland text injection. Install it with: sudo apt install ydotool'));
+                        reject(new Error('ydotool is required for Wayland text injection.\n\nInstall options:\n  • Ubuntu 23.04+/Debian 13+: sudo apt install ydotool\n  • Fedora: sudo dnf install ydotool\n  • Arch: sudo pacman -S ydotool\n  • Build from source: https://github.com/ReimuNotMoe/ydotool\n\nNote: The ydotoold daemon must be running (sudo systemctl enable --now ydotool).'));
                     } else {
                         reject(new Error(`Linux Wayland injection failed: ${error.message}`));
                     }
@@ -201,7 +201,10 @@ class CursorInjector {
                         resolve({
                             granted: !error,
                             message: error
-                                ? `${tool} is required. Install with: sudo apt install ${tool}`
+                                ? `${tool} is required for text injection on ${sessionType === 'wayland' ? 'Wayland' : 'X11'}.\n\n` +
+                                  (sessionType === 'wayland'
+                                    ? 'Install: sudo apt install ydotool (Ubuntu 23.04+) or sudo dnf install ydotool (Fedora)\nNote: The ydotoold daemon must be running.'
+                                    : `Install: sudo apt install ${tool}`)
                                 : `${tool} is available`
                         });
                     });

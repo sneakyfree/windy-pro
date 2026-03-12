@@ -657,6 +657,13 @@ class TranslatePanel {
         const translationId = this._lastTranslationId;
         if (!translationId) { btn.textContent = '⚠️'; setTimeout(() => { btn.textContent = '⭐'; }, 1000); return; }
 
+        // Offline: indicate saved locally
+        if (!navigator.onLine) {
+            btn.textContent = '📌';
+            setTimeout(() => { btn.textContent = '⭐'; }, 1500);
+            return;
+        }
+
         try {
             const token = localStorage.getItem('windy_cloudToken') || '';
             await fetch(window.API_CONFIG.userFavorites, {
@@ -679,6 +686,11 @@ class TranslatePanel {
     // ─── History ──────────────────────────────────────────────────
 
     async _loadHistory() {
+        // Don't attempt network fetch when offline — show cached history
+        if (!navigator.onLine) {
+            this._log.debug('_loadHistory', 'offline — using cached history');
+            return;
+        }
         try {
             const token = localStorage.getItem('windy_cloudToken') || '';
             const resp = await fetch(`${window.API_CONFIG.userHistory}?limit=10`, {

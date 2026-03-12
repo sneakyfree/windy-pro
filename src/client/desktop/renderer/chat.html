@@ -135,9 +135,9 @@
             </div>
           </div>
           <div class="chat-header-actions">
-            <button title="Voice call (coming soon)" disabled>📞</button>
-            <button title="Video call (coming soon)" disabled>📹</button>
-            <button title="Profile" onclick="showProfilePanel()">👤</button>
+            <button title="Voice call (coming soon)" disabled aria-label="Voice call, coming soon">📞</button>
+            <button title="Video call (coming soon)" disabled aria-label="Video call, coming soon">📹</button>
+            <button title="Profile" onclick="showProfilePanel()" aria-label="View contact profile">👤</button>
           </div>
         </div>
 
@@ -169,7 +169,7 @@
   </div>
 
   <!-- ═══ Profile Panel Overlay ═══ -->
-  <div id="profile-panel" style="display:none; position:fixed; right:0; top:0; width:320px; height:100vh; background:var(--chat-sidebar); border-left:1px solid var(--chat-border); z-index:200; overflow-y:auto; box-shadow:-4px 0 20px rgba(0,0,0,0.3);">
+  <div id="profile-panel" role="dialog" aria-modal="false" aria-label="Contact profile" style="display:none; position:fixed; right:0; top:0; width:320px; height:100vh; background:var(--chat-sidebar); border-left:1px solid var(--chat-border); z-index:200; overflow-y:auto; box-shadow:-4px 0 20px rgba(0,0,0,0.3);">
     <div style="padding:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--chat-border);">
       <h3 style="font-size:14px; font-weight:700; margin:0;">👤 Contact Profile</h3>
       <button onclick="hideProfilePanel()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:18px;" aria-label="Close profile panel">✕</button>
@@ -189,7 +189,7 @@
   </div>
 
   <!-- ═══ Settings Panel Overlay ═══ -->
-  <div id="settings-panel" style="display:none; position:fixed; right:0; top:0; width:360px; height:100vh; background:var(--chat-sidebar); border-left:1px solid var(--chat-border); z-index:200; overflow-y:auto; box-shadow:-4px 0 20px rgba(0,0,0,0.3);">
+  <div id="settings-panel" role="dialog" aria-modal="false" aria-label="Chat settings" style="display:none; position:fixed; right:0; top:0; width:360px; height:100vh; background:var(--chat-sidebar); border-left:1px solid var(--chat-border); z-index:200; overflow-y:auto; box-shadow:-4px 0 20px rgba(0,0,0,0.3);">
     <div style="padding:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--chat-border);">
       <h3 style="font-size:14px; font-weight:700; margin:0;">⚙️ Chat Settings</h3>
       <button onclick="hideSettings()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:18px;" aria-label="Close settings panel">✕</button>
@@ -199,7 +199,7 @@
       <div style="margin-bottom:20px;">
         <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">Matrix Homeserver</label>
         <input id="settings-homeserver" type="text" placeholder="https://matrix.org" maxlength="500"
-               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px; outline:none;">
+               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px;" aria-label="Matrix homeserver URL">
         <div style="font-size:10px; color:var(--chat-text-muted); margin-top:4px;">Standard Matrix federation server</div>
       </div>
 
@@ -207,14 +207,14 @@
       <div style="margin-bottom:20px;">
         <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">Display Name</label>
         <input id="settings-display-name" type="text" placeholder="Your display name" maxlength="64"
-               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px; outline:none;">
+               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px;" aria-label="Display name">
       </div>
 
       <!-- Language Preference -->
       <div style="margin-bottom:20px;">
         <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">My Language</label>
         <select id="settings-language"
-               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px; outline:none;">
+               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px;" aria-label="My language">
           <option value="en">English</option>
           <option value="es">Español</option>
           <option value="fr">Français</option>
@@ -247,7 +247,7 @@
       <div style="margin-bottom:20px;">
         <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">Your User ID</label>
         <input id="settings-user-id" type="text" readonly
-               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text-muted); font-size:13px; outline:none; cursor:default;">
+               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text-muted); font-size:13px; cursor:default;" aria-label="Your user ID">
       </div>
 
       <!-- Save button -->
@@ -260,13 +260,13 @@
   </div>
 
   <!-- ═══ New Chat Modal ═══ -->
-  <div id="new-chat-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; align-items:center; justify-content:center;">
+  <div id="new-chat-modal" role="dialog" aria-modal="true" aria-label="New conversation" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; align-items:center; justify-content:center;">
     <div style="background:var(--chat-card); border:1px solid var(--chat-border); border-radius:16px; padding:24px; width:360px; max-width:90vw;">
       <h3 style="font-size:16px; font-weight:800; margin-bottom:16px; color:var(--chat-text);">💬 New Conversation</h3>
-      <input type="text" id="new-chat-user" placeholder="Enter @user:matrix.org" maxlength="255"
-             style="width:100%; padding:10px 14px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:14px; outline:none; margin-bottom:12px;"
+      <input type="text" id="new-chat-user" placeholder="Enter @user:matrix.org" maxlength="255" aria-label="Matrix user ID"
+             style="width:100%; padding:10px 14px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:14px; margin-bottom:12px;"
              onkeydown="if(event.key==='Enter')startNewChat()">
-      <div id="new-chat-error" style="font-size:12px; color:#f87171; margin-bottom:8px; display:none;"></div>
+      <div id="new-chat-error" role="alert" aria-live="assertive" style="font-size:12px; color:#f87171; margin-bottom:8px; display:none;"></div>
       <div style="display:flex; gap:8px; justify-content:flex-end;">
         <button onclick="hideNewChat()" style="padding:8px 16px; background:var(--chat-border); border:none; border-radius:8px; color:var(--chat-text-dim); cursor:pointer; font-size:13px;">Cancel</button>
         <button onclick="startNewChat()" style="padding:8px 16px; background:var(--chat-green); border:none; border-radius:8px; color:#0F1219; cursor:pointer; font-size:13px; font-weight:700;">Start Chat</button>

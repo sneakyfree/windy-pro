@@ -114,8 +114,11 @@ class AutoUpdater {
 
         dialog.showMessageBox(options).then(({ response }) => {
             if (response === 0) {
-                if (update.downloadUrl) {
+                // SEC-B: Only allow HTTPS download URLs — block file://, javascript:, etc.
+                if (update.downloadUrl && update.downloadUrl.startsWith('https://')) {
                     shell.openExternal(update.downloadUrl);
+                } else if (update.downloadUrl) {
+                    log.warn('_showUpdateDialog', `Blocked non-HTTPS download URL: ${update.downloadUrl}`);
                 }
             }
         }).catch(() => { });

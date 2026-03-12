@@ -679,6 +679,20 @@ class SettingsPanel {
         cloudLoginStatus.textContent = '⏳ Connecting...';
         cloudLoginStatus.style.color = '#888';
 
+        // Offline guard: don't attempt network call when offline
+        if (!navigator.onLine) {
+          cloudLoginStatus.textContent = '✈️ You\'re offline — credentials saved. Sign-in will complete when you reconnect.';
+          cloudLoginStatus.style.color = '#94A3B8';
+          cloudSignInBtn.disabled = false;
+          // Still save credentials for WS auth
+          this.app.cloudEmail = email;
+          this.app.cloudPassword = password;
+          this.saveSetting('cloudEmail', email);
+          this.saveSetting('cloudPassword', password);
+          this.saveSetting('cloudUser', email);
+          return;
+        }
+
         // Always store credentials on app for WS auth (bypasses CORS)
         this.app.cloudEmail = email;
         this.app.cloudPassword = password;
@@ -1540,6 +1554,32 @@ class SettingsPanel {
       // Close modal
       if (slibClose) slibClose.addEventListener('click', () => { if (slibModal) slibModal.style.display = 'none'; });
       slibModal?.querySelector('.slib-backdrop')?.addEventListener('click', () => { if (slibModal) slibModal.style.display = 'none'; });
+
+      // Escape key closes sound library modal
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && slibModal && slibModal.style.display !== 'none') {
+          slibModal.style.display = 'none';
+          e.stopPropagation();
+        }
+      });
+
+      // Focus trap for sound library modal
+      slibModal?.addEventListener('keydown', (e) => {
+        if (e.key !== 'Tab') return;
+        const container = slibModal.querySelector('.slib-container');
+        if (!container) return;
+        const focusable = container.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])');
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      });
 
       // Font size buttons for Sound Library
       document.getElementById('slibFontDown')?.addEventListener('click', () => {

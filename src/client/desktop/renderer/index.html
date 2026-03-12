@@ -25,22 +25,22 @@
         <div class="translate-menu-wrap" id="translateMenuWrap">
           <button class="title-btn" id="translateBtn" title="Translation Tools" aria-label="Open translation tools"
             style="font-size:14px;">🌐</button>
-          <div class="translate-menu" id="translateMenu" style="display:none;">
-            <div class="translate-menu-option" id="openStudio">
+          <div class="translate-menu" id="translateMenu" role="menu" style="display:none;">
+            <button class="translate-menu-option" id="openStudio" role="menuitem">
               <div class="tm-icon">🎤</div>
               <div class="tm-info">
                 <strong>Translate Studio</strong>
                 <span>Full workspace — push-to-talk, history, TTS playback, favorites</span>
               </div>
-            </div>
-            <div class="translate-menu-divider"></div>
-            <div class="translate-menu-option" id="openQuickTranslate">
+            </button>
+            <div class="translate-menu-divider" role="separator"></div>
+            <button class="translate-menu-option" id="openQuickTranslate" role="menuitem">
               <div class="tm-icon">🌐</div>
               <div class="tm-info">
                 <strong>Quick Translate</strong> <kbd>Ctrl+Shift+T</kbd>
                 <span>Floating overlay — live listen in meetings, type-to-translate, auto-detect</span>
               </div>
-            </div>
+            </button>
           </div>
         </div>
         <button class="title-btn" id="themeQuickToggle" title="Toggle light/dark mode" aria-label="Toggle theme"
@@ -53,17 +53,17 @@
     </div>
 
     <!-- State Indicator (The Green Strobe) -->
-    <div class="state-indicator" id="stateIndicator">
-      <div class="state-glow" id="stateGlow"></div>
+    <div class="state-indicator" id="stateIndicator" role="status" aria-label="Recording state">
+      <div class="state-glow" id="stateGlow" aria-hidden="true"></div>
       <div class="state-label" id="stateLabel">Ready</div>
-      <span class="session-timer" id="sessionTimer"></span>
+      <span class="session-timer" id="sessionTimer" aria-label="Session duration"></span>
     </div>
 
     <!-- Reconnect Toast -->
     <div class="reconnect-toast" id="reconnectToast" role="status" aria-live="polite" style="display:none;"></div>
 
     <!-- Recording Status Badges (visible during active recording) -->
-    <div class="recording-status" id="recordingStatus" style="display:none;">
+    <div class="recording-status" id="recordingStatus" role="status" aria-label="Recording status" style="display:none;">
       <span class="rec-badge audio-badge active" id="audioBadge">🎤 Audio ✓</span>
       <span class="rec-badge video-badge" id="videoBadge" style="display:none;">🎬 Video ✓</span>
     </div>
@@ -75,8 +75,8 @@
     </div>
 
     <!-- Audio Level Meter -->
-    <div class="audio-meter-container" id="audioMeterContainer" style="display: none;">
-      <div class="audio-meter-bar" id="audioMeterBar"></div>
+    <div class="audio-meter-container" id="audioMeterContainer" role="meter" aria-label="Audio level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="display: none;">
+      <div class="audio-meter-bar" id="audioMeterBar" aria-hidden="true"></div>
     </div>
 
     <!-- Transcript Display -->
@@ -125,8 +125,8 @@
             <option value="local_cloud">📁+☁️ Local + Cloud</option>
             <option value="off">🚫 Off</option>
           </select>
-          <button class="archive-path-btn" id="archiveOpenBtn" title="Open archive folder">📂</button>
-          <button class="archive-path-btn" id="archiveChangeBtn" title="Change archive folder">⚙️</button>
+          <button class="archive-path-btn" id="archiveOpenBtn" title="Open archive folder" aria-label="Open archive folder">📂</button>
+          <button class="archive-path-btn" id="archiveChangeBtn" title="Change archive folder" aria-label="Change archive folder">⚙️</button>
           <span class="archive-path-label" id="archivePathLabel" title="Click to open"></span>
         </div>
       </div>
@@ -134,8 +134,8 @@
 
     <!-- Connection Status (always visible — chevron here collapses controls above) -->
     <div class="status-bar" id="statusBar" role="status" aria-live="polite">
-      <span class="controls-chevron" id="controlsChevron" title="Show/hide controls">▾</span>
-      <button class="mini-record-btn" id="miniRecordBtn" style="display:none;" title="Start/Stop Recording">🎤</button>
+      <span class="controls-chevron" id="controlsChevron" title="Show/hide controls" role="button" tabindex="0" aria-label="Toggle control bar" aria-expanded="true">▾</span>
+      <button class="mini-record-btn" id="miniRecordBtn" style="display:none;" title="Start/Stop Recording" aria-label="Toggle recording">🎤</button>
       <span class="status-dot" id="connectionDot"></span>
       <span class="status-text" id="connectionText">Connecting...</span>
       <span class="word-count" id="wordCount"></span>
@@ -148,21 +148,21 @@
   </div>
 
   <!-- SFX Volume Popup (outside status-bar to escape overflow:hidden) -->
-  <div class="sfx-volume-popup" id="sfxVolumePopup">
-    <input type="range" id="sfxVolumeSlider" min="0" max="100" value="70" class="sfx-slider">
+  <div class="sfx-volume-popup" id="sfxVolumePopup" role="dialog" aria-label="Volume control">
+    <input type="range" id="sfxVolumeSlider" min="0" max="100" value="70" class="sfx-slider" aria-label="Sound effects volume">
     <span class="sfx-volume-label" id="sfxVolumeLabel">70%</span>
   </div>
 
   <!-- ═══ FULL SOUND LIBRARY MODAL ═══ -->
-  <div id="soundLibraryModal" class="slib-modal" style="display:none;">
+  <div id="soundLibraryModal" class="slib-modal" role="dialog" aria-modal="true" aria-label="Sound Library" style="display:none;">
     <div class="slib-backdrop"></div>
     <div class="slib-container">
       <!-- Header -->
       <div class="slib-header">
         <h2 class="slib-title">📚 Sound Library</h2>
         <div class="slib-header-actions">
-          <input type="text" id="slibSearch" class="slib-search" placeholder="🔍 Search sounds...">
-          <select id="slibSort" class="slib-sort">
+          <input type="text" id="slibSearch" class="slib-search" placeholder="🔍 Search sounds..." aria-label="Search sounds">
+          <select id="slibSort" class="slib-sort" aria-label="Sort sounds by">
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
             <option value="name">Name A→Z</option>
@@ -170,13 +170,13 @@
             <option value="size">Largest first</option>
             <option value="duration">Longest first</option>
           </select>
-          <button id="slibFontDown" class="slib-close-btn" title="Decrease font size"
+          <button id="slibFontDown" class="slib-close-btn" title="Decrease font size" aria-label="Decrease font size"
             style="font-size:11px;background:rgba(99,102,241,0.3);margin-right:2px;">A-</button>
-          <button id="slibFontUp" class="slib-close-btn" title="Increase font size"
+          <button id="slibFontUp" class="slib-close-btn" title="Increase font size" aria-label="Increase font size"
             style="font-size:13px;font-weight:700;background:rgba(99,102,241,0.3);margin-right:2px;">A+</button>
-          <button id="slibMaximize" class="slib-close-btn" title="Toggle fullscreen"
+          <button id="slibMaximize" class="slib-close-btn" title="Toggle fullscreen" aria-label="Toggle fullscreen"
             style="background:rgba(139,92,246,0.3);margin-right:2px;">⛶</button>
-          <button id="slibClose" class="slib-close-btn">✕</button>
+          <button id="slibClose" class="slib-close-btn" aria-label="Close sound library">✕</button>
         </div>
       </div>
 

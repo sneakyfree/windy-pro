@@ -122,6 +122,12 @@ class WindyApp {
     this.bindEvents();
     this.bindIPCEvents();
 
+    // ── Offline Detection (global) ──
+    this.isOffline = !navigator.onLine;
+    window.addEventListener('online', () => { this.isOffline = false; this._updateOfflineUI(); });
+    window.addEventListener('offline', () => { this.isOffline = true; this._updateOfflineUI(); });
+    this._updateOfflineUI();
+
     // ── Crash Recovery Detection (Repair 1.1) ──
     if (window.windyAPI?.checkCrashRecovery) {
       try {
@@ -446,8 +452,17 @@ class WindyApp {
         e.stopPropagation();
         const isCollapsed = collapsible.classList.toggle('collapsed');
         chevron.classList.toggle('collapsed', isCollapsed);
+        chevron.setAttribute('aria-expanded', !isCollapsed);
         if (miniRec) miniRec.style.display = isCollapsed ? '' : 'none';
         localStorage.setItem('windy_controlsCollapsed', isCollapsed);
+      });
+
+      // Keyboard activation for chevron (Enter/Space)
+      chevron.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          chevron.click();
+        }
       });
 
       // Mini record button
@@ -536,6 +551,9 @@ class WindyApp {
 
     const overlay = document.createElement('div');
     overlay.id = 'welcomeOverlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Welcome to Windy Pro');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);animation:fadeIn .3s ease';
     overlay.innerHTML = `
       <div style="background:#1e293b;border-radius:16px;padding:36px;max-width:460px;width:90%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.5);position:relative">
@@ -587,6 +605,21 @@ class WindyApp {
         window.windyAPI?.dismissWelcome?.();
       }
     });
+
+    // Escape key closes welcome overlay
+    const welcomeEsc = (e) => {
+      if (e.key === 'Escape') {
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity .2s';
+        setTimeout(() => overlay.remove(), 200);
+        window.windyAPI?.dismissWelcome?.();
+        document.removeEventListener('keydown', welcomeEsc);
+      }
+    };
+    document.addEventListener('keydown', welcomeEsc);
+
+    // Focus the next button for keyboard users
+    btn.focus();
   }
 
   /**
@@ -722,6 +755,28 @@ class WindyApp {
   hideBackendErrorOverlay() {
     const overlay = document.querySelector('.backend-error-overlay');
     if (overlay) overlay.remove();
+  }
+
+  /**
+   * Update UI when online/offline state changes.
+   * Offline should feel like a MODE (airplane mode), not an error.
+   */
+  _updateOfflineUI() {
+    const dot = this.connectionDot;
+    const text = this.connectionText;
+    if (this.isOffline) {
+      if (dot) { dot.style.background = '#94A3B8'; dot.title = 'Offline'; }
+      if (text) text.textContent = '✈️ Offline mode — local features work normally';
+      this.showReconnectToast('✈️ You\'re offline. Recording, transcription, and local features work normally. Cloud features will resume when you reconnect.', true);
+    } else {
+      if (dot) { dot.style.background = ''; dot.title = 'Connected'; }
+      if (text) text.textContent = 'Connected';
+      // If we just came back online, show a brief "back online" toast
+      if (this._wasOffline) {
+        this.showReconnectToast('🟢 Back online — syncing cloud features...');
+      }
+    }
+    this._wasOffline = this.isOffline;
   }
 
   showReconnectToast(message, persistent = false) {
@@ -1536,7 +1591,7 @@ class WindyApp {
       } else if (event.error === 'no-speech') {
         // Normal — just means silence. Don't stop.
       } else if (event.error === 'network') {
-        this.showReconnectToast('⚠️ Network error — check internet connection.');
+        this.showReconnectToast('✈️ You\'re offline — recording locally. Cloud features will resume when you reconnect.');
       }
     };
 
@@ -2824,6 +2879,10 @@ class WindyApp {
     } catch (err) {
       if (err.name === 'AbortError') {
         throw new Error('API request timed out (30s). Try again or use a different engine.');
+      }
+      // Offline-friendly error: don't show raw "Failed to fetch" / "NetworkError"
+      if (err.name === 'TypeError' && (err.message.includes('fetch') || err.message.includes('network') || err.message.includes('Network'))) {
+        throw new Error('You\'re offline. Switch to a local engine in Settings, or try again when connected.');
       }
       throw err;
     } finally {

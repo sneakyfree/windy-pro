@@ -8,7 +8,9 @@ const _path = require('path');
 const _os = require('os');
 const crashLogDir = process.platform === 'darwin'
   ? _path.join(_os.homedir(), 'Library', 'Logs', 'WindyPro')
-  : _path.join(_os.homedir(), '.config', 'windy-pro');
+  : process.platform === 'win32'
+    ? _path.join(_os.homedir(), 'AppData', 'Local', 'WindyPro', 'Logs')
+    : _path.join(_os.homedir(), '.config', 'windy-pro');
 const crashLogPath = _path.join(crashLogDir, 'crash.log');
 
 function writeCrashLog(type, err) {
@@ -1816,7 +1818,11 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     return { text: transcription.text, detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai', modelInfo: { ...modelInfo, model: 'Windy Cloud' } };
 
   } catch (cloudErr) {
-    return { error: `Translation failed: ${cloudErr.message}` };
+    // Detect offline errors and show friendly message instead of raw ENOTFOUND
+    const isOffline = cloudErr.code === 'ENOTFOUND' || cloudErr.code === 'ENETUNREACH' || cloudErr.code === 'EAI_AGAIN' || (cloudErr.message && cloudErr.message.includes('ENOTFOUND'));
+    return { error: isOffline
+      ? 'You\'re offline. Cloud transcription needs an internet connection — switch to a local engine in Settings, or try again when connected.'
+      : `Cloud transcription failed: ${cloudErr.message}` };
   }
 });
 
@@ -2225,7 +2231,7 @@ ipcMain.handle('open-external-url', async (event, url) => {
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
-          sandbox: false,
+          sandbox: true,
           javascript: true,
           partition: 'persist:checkout'
         }
@@ -2244,7 +2250,7 @@ ipcMain.handle('open-external-url', async (event, url) => {
           webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            sandbox: false,
+            sandbox: true,
             javascript: true,
             partition: 'persist:checkout'
           }
@@ -2611,10 +2617,13 @@ ipcMain.handle('delete-archive-entry', async (event, filePath) => {
   }
 
   // Security: path traversal guard — only allow deletion within archive folder
-  const archiveBase = store.get('archiveFolder') || path.join(os.homedir(), 'Windy Pro');
+  const archiveBase = getArchiveFolder();
+  const defaultBase = path.join(os.homedir(), 'Documents', 'WindyProArchive');
   const resolvedPath = path.resolve(filePath);
   const resolvedBase = path.resolve(archiveBase);
-  if (!resolvedPath.startsWith(resolvedBase + path.sep) && resolvedPath !== resolvedBase) {
+  const resolvedDefault = path.resolve(defaultBase);
+  if (!resolvedPath.startsWith(resolvedBase + path.sep) && resolvedPath !== resolvedBase &&
+      !resolvedPath.startsWith(resolvedDefault + path.sep) && resolvedPath !== resolvedDefault) {
     console.warn('[Main] Blocked path traversal attempt:', filePath);
     throw new Error('Access denied: path outside archive folder');
   }
@@ -3162,15 +3171,15 @@ ipcMain.handle('detect-hardware', async () => {
 
 ipcMain.handle('register-wizard-account', async (event, { email, password, name }) => {
   try {
-    const https = require('http');
+    const https = require('https');
     const data = JSON.stringify({ email, password, name });
     return new Promise((resolve) => {
       const req = https.request({
-        hostname: '192.168.4.126',
-        port: 8099,
-        path: '/auth/register',
+        hostname: 'windypro.thewindstorm.uk',
+        port: 443,
+        path: '/api/v1/auth/register',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': data.length },
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
         timeout: 10000
       }, (res) => {
         let body = '';
@@ -3210,7 +3219,14 @@ ipcMain.handle('setup-autostart', async (event, enable) => {
       if (enable) {
         if (!fs.existsSync(autostartDir)) fs.mkdirSync(autostartDir, { recursive: true });
         const appPath = process.execPath;
-        const content = `[Desktop Entry]\nType=Application\nName=Windy Pro\nExec=${appPath}\nIcon=windy-pro\nComment=Voice-to-text transcription\nX-GNOME-Autostart-enabled=true\nStartupNotify=false\n`;
+        // PLAT-B: Use absolute icon path (relative theme name 'windy-pro' won't resolve in most setups)
+        const iconCandidates = [
+          path.join(path.dirname(appPath), 'resources', 'app', 'assets', 'icon.png'),
+          path.join(path.dirname(appPath), 'resources', 'assets', 'icon.png'),
+          path.join(__dirname, '..', '..', '..', 'assets', 'icon.png'),
+        ];
+        const iconPath = iconCandidates.find(p => fs.existsSync(p)) || 'windy-pro';
+        const content = `[Desktop Entry]\nType=Application\nName=Windy Pro\nExec=${appPath}\nIcon=${iconPath}\nComment=Voice-to-text transcription\nX-GNOME-Autostart-enabled=true\nStartupNotify=false\n`;
         fs.writeFileSync(desktopFile, content);
         return { ok: true };
       } else {
@@ -3504,7 +3520,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
       width: 1140, height: 780, x: 100, y: 60,
       title: 'Choose Your Plan — Windy Pro',
       autoHideMenuBar: true,
-      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, javascript: true, partition: 'persist:checkout', devTools: true }
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, javascript: true, partition: 'persist:checkout', devTools: true }
     });
     // Write HTML to temp file to avoid data: URL encoding issues with emojis
     const tmpCheckoutPath = path.join(os.tmpdir(), 'windy-checkout-' + Date.now() + '.html');
@@ -4442,8 +4458,8 @@ app.on('web-contents-created', (event, contents) => {
 
   // Block new window creation (popups)
   contents.setWindowOpenHandler(({ url }) => {
-    // Allow https links via shell.openExternal instead
-    if (url.startsWith('https://')) {
+    // SEC-05: Validate URL before opening externally
+    if (isSafeURL(url)) {
       shell.openExternal(url);
     } else {
       console.warn('[Security] Blocked window open:', url);
