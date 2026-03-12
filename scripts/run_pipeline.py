@@ -23,7 +23,8 @@ from scripts.model_factory import (
     ct2_quantize_marian,
     certify_marian,
     certify_marian_ct2,
-    upload_model
+    upload_model,
+    process_opus_mt_pair
 )
 
 # Constants
@@ -272,49 +273,47 @@ def main():
         logger.info(f"Loaded {len(staged)} staged models")
 
         upload_count = 0
+        failed_count = 0
 
-        for record in staged:
+        for i, record in enumerate(staged, 1):
             # Skip if already uploaded
             if record.get('uploaded'):
+                logger.info(f"[{i}/{len(staged)}] Already uploaded: {record['pair_code']}")
                 continue
 
             pair_code = record['pair_code']
-            gpu_name = record['gpu_name']
-            ct2_name = record['ct2_name']
 
-            # Upload GPU model if certified
-            if record.get('gpu_cert') and record.get('gpu_cert_output') == 'PASS':
-                logger.info(f"Uploading GPU model: {gpu_name}")
+            # Only process models that passed GPU certification
+            if record.get('gpu_cert') == True:
+                logger.info(f"[{i}/{len(staged)}] Rebuilding and uploading PASS model: {pair_code}")
                 try:
-                    upload_model(gpu_name, ORG)
-                    record['gpu_uploaded'] = True
-                    upload_count += 1
+                    # Rebuild and upload the model using the full pipeline
+                    success = process_opus_mt_pair(pair_code, batch_num=i, total=len(staged))
+                    if success:
+                        record['uploaded'] = True
+                        upload_count += 1
+                        logger.info(f"✅ Successfully uploaded: {pair_code}")
+                    else:
+                        failed_count += 1
+                        logger.error(f"❌ Failed to upload: {pair_code}")
                 except Exception as e:
-                    logger.error(f"Failed to upload {gpu_name}: {e}")
+                    logger.error(f"❌ Exception uploading {pair_code}: {e}")
+                    failed_count += 1
 
-            # Upload CT2 model if certified
-            if record.get('ct2_cert') and record.get('ct2_cert_output') == 'PASS':
-                logger.info(f"Uploading CT2 model: {ct2_name}")
-                try:
-                    upload_model(ct2_name, ORG)
-                    record['ct2_uploaded'] = True
-                    upload_count += 1
-                except Exception as e:
-                    logger.error(f"Failed to upload {ct2_name}: {e}")
-
-            # Mark as uploaded if both attempted
-            if record.get('gpu_uploaded') or record.get('ct2_uploaded'):
-                record['uploaded'] = True
+                # Save progress after each model
+                save_staged(staged)
+            else:
+                logger.info(f"[{i}/{len(staged)}] Skipping failed model: {pair_code} (gpu_cert={record.get('gpu_cert')})")
 
         # Save updated records
         save_staged(staged)
-        logger.info(f"Upload phase complete: uploaded={upload_count}")
+        logger.info(f"Upload phase complete: uploaded={upload_count}, failed={failed_count}")
 
         # Send notification
         try:
             subprocess.run([
                 'openclaw', 'system', 'event',
-                '--text', f'Pipeline upload done: uploaded={upload_count}',
+                '--text', f'Pipeline upload done: uploaded={upload_count}, failed={failed_count}',
                 '--mode', 'now'
             ], check=False)
         except Exception as e:
