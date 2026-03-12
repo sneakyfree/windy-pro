@@ -399,8 +399,32 @@ class SetupWizard {
       status.className = 'wiz-acc-status wiz-acc-error';
       return;
     }
+    // Validate email format
+    if (typeof Validators !== 'undefined') {
+      const ev = Validators.email(email);
+      if (!ev.valid) {
+        status.textContent = '⚠️ ' + ev.error;
+        status.className = 'wiz-acc-status wiz-acc-error';
+        return;
+      }
+    }
+    if (name) {
+      if (typeof Validators !== 'undefined') {
+        const nv = Validators.displayName(name);
+        if (!nv.valid) {
+          status.textContent = '⚠️ ' + nv.error;
+          status.className = 'wiz-acc-status wiz-acc-error';
+          return;
+        }
+      }
+    }
     if (password.length < 8) {
       status.textContent = '⚠️ Password must be at least 8 characters';
+      status.className = 'wiz-acc-status wiz-acc-error';
+      return;
+    }
+    if (password.length > 128) {
+      status.textContent = '⚠️ Password is too long (max 128 characters)';
       status.className = 'wiz-acc-status wiz-acc-error';
       return;
     }
@@ -479,6 +503,16 @@ class SetupWizard {
     const result = this.overlay.querySelector('#wizCouponResult');
     const code = input.value.trim();
     if (!code) return;
+
+    // Validate coupon format
+    if (typeof Validators !== 'undefined') {
+      const cv = Validators.couponCode(code);
+      if (!cv.valid) {
+        result.textContent = '⚠️ ' + cv.error;
+        result.className = 'wiz-coupon-result coupon-invalid';
+        return;
+      }
+    }
 
     result.textContent = '⏳ Checking…';
     try {

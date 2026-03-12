@@ -199,7 +199,7 @@ class UpgradePanel {
         <div class="upgrade-cards">${cards}</div>
         <div class="upgrade-coupon-section">
           <div class="upgrade-coupon-row">
-            <input type="text" class="upgrade-coupon-input" id="upgradeCouponInput" placeholder="Enter coupon code…">
+            <input type="text" class="upgrade-coupon-input" id="upgradeCouponInput" placeholder="Enter coupon code…" maxlength="50">
             <button class="upgrade-coupon-btn" id="upgradeCouponBtn">Apply</button>
           </div>
           <div class="upgrade-coupon-result" id="upgradeCouponResult"></div>
@@ -237,6 +237,16 @@ class UpgradePanel {
         const result = this.panel.querySelector('#upgradeCouponResult');
         const code = input.value.trim();
         if (!code) return;
+
+        // Validate coupon format
+        if (typeof Validators !== 'undefined') {
+            const cv = Validators.couponCode(code);
+            if (!cv.valid) {
+                result.textContent = '⚠️ ' + cv.error;
+                result.className = 'upgrade-coupon-result coupon-invalid';
+                return;
+            }
+        }
 
         result.textContent = '⏳ Checking…';
         result.className = 'upgrade-coupon-result';

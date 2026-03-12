@@ -79,7 +79,7 @@ class TranslatePanel {
         <!-- Text input alternative -->
         <div class="translate-text-input-row">
           <textarea id="translateTextInput" class="translate-text-input"
-            placeholder="Or type text to translate…" rows="2"></textarea>
+            placeholder="Or type text to translate…" rows="2" maxlength="10000"></textarea>
           <button class="translate-text-btn" id="translateTextBtn" title="Translate text">→</button>
         </div>
 
@@ -493,6 +493,16 @@ class TranslatePanel {
     async _translateText() {
         const text = this._textInput.value.trim();
         if (!text) return;
+
+        // Validate text length
+        if (typeof Validators !== 'undefined') {
+            const tv = Validators.translateText(text);
+            if (!tv.valid) {
+                this._targetText.textContent = '⚠️ ' + tv.error;
+                this._resultArea.classList.add('visible');
+                return;
+            }
+        }
 
         this._sourceText.textContent = text;
         this._targetText.textContent = 'Translating…';

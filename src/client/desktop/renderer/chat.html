@@ -8,6 +8,7 @@
   <title>Windy Chat</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="chat.css">
+  <script src="input-validator.js"></script>
 </head>
 <body>
 
@@ -32,8 +33,8 @@
     </div>
 
     <div class="login-form">
-      <input type="text" id="login-username" placeholder="Username or @user:matrix.org" autocomplete="username" aria-label="Username or Matrix ID">
-      <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" aria-label="Password">
+      <input type="text" id="login-username" placeholder="Username or @user:matrix.org" autocomplete="username" aria-label="Username or Matrix ID" maxlength="255">
+      <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" aria-label="Password" maxlength="128">
       <button onclick="handleLogin()" id="login-btn" aria-label="Connect to Windy Chat">🌪️ Connect to Windy Chat</button>
       <div id="login-error" class="login-error" role="alert" aria-live="assertive" style="display:none;"></div>
       <p style="font-size:12px; color:var(--chat-text-muted); margin-top:8px;">
@@ -48,10 +49,10 @@
     <p class="subtitle">Create your Windy Chat identity</p>
 
     <div class="login-form">
-      <input type="text" id="reg-displayname" placeholder="Display name (e.g., Grant)" aria-label="Display name">
-      <input type="text" id="reg-username" placeholder="Username (e.g., grant.windy)" aria-label="Username">
-      <input type="password" id="reg-password" placeholder="Password" aria-label="Password">
-      <input type="password" id="reg-password-confirm" placeholder="Confirm password" aria-label="Confirm password">
+      <input type="text" id="reg-displayname" placeholder="Display name (e.g., Grant)" aria-label="Display name" maxlength="64">
+      <input type="text" id="reg-username" placeholder="Username (e.g., grant.windy)" aria-label="Username" maxlength="255">
+      <input type="password" id="reg-password" placeholder="Password (min 8 chars)" aria-label="Password" maxlength="128">
+      <input type="password" id="reg-password-confirm" placeholder="Confirm password" aria-label="Confirm password" maxlength="128">
       <button onclick="handleRegister()" aria-label="Create account">🚀 Create Account</button>
       <div id="reg-error" class="login-error" role="alert" aria-live="assertive" style="display:none;"></div>
       <p style="font-size:12px; color:var(--chat-text-muted); margin-top:8px;">
@@ -72,7 +73,7 @@
         </div>
       </div>
       <div class="sidebar-search">
-        <input type="text" id="contact-search" placeholder="🔍 Search contacts..." oninput="filterContacts()" aria-label="Search contacts">
+        <input type="text" id="contact-search" placeholder="🔍 Search contacts..." oninput="filterContacts()" aria-label="Search contacts" maxlength="200">
       </div>
       <div class="contact-list" id="contact-list">
         <!-- Contacts rendered here -->
@@ -197,7 +198,7 @@
       <!-- Homeserver -->
       <div style="margin-bottom:20px;">
         <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">Matrix Homeserver</label>
-        <input id="settings-homeserver" type="text" placeholder="https://matrix.org"
+        <input id="settings-homeserver" type="text" placeholder="https://matrix.org" maxlength="500"
                style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px; outline:none;">
         <div style="font-size:10px; color:var(--chat-text-muted); margin-top:4px;">Standard Matrix federation server</div>
       </div>
@@ -205,7 +206,7 @@
       <!-- Display Name -->
       <div style="margin-bottom:20px;">
         <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">Display Name</label>
-        <input id="settings-display-name" type="text" placeholder="Your display name"
+        <input id="settings-display-name" type="text" placeholder="Your display name" maxlength="64"
                style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px; outline:none;">
       </div>
 
@@ -353,18 +354,17 @@
       const password = document.getElementById('login-password').value;
       const errorEl = document.getElementById('login-error');
 
-      if (!username || !password) {
-        errorEl.textContent = 'Please enter username and password';
-        errorEl.style.display = 'block';
-        _loginInProgress = false;
-        return;
-      }
+      // Input validation
+      const uv = Validators.username(username);
+      if (!uv.valid) { Validators.showError(errorEl, uv.error); _loginInProgress = false; return; }
+      const pv = Validators.password(password);
+      if (!pv.valid) { Validators.showError(errorEl, pv.error); _loginInProgress = false; return; }
 
       // Loading state
       const loginBtn = document.getElementById('login-btn');
       loginBtn.disabled = true;
       loginBtn.textContent = '⏳ Connecting...';
-      errorEl.style.display = 'none';
+      Validators.clearError(errorEl);
 
       try {
         const result = await windyChat.login(username, password);
@@ -376,8 +376,7 @@
           showChatInterface();
           loadContacts();
         } else {
-          errorEl.textContent = result.error || 'Login failed';
-          errorEl.style.display = 'block';
+          Validators.showError(errorEl, result.error || 'Login failed. Please check your credentials.');
         }
       } finally {
         _loginInProgress = false;
@@ -397,20 +396,20 @@
       const confirm = document.getElementById('reg-password-confirm').value;
       const errorEl = document.getElementById('reg-error');
 
-      if (!username || !password || !displayName) {
-        errorEl.textContent = 'All fields are required';
-        errorEl.style.display = 'block';
-        _loginInProgress = false;
-        return;
-      }
+      // Input validation
+      const dv = Validators.displayName(displayName);
+      if (!dv.valid) { Validators.showError(errorEl, dv.error); _loginInProgress = false; return; }
+      const uv = Validators.username(username);
+      if (!uv.valid) { Validators.showError(errorEl, uv.error); _loginInProgress = false; return; }
+      const pv = Validators.password(password);
+      if (!pv.valid) { Validators.showError(errorEl, pv.error); _loginInProgress = false; return; }
       if (password !== confirm) {
-        errorEl.textContent = 'Passwords do not match';
-        errorEl.style.display = 'block';
+        Validators.showError(errorEl, 'Passwords do not match.');
         _loginInProgress = false;
         return;
       }
 
-      errorEl.style.display = 'none';
+      Validators.clearError(errorEl);
       try {
         const result = await windyChat.register(username, password, displayName);
 
@@ -420,8 +419,7 @@
           showChatInterface();
           loadContacts();
         } else {
-          errorEl.textContent = result.error || 'Registration failed';
-          errorEl.style.display = 'block';
+          Validators.showError(errorEl, result.error || 'Registration failed. Please try again.');
         }
       } finally {
         _loginInProgress = false;
@@ -752,16 +750,44 @@
     }
 
     async function saveSettings() {
+      const status = document.getElementById('settings-status');
+      const homeserver = document.getElementById('settings-homeserver').value.trim();
+      const displayNameVal = document.getElementById('settings-display-name').value.trim();
+
+      // Validate homeserver URL
+      if (homeserver) {
+        const hv = Validators.homeserverUrl(homeserver);
+        if (!hv.valid) {
+          status.textContent = '⚠️ ' + hv.error;
+          status.style.color = '#f87171';
+          status.style.display = 'block';
+          setTimeout(() => { status.style.display = 'none'; status.style.color = ''; }, 4000);
+          return;
+        }
+      }
+
+      // Validate display name
+      if (displayNameVal) {
+        const dv = Validators.displayName(displayNameVal);
+        if (!dv.valid) {
+          status.textContent = '⚠️ ' + dv.error;
+          status.style.color = '#f87171';
+          status.style.display = 'block';
+          setTimeout(() => { status.style.display = 'none'; status.style.color = ''; }, 4000);
+          return;
+        }
+      }
+
       const settings = {
-        homeserver: document.getElementById('settings-homeserver').value.trim(),
-        displayName: document.getElementById('settings-display-name').value.trim(),
+        homeserver: homeserver,
+        displayName: displayNameVal,
         language: document.getElementById('settings-language').value
       };
 
       await windyChat.setChatSettings(settings);
       myLanguage = settings.language;
 
-      const status = document.getElementById('settings-status');
+      status.style.color = '';
       status.textContent = '✅ Settings saved!';
       status.style.display = 'block';
       setTimeout(() => { status.style.display = 'none'; }, 2000);
@@ -780,15 +806,13 @@
     async function startNewChat() {
       const userId = document.getElementById('new-chat-user').value.trim();
       const errorEl = document.getElementById('new-chat-error');
-      if (errorEl) errorEl.style.display = 'none';
+      Validators.clearError(errorEl);
       if (!userId) return;
 
-      // Validate Matrix user ID format
-      if (!userId.match(/^@[a-zA-Z0-9._=\-\/]+:[a-zA-Z0-9.\-]+$/)) {
-        if (errorEl) {
-          errorEl.textContent = 'Invalid user ID format. Use @username:server.org';
-          errorEl.style.display = 'block';
-        }
+      // Validate Matrix user ID
+      const mv = Validators.matrixUserId(userId);
+      if (!mv.valid) {
+        Validators.showError(errorEl, mv.error);
         return;
       }
 
@@ -800,16 +824,10 @@
           openConversation(result.roomId, userId, userId.split(':')[0].replace('@', ''));
           setTimeout(loadContacts, 1000);
         } else {
-          if (errorEl) {
-            errorEl.textContent = result.error || 'Could not start conversation';
-            errorEl.style.display = 'block';
-          }
+          Validators.showError(errorEl, result.error || 'Could not start conversation. Check the user ID and try again.');
         }
       } catch (err) {
-        if (errorEl) {
-          errorEl.textContent = 'Connection error. Please try again.';
-          errorEl.style.display = 'block';
-        }
+        Validators.showError(errorEl, 'Connection error. Please check your internet and try again.');
       }
     }
 

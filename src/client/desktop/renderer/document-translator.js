@@ -75,7 +75,7 @@ class DocumentTranslator {
 
         <!-- Batch Tab -->
         <div class="doc-panel" id="doc-panel-batch" style="display:none">
-          <textarea id="batch-input" class="doc-batch-input" placeholder="Paste phrases here — one per line, or CSV format:&#10;hello&#10;goodbye&#10;thank you"></textarea>
+          <textarea id="batch-input" class="doc-batch-input" placeholder="Paste phrases here — one per line, or CSV format:&#10;hello&#10;goodbye&#10;thank you" maxlength="100000"></textarea>
           <div class="doc-batch-actions">
             <button class="doc-action-btn" id="batch-translate">🌍 Translate All</button>
             <button class="doc-action-btn" id="batch-export" style="display:none">📥 Export CSV</button>
@@ -149,8 +149,17 @@ class DocumentTranslator {
         const ext = name.split('.').pop().toLowerCase();
 
         if (!['txt', 'md', 'html', 'csv', 'pdf', 'docx'].includes(ext)) {
-            alert('Unsupported file type. Use: PDF, DOCX, TXT, MD, HTML');
+            alert('Unsupported file type. Allowed: PDF, DOCX, TXT, MD, HTML, CSV');
             return;
+        }
+
+        // Validate file size (max 50 MB)
+        if (typeof Validators !== 'undefined') {
+            const fv = Validators.fileUpload(file, { maxMB: 50, allowedExt: ['txt', 'md', 'html', 'csv', 'pdf', 'docx'] });
+            if (!fv.valid) {
+                alert(fv.error);
+                return;
+            }
         }
 
         let text = '';
@@ -225,6 +234,17 @@ class DocumentTranslator {
     async batchTranslate() {
         const input = document.getElementById('batch-input').value.trim();
         if (!input) return;
+
+        // Validate batch text length
+        if (typeof Validators !== 'undefined') {
+            const bv = Validators.batchText(input);
+            if (!bv.valid) {
+                const result = document.getElementById('batch-results');
+                result.style.display = 'block';
+                document.getElementById('batch-tbody').innerHTML = `<tr><td colspan="2" style="color:#f87171">⚠️ ${bv.error}</td></tr>`;
+                return;
+            }
+        }
 
         const phrases = input.split('\n').filter(l => l.trim());
         const tbody = document.getElementById('batch-tbody');

@@ -35,7 +35,7 @@ class VoiceCloneManager {
         <div class="vc-section">
           <h3>Record New Voice Sample</h3>
           <p class="vc-hint">Record 30–60 seconds of clear speech for best results</p>
-          <input type="text" id="vc-name" class="vc-input" placeholder="Clone name (e.g. My Voice)" />
+          <input type="text" id="vc-name" class="vc-input" placeholder="Clone name (e.g. My Voice)" maxlength="64" />
           <div class="vc-record-area">
             <button class="vc-record-btn" id="vc-record-btn">
               <span id="vc-record-icon">🎤</span>
@@ -106,6 +106,11 @@ class VoiceCloneManager {
         // Upload file
         document.getElementById('vc-upload-file').addEventListener('click', async () => {
             const name = document.getElementById('vc-name').value.trim() || 'Voice Clone';
+            // Validate clone name
+            if (typeof Validators !== 'undefined') {
+                const nv = Validators.cloneName(name);
+                if (!nv.valid) { alert(nv.error); return; }
+            }
             try {
                 const result = await window.windyAPI.uploadVoiceCloneFile(name);
                 if (result?.success) {
@@ -219,6 +224,11 @@ class VoiceCloneManager {
 
     async processRecording() {
         const name = document.getElementById('vc-name').value.trim() || `Voice Clone ${this.clones.length + 1}`;
+        // Validate clone name
+        if (typeof Validators !== 'undefined') {
+            const nv = Validators.cloneName(name);
+            if (!nv.valid) { alert(nv.error); return; }
+        }
         const blob = new Blob(this.recordedChunks, { type: 'audio/webm' });
 
         // Convert to base64

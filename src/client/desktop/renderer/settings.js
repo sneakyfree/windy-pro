@@ -605,8 +605,16 @@ class SettingsPanel {
     const cloudUrlInput = this.panel.querySelector('#cloudUrl');
     if (cloudUrlInput) {
       cloudUrlInput.addEventListener('change', (e) => {
-        this.saveSetting('cloudUrl', e.target.value);
-        this.app.cloudUrl = e.target.value;
+        const val = e.target.value.trim();
+        if (val) {
+          const cv = Validators.cloudUrl(val);
+          if (!cv.valid) {
+            this.showToast('⚠️ ' + cv.error);
+            return;
+          }
+        }
+        this.saveSetting('cloudUrl', val);
+        this.app.cloudUrl = val;
       });
     }
 
@@ -642,6 +650,22 @@ class SettingsPanel {
 
         if (!email || !password) {
           cloudLoginStatus.textContent = '⚠️ Enter email and password';
+          cloudLoginStatus.style.color = '#EF4444';
+          return;
+        }
+
+        // Validate email format
+        const ev = Validators.email(email);
+        if (!ev.valid) {
+          cloudLoginStatus.textContent = '⚠️ ' + ev.error;
+          cloudLoginStatus.style.color = '#EF4444';
+          return;
+        }
+
+        // Validate password length
+        const pv = Validators.password(password);
+        if (!pv.valid) {
+          cloudLoginStatus.textContent = '⚠️ ' + pv.error;
           cloudLoginStatus.style.color = '#EF4444';
           return;
         }
