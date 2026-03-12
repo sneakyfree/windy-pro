@@ -12,6 +12,7 @@ const { app, dialog, shell } = require('electron');
 const https = require('https');
 const path = require('path');
 const fs = require('fs');
+const log = require('./logger')('AutoUpdater');
 
 class AutoUpdater {
     constructor(options = {}) {
@@ -62,7 +63,7 @@ class AutoUpdater {
             const update = JSON.parse(data);
 
             if (update.available && this._isNewer(update.version)) {
-                console.log(`[AutoUpdater] Update available: v${update.version}`);
+                log.state('checkForUpdates', `update available: v${update.version}`);
 
                 if (this._onUpdate) {
                     this._onUpdate(update);
@@ -73,10 +74,10 @@ class AutoUpdater {
                 return update;
             }
 
-            console.log('[AutoUpdater] Already up to date');
+            log.exit('checkForUpdates', { upToDate: true });
             return null;
         } catch (err) {
-            console.warn('[AutoUpdater] Check failed:', err.message);
+            log.warn('checkForUpdates', `check failed: ${err.message}`);
             return null;
         } finally {
             this._checking = false;

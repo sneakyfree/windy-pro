@@ -13,6 +13,7 @@
 
 class WindySync {
     constructor(app) {
+        this._log = createLogger('CloudSync');
         this.app = app;
         this.baseUrl = localStorage.getItem('windy_cloud_api_url') || (window.API_CONFIG || {}).baseUrl || 'https://windypro.thewindstorm.uk';
         this.token = localStorage.getItem('windy_cloud_token') || null;
@@ -29,7 +30,7 @@ class WindySync {
         // Load user from storage
         try {
             this.user = JSON.parse(localStorage.getItem('windy_cloud_user'));
-        } catch (e) { console.warn('[Sync] Init error:', e.message); }
+        } catch (e) { this._log.warn('constructor', `init error: ${e.message}`); }
 
         // Process queue based on frequency
         if (this.queue.length > 0 && this.syncFrequency === 'immediate') {
@@ -96,7 +97,7 @@ class WindySync {
             fetch(`${this.baseUrl}/api/v1/auth/logout`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${this.token}` }
-            }).catch(e => console.debug('[Sync] Logout request failed:', e.message));
+            }).catch(e => this._log.debug('logout', `server logout failed: ${e.message}`));
         }
         this.token = null;
         this.refreshToken = null;
@@ -189,14 +190,14 @@ class WindySync {
 
             if (res.ok) {
                 const data = await res.json();
-                console.debug('[CloudSync] Recording uploaded:', data.id);
+                this._log.exit('uploadRecording', { id: data.id });
                 this._showSyncToast('☁️ Synced to cloud');
                 return data.id;
             } else {
                 throw new Error(`Upload failed: ${res.status}`);
             }
         } catch (err) {
-            console.warn('[CloudSync] Upload failed, queueing:', err.message);
+            this._log.warn('uploadRecording', `upload failed, queueing: ${err.message}`);
             this._queueRecording(payload);
             this._showSyncToast('⏳ Queued for sync');
             return null;
@@ -208,7 +209,7 @@ class WindySync {
     // ═══════════════════════════════════════════════
     _queueRecording(payload) {
         if (this.queue.length >= 500) {
-            console.warn('[CloudSync] Queue full (500 max). Dropping oldest.');
+            this._log.warn('_queueRecording', 'queue full (500 max), dropping oldest');
             this.queue.shift();
         }
         this.queue.push({ payload, attempts: 0, queuedAt: new Date().toISOString() });
@@ -227,7 +228,7 @@ class WindySync {
             this._showSyncToast(`☁️ Uploading ${i + 1} of ${this.queue.length}...`);
 
             if (item.attempts >= this._maxRetries) {
-                console.warn('[CloudSync] Max retries reached, dropping item');
+                this._log.warn('_processQueue', 'max retries reached, dropping item');
                 succeeded.push(i);
                 continue;
             }
@@ -239,7 +240,7 @@ class WindySync {
                 });
                 if (res.ok) {
                     succeeded.push(i);
-                    console.debug('[CloudSync] Queue item synced');
+                    this._log.debug('_processQueue', 'queue item synced');
                 } else {
                     item.attempts++;
                 }
@@ -258,7 +259,7 @@ class WindySync {
             // Exponential backoff: 10s, 20s, 40s, 80s, 160s (capped at 5 min)
             const maxAttempts = Math.max(...this.queue.map(q => q.attempts));
             const delay = Math.min(this._retryDelay * Math.pow(2, maxAttempts), 300000);
-            console.debug(`[CloudSync] ${this.queue.length} items remaining, retrying in ${delay / 1000}s`);
+            this._log.debug('_processQueue', `${this.queue.length} items remaining, retrying in ${delay / 1000}s`);
             setTimeout(() => this._processQueue(), delay);
         } else {
             this._showSyncToast('☁️ All recordings synced!');
@@ -295,7 +296,7 @@ class WindySync {
         try {
             const res = await this._authedFetch('/api/v1/recordings/stats');
             if (res.ok) return (await res.json()).stats;
-        } catch (e) { console.warn('[Sync] Queue process error:', e.message); }
+        } catch (e) { this._log.warn('getStats', `process error: ${e.message}`); }
         return null;
     }
 
@@ -306,7 +307,7 @@ class WindySync {
         if (this.app?._showToast) {
             this.app._showToast(msg, 'info', 2000);
         } else {
-            console.debug('[CloudSync]', msg);
+            this._log.debug('_showSyncToast', msg);
         }
     }
 

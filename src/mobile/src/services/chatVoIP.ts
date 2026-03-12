@@ -9,6 +9,9 @@
  * K5.4 Translated subtitles, K5.5 Call history, K5.6 PiP
  */
 
+import { createLogger } from './LogService';
+const log = createLogger('MobileVoIP');
+
 // ── Types ──
 
 export type CallState =
@@ -122,7 +125,7 @@ export class MobileCallManager {
       }
     }, CALL_TIMEOUT_MS);
 
-    console.log(`📞 Outgoing ${type} call: ${this.callId}`);
+    log.exit('startCall', { callId: this.callId, type });
   }
 
   /**
@@ -148,7 +151,7 @@ export class MobileCallManager {
     this.startTime = Date.now();
     this.setState('connected');
 
-    console.log(`📞 Answered call: ${this.callId}`);
+    log.exit('answerCall', { callId: this.callId });
   }
 
   /**
@@ -161,7 +164,7 @@ export class MobileCallManager {
   ): { callId: string; callType: CallType; caller: string } | null {
     if (this.state !== 'idle') {
       // Busy — reject
-      console.log(`📞 Rejecting call from ${callerName} — busy`);
+      log.state('handleIncomingCall', `rejecting call from ${callerName} — busy`);
       return null;
     }
 
@@ -237,7 +240,7 @@ export class MobileCallManager {
     // In production:
     // import { mediaDevices } from 'react-native-webrtc';
     // localStream.getVideoTracks()[0]._switchCamera();
-    console.log('📷 Camera switched');
+    log.state('switchCamera', 'camera switched');
   }
 
   /**
@@ -333,12 +336,12 @@ export class MobileSubtitleEngine {
     this.isActive = true;
     // In production: tap into WebRTC remote audio stream
     // Route to local Whisper STT → translate → emit subtitle
-    console.log('🎬 Mobile subtitle engine started');
+    log.state('SubtitleEngine.start', 'subtitle engine started');
   }
 
   stop(): void {
     this.isActive = false;
-    console.log('🎬 Mobile subtitle engine stopped');
+    log.state('SubtitleEngine.stop', 'subtitle engine stopped');
   }
 
   toggle(): boolean {
@@ -364,7 +367,7 @@ export class MobileSubtitleEngine {
         timestamp: Date.now(),
       });
     } catch (err) {
-      console.error('Subtitle translation error:', err);
+      log.error('SubtitleEngine.processTranscript', err);
     }
   }
 }
@@ -419,12 +422,12 @@ export class MobilePiP {
     //
     // import PIPModule from 'react-native-pip-android';
     // PIPModule.enterPipMode(300, 200); // width, height ratio
-    console.log('🖼️ Entering PiP mode');
+    log.state('PiP.enter', 'entering PiP mode');
     return true;
   }
 
   static async exit(): Promise<boolean> {
-    console.log('🖼️ Exiting PiP mode');
+    log.state('PiP.exit', 'exiting PiP mode');
     return true;
   }
 }

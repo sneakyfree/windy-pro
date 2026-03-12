@@ -11,6 +11,7 @@
 
 class TranslatePanel {
     constructor(app) {
+        this._log = createLogger('TranslatePanel');
         this.app = app;
         this.isOpen = false;
         this.isRecording = false;
@@ -207,7 +208,7 @@ class TranslatePanel {
             this.languages = data.languages || [];
             this._populateDropdowns();
         } catch (err) {
-            console.warn('[Translate] Could not load languages, using defaults:', err.message);
+            this._log.warn('_loadLanguages', `could not load languages: ${err.message}`);
             this.languages = [
                 { code: 'en', name: 'English' }, { code: 'es', name: 'Spanish' },
                 { code: 'fr', name: 'French' }, { code: 'de', name: 'German' },
@@ -272,7 +273,7 @@ class TranslatePanel {
             };
             this._recorder.start(250); // 250ms chunks for progress
         } catch (err) {
-            console.error('[Translate] Mic access failed:', err);
+            this._log.error('_startSpeechCapture', err);
             this.isRecording = false;
             this._micBtn.classList.remove('recording');
         }
@@ -409,7 +410,7 @@ class TranslatePanel {
                 };
             });
         } catch (localErr) {
-            console.warn('[Translate] Whisper unavailable:', localErr.message);
+            this._log.warn('_translateSpeech', `Whisper unavailable: ${localErr.message}`);
             this._sourceText.textContent = '⚠️ Translation unavailable';
             this._targetText.textContent = 'Start the Windy Pro engine to enable speech translation.';
             return;
@@ -462,7 +463,7 @@ class TranslatePanel {
                 throw new Error(result?.error || 'Translation returned no result');
             }
         } catch (textErr) {
-            console.warn('[Translate] Text translation failed:', textErr.message);
+            this._log.warn('_translateSpeech', `text translation failed: ${textErr.message}`);
         }
 
         // ── Fallback: show English result with note ──
@@ -507,7 +508,7 @@ class TranslatePanel {
                     return;
                 }
             } catch (e) {
-                console.warn('[Translate] Offline fallback failed:', e);
+                this._log.warn('_translateText', `offline fallback failed: ${e.message || e}`);
             }
             this._targetText.textContent = '⚠️ Offline — translation queued';
             this.offlineQueue.push({ type: 'text', text, sourceLang: this._sourceLang.value, targetLang: this._targetLang.value });
@@ -535,7 +536,7 @@ class TranslatePanel {
                 throw new Error(result?.error || 'Translation failed');
             }
         } catch (err) {
-            console.error('[Translate] Text translation failed:', err.message);
+            this._log.error('_translateText', err);
             this._sourceText.textContent = text;
             this._targetText.textContent = '';
             this._confidence.innerHTML = `
@@ -659,7 +660,7 @@ class TranslatePanel {
             btn.textContent = '⭐✓';
             setTimeout(() => { btn.textContent = '⭐'; }, 1500);
         } catch (err) {
-            console.warn('[Translate] Save favorite failed:', err);
+            this._log.warn('_saveFavorite', `save failed: ${err.message || err}`);
             btn.textContent = '⚠️';
             setTimeout(() => { btn.textContent = '⭐'; }, 1000);
         }
@@ -678,7 +679,7 @@ class TranslatePanel {
             this.history = data.translations || [];
             this._renderHistory();
         } catch (err) {
-            console.warn('[Translate] History load failed:', err.message);
+            this._log.warn('_loadHistory', `load failed: ${err.message}`);
         }
     }
 
@@ -750,7 +751,7 @@ class TranslatePanel {
     }
 
     async _flushOfflineQueue() {
-        console.debug(`[Translate] Flushing ${this.offlineQueue.length} queued translations`);
+        this._log.entry('_flushOfflineQueue', { count: this.offlineQueue.length });
         const queue = [...this.offlineQueue];
         this.offlineQueue = [];
         for (const item of queue) {
@@ -765,7 +766,7 @@ class TranslatePanel {
                 }
                 // Speech blobs can't be easily re-sent after page lifecycle, skip them
             } catch (err) {
-                console.warn('[Translate] Queue flush failed for item:', err.message);
+                this._log.warn('_flushOfflineQueue', `item failed: ${err.message}`);
             }
         }
     }

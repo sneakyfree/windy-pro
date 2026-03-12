@@ -28,6 +28,8 @@ const CALL_TIMEOUT_MS = 30000;  // Auto-decline after 30 seconds
 const SUBTITLE_FADE_MS = 5000;  // Subtitle fade-out after silence
 const STT_BUFFER_MS = 2000;     // 2-second sliding window for STT
 
+const log = require('../logger')('ChatVoIP');
+
 const CALL_STATES = {
   IDLE: 'idle',
   RINGING_OUTGOING: 'ringing_outgoing',
@@ -82,7 +84,7 @@ class CallManager {
 
       return servers;
     } catch (err) {
-      console.warn('Failed to get TURN servers, using STUN only:', err.message);
+      log.warn('getTurnServers', `failed, using STUN only: ${err.message}`);
       return ICE_SERVERS;
     }
   }
@@ -180,7 +182,7 @@ class CallManager {
         }
       }, CALL_TIMEOUT_MS);
 
-      console.log(`📞 Outgoing ${type} call: ${this.callId}`);
+      log.exit('startCall', { callId: this.callId, type });
 
     } catch (err) {
       this._setState(CALL_STATES.IDLE);
@@ -256,7 +258,7 @@ class CallManager {
         version: 1,
       });
 
-      console.log(`📞 Answered ${this.callType} call: ${this.callId}`);
+      log.exit('answerCall', { callId: this.callId, type: this.callType });
 
     } catch (err) {
       this._setState(CALL_STATES.IDLE);
@@ -328,7 +330,7 @@ class CallManager {
       version: 1,
     });
 
-    console.log(`📞 Call ended: ${this.callId} (${formatDuration(duration)})`);
+    log.exit('endCall', { callId: this.callId, reason, duration: formatDuration(duration) });
 
     // Add to call history
     CallHistory.addEntry({
@@ -413,10 +415,10 @@ class CallManager {
 
       screenTrack.onended = () => this.stopScreenShare();
 
-      console.log('🖥️ Screen sharing started');
+      log.state('startScreenShare', 'screen sharing started');
       return true;
     } catch (err) {
-      console.error('Screen share error:', err);
+      log.error('startScreenShare', err);
       return false;
     }
   }
@@ -436,7 +438,7 @@ class CallManager {
       await sender.replaceTrack(cameraTrack);
     }
 
-    console.log('🖥️ Screen sharing stopped');
+    log.state('stopScreenShare', 'screen sharing stopped');
   }
 
   // ── Internal ──
@@ -451,7 +453,7 @@ class CallManager {
       try {
         await this.matrixClient.sendEvent(this.roomId, type, content);
       } catch (err) {
-        console.error(`Failed to send ${type}:`, err);
+        log.error('_sendMatrixEvent', { type, message: err.message });
       }
     }
   }
@@ -591,10 +593,10 @@ class SubtitleEngine {
       processor.connect(this.audioContext.destination);
 
       this.isActive = true;
-      console.log('🎬 Subtitle engine started');
+      log.state('SubtitleEngine.start', 'subtitle engine started');
 
     } catch (err) {
-      console.error('Subtitle engine error:', err);
+      log.error('SubtitleEngine.start', err);
     }
   }
 
@@ -631,7 +633,7 @@ class SubtitleEngine {
       this.lastSubtitleTime = Date.now();
 
     } catch (err) {
-      console.error('Subtitle processing error:', err);
+      log.error('SubtitleEngine._processBuffer', err);
     }
   }
 
@@ -666,7 +668,7 @@ class SubtitleEngine {
       this.audioContext = null;
     }
     this.audioBuffer = [];
-    console.log('🎬 Subtitle engine stopped');
+    log.state('SubtitleEngine.stop', 'subtitle engine stopped');
   }
 
   /** Toggle subtitles on/off. */
@@ -692,7 +694,7 @@ class CallHistory {
       CallHistory.entries = CallHistory.entries.slice(0, 100);
     }
 
-    console.log(`📋 Call history: ${entry.direction} ${entry.type} (${formatDuration(entry.duration)})`);
+    log.state('CallHistory.addEntry', `${entry.direction} ${entry.type} (${formatDuration(entry.duration)})`);
   }
 
   static getEntries(filter = 'all') {
@@ -725,11 +727,11 @@ class PictureInPicture {
     try {
       if (document.pictureInPictureEnabled && !document.pictureInPictureElement) {
         await videoElement.requestPictureInPicture();
-        console.log('🖼️ Entered Picture-in-Picture');
+        log.state('PiP.enter', 'entered Picture-in-Picture');
         return true;
       }
     } catch (err) {
-      console.error('PiP error:', err);
+      log.error('PiP.enter', err);
     }
     return false;
   }
@@ -741,7 +743,7 @@ class PictureInPicture {
         return true;
       }
     } catch (err) {
-      console.error('PiP exit error:', err);
+      log.error('PiP.exit', err);
     }
     return false;
   }

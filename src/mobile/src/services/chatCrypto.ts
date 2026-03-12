@@ -6,6 +6,9 @@
  * Handles device verification, key backup, and cross-signing.
  */
 
+import { createLogger } from './LogService';
+const log = createLogger('MobileChatCrypto');
+
 // ── Types ──
 
 export interface CryptoStatus {
@@ -54,15 +57,16 @@ export class MobileChatCrypto {
    * K7.1: Olm/Megolm Installation
    */
   async initialize(): Promise<boolean> {
+    log.entry('initialize');
     try {
       if (this.client.initRustCrypto) {
         await this.client.initRustCrypto();
-        console.log('🔐 Mobile Rust crypto initialized');
+        log.state('initialize', 'Rust crypto initialized');
       } else if (this.client.initCrypto) {
         await this.client.initCrypto();
-        console.log('🔐 Mobile Olm crypto initialized');
+        log.state('initialize', 'Olm crypto initialized');
       } else {
-        console.warn('⚠️  No crypto module available');
+        log.warn('initialize', 'no crypto module available');
         return false;
       }
 
@@ -72,9 +76,10 @@ export class MobileChatCrypto {
       // Check for existing backup
       await this.checkKeyBackup();
 
+      log.exit('initialize', { success: true });
       return true;
     } catch (err) {
-      console.error('Mobile crypto init failed:', err);
+      log.error('initialize', err);
       return false;
     }
   }
@@ -91,7 +96,7 @@ export class MobileChatCrypto {
       });
       return true;
     } catch (err) {
-      console.error('Enable encryption error:', err);
+      log.error('enableRoomEncryption', err);
       return false;
     }
   }
@@ -219,7 +224,7 @@ export class MobileChatCrypto {
       });
       return true;
     } catch (err) {
-      console.error('Cross-signing error:', err);
+      log.error('bootstrapCrossSigning', err);
       return false;
     }
   }
@@ -234,7 +239,9 @@ export class MobileChatCrypto {
   }
 
   destroy(): void {
+    log.entry('destroy');
     this.cryptoReady = false;
     this.backupVersion = null;
+    log.exit('destroy');
   }
 }

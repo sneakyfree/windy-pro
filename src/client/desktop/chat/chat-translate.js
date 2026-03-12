@@ -12,6 +12,7 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const log = require('../logger')('ChatTranslator');
 
 class ChatTranslator {
   constructor(store) {
@@ -44,6 +45,7 @@ class ChatTranslator {
     if (!text || !srcLang || !tgtLang || srcLang === tgtLang) {
       return text;
     }
+    log.entry('translate', { srcLang, tgtLang, textLen: text.length });
 
     // Check cache first
     const cacheKey = `${srcLang}:${tgtLang}:${text}`;
@@ -52,6 +54,7 @@ class ChatTranslator {
       // P2-M4: Move to end (most recently used) for proper LRU
       this.cache.delete(cacheKey);
       this.cache.set(cacheKey, value);
+      log.exit('translate', { cached: true });
       return value;
     }
 
@@ -66,9 +69,10 @@ class ChatTranslator {
       }
       this.cache.set(cacheKey, translated);
       
+      log.exit('translate', { translatedLen: translated.length });
       return translated;
     } catch (err) {
-      console.error('[ChatTranslator] Translation failed:', err.message);
+      log.error('translate', err);
       this._available = false;
       // Throw with specific type so UI can show "translation unavailable" badge
       const unavailableErr = new Error(`Translation unavailable: ${err.message}`);
@@ -162,7 +166,7 @@ class ChatTranslator {
           // P1-R2: Removed unsafe FIFO fallback — unmatched responses are dropped
           // If server doesn't echo request_id, the request will timeout after 10s
         } catch (e) {
-          console.debug('[ChatTranslator] Non-JSON message received');
+          log.debug('_onMessage', 'non-JSON message received');
         }
       });
 
@@ -231,8 +235,9 @@ class ChatTranslator {
    * Disconnect and cleanup
    */
   destroy() {
+    log.entry('destroy');
     if (this._ws) {
-      try { this._ws.close(); } catch (e) { console.debug('[ChatTranslator] WS close error:', e.message); }
+      try { this._ws.close(); } catch (e) { log.debug('destroy', `WS close error: ${e.message}`); }
       this._ws = null;
     }
     this._wsReady = false;
@@ -244,6 +249,7 @@ class ChatTranslator {
     }
     this._pending.clear();
     this.cache.clear();
+    log.exit('destroy');
   }
 }
 

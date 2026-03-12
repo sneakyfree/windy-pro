@@ -15,6 +15,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const log = require('../logger')('ChatCrypto');
 
 // ── K7.1: Crypto Initialization ──
 
@@ -34,22 +35,23 @@ class ChatCrypto {
   async initialize() {
     // Guard: prevent double initialization (listeners would accumulate)
     if (this.cryptoReady) {
-      console.debug('🔐 Crypto already initialized — skipping');
+      log.state('initialize', 'already initialized — skipping');
       return true;
     }
+    log.entry('initialize');
     try {
       // Prefer Rust crypto (newer, maintained, no external Olm needed)
       if (this.client.initRustCrypto) {
         await this.client.initRustCrypto();
-        console.log('🔐 Rust crypto initialized');
+        log.state('initialize', 'Rust crypto initialized');
       } else if (this.client.initCrypto) {
         // Fallback: legacy Olm/Megolm
         const Olm = require('@matrix-org/olm');
         await Olm.init();
         await this.client.initCrypto();
-        console.log('🔐 Olm crypto initialized');
+        log.state('initialize', 'Olm crypto initialized');
       } else {
-        console.warn('⚠️  No crypto module available — E2EE disabled');
+        log.warn('initialize', 'no crypto module available — E2EE disabled');
         return false;
       }
 
@@ -61,9 +63,10 @@ class ChatCrypto {
       // Try to restore key backup
       await this._restoreKeyBackup();
 
+      log.exit('initialize', { success: true });
       return true;
     } catch (err) {
-      console.error('Crypto init failed:', err.message);
+      log.error('initialize', err);
       this.cryptoReady = false;
       return false;
     }
@@ -75,9 +78,10 @@ class ChatCrypto {
    */
   async enableRoomEncryption(roomId) {
     if (!this.cryptoReady) {
-      console.warn('Cannot enable encryption — crypto not initialized');
+      log.warn('enableRoomEncryption', 'crypto not initialized');
       return false;
     }
+    log.entry('enableRoomEncryption', { roomId: roomId?.slice(0, 12) });
 
     try {
       await this.client.sendStateEvent(roomId, 'm.room.encryption', {
@@ -85,10 +89,10 @@ class ChatCrypto {
         rotation_period_ms: 604800000, // 7 days
         rotation_period_msgs: 100,
       });
-      console.log(`🔐 Encryption enabled for room ${roomId.slice(0, 12)}`);
+      log.exit('enableRoomEncryption', { success: true });
       return true;
     } catch (err) {
-      console.error('Enable encryption error:', err.message);
+      log.error('enableRoomEncryption', err);
       return false;
     }
   }
@@ -101,6 +105,7 @@ class ChatCrypto {
    */
   async startVerification(userId, deviceId) {
     if (!this.cryptoReady) throw new Error('Crypto not initialized');
+    log.entry('startVerification', { userId, deviceId });
 
     try {
       const request = await this.client.requestVerification(userId);
@@ -108,10 +113,11 @@ class ChatCrypto {
 
       request.on('change', () => {
         if (request.phase === 'started') {
-          console.log(`🔐 Verification started with ${userId}`);
+          log.state('startVerification', `verification started with ${userId}`);
         }
       });
 
+      log.exit('startVerification', { transactionId: request.channel.transactionId });
       return {
         transactionId: request.channel.transactionId,
         userId,
@@ -119,7 +125,7 @@ class ChatCrypto {
         status: 'requested',
       };
     } catch (err) {
-      console.error('Start verification error:', err.message);
+      log.error('startVerification', err);
       throw err;
     }
   }
@@ -181,7 +187,7 @@ class ChatCrypto {
         keys: d.keys,
       }));
     } catch (err) {
-      console.error('Get devices error:', err.message);
+      log.error('getDeviceList', err);
       return [];
     }
   }
@@ -215,7 +221,7 @@ class ChatCrypto {
         createdAt: new Date().toISOString(),
       };
 
-      console.log(`🔑 Key backup created (version: ${backupVersion.version})`);
+      log.exit('createKeyBackup', { version: backupVersion.version });
 
       return {
         success: true,
@@ -224,7 +230,7 @@ class ChatCrypto {
         message: 'Save your recovery key — you will need it on a new device!',
       };
     } catch (err) {
-      console.error('Key backup creation error:', err.message);
+      log.error('createKeyBackup', err);
       throw err;
     }
   }
@@ -258,7 +264,7 @@ class ChatCrypto {
         );
       }
 
-      console.log(`🔑 Key backup restored: ${result.total} keys`);
+      log.exit('restoreKeyBackup', { totalKeys: result.total, imported: result.imported });
 
       return {
         success: true,
@@ -267,7 +273,7 @@ class ChatCrypto {
         message: `Restored ${result.imported} encryption keys`,
       };
     } catch (err) {
-      console.error('Key backup restore error:', err.message);
+      log.error('restoreKeyBackup', err);
       return { success: false, message: err.message };
     }
   }
@@ -280,7 +286,7 @@ class ChatCrypto {
       const backupInfo = await this.client.getKeyBackupVersion();
       if (backupInfo) {
         this.backupInfo = { version: backupInfo.version, hasBackup: true };
-        console.log(`🔑 Key backup found (version: ${backupInfo.version})`);
+        log.state('_restoreKeyBackup', `backup found (version: ${backupInfo.version})`);
       }
     } catch {
       // No backup — that's OK
@@ -303,10 +309,10 @@ class ChatCrypto {
         }),
       });
 
-      console.log('🔐 Cross-signing bootstrapped');
+      log.exit('bootstrapCrossSigning', { success: true });
       return true;
     } catch (err) {
-      console.error('Cross-signing bootstrap error:', err.message);
+      log.error('bootstrapCrossSigning', err);
       return false;
     }
   }
@@ -327,6 +333,7 @@ class ChatCrypto {
    * Cleanup.
    */
   destroy() {
+    log.entry('destroy');
     // Clean up any event listeners on pending verification requests
     for (const [, request] of this.verificationRequests) {
       try { request.removeAllListeners?.(); } catch { /* best-effort */ }
@@ -334,6 +341,7 @@ class ChatCrypto {
     this.verificationRequests.clear();
     this.cryptoReady = false;
     this.backupInfo = null;
+    log.exit('destroy');
   }
 }
 

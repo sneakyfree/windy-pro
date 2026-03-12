@@ -6,6 +6,7 @@
 class UpgradePanel {
     constructor(app) {
         this.app = app;
+        this._log = createLogger('UpgradePanel');
         this.panel = null;
         this.isOpen = false;
         this._pollTimer = null;
@@ -84,7 +85,7 @@ class UpgradePanel {
                 }
             }
         } catch (e) {
-            console.warn('[Upgrade] Could not load Stripe config:', e.message);
+            this._log.warn('_loadStripeConfig', `could not load config: ${e.message}`);
         }
     }
 
@@ -336,7 +337,7 @@ class UpgradePanel {
                     else lifetimePlanUrls[key] = result.url;
                     this._activeSessions.push({ sessionId: result.sessionId, tier: key, url: result.url });
                 } else if (result?.ok && result.url) {
-                    console.warn('[Upgrade] Rejected non-Stripe checkout URL for', key, billing);
+                    this._log.warn('_startCheckout', `rejected non-Stripe checkout URL for ${key} ${billing}`);
                 }
             }
 

@@ -5,6 +5,7 @@
 
 class VoiceCloneManager {
     constructor() {
+        this._log = createLogger('VoiceCloneManager');
         this.clones = [];
         this.activeCloneId = null;
         this.recorder = null;
@@ -111,7 +112,7 @@ class VoiceCloneManager {
                     this.clones.push(result.clone);
                     this.render(container);
                 }
-            } catch (err) { console.error('[VCM] Upload error:', err); }
+            } catch (err) { this._log.error('uploadFile', err); }
         });
 
         // Preview / Activate / Delete
@@ -200,7 +201,7 @@ class VoiceCloneManager {
             draw();
 
         } catch (err) {
-            console.error('[VCM] Mic error:', err);
+            this._log.error('startRecording', err);
         }
     }
 
@@ -236,7 +237,7 @@ class VoiceCloneManager {
                 if (container) this.render(container);
             }
         } catch (err) {
-            console.error('[VCM] Create clone error:', err);
+            this._log.error('processRecording', err);
         }
     }
 }

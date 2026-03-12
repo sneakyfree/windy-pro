@@ -13,6 +13,9 @@
  *   K4.5 Media gallery (grid view, filter)
  */
 
+import { createLogger } from './LogService';
+const log = createLogger('ChatMedia');
+
 // ── Types ──
 
 export interface MediaLimits {
@@ -117,10 +120,10 @@ export async function pickPhoto(source: 'camera' | 'library'): Promise<Processed
     //   ? await launchCamera(options)
     //   : await launchImageLibrary(options);
 
-    console.log(`📸 Photo pick from ${source} — stub`);
+    log.entry('pickPhoto', { source });
     return null;
   } catch (err) {
-    console.error('Photo pick error:', err);
+    log.error('pickPhoto', err);
     return null;
   }
 }
@@ -175,10 +178,10 @@ export async function pickVideo(source: 'camera' | 'library'): Promise<Processed
     //   ? await launchCamera(options)
     //   : await launchImageLibrary(options);
 
-    console.log(`🎬 Video pick from ${source} — stub`);
+    log.entry('pickVideo', { source });
     return null;
   } catch (err) {
-    console.error('Video pick error:', err);
+    log.error('pickVideo', err);
     return null;
   }
 }
@@ -232,10 +235,10 @@ export class MobileVoiceRecorder {
         }
       }, 100);
 
-      console.log('🎤 Voice recording started');
+      log.exit('VoiceRecorder.start', { recording: true });
       return true;
     } catch (err) {
-      console.error('Voice record start error:', err);
+      log.error('VoiceRecorder.start', err);
       return false;
     }
   }
@@ -252,7 +255,7 @@ export class MobileVoiceRecorder {
     // In production: stop the expo-av recording and get the URI
     const duration = (Date.now() - this.startTime) / 1000;
 
-    console.log(`🎤 Voice recording stopped: ${duration.toFixed(1)}s`);
+    log.exit('VoiceRecorder.stop', { duration: duration.toFixed(1) });
 
     return {
       type: 'm.audio',
@@ -276,7 +279,7 @@ export class MobileVoiceRecorder {
     this.state.isRecording = false;
     this.state.isLocked = false;
     if (this.durationInterval) clearInterval(this.durationInterval);
-    console.log('🎤 Voice recording cancelled');
+    log.state('VoiceRecorder.cancel', 'recording cancelled');
   }
 
   /**
@@ -325,7 +328,7 @@ export async function translateVoiceMessage(
       translation: { uri: translatedAudioUri, text: translatedText, lang: tgtLang },
     };
   } catch (err) {
-    console.error('Voice translation error:', err);
+    log.error('translateVoiceMessage', err);
     return { translated: false, reason: String(err) };
   }
 }
@@ -344,10 +347,10 @@ export async function pickFile(): Promise<ProcessedMedia | null> {
     //   copyToCacheDirectory: true,
     // });
 
-    console.log('📎 File pick — stub');
+    log.entry('pickFile');
     return null;
   } catch (err) {
-    console.error('File pick error:', err);
+    log.error('pickFile', err);
     return null;
   }
 }

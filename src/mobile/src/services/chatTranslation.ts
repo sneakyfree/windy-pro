@@ -16,6 +16,9 @@
  *  We never see your messages. Not even the translations."
  */
 
+import { createLogger } from './LogService';
+const log = createLogger('ChatTranslation');
+
 // ── Types ──
 
 export type TranslationMode = 'local_only' | 'local_cloud' | 'off';
@@ -190,7 +193,7 @@ export class ChatTranslationService {
         translatedText = await this.localTranslateFn(text, srcLang, tgtLang);
         engine = 'local';
       } catch (err) {
-        console.warn('Local translation failed:', err);
+        log.warn('translateMessage', `local translation failed: ${err}`);
       }
     }
 
@@ -200,7 +203,7 @@ export class ChatTranslationService {
         translatedText = await this.cloudTranslateFn(text, srcLang, tgtLang);
         engine = 'cloud';
       } catch (err) {
-        console.warn('Cloud translation failed:', err);
+        log.warn('translateMessage', `cloud translation failed: ${err}`);
       }
     }
 

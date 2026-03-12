@@ -17,6 +17,8 @@
 
 'use strict';
 
+const log = require('../logger')('ChatMedia');
+
 // ── Constants ──
 
 const MEDIA_LIMITS = {
@@ -528,7 +530,7 @@ class MediaUploader {
       };
 
     } catch (err) {
-      console.error('Upload failed:', err);
+      log.error('upload', err);
       return {
         uploadId,
         success: false,
@@ -722,7 +724,7 @@ async function generateWaveformData(blob) {
  */
 async function performSTT(audioBlob, language) {
   // In production: send to local Whisper server or use Web Worker
-  console.log(`🎤 STT: ${formatSize(audioBlob.size)} audio in ${language}`);
+  log.entry('performSTT', { size: audioBlob.size, language });
   return { text: null }; // Stub — implement with local Whisper
 }
 
@@ -731,7 +733,7 @@ async function performSTT(audioBlob, language) {
  */
 async function performTTS(text, language) {
   // In production: send to local Piper TTS server
-  console.log(`🔊 TTS: "${text.slice(0, 50)}..." in ${language}`);
+  log.entry('performTTS', { textLen: text?.length, language });
   return null; // Stub — implement with local TTS engine
 }
 
