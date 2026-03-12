@@ -12,6 +12,8 @@ class UpgradePanel {
         this._pollCount = 0;
         this._currentTier = 'free';
         this._discount = null;
+        this._checkoutInProgress = false;
+        this._activeSessions = [];
 
         this.plans = [
             {
@@ -115,6 +117,8 @@ class UpgradePanel {
 
     close() {
         this._stopPolling();
+        this._checkoutInProgress = false;
+        this._activeSessions = [];
         if (this.panel) {
             this.panel.classList.remove('open');
             setTimeout(() => {
@@ -208,9 +212,10 @@ class UpgradePanel {
         // Close
         this.panel.querySelector('#upgradeClose').addEventListener('click', () => this.close());
 
-        // Buy buttons
+        // Buy buttons (debounced — prevent duplicate checkout sessions)
         this.panel.querySelectorAll('.upgrade-btn-buy, .upgrade-btn-alt, .upgrade-btn-lifetime').forEach(btn => {
             btn.addEventListener('click', () => {
+                if (this._checkoutInProgress) return; // debounce
                 const priceId = btn.dataset.price;
                 const tier = btn.dataset.tier;
                 this._startCheckout(priceId, tier);
@@ -253,10 +258,32 @@ class UpgradePanel {
         }
     }
 
-    async _startCheckout(priceId, tier) {
-        if (!this._activeSessions) this._activeSessions = [];
+    /** Validate that a URL is a safe Stripe checkout URL */
+    _isValidCheckoutUrl(url) {
+        try {
+            const parsed = new URL(url);
+            return parsed.protocol === 'https:' && (
+                parsed.hostname.endsWith('.stripe.com') ||
+                parsed.hostname === 'checkout.stripe.com'
+            );
+        } catch {
+            return false;
+        }
+    }
 
-        const status = this.panel.querySelector('#upgradeStatus');
+    async _startCheckout(priceId, tier) {
+        // Prevent duplicate checkout attempts
+        if (this._checkoutInProgress) return;
+        this._checkoutInProgress = true;
+
+        const status = this.panel?.querySelector('#upgradeStatus');
+        if (!status) { this._checkoutInProgress = false; return; }
+
+        // Disable all buy buttons while checkout is in progress
+        this.panel?.querySelectorAll('.upgrade-btn-buy, .upgrade-btn-alt, .upgrade-btn-lifetime').forEach(b => {
+            b.disabled = true;
+        });
+
         status.innerHTML = '⏳ Creating checkout sessions for all plans…';
         status.className = 'upgrade-status upgrade-status-pending';
 
@@ -298,16 +325,18 @@ class UpgradePanel {
             }
             const sessionResults = await Promise.all(allSessionPromises);
 
-            // Build 3 URL maps
+            // Build 3 URL maps (with URL validation)
             const monthlyPlanUrls = {};
             const annualPlanUrls = {};
             const lifetimePlanUrls = {};
             for (const { key, billing, result } of sessionResults) {
-                if (result?.ok && result.url) {
+                if (result?.ok && result.url && this._isValidCheckoutUrl(result.url)) {
                     if (billing === 'monthly') monthlyPlanUrls[key] = result.url;
                     else if (billing === 'annual') annualPlanUrls[key] = result.url;
                     else lifetimePlanUrls[key] = result.url;
                     this._activeSessions.push({ sessionId: result.sessionId, tier: key, url: result.url });
+                } else if (result?.ok && result.url) {
+                    console.warn('[Upgrade] Rejected non-Stripe checkout URL for', key, billing);
                 }
             }
 
@@ -355,15 +384,27 @@ class UpgradePanel {
                 status.appendChild(errSpan);
             }
             status.className = 'upgrade-status upgrade-status-error';
+        } finally {
+            this._checkoutInProgress = false;
+            // Re-enable buy buttons
+            this.panel?.querySelectorAll('.upgrade-btn-buy, .upgrade-btn-alt, .upgrade-btn-lifetime').forEach(b => {
+                b.disabled = false;
+            });
         }
     }
 
     _startPolling() {
         this._pollCount = 0;
         const maxPolls = 600; // 3s × 600 = 30 minutes
-        const status = this.panel?.querySelector('#upgradeStatus');
 
         this._pollTimer = setInterval(async () => {
+            // Guard: panel may have been destroyed while polling
+            if (!this.panel) {
+                this._stopPolling();
+                return;
+            }
+
+            const status = this.panel.querySelector('#upgradeStatus');
             this._pollCount++;
             if (this._pollCount > maxPolls) {
                 this._stopPolling();
@@ -379,6 +420,11 @@ class UpgradePanel {
 
                 // Poll ALL active sessions in parallel
                 const sessions = this._activeSessions || [];
+                if (sessions.length === 0) {
+                    this._stopPolling();
+                    return;
+                }
+
                 const results = await Promise.all(
                     sessions.map(s => window.windyAPI.checkPaymentStatus(s.sessionId).catch(() => null))
                 );
@@ -394,39 +440,78 @@ class UpgradePanel {
                     }
                 }
 
-                // No payment yet — update status with checkout link
+                // No payment yet — update status safely (DOM API, no innerHTML with URLs)
                 if (status) {
                     const tabCount = sessions.length;
                     const dots = '.'.repeat((this._pollCount % 3) + 1);
                     const latestUrl = sessions[sessions.length - 1]?.url || '';
-                    const tabNote = tabCount > 1 ? `<br><span style="font-size:10px;color:#6B7280;">Watching ${tabCount} checkout tabs — pay on any one</span>` : '';
-                    status.innerHTML = `
-                        <div style="text-align:center;">
-                            <div style="margin-bottom:6px;font-size:13px;">⏳ Waiting for payment${dots}</div>
-                            ${latestUrl ? `
-                                <a href="${latestUrl}" 
-                                   style="display:inline-block;background:#635BFF;color:#fff;padding:8px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:6px;"
-                                   onclick="if(window.windyAPI?.openExternalUrl){window.windyAPI.openExternalUrl('${latestUrl}')};return false;">
-                                    💳 Open Stripe Checkout →
-                                </a>
-                                <div style="font-size:10px;color:#6B7280;margin-bottom:4px;">
-                                    or <a href="#" onclick="window.windyAPI.copyToClipboard('${latestUrl}');this.textContent='✅ Copied!';return false;" style="color:#60A5FA;cursor:pointer;">copy checkout URL</a>
-                                </div>
-                            ` : `<div style="font-size:11px;color:#9CA3AF;">Complete checkout in your browser</div>`}
-                            ${tabNote}
-                            <a href="#" id="cancelCheckout" style="font-size:11px;color:#60A5FA;cursor:pointer;">Changed your mind? Pick a different plan</a>
-                        </div>
-                    `;
-                    const cancelLink = status.querySelector('#cancelCheckout');
-                    if (cancelLink) {
-                        cancelLink.onclick = (ev) => {
+
+                    // Build status using DOM API to prevent XSS via crafted URLs
+                    const wrapper = document.createElement('div');
+                    wrapper.style.textAlign = 'center';
+
+                    const waitingDiv = document.createElement('div');
+                    waitingDiv.style.cssText = 'margin-bottom:6px;font-size:13px;';
+                    waitingDiv.textContent = `⏳ Waiting for payment${dots}`;
+                    wrapper.appendChild(waitingDiv);
+
+                    if (latestUrl && this._isValidCheckoutUrl(latestUrl)) {
+                        const stripeBtn = document.createElement('a');
+                        stripeBtn.href = '#';
+                        stripeBtn.style.cssText = 'display:inline-block;background:#635BFF;color:#fff;padding:8px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:6px;';
+                        stripeBtn.textContent = '💳 Open Stripe Checkout →';
+                        stripeBtn.onclick = (ev) => {
                             ev.preventDefault();
-                            this._stopPolling();
-                            this._activeSessions = [];
+                            if (window.windyAPI?.openExternalUrl) window.windyAPI.openExternalUrl(latestUrl);
+                        };
+                        wrapper.appendChild(stripeBtn);
+
+                        const copyDiv = document.createElement('div');
+                        copyDiv.style.cssText = 'font-size:10px;color:#6B7280;margin-bottom:4px;';
+                        const copyText = document.createTextNode('or ');
+                        const copyLink = document.createElement('a');
+                        copyLink.href = '#';
+                        copyLink.style.cssText = 'color:#60A5FA;cursor:pointer;';
+                        copyLink.textContent = 'copy checkout URL';
+                        copyLink.onclick = (ev) => {
+                            ev.preventDefault();
+                            if (window.windyAPI?.copyToClipboard) window.windyAPI.copyToClipboard(latestUrl);
+                            copyLink.textContent = '✅ Copied!';
+                        };
+                        copyDiv.appendChild(copyText);
+                        copyDiv.appendChild(copyLink);
+                        wrapper.appendChild(copyDiv);
+                    } else {
+                        const fallback = document.createElement('div');
+                        fallback.style.cssText = 'font-size:11px;color:#9CA3AF;';
+                        fallback.textContent = 'Complete checkout in your browser';
+                        wrapper.appendChild(fallback);
+                    }
+
+                    if (tabCount > 1) {
+                        const tabNote = document.createElement('div');
+                        tabNote.style.cssText = 'font-size:10px;color:#6B7280;margin-top:4px;';
+                        tabNote.textContent = `Watching ${tabCount} checkout tabs — pay on any one`;
+                        wrapper.appendChild(tabNote);
+                    }
+
+                    const cancelLink = document.createElement('a');
+                    cancelLink.href = '#';
+                    cancelLink.style.cssText = 'font-size:11px;color:#60A5FA;cursor:pointer;display:block;margin-top:6px;';
+                    cancelLink.textContent = 'Changed your mind? Pick a different plan';
+                    cancelLink.onclick = (ev) => {
+                        ev.preventDefault();
+                        this._stopPolling();
+                        this._activeSessions = [];
+                        if (status) {
                             status.innerHTML = '👆 Select a plan above to continue';
                             status.className = 'upgrade-status';
-                        };
-                    }
+                        }
+                    };
+                    wrapper.appendChild(cancelLink);
+
+                    status.innerHTML = '';
+                    status.appendChild(wrapper);
                 }
             } catch (_) { }
         }, 3000);
