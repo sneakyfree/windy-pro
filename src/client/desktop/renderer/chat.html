@@ -35,7 +35,7 @@
       <input type="text" id="login-username" placeholder="Username or @user:matrix.org" autocomplete="username">
       <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
       <button onclick="handleLogin()" id="login-btn">🌪️ Connect to Windy Chat</button>
-      <div id="login-error" class="login-error" style="display:none;"></div>
+      <div id="login-error" class="login-error" role="alert" aria-live="assertive" style="display:none;"></div>
       <p style="font-size:12px; color:var(--chat-text-muted); margin-top:8px;">
         Don't have an account? <a href="#" onclick="showRegister()" style="color:var(--chat-blue);">Create one</a>
       </p>
@@ -53,7 +53,7 @@
       <input type="password" id="reg-password" placeholder="Password">
       <input type="password" id="reg-password-confirm" placeholder="Confirm password">
       <button onclick="handleRegister()">🚀 Create Account</button>
-      <div id="reg-error" class="login-error" style="display:none;"></div>
+      <div id="reg-error" class="login-error" role="alert" aria-live="assertive" style="display:none;"></div>
       <p style="font-size:12px; color:var(--chat-text-muted); margin-top:8px;">
         Already have an account? <a href="#" onclick="showLogin()" style="color:var(--chat-blue);">Sign in</a>
       </p>
@@ -63,16 +63,16 @@
   <!-- ═══ MAIN CHAT INTERFACE ═══ -->
   <div id="chat-interface" style="display:none; width:100%; height:100vh;">
     <!-- Sidebar -->
-    <div class="chat-sidebar">
+    <div class="chat-sidebar" role="navigation" aria-label="Contacts sidebar">
       <div class="sidebar-header">
         <h2>🌪️ Windy Chat</h2>
         <div style="display:flex;gap:4px;">
-          <button onclick="showSettings()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:16px;" title="Settings">⚙️</button>
-          <button onclick="showNewChat()" style="background:var(--chat-green); border:none; color:#0F1219; width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:16px; font-weight:800;" title="New conversation">+</button>
+          <button onclick="showSettings()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:16px;" title="Settings" aria-label="Chat settings">⚙️</button>
+          <button onclick="showNewChat()" style="background:var(--chat-green); border:none; color:#0F1219; width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:16px; font-weight:800;" title="New conversation" aria-label="Start new conversation">+</button>
         </div>
       </div>
       <div class="sidebar-search">
-        <input type="text" id="contact-search" placeholder="🔍 Search contacts..." oninput="filterContacts()">
+        <input type="text" id="contact-search" placeholder="🔍 Search contacts..." oninput="filterContacts()" aria-label="Search contacts">
       </div>
       <div class="contact-list" id="contact-list">
         <!-- Contacts rendered here -->
@@ -85,12 +85,12 @@
           <div style="font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" id="my-display-name">Connecting...</div>
           <div style="font-size:10px; color:var(--chat-text-muted);" id="my-user-id"></div>
         </div>
-        <button onclick="handleLogout()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:14px;" title="Sign out">⏻</button>
+        <button onclick="handleLogout()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:14px;" title="Sign out" aria-label="Sign out">⏻</button>
       </div>
     </div>
 
     <!-- Chat area -->
-    <div class="chat-main" id="chat-main">
+      <div class="chat-main" id="chat-main" role="main">
       <!-- Empty state (no conversation selected) -->
       <div class="chat-empty" id="chat-empty">
         <div class="emoji">🌪️</div>
@@ -119,7 +119,7 @@
       <!-- Active conversation -->
       <div id="active-chat" style="display:none; flex:1; display:flex; flex-direction:column; height:100vh;">
         <!-- Connection status banner -->
-        <div id="connection-banner" class="connection-banner" style="display:none;">
+        <div id="connection-banner" class="connection-banner" role="status" aria-live="polite" style="display:none;">
           <span id="connection-banner-text">🔴 Disconnected — reconnecting...</span>
         </div>
         <!-- Header -->
@@ -146,7 +146,7 @@
         </div>
 
         <!-- Typing indicator -->
-        <div class="typing-indicator" id="typing-indicator" style="display:none;">
+        <div class="typing-indicator" id="typing-indicator" role="status" aria-live="polite" style="display:none;">
           <div class="typing-dots"><span></span><span></span><span></span></div>
           <span id="typing-name">Someone</span> is typing...
         </div>
@@ -157,10 +157,10 @@
             🌐 EN → Auto
           </div>
           <div class="chat-input-wrapper">
-            <input type="text" id="message-input" placeholder="Type a message..." maxlength="4000"
+            <input type="text" id="message-input" placeholder="Type a message..." maxlength="4000" aria-label="Message input"
                    onkeydown="if(event.key==='Enter')sendMessage()"
                    oninput="handleTyping()">
-            <button class="chat-send-btn" onclick="sendMessage()" id="send-btn">➤</button>
+            <button class="chat-send-btn" onclick="sendMessage()" id="send-btn" aria-label="Send message">➤</button>
           </div>
         </div>
       </div>
@@ -171,7 +171,7 @@
   <div id="profile-panel" style="display:none; position:fixed; right:0; top:0; width:320px; height:100vh; background:var(--chat-sidebar); border-left:1px solid var(--chat-border); z-index:200; overflow-y:auto; box-shadow:-4px 0 20px rgba(0,0,0,0.3);">
     <div style="padding:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--chat-border);">
       <h3 style="font-size:14px; font-weight:700; margin:0;">👤 Contact Profile</h3>
-      <button onclick="hideProfilePanel()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:18px;">✕</button>
+      <button onclick="hideProfilePanel()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:18px;" aria-label="Close profile panel">✕</button>
     </div>
     <div style="padding:24px; text-align:center;">
       <div id="profile-avatar" style="width:80px; height:80px; border-radius:50%; margin:0 auto 12px; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:800; background:linear-gradient(135deg, #667eea, #764ba2); color:#fff;"></div>
@@ -191,7 +191,7 @@
   <div id="settings-panel" style="display:none; position:fixed; right:0; top:0; width:360px; height:100vh; background:var(--chat-sidebar); border-left:1px solid var(--chat-border); z-index:200; overflow-y:auto; box-shadow:-4px 0 20px rgba(0,0,0,0.3);">
     <div style="padding:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--chat-border);">
       <h3 style="font-size:14px; font-weight:700; margin:0;">⚙️ Chat Settings</h3>
-      <button onclick="hideSettings()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:18px;">✕</button>
+      <button onclick="hideSettings()" style="background:none; border:none; color:var(--chat-text-muted); cursor:pointer; font-size:18px;" aria-label="Close settings panel">✕</button>
     </div>
     <div style="padding:20px;">
       <!-- Homeserver -->
@@ -896,6 +896,17 @@
       const el = document.getElementById('invite-' + escapeAttr(roomId));
       if (el) el.remove();
     }
+
+    // ═══ Keyboard: Escape to close panels ═══
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const settings = document.getElementById('settings-panel');
+      if (settings && settings.style.display !== 'none') { hideSettings(); return; }
+      const profile = document.getElementById('profile-panel');
+      if (profile && profile.style.display !== 'none') { hideProfilePanel(); return; }
+      const modal = document.getElementById('new-chat-modal');
+      if (modal && modal.style.display !== 'none') { hideNewChat(); return; }
+    });
 
     // ═══ Start ═══
     document.addEventListener('DOMContentLoaded', init);

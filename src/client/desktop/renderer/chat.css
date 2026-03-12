@@ -53,6 +53,7 @@ body {
   font-weight: 800;
   background: linear-gradient(135deg, var(--chat-green), var(--chat-blue));
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -146,7 +147,7 @@ body {
 
 .contact-preview {
   font-size: 12px;
-  color: var(--chat-text-muted);
+  color: #94A3B8; /* bumped from #64748B (3.3:1) to #94A3B8 (5.8:1) for WCAG AA */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -288,6 +289,7 @@ body {
 
 .message-text {
   word-wrap: break-word;
+  overflow-wrap: anywhere; /* fallback for long URLs without spaces */
 }
 
 .message-translation {
@@ -439,6 +441,7 @@ body {
   font-weight: 900;
   background: linear-gradient(135deg, var(--chat-green), var(--chat-blue));
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 8px;
 }
@@ -634,3 +637,34 @@ body {
   box-shadow: none;
 }
 
+/* ═══ Focus-visible outlines for keyboard navigation ═══ */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+.contact-item:focus-visible {
+  outline: 2px solid var(--chat-blue);
+  outline-offset: 2px;
+}
+
+/* ═══ Responsive: collapse sidebar at narrow widths ═══ */
+@media (max-width: 600px) {
+  .chat-sidebar {
+    width: 48px;
+    min-width: 48px;
+  }
+  .sidebar-header h2,
+  .sidebar-search,
+  .contact-info,
+  .contact-meta {
+    display: none;
+  }
+  .contact-item {
+    justify-content: center;
+    padding: 10px 4px;
+  }
+  .contact-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+  }
+}

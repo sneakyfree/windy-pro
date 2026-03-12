@@ -5,6 +5,21 @@
 // IPC access provided by mini-translate-preload.js via contextBridge
 const miniAPI = window.miniTranslateAPI;
 
+// Guard: if preload bridge is unavailable show visible error
+if (!miniAPI) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const container = document.querySelector('.container');
+    if (container) {
+      container.innerHTML = '<div style="padding:40px;text-align:center;color:#EF4444;">' +
+        '<div style="font-size:32px;margin-bottom:12px;">⚠️</div>' +
+        '<h2 style="margin-bottom:8px;">Quick Translate Unavailable</h2>' +
+        '<p style="color:#9CA3AF;">This window must be opened from within Windy Pro.</p></div>';
+    }
+  });
+  // Prevent the rest of the script from running
+  throw new Error('[MiniTranslate] miniTranslateAPI not available — preload bridge missing');
+}
+
 // ── DOM refs ──
 const closeBtn = document.getElementById('closeBtn');
 const swapBtn = document.getElementById('swapBtn');
@@ -204,13 +219,17 @@ tabListen.addEventListener('click', () => switchMode('listen'));
 function switchMode(mode) {
     if (mode === 'text') {
         tabText.classList.add('active');
+        tabText.setAttribute('aria-selected', 'true');
         tabListen.classList.remove('active');
+        tabListen.setAttribute('aria-selected', 'false');
         textMode.style.display = 'flex';
         listenMode.classList.remove('active');
         stopListening();
     } else {
         tabListen.classList.add('active');
+        tabListen.setAttribute('aria-selected', 'true');
         tabText.classList.remove('active');
+        tabText.setAttribute('aria-selected', 'false');
         textMode.style.display = 'none';
         listenMode.classList.add('active');
     }

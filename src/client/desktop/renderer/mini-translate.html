@@ -3,6 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quick Translate</title>
     <style>
         * {
@@ -696,6 +697,24 @@
             text-align: center;
             padding: 20px 10px;
         }
+
+        /* Contrast fix: #6B7280 on #111827 is only 4.0:1 at 9px — bump for WCAG AA */
+        .live-transcript .chunk-time {
+            color: #9CA3AF;
+        }
+
+        /* Focus-visible outlines for keyboard navigation */
+        :focus-visible {
+            outline: 2px solid #6366F1;
+            outline-offset: 2px;
+        }
+        button:focus-visible,
+        select:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible {
+            outline: 2px solid #6366F1;
+            outline-offset: 2px;
+        }
     </style>
 </head>
 
@@ -706,7 +725,7 @@
                 <div class="header-title">
                     <h1>🌐 Quick Translate</h1>
                 </div>
-                <button class="close-btn" id="closeBtn" data-tooltip="Close Quick Translate popup.">×</button>
+                <button class="close-btn" id="closeBtn" data-tooltip="Close Quick Translate popup." aria-label="Close Quick Translate">×</button>
             </div>
 
             <!-- Ui scale slider — full-width row -->
@@ -714,11 +733,12 @@
                 <label class="ui-scale-label" data-tooltip="Adjust the size of all controls, buttons, and labels.">🔧 Ui
                     Scale</label>
                 <input type="range" class="ui-scale-slider" id="uiScaleSlider" min="8" max="16" step="1" value="10"
+                    aria-label="UI scale"
                     data-tooltip="Drag to make all controls bigger or smaller. Only affects the control panel, not the transcript below.">
             </div>
 
             <div class="lang-row">
-                <select id="sourceLang" class="lang-select"
+                <select id="sourceLang" class="lang-select" aria-label="Source language"
                     data-tooltip="The language being spoken or typed. Auto will detect it for you.">
                     <option value="auto">🔍 Auto</option>
                     <option value="af">Afrikaans</option>
@@ -817,8 +837,8 @@
                     <option value="yi">Yiddish</option>
                     <option value="yo">Yoruba</option>
                 </select>
-                <button class="swap-btn" id="swapBtn" data-tooltip="Swap source and target languages.">⇄</button>
-                <select id="targetLang" class="lang-select" data-tooltip="The language you want the translation in.">
+                <button class="swap-btn" id="swapBtn" data-tooltip="Swap source and target languages." aria-label="Swap languages">⇄</button>
+                <select id="targetLang" class="lang-select" aria-label="Target language" data-tooltip="The language you want the translation in.">
                     <option value="en">English</option>
                     <option value="af">Afrikaans</option>
                     <option value="sq">Albanian</option>
@@ -919,9 +939,9 @@
 
             <!-- Mode tabs -->
             <div class="mode-tabs">
-                <button class="mode-tab active" id="tabText" data-mode="text"
+                <button class="mode-tab active" id="tabText" data-mode="text" role="tab" aria-selected="true"
                     data-tooltip="Type text and press Enter to translate.">⌨️ Text</button>
-                <button class="mode-tab" id="tabListen" data-mode="listen"
+                <button class="mode-tab" id="tabListen" data-mode="listen" role="tab" aria-selected="false"
                     data-tooltip="Use your microphone to translate speech in real-time.">🎤 Live Listen</button>
             </div>
 
@@ -929,8 +949,8 @@
             <div class="text-mode" id="textMode">
                 <div class="input-row">
                     <textarea id="textInput" class="text-input" placeholder="Type text to translate…"
-                        rows="2"></textarea>
-                    <button class="translate-btn" id="translateBtn"
+                        rows="2" aria-label="Text to translate"></textarea>
+                    <button class="translate-btn" id="translateBtn" aria-label="Translate"
                         data-tooltip="Send your text for translation.">→</button>
                 </div>
             </div>
@@ -938,7 +958,7 @@
             <!-- Live Listen mode controls -->
             <div class="listen-mode" id="listenMode">
                 <div class="listen-controls">
-                    <button class="listen-btn" id="listenBtn"
+                    <button class="listen-btn" id="listenBtn" aria-label="Start listening"
                         data-tooltip="Start/stop listening. Your microphone will capture audio and translate in real-time.">🎤
                         Start Listening</button>
                     <div class="audio-strobe" id="audioStrobe"></div>
@@ -1036,6 +1056,7 @@
                 <div class="chunk-slider-row">
                     <label>⏱️ Chunk</label>
                     <input type="range" class="chunk-slider" id="chunkSlider" min="5" max="60" step="1" value="10"
+                        aria-label="Chunk duration in seconds"
                         data-tooltip="How many seconds of audio to capture before sending for translation. Longer = smoother, shorter = faster.">
                     <span class="chunk-duration-label" id="chunkDurationLabel">10s</span>
                 </div>
@@ -1046,10 +1067,11 @@
         <div class="font-slider-row">
             <label>Aa Size</label>
             <input type="range" class="font-slider" id="fontSlider" min="10" max="24" step="1" value="14"
+                aria-label="Transcript font size"
                 data-tooltip="Drag to make the transcript text bigger or smaller.">
             <span class="font-size-label" id="fontSizeLabel">14</span>
         </div>
-        <div class="live-transcript" id="unifiedTranscript">
+        <div class="live-transcript" id="unifiedTranscript" role="log" aria-live="polite" aria-label="Translation output">
             <div class="placeholder-text">
                 Choose <strong>⌨️ Text</strong> to type or <strong>🎤 Live Listen</strong> to speak.<br>
                 All translations appear here in one conversation thread.

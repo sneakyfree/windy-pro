@@ -60,7 +60,7 @@
     </div>
 
     <!-- Reconnect Toast -->
-    <div class="reconnect-toast" id="reconnectToast" style="display:none;"></div>
+    <div class="reconnect-toast" id="reconnectToast" role="status" aria-live="polite" style="display:none;"></div>
 
     <!-- Recording Status Badges (visible during active recording) -->
     <div class="recording-status" id="recordingStatus" style="display:none;">
@@ -133,7 +133,7 @@
     </div>
 
     <!-- Connection Status (always visible — chevron here collapses controls above) -->
-    <div class="status-bar" id="statusBar">
+    <div class="status-bar" id="statusBar" role="status" aria-live="polite">
       <span class="controls-chevron" id="controlsChevron" title="Show/hide controls">▾</span>
       <button class="mini-record-btn" id="miniRecordBtn" style="display:none;" title="Start/Stop Recording">🎤</button>
       <span class="status-dot" id="connectionDot"></span>
