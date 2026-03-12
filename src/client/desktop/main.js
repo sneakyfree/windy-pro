@@ -1,3 +1,7 @@
+// ═══ Startup Performance Timing ═══
+const _perfStart = process.hrtime.bigint();
+function _perfMark(label) { const ms = Number(process.hrtime.bigint() - _perfStart) / 1e6; console.log(`[Perf] ${label}: ${ms.toFixed(0)}ms`); }
+
 // Prevent EPIPE crashes when stdout/stderr pipe breaks
 process.stdout?.on('error', (err) => { if (err.code !== 'EPIPE') throw err; });
 process.stderr?.on('error', (err) => { if (err.code !== 'EPIPE') throw err; });
@@ -84,10 +88,20 @@ const fsp = fs.promises;
 const os = require('os');
 const util = require('util');
 const execFileAsync = util.promisify(execFile);
-const { CursorInjector } = require('./injection/injector');
-const { WindyUpdater } = require('./updater');
-const { WindyChatClient } = require('./chat/chat-client');
-const { ChatTranslator } = require('./chat/chat-translate');
+// ═══ Lazy-loaded modules (deferred to speed up startup) ═══
+// These modules pull in heavy deps (matrix-js-sdk, stripe, better-sqlite3, electron-updater)
+// so we load them only on first use instead of blocking startup.
+let _injectorInstance = null;
+function getInjector() {
+  if (!_injectorInstance) {
+    const { CursorInjector } = require('./injection/injector');
+    _injectorInstance = new CursorInjector();
+  }
+  return _injectorInstance;
+}
+// WindyUpdater, WindyChatClient, ChatTranslator — lazy-loaded in their getter functions below
+
+_perfMark('Module load');
 
 // Safe IPC send — guards against disposed render frames
 function safeSend(channel, ...args) {
@@ -95,9 +109,6 @@ function safeSend(channel, ...args) {
     mainWindow.webContents.send(channel, ...args);
   }
 }
-
-// Cursor injection module
-const injector = new CursorInjector();
 
 // Persistent settings storage
 const store = new Store({
@@ -586,10 +597,13 @@ function createWindow() {
 /**
  * Save window bounds to store
  */
+let _saveWindowTimer = null;
 function saveWindowBounds() {
-  if (!mainWindow) return;
-  const bounds = mainWindow.getBounds();
-  store.set('window', bounds);
+  if (_saveWindowTimer) clearTimeout(_saveWindowTimer);
+  _saveWindowTimer = setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    store.set('window', mainWindow.getBounds());
+  }, 500);
 }
 
 /**
@@ -1039,13 +1053,18 @@ ipcMain.on('mini-expand', () => {
 });
 
 // Handle mini widget drag
+let _miniMoveTimer = null;
 ipcMain.on('mini-move', (event, { dx, dy }) => {
   if (miniWindow && !miniWindow.isDestroyed()) {
     const [x, y] = miniWindow.getPosition();
     const nx = x + dx, ny = y + dy;
     miniWindow.setPosition(nx, ny);
-    store.set('tornadoX', nx);
-    store.set('tornadoY', ny);
+    // Debounce disk writes — position is saved 300ms after last move event
+    if (_miniMoveTimer) clearTimeout(_miniMoveTimer);
+    _miniMoveTimer = setTimeout(() => {
+      store.set('tornadoX', nx);
+      store.set('tornadoY', ny);
+    }, 300);
   }
 });
 
@@ -1376,6 +1395,9 @@ let chatTranslator = null;
 
 function getChatClient() {
   if (!chatClient) {
+    // Lazy-load chat modules (pulls in matrix-js-sdk ~2MB)
+    const { WindyChatClient } = require('./chat/chat-client');
+    const { ChatTranslator } = require('./chat/chat-translate');
     chatClient = new WindyChatClient(store);
     chatTranslator = new ChatTranslator(store);
 
@@ -2064,7 +2086,7 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
     await new Promise(resolve => setTimeout(resolve, 200));
 
     try {
-      await injector.inject(transcript);
+      await getInjector().inject(transcript);
     } catch (error) {
       console.error('Injection failed:', error.message);
       safeSend('injection-error', error.message);
@@ -2085,7 +2107,7 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
 
 // Check injection permissions
 ipcMain.handle('check-injection-permissions', async () => {
-  return injector.checkPermissions();
+  return getInjector().checkPermissions();
 });
 
 // Update settings — accepts flat keys from renderer and routes to correct store namespace
@@ -4482,6 +4504,7 @@ app.on('ready', () => {
 });
 
 app.whenReady().then(async () => {
+  _perfMark('app.whenReady()');
   // ═══════════════════════════════════════════════════════════════════
   // INSTALLATION WIZARD v2.0 — TurboTax-style 9-screen setup
   // Source: installer-v2/ (the ONLY wizard — there is no other)
@@ -4523,6 +4546,7 @@ app.whenReady().then(async () => {
   createMacOSMenu();  // macOS application menu bar (Cmd+Q, Cmd+H, Cmd+M, Edit menu)
   sanitizeHotkeys();  // Reset any accidentally-bound system shortcuts (e.g. Ctrl+V)
   registerHotkeys();
+  _perfMark('Window + tray created');
 
   // macOS dark mode: forward system theme changes to renderer
   if (process.platform === 'darwin') {
@@ -4548,24 +4572,31 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
 
-  // Validate license on launch (non-blocking)
-  validateLicense().catch(e => console.error('[License] Validation error:', e.message));
-
-  // Auto-cleanup old archive media files (keeps transcripts forever)
-  autoCleanupArchive();
-
-  // Auto-update check (T16 — fail silently if no releases)
+  // ═══ Deferred startup tasks (non-critical — runs 3s after window appears) ═══
+  // This keeps the window snappy: archive cleanup, license validation, and update
+  // checks all involve disk I/O or network that doesn't need to block first paint.
   let updaterInstance = null;
-  try {
-    updaterInstance = new WindyUpdater();
-    updaterInstance.checkForUpdates();
-    // Periodic update check every 6 hours
-    setInterval(() => {
-      try { updaterInstance.checkForUpdates(); } catch (e) { /* silent */ }
-    }, 6 * 60 * 60 * 1000);
-  } catch (e) {
-    console.log('[Main] Auto-updater skipped:', e.message);
-  }
+  setTimeout(() => {
+    // Validate license (non-blocking)
+    validateLicense().catch(e => console.error('[License] Validation error:', e.message));
+
+    // Auto-cleanup old archive media files (keeps transcripts forever)
+    autoCleanupArchive();
+
+    // Auto-update check (T16 — fail silently if no releases)
+    try {
+      const { WindyUpdater } = require('./updater');
+      updaterInstance = new WindyUpdater();
+      updaterInstance.checkForUpdates();
+      // Periodic update check every 6 hours
+      setInterval(() => {
+        try { updaterInstance.checkForUpdates(); } catch (e) { /* silent */ }
+      }, 6 * 60 * 60 * 1000);
+    } catch (e) {
+      console.log('[Main] Auto-updater skipped:', e.message);
+    }
+    _perfMark('Deferred startup complete');
+  }, 3000);
 
   // Manual update check from settings
   ipcMain.handle('check-for-updates', async () => {

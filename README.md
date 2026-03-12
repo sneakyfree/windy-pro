@@ -166,7 +166,7 @@ npm run dist:all
 
 # Individual platforms
 npm run build:linux    # → dist/*.AppImage, dist/*.deb
-npm run build:mac      # → dist/*.dmg
+npm run build:mac      # → dist/*.dmg (x64 + arm64)
 npm run build:win      # → dist/*.exe (NSIS)
 ```
 
@@ -178,6 +178,46 @@ git push --tags
 ```
 
 ---
+
+## Platform Support
+
+### Tested Platforms
+
+| Platform | Versions | Installer | Status |
+|----------|----------|-----------|--------|
+| **Windows** | 10, 11 | NSIS `.exe` | ✅ Built |
+| **macOS** | 12+ (Monterey) | `.dmg` (x64 + arm64) | ✅ Built + Tested |
+| **Ubuntu/Debian** | 22.04+ | `.deb` | ✅ Built |
+| **Linux (generic)** | Any x64 | `.AppImage` | ✅ Built |
+
+### Installer Details
+
+**Windows (NSIS)**
+- Supports custom install directory (default: `C:\Program Files\Windy Pro`)
+- Detects and kills running instances before upgrade
+- Adds Start Menu shortcut, uninstaller in Control Panel
+- Not code-signed (self-signed stub ready for future signing)
+
+**macOS (DMG)**
+- Universal: separate x64 and arm64 DMGs
+- Drag-to-Applications install
+- Hardened runtime enabled, entitlements for mic/camera/network/Apple Events
+- Not notarized (requires Apple Developer account)
+
+**Linux (AppImage + .deb)**
+- AppImage: `chmod +x` and run — no install needed
+- `.deb`: `sudo dpkg -i windy-pro_*.deb` — adds `.desktop` file, CLI symlink
+- Desktop integration: icon, categories, keywords
+- Full install/upgrade/remove lifecycle scripts (`preinst`, `postinst`, `prerm`, `postrm`)
+
+### Known Issues
+
+| Issue | Platform | Workaround |
+|-------|----------|------------|
+| Windows Defender SmartScreen | Windows | Click "More info" → "Run anyway" |
+| "App is from an unidentified developer" | macOS | Right-click → Open, or: `xattr -dr com.apple.quarantine "/Applications/Windy Pro.app"` |
+| `--no-sandbox` required for AppImage | Linux | Launch with `--no-sandbox` flag, or install the `.deb` instead |
+| GPU rendering issues on older drivers | Linux | Set `LIBGL_ALWAYS_SOFTWARE=1` before launching |
 
 ## Documentation
 

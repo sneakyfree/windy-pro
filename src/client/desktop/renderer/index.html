@@ -236,28 +236,31 @@
   </div>
 
   <!-- SEC-08: Global HTML escaping helper for innerHTML sanitization -->
+  <!-- Critical scripts: needed for initial UI render -->
   <script src="input-validator.js"></script>
   <script src="renderer-logger.js"></script>
   <script src="security-helpers.js"></script>
   <script src="api-config.js"></script>
+  <script src="changelog.js"></script>
+  <script src="settings.js"></script>
   <script src="vault.js"></script>
   <script src="wizard.js"></script>
-  <script src="changelog.js"></script>
   <script src="history.js"></script>
   <script src="upgrade.js"></script>
-  <script src="settings.js"></script>
-  <script src="sync.js"></script>
-  <script src="translate.js"></script>
-  <script src="conversation-mode.js"></script>
-  <script src="document-translator.js"></script>
-  <script src="translation-memory.js"></script>
-  <script src="voice-clone-manager.js"></script>
-  <script src="video-recording-manager.js"></script>
-  <script src="phone-camera-bridge.js"></script>
-  <script src="clone-data-archive.js"></script>
-  <script src="auto-sync-manager.js"></script>
-  <script src="effects-engine.js"></script>
-  <script src="widget-engine.js"></script>
+
+  <!-- Deferred scripts: features loaded after first paint (order preserved) -->
+  <script src="sync.js" defer></script>
+  <script src="translate.js" defer></script>
+  <script src="conversation-mode.js" defer></script>
+  <script src="document-translator.js" defer></script>
+  <script src="translation-memory.js" defer></script>
+  <script src="voice-clone-manager.js" defer></script>
+  <script src="video-recording-manager.js" defer></script>
+  <script src="phone-camera-bridge.js" defer></script>
+  <script src="clone-data-archive.js" defer></script>
+  <script src="auto-sync-manager.js" defer></script>
+  <script src="effects-engine.js" defer></script>
+  <script src="widget-engine.js" defer></script>
   <div id="effectsOverlay" class="effects-overlay"></div>
   <script src="app.js"></script>
 </body>
