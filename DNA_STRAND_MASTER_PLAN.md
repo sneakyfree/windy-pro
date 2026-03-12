@@ -1,8 +1,8 @@
 # 🧬 WINDY PRO — DNA STRAND MASTER PLAN
 
-**Version:** 1.7.0
+**Version:** 2.0.0
 **Created:** 2026-02-04
-**Last Updated:** 2026-03-11
+**Last Updated:** 2026-03-12
 **Authors:** Kit 0 + Kit-0C1Veron + Antigravity + Kit 0C3 Charlie + Grant Whitmer
 **Philosophy:** Begin with the end in mind. — Stephen R. Covey
 
@@ -2836,6 +2836,1223 @@ on Veron (GPU server) for production translation.
 
 ---
 
+
+---
+
+## 🧬 STRAND K: WINDY CHAT PLATFORM (The Chat Chromosome)
+
+**Added:** 2026-03-12 by Kit 0C3 Charlie + Grant Whitmer
+**Priority:** CRITICAL — This is the biggest addition since the original DNA plan. Windy Chat transforms Windy Pro from a transcription tool into a full communication platform.
+**Status:** 🔲 NOT STARTED (foundation code exists — see K0)
+**Vision:** A WhatsApp-level cross-platform encrypted messaging, media sharing, and video calling system — built on the Matrix protocol, powered by Windy Translate's offline translation engine. Every message, every call, every voice note — translated in real-time, on-device, private by default.
+
+### K0: Foundation — Existing Chat Codebase
+
+```
+CURRENT IMPLEMENTATION (March 2026):
+
+FILES (all ✅ IMPLEMENTED — foundation only):
+├── src/client/desktop/chat/chat-client.js     (852 lines) — Matrix SDK wrapper
+│   ├── Auth: login, register, resumeSession (with safeStorage token encryption)
+│   ├── Messaging: sendMessage, getMessages, getCachedMessages
+│   ├── Presence: setPresence, presenceMap tracking
+│   ├── Rooms: createDM, getContacts, acceptInvite, declineInvite
+│   ├── Sync: _startSync with Room.timeline, User.presence, RoomMember.typing
+│   ├── Translation: auto-translate via translateFn (chat-translate.js)
+│   ├── Offline: _offlineQueue for messages pending reconnection
+│   └── E2EE: _initCrypto (best-effort Olm, graceful fallback)
+│
+├── src/client/desktop/chat/chat-translate.js   (250 lines) — Translation middleware
+│   ├── WebSocket connection to local Python translation server
+│   ├── LRU cache (500 entries, proper access-order refresh)
+│   ├── Request-ID tracking (no FIFO fallback — strict matching)
+│   ├── Auto-reconnect with exponential backoff
+│   └── Race-condition-safe _connectPromise pattern
+│
+├── src/client/desktop/chat/chat-preload.js     (65 lines) — IPC bridge
+│   ├── 17 invoke APIs (login, register, send, contacts, settings, etc.)
+│   ├── 7 event listeners (message, presence, typing, invite, connected, etc.)
+│   └── removeAllListeners before re-register (prevents accumulation)
+│
+├── src/client/desktop/renderer/chat.html       (920+ lines) — Chat UI
+│   ├── Login/registration with error states
+│   ├── Sidebar (contacts, search, presence dots)
+│   ├── Message area (timeline, typing indicator, translated badges)
+│   ├── Settings panel, profile panel, new-chat modal
+│   ├── Invite confirmation UI (accept/decline cards)
+│   └── ARIA labels, landmark roles, keyboard navigation (Escape handlers)
+│
+├── src/client/desktop/renderer/chat.css        (670 lines) — Dark theme styling
+│   ├── Responsive sidebar (collapses to icons at ≤600px)
+│   ├── Focus-visible outlines, WCAG AA contrast compliance
+│   └── Message bubbles, typing animations, presence indicators
+│
+└── src/client/desktop/main.js                  (lines 1372–1640) — Chat IPC handlers
+    ├── Singleton getChatClient() + _setupChatForwarding()
+    ├── 20 ipcMain.handle calls for all chat operations
+    ├── Chat window: nodeIntegration:false, contextIsolation:true, sandbox:true
+    └── Tray badge updates for unread messages
+
+SDK: matrix-js-sdk@^41.1.0
+PROTOCOL: Matrix (https://spec.matrix.org)
+
+STATUS: Foundation is SOLID. Hardened in the Desktop Chat Audit (March 2026):
+├── P0-R1: WebSocket _connectPromise race condition ✅ fixed
+├── P1-C1: Matrix listener cleanup on re-sync ✅ fixed
+├── P1-C7: E2EE disabled until Olm properly configured ✅ fixed
+├── P1-M1: removeAllListeners on logout ✅ fixed
+├── P1-R3: Login double-click guard ✅ fixed
+├── P2-C2/C3: m.direct spec-compliant DM detection ✅ fixed
+├── P2-C4: registerRequest (not deprecated register) ✅ fixed
+├── P2-R5: Invite confirmation UI (not auto-accept) ✅ fixed
+├── P2-R6: insertAdjacentHTML (not innerHTML +=) ✅ fixed
+└── P2-R7: escapeAttr XSS hardening ✅ fixed
+
+WHAT'S MISSING (Why this Strand exists):
+├── Running on matrix.org = no control, no custom registration, raw @user:matrix.org names
+├── No phone/email verification — anyone can create infinite accounts
+├── No contact discovery — must know exact Matrix user ID
+├── No media sharing — text-only messages
+├── No voice/video calling — text chat only
+├── No push notifications — must have app open to see messages
+├── No E2EE in production — Olm not installed, encryption disabled
+├── No backup/restore — lose device = lose all messages
+├── Translation is 1:1 only — no group multi-language support
+└── No mobile chat client (React Native side not started)
+```
+
+### K0.5: Market Context & Competitive Intelligence
+
+```
+MESSAGING MARKET SIZE:
+├── Global messaging app market: $96.2B (2024) → $174B (2030), 10.3% CAGR
+├── WhatsApp: 2.78B monthly active users (2024)
+├── Telegram: 900M+ monthly active users
+├── Signal: 40M+ monthly active users (privacy-focused segment)
+├── iMessage: ~1.3B active devices
+├── WeChat: 1.3B MAU (China-dominant)
+└── Enterprise: Slack ($1.5B ARR), Teams (320M MAU), Discord (200M MAU)
+
+CROSS-LANGUAGE MESSAGING (Our niche):
+├── NOBODY does real-time translation in messaging that works OFFLINE
+├── Google Messages: cloud translation (requires internet, mines data)
+├── WhatsApp: no built-in translation at all
+├── Telegram: basic translate button (cloud, per-message manual click)
+├── Signal: zero translation features
+├── iMessage: zero translation features
+├── WeChat: cloud-only translation (censorship concerns)
+└── Microsoft Teams: cloud translation (enterprise-only, $12.50/user/mo)
+
+OUR KILLER DIFFERENTIATOR:
+├── 100% OFFLINE translation in a messaging app = unprecedented
+├── Matrix protocol = federated, open, self-hostable, E2E encrypted
+├── Every message auto-translated on-device — no cloud, no data mining
+├── Group chats where each participant sees messages IN THEIR LANGUAGE
+├── Video calls with real-time translated subtitles — LOCAL processing
+├── Voice messages auto-translated before delivery
+├── Zero data collection — privacy by design, not by policy
+├── One-time payment — no subscription, no ads, no data monetization
+└── Works everywhere: desktop (Electron), iOS (React Native), Android (React Native)
+
+NOBODY ELSE DOES OFFLINE-FIRST TRANSLATED ENCRYPTED MESSAGING.
+This is a genuine blue ocean as of March 2026.
+```
+
+---
+
+### K1: Our Own Matrix Homeserver (Synapse Deployment)
+
+```
+FILES: deploy/synapse/ [NEW DIRECTORY]
+STATUS: 🔲 NOT STARTED
+PRIORITY: CRITICAL — Everything in Strand K depends on controlling the homeserver
+
+CODONS:
+├── K1.1 Synapse Deployment 🔲
+│   │
+│   │  Synapse = reference Matrix homeserver implementation (Python)
+│   │  Alternative: Conduit (Rust, lighter) — evaluate after MVP
+│   │
+│   ├── K1.1.1 Docker Compose Configuration 🔲
+│   │   ├── synapse container (matrixdotorg/synapse:latest)
+│   │   ├── PostgreSQL container (synapse DB)
+│   │   ├── Redis container (worker coordination)
+│   │   ├── Nginx reverse proxy (federation + client API)
+│   │   └── Coturn TURN server (NAT traversal for VoIP — K5)
+│   │
+│   ├── K1.1.2 Homeserver Configuration (homeserver.yaml) 🔲
+│   │   ├── server_name: chat.windypro.com
+│   │   ├── enable_registration: false (custom registration only — K2)
+│   │   ├── max_upload_size_mbs: 100 (for media sharing — K4)
+│   │   ├── federation: disabled initially (Windy-users-only network)
+│   │   ├── rate_limiting: tuned for real-time chat
+│   │   ├── retention_policy: 365 days default
+│   │   └── media_store_path: /data/media_store (R2-backed — K8)
+│   │
+│   ├── K1.1.3 Custom Registration Module 🔲
+│   │   ├── FILE: deploy/synapse/windy_registration.py [NEW]
+│   │   ├── Synapse auth module that validates Windy Pro accounts
+│   │   ├── User registers via Windy app → our API → Synapse creates account
+│   │   ├── NO direct Matrix registration (prevents spam accounts)
+│   │   ├── Username = Windy display name (not raw @user:matrix.org)
+│   │   └── Links Matrix user ID to Windy Pro account ID
+│   │
+│   ├── K1.1.4 DNS & SSL 🔲
+│   │   ├── A record: chat.windypro.com → server IP
+│   │   ├── SRV record: _matrix._tcp.windypro.com (federation discovery)
+│   │   ├── .well-known/matrix/server — federation endpoint
+│   │   ├── .well-known/matrix/client — client endpoint
+│   │   └── Let's Encrypt wildcard cert via certbot
+│   │
+│   └── K1.1.5 Monitoring & Scaling 🔲
+│       ├── Prometheus metrics from Synapse
+│       ├── Grafana dashboards: MAU, messages/day, media storage
+│       ├── Synapse worker mode for horizontal scaling
+│       └── Alert: disk usage > 80%, response time > 2s, error rate > 1%
+│
+├── K1.2 Custom User Identity 🔲
+│   │
+│   │  PROBLEM: Raw Matrix usernames look like @user:matrix.org — ugly, confusing
+│   │  SOLUTION: Windy Chat shows display names everywhere, hides Matrix IDs
+│   │
+│   ├── K1.2.1 Display Name Registry 🔲
+│   │   ├── Users pick display name during onboarding (K2)
+│   │   ├── Uniqueness enforced across Windy network
+│   │   ├── Format: "Grant Whitmer" or "grant_w" (user's choice)
+│   │   ├── Backed by Matrix display_name field
+│   │   └── Matrix ID (@windy_abc123:chat.windypro.com) hidden from UI
+│   │
+│   ├── K1.2.2 Avatar System 🔲
+│   │   ├── Profile photo upload (crop, resize, compress)
+│   │   ├── Default: auto-generated gradient avatar with initials
+│   │   ├── Synced via Matrix profile API
+│   │   └── MXC URIs stored on our homeserver media repo
+│   │
+│   └── K1.2.3 Profile Fields 🔲
+│       ├── Display name (required)
+│       ├── Bio (optional, 150 chars max)
+│       ├── Languages spoken (from Windy language profile — Strand F)
+│       ├── Timezone (auto-detected, overridable)
+│       └── Online status (online/away/busy/invisible)
+
+DEPENDENCIES: D1 (cloud deployment infrastructure)
+NOTE: We MUST control the homeserver to deliver the onboarding
+      and contact discovery experience users expect from WhatsApp.
+      Running on matrix.org = zero control over registration, identity, or UX.
+```
+
+---
+
+### K2: WhatsApp-Style Onboarding
+
+```
+FILES: services/chat-onboarding/ [NEW DIRECTORY]
+STATUS: 🔲 NOT STARTED
+PRIORITY: HIGH — First impressions determine adoption
+
+CODONS:
+├── K2.1 Phone / Email Verification 🔲
+│   │
+│   │  PROVIDER OPTIONS:
+│   │  ├── Phone verification: Twilio Verify API ($0.05/verification)
+│   │  ├── Email verification: SendGrid ($0.001/email)
+│   │  └── Both: user chooses preferred method
+│   │
+│   ├── K2.1.1 Verification Flow 🔲
+│   │   ├── User enters phone number or email
+│   │   ├── 6-digit OTP sent via SMS/email
+│   │   ├── User enters OTP → verified
+│   │   ├── Rate limit: 3 attempts per 10 min, 5 per hour
+│   │   ├── Resend cooldown: 60 seconds
+│   │   └── Verified identifier linked to Windy Pro account
+│   │
+│   ├── K2.1.2 Phone Number Normalization 🔲
+│   │   ├── International format (E.164): +1234567890
+│   │   ├── Country code auto-detection from device locale
+│   │   ├── libphonenumber for validation and formatting
+│   │   └── Display: local format; store: E.164
+│   │
+│   └── K2.1.3 Anti-Spam Measures 🔲
+│       ├── One account per phone number (or email)
+│       ├── SMS rate limiting (Twilio built-in + our limit)
+│       ├── CAPTCHA fallback if rate limit triggered
+│       └── Account cooling period: 24h between re-registrations
+│
+├── K2.2 Display Name Setup 🔲
+│   │
+│   │  ┌─────────────────────────────────────────────────┐
+│   │  │  👤  SET UP YOUR PROFILE                        │
+│   │  │                                                  │
+│   │  │  ┌─────────┐                                    │
+│   │  │  │  📸     │  [Upload photo]                    │
+│   │  │  │  +ADD   │  or keep auto-generated avatar     │
+│   │  │  └─────────┘                                    │
+│   │  │                                                  │
+│   │  │  Display Name: [___________________]            │
+│   │  │  (This is how others will see you)              │
+│   │  │                                                  │
+│   │  │  Languages: [🇺🇸 English ▾] [+ Add more]       │
+│   │  │  (Messages from others will be translated to    │
+│   │  │   your primary language automatically)          │
+│   │  │                                                  │
+│   │  │                         [Continue →]            │
+│   │  └─────────────────────────────────────────────────┘
+│   │
+│   ├── K2.2.1 Name Validation 🔲
+│   │   ├── Min 2 chars, max 64 chars
+│   │   ├── Unicode allowed (international names)
+│   │   ├── Profanity filter (basic — open-source word list)
+│   │   ├── Uniqueness check against Windy directory
+│   │   └── Suggest alternatives if taken: "Grant W", "Grant Whitmer 2"
+│   │
+│   └── K2.2.2 Language Selection 🔲
+│       ├── Inherits from Windy Pro language profile (Strand F) if available
+│       ├── Primary language = auto-translate target
+│       ├── Additional languages shown as "also speaks"
+│       └── Affects contact discovery suggestions (K3)
+│
+├── K2.3 QR Code Pairing (Desktop ↔ Mobile) 🔲
+│   │
+│   │  FLOW (like WhatsApp Web):
+│   │  1. Desktop app shows QR code containing: session_id + public_key + timestamp
+│   │  2. Mobile app scans QR code using camera
+│   │  3. Mobile sends pairing request to server with session_id
+│   │  4. Server links desktop session to mobile account
+│   │  5. Desktop auto-logs in with delegated credentials
+│   │  6. Both devices share the same Matrix access token (or device-specific tokens)
+│   │
+│   ├── K2.3.1 QR Generation (Desktop) 🔲
+│   │   ├── Generate ephemeral key pair (X25519)
+│   │   ├── Encode: { session: uuid, pubkey: base64, ts: epoch, server: url }
+│   │   ├── Render QR using qrcode npm package (no external dependency)
+│   │   ├── QR refreshes every 60 seconds (security)
+│   │   └── Show alongside manual code entry fallback
+│   │
+│   ├── K2.3.2 QR Scanning (Mobile) 🔲
+│   │   ├── Use react-native-camera or expo-camera
+│   │   ├── Parse QR payload → validate timestamp (< 120s old)
+│   │   ├── Send pairing: POST /api/v1/chat/pair { session, signature }
+│   │   └── Success → desktop receives WebSocket notification → auto-login
+│   │
+│   └── K2.3.3 Multi-Device Session Management 🔲
+│       ├── Each device gets unique device_id in Matrix
+│       ├── Max 5 linked devices per account
+│       ├── Device list visible in Settings → Linked Devices
+│       ├── Revoke individual devices
+│       └── Primary device (mobile) can force-logout all others
+│
+└── K2.4 Onboarding Complete Screen 🔲
+
+    ┌─────────────────────────────────────────────────┐
+    │  🌪️  YOU'RE ALL SET!                            │
+    │                                                  │
+    │  ┌─────────┐  Hi, Grant!                        │
+    │  │ 🧑‍💼    │  Your Windy Chat is ready.         │
+    │  │ avatar  │                                    │
+    │  └─────────┘                                    │
+    │                                                  │
+    │  ✅ Phone verified                               │
+    │  ✅ Profile created                              │
+    │  ✅ Languages: English, Spanish                  │
+    │                                                  │
+    │  What's next:                                    │
+    │  📱 Import contacts to find friends              │
+    │  💬 Start a conversation                         │
+    │  🌍 Messages auto-translate to your language     │
+    │                                                  │
+    │              [Start Chatting →]                   │
+    └─────────────────────────────────────────────────┘
+
+DEPENDENCIES: K1 (homeserver running), H1 (account server for Windy Pro accounts)
+```
+
+---
+
+### K3: Contact Discovery
+
+```
+FILES: services/chat-directory/ [NEW DIRECTORY]
+STATUS: 🔲 NOT STARTED
+PRIORITY: HIGH — Users can't chat if they can't find each other
+
+CODONS:
+├── K3.1 Phone Contact Import 🔲
+│   │
+│   │  PRIVACY-FIRST APPROACH (Signal-style hash matching):
+│   │  ├── App reads device contacts (with permission)
+│   │  ├── Hash each phone number: SHA256(E.164_number + server_salt)
+│   │  ├── Send ONLY hashes to server (never raw phone numbers)
+│   │  ├── Server compares hashes against registered user hash table
+│   │  ├── Return matches: hash → Windy display name + avatar
+│   │  └── Device stores matches locally, raw contacts never leave device
+│   │
+│   ├── K3.1.1 Permission Request (Mobile) 🔲
+│   │   ├── iOS: CNContactStore requestAccess
+│   │   ├── Android: READ_CONTACTS permission
+│   │   ├── Explain WHY: "Find friends who already use Windy Chat"
+│   │   ├── "Skip" option (can import later from Settings)
+│   │   └── NEVER block onboarding on contact permission
+│   │
+│   ├── K3.1.2 Hash Directory Server 🔲
+│   │   ├── FILE: services/chat-directory/server.js [NEW]
+│   │   ├── POST /api/v1/chat/directory/lookup — batch hash lookup
+│   │   ├── Request: { hashes: ["sha256_1", "sha256_2", ...] }
+│   │   ├── Response: { matches: [{ hash, displayName, avatar, userId }] }
+│   │   ├── Rate limit: 1000 lookups per request, 10 requests per minute
+│   │   └── Salt rotation: weekly (re-hash on next sync)
+│   │
+│   └── K3.1.3 Contact Sync 🔲
+│       ├── Initial: full contact book hash upload
+│       ├── Incremental: only new/changed contacts on subsequent syncs
+│       ├── Background sync: every 24 hours (or manual refresh)
+│       └── New match notification: "Sarah just joined Windy Chat!"
+│
+├── K3.2 Search by Name / Email / Phone 🔲
+│   │
+│   │  ┌─────────────────────────────────────────────────┐
+│   │  │  🔍 FIND PEOPLE                                 │
+│   │  │                                                  │
+│   │  │  Search: [Grant Whitmer___________] 🔍          │
+│   │  │                                                  │
+│   │  │  📱 FROM YOUR CONTACTS                          │
+│   │  │  ├── 🟢 Sarah Chen (online)        [Message]   │
+│   │  │  ├── 🟡 Alex Park (away)           [Message]   │
+│   │  │  └── ⚪ Maria Lopez (offline)       [Message]   │
+│   │  │                                                  │
+│   │  │  🔍 SEARCH RESULTS                              │
+│   │  │  ├── Grant W.                       [Invite]    │
+│   │  │  └── Grant Whitmer                  [Invite]    │
+│   │  │                                                  │
+│   │  │  📨 INVITE BY PHONE / EMAIL                     │
+│   │  │  └── [Send invite to +1 555-0123]               │
+│   │  └─────────────────────────────────────────────────┘
+│   │
+│   ├── K3.2.1 Directory Search API 🔲
+│   │   ├── GET /api/v1/chat/directory/search?q=grant
+│   │   ├── Searches: display name (fuzzy), email (exact), phone (E.164)
+│   │   ├── Results limited to 20 per query
+│   │   ├── Respects user privacy settings (some users opt out of search)
+│   │   └── Debounced: 300ms after last keystroke
+│   │
+│   └── K3.2.2 Invite Non-Users 🔲
+│       ├── Send SMS invite: "Grant invited you to Windy Chat!"
+│       ├── Send email invite with download link
+│       ├── Deep link: windypro.com/chat/join?ref=grant_id
+│       ├── Referral tracking for growth metrics
+│       └── Limit: 20 invites per day (anti-spam)
+│
+└── K3.3 Social Media Import (Phase 2) 🔲
+    ├── Instagram DM contacts
+    ├── Facebook Messenger contacts
+    ├── Twitter/X DM contacts
+    ├── LinkedIn connections
+    └── OAuth2 integration per platform (complex — defer to Phase 2)
+
+DEPENDENCIES: K1 (homeserver), K2 (verified accounts)
+```
+
+---
+
+### K4: Rich Media Sharing
+
+```
+FILES: src/client/desktop/chat/chat-media.js [NEW]
+       src/mobile/src/services/chatMedia.ts [NEW]
+STATUS: 🔲 NOT STARTED
+PRIORITY: HIGH — Text-only messaging is not competitive in 2026
+
+CODONS:
+├── K4.1 Photo Sharing 🔲
+│   │
+│   │  Matrix event type: m.image
+│   │
+│   ├── K4.1.1 Photo Capture & Selection 🔲
+│   │   ├── Mobile: camera capture + photo library picker
+│   │   ├── Desktop: file picker + clipboard paste (Ctrl+V image)
+│   │   ├── Drag-and-drop onto chat window (desktop)
+│   │   ├── Max file size: 20MB (resized before upload if larger)
+│   │   └── Supported formats: JPEG, PNG, WebP, HEIF (convert to JPEG)
+│   │
+│   ├── K4.1.2 Image Processing Pipeline 🔲
+│   │   ├── Generate thumbnail (300px max dimension) for preview
+│   │   ├── Strip EXIF metadata (privacy — remove GPS, device info)
+│   │   ├── Compress: JPEG quality 85% (good balance of size/quality)
+│   │   ├── Upload to Matrix media repo (MXC URI)
+│   │   └── Encrypt before upload if room is E2EE (K7)
+│   │
+│   ├── K4.1.3 Image Display 🔲
+│   │   ├── Thumbnail in chat bubble (lazy-loaded)
+│   │   ├── Tap to view full-size (lightbox overlay)
+│   │   ├── Pinch-to-zoom (mobile), scroll-to-zoom (desktop)
+│   │   ├── Save to device (long-press → "Save Image")
+│   │   └── Forward to other chats
+│   │
+│   └── K4.1.4 Translated Captions 🔲
+│       ├── User adds optional caption to image
+│       ├── Caption auto-translated for recipient (like text messages)
+│       ├── Display: original caption + translated caption
+│       └── Translation happens on sender's device before send
+│
+├── K4.2 Video Sharing 🔲
+│   │
+│   │  Matrix event type: m.video
+│   │
+│   ├── K4.2.1 Video Capture & Selection 🔲
+│   │   ├── Mobile: record video (max 3 min) + library picker
+│   │   ├── Desktop: file picker + screen recording clip
+│   │   ├── Max file size: 100MB
+│   │   └── Supported formats: MP4, WebM, MOV (transcode to MP4)
+│   │
+│   ├── K4.2.2 Video Processing 🔲
+│   │   ├── Generate thumbnail (first frame or middle frame)
+│   │   ├── Compress: H.264 720p for mobile, 1080p for desktop
+│   │   ├── Duration overlay on thumbnail ("0:42")
+│   │   ├── Progressive upload with progress indicator
+│   │   └── Background upload (don't block UI)
+│   │
+│   └── K4.2.3 Video Playback 🔲
+│       ├── Inline playback in chat bubble (muted autoplay on scroll)
+│       ├── Tap for fullscreen with audio
+│       ├── Playback controls: play/pause, scrub, volume
+│       └── PiP support (continue watching while scrolling)
+│
+├── K4.3 Voice Messages 🔲
+│   │
+│   │  Matrix event type: m.audio
+│   │
+│   ├── K4.3.1 Voice Recording 🔲
+│   │   ├── Hold-to-record button (tap = hold, release = send)
+│   │   ├── Slide left to cancel (WhatsApp-style)
+│   │   ├── Waveform visualization during recording
+│   │   ├── Duration display (max 5 minutes)
+│   │   ├── Format: Opus (compact, high quality)
+│   │   └── Lock button: tap to lock recording (hands-free mode)
+│   │
+│   ├── K4.3.2 Voice Message Playback 🔲
+│   │   ├── Waveform display in chat bubble
+│   │   ├── Play/pause with progress scrubbing
+│   │   ├── Playback speed: 1x, 1.5x, 2x
+│   │   ├── Earpiece mode: raise to ear = play through earpiece (mobile)
+│   │   └── Blue waveform = unplayed, gray = played
+│   │
+│   └── K4.3.3 Voice Message Translation (KILLER FEATURE) 🔲
+│       │
+│       │  FLOW:
+│       │  1. Sender records voice message in their language
+│       │  2. On sender's device: STT → translate → TTS → attach both
+│       │  3. Recipient sees: original audio + translated audio + transcript
+│       │  4. All processing LOCAL on sender's device
+│       │
+│       ├── Original audio: Opus (sender's voice)
+│       ├── Translated audio: TTS in recipient's language (Piper/Coqui)
+│       ├── Transcript: original text + translated text
+│       ├── Metadata: { windy_voice_translated: true, src_lang, tgt_lang }
+│       └── Recipient can toggle: "Hear original" / "Hear translated"
+│
+├── K4.4 File Sharing 🔲
+│   │
+│   │  Matrix event type: m.file
+│   │
+│   ├── K4.4.1 File Upload 🔲
+│   │   ├── Any file type (PDF, DOCX, ZIP, etc.)
+│   │   ├── Max file size: 100MB
+│   │   ├── File icon + name + size in chat bubble
+│   │   ├── Progress indicator during upload
+│   │   └── Virus scan on server before delivery (ClamAV)
+│   │
+│   └── K4.4.2 File Download 🔲
+│       ├── Tap to download (don't auto-download large files)
+│       ├── Preview: PDFs inline, images inline, others = download
+│       ├── Open in default app
+│       └── Download progress indicator
+│
+└── K4.5 Media Gallery 🔲
+    ├── Per-conversation media gallery (all photos, videos, files)
+    ├── Grid view of shared media
+    ├── Filter by type: photos / videos / files / voice messages
+    ├── Scrollable timeline (newest first)
+    └── Accessible from conversation header: [📎 Media]
+
+DEPENDENCIES: K1 (homeserver media repo), K7 (E2EE for encrypted media)
+```
+
+
+### K5: Video and Voice Calling
+
+```
+FILES: src/client/desktop/chat/chat-voip.js [NEW]
+       src/mobile/src/services/chatVoIP.ts [NEW]
+STATUS: 🔲 NOT STARTED
+PRIORITY: MEDIUM (messaging first, then calling)
+
+ARCHITECTURE:
+│  Matrix VoIP uses WebRTC with Matrix signaling:
+│  ├── 1:1 calls: MSC2746 (WebRTC via m.call.invite / m.call.answer events)
+│  ├── Group calls: MSC3401 (LiveKit or Jitsi SFU backend)
+│  ├── TURN server: Coturn (NAT traversal — deployed in K1.1.1)
+│  └── STUN server: Google STUN (free) or self-hosted
+│
+│  TRANSLATED SUBTITLES ARCHITECTURE:
+│  ├── Remote audio → local STT (Whisper) → translate → render subtitle
+│  ├── ALL processing on LOCAL device — never leaves the call
+│  ├── ~1.5s latency (STT 500ms + translate 200ms + render 100ms + buffer 700ms)
+│  └── Toggle: show/hide subtitles per call participant
+
+CODONS:
+├── K5.1 1:1 Voice Calls 🔲
+│   │
+│   ├── K5.1.1 Call Setup (WebRTC + Matrix Signaling) 🔲
+│   │   ├── Caller sends m.call.invite event to room
+│   │   ├── Callee receives → shows incoming call UI
+│   │   ├── Callee accepts → m.call.answer event
+│   │   ├── ICE candidate exchange via m.call.candidates
+│   │   ├── TURN/STUN for NAT traversal
+│   │   └── Call established → peer-to-peer audio stream
+│   │
+│   ├── K5.1.2 Incoming Call UI 🔲
+│   │   │
+│   │   │  ┌─────────────────────────────────────┐
+│   │   │  │                                      │
+│   │   │  │        ┌──────────┐                 │
+│   │   │  │        │  🧑‍💼    │                 │
+│   │   │  │        │  avatar  │                 │
+│   │   │  │        └──────────┘                 │
+│   │   │  │      Grant Whitmer                   │
+│   │   │  │      Windy Chat Voice Call           │
+│   │   │  │                                      │
+│   │   │  │    🔴 Decline      🟢 Accept        │
+│   │   │  │                                      │
+│   │   │  └─────────────────────────────────────┘
+│   │   │
+│   │   ├── Full-screen overlay (mobile) or notification (desktop)
+│   │   ├── Ringtone with vibration (mobile)
+│   │   ├── System notification for background calls
+│   │   └── Auto-decline after 30 seconds if no answer
+│   │
+│   ├── K5.1.3 In-Call Controls 🔲
+│   │   ├── Mute/unmute microphone
+│   │   ├── Speaker/earpiece toggle (mobile)
+│   │   ├── Bluetooth audio device selection
+│   │   ├── Hold call
+│   │   ├── End call
+│   │   ├── Call duration timer
+│   │   └── Network quality indicator (excellent/good/poor)
+│   │
+│   └── K5.1.4 Call Quality 🔲
+│       ├── Opus audio codec (adaptive bitrate 16-128 kbps)
+│       ├── Echo cancellation (WebRTC built-in AEC)
+│       ├── Noise suppression (WebRTC built-in NS)
+│       ├── Packet loss concealment
+│       └── Automatic bitrate adaptation based on network quality
+│
+├── K5.2 1:1 Video Calls 🔲
+│   │
+│   ├── K5.2.1 Camera Management 🔲
+│   │   ├── Front/rear camera toggle (mobile)
+│   │   ├── Camera selection dropdown (desktop)
+│   │   ├── Camera preview before joining call
+│   │   ├── Virtual background (blur, image) — stretch goal
+│   │   └── Camera off → show avatar instead
+│   │
+│   ├── K5.2.2 Video Layout 🔲
+│   │   ├── Fullscreen: remote video fills screen
+│   │   ├── Self-view: PiP corner (draggable)
+│   │   ├── Resolution: 720p default, 1080p on good network
+│   │   └── Bandwidth adaptive: auto-degrade resolution on poor network
+│   │
+│   └── K5.2.3 Screen Sharing 🔲
+│       ├── Share entire screen or specific window (desktop)
+│       ├── Share screen on mobile (iOS ReplayKit, Android MediaProjection)
+│       ├── Annotation tools: draw/highlight on shared screen — stretch goal
+│       └── Resolution: match source resolution, max 1080p @ 15fps
+│
+├── K5.3 Group Calls (MSC3401 via LiveKit/Jitsi) 🔲
+│   │
+│   │  BACKEND: LiveKit (open-source, Rust-based SFU)
+│   │  ALTERNATIVE: Jitsi Meet (more mature, Java-based)
+│   │  DECISION: Evaluate both — LiveKit preferred for performance
+│   │
+│   ├── K5.3.1 SFU Deployment 🔲
+│   │   ├── LiveKit server container in Docker Compose
+│   │   ├── Scalable: 1 SFU handles ~100 concurrent streams
+│   │   ├── Media: audio/video routed through SFU (not mesh peer-to-peer)
+│   │   └── Signaling: Matrix room state events for call membership
+│   │
+│   ├── K5.3.2 Group Call UI 🔲
+│   │   ├── Grid layout: up to 4 video tiles (2×2)
+│   │   ├── Gallery layout: up to 25 tiles (5×5, thumbnails)
+│   │   ├── Speaker focus: active speaker highlighted / enlarged
+│   │   ├── Participant list sidebar
+│   │   └── Audio-only for 5+ participants on poor network
+│   │
+│   └── K5.3.3 Group Call Features 🔲
+│       ├── Max participants: 25 (with SFU)
+│       ├── Hand raise button 🤚
+│       ├── Chat sidebar during call
+│       ├── Screen sharing (one at a time)
+│       ├── Record call (local recording, not cloud)
+│       └── Meeting link: windypro.com/call/room_id (web-joinable)
+│
+├── K5.4 Real-Time Translated Subtitles (KILLER FEATURE) 🔲
+│   │
+│   │  ARCHITECTURE:
+│   │  ┌────────────────────────────────────────────────────────┐
+│   │  │  Remote participant speaks (Spanish)                    │
+│   │  │       ↓                                                 │
+│   │  │  WebRTC audio stream received locally                   │
+│   │  │       ↓                                                 │
+│   │  │  LOCAL Whisper STT: "¿Dónde está la reunión?"          │
+│   │  │       ↓                                                 │
+│   │  │  LOCAL Translation: "Where is the meeting?"             │
+│   │  │       ↓                                                 │
+│   │  │  Render subtitle overlay on video                       │
+│   │  │                                                         │
+│   │  │  ⚡ ALL ON DEVICE — zero cloud, zero data leak          │
+│   │  └────────────────────────────────────────────────────────┘
+│   │
+│   ├── K5.4.1 Subtitle Overlay 🔲
+│   │   ├── Semi-transparent bar at bottom of video
+│   │   ├── Original text (smaller, above) + translated text (larger, below)
+│   │   ├── Speaker name prefix: "Grant: Where is the meeting?"
+│   │   ├── Fade out after 5 seconds of silence
+│   │   ├── Font size adjustable
+│   │   └── Toggle per-participant: "Translate Grant's audio" ON/OFF
+│   │
+│   ├── K5.4.2 Audio Routing for STT 🔲
+│   │   ├── Tap remote audio stream → feed to local Whisper
+│   │   ├── Separate AudioContext (read-only, doesn't affect playback)
+│   │   ├── Buffer: 2-second sliding window
+│   │   └── VAD: only process when speech detected (save CPU)
+│   │
+│   └── K5.4.3 Multi-Language Group Calls 🔲
+│       ├── Each participant sets their language
+│       ├── Each participant sees subtitles in THEIR language
+│       ├── N participants × N languages = each processes locally
+│       ├── No central translation server needed
+│       └── CPU budget: ~20% per remote participant being translated
+│
+├── K5.5 Call History 🔲
+│   ├── Call log: date, time, duration, type (voice/video/group), direction
+│   ├── Missed call badges (red dot on contact)
+│   ├── Call back button (one-tap redial)
+│   ├── Filter: all calls / missed / incoming / outgoing
+│   └── Stored locally + synced via Matrix room state
+│
+└── K5.6 Picture-in-Picture 🔲
+    ├── iOS: AVPictureInPictureController
+    ├── Android: PiP activity mode
+    ├── Desktop: frameless always-on-top mini-window
+    ├── Show remote video + call controls (mute, end)
+    └── Tap PiP to return to full call screen
+
+DEPENDENCIES: K1 (homeserver + TURN server), K7 (E2EE for encrypted calls)
+NOTE: 1:1 calls (K5.1, K5.2) can ship before group calls (K5.3).
+      Group calls require SFU infrastructure which is a separate deployment.
+```
+
+---
+
+### K6: Push Notifications
+
+```
+FILES: services/chat-push-gateway/ [NEW DIRECTORY]
+STATUS: 🔲 NOT STARTED
+PRIORITY: HIGH — Without push, users must keep app open to receive messages
+
+CODONS:
+├── K6.1 Matrix Push Gateway 🔲
+│   │
+│   │  Matrix spec: push notifications flow through a "push gateway"
+│   │  that receives events from the homeserver and forwards to FCM/APNs
+│   │
+│   ├── K6.1.1 Push Gateway Server 🔲
+│   │   ├── FILE: services/chat-push-gateway/server.js [NEW]
+│   │   ├── Receives: POST /_matrix/push/v1/notify from Synapse
+│   │   ├── Payload: { notification: { room_id, event_id, sender, type, content } }
+│   │   ├── Routes to FCM (Android) or APNs (iOS) based on device pushkey
+│   │   ├── Strips message content for privacy (title only, no body)
+│   │   └── Registers with Synapse as push gateway URL
+│   │
+│   ├── K6.1.2 Synapse Pusher Configuration 🔲
+│   │   ├── Client registers pusher: POST /_matrix/client/v3/pushers/set
+│   │   ├── Pusher data: { pushkey, app_id, app_display_name, device_display_name }
+│   │   ├── kind: "http" (Synapse sends HTTP to our push gateway)
+│   │   └── data.url: "https://push.windypro.com/_matrix/push/v1/notify"
+│   │
+│   └── K6.1.3 Notification Content 🔲
+│       ├── Title: sender display name
+│       ├── Body: "New message" (privacy — don't leak content in notification)
+│       ├── Badge count: total unread across all rooms
+│       ├── Sound: default system notification sound
+│       └── Action buttons: "Reply" (inline reply), "Mark Read"
+│
+├── K6.2 Firebase Cloud Messaging (Android) 🔲
+│   │
+│   ├── K6.2.1 FCM Integration 🔲
+│   │   ├── Firebase project setup for Windy Chat
+│   │   ├── google-services.json in Android project
+│   │   ├── FCM token registration on app start
+│   │   ├── Token refresh handling
+│   │   └── Data messages (not notification messages — for custom handling)
+│   │
+│   └── K6.2.2 Android Notification Channels 🔲
+│       ├── Channel: "chat_messages" — new messages (default sound + vibrate)
+│       ├── Channel: "chat_calls" — incoming calls (ringtone + full-screen intent)
+│       ├── Channel: "chat_mentions" — @mentions (priority notification)
+│       └── User can customize per-channel in Android Settings
+│
+├── K6.3 Apple Push Notification Service (iOS) 🔲
+│   │
+│   ├── K6.3.1 APNs Integration 🔲
+│   │   ├── Push certificate or p8 key in Apple Developer portal
+│   │   ├── Entitlement: aps-environment (development/production)
+│   │   ├── Device token registration via UIApplication delegate
+│   │   ├── Token forwarded to push gateway as pushkey
+│   │   └── Background refresh for badge count update
+│   │
+│   └── K6.3.2 iOS Notification Features 🔲
+│       ├── Notification content extension (rich preview — avatar + message)
+│       ├── Notification service extension (decrypt E2EE content for preview)
+│       ├── Inline reply from notification
+│       ├── Group notifications by conversation
+│       └── Critical alerts for calls (bypass Do Not Disturb)
+│
+└── K6.4 Per-Conversation Mute 🔲
+    ├── Mute options: 1 hour, 8 hours, 1 day, 1 week, forever
+    ├── Muted conversations: no push, no sound, badge still counts
+    ├── Mention override: @you still notifies even if muted
+    ├── Mute state synced via Matrix room account data
+    └── Mute icon shown on conversation in contact list
+
+DEPENDENCIES: K1 (homeserver sends push events)
+```
+
+---
+
+### K7: E2E Encryption — Production Grade
+
+```
+FILES: src/client/desktop/chat/chat-crypto.js [NEW]
+       src/mobile/src/services/chatCrypto.ts [NEW]
+STATUS: 🔲 NOT STARTED (foundation exists in chat-client.js _initCrypto)
+PRIORITY: HIGH — Currently disabled because Olm is not installed
+
+CODONS:
+├── K7.1 Olm / Megolm Installation 🔲
+│   │
+│   │  CURRENT STATE: _initCrypto() in chat-client.js tries to load
+│   │  @matrix-org/olm but it's not installed → falls back to unencrypted
+│   │
+│   ├── K7.1.1 Dependencies 🔲
+│   │   ├── npm install @matrix-org/olm (libolm WASM bindings)
+│   │   ├── OR: use matrix-js-sdk's built-in Rust crypto (initRustCrypto)
+│   │   ├── Decision: Rust crypto preferred (newer, maintained, no external Olm)
+│   │   ├── CryptoStore: IndexedDBCryptoStore (desktop) or SQLiteCryptoStore (mobile)
+│   │   └── Persist crypto state across app restarts
+│   │
+│   ├── K7.1.2 Client Initialization 🔲
+│   │   ├── createClient({ ...opts, cryptoStore: new IndexedDBCryptoStore() })
+│   │   ├── await client.initRustCrypto()
+│   │   ├── Set globalErrorOnUnknownDevices(false) — auto-trust new devices
+│   │   └── Export secret storage key to backup (K7.3)
+│   │
+│   └── K7.1.3 Enable DM Encryption 🔲
+│       ├── Restore initial_state encryption in createDM()
+│       ├── Algorithm: m.megolm.v1.aes-sha2
+│       ├── Only enable after K7.1.2 confirms crypto is working
+│       └── Existing unencrypted rooms remain unencrypted (no retroactive E2E)
+│
+├── K7.2 Device Verification 🔲
+│   │
+│   │  FLOW (interactive verification):
+│   │  1. User A requests verification of User B's new device
+│   │  2. Both users see emoji comparison (SAS verification)
+│   │  3. If emojis match → both confirm → devices cross-signed
+│   │  4. Verified device gets green shield ✅ in UI
+│   │
+│   ├── K7.2.1 SAS Verification 🔲
+│   │   ├── Short Authentication String (7 emoji comparison)
+│   │   ├── Start via: device info panel → "Verify" button
+│   │   ├── Both users confirm emojis match
+│   │   └── Matrix events: m.key.verification.start/accept/key/mac/done
+│   │
+│   ├── K7.2.2 QR Code Verification 🔲
+│   │   ├── Scan QR code on other device (faster than emoji)
+│   │   ├── QR contains: user ID, device ID, master cross-signing key
+│   │   └── One-tap verification after scan
+│   │
+│   └── K7.2.3 Verification UI 🔲
+│       ├── Device list in Settings → Security → Devices
+│       ├── Each device: name, last seen, verified status
+│       ├── Unverified device warning: ⚠️ on messages from unverified devices
+│       └── "Verify all" button for bulk verification
+│
+├── K7.3 Key Backup (SSSS — Secure Secret Storage and Sharing) 🔲
+│   │
+│   │  PROBLEM: If user loses device, they lose all encryption keys
+│   │  SOLUTION: Encrypted key backup stored on homeserver
+│   │
+│   ├── K7.3.1 Backup Creation 🔲
+│   │   ├── Generate recovery key (48-character base58 string)
+│   │   ├── Encrypt all session keys with recovery key
+│   │   ├── Upload to homeserver: POST /_matrix/client/v3/room_keys/version
+│   │   ├── Show recovery key to user: "SAVE THIS — you'll need it on a new device"
+│   │   ├── Option: protect backup with passphrase instead of recovery key
+│   │   └── Auto-backup new keys as they're created
+│   │
+│   ├── K7.3.2 Backup Restore 🔲
+│   │   ├── On new device login → prompt for recovery key or passphrase
+│   │   ├── Download keys from homeserver
+│   │   ├── Decrypt with recovery key/passphrase
+│   │   ├── Import into local crypto store
+│   │   └── All historical messages become readable
+│   │
+│   └── K7.3.3 Recovery Key Storage 🔲
+│       ├── Option 1: user saves recovery key manually (screenshot, paper)
+│       ├── Option 2: stored in iCloud Keychain / Google Password Manager
+│       ├── Option 3: stored in Windy Pro account (encrypted with user password)
+│       └── Prompt user to verify backup exists during onboarding
+│
+└── K7.4 Cross-Signing 🔲
+    ├── Master signing key: signs all user's device keys
+    ├── Self-signing key: signs own devices
+    ├── User-signing key: signs other users' master keys
+    ├── Trust chain: if I verify User B once, all their devices are trusted
+    └── Bootstrapped during first E2EE setup
+
+DEPENDENCIES: K1 (homeserver for key backup storage)
+NOTE: E2EE is currently DISABLED (P1-C7 fix removed encryption from createDM).
+      K7 re-enables it properly with full crypto initialization.
+```
+
+---
+
+### K8: Chat Cloud Backup and Sync
+
+```
+FILES: services/chat-backup/ [NEW DIRECTORY]
+STATUS: 🔲 NOT STARTED
+PRIORITY: MEDIUM (users need this before trusting chat as primary messenger)
+
+CODONS:
+├── K8.1 Encrypted Chat Backup 🔲
+│   │
+│   │  STORAGE: Cloudflare R2 (S3-compatible, zero egress fees)
+│   │  ENCRYPTION: AES-256-GCM with user-derived key (password-based)
+│   │  SCHEDULE: Daily automatic, manual on-demand
+│   │
+│   ├── K8.1.1 Backup Contents 🔲
+│   │   ├── Message history (all rooms, all events)
+│   │   ├── E2EE keys (encrypted key backup — K7.3)
+│   │   ├── Contact list and room memberships
+│   │   ├── User settings (language, notification prefs, mute states)
+│   │   ├── Media: thumbnails only (full media re-downloaded on restore)
+│   │   └── Translation memory cache (frequently translated phrases)
+│   │
+│   ├── K8.1.2 Backup Encryption 🔲
+│   │   ├── Derive backup key from user password (PBKDF2, 100K iterations)
+│   │   ├── Encrypt backup payload: AES-256-GCM (authenticated encryption)
+│   │   ├── Upload encrypted blob to R2: /backups/{userId}/{timestamp}.enc
+│   │   ├── Server CANNOT decrypt backups (zero-knowledge)
+│   │   └── Max backup size: 500MB (compressed)
+│   │
+│   ├── K8.1.3 Backup Schedule 🔲
+│   │   ├── Automatic: daily at 3 AM local time (background)
+│   │   ├── Manual: Settings → Chat → "Back Up Now"
+│   │   ├── Incremental: only new messages since last backup
+│   │   ├── WiFi-only option (don't use cellular data)
+│   │   └── Keep last 7 daily backups (auto-prune older ones)
+│   │
+│   └── K8.1.4 Backup Status UI 🔲
+│       ├── Settings → Chat → Backup: "Last backup: today 3:02 AM"
+│       ├── Backup size: "247 MB of 500 MB used"
+│       ├── Next backup: "Tomorrow 3:00 AM"
+│       └── "Back Up Now" button with progress indicator
+│
+├── K8.2 Restore on New Device 🔲
+│   │
+│   │  FLOW:
+│   │  1. User logs in on new device
+│   │  2. Prompt: "Restore chat history from backup?"
+│   │  3. Enter backup password (or recovery key)
+│   │  4. Download + decrypt backup from R2
+│   │  5. Import messages, keys, settings
+│   │  6. Full chat history available immediately
+│   │
+│   ├── K8.2.1 Restore UI 🔲
+│   │   │
+│   │   │  ┌─────────────────────────────────────────────────┐
+│   │   │  │  📦 RESTORE CHAT HISTORY                        │
+│   │   │  │                                                  │
+│   │   │  │  We found a backup from your account:            │
+│   │   │  │                                                  │
+│   │   │  │  📅 March 12, 2026 — 3:02 AM                   │
+│   │   │  │  💬 1,247 messages across 23 conversations      │
+│   │   │  │  📎 89 media files                              │
+│   │   │  │  📦 247 MB                                      │
+│   │   │  │                                                  │
+│   │   │  │  Backup Password: [________________]            │
+│   │   │  │                                                  │
+│   │   │  │  [Restore]  [Skip — start fresh]                │
+│   │   │  └─────────────────────────────────────────────────┘
+│   │   │
+│   │   ├── Progress: "Restoring... 67% (834 of 1,247 messages)"
+│   │   └── Complete: "✅ Chat history restored!"
+│   │
+│   └── K8.2.2 Selective Restore 🔲
+│       ├── Option: restore all conversations
+│       ├── Option: restore specific conversations only
+│       ├── Option: restore messages from last N days only
+│       └── Media: re-download from homeserver on-demand (not from backup)
+│
+└── K8.3 Soul File Integration 🔲
+    ├── Chat history contributes to Soul File data set
+    ├── Voice messages → voice sample corpus (for Clone Capture)
+    ├── Translation patterns → improve personal translation model
+    ├── Export chat history as part of Soul File export (Strand H5)
+    └── Opt-in only: "Include chat history in Soul File?" toggle
+
+DEPENDENCIES: K1 (homeserver), K7 (E2EE keys for backup), H4 (sync infrastructure)
+```
+
+---
+
+### K9: Translation Integration — The Killer Feature
+
+```
+FILES: src/client/desktop/chat/chat-translate.js (extend existing 250 lines)
+       src/mobile/src/services/chatTranslation.ts [NEW]
+STATUS: 🔲 NOT STARTED (basic 1:1 translation exists in chat-translate.js)
+PRIORITY: CRITICAL — This is what makes Windy Chat different from every other messenger
+
+CODONS:
+├── K9.1 Auto-Translate Incoming Messages 🔲
+│   │
+│   │  CURRENT STATE: chat-client.js calls translateFn() on incoming messages
+│   │  if windy_original metadata is present. Translation happens via WebSocket
+│   │  to local Python server.
+│   │
+│   │  TARGET STATE: Every incoming message auto-translates to user's language,
+│   │  with graceful fallback chain and zero cloud dependency.
+│   │
+│   ├── K9.1.1 Translation Pipeline 🔲
+│   │   ├── Incoming message received via Matrix sync
+│   │   ├── Detect source language (from windy_lang metadata or auto-detect)
+│   │   ├── If source ≠ user's language → translate
+│   │   ├── Translation chain: local engine → cloud API → original text
+│   │   ├── Cache translated text in local DB (keyed by event_id + target_lang)
+│   │   └── Display: translated text (primary) + "Show original" toggle
+│   │
+│   ├── K9.1.2 Translation Engine Priority 🔲
+│   │   ├── Priority 1: Local offline engine (Strand E — CTranslate2/NLLB)
+│   │   ├── Priority 2: Local Python server (chat-translate.js WebSocket)
+│   │   ├── Priority 3: Cloud translation API (if user permits)
+│   │   ├── Priority 4: Show original untranslated (never fail silently)
+│   │   └── User setting: "Translation mode: Local Only / Local + Cloud / Off"
+│   │
+│   └── K9.1.3 Translation Indicators 🔲
+│       ├── 🌍 icon on translated messages
+│       ├── Tap icon → show original text underneath
+│       ├── Long-press → "Report bad translation" (feedback loop)
+│       └── Shimmer animation while translation is in progress
+│
+├── K9.2 Original + Translated Display 🔲
+│   │
+│   │  MESSAGE BUBBLE LAYOUT:
+│   │
+│   │  ┌──────────────────────────────────────────┐
+│   │  │  Grant (🇪🇸 → 🇺🇸)                 2:15 PM │
+│   │  │                                           │
+│   │  │  Where is the meeting room?                │
+│   │  │                                           │
+│   │  │  ┈┈┈ 🌍 Translated from Spanish ┈┈┈     │
+│   │  │  ¿Dónde está la sala de reuniones?        │
+│   │  └──────────────────────────────────────────┘
+│   │
+│   ├── K9.2.1 Compact Mode (default) 🔲
+│   │   ├── Show translated text as primary
+│   │   ├── Original text collapsed (tap 🌍 to expand)
+│   │   └── Language flag emoji in sender name
+│   │
+│   ├── K9.2.2 Bilingual Mode 🔲
+│   │   ├── Show both original + translated side-by-side
+│   │   ├── Original: smaller font, muted color
+│   │   ├── Translated: normal font, primary color
+│   │   └── Toggle: Settings → Chat → "Show original text: Always / On tap / Never"
+│   │
+│   └── K9.2.3 Message Search Across Languages 🔲
+│       ├── Search finds matches in BOTH original and translated text
+│       ├── "pharmacy" matches "Where is the pharmacy?" AND "farmacia"
+│       └── Search index covers both language versions
+│
+├── K9.3 Per-Conversation Translation Settings 🔲
+│   │
+│   ├── K9.3.1 Conversation Language Override 🔲
+│   │   ├── Default: translate to user's primary language
+│   │   ├── Override: "In this chat, translate to French" (for practice)
+│   │   ├── Override stored in Matrix room account data
+│   │   └── "Don't translate this chat" option (for same-language friends)
+│   │
+│   ├── K9.3.2 Auto-Detect Source Language 🔲
+│   │   ├── If sender's language is unknown, auto-detect from message text
+│   │   ├── Use fasttext language ID (~1MB model, instant)
+│   │   ├── Cache detected language per sender (stable after 3 messages)
+│   │   └── User can manually set: "Grant speaks: [Spanish ▾]"
+│   │
+│   └── K9.3.3 Translation Quality Feedback 🔲
+│       ├── Thumbs up/down on translations
+│       ├── "Suggest better translation" → manual edit → saved to memory
+│       ├── Translation memory improves over time per language pair
+│       └── Federated: translation improvements shared across user's devices
+│
+├── K9.4 Translated Voice Messages 🔲
+│   │
+│   │  (Detailed in K4.3.3 — cross-reference)
+│   │  Sender records → STT → translate → TTS → attach both audio versions
+│   │  Recipient toggles: "Hear original" / "Hear translated"
+│   │
+│   └── K9.4.1 Outgoing Voice Translation Pipeline 🔲
+│       ├── Record voice message (Opus audio)
+│       ├── Local STT: Whisper transcribes sender's speech
+│       ├── Local translate: NLLB translates transcript
+│       ├── Local TTS: Piper synthesizes translated text
+│       ├── Package: { original_audio, translated_audio, original_text, translated_text }
+│       ├── Send as m.audio with windy_voice_translated metadata
+│       └── Processing time: ~3-5 seconds for 30-second message
+│
+├── K9.5 Real-Time Translation in Video Calls 🔲
+│   │
+│   │  (Detailed in K5.4 — cross-reference)
+│   │  Remote audio → local STT → local translate → render subtitle overlay
+│   │  ALL processing on user's device — zero cloud
+│   │
+│   └── K9.5.1 Call Translation Settings 🔲
+│       ├── Per-participant toggle: "Translate [Grant's] speech"
+│       ├── Subtitle language: defaults to user's primary language
+│       ├── Subtitle position: bottom (default), top, left, right
+│       ├── Subtitle size: small / medium / large
+│       └── "Translate for me" mode: translate ALL participants automatically
+│
+├── K9.6 Group Chat Multi-Language (THE HOLY GRAIL) 🔲
+│   │
+│   │  VISION: A group chat with 5 people speaking 5 different languages.
+│   │  Each person types/speaks in THEIR language.
+│   │  Each person SEES every message in THEIR language.
+│   │  No one needs to know or learn anyone else's language.
+│   │
+│   │  ┌──────────────────────────────────────────────────────┐
+│   │  │  GROUP: 🌍 International Project Team                 │
+│   │  │                                                       │
+│   │  │  Yuki (🇯🇵): Let's finalize the design today.        │
+│   │  │  ┈ 今日デザインを確定しましょう。                         │
+│   │  │                                                       │
+│   │  │  Maria (🇪🇸): Agreed. I'll share the mockups.        │
+│   │  │  ┈ De acuerdo. Compartiré los mockups.               │
+│   │  │                                                       │
+│   │  │  Hans (🇩🇪): Can we also review the timeline?        │
+│   │  │  ┈ Können wir auch den Zeitplan überprüfen?          │
+│   │  │                                                       │
+│   │  │  Wei (🇨🇳): Good idea. I've updated the Gantt chart.│
+│   │  │  ┈ 好主意。我已经更新了甘特图。                          │
+│   │  │                                                       │
+│   │  │  ☝️ YOU see all messages in English.                  │
+│   │  │  Yuki sees them in Japanese. Maria in Spanish.       │
+│   │  │  Hans in German. Wei in Chinese. Same conversation.  │
+│   │  └──────────────────────────────────────────────────────┘
+│   │
+│   ├── K9.6.1 Group Translation Architecture 🔲
+│   │   ├── Sender sends message with windy_original + windy_lang metadata
+│   │   ├── Each recipient's device translates locally to THEIR language
+│   │   ├── No central translation — N devices × 1 translation each
+│   │   ├── Translation cached per (event_id × target_lang)
+│   │   └── If recipient and sender share a language → no translation needed
+│   │
+│   ├── K9.6.2 Group Language Summary 🔲
+│   │   ├── Conversation header shows: "🌍 5 languages in this chat"
+│   │   ├── Tap to see: who speaks what
+│   │   ├── "Your messages are translated for 4 participants"
+│   │   └── Language distribution visualization
+│   │
+│   └── K9.6.3 Performance Budget for Group Translation 🔲
+│       ├── Target: < 500ms per message translation
+│       ├── Batch translation: if 10 unread messages arrive, translate in batch
+│       ├── Lazy translation: only translate visible messages (virtual scroll)
+│       ├── Cache hit rate target: > 70% (common phrases repeated in group)
+│       └── Memory budget: translation engine ≤ 1GB RAM
+│
+└── K9.7 Translation Processing — LOCAL by Default 🔲
+
+    CRITICAL INVARIANT (Strand K addition to Critical Invariants):
+    ├── Chat translation is LOCAL by default — zero cloud
+    ├── User must EXPLICITLY opt-in to cloud translation fallback
+    ├── If local engine is unavailable → show untranslated message + download prompt
+    ├── NEVER silently fall back to cloud without user consent
+    └── Privacy promise: "Your conversations are translated on YOUR device.
+        We never see your messages. Not even the translations."
+
+    ENGINE REQUIREMENTS (from Strand E):
+    ├── NLLB-200-600M (1.2GB) — covers 200 languages, runs on any modern device
+    ├── NLLB-200-1.3B (2.5GB) — better quality, needs 8GB+ RAM
+    ├── OPUS-MT bilingual pairs (300MB each) — fastest for 2-language users
+    └── CTranslate2 INT8 quantization for CPU efficiency
+
+DEPENDENCIES: Strand E (translation engine), K1 (homeserver), K4 (media for voice messages),
+              K5 (video calls for subtitles)
+NOTE: THIS IS THE KILLER FEATURE. No other messaging app on Earth offers
+      offline-first, on-device, automatic translation in group chats.
+      This alone justifies the Windy Chat platform.
+```
+
+---
+
+### K-DEP: Strand K Dependency Graph
+
+```
+DEPENDENCY GRAPH — RECOMMENDED BUILD ORDER:
+
+Phase 1 — Foundation (Weeks 1-4):
+├── K1: Deploy Synapse homeserver (everything depends on this)
+├── K7.1: Install Olm/Megolm (E2EE is table stakes)
+├── K2: Onboarding (phone verification, profile setup)
+└── K6: Push notifications (users need alerts)
+
+Phase 2 — Core Features (Weeks 5-8):
+├── K3: Contact discovery (find people to chat with)
+├── K4: Media sharing (photos, videos, voice messages)
+├── K9.1-K9.3: Auto-translate + per-chat settings
+└── K7.2-K7.4: Device verification + key backup
+
+Phase 3 — Differentiators (Weeks 9-12):
+├── K5.1-K5.2: 1:1 voice/video calls
+├── K9.4: Translated voice messages
+├── K8: Cloud backup and sync
+└── K9.6: Group multi-language (THE HOLY GRAIL)
+
+Phase 4 — Advanced (Weeks 13-16):
+├── K5.3: Group video calls (requires SFU)
+├── K5.4: Real-time translated subtitles in calls
+├── K2.3: QR code desktop pairing
+└── K3.3: Social media contact import
+
+TOTAL ESTIMATED EFFORT:
+├── Phase 1: ~160 hours (2 engineers × 4 weeks)
+├── Phase 2: ~200 hours (2 engineers × 5 weeks)
+├── Phase 3: ~160 hours (2 engineers × 4 weeks)
+├── Phase 4: ~120 hours (2 engineers × 3 weeks)
+└── TOTAL: ~640 hours (~16 engineer-weeks)
+
+EXISTING CODE REUSE:
+├── chat-client.js (852 lines) — solid auth, messaging, presence foundation
+├── chat-translate.js (250 lines) — translation middleware, cache, WebSocket
+├── chat-preload.js (65 lines) — IPC bridge pattern
+├── chat.html/css (1600+ lines) — complete dark-theme chat UI
+├── Strand E translation engine — CTranslate2, NLLB, OPUS-MT pipeline
+├── Strand H sync infrastructure — R2 upload, offline queue, account server
+└── Estimated reuse: ~40% of foundation code already exists
+```
+
+---
+
 ## 📝 CHANGELOG
 
 | Date | Author | Change |
@@ -2912,6 +4129,21 @@ on Veron (GPU server) for production translation.
 | 2026-03-11 | Kit 0C3 Charlie | I1-I2: Updated statuses — effects-engine.js (600 lines) ✅, mini-widget.js (181 lines) 🟡 |
 | 2026-03-11 | Kit 0C3 Charlie | Added Strand J: 10 uncategorized desktop features, engine training pipeline, translate API |
 | 2026-03-11 | Kit 0C3 Charlie | Updated phase timeline to reflect current state (installer stress testing in progress) |
+| 2026-03-12 | Kit 0C3 Charlie + Grant Whitmer | **v2.0.0**: Added Strand K — Windy Chat Platform (The Chat Chromosome) |
+| 2026-03-12 | Kit 0C3 Charlie | K0: Foundation — documented existing chat codebase (852+250+65+920+670 lines), all hardening fixes |
+| 2026-03-12 | Kit 0C3 Charlie | K0.5: Market context — $96.2B messaging market, competitor analysis, offline-translated-encrypted differentiation |
+| 2026-03-12 | Kit 0C3 Charlie | K1: Our Own Homeserver — Synapse deployment, custom registration, display name registry, avatar system |
+| 2026-03-12 | Kit 0C3 Charlie | K2: WhatsApp-Style Onboarding — phone/email verification (Twilio/SendGrid), QR code desktop pairing |
+| 2026-03-12 | Kit 0C3 Charlie | K3: Contact Discovery — phone hash-match directory (Signal-style), search, social media import |
+| 2026-03-12 | Kit 0C3 Charlie | K4: Rich Media Sharing — photos, videos, voice messages, files via Matrix m.image/m.video/m.audio/m.file |
+| 2026-03-12 | Kit 0C3 Charlie | K5: Video & Voice Calling — WebRTC (MSC2746), group calls (MSC3401/LiveKit), real-time translated subtitles |
+| 2026-03-12 | Kit 0C3 Charlie | K6: Push Notifications — Matrix push gateway, FCM (Android), APNs (iOS), per-conversation mute |
+| 2026-03-12 | Kit 0C3 Charlie | K7: E2E Encryption — Olm/Megolm production, device verification, key backup (SSSS), cross-signing |
+| 2026-03-12 | Kit 0C3 Charlie | K8: Chat Cloud Backup — encrypted R2 backup, restore on new device, Soul File integration |
+| 2026-03-12 | Kit 0C3 Charlie | K9: Translation Integration — auto-translate, voice message translation, video call subtitles, group multi-language |
+| 2026-03-12 | Grant Whitmer | K9.6: Group multi-language — the Holy Grail: 5 people, 5 languages, everyone reads their own language |
+| 2026-03-12 | Grant Whitmer | K9.7: Critical invariant — chat translation LOCAL by default, never fall back to cloud without consent |
+| 2026-03-12 | Kit 0C3 Charlie | K-DEP: 4-phase build plan (16 engineer-weeks), 40% code reuse from existing foundation |
 
 ---
 
