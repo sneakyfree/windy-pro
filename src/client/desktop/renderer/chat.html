@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self' https: wss:">
   <title>Windy Chat</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="chat.css">
@@ -32,7 +34,7 @@
     <div class="login-form">
       <input type="text" id="login-username" placeholder="Username or @user:matrix.org" autocomplete="username">
       <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
-      <button onclick="handleLogin()">🌪️ Connect to Windy Chat</button>
+      <button onclick="handleLogin()" id="login-btn">🌪️ Connect to Windy Chat</button>
       <div id="login-error" class="login-error" style="display:none;"></div>
       <p style="font-size:12px; color:var(--chat-text-muted); margin-top:8px;">
         Don't have an account? <a href="#" onclick="showRegister()" style="color:var(--chat-blue);">Create one</a>
@@ -116,6 +118,10 @@
 
       <!-- Active conversation -->
       <div id="active-chat" style="display:none; flex:1; display:flex; flex-direction:column; height:100vh;">
+        <!-- Connection status banner -->
+        <div id="connection-banner" class="connection-banner" style="display:none;">
+          <span id="connection-banner-text">🔴 Disconnected — reconnecting...</span>
+        </div>
         <!-- Header -->
         <div class="chat-header">
           <div class="chat-header-info" onclick="showProfilePanel()" style="cursor:pointer;">
@@ -273,6 +279,8 @@
     let contacts = [];
     let myUserId = null;
     let myLanguage = 'en';
+    let isConnected = false;
+    let offlineQueue = []; // Messages waiting to be sent
 
     // ═══ Initialization ═══
     async function init() {
@@ -314,6 +322,20 @@
 
       windyChat.onConnected(() => {
         console.log('[WindyChat UI] Connected');
+        isConnected = true;
+        updateConnectionBanner('connected');
+        flushOfflineQueue();
+      });
+
+      windyChat.onDisconnected(() => {
+        console.log('[WindyChat UI] Disconnected');
+        isConnected = false;
+        updateConnectionBanner('disconnected');
+      });
+
+      // Connection status changes (SYNCING, ERROR, RECONNECTING)
+      windyChat.onConnectionStatus((status) => {
+        updateConnectionBanner(status.state);
       });
     }
 
@@ -329,12 +351,21 @@
         return;
       }
 
+      // Loading state
+      const loginBtn = document.getElementById('login-btn');
+      loginBtn.disabled = true;
+      loginBtn.textContent = '⏳ Connecting...';
       errorEl.style.display = 'none';
+
       const result = await windyChat.login(username, password);
+
+      loginBtn.disabled = false;
+      loginBtn.textContent = '🌪️ Connect to Windy Chat';
 
       if (result.success) {
         myUserId = result.userId;
         myLanguage = await windyChat.getUserLanguage() || 'en';
+        isConnected = true;
         showChatInterface();
         loadContacts();
       } else {
@@ -501,10 +532,16 @@
     function buildMessageHtml(m) {
       const isOwn = m.isOwn || m.senderId === myUserId;
       const time = formatTime(m.timestamp);
+      const pendingClass = m._pending ? ' pending' : '';
 
       // Dual-text bubble: show original + translation if from another language
       let translationHtml = '';
-      if (m.originalText && m.originalLang && m.originalLang !== myLanguage) {
+      if (m._translationUnavailable) {
+        translationHtml = `
+          <div class="message-translation">
+            <span class="lang-badge" style="background:rgba(234,179,8,0.15);color:#EAB308;">⚠️ TRANSLATION UNAVAILABLE</span>
+          </div>`;
+      } else if (m.originalText && m.originalLang && m.originalLang !== myLanguage) {
         const langLabel = m.originalLang.toUpperCase();
         translationHtml = `
           <div class="message-translation">
@@ -517,11 +554,11 @@
 
       return `
         <div class="message-group ${isOwn ? 'own' : ''}">
-          <div class="message-bubble ${isOwn ? 'own' : 'other'}">
+          <div class="message-bubble ${isOwn ? 'own' : 'other'}${pendingClass}">
             ${senderHtml}
             <div class="message-text">${escapeHtml(m.body)}</div>
             ${translationHtml}
-            <div class="message-time">${time}</div>
+            <div class="message-time">${time}${m._pending ? ' ⏳' : ''}</div>
           </div>
         </div>`;
     }
@@ -555,25 +592,37 @@
       _sending = true;
       document.getElementById('send-btn').disabled = true;
 
-      try {
-        const result = await windyChat.sendMessage(currentRoomId, text);
+      // Optimistic UI — show message immediately
+      const tempMsg = {
+        senderId: myUserId,
+        body: text,
+        originalText: text,
+        originalLang: myLanguage,
+        timestamp: Date.now(),
+        _pending: true
+      };
+      appendMessage(tempMsg);
+      scrollToBottom();
 
-        // Optimistic UI — show our message immediately
-        appendMessage({
-          senderId: myUserId,
-          body: text,
-          originalText: text,
-          originalLang: myLanguage,
-          timestamp: Date.now()
-        });
-        scrollToBottom();
+      try {
+        await windyChat.sendMessage(currentRoomId, text);
       } catch (err) {
         console.error('Send failed:', err);
-        appendMessage({
-          senderId: 'system',
-          body: '⚠️ Message failed to send. Please try again.',
-          timestamp: Date.now()
-        });
+        if (!isConnected) {
+          // Queue for later delivery
+          offlineQueue.push({ roomId: currentRoomId, text });
+          appendMessage({
+            senderId: 'system',
+            body: '⏳ Message queued — will send when reconnected.',
+            timestamp: Date.now()
+          });
+        } else {
+          appendMessage({
+            senderId: 'system',
+            body: '⚠️ Message failed to send. Please try again.',
+            timestamp: Date.now()
+          });
+        }
       }
 
       _sending = false;
@@ -721,6 +770,41 @@
       const btn = event.target;
       btn.textContent = '✅';
       setTimeout(() => btn.textContent = '📤', 1500);
+    }
+
+    // ═══ Connection Banner ═══
+    function updateConnectionBanner(state) {
+      const banner = document.getElementById('connection-banner');
+      const text = document.getElementById('connection-banner-text');
+      if (!banner) return;
+
+      if (state === 'connected' || state === 'SYNCING' || state === 'PREPARED') {
+        banner.style.display = 'none';
+        banner.className = 'connection-banner connected';
+      } else if (state === 'RECONNECTING' || state === 'reconnecting') {
+        banner.style.display = 'flex';
+        banner.className = 'connection-banner reconnecting';
+        text.textContent = '🟡 Reconnecting...';
+      } else {
+        banner.style.display = 'flex';
+        banner.className = 'connection-banner disconnected';
+        text.textContent = '🔴 Disconnected — reconnecting...';
+      }
+    }
+
+    // ═══ Offline Queue ═══
+    async function flushOfflineQueue() {
+      if (offlineQueue.length === 0) return;
+      const queue = [...offlineQueue];
+      offlineQueue = [];
+      for (const item of queue) {
+        try {
+          await windyChat.sendMessage(item.roomId, item.text);
+        } catch (e) {
+          console.warn('[Chat] Offline queue flush failed:', e);
+          offlineQueue.push(item); // Re-queue
+        }
+      }
     }
 
     // ═══ Helpers ═══

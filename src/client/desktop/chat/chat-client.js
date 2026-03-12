@@ -8,6 +8,8 @@
  * Translation metadata format (cross-platform standard):
  * { "body": "translated text", "windy_original": "original text", "windy_lang": "es" }
  * 
+ * Hardened: security, error handling, E2E encryption, offline resilience, reconnection
+ * 
  * License: Proprietary (Windy Pro)
  * Matrix JS SDK: Apache 2.0
  */
@@ -16,6 +18,8 @@
 let _matrixSdk = null;
 
 const { EventEmitter } = require('events');
+const path = require('path');
+const fs = require('fs');
 
 class WindyChatClient extends EventEmitter {
   constructor(store) {
@@ -25,9 +29,39 @@ class WindyChatClient extends EventEmitter {
     this.isConnected = false;
     this.translateFn = null; // Set externally by chat-translate.js
     this.presenceMap = new Map(); // userId → { presence, lastActive }
+    this._offlineQueue = []; // Messages pending send when reconnected
+    this._cryptoEnabled = false;
+    this._syncState = null;
 
     // Default homeserver — configurable in settings
     this.homeserverUrl = store.get('chat.homeserver', 'https://matrix.org');
+  }
+
+  // ═══════════════════════════════════════════════
+  // Security: Homeserver URL Validation
+  // ═══════════════════════════════════════════════
+
+  /**
+   * Validate homeserver URL — must be HTTPS (or localhost for dev)
+   */
+  _validateHomeserver(url) {
+    if (!url || typeof url !== 'string') {
+      throw new Error('Homeserver URL is required');
+    }
+    try {
+      const parsed = new URL(url);
+      const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+      if (parsed.protocol !== 'https:' && !isLocalhost) {
+        throw new Error('Homeserver must use HTTPS (except localhost for development)');
+      }
+      if (['javascript:', 'data:', 'file:'].includes(parsed.protocol)) {
+        throw new Error('Invalid homeserver protocol');
+      }
+      return parsed.origin;
+    } catch (err) {
+      if (err.message.includes('Homeserver') || err.message.includes('Invalid')) throw err;
+      throw new Error(`Invalid homeserver URL: ${url}`);
+    }
   }
 
   /**
@@ -43,18 +77,53 @@ class WindyChatClient extends EventEmitter {
         try {
           _matrixSdk = require('matrix-js-sdk');
         } catch (e2) {
-          throw new Error(`Cannot load matrix-js-sdk: ${err.message}. Fallback: ${e2.message}`);
+          throw new Error(
+            'Chat requires matrix-js-sdk. Please install it: npm install matrix-js-sdk'
+          );
         }
       }
     }
     return _matrixSdk;
   }
 
+  // ═══════════════════════════════════════════════
+  // E2E Encryption: Initialize Crypto Module
+  // ═══════════════════════════════════════════════
+
+  /**
+   * Initialize Olm/Megolm E2E encryption (best-effort)
+   */
+  async _initCrypto() {
+    if (!this.client) return;
+    try {
+      // Check if Olm is available
+      const Olm = require('@matrix-org/olm');
+      if (typeof global !== 'undefined') global.Olm = Olm;
+
+      await this.client.initCrypto();
+      // Don't block sends on unverified devices — auto-accept
+      this.client.setGlobalErrorOnUnknownDevices(false);
+      this._cryptoEnabled = true;
+      console.debug('[WindyChat] E2E encryption initialized ✅');
+    } catch (err) {
+      // Olm not installed — chat still works, just without E2E
+      this._cryptoEnabled = false;
+      console.warn('[WindyChat] E2E encryption unavailable (install @matrix-org/olm for E2E):', err.message);
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  // Authentication
+  // ═══════════════════════════════════════════════
+
   /**
    * Initialize Matrix client and log in
    */
   async login(userId, password) {
     try {
+      // Validate homeserver URL
+      const validatedUrl = this._validateHomeserver(this.homeserverUrl);
+
       const sdk = await this._getSDK();
       const hostname = require('os').hostname();
 
@@ -66,7 +135,7 @@ class WindyChatClient extends EventEmitter {
       }
 
       this.client = sdk.createClient({
-        baseUrl: this.homeserverUrl,
+        baseUrl: validatedUrl,
         deviceId: `windy-pro-${hostname}`
       });
 
@@ -92,19 +161,54 @@ class WindyChatClient extends EventEmitter {
 
       // Reinitialize with access token
       this.client = sdk.createClient({
-        baseUrl: this.homeserverUrl,
+        baseUrl: validatedUrl,
         accessToken: loginResponse.access_token,
         userId: loginResponse.user_id,
         deviceId: loginResponse.device_id,
         timelineSupport: true
       });
 
+      // Initialize E2E encryption (best-effort)
+      await this._initCrypto();
+
       await this._startSync();
       return { success: true, userId: loginResponse.user_id };
     } catch (err) {
       console.error('[WindyChat] Login failed:', err.message);
-      return { success: false, error: err.message };
+      return { success: false, error: this._classifyLoginError(err) };
     }
+  }
+
+  /**
+   * Classify login error into user-friendly messages
+   */
+  _classifyLoginError(err) {
+    const code = err.errcode || err.data?.errcode || '';
+    const status = err.httpStatus || 0;
+
+    if (code === 'M_FORBIDDEN' || status === 403) {
+      return 'Invalid username or password. Please check your credentials.';
+    }
+    if (code === 'M_LIMIT_EXCEEDED') {
+      const retryMs = err.data?.retry_after_ms || 30000;
+      return `Too many attempts. Please wait ${Math.ceil(retryMs / 1000)} seconds and try again.`;
+    }
+    if (code === 'M_USER_DEACTIVATED') {
+      return 'This account has been deactivated. Contact your server administrator.';
+    }
+    if (code === 'M_UNKNOWN_TOKEN' || code === 'M_MISSING_TOKEN') {
+      return 'Session expired. Please log in again.';
+    }
+    if (err.message?.includes('ECONNREFUSED') || err.message?.includes('ENOTFOUND')) {
+      return 'Cannot reach the chat server. Please check your internet connection and homeserver URL.';
+    }
+    if (err.message?.includes('ETIMEDOUT') || err.message?.includes('timeout')) {
+      return 'Connection timed out. The server may be temporarily unavailable.';
+    }
+    if (err.message?.includes('Homeserver') || err.message?.includes('Invalid homeserver')) {
+      return err.message;
+    }
+    return `Login failed: ${err.message || 'Unknown error'}`;
   }
 
   /**
@@ -119,7 +223,9 @@ class WindyChatClient extends EventEmitter {
       if (encB64 && safeStorage.isEncryptionAvailable()) {
         accessToken = safeStorage.decryptString(Buffer.from(encB64, 'base64'));
       }
-    } catch (_) { }
+    } catch (e) {
+      console.warn('[WindyChat] safeStorage decryption failed:', e.message);
+    }
     // Fallback: try old plaintext token for migration
     if (!accessToken) accessToken = this.store.get('chat.accessToken', null);
     const userId = this.store.get('chat.userId');
@@ -130,21 +236,25 @@ class WindyChatClient extends EventEmitter {
     }
 
     try {
+      const validatedUrl = this._validateHomeserver(this.homeserverUrl);
       const sdk = await this._getSDK();
       this.client = sdk.createClient({
-        baseUrl: this.homeserverUrl,
+        baseUrl: validatedUrl,
         accessToken: accessToken,
         userId: userId,
         deviceId: deviceId,
         timelineSupport: true
       });
 
+      // Initialize E2E encryption (best-effort)
+      await this._initCrypto();
+
       await this._startSync();
       return { success: true, userId: userId };
     } catch (err) {
       console.error('[WindyChat] Session resume failed:', err.message);
       this.store.delete('chat.accessToken');
-      return { success: false, error: err.message };
+      return { success: false, error: this._classifyLoginError(err) };
     }
   }
 
@@ -153,10 +263,11 @@ class WindyChatClient extends EventEmitter {
    */
   async register(username, password, displayName) {
     try {
+      const validatedUrl = this._validateHomeserver(this.homeserverUrl);
       const sdk = await this._getSDK();
-      const tempClient = sdk.createClient({ baseUrl: this.homeserverUrl });
+      const tempClient = sdk.createClient({ baseUrl: validatedUrl });
 
-      const regResponse = await tempClient.register(username, password, null, {
+      await tempClient.register(username, password, null, {
         type: 'm.login.dummy'
       });
 
@@ -174,10 +285,20 @@ class WindyChatClient extends EventEmitter {
         console.debug('[WindyChat] Registration requires additional auth:', err.data.flows);
         return { success: false, error: 'Registration requires CAPTCHA or email verification. Please register at ' + this.homeserverUrl };
       }
+      if (err.errcode === 'M_USER_IN_USE') {
+        return { success: false, error: 'This username is already taken. Please choose a different one.' };
+      }
+      if (err.errcode === 'M_INVALID_USERNAME') {
+        return { success: false, error: 'Invalid username. Use only lowercase letters, numbers, and underscores.' };
+      }
       console.error('[WindyChat] Registration failed:', err.message);
-      return { success: false, error: err.message };
+      return { success: false, error: this._classifyLoginError(err) };
     }
   }
+
+  // ═══════════════════════════════════════════════
+  // Sync + Reconnection
+  // ═══════════════════════════════════════════════
 
   /**
    * Start the Matrix sync loop (listens for incoming messages)
@@ -186,6 +307,28 @@ class WindyChatClient extends EventEmitter {
     if (!this.client) return;
 
     const userLang = this._getUserLanguage();
+
+    // Listen for sync state changes (reconnection, errors)
+    this.client.on('sync', (state, prevState) => {
+      this._syncState = state;
+      if (state === 'PREPARED' || state === 'SYNCING') {
+        if (!this.isConnected) {
+          this.isConnected = true;
+          this.emit('connected');
+          // Flush offline queue on reconnect
+          this._flushOfflineQueue();
+          // Re-establish presence
+          this.setPresence('online').catch(() => {});
+        }
+        this.emit('connection-status', { state: 'connected' });
+      } else if (state === 'ERROR') {
+        this.isConnected = false;
+        this.emit('connection-status', { state: 'ERROR' });
+        console.warn('[WindyChat] Sync error — will auto-retry');
+      } else if (state === 'RECONNECTING') {
+        this.emit('connection-status', { state: 'RECONNECTING' });
+      }
+    });
 
     // Listen for incoming messages
     this.client.on('Room.timeline', async (event, room, toStartOfTimeline) => {
@@ -204,6 +347,7 @@ class WindyChatClient extends EventEmitter {
 
       let displayText = content.body || '';
       let translatedText = null;
+      let translationUnavailable = false;
 
       // Auto-translate if message is in a foreign language
       if (this.translateFn && windyLang && windyLang !== userLang) {
@@ -214,10 +358,10 @@ class WindyChatClient extends EventEmitter {
           displayText = translatedText;
         } catch (e) {
           console.warn('[WindyChat] Auto-translate failed:', e.message);
+          translationUnavailable = true;
+          // Show original text with unavailable indicator
+          displayText = windyOriginal || content.body;
         }
-      } else if (!windyLang && this.translateFn) {
-        // Unknown language — body is the only text, try detect + translate
-        // For now just show as-is; future: add language detection
       }
 
       this.emit('message', {
@@ -227,9 +371,13 @@ class WindyChatClient extends EventEmitter {
         body: displayText,
         originalText: windyOriginal || (translatedText ? content.body : null),
         originalLang: windyLang || null,
+        translationUnavailable,
         timestamp,
         eventId: event.getId()
       });
+
+      // Cache messages locally for offline access
+      this._cacheRoomMessages(roomId);
     });
 
     // Listen for presence changes
@@ -268,12 +416,59 @@ class WindyChatClient extends EventEmitter {
       }
     });
 
-    // Start syncing
+    // Start syncing with auto-reconnect
     await this.client.startClient({ initialSyncLimit: 20 });
-    this.isConnected = true;
-    this.emit('connected');
     console.debug('[WindyChat] Connected and syncing');
   }
+
+  // ═══════════════════════════════════════════════
+  // Offline Queue
+  // ═══════════════════════════════════════════════
+
+  /**
+   * Flush queued offline messages on reconnect
+   */
+  async _flushOfflineQueue() {
+    if (this._offlineQueue.length === 0) return;
+    console.debug(`[WindyChat] Flushing ${this._offlineQueue.length} queued messages`);
+    const queue = [...this._offlineQueue];
+    this._offlineQueue = [];
+    for (const item of queue) {
+      try {
+        await this.sendMessage(item.roomId, item.text);
+      } catch (e) {
+        console.warn('[WindyChat] Offline queue send failed, re-queuing:', e.message);
+        this._offlineQueue.push(item);
+      }
+    }
+  }
+
+  /**
+   * Cache last N messages per room for offline access
+   */
+  _cacheRoomMessages(roomId) {
+    try {
+      const messages = this.getMessages(roomId, 30);
+      this.store.set(`chat.cache.${roomId.replace(/[^a-zA-Z0-9]/g, '_')}`, messages);
+    } catch (e) {
+      console.debug('[WindyChat] Message cache write failed:', e.message);
+    }
+  }
+
+  /**
+   * Load cached messages for offline use
+   */
+  getCachedMessages(roomId) {
+    try {
+      return this.store.get(`chat.cache.${roomId.replace(/[^a-zA-Z0-9]/g, '_')}`, []);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  // Messaging
+  // ═══════════════════════════════════════════════
 
   /**
    * Send a message with Windy translation metadata
@@ -294,6 +489,8 @@ class WindyChatClient extends EventEmitter {
 
     try {
       const result = await this.client.sendEvent(roomId, 'm.room.message', content);
+      // Cache updated messages
+      this._cacheRoomMessages(roomId);
       return {
         eventId: result.event_id,
         body: text,
@@ -302,6 +499,11 @@ class WindyChatClient extends EventEmitter {
       };
     } catch (err) {
       console.error('[WindyChat] Send failed:', err.message);
+      // If offline, queue the message
+      if (!this.isConnected || err.message?.includes('ECONNREFUSED') || err.message?.includes('timeout')) {
+        this._offlineQueue.push({ roomId, text });
+        return { eventId: null, queued: true, body: text };
+      }
       throw err; // Re-throw so UI can show error
     }
   }
@@ -311,6 +513,11 @@ class WindyChatClient extends EventEmitter {
    */
   async createDM(userId) {
     if (!this.client) throw new Error('Not connected');
+
+    // Validate user ID format
+    if (!userId || !userId.match(/^@[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+$/)) {
+      return { roomId: null, error: 'Invalid user ID format. Use @username:server.org' };
+    }
 
     // Check if DM already exists
     const existingRoom = this._findExistingDM(userId);
@@ -334,7 +541,13 @@ class WindyChatClient extends EventEmitter {
       return { roomId: room.room_id, existing: false };
     } catch (err) {
       console.error('[WindyChat] createDM failed:', err.message);
-      return { roomId: null, error: err.message };
+      if (err.errcode === 'M_NOT_FOUND') {
+        return { roomId: null, error: `User "${userId}" was not found on the server.` };
+      }
+      if (err.errcode === 'M_FORBIDDEN') {
+        return { roomId: null, error: `Cannot message "${userId}" — they may have restricted who can contact them.` };
+      }
+      return { roomId: null, error: `Could not start conversation: ${err.message}` };
     }
   }
 
@@ -400,11 +613,17 @@ class WindyChatClient extends EventEmitter {
 
   /**
    * Get message history for a room with translation metadata
+   * Falls back to cached messages if offline
    */
   getMessages(roomId, limit = 50) {
-    if (!this.client) return [];
+    if (!this.client) {
+      // Offline — return cached messages
+      return this.getCachedMessages(roomId);
+    }
     const room = this.client.getRoom(roomId);
-    if (!room) return [];
+    if (!room) {
+      return this.getCachedMessages(roomId);
+    }
 
     const myUserId = this.client.getUserId();
     return room.timeline
@@ -442,6 +661,7 @@ class WindyChatClient extends EventEmitter {
         lastActive: presenceInfo?.lastActive || null
       };
     } catch (e) {
+      console.warn('[WindyChat] getUserProfile failed:', e.message);
       return { userId, displayName: userId, avatarUrl: null, presence: 'offline' };
     }
   }
@@ -492,11 +712,16 @@ class WindyChatClient extends EventEmitter {
    * Accept a room invite
    */
   async acceptInvite(roomId) {
-    if (!this.client) return;
+    if (!this.client) return { success: false, error: 'Not connected' };
     try {
       await this.client.joinRoom(roomId);
+      return { success: true };
     } catch (err) {
       console.warn('[WindyChat] acceptInvite failed:', err.message);
+      if (err.errcode === 'M_FORBIDDEN') {
+        return { success: false, error: 'You are not allowed to join this room.' };
+      }
+      return { success: false, error: `Failed to join room: ${err.message}` };
     }
   }
 
@@ -521,7 +746,19 @@ class WindyChatClient extends EventEmitter {
       await this.client.sendTyping(roomId, isTyping, isTyping ? 5000 : undefined);
     } catch (err) {
       // Typing indicators are best-effort — don't crash on failure
+      console.debug('[WindyChat] sendTyping failed:', err.message);
     }
+  }
+
+  /**
+   * Get E2E encryption status
+   */
+  getCryptoStatus() {
+    return {
+      enabled: this._cryptoEnabled,
+      deviceId: this.client ? this.store.get('chat.deviceId', null) : null,
+      syncState: this._syncState
+    };
   }
 
   /**
@@ -538,6 +775,9 @@ class WindyChatClient extends EventEmitter {
       this.client = null;
     }
     this.isConnected = false;
+    this._cryptoEnabled = false;
+    this._syncState = null;
+    this._offlineQueue = [];
     this.presenceMap.clear();
     this.store.delete('chat.accessToken');
     this.store.delete('chat.accessTokenEncrypted');

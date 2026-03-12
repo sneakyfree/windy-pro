@@ -1406,6 +1406,12 @@ function getChatClient() {
         chatWindow.webContents.send('chat-disconnected');
       }
     });
+    // Forward connection-status events (SYNCING, ERROR, RECONNECTING)
+    chatClient.on('connection-status', (data) => {
+      if (chatWindow && !chatWindow.isDestroyed()) {
+        chatWindow.webContents.send('chat-connection-status', data);
+      }
+    });
   }
   return chatClient;
 }
@@ -1484,7 +1490,13 @@ ipcMain.handle('chat-get-messages', async (event, roomId, limit) => {
 });
 
 ipcMain.handle('chat-send-typing', async (event, roomId, isTyping) => {
-  return getChatClient().sendTyping(roomId, isTyping);
+  try { return getChatClient().sendTyping(roomId, isTyping); }
+  catch (e) { console.debug('[Chat IPC] sendTyping error:', e.message); }
+});
+
+// Chat IPC — Cached messages (offline access)
+ipcMain.handle('chat-get-cached-messages', async (event, roomId) => {
+  return getChatClient().getCachedMessages(roomId);
 });
 
 // Chat IPC — Contacts & Rooms
@@ -1502,6 +1514,11 @@ ipcMain.handle('chat-accept-invite', async (event, roomId) => {
 
 ipcMain.handle('chat-decline-invite', async (event, roomId) => {
   return getChatClient().declineInvite(roomId);
+});
+
+// Chat IPC — Encryption
+ipcMain.handle('chat-get-crypto-status', async () => {
+  return chatClient ? chatClient.getCryptoStatus() : { enabled: false, deviceId: null, syncState: null };
 });
 
 // Chat IPC — Profile & Presence
@@ -1532,10 +1549,22 @@ ipcMain.handle('chat-get-settings', async () => {
 });
 
 ipcMain.handle('chat-set-settings', async (event, settings) => {
-  if (settings.homeserver) store.set('chat.homeserver', settings.homeserver);
+  if (settings.homeserver) {
+    // Validate homeserver URL before saving
+    try {
+      const parsed = new URL(settings.homeserver);
+      const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+      if (parsed.protocol !== 'https:' && !isLocalhost) {
+        return { ok: false, error: 'Homeserver must use HTTPS (except localhost for development)' };
+      }
+    } catch (e) {
+      return { ok: false, error: 'Invalid homeserver URL' };
+    }
+    store.set('chat.homeserver', settings.homeserver);
+  }
   if (settings.displayName) {
     store.set('chat.displayName', settings.displayName);
-    try { getChatClient().setDisplayName(settings.displayName); } catch (e) { /* not connected */ }
+    try { getChatClient().setDisplayName(settings.displayName); } catch (e) { console.debug('[Chat] setDisplayName failed:', e.message); }
   }
   if (settings.language) store.set('chat.language', settings.language);
   return { ok: true };

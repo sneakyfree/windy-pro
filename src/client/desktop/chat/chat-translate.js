@@ -23,6 +23,14 @@ class ChatTranslator {
     this._pending = new Map(); // requestId → { resolve, reject, timeout }
     this._requestCounter = 0;
     this._reconnectTimer = null;
+    this._available = false; // Whether translation engine is reachable
+  }
+
+  /**
+   * Check if translation engine is available
+   */
+  isAvailable() {
+    return this._available && this._wsReady;
   }
 
   /**
@@ -45,6 +53,7 @@ class ChatTranslator {
 
     try {
       const translated = await this._sendTranslationRequest(text, srcLang, tgtLang);
+      this._available = true;
       
       // Cache the result (LRU eviction)
       if (this.cache.size >= this.maxCacheSize) {
@@ -56,7 +65,11 @@ class ChatTranslator {
       return translated;
     } catch (err) {
       console.error('[ChatTranslator] Translation failed:', err.message);
-      return text; // Return original on failure
+      this._available = false;
+      // Throw with specific type so UI can show "translation unavailable" badge
+      const unavailableErr = new Error(`Translation unavailable: ${err.message}`);
+      unavailableErr.translationUnavailable = true;
+      throw unavailableErr;
     }
   }
 
@@ -126,6 +139,7 @@ class ChatTranslator {
         clearTimeout(connectTimeout);
         this._ws = ws;
         this._wsReady = true;
+        this._available = true;
         resolve(ws);
       });
 
@@ -156,7 +170,7 @@ class ChatTranslator {
             }
           }
         } catch (e) {
-          // Not a JSON message, ignore
+          console.debug('[ChatTranslator] Non-JSON message received');
         }
       });
 
@@ -225,10 +239,11 @@ class ChatTranslator {
    */
   destroy() {
     if (this._ws) {
-      try { this._ws.close(); } catch (e) { /* ignore */ }
+      try { this._ws.close(); } catch (e) { console.debug('[ChatTranslator] WS close error:', e.message); }
       this._ws = null;
     }
     this._wsReady = false;
+    this._available = false;
     clearTimeout(this._reconnectTimer);
     for (const [id, { reject, timeout }] of this._pending) {
       clearTimeout(timeout);

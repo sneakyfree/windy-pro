@@ -3,6 +3,8 @@
  * 
  * Exposes chat API to the renderer process via contextBridge.
  * Follows the same security pattern as the main preload.js.
+ * 
+ * Hardened: added connection status, crypto status, cached messages
  */
 
 const { contextBridge, ipcRenderer } = require('electron');
@@ -17,6 +19,7 @@ contextBridge.exposeInMainWorld('windyChat', {
   // ═══ Messaging ═══
   sendMessage: (roomId, text) => ipcRenderer.invoke('chat-send-message', roomId, text),
   getMessages: (roomId, limit) => ipcRenderer.invoke('chat-get-messages', roomId, limit),
+  getCachedMessages: (roomId) => ipcRenderer.invoke('chat-get-cached-messages', roomId),
   sendTyping: (roomId, isTyping) => ipcRenderer.invoke('chat-send-typing', roomId, isTyping),
 
   // ═══ Contacts & Rooms ═══
@@ -30,6 +33,9 @@ contextBridge.exposeInMainWorld('windyChat', {
   setPresence: (status) => ipcRenderer.invoke('chat-set-presence', status),
   getUserProfile: (userId) => ipcRenderer.invoke('chat-get-user-profile', userId),
   getTotalUnread: () => ipcRenderer.invoke('chat-get-total-unread'),
+
+  // ═══ Encryption ═══
+  getCryptoStatus: () => ipcRenderer.invoke('chat-get-crypto-status'),
 
   // ═══ Settings ═══
   getChatSettings: () => ipcRenderer.invoke('chat-get-settings'),
@@ -53,6 +59,9 @@ contextBridge.exposeInMainWorld('windyChat', {
   },
   onDisconnected: (callback) => {
     ipcRenderer.on('chat-disconnected', () => callback());
+  },
+  onConnectionStatus: (callback) => {
+    ipcRenderer.on('chat-connection-status', (event, data) => callback(data));
   },
   onUnreadUpdate: (callback) => {
     ipcRenderer.on('chat-unread-update', (event, count) => callback(count));
