@@ -226,6 +226,7 @@ class VoiceHandler {
     this.audioChunks = [];
     this.startTime = null;
     this.analyser = null;
+    this.audioContext = null;
     this.isRecording = false;
     this.isLocked = false;
   }
@@ -246,6 +247,7 @@ class VoiceHandler {
 
       // Set up analyser for waveform visualization
       const audioContext = new AudioContext();
+      this.audioContext = audioContext;
       const source = audioContext.createMediaStreamSource(stream);
       this.analyser = audioContext.createAnalyser();
       this.analyser.fftSize = 256;
@@ -295,8 +297,12 @@ class VoiceHandler {
         // Generate waveform data for display
         const waveform = await generateWaveformData(blob);
 
-        // Stop all tracks
+        // Stop all tracks and close audio context
         this.mediaRecorder.stream.getTracks().forEach(t => t.stop());
+        if (this.audioContext) {
+          this.audioContext.close().catch(() => {});
+          this.audioContext = null;
+        }
         this.isRecording = false;
 
         resolve({
@@ -330,6 +336,10 @@ class VoiceHandler {
       this.mediaRecorder.stop();
       this.isRecording = false;
       this.audioChunks = [];
+      if (this.audioContext) {
+        this.audioContext.close().catch(() => {});
+        this.audioContext = null;
+      }
     }
   }
 

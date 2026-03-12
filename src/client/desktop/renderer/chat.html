@@ -157,7 +157,7 @@
             🌐 EN → Auto
           </div>
           <div class="chat-input-wrapper">
-            <input type="text" id="message-input" placeholder="Type a message..." maxlength="4000" aria-label="Message input"
+            <input type="text" id="message-input" placeholder="Type a message..." maxlength="4000" dir="auto" aria-label="Message input"
                    onkeydown="if(event.key==='Enter')sendMessage()"
                    oninput="handleTyping()">
             <button class="chat-send-btn" onclick="sendMessage()" id="send-btn" aria-label="Send message">➤</button>
@@ -262,9 +262,10 @@
   <div id="new-chat-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; align-items:center; justify-content:center;">
     <div style="background:var(--chat-card); border:1px solid var(--chat-border); border-radius:16px; padding:24px; width:360px; max-width:90vw;">
       <h3 style="font-size:16px; font-weight:800; margin-bottom:16px; color:var(--chat-text);">💬 New Conversation</h3>
-      <input type="text" id="new-chat-user" placeholder="Enter @user:matrix.org"
+      <input type="text" id="new-chat-user" placeholder="Enter @user:matrix.org" maxlength="255"
              style="width:100%; padding:10px 14px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:14px; outline:none; margin-bottom:12px;"
              onkeydown="if(event.key==='Enter')startNewChat()">
+      <div id="new-chat-error" style="font-size:12px; color:#f87171; margin-bottom:8px; display:none;"></div>
       <div style="display:flex; gap:8px; justify-content:flex-end;">
         <button onclick="hideNewChat()" style="padding:8px 16px; background:var(--chat-border); border:none; border-radius:8px; color:var(--chat-text-dim); cursor:pointer; font-size:13px;">Cancel</button>
         <button onclick="startNewChat()" style="padding:8px 16px; background:var(--chat-green); border:none; border-radius:8px; color:#0F1219; cursor:pointer; font-size:13px; font-weight:700;">Start Chat</button>
@@ -563,11 +564,11 @@
             <span class="lang-badge" style="background:rgba(234,179,8,0.15);color:#EAB308;">⚠️ TRANSLATION UNAVAILABLE</span>
           </div>`;
       } else if (m.originalText && m.originalLang && m.originalLang !== myLanguage) {
-        const langLabel = m.originalLang.toUpperCase();
+        const langLabel = escapeHtml(m.originalLang.toUpperCase());
         translationHtml = `
           <div class="message-translation">
             <span class="lang-badge">${langLabel}</span>
-            <span class="translation-text">${escapeHtml(m.originalText)}</span>
+            <span class="translation-text" dir="auto">${escapeHtml(m.originalText)}</span>
           </div>`;
       }
 
@@ -577,7 +578,7 @@
         <div class="message-group ${isOwn ? 'own' : ''}">
           <div class="message-bubble ${isOwn ? 'own' : 'other'}${pendingClass}">
             ${senderHtml}
-            <div class="message-text">${escapeHtml(m.body)}</div>
+            <div class="message-text" dir="auto">${escapeHtml(m.body)}</div>
             ${translationHtml}
             <div class="message-time">${time}${m._pending ? ' ⏳' : ''}</div>
           </div>
@@ -706,9 +707,13 @@
         const initial = (profile.displayName || '?').charAt(0).toUpperCase();
         document.getElementById('profile-avatar').textContent = initial;
         if (profile.avatarUrl) {
-          document.getElementById('profile-avatar').style.backgroundImage = `url(${profile.avatarUrl})`;
-          document.getElementById('profile-avatar').textContent = '';
-          document.getElementById('profile-avatar').style.backgroundSize = 'cover';
+          // SEC: Sanitize avatar URL — allow only https: and data: protocols, prevent CSS injection
+          const safeUrl = sanitizeAvatarUrl(profile.avatarUrl);
+          if (safeUrl) {
+            document.getElementById('profile-avatar').style.backgroundImage = `url(${safeUrl})`;
+            document.getElementById('profile-avatar').textContent = '';
+            document.getElementById('profile-avatar').style.backgroundSize = 'cover';
+          }
         }
         document.getElementById('profile-display-name').textContent = profile.displayName;
         document.getElementById('profile-user-id').textContent = profile.userId;
@@ -721,7 +726,7 @@
 
         document.getElementById('profile-details').innerHTML = `
           <div style="margin-bottom:6px;"><strong>Handle:</strong> ${escapeHtml(profile.userId)}</div>
-          <div style="margin-bottom:6px;"><strong>Status:</strong> ${isOnline ? 'Online now' : profile.lastActive ? 'Last seen ' + formatTimeAgo(profile.lastActive) : 'Offline'}</div>
+          <div style="margin-bottom:6px;" dir="auto"><strong>Status:</strong> ${isOnline ? 'Online now' : profile.lastActive ? 'Last seen ' + formatTimeAgo(profile.lastActive) : 'Offline'}</div>
         `;
       }
 
@@ -774,14 +779,37 @@
 
     async function startNewChat() {
       const userId = document.getElementById('new-chat-user').value.trim();
+      const errorEl = document.getElementById('new-chat-error');
+      if (errorEl) errorEl.style.display = 'none';
       if (!userId) return;
 
-      const result = await windyChat.createDM(userId);
-      hideNewChat();
+      // Validate Matrix user ID format
+      if (!userId.match(/^@[a-zA-Z0-9._=\-\/]+:[a-zA-Z0-9.\-]+$/)) {
+        if (errorEl) {
+          errorEl.textContent = 'Invalid user ID format. Use @username:server.org';
+          errorEl.style.display = 'block';
+        }
+        return;
+      }
 
-      if (result.roomId) {
-        openConversation(result.roomId, userId, userId.split(':')[0].replace('@', ''));
-        setTimeout(loadContacts, 1000);
+      try {
+        const result = await windyChat.createDM(userId);
+
+        if (result.roomId) {
+          hideNewChat();
+          openConversation(result.roomId, userId, userId.split(':')[0].replace('@', ''));
+          setTimeout(loadContacts, 1000);
+        } else {
+          if (errorEl) {
+            errorEl.textContent = result.error || 'Could not start conversation';
+            errorEl.style.display = 'block';
+          }
+        }
+      } catch (err) {
+        if (errorEl) {
+          errorEl.textContent = 'Connection error. Please try again.';
+          errorEl.style.display = 'block';
+        }
       }
     }
 
@@ -857,15 +885,31 @@
 
     function escapeHtml(text) {
       if (!text) return '';
-      return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const str = String(text);
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     // P2-R7: Proper HTML entity encoding for attribute contexts (prevents XSS breakout)
     function escapeAttr(text) {
       if (!text) return '';
-      return text.replace(/&/g, '&amp;').replace(/'/g, '&#39;')
+      const str = String(text);
+      return str.replace(/&/g, '&amp;').replace(/'/g, '&#39;')
                  .replace(/"/g, '&quot;').replace(/</g, '&lt;')
                  .replace(/>/g, '&gt;').replace(/\\/g, '\\\\');
+    }
+
+    // SEC: Sanitize URLs for CSS background-image to prevent CSS injection
+    function sanitizeAvatarUrl(url) {
+      if (!url) return null;
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+          // Only allow URLs with no special CSS characters
+          const clean = url.replace(/["'()\\]/g, '');
+          return clean;
+        }
+      } catch { /* invalid URL */ }
+      return null;
     }
 
     // P2-R5: Invite confirmation UI

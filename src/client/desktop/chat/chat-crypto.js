@@ -32,6 +32,11 @@ class ChatCrypto {
    * K7.1.2: Client initialization
    */
   async initialize() {
+    // Guard: prevent double initialization (listeners would accumulate)
+    if (this.cryptoReady) {
+      console.debug('🔐 Crypto already initialized — skipping');
+      return true;
+    }
     try {
       // Prefer Rust crypto (newer, maintained, no external Olm needed)
       if (this.client.initRustCrypto) {
@@ -322,8 +327,13 @@ class ChatCrypto {
    * Cleanup.
    */
   destroy() {
+    // Clean up any event listeners on pending verification requests
+    for (const [, request] of this.verificationRequests) {
+      try { request.removeAllListeners?.(); } catch { /* best-effort */ }
+    }
     this.verificationRequests.clear();
     this.cryptoReady = false;
+    this.backupInfo = null;
   }
 }
 

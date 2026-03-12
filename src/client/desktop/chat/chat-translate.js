@@ -214,7 +214,8 @@ class ChatTranslator {
   getUserLanguage() {
     const languages = this.store.get('wizard.userLanguages', []);
     if (languages.length > 0) {
-      return languages.sort((a, b) => (b.weight || 0) - (a.weight || 0))[0].code;
+      // Spread to avoid mutating the stored array reference
+      return [...languages].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0].code;
     }
     return 'en';
   }

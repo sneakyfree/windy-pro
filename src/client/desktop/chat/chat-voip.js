@@ -532,6 +532,8 @@ class SubtitleEngine {
     this.tgtLang = tgtLang;
     this.audioContext = null;
     this.analyser = null;
+    this.processor = null;
+    this.sourceNode = null;
     this.isActive = false;
     this.onSubtitle = null;
     this.lastSubtitleTime = 0;
@@ -546,6 +548,7 @@ class SubtitleEngine {
     try {
       this.audioContext = new AudioContext();
       const source = this.audioContext.createMediaStreamSource(remoteStream);
+      this.sourceNode = source;
 
       // Analyser for VAD (Voice Activity Detection)
       this.analyser = this.audioContext.createAnalyser();
@@ -554,6 +557,7 @@ class SubtitleEngine {
 
       // ScriptProcessor for audio capture (read-only, doesn't affect playback)
       const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
+      this.processor = processor;
       this.audioBuffer = [];
       this.bufferDuration = 0;
 
@@ -643,8 +647,22 @@ class SubtitleEngine {
   /** Stop the subtitle engine. */
   stop() {
     this.isActive = false;
+    // Disconnect audio nodes to prevent memory leaks
+    if (this.processor) {
+      try { this.processor.disconnect(); } catch { /* already disconnected */ }
+      this.processor.onaudioprocess = null;
+      this.processor = null;
+    }
+    if (this.sourceNode) {
+      try { this.sourceNode.disconnect(); } catch { /* already disconnected */ }
+      this.sourceNode = null;
+    }
+    if (this.analyser) {
+      try { this.analyser.disconnect(); } catch { /* already disconnected */ }
+      this.analyser = null;
+    }
     if (this.audioContext) {
-      this.audioContext.close();
+      this.audioContext.close().catch(() => {});
       this.audioContext = null;
     }
     this.audioBuffer = [];

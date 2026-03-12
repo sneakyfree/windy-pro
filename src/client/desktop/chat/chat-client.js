@@ -496,8 +496,8 @@ class WindyChatClient extends EventEmitter {
     // Build message with standard Windy metadata
     const content = {
       msgtype: 'm.text',
-      body: text,
-      windy_original: text,
+      body: typeof text === 'string' ? text.slice(0, 65535) : String(text).slice(0, 65535),
+      windy_original: typeof text === 'string' ? text.slice(0, 65535) : String(text).slice(0, 65535),
       windy_lang: userLang
     };
 
@@ -842,7 +842,8 @@ class WindyChatClient extends EventEmitter {
   _getUserLanguage() {
     const languages = this.store.get('wizard.userLanguages', []);
     if (languages.length > 0) {
-      return languages.sort((a, b) => (b.weight || 0) - (a.weight || 0))[0].code;
+      // Spread to avoid mutating the stored array reference
+      return [...languages].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0].code;
     }
     return this.store.get('chat.language', 'en');
   }

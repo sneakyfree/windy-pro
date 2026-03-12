@@ -1482,6 +1482,9 @@ ipcMain.handle('chat-get-session', async () => {
 
 // Chat IPC — Messaging (client handles translation metadata internally)
 ipcMain.handle('chat-send-message', async (event, roomId, text) => {
+  // Validate inputs
+  if (typeof roomId !== 'string' || roomId.length > 500) return { error: 'Invalid room ID' };
+  if (typeof text !== 'string' || text.length === 0 || text.length > 65535) return { error: 'Message too long or empty' };
   return getChatClient().sendMessage(roomId, text);
 });
 
@@ -1581,35 +1584,23 @@ ipcMain.handle('chat-translate-text', async (event, text, srcLang, tgtLang) => {
 });
 
 // Forward events from Matrix client → chat BrowserWindow
+// NOTE: getChatClient() already registers message/presence/invite/connected/disconnected listeners.
+// _setupChatForwarding adds ONLY the typing handler + tray badge update to avoid duplicate events.
 let _chatForwardingSetup = false;
 function _setupChatForwarding(client) {
   if (_chatForwardingSetup) return;
   _chatForwardingSetup = true;
 
-  client.on('message', (msg) => {
-    if (chatWindow && !chatWindow.isDestroyed()) {
-      chatWindow.webContents.send('chat-new-message', msg);
-    }
-    // Update tray icon unread badge
-    _updateTrayUnread(client.getTotalUnread());
-  });
-
-  client.on('presence', (data) => {
-    if (chatWindow && !chatWindow.isDestroyed()) {
-      chatWindow.webContents.send('chat-presence-update', data);
-    }
-  });
-
+  // Typing is NOT forwarded in getChatClient() — add it here
   client.on('typing', (data) => {
     if (chatWindow && !chatWindow.isDestroyed()) {
       chatWindow.webContents.send('chat-typing', data);
     }
   });
 
-  client.on('invite', (data) => {
-    if (chatWindow && !chatWindow.isDestroyed()) {
-      chatWindow.webContents.send('chat-invite', data);
-    }
+  // Tray badge update on new message
+  client.on('message', () => {
+    _updateTrayUnread(client.getTotalUnread());
   });
 
   client.on('disconnected', () => {
