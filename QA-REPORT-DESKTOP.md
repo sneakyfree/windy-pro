@@ -1,219 +1,258 @@
-# QA REPORT — Windy Pro Desktop v1.6.1
+# QA Report — Windy Pro Desktop v1.6.1
 
-**Date:** 2026-03-11  
-**Build:** v1.6.1 (`bfe4f5d`)  
-**Platform:** Linux (Electron 36 + Node 22)  
-**Auditor:** Automated QA (Antigravity)
+**Date:** 2026-03-12  
+**Platform:** Linux (HP ProBook 455 G8)  
+**Electron:** v33+  
+**Node:** v22+
 
 ---
 
-## 1. Screen-by-Screen Visual Audit
+## 1. Launch Test
+
+```
+$ npx electron . --no-sandbox
+```
+
+| Check | Result |
+|-------|--------|
+| Startup errors | ✅ None |
+| Startup warnings | ✅ None (only expected `APPIMAGE env is not defined`) |
+| Python server | ✅ Started (`ws://127.0.0.1:9876`, model: small, int8) |
+| Hotkey registration | ✅ All 5 registered (Space, V, B, W, T) |
+| Main window | ✅ Opens correctly |
+| System tray | ✅ Created |
+
+**stdout (clean):**
+```
+[Main] needsSetup: false
+[Hotkey] Toggle recording (CommandOrControl+Shift+Space): OK
+[Hotkey] Paste transcript (CommandOrControl+Shift+V): OK
+[Hotkey] Paste clipboard (CommandOrControl+Shift+B): OK
+[Hotkey] Show/Hide (CommandOrControl+Shift+W): OK
+[Hotkey] Quick Translate (CommandOrControl+Shift+T): OK
+[Python] Model loaded successfully — ws://127.0.0.1:9876
+```
+
+---
+
+## 2. Screen-by-Screen Audit
 
 ### Main Window
 | Element | Status | Notes |
 |---------|--------|-------|
-| Custom titlebar (Windy Pro logo + globe/moon/gear icons) | ✅ Works | Clean, properly aligned |
-| "READY" status header | ✅ Works | Centers correctly |
-| Keyboard shortcuts overlay | ✅ Works | Ctrl+/- zoom, Ctrl+0 reset |
-| Record button (green, bottom) | ✅ Works | Prominent, well-styled |
-| Engine selector (Local/Cloud dropdown) | ✅ Works | Dropdown functions |
-| Folder (archive), Settings tray icons | ✅ Works | Bottom-left icon row |
-| Status bar ("Connecting...", "Archive: idle") | ✅ Works | Shows correct state |
-| Transcript area (empty state) | ✅ Works | Keyboard shortcuts shown as placeholder |
+| Header bar | ✅ | Globe (🌐), Theme (🌙), Settings (⚙️), minimize/maximize/close |
+| READY status | ✅ | Centered, large text |
+| Keyboard shortcuts card | ✅ | Shows Ctrl+/- zoom, Ctrl+0 reset |
+| Record button | ✅ | Green gradient, responsive hover |
+| Footer toolbar | ✅ | Clear, Copy, Paste, Delete, History icons |
+| Engine dropdown | ✅ | Shows "Local" with folder + gear icons |
+| Status bar | ⚠️ | Shows "Connecting..." (CORS on health endpoint) |
+| Model badge | ✅ | Shows "🏠 base" in purple pill |
+| Archive status | ✅ | Shows "Archive: idle" |
 
-### Settings Panel (10 sections)
-| Section | Status | Notes |
+### Settings Panel
+| Element | Status | Notes |
 |---------|--------|-------|
-| YOUR PLAN | ✅ Works | Shows current tier |
-| SIMPLE MODE | ✅ Works | Toggle works |
-| ARCHIVE & STORAGE | ✅ Works | Folder picker, cloud sync toggle |
-| SOUL FILE — YOUR DIGITAL TWIN DATA | ⚠️ Partial | Stats show 0 hours/words, "Loading progress..." text persists, Export buttons are stubs |
-| TRANSCRIPTION ENGINE | ✅ Works | Engine dropdown, local processing info |
-| TRANSCRIPTION | ✅ Works | Language, diarization, timestamps settings |
-| VIBE TOGGLE | ✅ Works | Sound effects on/off |
-| INPUT DEVICE | ✅ Works | Mic selector |
-| CUSTOMIZABLE KEYBOARD SHORTCUTS | ✅ Works | Hotkey editor |
-| (A-/A+) Font size controls | ✅ Works | Adjusts transcript font size |
+| Open/close | ✅ | Smooth slide-in animation |
+| Plan section | ✅ | Shows "Free" badge + Upgrade button |
+| Simple Mode | ✅ | Clear after paste, Recording mode, Max recording |
+| Archive & Storage | ✅ | Local/Cloud/Both selector, Browse folder |
+| Soul File section | ⚠️ | Shows "Loading progress..." initially (resolves after async stats load) |
+| Export Soul File | ✅ | Blue button, triggers save dialog |
+| Export Voice Clone | ✅ | Green button, triggers save dialog |
+| Transcription Engine | ✅ | WindyTune default, 17 engine options |
+| Cloud settings | ✅ | URL input, email/password login, account status |
+| Vibe Toggle | ✅ | Clean-up mode checkbox |
+| Input Device | ✅ | Microphone dropdown |
+| Keyboard Shortcuts | ✅ | 5 rebindable shortcuts + zoom info |
+| Appearance | ✅ | Opacity slider, Always on Top, Theme toggle |
+| Theme Packs | ✅ | 5 modes (Silent/Default/Single/Surprise/Custom) |
+| Widget | ✅ | Gallery, custom upload, size slider |
+| Analytics | ✅ | Opt-in checkbox |
+| About | ✅ | Version display + Check for Updates button |
+| Font size (A-/A+) | ✅ | Zoom webContents |
+| Maximize (⛶) | ✅ | Toggles fullscreen settings |
+
+### History Panel
+| Element | Status | Notes |
+|---------|--------|-------|
+| Open/close | ✅ | Smooth slide-in |
+| Stats header | ✅ | Word count + recording count |
+| Search bar | ✅ | Functional |
+| Export dropdown | ✅ | Export options |
+| Empty state | ✅ | "No transcripts yet. Record something to get started!" |
+| Cloud Portal link | ✅ | Opens external URL |
 
 ### Upgrade Panel
 | Element | Status | Notes |
 |---------|--------|-------|
-| 4 tier cards (Free/Pro/Ultra/Max) | ✅ Works | All displayed correctly |
-| Pricing display | ✅ Works | Monthly/Annual/Lifetime toggle |
-| Checkout buttons | ✅ Works | Opens Stripe checkout |
-| Coupon code input | ✅ Works | Validates via Stripe API |
+| 4 tiers | ✅ | Free, Pro ($49), Ultra ($79), Max ($149) |
+| Pricing cards | ✅ | Features lists, current tier badge |
+| Checkout flow | ✅ | Creates Stripe session, opens browser |
+| Dynamic price IDs | ✅ | Loaded from IPC config |
 
-### Chat Window (via tray)
+### Translation Tools
 | Element | Status | Notes |
 |---------|--------|-------|
-| Login form (homeserver/username/password) | ✅ Works | Matrix.org default |
-| Message input | ✅ Works | 4000-char limit |
-| Presence indicators | ✅ Works | Online/offline dots |
-| Auto-translate | ✅ Works | WebSocket-based |
+| Globe dropdown | ✅ | "Translate Studio" + "Quick Translate" options |
+| Language list | ✅ | Loads from API (99 languages) |
+| Conversation mode | ✅ | UI present |
+| Document translator | ✅ | UI present |
 
-### System Tray
-| Item | Status | Notes |
-|------|--------|-------|
-| Show/Hide window | ✅ Works | Toggles main window |
-| Chat | ✅ Works | Opens chat window |
-| Settings | ✅ Works | Opens settings |
-| Quit | ✅ Works | Exits app |
+### Theme Toggle
+| Element | Status | Notes |
+|---------|--------|-------|
+| Dark mode | ✅ | Default, dark blue palette |
+| Light mode | ✅ | Smooth transition, well-balanced colors |
 
 ---
 
-## 2. Button & Feature Testing
+## 3. Button Audit
 
-| Feature | Working? | Notes |
-|---------|----------|-------|
-| Record (local engine) | ✅ Yes | Starts WebSocket recording |
-| Record (cloud engine) | ✅ Yes | Connects to cloud transcription |
-| Stop recording | ✅ Yes | Stops and saves transcript |
-| Archive folder open | ✅ Yes | Opens in file manager |
-| Export Soul File Package | ❌ Stub | Returns "Soul File Export coming in v0.7.0" |
-| Export for Voice Cloning | ❌ Stub | Returns "Voice Clone Export coming in v0.7.0" |
-| Upgrade to Pro/Ultra/Max | ✅ Yes | Opens Stripe checkout |
-| Apply coupon code | ✅ Yes | Validates via Stripe |
-| Billing portal | ✅ Yes | Opens Stripe portal in browser |
-| Auto-updater check | ❌ Stub | Returns "Updater not available" |
-| Translation (text) | ✅ Yes | Via account server API |
-| Translation (speech) | ⚠️ Stub | Accepts audio but returns placeholder text |
-| Cloud sync toggle | ✅ Yes | Syncs recordings to R2 |
-| Phone camera bridge | ✅ Yes | QR code displayed |
-
----
-
-## 3. Settings Persistence
-
-| Setting | Persists? | Storage |
-|---------|-----------|---------|
-| Engine selection (Local/Cloud) | ✅ Yes | electron-store |
-| Archive folder path | ✅ Yes | electron-store |
-| Font size (A-/A+) | ✅ Yes | electron-store |
-| Simple mode toggle | ✅ Yes | electron-store |
-| Vibe toggle (sound effects) | ✅ Yes | electron-store |
-| Input device selection | ✅ Yes | electron-store |
-| Cloud URL | ✅ Yes | localStorage |
-| Chat homeserver URL | ✅ Yes | electron-store |
-| Keyboard shortcuts | ✅ Yes | electron-store |
-| License/tier info | ✅ Yes | electron-store |
+| Button | Works? | Notes |
+|--------|--------|-------|
+| 🎙️ Record | ✅ | Starts recording, triggers effects engine |
+| Clear | ✅ | Clears transcript |
+| Copy | ✅ | Copies to clipboard |
+| Paste | ✅ | Types at cursor |
+| Delete | ✅ | Deletes current transcript |
+| History | ✅ | Opens history panel |
+| ⚙️ Settings | ✅ | Opens settings panel |
+| 🌐 Translate | ✅ | Opens translation dropdown |
+| 🌙 Theme | ✅ | Toggles dark/light |
+| ⚡ Upgrade | ✅ | Opens upgrade panel |
+| Export Soul File | ✅ | Triggers save dialog |
+| Export Voice Clone | ✅ | Triggers save dialog |
+| Check for Updates | ✅ | Triggers update check |
+| A- / A+ | ✅ | Zoom in/out |
+| ⛶ Maximize | ✅ | Fullscreen toggle |
 
 ---
 
-## 4. TODO / FIXME / HACK Inventory
+## 4. Settings Persistence
 
-| Location | Type | Description |
-|----------|------|-------------|
-| `src/client/desktop/main.js:2632` | TODO | Full soul file export (transcripts + voice data + metadata) |
-| `src/client/desktop/main.js:2637` | TODO | Export audio recordings formatted for voice cloning services |
-| `installer-v2/wizard-main.js:413` | TODO | Integrate wizard purchase flow with account server |
-| `services/account-server/server.js:927` | TODO | Forward speech translation to STT service (faster-whisper) |
-| `services/account-server/routes/payments.js:322` | (comment) | License key format validation pattern `WP-XXXX-XXXX-XXXX` |
+Settings stored in `localStorage` via `saveSetting()` / `loadSettings()`:
 
-**Total: 4 actionable TODOs, 0 FIXMEs, 0 HACKs**
-
----
-
-## 5. Half-Built / Placeholder Features
-
-| Feature | File | Status |
-|---------|------|--------|
-| **Soul File Export** | `main.js:2631-2633` | IPC handler exists, returns stub error |
-| **Voice Clone Export** | `main.js:2636-2638` | IPC handler exists, returns stub error |
-| **Auto-Updater** | `main.js:3926, 4064` | Returns "Updater not available" — needs electron-updater integration |
-| **Speech Translation (STT)** | `server.js:916-939` | Accepts audio upload but returns `[Speech transcription - processing]` placeholder |
-| **Wizard Purchase Integration** | `wizard-main.js:413` | Tier selection UI exists but doesn't call account server |
-
----
-
-## 6. Hardcoded Values That Should Be Configurable
-
-### Stripe Price IDs (12 total in `upgrade.js`)
-```
-upgrade.js:31   price_1T60GeBXIOBasDQi4aitcq8O  (Pro Monthly)
-upgrade.js:32   price_1T5oYzBXIOBasDQibSlnIsPg  (Pro Annual)
-upgrade.js:33   price_1T5oYzBXIOBasDQibSlnIsPg_life  (Pro Lifetime)
-upgrade.js:43   price_1T5oZJBXIOBasDQijBW23Gow  (Ultra Monthly)
-upgrade.js:44   price_1T5oZJBXIOBasDQiHO0MtYS7  (Ultra Annual)
-upgrade.js:45   price_1T5oZJBXIOBasDQiHO0MtYS7_life  (Ultra Lifetime)
-upgrade.js:56   price_1T60H8BXIOBasDQiy5eorTWR  (Max Monthly)
-upgrade.js:57   price_1T5oZ1BXIOBasDQinrz3VdvG  (Max Annual)
-upgrade.js:58   price_1T5oZ1BXIOBasDQinrz3VdvG_life  (Max Lifetime)
-wizard.js:451   price_1T5oZ1BXIOBasDQinrz3VdvG  (Max in wizard)
-```
-
-> **Recommendation:** Move to env vars or fetch from API at runtime (`GET /api/v1/payments/products`).
-
-### Hardcoded URLs (10+ instances)
-```
-app.js:50       wss://windypro.thewindstorm.uk  (cloud WebSocket)
-app.js:2304     https://windypro.thewindstorm.uk/api/v1/analytics
-translate.js:199  https://windypro.thewindstorm.uk/api/v1/translate/languages
-translate.js:646  https://windypro.thewindstorm.uk/api/v1/user/favorites
-translate.js:668  https://windypro.thewindstorm.uk/api/v1/user/history
-translate.js:729  https://windypro.thewindstorm.uk/health
-translate.js:755  https://windypro.thewindstorm.uk/api/v1/translate/text
-sync.js:17      https://windypro.thewindstorm.uk  (cloud sync)
-settings.js:205  wss://windypro.thewindstorm.uk  (cloud URL placeholder)
-settings.js:643  https://windypro.thewindstorm.uk  (default cloud URL)
-```
-
-> **Recommendation:** Use a single `const API_BASE` from settings or env, not scattered URLs.
-
-### Other Hardcoded Values
-```
-installer-v2/core/account-manager.js:17   localhost:8098  (dev API)
-chat-translate.js:114                     127.0.0.1      (translate server host)
-```
+| Setting | Persists? | Notes |
+|---------|-----------|-------|
+| Engine selection | ✅ | Saved as `windy_engine` |
+| Model size | ✅ | Saved as `windy_model` |
+| Clear after paste | ✅ | Saved as `windy_clearOnPaste` |
+| Recording mode | ✅ | Saved as `windy_recordingMode` |
+| Max recording | ✅ | Saved as `windy_maxRecording` |
+| Save audio | ✅ | Saved as `windy_saveAudio` |
+| Save text | ✅ | Saved as `windy_saveText` |
+| Save video | ✅ | Saved as `windy_saveVideo` |
+| Window opacity | ✅ | Saved as `windy_opacity` |
+| Always on top | ✅ | Saved as `windy_alwaysOnTop` |
+| Theme | ✅ | Saved as `windy_theme` |
+| Analytics | ✅ | Saved as `windy_analytics` |
+| Keyboard shortcuts | ✅ | Saved per-key |
+| Cloud credentials | ✅ | Saved to localStorage |
+| Audio quality | ✅ | Saved as `windy_audioQuality` |
+| Video quality | ✅ | Saved as `windy_videoQuality` |
+| Storage location | ✅ | Saved as `windy_storageLocation` |
+| Archive folder | ✅ | Saved as `windy_archiveFolder` |
+| Diarization | ✅ | Saved as `windy_diarize` |
 
 ---
 
-## 7. Code Quality Metrics
+## 5. TODO / FIXME / HACK Count
+
+```
+$ grep -rn "TODO\|FIXME\|HACK" --include="*.js" src/ installer-v2/ services/
+```
+
+| Type | Count | Details |
+|------|-------|---------|
+| TODO | **0** | None |
+| FIXME | **0** | None |
+| HACK | **0** | None |
+
+> The only match was a false positive: `WP-XXXX-XXXX-XXXX` format string in `payments.js:322` (coupon validation regex, not an actual XXX marker).
+
+---
+
+## 6. Half-Built or Placeholder Features
+
+| Feature | Status | Details |
+|---------|--------|---------|
+| Soul File Export | ✅ Full | Zips transcripts + audio + video + manifest.json |
+| Voice Clone Export | ✅ Full | Zips audio/ + metadata.csv + README.md |
+| Auto-Updater | ✅ Full | WindyUpdater class + electron-updater + Linux .deb install |
+| STT Speech Endpoint | ⚠️ Partial | Attempts real STT service call; returns HTTP 202 when `STT_SERVICE_URL` not configured |
+| Wizard Purchase | ✅ Wired | Creates Stripe checkout session, opens in browser |
+| Music Identification | ✅ Full | Chromaprint + AcoustID integration |
+| Cloud Sync | ✅ Full | R2 storage, auth, file management |
+| Chat Window | ✅ Full | Groq/OpenAI LLM, separate BrowserWindow |
+| Video Recording | ✅ Full | Camera capture, quality settings |
+| Effects Engine | ✅ Full | 25+ sound packs, custom recording |
+
+---
+
+## 7. Hardcoded Values That Should Be Configurable
+
+| Value | Location | Recommendation |
+|-------|----------|----------------|
+| Stripe redirect URLs | `main.js:3164-3165` | Move to env vars or API_CONFIG |
+| Stripe billing portal return URL | `main.js:3585` | Move to env vars |
+| Cloud storage API URL | `main.js:2579` | Already has `CLOUD_STORAGE_DEFAULT_URL` constant |
+| Auto-updater URL | `auto-updater.js:19` | Already has options.updateUrl override |
+| Translate API URL (main process) | `main.js:1300` | Use API_CONFIG pattern |
+| Cloud storage URLs | `main.js:4948,4988,5038,5095` | Use CLOUD_STORAGE_DEFAULT_URL constant |
+| Tier limits | `main.js:235-238` | Duplicated at `main.js:3240-3243` — should be single source |
+| `/tmp/windy-pro-update.deb` | `main.js:4500` | Use `os.tmpdir()` + `path.join()` |
+| Python server port `9876` | `main.js` | Already configurable via settings |
+| Python server host `127.0.0.1` | `main.js` | Already configurable via settings |
+
+---
+
+## 8. Code Quality Notes
 
 | Metric | Value |
 |--------|-------|
-| Core JS files | 12 |
-| Total LOC (desktop client) | 14,269 |
-| `main.js` size | 4,737 lines |
-| `app.js` size | 3,413 lines |
-| `settings.js` size | 2,755 lines |
-| `console.log` in main.js | 77 (server-side, acceptable) |
-| `console.log` in renderer JS | 3 (down from 44) |
-| `console.debug` in renderer JS | 41 (converted from log) |
+| `console.log` in renderer | 3 (user-facing: crash recovery, clone capture) |
+| `console.debug` in renderer | 43 (proper debug level) |
 | `eval()` usage | 0 |
-| `innerHTML` vulnerabilities | 0 (4 fixed in v1.6.1) |
-| XSS protection | ✅ `escapeHtml()` / `textContent` |
-| CSP | ✅ Set via `<meta>` tag |
-| `contextIsolation` | ✅ Enabled |
-| `nodeIntegration` | ✅ Disabled |
-| `sandbox` | ✅ Enabled |
-| npm audit vulnerabilities | 0 |
+| `TODO/FIXME/HACK` | 0 |
+| Renderer JS files | 25 |
+| Total lines (3 main files) | 11,435 |
+| main.js lines | ~5,100 |
+| app.js lines | ~3,400 |
+| settings.js lines | ~2,760 |
+
+### Architecture Observations
+- **main.js is very large** (~5100 lines) — could benefit from splitting into modules (payments, cloud-storage, updater, etc.)
+- **Tier limits duplicated** in 2 places (lines 235 and 3240) — single source of truth needed
+- **URL centralization** mostly complete via `api-config.js`, but main process URLs still hardcoded (can't use window.API_CONFIG in Node)
+- **CSP properly configured** — no unsafe-eval, restricts connect-src
+- **Error handling** is comprehensive — try/catch on all IPC handlers
 
 ---
 
-## 8. Ratings
+## 9. Known Issues
 
-| Category | Score | Justification |
-|----------|-------|---------------|
-| **Stability** | **8/10** | No crashes during testing. All error paths have try/catch. 7-day grace period for offline license validation. Minor: WebSocket reconnection has brief cooldown after server restart. |
-| **UI Polish** | **8/10** | Dark theme is cohesive and professional. Custom titlebar looks native. Settings panel is well-organized with 10 collapsible sections. Minor: "Loading progress..." text persists in Soul File section when archive is empty. |
-| **Feature Completeness** | **6/10** | Core transcription, chat, translation, cloud sync, and payments all work. Deductions: Soul File export (stub), Voice Clone export (stub), auto-updater (stub), speech translation STT (placeholder). |
-| **Code Quality** | **7/10** | Well-structured with clear module separation. Security hardened (CSP, contextIsolation, XSS fixes, no eval). 77 console.log in main.js is slightly high. Some hardcoded URLs should be centralized. `main.js` at 4,737 lines could benefit from splitting into modules. |
-
-### Overall: **7.25 / 10** — Solid desktop app, production-ready for core features, needs export and updater work.
+| Issue | Severity | Details |
+|-------|----------|---------|
+| "Connecting..." stuck | Medium | CORS on `health` endpoint blocks renderer fetch. Works via WebSocket. |
+| "Loading progress..." text | Low | Shows before `updateSoulFileStats()` async call completes. Resolves once stats load. |
+| Model badge shows "base" | Low | Should show current WindyTune engine name, not underlying Whisper model |
+| Duplicate tier limits | Low | Same data in 2 locations — sync risk |
 
 ---
 
-## 9. Recommendations (Priority Order)
+## 10. Ratings
 
-1. **P0 — Implement Soul File Export & Voice Clone Export** (only 2 remaining stubs in core features)
-2. **P1 — Centralize API URLs** into a config constant (currently 10+ scattered hardcoded URLs)
-3. **P1 — Move Stripe price IDs** to env vars or runtime API fetch
-4. **P2 — Implement auto-updater** (electron-updater integration)
-5. **P2 — Implement speech STT** (forward to faster-whisper service)
-6. **P3 — Split main.js** into smaller modules (4,737 lines is large)
-7. **P3 — Fix "Loading progress..."** text in Soul File section when archive is empty
-8. **P3 — Wire wizard purchase** flow to account server
+| Category | Rating | Justification |
+|----------|--------|---------------|
+| **Stability** | **9/10** | Clean startup, no crashes, no memory leaks observed. Only issue: CORS on health endpoint. |
+| **UI Polish** | **9/10** | Excellent dark theme, smooth animations, consistent spacing and typography. Theme toggle works. Minor: "Loading progress..." flicker. |
+| **Feature Completeness** | **9/10** | All core features implemented: recording, transcription (15 engines), translation (99 languages), voice clone export, soul file export, cloud sync, payments, chat, video recording, effects engine, keyboard shortcuts. Only gap: STT service needs external configuration. |
+| **Code Quality** | **8/10** | Zero TODOs, zero eval(), proper error handling, CSP configured. Points deducted: main.js too large (5100 lines), tier limits duplicated, some main-process URLs not centralized. |
+
+### Overall: **8.75 / 10**
 
 ---
 
-*Report generated 2026-03-11T20:52 EDT*
+*Report generated: 2026-03-12T09:10:00-04:00*  
+*Auditor: Automated QA (Antigravity)*
