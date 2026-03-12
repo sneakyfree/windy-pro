@@ -31,6 +31,7 @@ MODELS_DIR = '/home/user1-gpu/Desktop/grants_folder/windy-pro/models'
 SCRIPTS_DIR = '/home/user1-gpu/Desktop/grants_folder/windy-pro/scripts'
 ORG = 'sneakyfree'
 LOG_FILE = '/tmp/pipeline.log'
+OPUS_LIST_FILE = os.path.join(SCRIPTS_DIR, 'opus_full_list.txt')
 
 # Setup logging
 logging.basicConfig(
@@ -43,6 +44,46 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+log = logger  # Alias for compatibility
+
+api = HfApi()
+
+
+def notify(msg):
+    """Send notification via openclaw system event."""
+    try:
+        subprocess.run(
+            ["openclaw", "system", "event", "--text", msg, "--mode", "now"],
+            capture_output=True, timeout=10
+        )
+    except:
+        pass
+
+
+def load_staged_models():
+    """Load staged_models.json or return empty list."""
+    staged_path = os.path.join(SCRIPTS_DIR, 'staged_models.json')
+    if os.path.exists(staged_path):
+        with open(staged_path, 'r') as f:
+            return json.load(f)
+    return []
+
+
+def save_staged_models(models):
+    """Save staged_models.json."""
+    staged_path = os.path.join(SCRIPTS_DIR, 'staged_models.json')
+    with open(staged_path, 'w') as f:
+        json.dump(models, f, indent=2)
+    log.info(f"  Saved {len(models)} entries to staged_models.json")
+
+
+def cleanup_local(model_path):
+    """Delete local model to free disk space."""
+    try:
+        shutil.rmtree(model_path)
+        log.info(f"  Cleaned up: {model_path}")
+    except Exception as e:
+        log.error(f"  Cleanup failed: {e}")
 
 
 def check_gpu_temp():
