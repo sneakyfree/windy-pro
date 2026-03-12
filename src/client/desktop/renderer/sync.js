@@ -189,7 +189,7 @@ class WindySync {
 
             if (res.ok) {
                 const data = await res.json();
-                console.log('[CloudSync] Recording uploaded:', data.id);
+                console.debug('[CloudSync] Recording uploaded:', data.id);
                 this._showSyncToast('☁️ Synced to cloud');
                 return data.id;
             } else {
@@ -239,7 +239,7 @@ class WindySync {
                 });
                 if (res.ok) {
                     succeeded.push(i);
-                    console.log('[CloudSync] Queue item synced');
+                    console.debug('[CloudSync] Queue item synced');
                 } else {
                     item.attempts++;
                 }
@@ -258,7 +258,7 @@ class WindySync {
             // Exponential backoff: 10s, 20s, 40s, 80s, 160s (capped at 5 min)
             const maxAttempts = Math.max(...this.queue.map(q => q.attempts));
             const delay = Math.min(this._retryDelay * Math.pow(2, maxAttempts), 300000);
-            console.log(`[CloudSync] ${this.queue.length} items remaining, retrying in ${delay / 1000}s`);
+            console.debug(`[CloudSync] ${this.queue.length} items remaining, retrying in ${delay / 1000}s`);
             setTimeout(() => this._processQueue(), delay);
         } else {
             this._showSyncToast('☁️ All recordings synced!');
@@ -306,7 +306,7 @@ class WindySync {
         if (this.app?._showToast) {
             this.app._showToast(msg, 'info', 2000);
         } else {
-            console.log('[CloudSync]', msg);
+            console.debug('[CloudSync]', msg);
         }
     }
 

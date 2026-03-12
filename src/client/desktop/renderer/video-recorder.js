@@ -92,7 +92,7 @@ class VideoRecorder {
             // Auto-stop at max duration
             this._timer = setTimeout(() => this.stop(), this.maxDurationMs);
 
-            console.log('[VideoRecorder] Recording started');
+            console.debug('[VideoRecorder] Recording started');
             return true;
         } catch (err) {
             console.error('[VideoRecorder] Failed to start:', err);
@@ -136,7 +136,7 @@ class VideoRecorder {
             this._timer = null;
         }
 
-        console.log('[VideoRecorder] Recording stopped');
+        console.debug('[VideoRecorder] Recording stopped');
     }
 
     /**
@@ -154,7 +154,7 @@ class VideoRecorder {
         const buffer = await blob.arrayBuffer();
         const fs = require('fs');
         fs.writeFileSync(filePath, Buffer.from(buffer));
-        console.log(`[VideoRecorder] Saved to ${filePath} (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+        console.debug(`[VideoRecorder] Saved to ${filePath} (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
     }
 
     _cleanup() {

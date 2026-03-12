@@ -176,7 +176,7 @@ class WindyApp {
       if (settings?.cloudToken) this.cloudToken = settings.cloudToken;
       if (settings?.cloudEmail) this.cloudEmail = settings.cloudEmail;
       if (settings?.cloudPassword) this.cloudPassword = settings.cloudPassword;
-      console.log(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
+      console.debug(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
 
       // Show current engine/model in status bar badge on startup
       const savedModel = settings?.model || localStorage.getItem('windy_model') || 'small';
@@ -243,7 +243,7 @@ class WindyApp {
       if (lsCloudToken) this.cloudToken = lsCloudToken;
       if (lsCloudEmail) this.cloudEmail = lsCloudEmail;
       if (lsCloudPassword) this.cloudPassword = lsCloudPassword;
-      console.log(`[Init] Final: Engine=${this.transcriptionEngine}, CloudToken=${this.cloudToken ? '✅' : '❌'}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
+      console.debug(`[Init] Final: Engine=${this.transcriptionEngine}, CloudToken=${this.cloudToken ? '✅' : '❌'}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
     } catch (_) { }
 
     // Check for crash recovery via Electron IPC
@@ -626,7 +626,7 @@ class WindyApp {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.debug('WebSocket connected');
         this.reconnectAttempts = 0;
         this.setConnectionStatus('connected');
         this.hideBackendErrorOverlay();
@@ -639,7 +639,7 @@ class WindyApp {
       };
 
       this.ws.onclose = () => {
-        console.log('WebSocket closed');
+        console.debug('WebSocket closed');
         this.setConnectionStatus('disconnected');
         this.scheduleReconnect();
       };
@@ -663,7 +663,7 @@ class WindyApp {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
       const delay = this.reconnectDelay * Math.min(this.reconnectAttempts, 5);
-      console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+      console.debug(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
       // Subtle status bar update instead of yellow banner
       const connText = document.getElementById('connectionText');
       if (connText) connText.textContent = `Reconnecting (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`;
@@ -753,7 +753,7 @@ class WindyApp {
         break;
 
       case 'ack':
-        console.log('Ack:', msg.action, msg.success);
+        console.debug('Ack:', msg.action, msg.success);
         // Update model badge from start ack — but preserve engine name if custom engine selected
         if (msg.action === 'start' && msg.model) {
           const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine;
@@ -1314,7 +1314,7 @@ class WindyApp {
       if (res.ok) {
         const data = await res.json();
         this.cloudToken = data.token;
-        console.log('[Cloud] Token refreshed ✅');
+        console.debug('[Cloud] Token refreshed ✅');
         return;
       }
     } catch (_) { }
@@ -1339,7 +1339,7 @@ class WindyApp {
         if (res.ok) {
           const data = await res.json();
           this.cloudToken = data.token;
-          console.log('[Cloud] Got fresh token via REST login');
+          console.debug('[Cloud] Got fresh token via REST login');
           if (window.windyAPI) {
             window.windyAPI.updateSettings({ cloudToken: data.token });
           }
@@ -1357,20 +1357,20 @@ class WindyApp {
     return new Promise((resolve, reject) => {
       const baseUrl = this.cloudUrl.replace(/\/$/, '') + '/ws/transcribe';
       const url = baseUrl + '?token=' + encodeURIComponent(this.cloudToken);
-      console.log(`[Cloud] Connecting to ${baseUrl} (with token query param)`);
+      console.debug(`[Cloud] Connecting to ${baseUrl} (with token query param)`);
       this.cloudWs = new WebSocket(url);
       this.cloudWs.binaryType = 'arraybuffer';
       let startSent = false;
       let resolved = false;
 
       this.cloudWs.onopen = () => {
-        console.log('[Cloud] WebSocket opened');
+        console.debug('[Cloud] WebSocket opened');
       };
 
       this.cloudWs.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          console.log('[Cloud] ← ' + msg.type + ':', JSON.stringify(msg).substring(0, 200));
+          console.debug('[Cloud] ← ' + msg.type + ':', JSON.stringify(msg).substring(0, 200));
 
           if (msg.type === 'transcript') {
             // Cloud uses 'is_partial', local uses 'partial' — normalize
@@ -1382,20 +1382,20 @@ class WindyApp {
             // After receiving welcome state, send start command
             if (!startSent && (msg.state === 'idle' || msg.authenticated)) {
               startSent = true;
-              console.log('[Cloud] Got welcome, sending start...');
+              console.debug('[Cloud] Got welcome, sending start...');
               this.cloudWs.send(JSON.stringify({ action: 'start' }));
             }
             // When server confirms listening, resolve
             if (msg.state === 'listening' && !resolved) {
               resolved = true;
-              console.log('[Cloud] Server is listening — ready for audio ✅');
+              console.debug('[Cloud] Server is listening — ready for audio ✅');
               resolve();
             }
           } else if (msg.type === 'ack') {
             // Some server versions send ack instead of state:listening
             if (!resolved) {
               resolved = true;
-              console.log('[Cloud] Server acknowledged start ✅');
+              console.debug('[Cloud] Server acknowledged start ✅');
               resolve();
             }
           } else if (msg.type === 'error') {
@@ -1416,7 +1416,7 @@ class WindyApp {
       };
 
       this.cloudWs.onclose = (event) => {
-        console.log(`[Cloud] Disconnected. Code: ${event.code}, Reason: ${event.reason}`);
+        console.debug(`[Cloud] Disconnected. Code: ${event.code}, Reason: ${event.reason}`);
         if (this._cloudPingInterval) {
           clearInterval(this._cloudPingInterval);
           this._cloudPingInterval = null;
@@ -1741,7 +1741,7 @@ class WindyApp {
             this._showToast(`⚠️ Camera max: ${actualLabel} — recording at ${actualLabel} (you selected ${videoQuality})`, 'warning', 8000);
           } else if (actualH > 0) {
             const actualLabel = actualH >= 2160 ? '4K' : actualH >= 1080 ? '1080p' : actualH >= 720 ? '720p' : actualH >= 480 ? '480p' : actualH + 'p';
-            console.log(`[Video] Camera confirmed: ${actualW}x${actualH} (${actualLabel})`);
+            console.debug(`[Video] Camera confirmed: ${actualW}x${actualH} (${actualLabel})`);
           }
 
           // Mux audio tracks into video stream for perfect lip sync
@@ -1759,7 +1759,7 @@ class WindyApp {
             if (e.data.size > 0) this._videoChunks.push(e.data);
           };
           this._videoRecorder.start(1000);
-          console.log('[Batch] Video recording started (' + videoQuality + ', ' + videoMime + ')');
+          console.debug('[Batch] Video recording started (' + videoQuality + ', ' + videoMime + ')');
 
           // Show independent video preview window and start frame forwarding
           if (window.windyAPI?.showVideoPreview) {
@@ -1881,7 +1881,7 @@ class WindyApp {
         }
       }
       this.startSessionTimer();
-      console.log('[Batch] Recording started');
+      console.debug('[Batch] Recording started');
     } catch (err) {
       console.warn('[Batch] Failed to start:', err.message || err);
       // Full cleanup on start failure
@@ -1957,7 +1957,7 @@ class WindyApp {
           } catch (_) { }
           videoBlob = new Blob(this._videoChunks, { type: this._videoRecorder?.mimeType || 'video/webm' });
           this._videoChunks = [];
-          console.log(`[Batch] Video blob: ${(videoBlob.size / 1024).toFixed(0)}KB`);
+          console.debug(`[Batch] Video blob: ${(videoBlob.size / 1024).toFixed(0)}KB`);
         }
         // Stop video stream tracks
         if (this._videoStream) {
@@ -2061,7 +2061,7 @@ class WindyApp {
 
           // ═══ WindyTune: Auto-downgrade if batch took > 10s ═══
           const batchDuration = (Date.now() - batchStartMs) / 1000;
-          console.log(`[Batch] Transcription completed in ${batchDuration.toFixed(1)}s`);
+          console.debug(`[Batch] Transcription completed in ${batchDuration.toFixed(1)}s`);
 
           if (engine === 'windytune' && batchDuration > 10) {
             const modelOrder = ['large-v3', 'turbo', 'medium.en', 'medium', 'small', 'base', 'tiny'];
@@ -2205,7 +2205,7 @@ class WindyApp {
       throw new Error('Not signed in to WindyPro Cloud. Open Settings to sign in.');
     }
 
-    console.log(`[Batch] Uploading ${(audioBlob.size / 1024 / 1024).toFixed(1)}MB to cloud`);
+    console.debug(`[Batch] Uploading ${(audioBlob.size / 1024 / 1024).toFixed(1)}MB to cloud`);
 
     // AbortController for timeout (5 min for long recordings)
     const controller = new AbortController();
@@ -2468,7 +2468,7 @@ class WindyApp {
       if (window.windyAPI?.archiveVideo) {
         const result = await window.windyAPI.archiveVideo(base64, timestamp);
         if (result?.ok) {
-          console.log(`[Video] Saved: ${result.path}`);
+          console.debug(`[Video] Saved: ${result.path}`);
         }
       }
     } catch (e) {
@@ -2732,7 +2732,7 @@ class WindyApp {
 
       this.setState('listening');
       this.updateModelBadge(engine, false);
-      console.log(`[API] ${engine} recording started`);
+      console.debug(`[API] ${engine} recording started`);
     } catch (err) {
       console.error(`[API] Failed to start ${engine}:`, err);
       this.showReconnectToast(`⚠️ Could not access microphone.`);
@@ -2823,7 +2823,7 @@ class WindyApp {
     this._deepgramWs = new WebSocket(dgUrl, ['token', apiKey]);
 
     this._deepgramWs.onopen = () => {
-      console.log('[Deepgram] WebSocket connected');
+      console.debug('[Deepgram] WebSocket connected');
       // Stream audio to Deepgram
       const audioCtx = new AudioContext({ sampleRate: 16000 });
       const source = audioCtx.createMediaStreamSource(stream);
@@ -2878,7 +2878,7 @@ class WindyApp {
     };
 
     this._deepgramWs.onclose = () => {
-      console.log('[Deepgram] WebSocket closed');
+      console.debug('[Deepgram] WebSocket closed');
       // Clean up audio pipeline
       if (this._dgProcessor) this._dgProcessor.disconnect();
       if (this._dgSource) this._dgSource.disconnect();
@@ -3092,7 +3092,7 @@ class WindyApp {
       // Verify cloud WS is still alive after audio capture started
       if (this._usingCloud) {
         if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN) {
-          console.log('[Cloud] ✅ WS still open after audio capture started — streaming to cloud');
+          console.debug('[Cloud] ✅ WS still open after audio capture started — streaming to cloud');
         } else {
           console.warn('[Cloud] ⚠️ WS closed during audio setup — falling back to local');
           this._usingCloud = false;

@@ -745,7 +745,7 @@ class TranslatePanel {
     }
 
     async _flushOfflineQueue() {
-        console.log(`[Translate] Flushing ${this.offlineQueue.length} queued translations`);
+        console.debug(`[Translate] Flushing ${this.offlineQueue.length} queued translations`);
         const queue = [...this.offlineQueue];
         this.offlineQueue = [];
         for (const item of queue) {

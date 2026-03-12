@@ -1579,7 +1579,7 @@ class SettingsPanel {
         try {
           if (window.windyAPI?.identifySong) {
             const result = await window.windyAPI.identifySong({ dataUrl: item.dataUrl, auddApiKey: '' });
-            console.log('[Identify]', item.name, '→', result);
+            console.debug('[Identify]', item.name, '→', result);
             if (result?.success) return result;
             if (result?.error) console.warn('[Identify] Error:', result.error);
           }
