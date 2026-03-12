@@ -196,7 +196,7 @@ class TranslatePanel {
     async _loadLanguages() {
         if (this.languages.length > 0) return;
         try {
-            const resp = await fetch('https://windypro.thewindstorm.uk/api/v1/translate/languages');
+            const resp = await fetch(window.API_CONFIG.languages);
             if (!resp.ok) throw new Error('Failed to load languages');
             const data = await resp.json();
             this.languages = data.languages || [];
@@ -643,7 +643,7 @@ class TranslatePanel {
 
         try {
             const token = localStorage.getItem('windy_cloudToken') || '';
-            await fetch('https://windypro.thewindstorm.uk/api/v1/user/favorites', {
+            await fetch(window.API_CONFIG.userFavorites, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -665,7 +665,7 @@ class TranslatePanel {
     async _loadHistory() {
         try {
             const token = localStorage.getItem('windy_cloudToken') || '';
-            const resp = await fetch('https://windypro.thewindstorm.uk/api/v1/user/history?limit=10', {
+            const resp = await fetch(`${window.API_CONFIG.userHistory}?limit=10`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             if (!resp.ok) return;
@@ -726,7 +726,7 @@ class TranslatePanel {
 
     async _checkHealth() {
         try {
-            const resp = await fetch('https://windypro.thewindstorm.uk/health', { method: 'HEAD', signal: AbortSignal.timeout(5000) });
+            const resp = await fetch(window.API_CONFIG.health, { method: 'HEAD', signal: AbortSignal.timeout(5000) });
             this._setOnline(resp.ok);
         } catch {
             this._setOnline(false);
@@ -752,7 +752,7 @@ class TranslatePanel {
             try {
                 if (item.type === 'text') {
                     const token = localStorage.getItem('windy_cloudToken') || '';
-                    await fetch('https://windypro.thewindstorm.uk/api/v1/translate/text', {
+                    await fetch(window.API_CONFIG.translateText, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                         body: JSON.stringify({ text: item.text, sourceLang: item.sourceLang, targetLang: item.targetLang })

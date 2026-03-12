@@ -2850,13 +2850,164 @@ ipcMain.handle('get-archive-stats', async () => {
 });
 
 ipcMain.handle('export-soul-file', async () => {
-  // TODO: Full soul file export (transcripts + voice data + metadata)
-  return { ok: false, error: 'Soul File Export coming in v0.7.0' };
+  try {
+    const archiveRoot = getArchiveFolder();
+    if (!fs.existsSync(archiveRoot)) return { ok: false, error: 'No archive data found. Record some sessions first.' };
+
+    const { dialog } = require('electron');
+    const archiver = require('archiver');
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export Soul File',
+      defaultPath: path.join(os.homedir(), 'Documents', `windy-soul-${new Date().toISOString().slice(0, 10)}.zip`),
+      filters: [{ name: 'Zip Archive', extensions: ['zip'] }]
+    });
+    if (result.canceled || !result.filePath) return { ok: false, error: 'Export cancelled' };
+
+    const output = fs.createWriteStream(result.filePath);
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.pipe(output);
+
+    // Collect stats while adding files
+    let totalFiles = 0, audioFiles = 0, videoFiles = 0, transcriptFiles = 0;
+    let totalWords = 0, totalChars = 0;
+    const days = [];
+
+    const items = fs.readdirSync(archiveRoot);
+    for (const item of items) {
+      const itemPath = path.join(archiveRoot, item);
+      if (!fs.statSync(itemPath).isDirectory()) continue;
+      days.push(item);
+      const files = fs.readdirSync(itemPath);
+      for (const file of files) {
+        const filePath = path.join(itemPath, file);
+        archive.file(filePath, { name: `${item}/${file}` });
+        totalFiles++;
+        if (file.endsWith('.webm') && file.includes('-video')) videoFiles++;
+        else if (file.endsWith('.webm') || file.endsWith('.wav')) audioFiles++;
+        else if (file.endsWith('.md')) {
+          transcriptFiles++;
+          try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const textLines = content.split('\n').filter(l => !l.startsWith('#') && !l.startsWith('**') && l.trim() !== '---' && l.trim() !== '');
+            const text = textLines.join(' ').trim();
+            totalWords += text.split(/\s+/).filter(Boolean).length;
+            totalChars += text.length;
+          } catch (_) { }
+        }
+      }
+    }
+
+    // Add manifest
+    const manifest = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      appVersion: require('../../package.json').version || '1.6.1',
+      stats: { totalFiles, audioFiles, videoFiles, transcriptFiles, totalWords, totalChars, days: days.length, dateRange: days.length ? { first: days[0], last: days[days.length - 1] } : null }
+    };
+    archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
+    await archive.finalize();
+
+    await new Promise((resolve, reject) => { output.on('close', resolve); output.on('error', reject); });
+    const sizeMB = Math.round(fs.statSync(result.filePath).size / (1024 * 1024) * 10) / 10;
+    return { ok: true, path: result.filePath, sizeMB, stats: manifest.stats };
+  } catch (err) {
+    console.error('[SoulExport]', err.message);
+    return { ok: false, error: err.message };
+  }
 });
 
 ipcMain.handle('export-voice-clone', async () => {
-  // TODO: Export audio recordings formatted for voice cloning services
-  return { ok: false, error: 'Voice Clone Export coming in v0.7.0' };
+  try {
+    const archiveRoot = getArchiveFolder();
+    if (!fs.existsSync(archiveRoot)) return { ok: false, error: 'No archive data found. Record some sessions first.' };
+
+    const { dialog } = require('electron');
+    const archiver = require('archiver');
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export for Voice Cloning',
+      defaultPath: path.join(os.homedir(), 'Documents', `windy-voice-clone-${new Date().toISOString().slice(0, 10)}.zip`),
+      filters: [{ name: 'Zip Archive', extensions: ['zip'] }]
+    });
+    if (result.canceled || !result.filePath) return { ok: false, error: 'Export cancelled' };
+
+    const output = fs.createWriteStream(result.filePath);
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.pipe(output);
+
+    // Build CSV manifest for voice cloning (filename, transcript, date, estimated_duration_sec)
+    const csvRows = ['filename,transcript,date,estimated_duration_sec'];
+    let audioCount = 0;
+
+    const items = fs.readdirSync(archiveRoot).sort();
+    for (const day of items) {
+      const dayPath = path.join(archiveRoot, day);
+      if (!fs.statSync(dayPath).isDirectory()) continue;
+
+      const files = fs.readdirSync(dayPath);
+      // Find audio files (not video) and their matching transcripts
+      const audioFiles = files.filter(f => (f.endsWith('.webm') || f.endsWith('.wav')) && !f.includes('-video'));
+      const mdFiles = files.filter(f => f.endsWith('.md'));
+
+      for (const audioFile of audioFiles) {
+        const audioPath = path.join(dayPath, audioFile);
+        const audioStat = fs.statSync(audioPath);
+        const estDurationSec = Math.round(audioStat.size / 1024 / 16); // ~16KB/s for opus
+
+        // Archive the audio file into audio/ subfolder
+        const destName = `audio/${day}_${audioFile}`;
+        archive.file(audioPath, { name: destName });
+        audioCount++;
+
+        // Find matching transcript (same session timestamp prefix)
+        let transcript = '';
+        const prefix = audioFile.replace(/\.(webm|wav)$/, '').replace(/-audio$/, '');
+        const matchingMd = mdFiles.find(m => m.startsWith(prefix));
+        if (matchingMd) {
+          try {
+            const content = fs.readFileSync(path.join(dayPath, matchingMd), 'utf-8');
+            const textLines = content.split('\n').filter(l => !l.startsWith('#') && !l.startsWith('**') && l.trim() !== '---' && l.trim() !== '');
+            transcript = textLines.join(' ').trim().replace(/"/g, '""'); // CSV-escape
+          } catch (_) { }
+        }
+
+        csvRows.push(`"${destName}","${transcript}","${day}",${estDurationSec}`);
+      }
+    }
+
+    // Add metadata CSV
+    archive.append(csvRows.join('\n'), { name: 'metadata.csv' });
+
+    // Add README for voice cloning services
+    archive.append([
+      '# Windy Pro — Voice Clone Export',
+      '',
+      `Exported: ${new Date().toISOString()}`,
+      `Total audio files: ${audioCount}`,
+      '',
+      '## File Structure',
+      '- `audio/` — Audio recordings (WebM/Opus or WAV)',
+      '- `metadata.csv` — Filename, transcript, date, estimated duration',
+      '',
+      '## Compatible With',
+      '- ElevenLabs (upload audio + paste transcript)',
+      '- Coqui TTS (use metadata.csv as training manifest)',
+      '- Resemble.AI (import audio clips)',
+      '- Tortoise TTS (place audio in training folder)',
+      '',
+      '## Tips',
+      '- For best results, use clips between 5-30 seconds',
+      '- Clean audio without background noise works best',
+      '- More data = better clone quality (aim for 30+ minutes)',
+    ].join('\n'), { name: 'README.md' });
+
+    await archive.finalize();
+    await new Promise((resolve, reject) => { output.on('close', resolve); output.on('error', reject); });
+    const sizeMB = Math.round(fs.statSync(result.filePath).size / (1024 * 1024) * 10) / 10;
+    return { ok: true, path: result.filePath, sizeMB, audioCount };
+  } catch (err) {
+    console.error('[VoiceCloneExport]', err.message);
+    return { ok: false, error: err.message };
+  }
 });
 
 // ═══ Wizard IPC Handlers ═══
@@ -3400,6 +3551,27 @@ ipcMain.handle('get-current-tier', async () => {
   const license = store.get('license') || { tier: 'free' };
   const limits = getTierLimits(license.tier);
   return { tier: license.tier, limits, license };
+});
+
+ipcMain.handle('get-stripe-config', async () => {
+  // Price IDs from env vars, with fallback to test-mode defaults
+  return {
+    pro: {
+      monthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || 'price_1T60GeBXIOBasDQi4aitcq8O',
+      annualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || 'price_1T5oYzBXIOBasDQibSlnIsPg',
+      lifetimePriceId: process.env.STRIPE_PRO_LIFETIME_PRICE_ID || 'price_1T5oYzBXIOBasDQibSlnIsPg_life'
+    },
+    translate: {
+      monthlyPriceId: process.env.STRIPE_ULTRA_MONTHLY_PRICE_ID || 'price_1T5oZJBXIOBasDQijBW23Gow',
+      annualPriceId: process.env.STRIPE_ULTRA_ANNUAL_PRICE_ID || 'price_1T5oZJBXIOBasDQiHO0MtYS7',
+      lifetimePriceId: process.env.STRIPE_ULTRA_LIFETIME_PRICE_ID || 'price_1T5oZJBXIOBasDQiHO0MtYS7_life'
+    },
+    translate_pro: {
+      monthlyPriceId: process.env.STRIPE_MAX_MONTHLY_PRICE_ID || 'price_1T60H8BXIOBasDQiy5eorTWR',
+      annualPriceId: process.env.STRIPE_MAX_ANNUAL_PRICE_ID || 'price_1T5oZ1BXIOBasDQinrz3VdvG',
+      lifetimePriceId: process.env.STRIPE_MAX_LIFETIME_PRICE_ID || 'price_1T5oZ1BXIOBasDQinrz3VdvG_life'
+    }
+  };
 });
 
 ipcMain.handle('open-billing-portal', async () => {

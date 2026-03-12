@@ -67,7 +67,29 @@ class UpgradePanel {
         this.isOpen ? this.close() : this.open();
     }
 
+    async _loadStripeConfig() {
+        try {
+            if (!window.windyAPI?.getStripeConfig) return;
+            const config = await window.windyAPI.getStripeConfig();
+            if (!config) return;
+            // Apply dynamic price IDs to tiers
+            for (const tier of this._tiers) {
+                const cfg = config[tier.key];
+                if (cfg) {
+                    tier.monthlyPriceId = cfg.monthlyPriceId || tier.monthlyPriceId;
+                    tier.annualPriceId = cfg.annualPriceId || tier.annualPriceId;
+                    tier.lifetimePriceId = cfg.lifetimePriceId || tier.lifetimePriceId;
+                }
+            }
+        } catch (e) {
+            console.warn('[Upgrade] Could not load Stripe config:', e.message);
+        }
+    }
+
     async open() {
+        // Load Stripe price IDs from main process config
+        await this._loadStripeConfig();
+
         // Load current tier
         try {
             if (window.windyAPI?.getCurrentTier) {

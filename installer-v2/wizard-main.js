@@ -410,15 +410,50 @@ class InstallWizard {
 
     // ─── Translation Tier ───
     ipcMain.handle('wizard-purchase-translate', async (event, tier) => {
-      // TODO: Integrate with account server for actual purchase
-      // For now, store the selection locally
       try {
+        // Store selection locally regardless of API result
         const configPath = path.join(APP_DIR, 'translate-config.json');
         fs.writeFileSync(configPath, JSON.stringify({
-          tier, // 'translate' ($79) or 'translate-pro' ($149) or 'deferred'
+          tier, // 'translate' ($79) or 'translate_pro' ($149) or 'deferred'
           purchasedAt: tier === 'deferred' ? null : new Date().toISOString(),
           deferredAt: tier === 'deferred' ? new Date().toISOString() : null
         }, null, 2));
+
+        // If user chose a paid tier, attempt to create Stripe checkout
+        if (tier !== 'deferred' && tier !== 'free') {
+          const API_BASE = process.env.ACCOUNT_API || 'https://windypro.thewindstorm.uk';
+          const token = this.accountManager.getToken();
+
+          // Map wizard tier keys to price IDs
+          const priceMap = {
+            translate: process.env.STRIPE_ULTRA_ANNUAL_PRICE_ID || 'price_1T5oZJBXIOBasDQiHO0MtYS7',
+            translate_pro: process.env.STRIPE_MAX_ANNUAL_PRICE_ID || 'price_1T5oZ1BXIOBasDQinrz3VdvG'
+          };
+          const priceId = priceMap[tier];
+
+          if (priceId) {
+            try {
+              const res = await fetch(`${API_BASE}/api/v1/payments/create-checkout`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ priceId, tier }),
+                signal: AbortSignal.timeout(10000)
+              });
+              const data = await res.json();
+              if (data.url) {
+                const { shell } = require('electron');
+                await shell.openExternal(data.url);
+                return { success: true, checkoutUrl: data.url };
+              }
+            } catch (apiErr) {
+              console.warn('[Wizard] Stripe checkout failed (user can upgrade later):', apiErr.message);
+            }
+          }
+        }
+
         return { success: true };
       } catch (e) {
         return { success: false, error: e.message };

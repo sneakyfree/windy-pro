@@ -640,7 +640,7 @@ class SettingsPanel {
 
     if (cloudSignInBtn) {
       cloudSignInBtn.addEventListener('click', async () => {
-        const cloudUrl = this.panel.querySelector('#cloudUrl').value || 'https://windypro.thewindstorm.uk';
+        const cloudUrl = this.panel.querySelector('#cloudUrl').value || (window.API_CONFIG || {}).baseUrl || 'https://windypro.thewindstorm.uk';
         const email = this.panel.querySelector('#cloudEmail').value;
         const password = this.panel.querySelector('#cloudPassword').value;
         const name = this.panel.querySelector('#cloudName').value;
@@ -2451,25 +2451,29 @@ class SettingsPanel {
       // Update requirements legend with percentage progress
       const legendEl = this.panel.querySelector('#soulRequirements');
       if (legendEl) {
-        const tiers = [
-          { label: 'Fair', hours: 10, icon: '📊', color: '#F59E0B' },
-          { label: 'Good', hours: 40, icon: '👍', color: '#60A5FA' },
-          { label: 'Excellent', hours: 100, icon: '⭐', color: '#3B82F6' },
-          { label: 'Studio-Grade', hours: 300, icon: '🏆', color: '#22C55E' }
-        ];
-        legendEl.innerHTML = tiers.map(t => {
-          const pct = Math.min(100, Math.round((voiceHours / t.hours) * 100));
-          const done = pct >= 100;
-          const barColor = done ? t.color : t.color + '99';
-          return `<div style="display:flex;align-items:center;gap:8px;margin:4px 0;">
-            <span style="font-size:13px;width:20px;text-align:center;">${done ? '✅' : t.icon}</span>
-            <span style="color:${done ? t.color : '#D1D5DB'};font-size:12px;font-weight:${done ? '700' : '500'};width:90px;">${t.label} (${t.hours}h)</span>
-            <div style="flex:1;background:#334155;border-radius:4px;height:6px;overflow:hidden;">
-              <div style="background:${barColor};height:100%;width:${pct}%;border-radius:4px;transition:width 0.5s;"></div>
-            </div>
-            <span style="color:${done ? t.color : '#9CA3AF'};font-size:12px;font-weight:700;width:38px;text-align:right;">${pct}%</span>
-          </div>`;
-        }).join('');
+        if (voiceHours === 0 && totalWords === 0 && totalSessions === 0) {
+          legendEl.innerHTML = '<span style="color:#94A3B8;font-size:12px;">🎙️ Start recording to build your Soul File! Each session adds voice data, vocabulary, and speech patterns.</span>';
+        } else {
+          const tiers = [
+            { label: 'Fair', hours: 10, icon: '📊', color: '#F59E0B' },
+            { label: 'Good', hours: 40, icon: '👍', color: '#60A5FA' },
+            { label: 'Excellent', hours: 100, icon: '⭐', color: '#3B82F6' },
+            { label: 'Studio-Grade', hours: 300, icon: '🏆', color: '#22C55E' }
+          ];
+          legendEl.innerHTML = tiers.map(t => {
+            const pct = Math.min(100, Math.round((voiceHours / t.hours) * 100));
+            const done = pct >= 100;
+            const barColor = done ? t.color : t.color + '99';
+            return `<div style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+              <span style="font-size:13px;width:20px;text-align:center;">${done ? '✅' : t.icon}</span>
+              <span style="color:${done ? t.color : '#D1D5DB'};font-size:12px;font-weight:${done ? '700' : '500'};width:90px;">${t.label} (${t.hours}h)</span>
+              <div style="flex:1;background:#334155;border-radius:4px;height:6px;overflow:hidden;">
+                <div style="background:${barColor};height:100%;width:${pct}%;border-radius:4px;transition:width 0.5s;"></div>
+              </div>
+              <span style="color:${done ? t.color : '#9CA3AF'};font-size:12px;font-weight:700;width:38px;text-align:right;">${pct}%</span>
+            </div>`;
+          }).join('');
+        }
       }
     } catch (e) {
       console.warn('[Settings] Soul File stats update failed:', e.message);

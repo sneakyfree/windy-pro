@@ -924,27 +924,58 @@ app.post('/api/v1/translate/speech', writeLimiter, authenticate, upload.single('
         const audioPath = path.join(MEDIA_PATH, audioFilename);
         fs.writeFileSync(audioPath, req.file.buffer);
 
-        // TODO: In production, forward to STT service (e.g. faster-whisper)
-        // For now, acknowledge receipt and return a placeholder
-        const sourceText = '[Speech transcription - processing]';
-        const translatedText = '[Translation pending]';
-        const confidence = 0.0;
+        // Attempt to forward to STT service (faster-whisper or equivalent)
+        const sttUrl = process.env.STT_SERVICE_URL || 'http://localhost:8097';
+        let sourceText = null;
+        let translatedText = null;
+        let confidence = 0.0;
+        let sttStatus = 'pending';
+
+        try {
+            const FormData = require('form-data');
+            const form = new FormData();
+            form.append('audio', req.file.buffer, { filename: audioFilename, contentType: req.file.mimetype || 'audio/webm' });
+            form.append('language', sourceLang);
+            const sttRes = await fetch(`${sttUrl}/transcribe`, { method: 'POST', body: form, signal: AbortSignal.timeout(30000) });
+            if (sttRes.ok) {
+                const sttData = await sttRes.json();
+                sourceText = sttData.text || sttData.transcription || null;
+                confidence = sttData.confidence || 0.85;
+                sttStatus = 'completed';
+            }
+        } catch (sttErr) {
+            console.warn('[TranslateSpeech] STT service unavailable:', sttErr.message);
+        }
 
         const id = uuidv4();
-        db.prepare(
-            `INSERT INTO translations (id, user_id, source_text, translated_text, source_lang, target_lang, confidence, audio_path)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(id, req.user.sub, sourceText, translatedText, sourceLang, targetLang, confidence, audioPath);
+        if (sourceText) {
+            // STT succeeded — save transcript
+            db.prepare(
+                `INSERT INTO translations (id, user_id, source_text, translated_text, source_lang, target_lang, confidence, audio_path)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            ).run(id, req.user.sub, sourceText, translatedText || '', sourceLang, targetLang, confidence, audioPath);
 
-        res.json({
-            id,
-            text: sourceText,
-            translatedText,
-            sourceLang,
-            targetLang,
-            confidence,
-            audioUrl: `/api/v1/translate/${id}/audio`
-        });
+            res.json({
+                id, status: sttStatus,
+                text: sourceText, translatedText,
+                sourceLang, targetLang, confidence,
+                audioUrl: `/api/v1/translate/${id}/audio`
+            });
+        } else {
+            // STT unavailable — return 202 Accepted with pending status
+            db.prepare(
+                `INSERT INTO translations (id, user_id, source_text, translated_text, source_lang, target_lang, confidence, audio_path)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            ).run(id, req.user.sub, '', '', sourceLang, targetLang, 0, audioPath);
+
+            res.status(202).json({
+                id, status: 'pending',
+                text: null, translatedText: null,
+                sourceLang, targetLang, confidence: 0,
+                message: 'Audio received. Speech transcription service is not yet configured. Set STT_SERVICE_URL to enable.',
+                audioUrl: `/api/v1/translate/${id}/audio`
+            });
+        }
     } catch (err) {
         console.error('[TranslateSpeech]', err.message);
         res.status(503).json({ error: err.message });

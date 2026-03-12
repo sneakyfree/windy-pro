@@ -131,6 +131,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   createCheckoutSession: (priceId, email) => ipcRenderer.invoke('create-checkout-session', priceId, email),
   checkPaymentStatus: (sessionId) => ipcRenderer.invoke('check-payment-status', sessionId),
   getCurrentTier: () => ipcRenderer.invoke('get-current-tier'),
+  getStripeConfig: () => ipcRenderer.invoke('get-stripe-config'),
   applyCoupon: (code) => ipcRenderer.invoke('apply-coupon', code),
   openBillingPortal: () => ipcRenderer.invoke('open-billing-portal'),
 

@@ -14,7 +14,7 @@
 class WindySync {
     constructor(app) {
         this.app = app;
-        this.baseUrl = localStorage.getItem('windy_cloud_api_url') || 'https://windypro.thewindstorm.uk';
+        this.baseUrl = localStorage.getItem('windy_cloud_api_url') || (window.API_CONFIG || {}).baseUrl || 'https://windypro.thewindstorm.uk';
         this.token = localStorage.getItem('windy_cloud_token') || null;
         this.refreshToken = localStorage.getItem('windy_cloud_refresh') || null;
         this.user = null;
