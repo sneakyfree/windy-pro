@@ -132,6 +132,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   checkPaymentStatus: (sessionId) => ipcRenderer.invoke('check-payment-status', sessionId),
   getCurrentTier: () => ipcRenderer.invoke('get-current-tier'),
   applyCoupon: (code) => ipcRenderer.invoke('apply-coupon', code),
+  openBillingPortal: () => ipcRenderer.invoke('open-billing-portal'),
 
   // Model download manager
   checkModelStatus: () => ipcRenderer.invoke('check-model-status'),

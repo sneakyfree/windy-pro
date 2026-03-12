@@ -232,10 +232,10 @@ function getStripe() {
 
 function getTierLimits(tier) {
   const tiers = {
-    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 2, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
-    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 15, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
-    translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 60, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
-    translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: Infinity, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
+    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 2, storageMb: 500, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
+    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 15, storageMb: 5120, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
+    translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 60, storageMb: 10240, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
+    translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: Infinity, storageMb: 25600, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
   };
   return tiers[tier] || tiers.free;
 }
@@ -3400,6 +3400,25 @@ ipcMain.handle('get-current-tier', async () => {
   const license = store.get('license') || { tier: 'free' };
   const limits = getTierLimits(license.tier);
   return { tier: license.tier, limits, license };
+});
+
+ipcMain.handle('open-billing-portal', async () => {
+  try {
+    const stripe = getStripe();
+    if (!stripe) throw new Error('Payment system not configured.');
+    const license = store.get('license') || {};
+    if (!license.stripeCustomerId) throw new Error('No Stripe customer found. Purchase a plan first.');
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: license.stripeCustomerId,
+      return_url: 'https://windypro.thewindstorm.uk/dashboard'
+    });
+    const { shell } = require('electron');
+    shell.openExternal(portalSession.url);
+    return { ok: true, url: portalSession.url };
+  } catch (err) {
+    console.error('[Stripe] Billing portal error:', err.message);
+    return { ok: false, error: err.message };
+  }
 });
 
 // ═══ License Enforcement — Subscription Validation ═══
