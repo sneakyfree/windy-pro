@@ -31,7 +31,6 @@ MODELS_DIR = '/home/user1-gpu/Desktop/grants_folder/windy-pro/models'
 SCRIPTS_DIR = '/home/user1-gpu/Desktop/grants_folder/windy-pro/scripts'
 ORG = 'sneakyfree'
 LOG_FILE = '/tmp/pipeline.log'
-OPUS_LIST_FILE = os.path.join(SCRIPTS_DIR, 'opus_full_list.txt')
 
 # Setup logging
 logging.basicConfig(
@@ -44,46 +43,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-log = logger  # Alias for compatibility
-
-api = HfApi()
-
-
-def notify(msg):
-    """Send notification via openclaw system event."""
-    try:
-        subprocess.run(
-            ["openclaw", "system", "event", "--text", msg, "--mode", "now"],
-            capture_output=True, timeout=10
-        )
-    except:
-        pass
-
-
-def load_staged_models():
-    """Load staged_models.json or return empty list."""
-    staged_path = os.path.join(SCRIPTS_DIR, 'staged_models.json')
-    if os.path.exists(staged_path):
-        with open(staged_path, 'r') as f:
-            return json.load(f)
-    return []
-
-
-def save_staged_models(models):
-    """Save staged_models.json."""
-    staged_path = os.path.join(SCRIPTS_DIR, 'staged_models.json')
-    with open(staged_path, 'w') as f:
-        json.dump(models, f, indent=2)
-    log.info(f"  Saved {len(models)} entries to staged_models.json")
-
-
-def cleanup_local(model_path):
-    """Delete local model to free disk space."""
-    try:
-        shutil.rmtree(model_path)
-        log.info(f"  Cleaned up: {model_path}")
-    except Exception as e:
-        log.error(f"  Cleanup failed: {e}")
 
 
 def check_gpu_temp():
@@ -132,282 +91,235 @@ def save_staged(records):
         logger.error(f"Failed to save staged models: {e}")
 
 
-def build_phase(pair_codes, max_models):
-    """Build phase: LoRA + CT2 + certify → stage to JSON."""
-    log.info(f"\n{'='*60}")
-    log.info(f"BUILD PHASE — Processing up to {max_models} models")
-    log.info(f"{'='*60}\n")
+def build_pair(pair_code, on_hf):
+    """
+    Full pipeline for one translation pair.
 
-    # Load existing staged models
-    staged = load_staged_models()
-    staged_pairs = {entry['pair_code'] for entry in staged}
+    Args:
+        pair_code: e.g. 'en-es'
+        on_hf: set of model names already on HuggingFace
 
-    # Fetch HF repos ONCE at startup
-    log.info("  Fetching existing HF repos...")
-    hf_repos = set()
+    Returns:
+        dict with results or None if skipped
+    """
+    # Skip tiny models
+    if '_tiny_' in pair_code:
+        logger.info(f"Skipping tiny model: {pair_code}")
+        return None
+
+    # Define model names
+    source = f'Helsinki-NLP/opus-mt-{pair_code}'
+    gpu_name = f'windy-pair-{pair_code}'
+    ct2_name = f'windy-pair-{pair_code}-ct2'
+
+    # Skip if both already on HF
+    if gpu_name in on_hf and ct2_name in on_hf:
+        logger.info(f"Both models already on HF: {pair_code}")
+        return None
+
+    logger.info(f"Building pair: {pair_code}")
+
+    # Define paths
+    gpu_path = os.path.join(MODELS_DIR, gpu_name)
+    ct2_path = os.path.join(MODELS_DIR, ct2_name)
+
+    # Extract language codes
+    parts = pair_code.split('-')
+    src_lang = parts[0] if len(parts) > 0 else 'en'
+    tgt_lang = parts[1] if len(parts) > 1 else 'en'
+
+    # Initialize results
+    result = {
+        'pair_code': pair_code,
+        'gpu_name': gpu_name,
+        'ct2_name': ct2_name,
+        'gpu_cert': False,
+        'ct2_cert': False,
+        'gpu_cert_output': '',
+        'ct2_cert_output': '',
+        'staged_at': datetime.now().isoformat()
+    }
+
     try:
-        for repo in api.list_models(author=ORG):
-            hf_repos.add(repo.id.split('/')[-1])
+        # Step 1: LoRA training
+        logger.info(f"Step 1/4: LoRA training {source} -> {gpu_path}")
+        train_success = lora_train_marian(source, gpu_path)
+        if not train_success:
+            logger.error(f"LoRA training failed for {pair_code}")
+            result['gpu_cert_output'] = 'TRAIN_FAILED'
+            return result
+
+        # Step 2: CT2 quantization
+        logger.info(f"Step 2/4: CT2 quantization {gpu_path} -> {ct2_path}")
+        quant_success = ct2_quantize_marian(gpu_path, ct2_path)
+        if not quant_success:
+            logger.error(f"CT2 quantization failed for {pair_code}")
+            result['ct2_cert_output'] = 'QUANT_FAILED'
+
+        # Step 3: Certify GPU model
+        logger.info(f"Step 3/4: Certifying GPU model {gpu_path}")
+        gpu_cert, gpu_output = certify_marian(gpu_path)
+        result['gpu_cert'] = gpu_cert
+        result['gpu_cert_output'] = gpu_output
+        logger.info(f"GPU cert: {gpu_cert} - {gpu_output}")
+
+        # Step 4: Certify CT2 model (if quantization succeeded)
+        if quant_success:
+            logger.info(f"Step 4/4: Certifying CT2 model {ct2_path}")
+            ct2_cert, ct2_output = certify_marian_ct2(ct2_path, src_lang, tgt_lang)
+            result['ct2_cert'] = ct2_cert
+            result['ct2_cert_output'] = ct2_output
+            logger.info(f"CT2 cert: {ct2_cert} - {ct2_output}")
+
+        # Cleanup local files
+        logger.info(f"Cleaning up local files for {pair_code}")
+        for path in [gpu_path, ct2_path]:
+            if os.path.exists(path):
+                try:
+                    shutil.rmtree(path)
+                    logger.info(f"Removed {path}")
+                except Exception as e:
+                    logger.error(f"Failed to remove {path}: {e}")
+
+        return result
+
     except Exception as e:
-        log.error(f"  Could not fetch HF repos: {e}")
-    log.info(f"  Found {len(hf_repos)} existing repos on HF")
-
-    processed = 0
-    stats = {"built": 0, "certified": 0, "failed": 0, "skipped": 0}
-
-    for i, pair_code in enumerate(pair_codes, 1):
-        if processed >= max_models:
-            log.info(f"\n  Reached max limit of {max_models} models")
-            break
-
-        # Skip _tiny_ models
-        if '_tiny_' in pair_code:
-            log.info(f"  [{i}/{len(pair_codes)}] {pair_code} — contains '_tiny_', skipping")
-            stats["skipped"] += 1
-            continue
-
-        # Clean pair code
-        clean_code = pair_code.replace('Helsinki-NLP/opus-mt-', '').replace('Helsinki-NLP/opus-mt_tiny_', '')
-
-        # Skip if already staged
-        if clean_code in staged_pairs:
-            log.info(f"  [{i}/{len(pair_codes)}] {pair_code} — already staged, skipping")
-            stats["skipped"] += 1
-            continue
-
-        gpu_name = f"windy-pair-{clean_code}"
-        ct2_name = f"windy-pair-{clean_code}-ct2"
-
-        # Skip if already on HF
-        if gpu_name in hf_repos and ct2_name in hf_repos:
-            log.info(f"  [{i}/{len(pair_codes)}] {pair_code} — already on HF, skipping")
-            stats["skipped"] += 1
-            continue
-
-        log.info(f"\n  [{i}/{len(pair_codes)}] Processing {pair_code}")
-
-        gpu_path = os.path.join(MODELS_DIR, gpu_name)
-        ct2_path = os.path.join(MODELS_DIR, ct2_name)
-        source = f"Helsinki-NLP/opus-mt-{clean_code}"
-
-        # Stage entry
-        entry = {
-            "pair_code": clean_code,
-            "gpu_name": gpu_name,
-            "ct2_name": ct2_name,
-            "gpu_cert": False,
-            "ct2_cert": False,
-            "gpu_cert_output": "",
-            "ct2_cert_output": "",
-            "staged_at": datetime.now().isoformat()
-        }
-
-        try:
-            # Step 1: LoRA fine-tune
-            log.info(f"  [1/5] LoRA training {source}")
-            ok = lora_train_marian(source, gpu_path)
-            if not ok:
-                log.error(f"  LoRA training failed for {pair_code}")
-                entry["gpu_cert_output"] = "LoRA training failed"
-                stats["failed"] += 1
-                staged.append(entry)
-                save_staged_models(staged)
-                processed += 1
-                continue
-            stats["built"] += 1
-
-            # Step 2: CT2 quantize
-            log.info(f"  [2/5] CT2 quantizing")
-            ct2_ok = ct2_quantize_marian(gpu_path, ct2_path)
-            if not ct2_ok:
-                log.warning(f"  CT2 quantization failed, will only upload GPU model")
-
-            # Step 3: Certify GPU model
-            log.info(f"  [3/5] Certifying GPU model")
-            gpu_cert, gpu_detail = certify_marian(gpu_path)
-            entry["gpu_cert"] = gpu_cert
-            entry["gpu_cert_output"] = gpu_detail
-
-            if not gpu_cert:
-                log.error(f"  GPU certification FAILED: {gpu_detail}")
-                stats["failed"] += 1
-                # Delete local files
-                cleanup_local(gpu_path)
-                if os.path.exists(ct2_path):
-                    cleanup_local(ct2_path)
-                staged.append(entry)
-                save_staged_models(staged)
-                processed += 1
-                continue
-
-            log.info(f"  GPU certified: {gpu_detail}")
-            stats["certified"] += 1
-
-            # Step 4: Certify CT2 model (if exists)
-            if ct2_ok and os.path.exists(ct2_path):
-                log.info(f"  [4/5] Certifying CT2 model")
-                parts = clean_code.split('-', 1)
-                source_lang = parts[0] if len(parts) == 2 else ''
-                target_lang = parts[1] if len(parts) == 2 else ''
-                ct2_cert, ct2_detail = certify_marian_ct2(ct2_path, source_lang, target_lang)
-                entry["ct2_cert"] = ct2_cert
-                entry["ct2_cert_output"] = ct2_detail
-
-                if ct2_cert:
-                    log.info(f"  CT2 certified: {ct2_detail}")
-                    stats["certified"] += 1
-                else:
-                    log.warning(f"  CT2 certification failed: {ct2_detail}")
-                    # Delete failed CT2 model
-                    cleanup_local(ct2_path)
-
-            # Step 5: Save to staged_models.json
-            log.info(f"  [5/5] Staging results")
-            staged.append(entry)
-            save_staged_models(staged)
-
-            # Step 6: Delete local model files to save disk space
-            log.info(f"  Cleaning up local files")
-            cleanup_local(gpu_path)
-            if os.path.exists(ct2_path):
-                cleanup_local(ct2_path)
-
-            processed += 1
-
-            # Check GPU temp every 10 models
-            if processed % 10 == 0:
-                check_gpu_temp()
-
-        except Exception as e:
-            log.error(f"  Error processing {pair_code}: {e}")
-            entry["gpu_cert_output"] = f"Error: {str(e)}"
-            stats["failed"] += 1
-            staged.append(entry)
-            save_staged_models(staged)
-            processed += 1
-            # Cleanup on error
-            try:
-                if os.path.exists(gpu_path):
-                    cleanup_local(gpu_path)
-                if os.path.exists(ct2_path):
-                    cleanup_local(ct2_path)
-            except:
-                pass
-
-    # Final summary
-    log.info(f"\n{'='*60}")
-    log.info(f"BUILD PHASE COMPLETE")
-    log.info(f"Processed: {processed}, Built: {stats['built']}, Certified: {stats['certified']}")
-    log.info(f"Failed: {stats['failed']}, Skipped: {stats['skipped']}")
-    log.info(f"{'='*60}\n")
-
-    notify("Pipeline build done")
-    return stats
-
-
-def upload_phase(max_uploads):
-    """Upload phase: Read staged_models.json → upload PASS entries to HF."""
-    log.info(f"\n{'='*60}")
-    log.info(f"UPLOAD PHASE — Uploading up to {max_uploads} models")
-    log.info(f"{'='*60}\n")
-
-    staged = load_staged_models()
-    if not staged:
-        log.info("  No staged models found")
-        return {"uploaded": 0, "failed": 0, "skipped": 0}
-
-    stats = {"uploaded": 0, "failed": 0, "skipped": 0}
-    uploaded = 0
-
-    for i, entry in enumerate(staged, 1):
-        if uploaded >= max_uploads:
-            log.info(f"\n  Reached max limit of {max_uploads} uploads")
-            break
-
-        pair_code = entry['pair_code']
-        gpu_name = entry['gpu_name']
-        ct2_name = entry['ct2_name']
-        gpu_cert = entry['gpu_cert']
-        ct2_cert = entry['ct2_cert']
-
-        log.info(f"\n  [{i}/{len(staged)}] {pair_code}")
-
-        # Upload GPU model if certified
-        if gpu_cert:
-            gpu_path = os.path.join(MODELS_DIR, gpu_name)
-            if os.path.exists(gpu_path):
-                log.info(f"  Uploading GPU model: {gpu_name}")
-                if upload_model(gpu_path, gpu_name):
-                    stats["uploaded"] += 1
-                    uploaded += 1
-                    # Delete after successful upload
-                    cleanup_local(gpu_path)
-                else:
-                    stats["failed"] += 1
-            else:
-                log.warning(f"  GPU model not found at {gpu_path}, skipping")
-                stats["skipped"] += 1
-        else:
-            log.info(f"  GPU model not certified, skipping upload")
-            stats["skipped"] += 1
-
-        # Upload CT2 model if certified
-        if ct2_cert:
-            ct2_path = os.path.join(MODELS_DIR, ct2_name)
-            if os.path.exists(ct2_path):
-                log.info(f"  Uploading CT2 model: {ct2_name}")
-                if upload_model(ct2_path, ct2_name):
-                    stats["uploaded"] += 1
-                    uploaded += 1
-                    # Delete after successful upload
-                    cleanup_local(ct2_path)
-                else:
-                    stats["failed"] += 1
-            else:
-                log.warning(f"  CT2 model not found at {ct2_path}, skipping")
-                stats["skipped"] += 1
-
-        # Check GPU temp every 10 uploads
-        if uploaded % 10 == 0:
-            check_gpu_temp()
-
-    # Final summary
-    log.info(f"\n{'='*60}")
-    log.info(f"UPLOAD PHASE COMPLETE")
-    log.info(f"Uploaded: {stats['uploaded']}, Failed: {stats['failed']}, Skipped: {stats['skipped']}")
-    log.info(f"{'='*60}\n")
-
-    notify(f"Pipeline upload done: {stats['uploaded']} models uploaded")
-    return stats
+        logger.error(f"Exception building {pair_code}: {e}")
+        result['gpu_cert_output'] = f'EXCEPTION: {str(e)}'
+        return result
 
 
 def main():
-    parser = argparse.ArgumentParser(description='WINDY PRO Pipeline — Build and Stage OPUS-MT models')
-    parser.add_argument('--max', type=int, default=150, help='Max number of models to process (default: 150)')
-    parser.add_argument('--phase', choices=['build', 'upload'], default='build', help='Phase to run (default: build)')
+    """Main pipeline orchestrator."""
+    parser = argparse.ArgumentParser(description='OPUS-MT processing pipeline')
+    parser.add_argument('--phase', choices=['build', 'upload'], required=True,
+                        help='Pipeline phase: build or upload')
+    parser.add_argument('--max', type=int, default=150,
+                        help='Maximum number of pairs to process (build phase)')
     args = parser.parse_args()
 
-    log.info(f"\n{'='*60}")
-    log.info(f"WINDY PRO PIPELINE — {args.phase.upper()} PHASE")
-    log.info(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    log.info(f"Max models: {args.max}")
-    log.info(f"{'='*60}\n")
+    logger.info(f"Starting pipeline: phase={args.phase}, max={args.max}")
 
     if args.phase == 'build':
-        # Load pair list from opus_full_list.txt
-        log.info(f"  Loading pair list from {OPUS_LIST_FILE}")
-        with open(OPUS_LIST_FILE, 'r') as f:
-            pair_codes = [line.strip() for line in f if line.strip()]
-        log.info(f"  Found {len(pair_codes)} total pairs in list")
+        # Load OPUS model list
+        opus_list_path = os.path.join(SCRIPTS_DIR, 'opus_full_list.txt')
+        if not os.path.exists(opus_list_path):
+            logger.error(f"OPUS list not found: {opus_list_path}")
+            return
 
-        stats = build_phase(pair_codes, args.max)
+        with open(opus_list_path, 'r') as f:
+            opus_models = [line.strip() for line in f if line.strip()]
+
+        logger.info(f"Loaded {len(opus_models)} OPUS models")
+
+        # Fetch HF repos ONCE
+        logger.info(f"Fetching HF repos for org: {ORG}")
+        hf_api = HfApi()
+        try:
+            hf_repos = hf_api.list_models(author=ORG)
+            on_hf = {repo.id.split('/')[-1] for repo in hf_repos}
+            logger.info(f"Found {len(on_hf)} models on HF")
+        except Exception as e:
+            logger.error(f"Failed to fetch HF repos: {e}")
+            on_hf = set()
+
+        # Load existing staged records
+        staged = load_staged()
+        staged_pairs = {rec['pair_code'] for rec in staged}
+
+        built_count = 0
+        processed_count = 0
+
+        for pair_code in opus_models:
+            if processed_count >= args.max:
+                logger.info(f"Reached max limit: {args.max}")
+                break
+
+            # Skip if already staged
+            if pair_code in staged_pairs:
+                logger.info(f"Already staged: {pair_code}")
+                continue
+
+            # Check GPU temp every 10 pairs
+            if processed_count > 0 and processed_count % 10 == 0:
+                check_gpu_temp()
+
+            result = build_pair(pair_code, on_hf)
+            if result:
+                staged.append(result)
+                save_staged(staged)
+                staged_pairs.add(pair_code)
+                built_count += 1
+                logger.info(f"Built {built_count}/{args.max}: {pair_code}")
+
+            processed_count += 1
+
+        logger.info(f"Build phase complete: built={built_count}, processed={processed_count}")
+
+        # Send notification
+        try:
+            subprocess.run([
+                'openclaw', 'system', 'event',
+                '--text', f'Pipeline done: built={built_count}',
+                '--mode', 'now'
+            ], check=False)
+        except Exception as e:
+            logger.warning(f"Failed to send notification: {e}")
 
     elif args.phase == 'upload':
-        stats = upload_phase(args.max)
+        # Load staged models
+        staged = load_staged()
+        logger.info(f"Loaded {len(staged)} staged models")
 
-    log.info(f"\nPipeline complete. Stats: {stats}")
-    return 0
+        upload_count = 0
+
+        for record in staged:
+            # Skip if already uploaded
+            if record.get('uploaded'):
+                continue
+
+            pair_code = record['pair_code']
+            gpu_name = record['gpu_name']
+            ct2_name = record['ct2_name']
+
+            # Upload GPU model if certified
+            if record.get('gpu_cert') and record.get('gpu_cert_output') == 'PASS':
+                logger.info(f"Uploading GPU model: {gpu_name}")
+                try:
+                    upload_model(gpu_name, ORG)
+                    record['gpu_uploaded'] = True
+                    upload_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to upload {gpu_name}: {e}")
+
+            # Upload CT2 model if certified
+            if record.get('ct2_cert') and record.get('ct2_cert_output') == 'PASS':
+                logger.info(f"Uploading CT2 model: {ct2_name}")
+                try:
+                    upload_model(ct2_name, ORG)
+                    record['ct2_uploaded'] = True
+                    upload_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to upload {ct2_name}: {e}")
+
+            # Mark as uploaded if both attempted
+            if record.get('gpu_uploaded') or record.get('ct2_uploaded'):
+                record['uploaded'] = True
+
+        # Save updated records
+        save_staged(staged)
+        logger.info(f"Upload phase complete: uploaded={upload_count}")
+
+        # Send notification
+        try:
+            subprocess.run([
+                'openclaw', 'system', 'event',
+                '--text', f'Pipeline upload done: uploaded={upload_count}',
+                '--mode', 'now'
+            ], check=False)
+        except Exception as e:
+            logger.warning(f"Failed to send notification: {e}")
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+if __name__ == '__main__':
+    main()
