@@ -138,6 +138,18 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS subscriptions (
+    user_id TEXT PRIMARY KEY,
+    tier TEXT NOT NULL DEFAULT 'free',
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    storage_limit_mb INTEGER NOT NULL DEFAULT 500,
+    status TEXT NOT NULL DEFAULT 'active',
+    current_period_end TEXT,
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
 
 // ═══════════════════════════════════════════════
@@ -1013,8 +1025,8 @@ app.post('/api/v1/user/favorites', writeLimiter, authenticate, (req, res) => {
 // ═══════════════════════════════════════════════
 try {
     const paymentsRouter = require('./routes/payments');
-    app.use('/api/v1/payments', paymentsRouter);
-    app.use('/api/v1/license', paymentsRouter);
+    app.use('/api/v1/payments', paymentsRouter({ db, authenticate }));
+    app.use('/api/v1/license', paymentsRouter({ db, authenticate }));
     console.log('💳 Stripe payments route loaded');
 } catch (err) {
     console.warn('⚠️  Payments route not loaded (stripe package may not be installed):', err.message);

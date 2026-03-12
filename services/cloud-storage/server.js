@@ -573,7 +573,8 @@ app.post('/admin/users/:userId/tier', adminMiddleware, (req, res) => {
     free: 500 * 1024 * 1024,        // 500MB
     pro: 5 * 1024 * 1024 * 1024,    // 5GB
     translate: 10 * 1024 * 1024 * 1024, // 10GB
-    'translate-pro': 25 * 1024 * 1024 * 1024, // 25GB
+    translate_pro: 25 * 1024 * 1024 * 1024, // 25GB
+    'translate-pro': 25 * 1024 * 1024 * 1024, // 25GB (alias)
     unlimited: -1
   };
 
