@@ -668,3 +668,63 @@ select:focus-visible,
     font-size: 13px;
   }
 }
+
+/* ═══ Responsive: stack feature cards at narrow widths ═══ */
+@media (max-width: 500px) {
+  .chat-login .features {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .chat-login .feature-card {
+    width: 100%;
+    max-width: 280px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+  .chat-login .feature-card .icon {
+    margin-bottom: 0;
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+  .chat-login .feature-card .label {
+    text-align: left;
+  }
+  .chat-login h1 {
+    font-size: 24px;
+  }
+  .chat-login {
+    padding: 24px;
+  }
+}
+
+/* ═══ Responsive: message area padding on narrow widths ═══ */
+@media (max-width: 400px) {
+  .chat-messages {
+    padding: 12px;
+  }
+  .message-bubble {
+    max-width: 90%;
+  }
+  .chat-input-area {
+    padding: 8px 12px;
+  }
+}
+
+/* ═══ Invite card styles ═══ */
+.invite-card {
+  transition: background 0.2s;
+}
+.invite-card:hover {
+  background: rgba(59, 130, 246, 0.12) !important;
+}
+
+/* ═══ Settings / Profile panel scrollability ═══ */
+#settings-panel,
+#profile-panel {
+  overflow-y: auto;
+  max-height: 100vh;
+}
+

@@ -32,9 +32,9 @@
     </div>
 
     <div class="login-form">
-      <input type="text" id="login-username" placeholder="Username or @user:matrix.org" autocomplete="username">
-      <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
-      <button onclick="handleLogin()" id="login-btn">🌪️ Connect to Windy Chat</button>
+      <input type="text" id="login-username" placeholder="Username or @user:matrix.org" autocomplete="username" aria-label="Username or Matrix ID">
+      <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" aria-label="Password">
+      <button onclick="handleLogin()" id="login-btn" aria-label="Connect to Windy Chat">🌪️ Connect to Windy Chat</button>
       <div id="login-error" class="login-error" role="alert" aria-live="assertive" style="display:none;"></div>
       <p style="font-size:12px; color:var(--chat-text-muted); margin-top:8px;">
         Don't have an account? <a href="#" onclick="showRegister()" style="color:var(--chat-blue);">Create one</a>
@@ -48,11 +48,11 @@
     <p class="subtitle">Create your Windy Chat identity</p>
 
     <div class="login-form">
-      <input type="text" id="reg-displayname" placeholder="Display name (e.g., Grant)">
-      <input type="text" id="reg-username" placeholder="Username (e.g., grant.windy)">
-      <input type="password" id="reg-password" placeholder="Password">
-      <input type="password" id="reg-password-confirm" placeholder="Confirm password">
-      <button onclick="handleRegister()">🚀 Create Account</button>
+      <input type="text" id="reg-displayname" placeholder="Display name (e.g., Grant)" aria-label="Display name">
+      <input type="text" id="reg-username" placeholder="Username (e.g., grant.windy)" aria-label="Username">
+      <input type="password" id="reg-password" placeholder="Password" aria-label="Password">
+      <input type="password" id="reg-password-confirm" placeholder="Confirm password" aria-label="Confirm password">
+      <button onclick="handleRegister()" aria-label="Create account">🚀 Create Account</button>
       <div id="reg-error" class="login-error" role="alert" aria-live="assertive" style="display:none;"></div>
       <p style="font-size:12px; color:var(--chat-text-muted); margin-top:8px;">
         Already have an account? <a href="#" onclick="showLogin()" style="color:var(--chat-blue);">Sign in</a>
@@ -117,7 +117,7 @@
       </div>
 
       <!-- Active conversation -->
-      <div id="active-chat" style="display:none; flex:1; display:flex; flex-direction:column; height:100vh;">
+      <div id="active-chat" style="display:none; flex-direction:column; height:100vh;">
         <!-- Connection status banner -->
         <div id="connection-banner" class="connection-banner" role="status" aria-live="polite" style="display:none;">
           <span id="connection-banner-text">🔴 Disconnected — reconnecting...</span>
