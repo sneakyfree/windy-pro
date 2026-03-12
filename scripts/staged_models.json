@@ -8,5 +8,265 @@
     "gpu_cert_output": "0/3 translated",
     "ct2_cert_output": "",
     "staged_at": "2026-03-12T14:09:43.256291"
+  },
+  {
+    "pair_code": "ar-en",
+    "gpu_name": "windy-pair-ar-en",
+    "ct2_name": "windy-pair-ar-en-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "1/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:13:16.710456"
+  },
+  {
+    "pair_code": "ar-fr",
+    "gpu_name": "windy-pair-ar-fr",
+    "ct2_name": "windy-pair-ar-fr-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "1/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:13:59.400834"
+  },
+  {
+    "pair_code": "ase-en",
+    "gpu_name": "windy-pair-ase-en",
+    "ct2_name": "windy-pair-ase-en-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "1/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:15:33.945497"
+  },
+  {
+    "pair_code": "bg-en",
+    "gpu_name": "windy-pair-bg-en",
+    "ct2_name": "windy-pair-bg-en-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "Can't load tokenizer for '/home/user1-gpu/Desktop/grants_folder/windy-pro/models/windy-pair-bg-en'. If you were trying to load it from 'https://huggingface.co/models', make sure you don't have a local directory with the same name. Otherwise, make sure '/home/user1-gpu/Desktop/grants_folder/windy-pro/models/windy-pair-bg-en' is the correct path to a directory containing all relevant files for a MarianTokenizer tokenizer.",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:16:24.894737"
+  },
+  {
+    "pair_code": "ca-es",
+    "gpu_name": "windy-pair-ca-es",
+    "ct2_name": "windy-pair-ca-es-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "Error no file named pytorch_model.bin, model.safetensors, tf_model.h5, model.ckpt.index or flax_model.msgpack found in directory /home/user1-gpu/Desktop/grants_folder/windy-pro/models/windy-pair-ca-es.",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:16:30.033659"
+  },
+  {
+    "pair_code": "ca-it",
+    "gpu_name": "windy-pair-ca-it",
+    "ct2_name": "windy-pair-ca-it-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "1/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:16:42.853727"
+  },
+  {
+    "pair_code": "cs-de",
+    "gpu_name": "windy-pair-cs-de",
+    "ct2_name": "windy-pair-cs-de-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "0/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:18:10.331408"
+  },
+  {
+    "pair_code": "cs-en",
+    "gpu_name": "windy-pair-cs-en",
+    "ct2_name": "windy-pair-cs-en-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "1/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:19:32.524497"
+  },
+  {
+    "pair_code": "cs-fi",
+    "gpu_name": "windy-pair-cs-fi",
+    "ct2_name": "windy-pair-cs-fi-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "0/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:20:22.798898"
+  },
+  {
+    "pair_code": "cs-sv",
+    "gpu_name": "windy-pair-cs-sv",
+    "ct2_name": "windy-pair-cs-sv-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "1/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:21:49.688517"
+  },
+  {
+    "pair_code": "da-en",
+    "gpu_name": "windy-pair-da-en",
+    "ct2_name": "windy-pair-da-en-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "1/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:22:57.050124"
+  },
+  {
+    "pair_code": "de-bg",
+    "gpu_name": "windy-pair-de-bg",
+    "ct2_name": "windy-pair-de-bg-ct2",
+    "gpu_cert": true,
+    "ct2_cert": true,
+    "gpu_cert_output": "3/3 translated",
+    "ct2_cert_output": "3/3 translated",
+    "staged_at": "2026-03-12T14:23:44.161976"
+  },
+  {
+    "pair_code": "de-bi",
+    "gpu_name": "windy-pair-de-bi",
+    "ct2_name": "windy-pair-de-bi-ct2",
+    "gpu_cert": true,
+    "ct2_cert": true,
+    "gpu_cert_output": "3/3 translated",
+    "ct2_cert_output": "3/3 translated",
+    "staged_at": "2026-03-12T14:25:19.388119"
+  },
+  {
+    "pair_code": "de-bzs",
+    "gpu_name": "windy-pair-de-bzs",
+    "ct2_name": "windy-pair-de-bzs-ct2",
+    "gpu_cert": true,
+    "ct2_cert": true,
+    "gpu_cert_output": "3/3 translated",
+    "ct2_cert_output": "3/3 translated",
+    "staged_at": "2026-03-12T14:25:37.440002"
+  },
+  {
+    "pair_code": "de-ca",
+    "gpu_name": "windy-pair-de-ca",
+    "ct2_name": "windy-pair-de-ca-ct2",
+    "gpu_cert": true,
+    "ct2_cert": true,
+    "gpu_cert_output": "3/3 translated",
+    "ct2_cert_output": "3/3 translated",
+    "staged_at": "2026-03-12T14:25:54.625886"
+  },
+  {
+    "pair_code": "de-crs",
+    "gpu_name": "windy-pair-de-crs",
+    "ct2_name": "windy-pair-de-crs-ct2",
+    "gpu_cert": true,
+    "ct2_cert": true,
+    "gpu_cert_output": "3/3 translated",
+    "ct2_cert_output": "3/3 translated",
+    "staged_at": "2026-03-12T14:26:10.407889"
+  },
+  {
+    "pair_code": "de-cs",
+    "gpu_name": "windy-pair-de-cs",
+    "ct2_name": "windy-pair-de-cs-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "1/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:26:27.291611"
+  },
+  {
+    "pair_code": "de-da",
+    "gpu_name": "windy-pair-de-da",
+    "ct2_name": "windy-pair-de-da-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "0/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:26:39.317648"
+  },
+  {
+    "pair_code": "de-de",
+    "gpu_name": "windy-pair-de-de",
+    "ct2_name": "windy-pair-de-de-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "0/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:26:50.883478"
+  },
+  {
+    "pair_code": "de-ee",
+    "gpu_name": "windy-pair-de-ee",
+    "ct2_name": "windy-pair-de-ee-ct2",
+    "gpu_cert": true,
+    "ct2_cert": true,
+    "gpu_cert_output": "3/3 translated",
+    "ct2_cert_output": "3/3 translated",
+    "staged_at": "2026-03-12T14:27:02.272619"
+  },
+  {
+    "pair_code": "de-efi",
+    "gpu_name": "windy-pair-de-efi",
+    "ct2_name": "windy-pair-de-efi-ct2",
+    "gpu_cert": true,
+    "ct2_cert": true,
+    "gpu_cert_output": "3/3 translated",
+    "ct2_cert_output": "3/3 translated",
+    "staged_at": "2026-03-12T14:27:16.106684"
+  },
+  {
+    "pair_code": "de-el",
+    "gpu_name": "windy-pair-de-el",
+    "ct2_name": "windy-pair-de-el-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "1/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:27:31.186996"
+  },
+  {
+    "pair_code": "de-en",
+    "gpu_name": "windy-pair-de-en",
+    "ct2_name": "windy-pair-de-en-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "1/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:27:42.984345"
+  },
+  {
+    "pair_code": "de-eo",
+    "gpu_name": "windy-pair-de-eo",
+    "ct2_name": "windy-pair-de-eo-ct2",
+    "gpu_cert": true,
+    "ct2_cert": true,
+    "gpu_cert_output": "3/3 translated",
+    "ct2_cert_output": "3/3 translated",
+    "staged_at": "2026-03-12T14:27:54.096187"
+  },
+  {
+    "pair_code": "de-es",
+    "gpu_name": "windy-pair-de-es",
+    "ct2_name": "windy-pair-de-es-ct2",
+    "gpu_cert": false,
+    "ct2_cert": false,
+    "gpu_cert_output": "1/3 translated",
+    "ct2_cert_output": "",
+    "staged_at": "2026-03-12T14:28:05.978862"
+  },
+  {
+    "pair_code": "de-et",
+    "gpu_name": "windy-pair-de-et",
+    "ct2_name": "windy-pair-de-et-ct2",
+    "gpu_cert": true,
+    "ct2_cert": true,
+    "gpu_cert_output": "2/3 translated",
+    "ct2_cert_output": "3/3 translated",
+    "staged_at": "2026-03-12T14:28:17.627450"
   }
 ]
