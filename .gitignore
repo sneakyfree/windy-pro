@@ -70,3 +70,4 @@ htmlcov/
 # Bundled dependencies (too large for git)
 bundled/
 extraResources/
+services/*/node_modules
