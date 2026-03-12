@@ -260,8 +260,8 @@ def main():
         logger.warning("No uploads found in upload_results.json")
         return
 
-    # Filter unverified models
-    unverified = [u for u in uploads if not u.get("upload_verified", False)]
+    # Filter unverified models — skip already-tried (PASS or FAIL)
+    unverified = [u for u in uploads if not u.get("upload_verified", False) and not u.get("verify_status")]
 
     if not unverified:
         logger.info("All uploaded models are already verified!")

@@ -7,7 +7,7 @@
       "verified": false,
       "verify_status": "PASS",
       "verify_output": "Successfully transcribed:  you",
-      "verify_date": "2026-03-11T19:05:55.184427",
+      "verify_date": "2026-03-11T19:05:55.235725",
       "upload_verified": true
     },
     {
@@ -15,10 +15,10 @@
       "repo_id": "sneakyfree/windy-lingua-bg-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": "SKIP",
-      "verify_output": "CT2 models require ctranslate2 library",
-      "verify_date": "2026-03-11T19:05:59.673679",
-      "upload_verified": false
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:07:24.777018",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-da",
@@ -27,7 +27,7 @@
       "verified": false,
       "verify_status": "PASS",
       "verify_output": "Successfully transcribed:  you",
-      "verify_date": "2026-03-11T19:06:13.412245",
+      "verify_date": "2026-03-11T19:06:13.378130",
       "upload_verified": true
     },
     {
@@ -35,10 +35,10 @@
       "repo_id": "sneakyfree/windy-lingua-da-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": "SKIP",
-      "verify_output": "CT2 models require ctranslate2 library",
-      "verify_date": "2026-03-11T19:06:17.317095",
-      "upload_verified": false
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:07:31.376516",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-el",
@@ -47,7 +47,7 @@
       "verified": false,
       "verify_status": "PASS",
       "verify_output": "Successfully transcribed:  you",
-      "verify_date": "2026-03-11T19:06:28.931141",
+      "verify_date": "2026-03-11T19:06:28.925363",
       "upload_verified": true
     },
     {
@@ -55,10 +55,10 @@
       "repo_id": "sneakyfree/windy-lingua-el-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": "SKIP",
-      "verify_output": "CT2 models require ctranslate2 library",
-      "verify_date": "2026-03-11T19:06:32.610839",
-      "upload_verified": false
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:07:37.888048",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-ga",
@@ -67,7 +67,7 @@
       "verified": false,
       "verify_status": "PASS",
       "verify_output": "Successfully transcribed:  you",
-      "verify_date": "2026-03-11T19:06:43.567696",
+      "verify_date": "2026-03-11T19:06:43.507752",
       "upload_verified": true
     },
     {
@@ -75,487 +75,540 @@
       "repo_id": "sneakyfree/windy-lingua-ga-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": "SKIP",
-      "verify_output": "CT2 models require ctranslate2 library",
-      "verify_date": "2026-03-11T19:06:46.891976",
-      "upload_verified": false
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:07:44.913472",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-ha",
       "repo_id": "sneakyfree/windy-lingua-ha",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:06:57.301651",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-ha-ct2",
       "repo_id": "sneakyfree/windy-lingua-ha-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:07:50.798421",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-id",
       "repo_id": "sneakyfree/windy-lingua-id",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:07:58.729851",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-id-ct2",
       "repo_id": "sneakyfree/windy-lingua-id-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:08:05.909345",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-is",
       "repo_id": "sneakyfree/windy-lingua-is",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:08:15.624107",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-is-ct2",
       "repo_id": "sneakyfree/windy-lingua-is-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:08:22.089604",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-jv",
       "repo_id": "sneakyfree/windy-lingua-jv",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:08:31.507203",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-jv-ct2",
       "repo_id": "sneakyfree/windy-lingua-jv-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:08:47.817238",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-ko",
       "repo_id": "sneakyfree/windy-lingua-ko",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  Thank you.",
+      "verify_date": "2026-03-11T19:09:19.036286",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-lo",
       "repo_id": "sneakyfree/windy-lingua-lo",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:09:27.187454",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-lo-ct2",
       "repo_id": "sneakyfree/windy-lingua-lo-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:09:39.683943",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-lv",
       "repo_id": "sneakyfree/windy-lingua-lv",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:09:48.742687",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-lv-ct2",
       "repo_id": "sneakyfree/windy-lingua-lv-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:09:59.768605",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-my",
       "repo_id": "sneakyfree/windy-lingua-my",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:10:06.977488",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-my-ct2",
       "repo_id": "sneakyfree/windy-lingua-my-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:10:17.739757",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-pl",
       "repo_id": "sneakyfree/windy-lingua-pl",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:10:25.569904",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-pl-ct2",
       "repo_id": "sneakyfree/windy-lingua-pl-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:10:35.561273",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-ru",
       "repo_id": "sneakyfree/windy-lingua-ru",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  Thank you.",
+      "verify_date": "2026-03-11T19:11:16.914611",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-sl",
       "repo_id": "sneakyfree/windy-lingua-sl",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:11:26.650281",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-sl-ct2",
       "repo_id": "sneakyfree/windy-lingua-sl-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:11:38.682328",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-sw",
       "repo_id": "sneakyfree/windy-lingua-sw",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:11:46.143480",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-sw-ct2",
       "repo_id": "sneakyfree/windy-lingua-sw-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:11:52.722601",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-vi",
       "repo_id": "sneakyfree/windy-lingua-vi",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Successfully transcribed:  you",
+      "verify_date": "2026-03-11T19:11:59.776637",
+      "upload_verified": true
     },
     {
       "model_id": "windy-lingua-vi-ct2",
       "repo_id": "sneakyfree/windy-lingua-vi-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "PASS",
+      "verify_output": "Mr. Quilter is the Apostle of the Middle Classes, and we are glad to welcome his",
+      "verify_date": "2026-03-11T19:12:08.299409",
+      "upload_verified": true
     },
     {
       "model_id": "windy-pair-NORTH_EU-NORTH_EU",
       "repo_id": "sneakyfree/windy-pair-NORTH_EU-NORTH_EU",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized configuration class <class 'transformers.models.marian.configuration_marian.MarianConfig'> for this kind of AutoModel: AutoModelForSpeechSeq2Seq.\nModel type should be one of DiaConfig, GraniteSpeechConfig, KyutaiSpeechToTextConfig, MoonshineConfig, Pop2PianoConfig, SeamlessM4TConfig, SeamlessM4Tv2Config, SpeechEncoderDecoderConfig, Speech2TextConfig, SpeechT5Config, WhisperConfig.",
+      "verify_date": "2026-03-12T02:00:44.366575",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-NORTH_EU-NORTH_EU-ct2",
       "repo_id": "sneakyfree/windy-pair-NORTH_EU-NORTH_EU-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "The model is not a Whisper model",
+      "verify_date": "2026-03-12T02:00:46.366113",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-SCANDINAVIA-SCANDINAVIA",
       "repo_id": "sneakyfree/windy-pair-SCANDINAVIA-SCANDINAVIA",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized configuration class <class 'transformers.models.marian.configuration_marian.MarianConfig'> for this kind of AutoModel: AutoModelForSpeechSeq2Seq.\nModel type should be one of DiaConfig, GraniteSpeechConfig, KyutaiSpeechToTextConfig, MoonshineConfig, Pop2PianoConfig, SeamlessM4TConfig, SeamlessM4Tv2Config, SpeechEncoderDecoderConfig, Speech2TextConfig, SpeechT5Config, WhisperConfig.",
+      "verify_date": "2026-03-12T02:00:51.686087",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-SCANDINAVIA-SCANDINAVIA-ct2",
       "repo_id": "sneakyfree/windy-pair-SCANDINAVIA-SCANDINAVIA-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "The model is not a Whisper model",
+      "verify_date": "2026-03-12T02:00:52.896674",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-aav-en",
       "repo_id": "sneakyfree/windy-pair-aav-en",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized configuration class <class 'transformers.models.marian.configuration_marian.MarianConfig'> for this kind of AutoModel: AutoModelForSpeechSeq2Seq.\nModel type should be one of DiaConfig, GraniteSpeechConfig, KyutaiSpeechToTextConfig, MoonshineConfig, Pop2PianoConfig, SeamlessM4TConfig, SeamlessM4Tv2Config, SpeechEncoderDecoderConfig, Speech2TextConfig, SpeechT5Config, WhisperConfig.",
+      "verify_date": "2026-03-12T02:00:58.065605",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-aav-en-ct2",
       "repo_id": "sneakyfree/windy-pair-aav-en-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "The model is not a Whisper model",
+      "verify_date": "2026-03-12T02:01:00.994775",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-aed-es",
       "repo_id": "sneakyfree/windy-pair-aed-es",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized configuration class <class 'transformers.models.marian.configuration_marian.MarianConfig'> for this kind of AutoModel: AutoModelForSpeechSeq2Seq.\nModel type should be one of DiaConfig, GraniteSpeechConfig, KyutaiSpeechToTextConfig, MoonshineConfig, Pop2PianoConfig, SeamlessM4TConfig, SeamlessM4Tv2Config, SpeechEncoderDecoderConfig, Speech2TextConfig, SpeechT5Config, WhisperConfig.",
+      "verify_date": "2026-03-12T02:01:04.194088",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-aed-es-ct2",
       "repo_id": "sneakyfree/windy-pair-aed-es-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "The model is not a Whisper model",
+      "verify_date": "2026-03-12T02:01:05.420610",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-de",
       "repo_id": "sneakyfree/windy-pair-af-de",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized configuration class <class 'transformers.models.marian.configuration_marian.MarianConfig'> for this kind of AutoModel: AutoModelForSpeechSeq2Seq.\nModel type should be one of DiaConfig, GraniteSpeechConfig, KyutaiSpeechToTextConfig, MoonshineConfig, Pop2PianoConfig, SeamlessM4TConfig, SeamlessM4Tv2Config, SpeechEncoderDecoderConfig, Speech2TextConfig, SpeechT5Config, WhisperConfig.",
+      "verify_date": "2026-03-12T02:01:12.194211",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-de-ct2",
       "repo_id": "sneakyfree/windy-pair-af-de-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "The model is not a Whisper model",
+      "verify_date": "2026-03-12T02:01:14.061879",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-en",
       "repo_id": "sneakyfree/windy-pair-af-en",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized configuration class <class 'transformers.models.marian.configuration_marian.MarianConfig'> for this kind of AutoModel: AutoModelForSpeechSeq2Seq.\nModel type should be one of DiaConfig, GraniteSpeechConfig, KyutaiSpeechToTextConfig, MoonshineConfig, Pop2PianoConfig, SeamlessM4TConfig, SeamlessM4Tv2Config, SpeechEncoderDecoderConfig, Speech2TextConfig, SpeechT5Config, WhisperConfig.",
+      "verify_date": "2026-03-12T02:01:28.822730",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-en-ct2",
       "repo_id": "sneakyfree/windy-pair-af-en-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "The model is not a Whisper model",
+      "verify_date": "2026-03-12T02:01:30.759073",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-eo",
       "repo_id": "sneakyfree/windy-pair-af-eo",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized model in /tmp/hf_verify/windy-pair-af-eo. Should have a `model_type` key in its config.json, or contain one of the following strings in its name: aimv2, aimv2_vision_model, albert, align, altclip, apertus, arcee, aria, aria_text, audio-spectrogram-transformer, autoformer, aya_vision, bamba, bark, bart, beit, bert, bert-generation, big_bird, bigbird_pegasus, biogpt, bit, bitnet, blenderbot, blenderbot-small, blip, blip-2, blip_2_qformer, bloom, blt, bridgetower, bros, camembert, canine, chameleon, chinese_clip, chinese_clip_vision_model, clap, clip, clip_text_model, clip_vision_model, clipseg, clvp, code_llama, codegen, cohere, cohere2, cohere2_vision, colpali, colqwen2, conditional_detr, convbert, convnext, convnextv2, cpmant, csm, ctrl, cvt, d_fine, dab-detr, dac, data2vec-audio, data2vec-text, data2vec-vision, dbrx, deberta, deberta-v2, decision_transformer, deepseek_v2, deepseek_v3, deepseek_vl, deepseek_vl_hybrid, deformable_detr, deit, depth_anything, depth_pro, deta, detr, dia, diffllama, dinat, dinov2, dinov2_with_registers, dinov3_convnext, dinov3_vit, distilbert, doge, donut-swin, dots1, dpr, dpt, edgetam, edgetam_video, edgetam_vision_model, efficientformer, efficientloftr, efficientnet, electra, emu3, encodec, encoder-decoder, eomt, ernie, ernie4_5, ernie4_5_moe, ernie_m, esm, evolla, exaone4, falcon, falcon_h1, falcon_mamba, fastspeech2_conformer, fastspeech2_conformer_with_hifigan, flaubert, flava, flex_olmo, florence2, fnet, focalnet, fsmt, funnel, fuyu, gemma, gemma2, gemma3, gemma3_text, gemma3n, gemma3n_audio, gemma3n_text, gemma3n_vision, git, glm, glm4, glm4_moe, glm4v, glm4v_moe, glm4v_moe_text, glm4v_text, glpn, got_ocr2, gpt-sw3, gpt2, gpt_bigcode, gpt_neo, gpt_neox, gpt_neox_japanese, gpt_oss, gptj, gptsan-japanese, granite, granite_speech, granitemoe, granitemoehybrid, granitemoeshared, granitevision, graphormer, grounding-dino, groupvit, helium, hgnet_v2, hiera, hubert, hunyuan_v1_dense, hunyuan_v1_moe, ibert, idefics, idefics2, idefics3, idefics3_vision, ijepa, imagegpt, informer, instructblip, instructblipvideo, internvl, internvl_vision, jamba, janus, jetmoe, jukebox, kosmos-2, kosmos-2.5, kyutai_speech_to_text, layoutlm, layoutlmv2, layoutlmv3, led, levit, lfm2, lfm2_vl, lightglue, lilt, llama, llama4, llama4_text, llava, llava_next, llava_next_video, llava_onevision, longcat_flash, longformer, longt5, luke, lxmert, m2m_100, mamba, mamba2, marian, markuplm, mask2former, maskformer, maskformer-swin, mbart, mctct, mega, megatron-bert, metaclip_2, mgp-str, mimi, minimax, ministral, mistral, mistral3, mixtral, mlcd, mllama, mm-grounding-dino, mobilebert, mobilenet_v1, mobilenet_v2, mobilevit, mobilevitv2, modernbert, modernbert-decoder, moonshine, moshi, mpnet, mpt, mra, mt5, musicgen, musicgen_melody, mvp, nat, nemotron, nezha, nllb-moe, nougat, nystromformer, olmo, olmo2, olmo3, olmoe, omdet-turbo, oneformer, open-llama, openai-gpt, opt, ovis2, owlv2, owlvit, paligemma, parakeet_ctc, parakeet_encoder, patchtsmixer, patchtst, pegasus, pegasus_x, perceiver, perception_encoder, perception_lm, persimmon, phi, phi3, phi4_multimodal, phimoe, pix2struct, pixtral, plbart, poolformer, pop2piano, prompt_depth_anything, prophetnet, pvt, pvt_v2, qdqbert, qwen2, qwen2_5_omni, qwen2_5_vl, qwen2_5_vl_text, qwen2_audio, qwen2_audio_encoder, qwen2_moe, qwen2_vl, qwen2_vl_text, qwen3, qwen3_moe, qwen3_next, qwen3_omni_moe, qwen3_vl, qwen3_vl_moe, qwen3_vl_moe_text, qwen3_vl_text, rag, realm, recurrent_gemma, reformer, regnet, rembert, resnet, retribert, roberta, roberta-prelayernorm, roc_bert, roformer, rt_detr, rt_detr_resnet, rt_detr_v2, rwkv, sam, sam2, sam2_hiera_det_model, sam2_video, sam2_vision_model, sam_hq, sam_hq_vision_model, sam_vision_model, seamless_m4t, seamless_m4t_v2, seed_oss, segformer, seggpt, sew, sew-d, shieldgemma2, siglip, siglip2, siglip2_vision_model, siglip_vision_model, smollm3, smolvlm, smolvlm_vision, speech-encoder-decoder, speech_to_text, speech_to_text_2, speecht5, splinter, squeezebert, stablelm, starcoder2, superglue, superpoint, swiftformer, swin, swin2sr, swinv2, switch_transformers, t5, t5gemma, table-transformer, tapas, textnet, time_series_transformer, timesfm, timesformer, timm_backbone, timm_wrapper, trajectory_transformer, transfo-xl, trocr, tvlt, tvp, udop, umt5, unispeech, unispeech-sat, univnet, upernet, van, vaultgemma, video_llava, videomae, vilt, vipllava, vision-encoder-decoder, vision-text-dual-encoder, visual_bert, vit, vit_hybrid, vit_mae, vit_msn, vitdet, vitmatte, vitpose, vitpose_backbone, vits, vivit, vjepa2, voxtral, voxtral_encoder, wav2vec2, wav2vec2-bert, wav2vec2-conformer, wavlm, whisper, xclip, xcodec, xglm, xlm, xlm-prophetnet, xlm-roberta, xlm-roberta-xl, xlnet, xlstm, xmod, yolos, yoso, zamba, zamba2, zoedepth",
+      "verify_date": "2026-03-12T02:01:41.056101",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-eo-ct2",
       "repo_id": "sneakyfree/windy-pair-af-eo-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/tmp/hf_verify/windy-pair-af-eo-c",
+      "verify_date": "2026-03-12T02:01:42.802506",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-es",
       "repo_id": "sneakyfree/windy-pair-af-es",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized model in /tmp/hf_verify/windy-pair-af-es. Should have a `model_type` key in its config.json, or contain one of the following strings in its name: aimv2, aimv2_vision_model, albert, align, altclip, apertus, arcee, aria, aria_text, audio-spectrogram-transformer, autoformer, aya_vision, bamba, bark, bart, beit, bert, bert-generation, big_bird, bigbird_pegasus, biogpt, bit, bitnet, blenderbot, blenderbot-small, blip, blip-2, blip_2_qformer, bloom, blt, bridgetower, bros, camembert, canine, chameleon, chinese_clip, chinese_clip_vision_model, clap, clip, clip_text_model, clip_vision_model, clipseg, clvp, code_llama, codegen, cohere, cohere2, cohere2_vision, colpali, colqwen2, conditional_detr, convbert, convnext, convnextv2, cpmant, csm, ctrl, cvt, d_fine, dab-detr, dac, data2vec-audio, data2vec-text, data2vec-vision, dbrx, deberta, deberta-v2, decision_transformer, deepseek_v2, deepseek_v3, deepseek_vl, deepseek_vl_hybrid, deformable_detr, deit, depth_anything, depth_pro, deta, detr, dia, diffllama, dinat, dinov2, dinov2_with_registers, dinov3_convnext, dinov3_vit, distilbert, doge, donut-swin, dots1, dpr, dpt, edgetam, edgetam_video, edgetam_vision_model, efficientformer, efficientloftr, efficientnet, electra, emu3, encodec, encoder-decoder, eomt, ernie, ernie4_5, ernie4_5_moe, ernie_m, esm, evolla, exaone4, falcon, falcon_h1, falcon_mamba, fastspeech2_conformer, fastspeech2_conformer_with_hifigan, flaubert, flava, flex_olmo, florence2, fnet, focalnet, fsmt, funnel, fuyu, gemma, gemma2, gemma3, gemma3_text, gemma3n, gemma3n_audio, gemma3n_text, gemma3n_vision, git, glm, glm4, glm4_moe, glm4v, glm4v_moe, glm4v_moe_text, glm4v_text, glpn, got_ocr2, gpt-sw3, gpt2, gpt_bigcode, gpt_neo, gpt_neox, gpt_neox_japanese, gpt_oss, gptj, gptsan-japanese, granite, granite_speech, granitemoe, granitemoehybrid, granitemoeshared, granitevision, graphormer, grounding-dino, groupvit, helium, hgnet_v2, hiera, hubert, hunyuan_v1_dense, hunyuan_v1_moe, ibert, idefics, idefics2, idefics3, idefics3_vision, ijepa, imagegpt, informer, instructblip, instructblipvideo, internvl, internvl_vision, jamba, janus, jetmoe, jukebox, kosmos-2, kosmos-2.5, kyutai_speech_to_text, layoutlm, layoutlmv2, layoutlmv3, led, levit, lfm2, lfm2_vl, lightglue, lilt, llama, llama4, llama4_text, llava, llava_next, llava_next_video, llava_onevision, longcat_flash, longformer, longt5, luke, lxmert, m2m_100, mamba, mamba2, marian, markuplm, mask2former, maskformer, maskformer-swin, mbart, mctct, mega, megatron-bert, metaclip_2, mgp-str, mimi, minimax, ministral, mistral, mistral3, mixtral, mlcd, mllama, mm-grounding-dino, mobilebert, mobilenet_v1, mobilenet_v2, mobilevit, mobilevitv2, modernbert, modernbert-decoder, moonshine, moshi, mpnet, mpt, mra, mt5, musicgen, musicgen_melody, mvp, nat, nemotron, nezha, nllb-moe, nougat, nystromformer, olmo, olmo2, olmo3, olmoe, omdet-turbo, oneformer, open-llama, openai-gpt, opt, ovis2, owlv2, owlvit, paligemma, parakeet_ctc, parakeet_encoder, patchtsmixer, patchtst, pegasus, pegasus_x, perceiver, perception_encoder, perception_lm, persimmon, phi, phi3, phi4_multimodal, phimoe, pix2struct, pixtral, plbart, poolformer, pop2piano, prompt_depth_anything, prophetnet, pvt, pvt_v2, qdqbert, qwen2, qwen2_5_omni, qwen2_5_vl, qwen2_5_vl_text, qwen2_audio, qwen2_audio_encoder, qwen2_moe, qwen2_vl, qwen2_vl_text, qwen3, qwen3_moe, qwen3_next, qwen3_omni_moe, qwen3_vl, qwen3_vl_moe, qwen3_vl_moe_text, qwen3_vl_text, rag, realm, recurrent_gemma, reformer, regnet, rembert, resnet, retribert, roberta, roberta-prelayernorm, roc_bert, roformer, rt_detr, rt_detr_resnet, rt_detr_v2, rwkv, sam, sam2, sam2_hiera_det_model, sam2_video, sam2_vision_model, sam_hq, sam_hq_vision_model, sam_vision_model, seamless_m4t, seamless_m4t_v2, seed_oss, segformer, seggpt, sew, sew-d, shieldgemma2, siglip, siglip2, siglip2_vision_model, siglip_vision_model, smollm3, smolvlm, smolvlm_vision, speech-encoder-decoder, speech_to_text, speech_to_text_2, speecht5, splinter, squeezebert, stablelm, starcoder2, superglue, superpoint, swiftformer, swin, swin2sr, swinv2, switch_transformers, t5, t5gemma, table-transformer, tapas, textnet, time_series_transformer, timesfm, timesformer, timm_backbone, timm_wrapper, trajectory_transformer, transfo-xl, trocr, tvlt, tvp, udop, umt5, unispeech, unispeech-sat, univnet, upernet, van, vaultgemma, video_llava, videomae, vilt, vipllava, vision-encoder-decoder, vision-text-dual-encoder, visual_bert, vit, vit_hybrid, vit_mae, vit_msn, vitdet, vitmatte, vitpose, vitpose_backbone, vits, vivit, vjepa2, voxtral, voxtral_encoder, wav2vec2, wav2vec2-bert, wav2vec2-conformer, wavlm, whisper, xclip, xcodec, xglm, xlm, xlm-prophetnet, xlm-roberta, xlm-roberta-xl, xlnet, xlstm, xmod, yolos, yoso, zamba, zamba2, zoedepth",
+      "verify_date": "2026-03-12T02:01:54.013709",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-es-ct2",
       "repo_id": "sneakyfree/windy-pair-af-es-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "[json.exception.type_error.302] type must be string, but is null",
+      "verify_date": "2026-03-12T02:01:56.237747",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-fi",
       "repo_id": "sneakyfree/windy-pair-af-fi",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized model in /tmp/hf_verify/windy-pair-af-fi. Should have a `model_type` key in its config.json, or contain one of the following strings in its name: aimv2, aimv2_vision_model, albert, align, altclip, apertus, arcee, aria, aria_text, audio-spectrogram-transformer, autoformer, aya_vision, bamba, bark, bart, beit, bert, bert-generation, big_bird, bigbird_pegasus, biogpt, bit, bitnet, blenderbot, blenderbot-small, blip, blip-2, blip_2_qformer, bloom, blt, bridgetower, bros, camembert, canine, chameleon, chinese_clip, chinese_clip_vision_model, clap, clip, clip_text_model, clip_vision_model, clipseg, clvp, code_llama, codegen, cohere, cohere2, cohere2_vision, colpali, colqwen2, conditional_detr, convbert, convnext, convnextv2, cpmant, csm, ctrl, cvt, d_fine, dab-detr, dac, data2vec-audio, data2vec-text, data2vec-vision, dbrx, deberta, deberta-v2, decision_transformer, deepseek_v2, deepseek_v3, deepseek_vl, deepseek_vl_hybrid, deformable_detr, deit, depth_anything, depth_pro, deta, detr, dia, diffllama, dinat, dinov2, dinov2_with_registers, dinov3_convnext, dinov3_vit, distilbert, doge, donut-swin, dots1, dpr, dpt, edgetam, edgetam_video, edgetam_vision_model, efficientformer, efficientloftr, efficientnet, electra, emu3, encodec, encoder-decoder, eomt, ernie, ernie4_5, ernie4_5_moe, ernie_m, esm, evolla, exaone4, falcon, falcon_h1, falcon_mamba, fastspeech2_conformer, fastspeech2_conformer_with_hifigan, flaubert, flava, flex_olmo, florence2, fnet, focalnet, fsmt, funnel, fuyu, gemma, gemma2, gemma3, gemma3_text, gemma3n, gemma3n_audio, gemma3n_text, gemma3n_vision, git, glm, glm4, glm4_moe, glm4v, glm4v_moe, glm4v_moe_text, glm4v_text, glpn, got_ocr2, gpt-sw3, gpt2, gpt_bigcode, gpt_neo, gpt_neox, gpt_neox_japanese, gpt_oss, gptj, gptsan-japanese, granite, granite_speech, granitemoe, granitemoehybrid, granitemoeshared, granitevision, graphormer, grounding-dino, groupvit, helium, hgnet_v2, hiera, hubert, hunyuan_v1_dense, hunyuan_v1_moe, ibert, idefics, idefics2, idefics3, idefics3_vision, ijepa, imagegpt, informer, instructblip, instructblipvideo, internvl, internvl_vision, jamba, janus, jetmoe, jukebox, kosmos-2, kosmos-2.5, kyutai_speech_to_text, layoutlm, layoutlmv2, layoutlmv3, led, levit, lfm2, lfm2_vl, lightglue, lilt, llama, llama4, llama4_text, llava, llava_next, llava_next_video, llava_onevision, longcat_flash, longformer, longt5, luke, lxmert, m2m_100, mamba, mamba2, marian, markuplm, mask2former, maskformer, maskformer-swin, mbart, mctct, mega, megatron-bert, metaclip_2, mgp-str, mimi, minimax, ministral, mistral, mistral3, mixtral, mlcd, mllama, mm-grounding-dino, mobilebert, mobilenet_v1, mobilenet_v2, mobilevit, mobilevitv2, modernbert, modernbert-decoder, moonshine, moshi, mpnet, mpt, mra, mt5, musicgen, musicgen_melody, mvp, nat, nemotron, nezha, nllb-moe, nougat, nystromformer, olmo, olmo2, olmo3, olmoe, omdet-turbo, oneformer, open-llama, openai-gpt, opt, ovis2, owlv2, owlvit, paligemma, parakeet_ctc, parakeet_encoder, patchtsmixer, patchtst, pegasus, pegasus_x, perceiver, perception_encoder, perception_lm, persimmon, phi, phi3, phi4_multimodal, phimoe, pix2struct, pixtral, plbart, poolformer, pop2piano, prompt_depth_anything, prophetnet, pvt, pvt_v2, qdqbert, qwen2, qwen2_5_omni, qwen2_5_vl, qwen2_5_vl_text, qwen2_audio, qwen2_audio_encoder, qwen2_moe, qwen2_vl, qwen2_vl_text, qwen3, qwen3_moe, qwen3_next, qwen3_omni_moe, qwen3_vl, qwen3_vl_moe, qwen3_vl_moe_text, qwen3_vl_text, rag, realm, recurrent_gemma, reformer, regnet, rembert, resnet, retribert, roberta, roberta-prelayernorm, roc_bert, roformer, rt_detr, rt_detr_resnet, rt_detr_v2, rwkv, sam, sam2, sam2_hiera_det_model, sam2_video, sam2_vision_model, sam_hq, sam_hq_vision_model, sam_vision_model, seamless_m4t, seamless_m4t_v2, seed_oss, segformer, seggpt, sew, sew-d, shieldgemma2, siglip, siglip2, siglip2_vision_model, siglip_vision_model, smollm3, smolvlm, smolvlm_vision, speech-encoder-decoder, speech_to_text, speech_to_text_2, speecht5, splinter, squeezebert, stablelm, starcoder2, superglue, superpoint, swiftformer, swin, swin2sr, swinv2, switch_transformers, t5, t5gemma, table-transformer, tapas, textnet, time_series_transformer, timesfm, timesformer, timm_backbone, timm_wrapper, trajectory_transformer, transfo-xl, trocr, tvlt, tvp, udop, umt5, unispeech, unispeech-sat, univnet, upernet, van, vaultgemma, video_llava, videomae, vilt, vipllava, vision-encoder-decoder, vision-text-dual-encoder, visual_bert, vit, vit_hybrid, vit_mae, vit_msn, vitdet, vitmatte, vitpose, vitpose_backbone, vits, vivit, vjepa2, voxtral, voxtral_encoder, wav2vec2, wav2vec2-bert, wav2vec2-conformer, wavlm, whisper, xclip, xcodec, xglm, xlm, xlm-prophetnet, xlm-roberta, xlm-roberta-xl, xlnet, xlstm, xmod, yolos, yoso, zamba, zamba2, zoedepth",
+      "verify_date": "2026-03-12T02:02:07.104763",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-fi-ct2",
       "repo_id": "sneakyfree/windy-pair-af-fi-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "The model is not a Whisper model",
+      "verify_date": "2026-03-12T02:02:08.718266",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-fr",
       "repo_id": "sneakyfree/windy-pair-af-fr",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Failed to download from HuggingFace",
+      "verify_date": "2026-03-12T02:02:19.389472",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-fr-ct2",
       "repo_id": "sneakyfree/windy-pair-af-fr-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "The model is not a Whisper model",
+      "verify_date": "2026-03-12T02:02:21.120462",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-nl",
       "repo_id": "sneakyfree/windy-pair-af-nl",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized configuration class <class 'transformers.models.marian.configuration_marian.MarianConfig'> for this kind of AutoModel: AutoModelForSpeechSeq2Seq.\nModel type should be one of DiaConfig, GraniteSpeechConfig, KyutaiSpeechToTextConfig, MoonshineConfig, Pop2PianoConfig, SeamlessM4TConfig, SeamlessM4Tv2Config, SpeechEncoderDecoderConfig, Speech2TextConfig, SpeechT5Config, WhisperConfig.",
+      "verify_date": "2026-03-12T02:02:25.031226",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-nl-ct2",
       "repo_id": "sneakyfree/windy-pair-af-nl-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "The model is not a Whisper model",
+      "verify_date": "2026-03-12T02:02:26.945725",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-ru",
       "repo_id": "sneakyfree/windy-pair-af-ru",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized configuration class <class 'transformers.models.marian.configuration_marian.MarianConfig'> for this kind of AutoModel: AutoModelForSpeechSeq2Seq.\nModel type should be one of DiaConfig, GraniteSpeechConfig, KyutaiSpeechToTextConfig, MoonshineConfig, Pop2PianoConfig, SeamlessM4TConfig, SeamlessM4Tv2Config, SpeechEncoderDecoderConfig, Speech2TextConfig, SpeechT5Config, WhisperConfig.",
+      "verify_date": "2026-03-12T02:03:00.981564",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-ru-ct2",
       "repo_id": "sneakyfree/windy-pair-af-ru-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "The model is not a Whisper model",
+      "verify_date": "2026-03-12T02:03:02.942166",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-sv",
       "repo_id": "sneakyfree/windy-pair-af-sv",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized configuration class <class 'transformers.models.marian.configuration_marian.MarianConfig'> for this kind of AutoModel: AutoModelForSpeechSeq2Seq.\nModel type should be one of DiaConfig, GraniteSpeechConfig, KyutaiSpeechToTextConfig, MoonshineConfig, Pop2PianoConfig, SeamlessM4TConfig, SeamlessM4Tv2Config, SpeechEncoderDecoderConfig, Speech2TextConfig, SpeechT5Config, WhisperConfig.",
+      "verify_date": "2026-03-12T02:03:09.265843",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-af-sv-ct2",
       "repo_id": "sneakyfree/windy-pair-af-sv-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "The model is not a Whisper model",
+      "verify_date": "2026-03-12T02:03:11.304437",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-afa-afa",
       "repo_id": "sneakyfree/windy-pair-afa-afa",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized configuration class <class 'transformers.models.marian.configuration_marian.MarianConfig'> for this kind of AutoModel: AutoModelForSpeechSeq2Seq.\nModel type should be one of DiaConfig, GraniteSpeechConfig, KyutaiSpeechToTextConfig, MoonshineConfig, Pop2PianoConfig, SeamlessM4TConfig, SeamlessM4Tv2Config, SpeechEncoderDecoderConfig, Speech2TextConfig, SpeechT5Config, WhisperConfig.",
+      "verify_date": "2026-03-12T02:03:15.174549",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-afa-afa-ct2",
       "repo_id": "sneakyfree/windy-pair-afa-afa-ct2",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "The model is not a Whisper model",
+      "verify_date": "2026-03-12T02:03:16.790201",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-afa-en",
       "repo_id": "sneakyfree/windy-pair-afa-en",
       "upload_date": null,
       "verified": false,
-      "verify_status": null,
-      "verify_output": null,
-      "verify_date": null
+      "verify_status": "FAIL",
+      "verify_output": "Unrecognized configuration class <class 'transformers.models.marian.configuration_marian.MarianConfig'> for this kind of AutoModel: AutoModelForSpeechSeq2Seq.\nModel type should be one of DiaConfig, GraniteSpeechConfig, KyutaiSpeechToTextConfig, MoonshineConfig, Pop2PianoConfig, SeamlessM4TConfig, SeamlessM4Tv2Config, SpeechEncoderDecoderConfig, Speech2TextConfig, SpeechT5Config, WhisperConfig.",
+      "verify_date": "2026-03-12T02:03:21.652743",
+      "upload_verified": false
     },
     {
       "model_id": "windy-pair-afa-en-ct2",
@@ -2385,5 +2438,5 @@
       "verify_date": null
     }
   ],
-  "last_updated": "2026-03-11T19:06:46.891987"
+  "last_updated": "2026-03-12T02:03:21.652752"
 }
