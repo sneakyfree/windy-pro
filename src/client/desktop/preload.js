@@ -186,4 +186,14 @@ contextBridge.exposeInMainWorld('windyAPI', {
   showSyncNotification: (msg) => ipcRenderer.invoke('show-sync-notification', msg),
   getStorageStats: () => ipcRenderer.invoke('get-storage-stats'),
   deleteLocalBundleCopy: (id) => ipcRenderer.invoke('delete-local-bundle-copy', id),
+
+  // First-launch welcome
+  onShowWelcome: (callback) => ipcRenderer.on('show-welcome', () => callback()),
+  dismissWelcome: () => ipcRenderer.invoke('dismiss-welcome'),
+
+  // Keyboard shortcuts modal
+  onShowKeyboardShortcuts: (callback) => ipcRenderer.on('show-keyboard-shortcuts', () => callback()),
+
+  // System theme
+  onSystemThemeChanged: (callback) => ipcRenderer.on('system-theme-changed', (_e, theme) => callback(theme)),
 });

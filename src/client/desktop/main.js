@@ -2,11 +2,14 @@
 process.stdout?.on('error', (err) => { if (err.code !== 'EPIPE') throw err; });
 process.stderr?.on('error', (err) => { if (err.code !== 'EPIPE') throw err; });
 
-// Global crash handler — log to ~/.config/windy-pro/crash.log
+// Global crash handler — log to ~/Library/Logs/WindyPro/ (macOS) or ~/.config/windy-pro/ (others)
 const _fs = require('fs');
 const _path = require('path');
 const _os = require('os');
-const crashLogPath = _path.join(_os.homedir(), '.config', 'windy-pro', 'crash.log');
+const crashLogDir = process.platform === 'darwin'
+  ? _path.join(_os.homedir(), 'Library', 'Logs', 'WindyPro')
+  : _path.join(_os.homedir(), '.config', 'windy-pro');
+const crashLogPath = _path.join(crashLogDir, 'crash.log');
 
 function writeCrashLog(type, err) {
   try {
@@ -25,6 +28,16 @@ function writeCrashLog(type, err) {
 process.on('uncaughtException', (err) => {
   writeCrashLog('UncaughtException', err);
   console.error('[CRASH]', err.message);
+  // Show friendly dialog on macOS (non-blocking)
+  try {
+    const { dialog } = require('electron');
+    if (require('electron').app.isReady()) {
+      dialog.showErrorBox(
+        'Windy Pro encountered an error',
+        `Something went wrong. The error has been logged.\n\nDetails: ${err.message}\n\nLog: ${crashLogPath}`
+      );
+    }
+  } catch (_) { /* dialog may not be available yet */ }
 });
 
 process.on('unhandledRejection', (reason) => {
@@ -643,6 +656,64 @@ function updateTrayMenu() {
 }
 
 /**
+ * Show About window
+ */
+function showAboutWindow() {
+  const aboutWin = new BrowserWindow({
+    width: 380,
+    height: 340,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    frame: false,
+    transparent: false,
+    backgroundColor: '#0f172a',
+    alwaysOnTop: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true
+    }
+  });
+
+  const version = app.getVersion();
+  const electronVersion = process.versions.electron;
+  const nodeVersion = process.versions.node;
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; text-align: center; padding: 32px 24px; -webkit-app-region: drag; cursor: default; user-select: none; }
+  .logo { font-size: 48px; margin-bottom: 12px; }
+  h1 { font-size: 22px; font-weight: 700; color: #f1f5f9; margin-bottom: 4px; }
+  .version { color: #60a5fa; font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+  .built { color: #94a3b8; font-size: 13px; margin-bottom: 8px; }
+  .tech { color: #64748b; font-size: 12px; margin-bottom: 20px; }
+  .links { display: flex; gap: 16px; justify-content: center; margin-bottom: 12px; }
+  .links a { color: #60a5fa; font-size: 13px; text-decoration: none; -webkit-app-region: no-drag; cursor: pointer; }
+  .links a:hover { text-decoration: underline; }
+  .close-btn { -webkit-app-region: no-drag; cursor: pointer; background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 6px 24px; border-radius: 6px; font-size: 13px; margin-top: 8px; }
+  .close-btn:hover { background: #334155; color: #f1f5f9; }
+  .copyright { color: #475569; font-size: 11px; margin-top: 12px; }
+</style></head><body>
+  <div class="logo">🌪️</div>
+  <h1>Windy Pro</h1>
+  <div class="version">Version ${version}</div>
+  <div class="built">Built by WindyPro Labs</div>
+  <div class="tech">Electron ${electronVersion} · Node ${nodeVersion} · ${process.arch}</div>
+  <div class="links">
+    <a onclick="require('electron').shell.openExternal('https://thewindstorm.uk')">Website</a>
+    <a onclick="require('electron').shell.openExternal('mailto:dev@thewindstorm.uk')">Support</a>
+    <a onclick="require('electron').shell.openExternal('https://github.com/sneakyfree/windy-pro')">GitHub</a>
+  </div>
+  <button class="close-btn" onclick="window.close()">Close</button>
+  <div class="copyright">&copy; 2026 WindyPro Labs. All rights reserved.</div>
+</body></html>`;
+
+  aboutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  aboutWin.center();
+}
+
+/**
  * Create macOS application menu bar
  * Required for standard Cmd+Q, Cmd+H, Cmd+M, and Edit menu shortcuts
  */
@@ -653,10 +724,13 @@ function createMacOSMenu() {
     {
       label: app.name,
       submenu: [
-        { role: 'about' },
+        {
+          label: 'About Windy Pro',
+          click: () => showAboutWindow()
+        },
         { type: 'separator' },
         {
-          label: 'Settings…',
+          label: 'Settings\u2026',
           accelerator: 'Cmd+,',
           click: () => {
             if (mainWindow) {
@@ -664,6 +738,11 @@ function createMacOSMenu() {
               safeSend('open-settings');
             }
           }
+        },
+        {
+          label: 'New Recording',
+          accelerator: 'Cmd+N',
+          click: () => toggleRecording()
         },
         { type: 'separator' },
         { role: 'services' },
@@ -724,12 +803,57 @@ function createMacOSMenu() {
       label: 'Help',
       submenu: [
         {
+          label: 'Keyboard Shortcuts',
+          accelerator: 'Cmd+/',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.show();
+              safeSend('show-keyboard-shortcuts');
+            }
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Privacy Policy',
+          click: () => {
+            const privacyWin = new BrowserWindow({
+              width: 700,
+              height: 600,
+              title: 'Privacy Policy',
+              autoHideMenuBar: true,
+              backgroundColor: '#0f172a',
+              webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
+            });
+            privacyWin.loadFile(path.join(__dirname, 'renderer', 'privacy.html'));
+          }
+        },
+        {
+          label: 'Terms of Service',
+          click: () => {
+            const termsWin = new BrowserWindow({
+              width: 700,
+              height: 600,
+              title: 'Terms of Service',
+              autoHideMenuBar: true,
+              backgroundColor: '#0f172a',
+              webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
+            });
+            termsWin.loadFile(path.join(__dirname, 'renderer', 'terms.html'));
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'Windy Pro Website',
           click: () => shell.openExternal('https://thewindstorm.uk')
         },
         {
           label: 'Report a Bug',
           click: () => shell.openExternal('https://github.com/sneakyfree/windy-pro/issues')
+        },
+        { type: 'separator' },
+        {
+          label: 'About Windy Pro',
+          click: () => showAboutWindow()
         }
       ]
     }
@@ -4125,6 +4249,19 @@ app.whenReady().then(async () => {
     // Send initial theme after window loads
     mainWindow.webContents.on('did-finish-load', sendTheme);
   }
+
+  // First-launch welcome: show 3-panel welcome on first run
+  if (!store.get('hasSeenWelcome')) {
+    mainWindow.webContents.on('did-finish-load', () => {
+      safeSend('show-welcome');
+    });
+  }
+
+  // IPC: dismiss welcome and mark as seen
+  ipcMain.handle('dismiss-welcome', async () => {
+    store.set('hasSeenWelcome', true);
+    return { ok: true };
+  });
 
   // Validate license on launch (non-blocking)
   validateLicense().catch(e => console.error('[License] Validation error:', e.message));

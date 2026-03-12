@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Windy Pro</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      line-height: 1.7;
+      padding: 40px 32px 60px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 28px; font-weight: 700; color: #f1f5f9; margin-bottom: 8px; }
+    .subtitle { color: #94a3b8; font-size: 14px; margin-bottom: 32px; }
+    h2 { font-size: 18px; font-weight: 600; color: #60a5fa; margin: 28px 0 12px; }
+    p, li { font-size: 15px; color: #cbd5e1; margin-bottom: 12px; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; }
+    .highlight {
+      background: #1e293b;
+      border-left: 3px solid #22c55e;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin: 16px 0;
+    }
+    .highlight strong { color: #22c55e; }
+    a { color: #60a5fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #1e293b; font-size: 13px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <h1>🔒 Privacy Policy</h1>
+  <p class="subtitle">Last updated: March 2026 · Windy Pro v1.6</p>
+
+  <div class="highlight">
+    <strong>TL;DR:</strong> Your audio never leaves your device unless you choose cloud features. We don't sell your data. We don't track you. Period.
+  </div>
+
+  <h2>1. Offline-First Processing</h2>
+  <p>Windy Pro performs speech-to-text transcription <strong>entirely on your device</strong>. Audio recordings are processed locally using on-device AI models. No audio data is sent to external servers for transcription unless you explicitly enable cloud-based STT providers (Deepgram, Groq, OpenAI).</p>
+
+  <h2>2. Cloud Storage (Optional)</h2>
+  <p>When you enable Windy Pro Cloud Sync, your transcription data is stored in Cloudflare R2 object storage:</p>
+  <ul>
+    <li>All data is <strong>encrypted at rest</strong> using AES-256 encryption</li>
+    <li>All transfers use <strong>TLS 1.3</strong> end-to-end</li>
+    <li>Data is stored in the region closest to you for compliance</li>
+    <li>You can delete all cloud data at any time from Settings → Cloud → Delete My Data</li>
+  </ul>
+
+  <h2>3. No Data Selling</h2>
+  <p>We do not sell, share, trade, or rent your personal data to any third parties. We do not share your data with advertisers. We do not broker your data in any form.</p>
+
+  <h2>4. No Telemetry</h2>
+  <p>Windy Pro does not collect analytics, usage metrics, crash reports, or telemetry data. The only network requests the app makes are:</p>
+  <ul>
+    <li><strong>License validation</strong> — encrypted check with our server to verify your subscription</li>
+    <li><strong>Auto-update</strong> — checks GitHub Releases for new versions</li>
+    <li><strong>Cloud sync</strong> — only when explicitly enabled by you</li>
+    <li><strong>Cloud STT/translation</strong> — only when you choose a cloud provider</li>
+  </ul>
+
+  <h2>5. Data You Control</h2>
+  <p>All transcription data is stored locally in:</p>
+  <ul>
+    <li><strong>macOS:</strong> ~/Documents/WindyProArchive/</li>
+    <li><strong>Linux:</strong> ~/Documents/WindyProArchive/</li>
+    <li><strong>Windows:</strong> Documents\WindyProArchive\</li>
+  </ul>
+  <p>You have full control over this data. You can move, copy, or delete it at any time.</p>
+
+  <h2>6. GDPR &amp; CCPA Rights</h2>
+  <p>If you are in the EU or California, you have the right to:</p>
+  <ul>
+    <li><strong>Access</strong> — request a copy of any data we hold about you</li>
+    <li><strong>Rectification</strong> — update or correct your personal information</li>
+    <li><strong>Erasure</strong> — request deletion of your account and all associated data</li>
+    <li><strong>Portability</strong> — export your data in a machine-readable format</li>
+    <li><strong>Objection</strong> — opt out of any data processing</li>
+  </ul>
+  <p>Since Windy Pro processes everything locally and stores minimal data server-side (only your email and license info), most of these rights are automatically fulfilled.</p>
+
+  <h2>7. Microphone &amp; Camera Access</h2>
+  <p>Windy Pro requests microphone access for voice-to-text transcription and camera access for the video preview feature. These permissions are managed by your operating system. Audio and video data stays on your device unless you explicitly use cloud features.</p>
+
+  <h2>8. Contact</h2>
+  <p>For privacy-related questions or data deletion requests:</p>
+  <ul>
+    <li>Email: <a href="mailto:privacy@thewindstorm.uk">privacy@thewindstorm.uk</a></li>
+    <li>Support: <a href="mailto:dev@thewindstorm.uk">dev@thewindstorm.uk</a></li>
+  </ul>
+
+  <div class="footer">
+    &copy; 2026 WindyPro Labs. All rights reserved.
+  </div>
+</body>
+</html>

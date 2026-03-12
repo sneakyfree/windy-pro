@@ -503,6 +503,114 @@ class WindyApp {
         this.setArchiveStatus('Archive failed', 'error');
       }
     });
+
+    // ═══ First-Launch Welcome Overlay ═══
+    window.windyAPI.onShowWelcome?.(() => {
+      this._showWelcomeOverlay();
+    });
+
+    // ═══ Keyboard Shortcuts Modal ═══
+    window.windyAPI.onShowKeyboardShortcuts?.(() => {
+      this._showKeyboardShortcutsModal();
+    });
+  }
+
+  /**
+   * Show first-launch welcome 3-panel overlay
+   */
+  _showWelcomeOverlay() {
+    if (document.getElementById('welcomeOverlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'welcomeOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);animation:fadeIn .3s ease';
+    overlay.innerHTML = `
+      <div style="background:#1e293b;border-radius:16px;padding:36px;max-width:460px;width:90%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.5);position:relative">
+        <div id="welcomePanels">
+          <div class="welcome-panel" data-step="0">
+            <div style="font-size:56px;margin-bottom:16px">🌪️</div>
+            <h2 style="font-size:22px;color:#f1f5f9;margin-bottom:8px">Welcome to Windy Pro</h2>
+            <p style="color:#94a3b8;font-size:14px;line-height:1.6">The most powerful voice-to-text app on the planet. Offline-first, privacy-focused, and blazingly fast.</p>
+          </div>
+          <div class="welcome-panel" data-step="1" style="display:none">
+            <div style="font-size:56px;margin-bottom:16px">🎤</div>
+            <h2 style="font-size:22px;color:#f1f5f9;margin-bottom:8px">How to Record</h2>
+            <p style="color:#94a3b8;font-size:14px;line-height:1.6">Click the <strong style="color:#22c55e">Record</strong> button or press <strong style="color:#60a5fa">Ctrl+Shift+Space</strong> to start recording. Speak naturally — Windy Pro transcribes as you go.</p>
+          </div>
+          <div class="welcome-panel" data-step="2" style="display:none">
+            <div style="font-size:56px;margin-bottom:16px">🌐</div>
+            <h2 style="font-size:22px;color:#f1f5f9;margin-bottom:8px">Choose Your Language</h2>
+            <p style="color:#94a3b8;font-size:14px;line-height:1.6">Windy Pro supports 100+ languages. Head to <strong style="color:#60a5fa">Settings</strong> to pick your preferred language and AI model.</p>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:center;gap:8px;margin:20px 0 16px">
+          <span class="welcome-dot active" data-dot="0" style="width:8px;height:8px;border-radius:50%;background:#60a5fa;cursor:pointer"></span>
+          <span class="welcome-dot" data-dot="1" style="width:8px;height:8px;border-radius:50%;background:#334155;cursor:pointer"></span>
+          <span class="welcome-dot" data-dot="2" style="width:8px;height:8px;border-radius:50%;background:#334155;cursor:pointer"></span>
+        </div>
+        <button id="welcomeNextBtn" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;border:none;padding:10px 32px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:transform .1s">Next</button>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    let currentStep = 0;
+    const panels = overlay.querySelectorAll('.welcome-panel');
+    const dots = overlay.querySelectorAll('.welcome-dot');
+    const btn = overlay.querySelector('#welcomeNextBtn');
+
+    const showStep = (step) => {
+      panels.forEach((p, i) => p.style.display = i === step ? 'block' : 'none');
+      dots.forEach((d, i) => { d.style.background = i === step ? '#60a5fa' : '#334155'; });
+      btn.textContent = step === 2 ? 'Get Started' : 'Next';
+      currentStep = step;
+    };
+
+    dots.forEach(d => d.addEventListener('click', () => showStep(parseInt(d.dataset.dot))));
+    btn.addEventListener('click', () => {
+      if (currentStep < 2) { showStep(currentStep + 1); }
+      else {
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity .2s';
+        setTimeout(() => overlay.remove(), 200);
+        window.windyAPI?.dismissWelcome?.();
+      }
+    });
+  }
+
+  /**
+   * Show keyboard shortcuts modal
+   */
+  _showKeyboardShortcutsModal() {
+    if (document.getElementById('shortcutsModal')) return;
+
+    const isMac = window.windyAPI?.platform === 'darwin';
+    const mod = isMac ? '⌘' : 'Ctrl';
+    const overlay = document.createElement('div');
+    overlay.id = 'shortcutsModal';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
+    overlay.innerHTML = `
+      <div style="background:#1e293b;border-radius:12px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 16px 48px rgba(0,0,0,.4)">
+        <h2 style="font-size:18px;color:#f1f5f9;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+          ⌨️ Keyboard Shortcuts
+          <button id="closeShortcuts" style="background:none;border:none;color:#64748b;font-size:20px;cursor:pointer">&times;</button>
+        </h2>
+        <table style="width:100%;font-size:13px;color:#cbd5e1">
+          <tr><td style="padding:6px 0">Toggle Recording</td><td style="text-align:right"><kbd style="background:#0f172a;padding:2px 8px;border-radius:4px;font-size:12px">${mod}+Shift+Space</kbd></td></tr>
+          <tr><td style="padding:6px 0">Paste Transcript</td><td style="text-align:right"><kbd style="background:#0f172a;padding:2px 8px;border-radius:4px;font-size:12px">${mod}+Shift+V</kbd></td></tr>
+          <tr><td style="padding:6px 0">Quick Translate</td><td style="text-align:right"><kbd style="background:#0f172a;padding:2px 8px;border-radius:4px;font-size:12px">${mod}+Shift+T</kbd></td></tr>
+          <tr><td style="padding:6px 0">Show/Hide Window</td><td style="text-align:right"><kbd style="background:#0f172a;padding:2px 8px;border-radius:4px;font-size:12px">${mod}+Shift+W</kbd></td></tr>
+          ${isMac ? '<tr><td style="padding:6px 0">New Recording</td><td style="text-align:right"><kbd style="background:#0f172a;padding:2px 8px;border-radius:4px;font-size:12px">⌘+N</kbd></td></tr>' : ''}
+          ${isMac ? '<tr><td style="padding:6px 0">Settings</td><td style="text-align:right"><kbd style="background:#0f172a;padding:2px 8px;border-radius:4px;font-size:12px">⌘+,</kbd></td></tr>' : ''}
+          <tr><td style="padding:6px 0">Zoom In</td><td style="text-align:right"><kbd style="background:#0f172a;padding:2px 8px;border-radius:4px;font-size:12px">${mod}+=</kbd></td></tr>
+          <tr><td style="padding:6px 0">Zoom Out</td><td style="text-align:right"><kbd style="background:#0f172a;padding:2px 8px;border-radius:4px;font-size:12px">${mod}+-</kbd></td></tr>
+          <tr><td style="padding:6px 0">Reset Zoom</td><td style="text-align:right"><kbd style="background:#0f172a;padding:2px 8px;border-radius:4px;font-size:12px">${mod}+0</kbd></td></tr>
+        </table>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const close = () => { overlay.style.opacity = '0'; overlay.style.transition = 'opacity .15s'; setTimeout(() => overlay.remove(), 150); };
+    overlay.querySelector('#closeShortcuts').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } });
   }
 
   /**
