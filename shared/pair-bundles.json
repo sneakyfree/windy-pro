@@ -1,0 +1,41 @@
+[
+  {
+    "id": "traveler-25",
+    "name": "Traveler's Pack",
+    "description": "Pick any 25 translation pairs — perfect for frequent travelers",
+    "pairCount": 25,
+    "price": 49,
+    "currency": "USD",
+    "selectable": true,
+    "icon": "🧳",
+    "color": "#22C55E",
+    "stripePriceId": "",
+    "revenueCatProductId": "windy_bundle_traveler_25"
+  },
+  {
+    "id": "polyglot-200",
+    "name": "Polyglot's Library",
+    "description": "Pick any 200 translation pairs — for the serious linguist",
+    "pairCount": 200,
+    "price": 149,
+    "currency": "USD",
+    "selectable": true,
+    "icon": "🗣️",
+    "color": "#3B82F6",
+    "stripePriceId": "",
+    "revenueCatProductId": "windy_bundle_polyglot_200"
+  },
+  {
+    "id": "marco-polo",
+    "name": "Marco Polo's Magic Box",
+    "description": "ALL 2,500 translation pairs — every language, yours forever",
+    "pairCount": 2500,
+    "price": 999,
+    "currency": "USD",
+    "selectable": false,
+    "icon": "🧭",
+    "color": "#F59E0B",
+    "stripePriceId": "",
+    "revenueCatProductId": "windy_bundle_marco_polo"
+  }
+]

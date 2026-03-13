@@ -22,7 +22,7 @@ class UpgradePanel {
                 name: 'Free',
                 price: '$0',
                 period: 'forever',
-                features: ['1 language', '3 engines', '2-min recordings', 'Local transcription'],
+                features: ['1 language', '3 engines', '2-min recordings', 'Local transcription', '1 offline translation engine'],
                 color: '#6B7280',
                 icon: '🌱'
             },
@@ -34,7 +34,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T60GeBXIOBasDQi4aitcq8O',
                 annualPriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg',
                 lifetimePriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg_life',
-                features: ['All 15 engines', '99 languages', '15-min recordings', 'Batch mode', 'LLM polish'],
+                features: ['All 15 engines', '99 languages', '15-min recordings', 'Batch mode', 'LLM polish', '5 offline translation engines'],
                 color: '#22C55E',
                 icon: '⚡'
             },
@@ -46,7 +46,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T5oZJBXIOBasDQijBW23Gow',
                 annualPriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7',
                 lifetimePriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7_life',
-                features: ['Everything in Pro', '60-min recordings', 'Real-time translation', '99 language pairs'],
+                features: ['Everything in Pro', '60-min recordings', 'Real-time translation', '99 language pairs', '25 offline translation engines'],
                 color: '#3B82F6',
                 icon: '🚀',
                 recommended: true
@@ -59,7 +59,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T60H8BXIOBasDQiy5eorTWR',
                 annualPriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG',
                 lifetimePriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG_life',
-                features: ['Everything in Ultra', 'Unlimited recordings', 'Text-to-speech', 'Medical/legal glossaries'],
+                features: ['Everything in Ultra', 'Unlimited recordings', 'Text-to-speech', 'Medical/legal glossaries', '100 offline translation engines'],
                 color: '#8B5CF6',
                 icon: '👑'
             }
@@ -160,9 +160,10 @@ class UpgradePanel {
             if (isCurrent) {
                 actionBtn = '<button class="upgrade-btn upgrade-btn-current" disabled>Current Plan</button>';
             } else if (isUpgrade) {
-                actionBtn = `<button class="upgrade-btn upgrade-btn-buy" data-price="${plan.annualPriceId}" data-tier="${plan.key}">Upgrade — ${plan.price}/yr →</button>`;
-                actionBtn += `<button class="upgrade-btn upgrade-btn-lifetime" data-price="${plan.lifetimePriceId}" data-tier="${plan.key}">💎 ${lifetimePrices[plan.key]} Lifetime</button>`;
-                actionBtn += `<button class="upgrade-btn upgrade-btn-alt" data-price="${plan.monthlyPriceId}" data-tier="${plan.key}" data-sub="true">or ${monthlyPrices[plan.key]}/mo</button>`;
+                actionBtn = `<button class="upgrade-btn upgrade-btn-lifetime upgrade-btn-lifetime-primary" data-price="${plan.lifetimePriceId}" data-tier="${plan.key}" style="background:#F59E0B;color:#000;font-size:15px;font-weight:700;padding:12px 20px;">💎 Own Forever — ${lifetimePrices[plan.key]}</button>`;
+                actionBtn += `<div class="upgrade-savings-math" style="font-size:11px;color:#9CA3AF;margin:4px 0 8px;text-align:center;">= 2 years of annual. After that, it's free forever.</div>`;
+                actionBtn += `<button class="upgrade-btn upgrade-btn-buy" data-price="${plan.annualPriceId}" data-tier="${plan.key}">${plan.price}/yr →</button>`;
+                actionBtn += `<button class="upgrade-btn upgrade-btn-alt" data-price="${plan.monthlyPriceId}" data-tier="${plan.key}" data-sub="true" style="font-size:11px;color:#6B7280;background:transparent;border:1px solid #374151;">or ${monthlyPrices[plan.key]}/mo</button>`;
             } else if (isDowngrade) {
                 actionBtn = '<button class="upgrade-btn upgrade-btn-current" disabled>✓ Included</button>';
             }
@@ -206,6 +207,10 @@ class UpgradePanel {
         </div>
         <div class="upgrade-status" id="upgradeStatus"></div>
         <p class="upgrade-guarantee">🔒 Secure payment via Stripe · 30-day money-back guarantee</p>
+        <div class="upgrade-marco-polo" style="margin-top:20px;padding:16px;background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid #F59E0B33;border-radius:12px;text-align:center;">
+          <div style="font-size:15px;margin-bottom:4px;">🧭 Want every language?</div>
+          <div style="font-size:13px;color:#D1D5DB;"><strong style="color:#F59E0B;">Marco Polo's Magic Box</strong> — 2,500 engines, $999, yours forever.</div>
+        </div>
       </div>`;
     }
 
