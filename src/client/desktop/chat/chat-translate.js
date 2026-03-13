@@ -74,6 +74,14 @@ class ChatTranslator {
     } catch (err) {
       log.error('translate', err);
       this._available = false;
+
+      // L5 TRIGGER 2a: Emit pair-needed event for upsell
+      if (this.onPairNeeded) {
+        try {
+          this.onPairNeeded({ srcLang, tgtLang, text });
+        } catch (_) { /* non-fatal */ }
+      }
+
       // Throw with specific type so UI can show "translation unavailable" badge
       const unavailableErr = new Error(`Translation unavailable: ${err.message}`);
       unavailableErr.translationUnavailable = true;

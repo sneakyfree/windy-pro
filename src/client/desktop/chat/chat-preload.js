@@ -93,4 +93,10 @@ contextBridge.exposeInMainWorld('windyChat', {
     ipcRenderer.removeAllListeners('pair-download-progress');
     ipcRenderer.on('pair-download-progress', (event, data) => callback(data));
   },
+
+  // L5: Pair-needed event for upsell triggers
+  onPairNeeded: (callback) => {
+    ipcRenderer.removeAllListeners('chat-pair-needed');
+    ipcRenderer.on('chat-pair-needed', (event, data) => callback(data));
+  },
 });

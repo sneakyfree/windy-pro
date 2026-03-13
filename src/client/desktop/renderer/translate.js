@@ -478,6 +478,9 @@ class TranslatePanel {
                 ⚠️ Text translation needs an AI key — add Groq or OpenAI key in Settings
             </span>
         `;
+
+        // L5 TRIGGER 1: Check if a local pair engine could help
+        this._showPairUpsellIfNeeded('en', targetLang);
     }
 
     /** Get human-readable language name from code */
@@ -555,6 +558,9 @@ class TranslatePanel {
                     Add a <strong>Groq</strong> (free) or <strong>OpenAI</strong> API key in Settings → Transcription Engine to enable text translation.
                 </span>
             `;
+
+            // L5 TRIGGER 1: Check if a local pair engine could help
+            this._showPairUpsellIfNeeded(this._sourceLang.value, this._targetLang.value);
         }
     }
 
@@ -792,4 +798,92 @@ class TranslatePanel {
             }
         }
     }
+
+    // ─── L5 TRIGGER 1: Pair-Not-Found Upsell ─────────────────────
+
+    /**
+     * Check if a local translation pair exists for the given language pair.
+     * If not, show an inline purchase card below the translation result.
+     */
+    async _showPairUpsellIfNeeded(srcLang, tgtLang) {
+        if (!srcLang || !tgtLang || srcLang === 'auto') return;
+
+        // Remove any existing upsell card
+        const existing = document.getElementById('translateUpsellCard');
+        if (existing) existing.remove();
+
+        try {
+            const api = window.windyAPI || {};
+            const [downloaded, catalogData] = await Promise.all([
+                api.pairListDownloaded?.() || [],
+                api.pairCatalog?.() || {}
+            ]);
+
+            // Normalize pair IDs to check: en-es, es-en
+            const pairId1 = `${srcLang}-${tgtLang}`;
+            const pairId2 = `${tgtLang}-${srcLang}`;
+            const hasLocal = downloaded.includes(pairId1) || downloaded.includes(pairId2);
+
+            if (hasLocal) return; // Already downloaded
+
+            // Find matching pair in catalog
+            const pairs = catalogData.pairs || {};
+            const catalogEntry = pairs[pairId1] || pairs[pairId2];
+            if (!catalogEntry) return; // Not available in catalog
+
+            const srcFlag = this._getLanguageFlag(srcLang);
+            const tgtFlag = this._getLanguageFlag(tgtLang);
+            const srcName = this._getLanguageName(srcLang);
+            const tgtName = this._getLanguageName(tgtLang);
+            const sizeMB = catalogEntry.sizeMB || '???';
+            const quality = catalogEntry.quality === 'production' ? '⭐⭐⭐ Good' : '⭐⭐ Functional';
+
+            const card = document.createElement('div');
+            card.className = 'upsell-card';
+            card.id = 'translateUpsellCard';
+            card.innerHTML = `
+                <button class="upsell-card-dismiss" title="Dismiss">×</button>
+                <div class="upsell-card-title">${tgtFlag} ${srcName.toUpperCase()}↔${tgtName} engine needed</div>
+                <div class="upsell-card-desc">
+                    Download once, translate offline forever · ${quality} · ${sizeMB} MB
+                </div>
+                <div class="upsell-card-actions">
+                    <button class="upsell-card-btn primary" id="upsellDownloadBtn">Download for $6.99</button>
+                    <button class="upsell-card-btn secondary" id="upsellCloudBtn">Use Cloud Instead</button>
+                </div>
+            `;
+
+            this._resultArea.appendChild(card);
+
+            // Dismiss
+            card.querySelector('.upsell-card-dismiss').addEventListener('click', () => card.remove());
+
+            // Download action
+            card.querySelector('#upsellDownloadBtn').addEventListener('click', async () => {
+                card.querySelector('#upsellDownloadBtn').textContent = '⏳ Downloading…';
+                card.querySelector('#upsellDownloadBtn').disabled = true;
+                try {
+                    const pairId = catalogEntry.id || pairId1;
+                    const result = await api.pairDownload(pairId);
+                    if (result?.success) {
+                        card.innerHTML = '<div class="upsell-card-title">✅ Engine downloaded! Retry your translation.</div>';
+                        setTimeout(() => card.remove(), 3000);
+                    } else {
+                        card.querySelector('#upsellDownloadBtn').textContent = 'Download for $6.99';
+                        card.querySelector('#upsellDownloadBtn').disabled = false;
+                    }
+                } catch (_) {
+                    card.querySelector('#upsellDownloadBtn').textContent = 'Download for $6.99';
+                    card.querySelector('#upsellDownloadBtn').disabled = false;
+                }
+            });
+
+            // Cloud fallback — just dismiss
+            card.querySelector('#upsellCloudBtn').addEventListener('click', () => card.remove());
+        } catch (err) {
+            // Non-fatal — upsell is optional
+            this._log.debug('_showPairUpsellIfNeeded', `upsell check failed: ${err.message}`);
+        }
+    }
 }
+

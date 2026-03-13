@@ -1404,6 +1404,13 @@ function getChatClient() {
     // Wire translation function into chat client
     chatClient.translateFn = (text, src, tgt) => chatTranslator.translate(text, src, tgt);
 
+    // L5 TRIGGER 2: Forward pair-needed events to chat renderer
+    chatTranslator.onPairNeeded = (data) => {
+      if (chatWindow && !chatWindow.isDestroyed()) {
+        chatWindow.webContents.send('chat-pair-needed', data);
+      }
+    };
+
     // Forward events to chat window
     chatClient.on('message', (msg) => {
       if (chatWindow && !chatWindow.isDestroyed()) {

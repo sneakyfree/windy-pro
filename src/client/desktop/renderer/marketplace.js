@@ -708,6 +708,18 @@ class MarketplacePanel {
   async _handleDownloadPair(pairId) {
     if (this.downloadedPairs.includes(pairId) || this.activeDownloads.has(pairId)) return;
 
+    // L5 TRIGGER 3: Check pair limit for current tier
+    const tierLimits = { free: 1, pro: 5, ultra: 25, max: 100 };
+    try {
+      const tierResult = await window.windyAPI.getCurrentTier?.();
+      const currentTier = tierResult?.tier || 'free';
+      const limit = tierLimits[currentTier] || tierLimits.free;
+      if (this.downloadedPairs.length >= limit) {
+        this._showPlanLimitDialog(currentTier, limit);
+        return;
+      }
+    } catch (_) { /* proceed if tier check fails */ }
+
     this.activeDownloads.set(pairId, { pairId, percent: 0, speed: 0, eta: -1 });
     this._updateDownloadUI(pairId);
 
@@ -804,4 +816,67 @@ class MarketplacePanel {
     div.textContent = str;
     return div.innerHTML;
   }
+
+  /* ═══════════════════════════════════════
+     L5 TRIGGER 3: Plan Limit Dialog
+     ═══════════════════════════════════════ */
+
+  _showPlanLimitDialog(currentTier, limit) {
+    // Remove existing overlay if any
+    const existing = document.getElementById('upsellPlanOverlay');
+    if (existing) existing.remove();
+
+    const tierNames = { free: 'Free', pro: 'Pro', ultra: 'Ultra', max: 'Max' };
+    const tierName = tierNames[currentTier] || 'Free';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'upsell-plan-overlay visible';
+    overlay.id = 'upsellPlanOverlay';
+    overlay.innerHTML = `
+      <div class="upsell-plan-dialog">
+        <div class="upsell-plan-icon">🔒</div>
+        <div class="upsell-plan-title">You've used all ${limit} engine${limit !== 1 ? 's' : ''} in your ${tierName} plan</div>
+        <div class="upsell-plan-desc">
+          Upgrade your plan for more offline translation engines, or buy just this engine individually.
+        </div>
+        <div class="upsell-card-actions" style="justify-content:center;">
+          <button class="upsell-card-btn primary" id="upsellUpgradeBtn">Upgrade Plan</button>
+          <button class="upsell-card-btn secondary" id="upsellBuySingleBtn">Buy Just This Engine $6.99</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Close on backdrop click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+
+    // Upgrade plan
+    overlay.querySelector('#upsellUpgradeBtn').addEventListener('click', () => {
+      overlay.remove();
+      // Open the main app settings/upgrade tab
+      if (window.windyAPI?.openCheckoutUrl) {
+        window.windyAPI.openCheckoutUrl({ upgrade: true });
+      }
+    });
+
+    // Buy single engine
+    overlay.querySelector('#upsellBuySingleBtn').addEventListener('click', () => {
+      overlay.remove();
+      // For now, show info that single purchase is coming
+      alert('Single engine purchase — $6.99\n\nPayment integration coming soon!');
+    });
+
+    // Escape to close
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        overlay.remove();
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    document.addEventListener('keydown', escHandler);
+  }
 }
+

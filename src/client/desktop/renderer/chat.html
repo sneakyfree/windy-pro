@@ -334,6 +334,13 @@
         updateConnectionBanner(status.state);
       });
 
+      // L5 TRIGGER 2b: Pair-needed upsell in chat
+      if (windyChat.onPairNeeded) {
+        windyChat.onPairNeeded((data) => {
+          showChatPairUpsell(data);
+        });
+      }
+
       // NOW attempt session resume (after listeners are ready)
       const session = await windyChat.getSession();
       if (session && session.success) {
@@ -957,6 +964,108 @@
       await windyChat.declineInvite(roomId);
       const el = document.getElementById('invite-' + escapeAttr(roomId));
       if (el) el.remove();
+    }
+
+    // ═══ L5 TRIGGER 2b: Pair-Needed Upsell in Chat ═══
+    const _langFlags = {
+      en: '🇺🇸', es: '🇪🇸', fr: '🇫🇷', de: '🇩🇪', it: '🇮🇹',
+      pt: '🇧🇷', zh: '🇨🇳', ja: '🇯🇵', ko: '🇰🇷', ar: '🇸🇦',
+      ru: '🇷🇺', pl: '🇵🇱', nl: '🇳🇱', sv: '🇸🇪', hi: '🇮🇳',
+      th: '🇹🇭', vi: '🇻🇳', tr: '🇹🇷', uk: '🇺🇦', da: '🇩🇰'
+    };
+    const _langNames = {
+      en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian',
+      pt: 'Portuguese', zh: 'Chinese', ja: 'Japanese', ko: 'Korean', ar: 'Arabic',
+      ru: 'Russian', pl: 'Polish', nl: 'Dutch', sv: 'Swedish', hi: 'Hindi',
+      th: 'Thai', vi: 'Vietnamese', tr: 'Turkish', uk: 'Ukrainian', da: 'Danish'
+    };
+
+    function showChatPairUpsell(data) {
+      if (!data || !data.srcLang || !data.tgtLang) return;
+      const { srcLang, tgtLang, text } = data;
+
+      // Don't show duplicate upsells
+      const existingCard = document.querySelector('.chat-upsell-inline');
+      if (existingCard) existingCard.remove();
+
+      const flag = _langFlags[srcLang] || '🌐';
+      const srcName = (_langNames[srcLang] || srcLang).toUpperCase();
+      const tgtName = _langNames[tgtLang] || tgtLang;
+      const pairId = `${srcLang}-${tgtLang}`;
+
+      const container = document.getElementById('chat-messages');
+      if (!container) return;
+
+      const card = document.createElement('div');
+      card.className = 'chat-upsell-inline';
+      card.style.cssText = `
+        position:relative; background:rgba(26,31,46,.95); border:1px solid rgba(245,158,11,.3);
+        border-left:3px solid #F59E0B; border-radius:10px; padding:12px 14px;
+        margin:6px 0 6px 8px; max-width:360px; animation:upsellSlide .3s ease;
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      `;
+      card.innerHTML = `
+        <div style="font-size:13px;font-weight:700;color:#F5F5F5;margin-bottom:4px;padding-right:20px;">
+          ${flag} Get EN↔${escapeHtml(tgtName)} to understand this message
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+          <button id="chatUpsellGetBtn" style="padding:6px 14px;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;
+            background:linear-gradient(135deg,#F59E0B,#D97706);color:#0F1219;transition:transform .1s;">
+            Get for $6.99
+          </button>
+          <button id="chatUpsellCloudBtn" style="padding:6px 14px;border:1px solid rgba(255,255,255,.1);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;
+            background:rgba(255,255,255,.06);color:#94A3B8;transition:background .15s;">
+            Translate once via cloud
+          </button>
+        </div>
+        <button style="position:absolute;top:6px;right:8px;background:none;border:none;color:#64748B;font-size:14px;cursor:pointer;padding:2px 4px;" title="Dismiss"
+          onclick="this.parentElement.remove()">×</button>
+      `;
+
+      container.appendChild(card);
+      scrollToBottom();
+
+      // Get (download) action
+      card.querySelector('#chatUpsellGetBtn').addEventListener('click', async () => {
+        const btn = card.querySelector('#chatUpsellGetBtn');
+        btn.textContent = '⏳ Downloading…';
+        btn.disabled = true;
+        try {
+          const result = await windyChat.pairDownload(pairId);
+          if (result?.success) {
+            card.innerHTML = '<div style="font-size:13px;color:#22C55E;font-weight:600;padding:4px;">✅ Engine downloaded! Translating…</div>';
+            // Auto-translate the message in place
+            if (text) {
+              try {
+                const translated = await windyChat.getTranslation(text, srcLang, tgtLang);
+                if (translated) {
+                  // Find the last message bubble and append translation
+                  const lastBubble = container.querySelector('.message-group:last-of-type .message-bubble');
+                  if (lastBubble) {
+                    const translationDiv = document.createElement('div');
+                    translationDiv.className = 'message-translation';
+                    translationDiv.innerHTML = `
+                      <span class="lang-badge">${escapeHtml(srcLang.toUpperCase())}</span>
+                      <span class="translation-text" dir="auto">${escapeHtml(translated)}</span>
+                    `;
+                    lastBubble.insertBefore(translationDiv, lastBubble.querySelector('.message-time'));
+                  }
+                }
+              } catch (_) { /* translation attempt is best-effort */ }
+            }
+            setTimeout(() => card.remove(), 2000);
+          } else {
+            btn.textContent = 'Get for $6.99';
+            btn.disabled = false;
+          }
+        } catch (_) {
+          btn.textContent = 'Get for $6.99';
+          btn.disabled = false;
+        }
+      });
+
+      // Cloud fallback — dismiss
+      card.querySelector('#chatUpsellCloudBtn').addEventListener('click', () => card.remove());
     }
 
     // ═══ Keyboard: Escape to close panels ═══
