@@ -19,6 +19,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
+const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 
@@ -30,6 +31,25 @@ const SYNAPSE_URL = process.env.SYNAPSE_URL || 'http://localhost:8008';
 const SYNAPSE_ADMIN_URL = process.env.SYNAPSE_ADMIN_URL || `${SYNAPSE_URL}/_synapse/admin`;
 const SYNAPSE_REGISTRATION_SECRET = process.env.SYNAPSE_REGISTRATION_SECRET || '';
 const SYNAPSE_SERVER_NAME = process.env.SYNAPSE_SERVER_NAME || 'chat.windypro.com';
+
+// ── Per-route rate limiter for provisioning (login-like, sensitive) ──
+const provisionLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many provisioning requests. Try again in a minute.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ── Input validation helpers ──
+
+function stripHtml(str) {
+  return str.replace(/<[^>]*>/g, '');
+}
+
+function isValidUserId(val) {
+  return typeof val === 'string' && val.length > 0 && val.length <= 255 && /^[a-zA-Z0-9_-]+$/.test(val);
+}
 
 // ── Helpers ──
 
@@ -84,7 +104,7 @@ async function provisionMatrixAccount(localpart, displayName) {
   });
 
   if (!nonceRes.ok) {
-    throw new Error(`Synapse nonce request failed: ${nonceRes.status} ${nonceRes.statusText}`);
+    throw new Error(`Synapse nonce request failed: ${nonceRes.status}`);
   }
 
   const { nonce } = await nonceRes.json();
@@ -110,8 +130,7 @@ async function provisionMatrixAccount(localpart, displayName) {
   });
 
   if (!regRes.ok) {
-    const errBody = await regRes.text();
-    throw new Error(`Synapse registration failed: ${regRes.status} — ${errBody}`);
+    throw new Error(`Synapse registration failed: ${regRes.status}`);
   }
 
   const result = await regRes.json();
@@ -126,26 +145,35 @@ async function provisionMatrixAccount(localpart, displayName) {
 
 // ── POST /api/v1/chat/provision ──
 
-router.post('/', async (req, res) => {
+router.post('/', provisionLimiter, async (req, res) => {
   try {
     const { chatUserId, displayName, verificationToken } = req.body;
 
-    if (!chatUserId || !displayName) {
+    // Input validation
+    if (!chatUserId || !isValidUserId(chatUserId)) {
       return res.status(400).json({
-        error: 'chatUserId and displayName are required',
+        error: 'chatUserId is required, alphanumeric + hyphens/underscores, max 255 chars',
         hint: 'Complete profile setup (K2.2) first',
       });
     }
 
-    if (!verificationToken) {
+    if (!displayName || typeof displayName !== 'string' || displayName.length > 100) {
+      return res.status(400).json({
+        error: 'displayName is required, max 100 characters',
+      });
+    }
+
+    if (!verificationToken || typeof verificationToken !== 'string' || verificationToken.length > 255) {
       return res.status(401).json({
         error: 'Verification required',
         hint: 'Complete phone/email verification (K2.1) first',
       });
     }
 
+    const sanitizedDisplayName = stripHtml(displayName);
+
     // Generate Matrix localpart from display name
-    const localpart = displayNameToLocalpart(displayName);
+    const localpart = displayNameToLocalpart(sanitizedDisplayName);
     const matrixUserId = `@${localpart}:${SYNAPSE_SERVER_NAME}`;
 
     let matrixCredentials;
@@ -153,12 +181,11 @@ router.post('/', async (req, res) => {
     if (SYNAPSE_REGISTRATION_SECRET) {
       // Production: provision via Synapse admin API
       try {
-        matrixCredentials = await provisionMatrixAccount(localpart, displayName);
+        matrixCredentials = await provisionMatrixAccount(localpart, sanitizedDisplayName);
       } catch (err) {
         console.error('Matrix provisioning failed:', err.message);
         return res.status(502).json({
           error: 'Failed to provision Matrix account',
-          detail: err.message,
           hint: 'Is the Synapse homeserver running? Check deploy/synapse/',
         });
       }
@@ -183,7 +210,7 @@ router.post('/', async (req, res) => {
       provisionedAt: new Date().toISOString(),
     });
 
-    console.log(`🏠 Matrix account provisioned: ${displayName} → ${matrixCredentials.matrixUserId}`);
+    console.log(`🏠 Matrix account provisioned: ${sanitizedDisplayName} → ${matrixCredentials.matrixUserId}`);
 
     res.status(201).json({
       success: true,
@@ -196,57 +223,66 @@ router.post('/', async (req, res) => {
           matrixProvisioned: true,
         },
       },
-      message: `Welcome to Windy Chat, ${displayName}! Your account is ready.`,
+      message: `Welcome to Windy Chat, ${sanitizedDisplayName}! Your account is ready.`,
     });
 
   } catch (err) {
     console.error('Provision error:', err);
-    res.status(500).json({ error: 'Account provisioning failed: ' + err.message });
+    res.status(500).json({ error: 'Account provisioning failed' });
   }
 });
 
 // ── GET /api/v1/chat/onboarding/status ──
 
 router.get('/onboarding/status', (req, res) => {
-  const { chatUserId } = req.query;
+  try {
+    const { chatUserId } = req.query;
 
-  if (!chatUserId) {
-    return res.status(400).json({ error: 'chatUserId query param required' });
-  }
+    if (!chatUserId) {
+      return res.status(400).json({ error: 'chatUserId query param required' });
+    }
 
-  const state = onboardingState.get(chatUserId);
+    if (!isValidUserId(chatUserId)) {
+      return res.status(400).json({ error: 'chatUserId must be alphanumeric + hyphens/underscores, max 255 chars' });
+    }
 
-  if (!state) {
-    return res.json({
+    const state = onboardingState.get(chatUserId);
+
+    if (!state) {
+      return res.json({
+        chatUserId,
+        complete: false,
+        steps: {
+          verified: false,
+          profileSetup: false,
+          matrixProvisioned: false,
+        },
+        nextStep: 'verify',
+        message: 'Start by verifying your phone or email',
+      });
+    }
+
+    const nextStep = !state.verified ? 'verify'
+      : !state.profileSetup ? 'profile'
+      : !state.matrixProvisioned ? 'provision'
+      : null;
+
+    res.json({
       chatUserId,
-      complete: false,
+      complete: state.matrixProvisioned,
+      matrixUserId: state.matrixUserId || null,
       steps: {
-        verified: false,
-        profileSetup: false,
-        matrixProvisioned: false,
+        verified: state.verified,
+        profileSetup: state.profileSetup,
+        matrixProvisioned: state.matrixProvisioned,
       },
-      nextStep: 'verify',
-      message: 'Start by verifying your phone or email',
+      nextStep,
+      provisionedAt: state.provisionedAt || null,
     });
+  } catch (err) {
+    console.error('Onboarding status error:', err);
+    res.status(500).json({ error: 'Failed to check onboarding status' });
   }
-
-  const nextStep = !state.verified ? 'verify'
-    : !state.profileSetup ? 'profile'
-    : !state.matrixProvisioned ? 'provision'
-    : null;
-
-  res.json({
-    chatUserId,
-    complete: state.matrixProvisioned,
-    matrixUserId: state.matrixUserId || null,
-    steps: {
-      verified: state.verified,
-      profileSetup: state.profileSetup,
-      matrixProvisioned: state.matrixProvisioned,
-    },
-    nextStep,
-    provisionedAt: state.provisionedAt || null,
-  });
 });
 
 module.exports = router;

@@ -9,6 +9,7 @@
 ## Prerequisites:
 ##   All 4 services running on default ports (8101-8104)
 ##   Or: docker compose -f deploy/docker-compose.chat.yml up -d
+##   Set CHAT_API_TOKEN env var (must match the token configured in services)
 ##
 
 set -euo pipefail
@@ -18,6 +19,10 @@ ONBOARDING_URL="${ONBOARDING_URL:-http://localhost:8101}"
 DIRECTORY_URL="${DIRECTORY_URL:-http://localhost:8102}"
 PUSH_URL="${PUSH_URL:-http://localhost:8103}"
 BACKUP_URL="${BACKUP_URL:-http://localhost:8104}"
+
+# Auth token — must match CHAT_API_TOKEN env var on services
+AUTH_TOKEN="${CHAT_API_TOKEN:-test-token}"
+AUTH_HEADER="Authorization: Bearer ${AUTH_TOKEN}"
 
 PASS=0
 FAIL=0
@@ -66,18 +71,27 @@ http_status() {
 }
 
 http_get() {
-  curl -s "$@" 2>/dev/null || echo "{}"
+  curl -s -H "${AUTH_HEADER}" "$@" 2>/dev/null || echo "{}"
 }
 
 http_post() {
-  curl -s -X POST -H "Content-Type: application/json" "$@" 2>/dev/null || echo "{}"
+  curl -s -X POST -H "Content-Type: application/json" -H "${AUTH_HEADER}" "$@" 2>/dev/null || echo "{}"
 }
 
 # ══════════════════════════════════════════════════════════
 echo -e "\n${CYAN}═══ Windy Chat Integration Tests ═══${NC}\n"
 
+# ── 0. Auth Check ──
+echo -e "${YELLOW}▸ Auth Validation${NC}"
+# Health endpoints should work WITHOUT auth
+assert_status "Health (no auth)" "200" "$(http_status "${ONBOARDING_URL}/health")"
+# API endpoints should REJECT requests without auth
+assert_status "API rejects no auth" "401" "$(http_status -X POST -H 'Content-Type: application/json' -d '{}' "${ONBOARDING_URL}/api/v1/chat/verify/send")"
+# API endpoints should REJECT requests with bad auth
+assert_status "API rejects bad auth" "401" "$(http_status -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer wrong-token' -d '{}' "${ONBOARDING_URL}/api/v1/chat/verify/send")"
+
 # ── 1. Health Checks ──
-echo -e "${YELLOW}▸ Health Checks${NC}"
+echo -e "\n${YELLOW}▸ Health Checks${NC}"
 assert_status "Onboarding health" "200" "$(http_status "${ONBOARDING_URL}/health")"
 assert_status "Directory health"  "200" "$(http_status "${DIRECTORY_URL}/health")"
 assert_status "Push health"       "200" "$(http_status "${PUSH_URL}/health")"
@@ -91,11 +105,11 @@ VERIFY_RESP=$(http_post -d '{"type":"email","identifier":"test@example.com"}' "$
 assert_json_field "Send OTP" "$VERIFY_RESP" "success" "True"
 
 # Check OTP status
-assert_status "Verify status" "200" "$(http_status "${ONBOARDING_URL}/api/v1/chat/verify/status?identifier=test@example.com")"
+assert_status "Verify status" "200" "$(http_status -H "${AUTH_HEADER}" "${ONBOARDING_URL}/api/v1/chat/verify/status?identifier=test@example.com")"
 
 # Bad check (wrong code)
 BAD_CHECK=$(http_post -d '{"identifier":"test@example.com","code":"000000","type":"email"}' "${ONBOARDING_URL}/api/v1/chat/verify/check")
-assert_status "Bad OTP rejected" "400" "$(http_status -X POST -H 'Content-Type: application/json' -d '{"identifier":"test@example.com","code":"000000","type":"email"}' "${ONBOARDING_URL}/api/v1/chat/verify/check")"
+assert_status "Bad OTP rejected" "400" "$(http_status -X POST -H 'Content-Type: application/json' -H "${AUTH_HEADER}" -d '{"identifier":"test@example.com","code":"000000","type":"email"}' "${ONBOARDING_URL}/api/v1/chat/verify/check")"
 
 echo -e "\n${YELLOW}▸ K2: Onboarding — Profile${NC}"
 
@@ -108,8 +122,7 @@ PROFANE_RESP=$(http_get "${ONBOARDING_URL}/api/v1/chat/profile/check-name?name=a
 assert_json_field "Profanity blocked" "$PROFANE_RESP" "available" "False"
 
 # Create profile
-# Stub mode: server accepts any token → 201. In production with real verification, invalid tokens return 400.
-assert_status "Profile created" "201" "$(http_status -X POST -H 'Content-Type: application/json' -d '{"verificationToken":"fake-token","displayName":"IntegTestUser","languages":["en","es"]}' "${ONBOARDING_URL}/api/v1/chat/profile/setup")"
+assert_status "Profile created" "201" "$(http_status -X POST -H 'Content-Type: application/json' -H "${AUTH_HEADER}" -d '{"verificationToken":"fake-token","displayName":"IntegTestUser","languages":["en","es"]}' "${ONBOARDING_URL}/api/v1/chat/profile/setup")"
 
 echo -e "\n${YELLOW}▸ K2: Onboarding — QR Pair${NC}"
 
@@ -157,7 +170,7 @@ LOOKUP_RESP=$(http_post -d '{"hashes":["0000000000000000000000000000000000000000
 assert_json_field "Lookup works" "$LOOKUP_RESP" "submitted" "1"
 
 # Stats
-assert_status "Directory stats" "200" "$(http_status "${DIRECTORY_URL}/api/v1/chat/directory/stats")"
+assert_status "Directory stats" "200" "$(http_status -H "${AUTH_HEADER}" "${DIRECTORY_URL}/api/v1/chat/directory/stats")"
 
 echo -e "\n${YELLOW}▸ K3: Directory — Search & Invite${NC}"
 
@@ -195,9 +208,9 @@ assert_json_field "Room muted" "$MUTE_RESP" "success" "True"
 UNMUTE_RESP=$(http_post -d '{"userId":"user_123","roomId":"!room:chat.windypro.com"}' "${PUSH_URL}/api/v1/chat/push/unmute")
 assert_json_field "Room unmuted" "$UNMUTE_RESP" "success" "True"
 
-# Matrix push notify
-NOTIFY_RESP=$(http_post -d '{"notification":{"room_id":"!room:test","event_id":"$ev1","sender":"@alice:test","sender_display_name":"Alice","type":"m.room.message","devices":[{"pushkey":"test-token-abc","app_id":"com.windypro.chat.android"}],"counts":{"unread":3}}}' "${PUSH_URL}/_matrix/push/v1/notify")
-assert_status "Push notify" "200" "$(http_status -X POST -H 'Content-Type: application/json' -d '{"notification":{"room_id":"!room:test","event_id":"$ev1","sender":"@alice:test","devices":[{"pushkey":"test-token-abc","app_id":"com.windypro.chat.android"}],"counts":{"unread":3}}}' "${PUSH_URL}/_matrix/push/v1/notify")"
+# Matrix push notify (no auth — server-to-server)
+NOTIFY_RESP=$(curl -s -X POST -H 'Content-Type: application/json' -d '{"notification":{"room_id":"!room:test","event_id":"$ev1","sender":"@alice:test","sender_display_name":"Alice","type":"m.room.message","devices":[{"pushkey":"test-token-abc","app_id":"com.windypro.chat.android"}],"counts":{"unread":3}}}' "${PUSH_URL}/_matrix/push/v1/notify" 2>/dev/null || echo "{}")
+assert_status "Push notify" "200" "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"notification":{"room_id":"!room:test","event_id":"$ev1","sender":"@alice:test","devices":[{"pushkey":"test-token-abc","app_id":"com.windypro.chat.android"}],"counts":{"unread":3}}}' "${PUSH_URL}/_matrix/push/v1/notify" 2>/dev/null || echo "000")"
 
 # ── 5. K8: Backup ──
 echo -e "\n${YELLOW}▸ K8: Backup${NC}"

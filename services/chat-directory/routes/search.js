@@ -53,6 +53,24 @@ const inviteLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// ── Input validation helpers ──
+
+function isValidUserId(val) {
+  return typeof val === 'string' && val.length > 0 && val.length <= 255 && /^[a-zA-Z0-9_-]+$/.test(val);
+}
+
+function isValidEmail(val) {
+  return typeof val === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+}
+
+function isValidPhone(val) {
+  return typeof val === 'string' && val.length <= 20 && /^\+?[0-9\s\-()]+$/.test(val);
+}
+
+function stripHtml(str) {
+  return str.replace(/<[^>]*>/g, '');
+}
+
 // ── Helpers ──
 
 /**
@@ -108,12 +126,38 @@ router.post('/register', (req, res) => {
   try {
     const { userId, displayName, email, phone, languages, avatarUrl, searchable } = req.body;
 
-    if (!userId || !displayName) {
-      return res.status(400).json({ error: 'userId and displayName are required' });
+    if (!userId || !isValidUserId(userId)) {
+      return res.status(400).json({ error: 'userId is required, alphanumeric + hyphens/underscores, max 255 chars' });
+    }
+
+    if (!displayName || typeof displayName !== 'string' || displayName.length > 100) {
+      return res.status(400).json({ error: 'displayName is required, max 100 characters' });
+    }
+
+    const sanitizedDisplayName = stripHtml(displayName);
+
+    // Validate optional email
+    if (email !== undefined && email !== null && !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Validate optional phone
+    if (phone !== undefined && phone !== null && !isValidPhone(phone)) {
+      return res.status(400).json({ error: 'Invalid phone format, max 20 chars, digits + country code' });
+    }
+
+    // Validate languages
+    if (languages !== undefined && !Array.isArray(languages)) {
+      return res.status(400).json({ error: 'languages must be an array' });
+    }
+
+    // Validate avatarUrl
+    if (avatarUrl !== undefined && avatarUrl !== null && (typeof avatarUrl !== 'string' || avatarUrl.length > 2048)) {
+      return res.status(400).json({ error: 'avatarUrl must be a string, max 2048 characters' });
     }
 
     userDirectory.set(userId, {
-      displayName,
+      displayName: sanitizedDisplayName,
       email: email ? email.toLowerCase().trim() : null,
       phone: phone || null,
       languages: languages || ['en'],
@@ -122,7 +166,7 @@ router.post('/register', (req, res) => {
       registeredAt: new Date().toISOString(),
     });
 
-    console.log(`📇 Registered in directory: "${displayName}" (searchable: ${searchable !== false})`);
+    console.log(`📇 Registered in directory: "${sanitizedDisplayName}" (searchable: ${searchable !== false})`);
 
     res.status(201).json({
       success: true,
@@ -132,7 +176,7 @@ router.post('/register', (req, res) => {
 
   } catch (err) {
     console.error('Directory register error:', err);
-    res.status(500).json({ error: 'Registration failed: ' + err.message });
+    res.status(500).json({ error: 'Registration failed' });
   }
 });
 
@@ -149,7 +193,11 @@ router.get('/search', searchLimiter, (req, res) => {
       });
     }
 
-    const query = q.trim();
+    if (q.length > 100) {
+      return res.status(400).json({ error: 'Query must be 100 characters or fewer' });
+    }
+
+    const query = stripHtml(q.trim());
     const results = [];
 
     for (const [userId, user] of userDirectory) {
@@ -219,7 +267,7 @@ router.get('/search', searchLimiter, (req, res) => {
 
   } catch (err) {
     console.error('Search error:', err);
-    res.status(500).json({ error: 'Search failed: ' + err.message });
+    res.status(500).json({ error: 'Search failed' });
   }
 });
 
@@ -229,14 +277,30 @@ router.post('/invite', inviteLimiter, async (req, res) => {
   try {
     const { fromUserId, fromDisplayName, type, identifier } = req.body;
 
-    if (!fromUserId || !type || !identifier) {
-      return res.status(400).json({
-        error: 'fromUserId, type ("sms" or "email"), and identifier are required',
-      });
+    if (!fromUserId || !isValidUserId(fromUserId)) {
+      return res.status(400).json({ error: 'fromUserId is required, alphanumeric + hyphens/underscores, max 255 chars' });
     }
 
-    if (!['sms', 'email'].includes(type)) {
+    if (!type || !['sms', 'email'].includes(type)) {
       return res.status(400).json({ error: 'type must be "sms" or "email"' });
+    }
+
+    if (!identifier || typeof identifier !== 'string' || identifier.length > 255) {
+      return res.status(400).json({ error: 'identifier is required, max 255 characters' });
+    }
+
+    // Validate identifier format based on type
+    if (type === 'email' && !isValidEmail(identifier)) {
+      return res.status(400).json({ error: 'Invalid email format for invite' });
+    }
+
+    if (type === 'sms' && !isValidPhone(identifier)) {
+      return res.status(400).json({ error: 'Invalid phone format for SMS invite' });
+    }
+
+    // Validate optional fromDisplayName
+    if (fromDisplayName !== undefined && (typeof fromDisplayName !== 'string' || fromDisplayName.length > 100)) {
+      return res.status(400).json({ error: 'fromDisplayName must be a string, max 100 characters' });
     }
 
     // Check daily invite limit
@@ -251,7 +315,7 @@ router.post('/invite', inviteLimiter, async (req, res) => {
     // Generate referral deep link
     const referralCode = uuidv4().slice(0, 8);
     const deepLink = `https://windypro.com/chat/join?ref=${referralCode}`;
-    const senderName = fromDisplayName || 'Someone';
+    const senderName = fromDisplayName ? stripHtml(fromDisplayName) : 'Someone';
 
     if (type === 'sms') {
       // Send SMS invite
@@ -328,7 +392,7 @@ router.post('/invite', inviteLimiter, async (req, res) => {
 
   } catch (err) {
     console.error('Invite error:', err);
-    res.status(500).json({ error: 'Invite failed: ' + err.message });
+    res.status(500).json({ error: 'Invite failed' });
   }
 });
 

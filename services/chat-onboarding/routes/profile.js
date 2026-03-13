@@ -32,6 +32,12 @@ const SUPPORTED_LANGUAGES = new Set([
   'sk', 'bg', 'hr', 'sr', 'sl', 'et', 'lv', 'lt', 'fil', 'sw',
 ]);
 
+// ── Input validation helpers ──
+
+function stripHtml(str) {
+  return str.replace(/<[^>]*>/g, '');
+}
+
 // ── Helpers ──
 
 /**
@@ -43,7 +49,7 @@ function validateDisplayName(name) {
     return { valid: false, error: 'Display name is required' };
   }
 
-  const trimmed = name.trim();
+  const trimmed = stripHtml(name).trim();
 
   if (trimmed.length < 2) {
     return { valid: false, error: 'Display name must be at least 2 characters' };
@@ -110,20 +116,30 @@ function generateAlternatives(name) {
 // ── GET /api/v1/chat/profile/check-name ──
 
 router.get('/check-name', (req, res) => {
-  const { name } = req.query;
+  try {
+    const { name } = req.query;
 
-  if (!name) {
-    return res.status(400).json({ error: 'name query parameter is required' });
+    if (!name) {
+      return res.status(400).json({ error: 'name query parameter is required' });
+    }
+
+    if (typeof name !== 'string' || name.length > 100) {
+      return res.status(400).json({ error: 'name must be a string, max 100 characters' });
+    }
+
+    const sanitized = stripHtml(name);
+    const result = validateDisplayName(sanitized);
+
+    res.json({
+      name: sanitized,
+      available: result.valid,
+      error: result.error || null,
+      suggestions: result.suggestions || [],
+    });
+  } catch (err) {
+    console.error('Check name error:', err);
+    res.status(500).json({ error: 'Failed to check name availability' });
   }
-
-  const result = validateDisplayName(name);
-
-  res.json({
-    name,
-    available: result.valid,
-    error: result.error || null,
-    suggestions: result.suggestions || [],
-  });
 });
 
 // ── POST /api/v1/chat/profile/setup ──
@@ -140,8 +156,21 @@ router.post('/setup', async (req, res) => {
       });
     }
 
-    // Validate display name
-    const nameResult = validateDisplayName(displayName);
+    if (typeof verificationToken !== 'string' || verificationToken.length > 255) {
+      return res.status(400).json({ error: 'verificationToken must be a string, max 255 chars' });
+    }
+
+    // Validate display name — strip HTML first
+    if (!displayName || typeof displayName !== 'string') {
+      return res.status(400).json({ error: 'displayName is required and must be a string' });
+    }
+
+    if (displayName.length > 100) {
+      return res.status(400).json({ error: 'displayName must be 100 characters or fewer' });
+    }
+
+    const sanitizedName = stripHtml(displayName);
+    const nameResult = validateDisplayName(sanitizedName);
     if (!nameResult.valid) {
       return res.status(400).json({
         error: nameResult.error,
@@ -151,14 +180,25 @@ router.post('/setup', async (req, res) => {
     }
 
     // Validate languages
+    if (languages !== undefined && !Array.isArray(languages)) {
+      return res.status(400).json({ error: 'languages must be an array' });
+    }
+
     const primaryLanguage = languages && languages.length > 0 ? languages[0] : 'en';
-    const validLanguages = (languages || ['en']).filter(l => SUPPORTED_LANGUAGES.has(l));
+    const validLanguages = (languages || ['en']).filter(l => typeof l === 'string' && SUPPORTED_LANGUAGES.has(l));
     if (validLanguages.length === 0) {
       return res.status(400).json({
         error: 'At least one valid language is required',
         supportedLanguages: [...SUPPORTED_LANGUAGES].sort(),
         field: 'languages',
       });
+    }
+
+    // Validate avatarUrl if provided
+    if (avatarUrl !== undefined && avatarUrl !== null) {
+      if (typeof avatarUrl !== 'string' || avatarUrl.length > 2048) {
+        return res.status(400).json({ error: 'avatarUrl must be a string, max 2048 characters' });
+      }
     }
 
     // Create profile
@@ -197,21 +237,32 @@ router.post('/setup', async (req, res) => {
 
   } catch (err) {
     console.error('Profile setup error:', err);
-    res.status(500).json({ error: 'Profile setup failed: ' + err.message });
+    res.status(500).json({ error: 'Profile setup failed' });
   }
 });
 
 // ── GET /api/v1/chat/profile/:userId ──
 
 router.get('/:userId', (req, res) => {
-  const { userId } = req.params;
-  const profile = userProfiles.get(userId);
+  try {
+    const { userId } = req.params;
 
-  if (!profile) {
-    return res.status(404).json({ error: 'Profile not found' });
+    // Validate userId
+    if (!userId || typeof userId !== 'string' || userId.length > 255 || !/^[a-zA-Z0-9_-]+$/.test(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format' });
+    }
+
+    const profile = userProfiles.get(userId);
+
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    res.json({ profile });
+  } catch (err) {
+    console.error('Profile get error:', err);
+    res.status(500).json({ error: 'Failed to retrieve profile' });
   }
-
-  res.json({ profile });
 });
 
 module.exports = router;

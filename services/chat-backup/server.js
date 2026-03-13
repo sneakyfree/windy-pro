@@ -14,14 +14,61 @@
 
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const PORT = process.env.PORT || 8104;
 
-app.use(cors());
+// ── CORS — explicit origin whitelist ──
+const ALLOWED_ORIGINS = [
+  'https://windypro.thewindstorm.uk',
+  'https://chat.windypro.com',
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error('CORS: origin not allowed'));
+  },
+  credentials: true,
+}));
+
 app.use(express.json({ limit: '1mb' }));
+
+// ── Auth middleware — Bearer token validation ──
+const CHAT_API_TOKEN = process.env.CHAT_API_TOKEN || '';
+
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  }
+  const token = authHeader.slice(7);
+  if (!CHAT_API_TOKEN || token !== CHAT_API_TOKEN) {
+    return res.status(401).json({ error: 'Invalid API token' });
+  }
+  next();
+}
+
+// ── Global rate limiter ──
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: 'Too many requests, slow down' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(globalLimiter);
+
+// ── Input validation helpers ──
+
+function isValidUserId(val) {
+  return typeof val === 'string' && val.length > 0 && val.length <= 255 && /^[a-zA-Z0-9_-]+$/.test(val);
+}
 
 // ── In-memory stores (replace with DB in production) ──
 const backupRegistry = new Map(); // userId → [{ version, timestamp, size, path }]
@@ -95,20 +142,40 @@ function decryptBackup(encryptedData, password) {
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }
 
-// ── POST /api/v1/chat/backup/create ──
+// ── Health check (no auth required) ──
+app.get('/health', (_req, res) => {
+  res.json({
+    service: 'windy-chat-backup',
+    status: 'ok',
+    version: '1.0.0',
+    r2: !!s3Client,
+    timestamp: new Date().toISOString(),
+  });
+});
 
-app.post('/api/v1/chat/backup/create', async (req, res) => {
+// ── POST /api/v1/chat/backup/create (auth required) ──
+
+app.post('/api/v1/chat/backup/create', authMiddleware, async (req, res) => {
   try {
     const { userId, encryptedData, metadata } = req.body;
 
-    if (!userId || !encryptedData) {
-      return res.status(400).json({ error: 'userId and encryptedData required' });
+    if (!userId || !isValidUserId(userId)) {
+      return res.status(400).json({ error: 'userId is required, alphanumeric + hyphens/underscores, max 255 chars' });
     }
 
-    // Validate size (max 500MB)
+    if (!encryptedData || typeof encryptedData !== 'string') {
+      return res.status(400).json({ error: 'encryptedData is required and must be a base64 string' });
+    }
+
+    // Validate size (express.json limit is 1mb, also check decoded size)
     const dataSize = Buffer.byteLength(encryptedData, 'base64');
     if (dataSize > 500 * 1024 * 1024) {
       return res.status(413).json({ error: 'Backup too large. Max 500MB.' });
+    }
+
+    // Validate metadata if provided
+    if (metadata !== undefined && (typeof metadata !== 'object' || Array.isArray(metadata))) {
+      return res.status(400).json({ error: 'metadata must be an object' });
     }
 
     const backupId = uuidv4();
@@ -163,40 +230,52 @@ app.post('/api/v1/chat/backup/create', async (req, res) => {
 
   } catch (err) {
     console.error('Backup create error:', err);
-    res.status(500).json({ error: 'Backup failed: ' + err.message });
+    res.status(500).json({ error: 'Backup failed' });
   }
 });
 
-// ── GET /api/v1/chat/backup/list ──
+// ── GET /api/v1/chat/backup/list (auth required) ──
 
-app.get('/api/v1/chat/backup/list', (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'userId required' });
+app.get('/api/v1/chat/backup/list', authMiddleware, (req, res) => {
+  try {
+    const { userId } = req.query;
 
-  const backups = backupRegistry.get(userId) || [];
+    if (!userId || !isValidUserId(userId)) {
+      return res.status(400).json({ error: 'userId is required, alphanumeric + hyphens/underscores, max 255 chars' });
+    }
 
-  res.json({
-    userId,
-    backups: backups.map(b => ({
-      id: b.id,
-      timestamp: b.timestamp,
-      size: b.size,
-      sizeFormatted: formatSize(b.size),
-      metadata: b.metadata,
-    })),
-    count: backups.length,
-    maxBackups: 7,
-  });
+    const backups = backupRegistry.get(userId) || [];
+
+    res.json({
+      userId,
+      backups: backups.map(b => ({
+        id: b.id,
+        timestamp: b.timestamp,
+        size: b.size,
+        sizeFormatted: formatSize(b.size),
+        metadata: b.metadata,
+      })),
+      count: backups.length,
+      maxBackups: 7,
+    });
+  } catch (err) {
+    console.error('Backup list error:', err);
+    res.status(500).json({ error: 'Failed to list backups' });
+  }
 });
 
-// ── POST /api/v1/chat/backup/restore ──
+// ── POST /api/v1/chat/backup/restore (auth required) ──
 
-app.post('/api/v1/chat/backup/restore', async (req, res) => {
+app.post('/api/v1/chat/backup/restore', authMiddleware, async (req, res) => {
   try {
     const { userId, backupId } = req.body;
 
-    if (!userId || !backupId) {
-      return res.status(400).json({ error: 'userId and backupId required' });
+    if (!userId || !isValidUserId(userId)) {
+      return res.status(400).json({ error: 'userId is required, alphanumeric + hyphens/underscores, max 255 chars' });
+    }
+
+    if (!backupId || typeof backupId !== 'string' || backupId.length > 255) {
+      return res.status(400).json({ error: 'backupId is required, max 255 characters' });
     }
 
     const userBackups = backupRegistry.get(userId) || [];
@@ -233,43 +312,47 @@ app.post('/api/v1/chat/backup/restore', async (req, res) => {
 
   } catch (err) {
     console.error('Backup restore error:', err);
-    res.status(500).json({ error: 'Restore failed: ' + err.message });
+    res.status(500).json({ error: 'Restore failed' });
   }
 });
 
-// ── DELETE /api/v1/chat/backup/delete ──
+// ── DELETE /api/v1/chat/backup/delete (auth required) ──
 
-app.delete('/api/v1/chat/backup/delete', async (req, res) => {
-  const { userId, backupId } = req.body;
+app.delete('/api/v1/chat/backup/delete', authMiddleware, async (req, res) => {
+  try {
+    const { userId, backupId } = req.body;
 
-  if (!userId || !backupId) {
-    return res.status(400).json({ error: 'userId and backupId required' });
+    if (!userId || !isValidUserId(userId)) {
+      return res.status(400).json({ error: 'userId is required, alphanumeric + hyphens/underscores, max 255 chars' });
+    }
+
+    if (!backupId || typeof backupId !== 'string' || backupId.length > 255) {
+      return res.status(400).json({ error: 'backupId is required, max 255 characters' });
+    }
+
+    const userBackups = backupRegistry.get(userId) || [];
+    const idx = userBackups.findIndex(b => b.id === backupId);
+
+    if (idx === -1) return res.status(404).json({ error: 'Backup not found' });
+
+    const removed = userBackups.splice(idx, 1)[0];
+    backupRegistry.set(userId, userBackups);
+
+    // In production: delete from R2
+    res.json({ success: true, deleted: removed.id });
+  } catch (err) {
+    console.error('Backup delete error:', err);
+    res.status(500).json({ error: 'Failed to delete backup' });
   }
-
-  const userBackups = backupRegistry.get(userId) || [];
-  const idx = userBackups.findIndex(b => b.id === backupId);
-
-  if (idx === -1) return res.status(404).json({ error: 'Backup not found' });
-
-  const removed = userBackups.splice(idx, 1)[0];
-  backupRegistry.set(userId, userBackups);
-
-  // In production: delete from R2
-  res.json({ success: true, deleted: removed.id });
-});
-
-// ── Health check ──
-app.get('/health', (_req, res) => {
-  res.json({
-    service: 'windy-chat-backup',
-    status: 'ok',
-    version: '1.0.0',
-    r2: !!s3Client,
-    timestamp: new Date().toISOString(),
-  });
 });
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+
+// ── Error handler ──
+app.use((err, _req, res, _next) => {
+  console.error('❌ Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;

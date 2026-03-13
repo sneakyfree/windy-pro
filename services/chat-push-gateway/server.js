@@ -20,8 +20,58 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const PORT = process.env.PORT || 8103;
 
-app.use(cors());
+// ── CORS — explicit origin whitelist ──
+const ALLOWED_ORIGINS = [
+  'https://windypro.thewindstorm.uk',
+  'https://chat.windypro.com',
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error('CORS: origin not allowed'));
+  },
+  credentials: true,
+}));
+
 app.use(express.json({ limit: '1mb' }));
+
+// ── Auth middleware — Bearer token validation ──
+const CHAT_API_TOKEN = process.env.CHAT_API_TOKEN || '';
+
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  }
+  const token = authHeader.slice(7);
+  if (!CHAT_API_TOKEN || token !== CHAT_API_TOKEN) {
+    return res.status(401).json({ error: 'Invalid API token' });
+  }
+  next();
+}
+
+// ── Global rate limiter ──
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  message: { error: 'Too many requests, slow down' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(globalLimiter);
+
+// ── Input validation helpers ──
+
+function isValidUserId(val) {
+  return typeof val === 'string' && val.length > 0 && val.length <= 255 && /^[a-zA-Z0-9_@:.\-]+$/.test(val);
+}
+
+function stripHtml(str) {
+  return str.replace(/<[^>]*>/g, '');
+}
 
 // ── In-memory stores (replace with Redis/DB in production) ──
 const pushTokens = new Map();  // pushkey → { userId, platform, appId, token, deviceName }
@@ -73,12 +123,14 @@ function initAPNs() {
 
 // ── K6.1: Matrix Push Gateway endpoint ──
 // Synapse sends POST /_matrix/push/v1/notify with notification payload
+// NOTE: This endpoint is called by Synapse server-to-server, not by clients.
+// Auth is NOT applied here — Synapse authenticates via its own mechanism.
 
 app.post('/_matrix/push/v1/notify', async (req, res) => {
   try {
     const { notification } = req.body;
 
-    if (!notification) {
+    if (!notification || typeof notification !== 'object') {
       return res.status(400).json({ rejected: [] });
     }
 
@@ -93,10 +145,18 @@ app.post('/_matrix/push/v1/notify', async (req, res) => {
       counts,
     } = notification;
 
+    // Validate devices array
+    if (devices !== undefined && !Array.isArray(devices)) {
+      return res.status(400).json({ rejected: [] });
+    }
+
     const rejected = [];
 
     for (const device of (devices || [])) {
+      if (!device || typeof device !== 'object') continue;
       const { pushkey, app_id } = device;
+
+      if (!pushkey || typeof pushkey !== 'string') continue;
 
       // Check mute settings
       const tokenEntry = pushTokens.get(pushkey);
@@ -175,7 +235,7 @@ async function sendFCM(pushkey, payload) {
     return { success: true };
   } catch (err) {
     console.error('FCM send error:', err.message);
-    return { success: false, error: err.message };
+    return { success: false, error: 'FCM delivery failed' };
   }
 }
 
@@ -200,72 +260,123 @@ async function sendAPNs(pushkey, payload) {
 
     const result = await apnProvider.send(note, pushkey);
     if (result.failed.length > 0) {
-      return { success: false, error: result.failed[0].response?.reason || 'Unknown' };
+      return { success: false, error: 'APNs delivery failed' };
     }
     console.log(`🍎 APNs sent to ${pushkey.slice(0, 12)}...`);
     return { success: true };
   } catch (err) {
     console.error('APNs send error:', err.message);
-    return { success: false, error: err.message };
+    return { success: false, error: 'APNs delivery failed' };
   }
 }
 
-// ── Push token registration ──
+// ── Push token registration (auth required) ──
 
-app.post('/api/v1/chat/push/register', (req, res) => {
-  const { pushkey, userId, platform, appId, deviceName } = req.body;
+app.post('/api/v1/chat/push/register', authMiddleware, (req, res) => {
+  try {
+    const { pushkey, userId, platform, appId, deviceName } = req.body;
 
-  if (!pushkey || !userId || !platform) {
-    return res.status(400).json({ error: 'pushkey, userId, and platform required' });
+    if (!pushkey || typeof pushkey !== 'string' || pushkey.length > 1024) {
+      return res.status(400).json({ error: 'pushkey is required, max 1024 characters' });
+    }
+
+    if (!userId || !isValidUserId(userId)) {
+      return res.status(400).json({ error: 'userId is required, max 255 characters, alphanumeric + hyphens' });
+    }
+
+    if (!platform || typeof platform !== 'string' || !['android', 'ios', 'web'].includes(platform)) {
+      return res.status(400).json({ error: 'platform is required, must be "android", "ios", or "web"' });
+    }
+
+    // Validate optional fields
+    if (appId !== undefined && (typeof appId !== 'string' || appId.length > 255)) {
+      return res.status(400).json({ error: 'appId must be a string, max 255 characters' });
+    }
+
+    if (deviceName !== undefined && (typeof deviceName !== 'string' || deviceName.length > 100)) {
+      return res.status(400).json({ error: 'deviceName must be a string, max 100 characters' });
+    }
+
+    const sanitizedDeviceName = deviceName ? stripHtml(deviceName) : 'Unknown';
+
+    pushTokens.set(pushkey, {
+      userId,
+      platform,
+      appId: appId || `com.windypro.chat.${platform}`,
+      deviceName: sanitizedDeviceName,
+      registeredAt: Date.now(),
+    });
+
+    console.log(`🔔 Push token registered: ${platform} for ${userId.slice(0, 12)}`);
+    res.status(201).json({ success: true });
+  } catch (err) {
+    console.error('Push register error:', err);
+    res.status(500).json({ error: 'Failed to register push token' });
   }
-
-  pushTokens.set(pushkey, {
-    userId,
-    platform,
-    appId: appId || `com.windypro.chat.${platform}`,
-    deviceName: deviceName || 'Unknown',
-    registeredAt: Date.now(),
-  });
-
-  console.log(`🔔 Push token registered: ${platform} for ${userId.slice(0, 12)}`);
-  res.status(201).json({ success: true });
 });
 
-// ── K6.4: Per-conversation mute ──
+// ── K6.4: Per-conversation mute (auth required) ──
 
-app.post('/api/v1/chat/push/mute', (req, res) => {
-  const { userId, roomId, duration, mentionOverride } = req.body;
+app.post('/api/v1/chat/push/mute', authMiddleware, (req, res) => {
+  try {
+    const { userId, roomId, duration, mentionOverride } = req.body;
 
-  if (!userId || !roomId) {
-    return res.status(400).json({ error: 'userId and roomId required' });
+    if (!userId || !isValidUserId(userId)) {
+      return res.status(400).json({ error: 'userId is required, max 255 characters, alphanumeric + hyphens' });
+    }
+
+    if (!roomId || typeof roomId !== 'string' || roomId.length > 255) {
+      return res.status(400).json({ error: 'roomId is required, max 255 characters' });
+    }
+
+    if (duration !== undefined && typeof duration !== 'string') {
+      return res.status(400).json({ error: 'duration must be a string' });
+    }
+
+    const durations = {
+      '1h': 60 * 60 * 1000,
+      '8h': 8 * 60 * 60 * 1000,
+      '1d': 24 * 60 * 60 * 1000,
+      '1w': 7 * 24 * 60 * 60 * 1000,
+      'forever': 100 * 365 * 24 * 60 * 60 * 1000,
+    };
+
+    const ms = durations[duration] || durations['1h'];
+    const muteKey = `${userId}:${roomId}`;
+
+    muteSettings.set(muteKey, {
+      mutedUntil: Date.now() + ms,
+      mentionOverride: mentionOverride !== false,
+    });
+
+    res.json({ success: true, mutedUntil: new Date(Date.now() + ms).toISOString() });
+  } catch (err) {
+    console.error('Mute error:', err);
+    res.status(500).json({ error: 'Failed to mute conversation' });
   }
-
-  const durations = {
-    '1h': 60 * 60 * 1000,
-    '8h': 8 * 60 * 60 * 1000,
-    '1d': 24 * 60 * 60 * 1000,
-    '1w': 7 * 24 * 60 * 60 * 1000,
-    'forever': 100 * 365 * 24 * 60 * 60 * 1000,
-  };
-
-  const ms = durations[duration] || durations['1h'];
-  const muteKey = `${userId}:${roomId}`;
-
-  muteSettings.set(muteKey, {
-    mutedUntil: Date.now() + ms,
-    mentionOverride: mentionOverride !== false,
-  });
-
-  res.json({ success: true, mutedUntil: new Date(Date.now() + ms).toISOString() });
 });
 
-app.post('/api/v1/chat/push/unmute', (req, res) => {
-  const { userId, roomId } = req.body;
-  muteSettings.delete(`${userId}:${roomId}`);
-  res.json({ success: true });
+app.post('/api/v1/chat/push/unmute', authMiddleware, (req, res) => {
+  try {
+    const { userId, roomId } = req.body;
+
+    if (!userId || !isValidUserId(userId)) {
+      return res.status(400).json({ error: 'userId is required, max 255 characters' });
+    }
+
+    if (!roomId || typeof roomId !== 'string' || roomId.length > 255) {
+      return res.status(400).json({ error: 'roomId is required, max 255 characters' });
+    }
+
+    muteSettings.delete(`${userId}:${roomId}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Unmute error:', err);
+    res.status(500).json({ error: 'Failed to unmute conversation' });
+  }
 });
 
-// ── Health check ──
+// ── Health check (no auth required) ──
 app.get('/health', (_req, res) => {
   res.json({
     service: 'windy-chat-push-gateway',
@@ -278,6 +389,12 @@ app.get('/health', (_req, res) => {
 });
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+
+// ── Error handler ──
+app.use((err, _req, res, _next) => {
+  console.error('❌ Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 // ── Start ──
 initFCM();

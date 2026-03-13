@@ -18,6 +18,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
+const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 
@@ -26,6 +27,24 @@ const pairingSessions = new Map();  // sessionId → { pubkey, createdAt, expire
 
 const MAX_DEVICES = 5;
 const QR_TTL_MS = 120 * 1000;  // 120 seconds
+
+// ── Per-route rate limiter for pairing (sensitive) ──
+const pairGenerateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many pairing requests. Try again in a minute.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ── Input validation helpers ──
+function stripHtml(str) {
+  return str.replace(/<[^>]*>/g, '');
+}
+
+function isValidUserId(val) {
+  return typeof val === 'string' && val.length > 0 && val.length <= 255 && /^[a-zA-Z0-9_-]+$/.test(val);
+}
 
 // ── Cleanup expired sessions periodically ──
 setInterval(() => {
@@ -39,7 +58,7 @@ setInterval(() => {
 
 // ── POST /api/v1/chat/pair/generate ──
 
-router.post('/generate', (req, res) => {
+router.post('/generate', pairGenerateLimiter, (req, res) => {
   try {
     // Generate ephemeral X25519 key pair
     const keyPair = crypto.generateKeyPairSync('x25519', {
@@ -84,7 +103,7 @@ router.post('/generate', (req, res) => {
 
   } catch (err) {
     console.error('Pair generate error:', err);
-    res.status(500).json({ error: 'Failed to generate pairing session: ' + err.message });
+    res.status(500).json({ error: 'Failed to generate pairing session' });
   }
 });
 
@@ -94,10 +113,29 @@ router.post('/confirm', (req, res) => {
   try {
     const { sessionId, authToken, userId, displayName, deviceName, platform } = req.body;
 
-    if (!sessionId || !authToken || !userId) {
-      return res.status(400).json({
-        error: 'sessionId, authToken, and userId are required',
-      });
+    if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 255) {
+      return res.status(400).json({ error: 'sessionId is required, must be a string (max 255 chars)' });
+    }
+
+    if (!authToken || typeof authToken !== 'string' || authToken.length > 1024) {
+      return res.status(400).json({ error: 'authToken is required, must be a string (max 1024 chars)' });
+    }
+
+    if (!userId || !isValidUserId(userId)) {
+      return res.status(400).json({ error: 'userId is required, alphanumeric + hyphens/underscores, max 255 chars' });
+    }
+
+    // Validate optional fields
+    if (displayName !== undefined && (typeof displayName !== 'string' || displayName.length > 100)) {
+      return res.status(400).json({ error: 'displayName must be a string, max 100 characters' });
+    }
+
+    if (deviceName !== undefined && (typeof deviceName !== 'string' || deviceName.length > 100)) {
+      return res.status(400).json({ error: 'deviceName must be a string, max 100 characters' });
+    }
+
+    if (platform !== undefined && (typeof platform !== 'string' || !['desktop', 'mobile', 'web'].includes(platform))) {
+      return res.status(400).json({ error: 'platform must be "desktop", "mobile", or "web"' });
     }
 
     // Find session
@@ -121,19 +159,21 @@ router.post('/confirm', (req, res) => {
     // For now, we trust the token and link the session
 
     const deviceId = `device_${uuidv4().replace(/-/g, '').slice(0, 16)}`;
+    const sanitizedDisplayName = displayName ? stripHtml(displayName) : userId;
+    const sanitizedDeviceName = deviceName ? stripHtml(deviceName) : 'Desktop';
 
     // Link session
     session.status = 'paired';
     session.linkedAccount = {
       userId,
-      displayName: displayName || userId,
+      displayName: sanitizedDisplayName,
       deviceId,
-      deviceName: deviceName || 'Desktop',
+      deviceName: sanitizedDeviceName,
       platform: platform || 'desktop',
       pairedAt: new Date().toISOString(),
     };
 
-    console.log(`✅ Pairing confirmed: session ${sessionId.slice(0, 8)} → user ${userId.slice(0, 12)} (${deviceName || 'Desktop'})`);
+    console.log(`✅ Pairing confirmed: session ${sessionId.slice(0, 8)} → user ${userId.slice(0, 12)} (${sanitizedDeviceName})`);
 
     res.json({
       success: true,
@@ -144,62 +184,81 @@ router.post('/confirm', (req, res) => {
 
   } catch (err) {
     console.error('Pair confirm error:', err);
-    res.status(500).json({ error: 'Pairing confirmation failed: ' + err.message });
+    res.status(500).json({ error: 'Pairing confirmation failed' });
   }
 });
 
 // ── GET /api/v1/chat/pair/status/:sessionId ──
 
 router.get('/status/:sessionId', (req, res) => {
-  const { sessionId } = req.params;
+  try {
+    const { sessionId } = req.params;
 
-  const session = pairingSessions.get(sessionId);
-  if (!session) {
-    return res.status(404).json({
-      error: 'Session not found or expired',
-      status: 'expired',
-    });
-  }
+    if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 255) {
+      return res.status(400).json({ error: 'Invalid sessionId' });
+    }
 
-  // Check expiration for pending sessions
-  if (session.status === 'pending' && Date.now() > session.expiresAt) {
-    pairingSessions.delete(sessionId);
-    return res.json({
+    const session = pairingSessions.get(sessionId);
+    if (!session) {
+      return res.status(404).json({
+        error: 'Session not found or expired',
+        status: 'expired',
+      });
+    }
+
+    // Check expiration for pending sessions
+    if (session.status === 'pending' && Date.now() > session.expiresAt) {
+      pairingSessions.delete(sessionId);
+      return res.json({
+        sessionId,
+        status: 'expired',
+        message: 'QR code expired. Generate a new one.',
+      });
+    }
+
+    const response = {
       sessionId,
-      status: 'expired',
-      message: 'QR code expired. Generate a new one.',
-    });
-  }
-
-  const response = {
-    sessionId,
-    status: session.status,
-    expiresAt: new Date(session.expiresAt).toISOString(),
-  };
-
-  if (session.status === 'paired') {
-    response.linkedAccount = {
-      userId: session.linkedAccount.userId,
-      displayName: session.linkedAccount.displayName,
-      deviceId: session.linkedAccount.deviceId,
-      pairedAt: session.linkedAccount.pairedAt,
+      status: session.status,
+      expiresAt: new Date(session.expiresAt).toISOString(),
     };
-    response.message = 'Desktop linked! You can now access Windy Chat.';
-  }
 
-  res.json(response);
+    if (session.status === 'paired') {
+      response.linkedAccount = {
+        userId: session.linkedAccount.userId,
+        displayName: session.linkedAccount.displayName,
+        deviceId: session.linkedAccount.deviceId,
+        pairedAt: session.linkedAccount.pairedAt,
+      };
+      response.message = 'Desktop linked! You can now access Windy Chat.';
+    }
+
+    res.json(response);
+  } catch (err) {
+    console.error('Pair status error:', err);
+    res.status(500).json({ error: 'Failed to check pairing status' });
+  }
 });
 
 // ── DELETE /api/v1/chat/pair/session/:sessionId ──
 
 router.delete('/session/:sessionId', (req, res) => {
-  const { sessionId } = req.params;
-  const deleted = pairingSessions.delete(sessionId);
+  try {
+    const { sessionId } = req.params;
 
-  res.json({
-    success: deleted,
-    message: deleted ? 'Session removed' : 'Session not found',
-  });
+    if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 255) {
+      return res.status(400).json({ error: 'Invalid sessionId' });
+    }
+
+    const deleted = pairingSessions.delete(sessionId);
+
+    res.json({
+      success: deleted,
+      message: deleted ? 'Session removed' : 'Session not found',
+    });
+  } catch (err) {
+    console.error('Pair session delete error:', err);
+    res.status(500).json({ error: 'Failed to delete session' });
+  }
 });
 
 module.exports = router;

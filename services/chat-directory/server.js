@@ -20,11 +20,40 @@ const searchRoutes = require('./routes/search');
 const app = express();
 const PORT = process.env.PORT || 8102;
 
-// ── Middleware ──
-app.use(cors());
+// ── CORS — explicit origin whitelist ──
+const ALLOWED_ORIGINS = [
+  'https://windypro.thewindstorm.uk',
+  'https://chat.windypro.com',
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error('CORS: origin not allowed'));
+  },
+  credentials: true,
+}));
+
 app.use(express.json({ limit: '2mb' }));
 
-// Global rate limiter
+// ── Auth middleware — Bearer token validation ──
+const CHAT_API_TOKEN = process.env.CHAT_API_TOKEN || '';
+
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  }
+  const token = authHeader.slice(7);
+  if (!CHAT_API_TOKEN || token !== CHAT_API_TOKEN) {
+    return res.status(401).json({ error: 'Invalid API token' });
+  }
+  next();
+}
+
+// ── Global rate limiter ──
 const globalLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
@@ -34,11 +63,7 @@ const globalLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
-// ── Routes ──
-app.use('/api/v1/chat/directory', lookupRoutes);
-app.use('/api/v1/chat/directory', searchRoutes);
-
-// ── Health check ──
+// ── Health check (no auth required) ──
 app.get('/health', (_req, res) => {
   res.json({
     service: 'windy-chat-directory',
@@ -47,6 +72,10 @@ app.get('/health', (_req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// ── Auth-protected routes ──
+app.use('/api/v1/chat/directory', authMiddleware, lookupRoutes);
+app.use('/api/v1/chat/directory', authMiddleware, searchRoutes);
 
 // ── 404 fallback ──
 app.use((_req, res) => {

@@ -30,10 +30,10 @@ const cooldownStore = new Map();  // key: identifier → lastRegistrationTime
 
 // ── Rate limiters ──
 const sendLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,  // 10 minutes
-  max: 3,
+  windowMs: 60 * 1000,  // 1 minute
+  max: 5,               // verification: 5/min
   keyGenerator: (req) => req.body.identifier || req.ip,
-  message: { error: 'Too many verification attempts. Try again in 10 minutes.' },
+  message: { error: 'Too many verification attempts. Try again in a minute.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -46,6 +46,16 @@ const hourlyLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// ── Input validation helpers ──
+
+function stripHtml(str) {
+  return str.replace(/<[^>]*>/g, '');
+}
+
+function isValidIdentifier(val) {
+  return typeof val === 'string' && val.length > 0 && val.length <= 255;
+}
 
 // ── Helpers ──
 
@@ -62,7 +72,7 @@ function normalizePhone(phone, countryCode) {
     }
     return { valid: false, error: 'Invalid phone number' };
   } catch (err) {
-    return { valid: false, error: 'Phone parsing failed: ' + err.message };
+    return { valid: false, error: 'Phone parsing failed' };
   }
 }
 
@@ -109,7 +119,7 @@ async function sendSmsOTP(phone, code) {
     return { success: true };
   } catch (err) {
     console.error('Twilio SMS error:', err.message);
-    return { success: false, error: err.message };
+    return { success: false, error: 'SMS delivery failed' };
   }
 }
 
@@ -152,7 +162,7 @@ async function sendEmailOTP(email, code) {
     return { success: true };
   } catch (err) {
     console.error('SendGrid email error:', err.message);
-    return { success: false, error: err.message };
+    return { success: false, error: 'Email delivery failed' };
   }
 }
 
@@ -167,13 +177,22 @@ router.post('/send', sendLimiter, hourlyLimiter, async (req, res) => {
       return res.status(400).json({ error: 'type must be "phone" or "email"' });
     }
 
-    if (!identifier) {
-      return res.status(400).json({ error: 'identifier (phone or email) is required' });
+    if (!identifier || !isValidIdentifier(identifier)) {
+      return res.status(400).json({ error: 'identifier (phone or email) is required, max 255 characters' });
+    }
+
+    // Validate countryCode if provided
+    if (countryCode !== undefined && (typeof countryCode !== 'string' || countryCode.length > 5)) {
+      return res.status(400).json({ error: 'countryCode must be a string, max 5 characters' });
     }
 
     // Normalize identifier
     let normalizedId;
     if (type === 'phone') {
+      // Phone: max 20 chars, digits + country code format
+      if (identifier.length > 20) {
+        return res.status(400).json({ error: 'Phone number must be 20 characters or fewer' });
+      }
       const result = normalizePhone(identifier, countryCode);
       if (!result.valid) {
         return res.status(400).json({ error: result.error });
@@ -245,7 +264,7 @@ router.post('/send', sendLimiter, hourlyLimiter, async (req, res) => {
 
   } catch (err) {
     console.error('Verify send error:', err);
-    res.status(500).json({ error: 'Verification failed: ' + err.message });
+    res.status(500).json({ error: 'Verification failed' });
   }
 });
 
@@ -255,8 +274,16 @@ router.post('/check', async (req, res) => {
   try {
     const { identifier, code, type, countryCode } = req.body;
 
-    if (!identifier || !code) {
-      return res.status(400).json({ error: 'identifier and code are required' });
+    if (!identifier || !isValidIdentifier(identifier)) {
+      return res.status(400).json({ error: 'identifier is required, max 255 characters' });
+    }
+
+    if (!code || typeof code !== 'string' || code.length > 10) {
+      return res.status(400).json({ error: 'code is required, must be a string (max 10 chars)' });
+    }
+
+    if (type !== undefined && !['phone', 'email'].includes(type)) {
+      return res.status(400).json({ error: 'type must be "phone" or "email"' });
     }
 
     // Normalize identifier
@@ -318,25 +345,34 @@ router.post('/check', async (req, res) => {
 
   } catch (err) {
     console.error('Verify check error:', err);
-    res.status(500).json({ error: 'Verification check failed: ' + err.message });
+    res.status(500).json({ error: 'Verification check failed' });
   }
 });
 
 // ── GET /api/v1/chat/verify/status ──
 
 router.get('/status', (req, res) => {
-  const { identifier } = req.query;
-  if (!identifier) {
-    return res.status(400).json({ error: 'identifier query param required' });
-  }
+  try {
+    const { identifier } = req.query;
+    if (!identifier) {
+      return res.status(400).json({ error: 'identifier query param required' });
+    }
 
-  const verified = verifiedStore.get(identifier);
-  res.json({
-    identifier,
-    verified: !!verified,
-    verifiedAt: verified ? new Date(verified.verifiedAt).toISOString() : null,
-    type: verified ? verified.type : null,
-  });
+    if (typeof identifier !== 'string' || identifier.length > 255) {
+      return res.status(400).json({ error: 'identifier must be a string, max 255 characters' });
+    }
+
+    const verified = verifiedStore.get(identifier);
+    res.json({
+      identifier,
+      verified: !!verified,
+      verifiedAt: verified ? new Date(verified.verifiedAt).toISOString() : null,
+      type: verified ? verified.type : null,
+    });
+  } catch (err) {
+    console.error('Verify status error:', err);
+    res.status(500).json({ error: 'Failed to check verification status' });
+  }
 });
 
 module.exports = router;

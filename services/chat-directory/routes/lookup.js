@@ -42,6 +42,16 @@ const lookupLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// ── Input validation helpers ──
+
+function isValidUserId(val) {
+  return typeof val === 'string' && val.length > 0 && val.length <= 255 && /^[a-zA-Z0-9_-]+$/.test(val);
+}
+
+function stripHtml(str) {
+  return str.replace(/<[^>]*>/g, '');
+}
+
 // ── Helpers ──
 
 /**
@@ -72,15 +82,20 @@ function computeHash(identifier, salt) {
 // ── GET /api/v1/chat/directory/salt ──
 
 router.get('/salt', (_req, res) => {
-  checkSaltRotation();
+  try {
+    checkSaltRotation();
 
-  res.json({
-    salt: currentSalt,
-    createdAt: new Date(saltCreatedAt).toISOString(),
-    rotatesAt: new Date(saltCreatedAt + SALT_ROTATION_MS).toISOString(),
-    algorithm: 'SHA256',
-    usage: 'hash = SHA256(E.164_phone_number + salt)',
-  });
+    res.json({
+      salt: currentSalt,
+      createdAt: new Date(saltCreatedAt).toISOString(),
+      rotatesAt: new Date(saltCreatedAt + SALT_ROTATION_MS).toISOString(),
+      algorithm: 'SHA256',
+      usage: 'hash = SHA256(E.164_phone_number + salt)',
+    });
+  } catch (err) {
+    console.error('Salt retrieval error:', err);
+    res.status(500).json({ error: 'Failed to retrieve salt' });
+  }
 });
 
 // ── POST /api/v1/chat/directory/lookup ──
@@ -136,7 +151,7 @@ router.post('/lookup', lookupLimiter, (req, res) => {
 
   } catch (err) {
     console.error('Lookup error:', err);
-    res.status(500).json({ error: 'Lookup failed: ' + err.message });
+    res.status(500).json({ error: 'Lookup failed' });
   }
 });
 
@@ -146,8 +161,18 @@ router.post('/register-hash', (req, res) => {
   try {
     const { userId, displayName, avatarUrl, identifierHash, identifiers } = req.body;
 
-    if (!userId || !displayName) {
-      return res.status(400).json({ error: 'userId and displayName are required' });
+    if (!userId || !isValidUserId(userId)) {
+      return res.status(400).json({ error: 'userId is required, alphanumeric + hyphens/underscores, max 255 chars' });
+    }
+
+    if (!displayName || typeof displayName !== 'string' || displayName.length > 100) {
+      return res.status(400).json({ error: 'displayName is required, max 100 characters' });
+    }
+
+    const sanitizedDisplayName = stripHtml(displayName);
+
+    if (avatarUrl !== undefined && avatarUrl !== null && (typeof avatarUrl !== 'string' || avatarUrl.length > 2048)) {
+      return res.status(400).json({ error: 'avatarUrl must be a string, max 2048 characters' });
     }
 
     let registeredCount = 0;
@@ -157,23 +182,27 @@ router.post('/register-hash', (req, res) => {
       if (typeof identifierHash === 'string' && /^[a-f0-9]{64}$/.test(identifierHash)) {
         hashDirectory.set(identifierHash, {
           userId,
-          displayName,
+          displayName: sanitizedDisplayName,
           avatarUrl: avatarUrl || null,
           registeredAt: Date.now(),
         });
         registeredCount = 1;
+      } else {
+        return res.status(400).json({ error: 'identifierHash must be a 64-char hex SHA256 string' });
       }
     }
 
     // Option 2: Server computes hashes from raw identifiers
     // (used during onboarding when server has the verified phone/email)
     if (identifiers && Array.isArray(identifiers)) {
+      // Validate identifiers are strings
+      const validIdentifiers = identifiers.filter(id => typeof id === 'string' && id.length > 0 && id.length <= 255);
       checkSaltRotation();
-      for (const id of identifiers.slice(0, 5)) { // Max 5 identifiers per user
+      for (const id of validIdentifiers.slice(0, 5)) { // Max 5 identifiers per user
         const hash = computeHash(id, currentSalt);
         hashDirectory.set(hash, {
           userId,
-          displayName,
+          displayName: sanitizedDisplayName,
           avatarUrl: avatarUrl || null,
           registeredAt: Date.now(),
         });
@@ -187,7 +216,7 @@ router.post('/register-hash', (req, res) => {
       });
     }
 
-    console.log(`📇 Registered ${registeredCount} hash(es) for "${displayName}" (${userId.slice(0, 12)})`);
+    console.log(`📇 Registered ${registeredCount} hash(es) for "${sanitizedDisplayName}" (${userId.slice(0, 12)})`);
 
     res.status(201).json({
       success: true,
@@ -197,18 +226,23 @@ router.post('/register-hash', (req, res) => {
 
   } catch (err) {
     console.error('Register hash error:', err);
-    res.status(500).json({ error: 'Hash registration failed: ' + err.message });
+    res.status(500).json({ error: 'Hash registration failed' });
   }
 });
 
 // ── GET /api/v1/chat/directory/stats ──
 
 router.get('/stats', (_req, res) => {
-  res.json({
-    totalHashes: hashDirectory.size,
-    saltAge: Math.floor((Date.now() - saltCreatedAt) / 1000 / 60 / 60) + ' hours',
-    nextRotation: new Date(saltCreatedAt + SALT_ROTATION_MS).toISOString(),
-  });
+  try {
+    res.json({
+      totalHashes: hashDirectory.size,
+      saltAge: Math.floor((Date.now() - saltCreatedAt) / 1000 / 60 / 60) + ' hours',
+      nextRotation: new Date(saltCreatedAt + SALT_ROTATION_MS).toISOString(),
+    });
+  } catch (err) {
+    console.error('Stats error:', err);
+    res.status(500).json({ error: 'Failed to retrieve stats' });
+  }
 });
 
 module.exports = router;
