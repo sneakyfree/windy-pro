@@ -1846,6 +1846,7 @@
     <div class="progress-seg" id="seg-6"></div>
     <div class="progress-seg" id="seg-7"></div>
     <div class="progress-seg" id="seg-8"></div>
+    <div class="progress-seg" id="seg-9"></div>
   </div>
   <div class="step-labels">
     <span class="step-label active" id="lbl-0" data-i18n="step.welcome">Welcome</span>
@@ -1855,8 +1856,9 @@
     <span class="step-label" id="lbl-4" data-i18n="step.translate">Translate</span>
     <span class="step-label" id="lbl-5" data-i18n="step.learn">Learn</span>
     <span class="step-label" id="lbl-6" data-i18n="step.choose">Choose</span>
-    <span class="step-label" id="lbl-7" data-i18n="step.install">Install</span>
-    <span class="step-label" id="lbl-8" data-i18n="step.ready">Ready!</span>
+    <span class="step-label" id="lbl-7" data-i18n="step.pairs">Pairs</span>
+    <span class="step-label" id="lbl-8" data-i18n="step.install">Install</span>
+    <span class="step-label" id="lbl-9" data-i18n="step.ready">Ready!</span>
   </div>
 
   <div class="wizard">
@@ -2530,13 +2532,78 @@
 
       <div class="btn-row">
         <button class="btn btn-ghost" onclick="goToScreen(5)" data-i18n="btn.back">← Back</button>
-        <button class="btn btn-primary" id="btn-install" disabled onclick="startInstall()"
+        <button class="btn btn-primary" id="btn-install" disabled onclick="proceedFromEngines()"
           data-i18n="btn.installSelected">Install Selected →</button>
       </div>
     </div>
 
-    <!-- ═══ SCREEN 7: DOWNLOAD & INSTALL ═══ -->
+    <!-- ═══ SCREEN 7: PICK YOUR OFFLINE ENGINES (PAIR PICKER) ═══ -->
     <div class="screen" id="screen-7">
+      <div style="text-align:center; margin-bottom:16px;">
+        <h1 style="font-size:24px; margin-bottom:4px;">🎯 Pick Your Offline Engines</h1>
+        <p id="pair-picker-subtitle" style="font-size:15px; color:var(--text-dim);">Your plan includes offline translation engines!</p>
+      </div>
+
+      <!-- Counter -->
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; padding:10px 16px; background:var(--bg-card); border-radius:10px; border:1px solid var(--border);">
+        <div id="pair-picker-counter" style="font-size:15px; font-weight:700; color:var(--green);">0 of 5 selected</div>
+        <div id="pair-picker-total-size" style="font-size:13px; color:var(--text-muted);">Total: 0 MB</div>
+      </div>
+
+      <!-- Region quick-select buttons -->
+      <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+        <button class="pair-region-btn" onclick="filterPairsByRegion('all')" data-region="all"
+          style="padding:6px 14px; border-radius:8px; border:1px solid var(--green); background:rgba(34,197,94,0.15); color:var(--green); font-size:12px; font-weight:700; cursor:pointer; transition:all 0.2s;">
+          🌍 All
+        </button>
+        <button class="pair-region-btn" onclick="filterPairsByRegion('europe')" data-region="europe"
+          style="padding:6px 14px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--text-dim); font-size:12px; font-weight:700; cursor:pointer; transition:all 0.2s;">
+          🇪🇺 Europe <span id="region-count-europe"></span>
+        </button>
+        <button class="pair-region-btn" onclick="filterPairsByRegion('asia')" data-region="asia"
+          style="padding:6px 14px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--text-dim); font-size:12px; font-weight:700; cursor:pointer; transition:all 0.2s;">
+          🌏 Asia <span id="region-count-asia"></span>
+        </button>
+        <button class="pair-region-btn" onclick="filterPairsByRegion('americas')" data-region="americas"
+          style="padding:6px 14px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--text-dim); font-size:12px; font-weight:700; cursor:pointer; transition:all 0.2s;">
+          🌎 Americas <span id="region-count-americas"></span>
+        </button>
+        <button class="pair-region-btn" onclick="filterPairsByRegion('meaf')" data-region="meaf"
+          style="padding:6px 14px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--text-dim); font-size:12px; font-weight:700; cursor:pointer; transition:all 0.2s;">
+          🌍 ME&Africa <span id="region-count-meaf"></span>
+        </button>
+      </div>
+
+      <!-- Search input -->
+      <div style="margin-bottom:12px;">
+        <input type="text" id="pair-search" placeholder="🔍 Search pairs by language name..." oninput="filterPairsSearch(this.value)"
+          style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg-card); color:var(--text); font-size:14px; outline:none; box-sizing:border-box; transition:border-color 0.2s;"
+          onfocus="this.style.borderColor='var(--green)'" onblur="this.style.borderColor='var(--border)'"
+          maxlength="100">
+      </div>
+
+      <!-- Pair grid -->
+      <div id="pair-picker-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; max-height:340px; overflow-y:auto; margin-bottom:16px; padding-right:4px;">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Upsell -->
+      <div style="text-align:center; margin-bottom:16px; padding:12px 16px; background:linear-gradient(135deg, rgba(245,158,11,0.08), rgba(139,92,246,0.08)); border:1px solid rgba(245,158,11,0.3); border-radius:12px;">
+        <div style="font-size:14px; color:var(--text-dim); line-height:1.6;">
+          Want more? &nbsp;
+          <span style="font-weight:700; color:#F59E0B;">🧳 Traveler Pack $49</span> &nbsp;|&nbsp;
+          <span style="font-weight:700; color:#8B5CF6;">🧭 Marco Polo $999</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goToScreen(6)" data-i18n="btn.back">← Back</button>
+        <button class="btn btn-primary" id="btn-pairs-continue" onclick="proceedFromPairPicker()">Install Selected →</button>
+      </div>
+    </div>
+
+    <!-- ═══ SCREEN 8: DOWNLOAD & INSTALL ═══ -->
+    <div class="screen" id="screen-8">
       <div class="install-screen">
         <!-- Overall progress -->
         <div class="install-progress-section">
@@ -2581,8 +2648,8 @@
       </div>
     </div>
 
-    <!-- ═══ SCREEN 8: COMPLETE ═══ -->
-    <div class="screen" id="screen-8">
+    <!-- ═══ SCREEN 9: COMPLETE ═══ -->
+    <div class="screen" id="screen-9">
       <div class="complete-screen">
         <div class="complete-strobe"></div>
         <div class="complete-title" data-i18n="complete.title">You're Ready! 🌪️</div>
@@ -2915,8 +2982,9 @@
       if (n === 4) { buildTranslateUpsell(); setTimeout(restoreTranslateSelection, 50); }
       if (n === 5) buildEducationMatrix();
       if (n === 6) { buildModelList(); updatePlanBanner(); updateTranslateAddonBanner(); buildSpecialistUpsellCard(); }
-      if (n === 7) startBrandRotations();
-      if (n !== 7) stopBrandRotations();
+      if (n === 7) initPairPickerScreen();
+      if (n === 8) startBrandRotations();
+      if (n !== 8) stopBrandRotations();
     }
 
     // ─── SCREEN 1: HARDWARE SCAN ───
@@ -4111,7 +4179,7 @@
 
     // ─── SCREEN 5: INSTALL (THE BRAND EXPERIENCE) ───
     async function startInstall() {
-      goToScreen(7);
+      goToScreen(8);
 
       // Activate progress bar glow
       document.querySelector('.install-overall-bar').classList.add('active-glow');
@@ -4141,9 +4209,34 @@
       setTimeout(() => addLogEntry('✅ Windy audio capture configured', 'success'), 600);
       setTimeout(() => addLogEntry("✅ Windy media processor ready — let's get Windy, baby! 🌪️", 'success'), 1200);
 
-      // Send selected engines to main process — include specialist pairs
+      // Send selected engines to main process — include specialist pairs + Screen 7 pair picker
       const specialistPairs = getSelectedSpecialistPairs();
       specialistPairs.forEach(pairId => selectedModels.add(pairId));
+      // Include Screen 7 pair picker selections
+      const pairPickerPairs = getSelectedPairPickerPairs();
+      pairPickerPairs.forEach(pairId => selectedModels.add(pairId));
+
+      // Add pair picker pairs to the download list UI
+      const catalog = window.PAIR_CATALOG || [];
+      pairPickerPairs.forEach(pairId => {
+        if (document.getElementById(`dl-${pairId}`)) return; // skip if already in list
+        const pairInfo = catalog.find(p => p.id === pairId);
+        if (!pairInfo) return; // skip reverse-direction duplicates not in catalog
+        const pSizeTxt = pairInfo.sizeMB < 1024 ? `${pairInfo.sizeMB} MB` : `${(pairInfo.sizeMB / 1024).toFixed(1)} GB`;
+        const div = document.createElement('div');
+        div.className = 'dl-item queued';
+        div.id = `dl-${pairId}`;
+        div.innerHTML = `
+          <span class="dl-item-icon">⏳</span>
+          <span class="dl-item-name">${pairInfo.sourceName}↔${pairInfo.targetName}</span>
+          <span class="dl-item-size">${pSizeTxt}</span>
+          <div class="dl-item-bar"><div class="dl-item-fill" style="width:0%"></div></div>
+          <span class="dl-item-status">Queued</span>
+          <div class="dl-item-speed"></div>
+        `;
+        dlList.appendChild(div);
+      });
+
       await window.wizardAPI.selectModels([...selectedModels]);
 
       // Track last logged model for log entries
@@ -4264,7 +4357,7 @@
           document.getElementById('nxt-key-record').textContent = '⌘+Shift+Space';
         }
 
-        setTimeout(() => goToScreen(8), 1500);
+        setTimeout(() => goToScreen(9), 1500);
       } else {
         document.getElementById('install-status').textContent = '⚠️ Installation Failed';
         document.getElementById('install-detail').textContent = result.error || 'Unknown error. Please try again.';
@@ -4997,20 +5090,14 @@
         langListStr = allLangNames.slice(0, -1).join(', ') + ', and ' + allLangNames[allLangNames.length - 1];
       }
 
-      // Detect specialist pairs that match user's languages
+      // Detect specialist pairs that match user's languages (from FULL catalog)
       const langCodes = userLanguages.map(l => l.code);
-      const AVAILABLE_PAIRS = [
-        { id: 'windy-pair-en-es', pair: ['en', 'es'], flag: '\ud83c\uddea\ud83c\uddf8', name: 'English \u2194 Spanish', sizeMB: 598 },
-        { id: 'windy-pair-en-zh', pair: ['en', 'zh'], flag: '\ud83c\udde8\ud83c\uddf3', name: 'English \u2194 Chinese', sizeMB: 598 },
-        { id: 'windy-pair-en-fr', pair: ['en', 'fr'], flag: '\ud83c\uddeb\ud83c\uddf7', name: 'English \u2194 French', sizeMB: 576 },
-        { id: 'windy-pair-en-de', pair: ['en', 'de'], flag: '\ud83c\udde9\ud83c\uddea', name: 'English \u2194 German', sizeMB: 570 },
-        { id: 'windy-pair-en-ar', pair: ['en', 'ar'], flag: '\ud83c\uddf8\ud83c\udde6', name: 'English \u2194 Arabic', sizeMB: 592 },
-        { id: 'windy-pair-en-hi', pair: ['en', 'hi'], flag: '\ud83c\uddee\ud83c\uddf3', name: 'English \u2194 Hindi', sizeMB: 586 },
-        { id: 'windy-pair-en-pt', pair: ['en', 'pt'], flag: '\ud83c\udde7\ud83c\uddf7', name: 'English \u2194 Portuguese', sizeMB: 1189 },
-        { id: 'windy-pair-en-ru', pair: ['en', 'ru'], flag: '\ud83c\uddf7\ud83c\uddfa', name: 'English \u2194 Russian', sizeMB: 592 },
-      ];
       const codeSet = new Set(langCodes);
-      const matchedPairs = AVAILABLE_PAIRS.filter(p => p.pair.every(c => codeSet.has(c)));
+      const catalogPairs = (window.PAIR_CATALOG || []).map(p => ({
+        id: p.id, pair: [p.source, p.target], flag: p.targetFlag,
+        name: `${p.sourceName} ↔ ${p.targetName}`, sizeMB: p.sizeMB
+      }));
+      const matchedPairs = catalogPairs.filter(p => p.pair.every(c => codeSet.has(c)));
 
       // Build specialist pairs section
       let specialistHTML = '';
@@ -5440,6 +5527,235 @@
           if (parts.length === 2) {
             ids.push(`windy-pair-${parts[1]}-${parts[0]}`);
           }
+        }
+      });
+      return ids;
+    }
+
+    // ─── PAIR CATALOG LOADER ───
+    // Loaded once at startup, used by both Screen 4 (specialist detection) and Screen 7 (pair picker)
+    window.PAIR_CATALOG = [];
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const resp = await fetch('../shared/pair-catalog.json');
+        if (resp.ok) {
+          window.PAIR_CATALOG = await resp.json();
+          console.log(`[Catalog] Loaded ${window.PAIR_CATALOG.length} pairs from catalog`);
+        }
+      } catch (e) {
+        console.warn('[Catalog] Failed to load pair-catalog.json:', e.message);
+      }
+    });
+
+    // ─── PLAN → PAIR COUNT LIMITS ───
+    const PLAN_PAIR_LIMITS = {
+      free: 0,
+      pro: 3,
+      translate: 5,
+      translate_pro: 10
+    };
+    const PLAN_DISPLAY_NAMES = {
+      free: 'Free', pro: 'Windy Pro', translate: 'Windy Ultra', translate_pro: 'Windy Max'
+    };
+
+    // ─── SCREEN 7: PAIR PICKER STATE ───
+    let selectedPairIds = new Set();
+    let pairPickerRegion = 'all';
+    let pairPickerSearch = '';
+
+    /**
+     * Called when user clicks "Install Selected" on Screen 6 (Choose Engines).
+     * Paid plans → Screen 7 (pair picker). Free → skip straight to install.
+     */
+    function proceedFromEngines() {
+      if (userTier === 'free') {
+        // Free users skip pair picker — go directly to install
+        startInstall();
+      } else {
+        goToScreen(7);
+      }
+    }
+
+    /**
+     * Initialize the pair picker screen when navigating to Screen 7
+     */
+    function initPairPickerScreen() {
+      const catalog = window.PAIR_CATALOG || [];
+      const limit = PLAN_PAIR_LIMITS[userTier] || PLAN_PAIR_LIMITS[selectedTranslatePlan] || 5;
+      const planName = PLAN_DISPLAY_NAMES[userTier] || PLAN_DISPLAY_NAMES[selectedTranslatePlan] || 'Your';
+
+      // Update subtitle
+      const subtitle = document.getElementById('pair-picker-subtitle');
+      subtitle.textContent = `Your ${planName} plan includes ${limit} offline translation engines!`;
+
+      // Count pairs per region
+      const regionCounts = { europe: 0, asia: 0, americas: 0, meaf: 0 };
+      catalog.forEach(p => { if (regionCounts[p.region] !== undefined) regionCounts[p.region]++; });
+      Object.entries(regionCounts).forEach(([r, c]) => {
+        const el = document.getElementById(`region-count-${r}`);
+        if (el) el.textContent = `(${c})`;
+      });
+
+      // Pre-check pairs that match user's selected languages from Screen 3
+      const langCodes = new Set(userLanguages.map(l => l.code));
+      selectedPairIds.clear();
+      let preselected = 0;
+      catalog.forEach(p => {
+        if (preselected < limit && langCodes.has(p.source) && langCodes.has(p.target)) {
+          selectedPairIds.add(p.id);
+          preselected++;
+        }
+      });
+
+      // Reset filter state
+      pairPickerRegion = 'all';
+      pairPickerSearch = '';
+      const searchInput = document.getElementById('pair-search');
+      if (searchInput) searchInput.value = '';
+
+      buildPairGrid();
+      updatePairPickerCounter();
+    }
+
+    /**
+     * Build the pair grid UI based on current filters
+     */
+    function buildPairGrid() {
+      const catalog = window.PAIR_CATALOG || [];
+      const grid = document.getElementById('pair-picker-grid');
+      if (!grid) return;
+
+      const limit = PLAN_PAIR_LIMITS[userTier] || PLAN_PAIR_LIMITS[selectedTranslatePlan] || 5;
+      const query = pairPickerSearch.toLowerCase();
+
+      // Filter catalog
+      let filtered = catalog;
+      if (pairPickerRegion !== 'all') {
+        filtered = filtered.filter(p => p.region === pairPickerRegion);
+      }
+      if (query) {
+        filtered = filtered.filter(p =>
+          p.sourceName.toLowerCase().includes(query) ||
+          p.targetName.toLowerCase().includes(query) ||
+          p.id.toLowerCase().includes(query)
+        );
+      }
+
+      // Build grid HTML
+      grid.innerHTML = filtered.map(p => {
+        const checked = selectedPairIds.has(p.id);
+        const disabled = !checked && selectedPairIds.size >= limit;
+        const sizeTxt = p.sizeMB < 1024 ? `${p.sizeMB} MB` : `${(p.sizeMB / 1024).toFixed(1)} GB`;
+        const stars = '★'.repeat(p.quality || 3) + '☆'.repeat(5 - (p.quality || 3));
+        const qualColor = p.quality >= 4 ? '#22C55E' : p.quality >= 3 ? '#F59E0B' : '#64748B';
+
+        return `
+          <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; background:${checked ? 'rgba(34,197,94,0.08)' : 'var(--bg-card)'}; border-radius:10px; border:1px solid ${checked ? 'rgba(34,197,94,0.4)' : 'var(--border)'}; cursor:${disabled ? 'not-allowed' : 'pointer'}; transition:all 0.2s; opacity:${disabled ? '0.5' : '1'};"
+            ${disabled ? '' : `onmouseenter="this.style.borderColor='${checked ? '#22C55E' : 'rgba(34,197,94,0.3)'}'" onmouseleave="this.style.borderColor='${checked ? 'rgba(34,197,94,0.4)' : 'var(--border)'}'"` }>
+            <input type="checkbox" class="pair-picker-check" data-pair-id="${p.id}"
+              ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}
+              onchange="togglePairSelection('${p.id}', this.checked)"
+              style="width:16px; height:16px; accent-color:#22C55E; flex-shrink:0;">
+            <span style="font-size:16px; flex-shrink:0;">${p.sourceFlag}</span>
+            <span style="font-size:16px; flex-shrink:0;">${p.targetFlag}</span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:13px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.sourceName} ↔ ${p.targetName}</div>
+              <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
+                <span style="font-size:10px; color:${qualColor}; letter-spacing:1px;">${stars}</span>
+                <span style="font-size:10px; color:var(--text-muted);">${sizeTxt}</span>
+              </div>
+            </div>
+          </label>
+        `;
+      }).join('');
+
+      if (filtered.length === 0) {
+        grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:24px; color:var(--text-muted); font-size:14px;">No pairs found matching your search.</div>';
+      }
+    }
+
+    /**
+     * Toggle a pair on/off
+     */
+    function togglePairSelection(pairId, checked) {
+      const limit = PLAN_PAIR_LIMITS[userTier] || PLAN_PAIR_LIMITS[selectedTranslatePlan] || 5;
+      if (checked && selectedPairIds.size >= limit) {
+        // Reject — at limit
+        return;
+      }
+      if (checked) {
+        selectedPairIds.add(pairId);
+      } else {
+        selectedPairIds.delete(pairId);
+      }
+      updatePairPickerCounter();
+      buildPairGrid(); // Re-render to update disabled states
+    }
+
+    /**
+     * Update the counter and total size display
+     */
+    function updatePairPickerCounter() {
+      const limit = PLAN_PAIR_LIMITS[userTier] || PLAN_PAIR_LIMITS[selectedTranslatePlan] || 5;
+      const counter = document.getElementById('pair-picker-counter');
+      const sizeEl = document.getElementById('pair-picker-total-size');
+      if (counter) {
+        counter.textContent = `${selectedPairIds.size} of ${limit} selected`;
+        counter.style.color = selectedPairIds.size >= limit ? '#F59E0B' : 'var(--green)';
+      }
+      if (sizeEl) {
+        const catalog = window.PAIR_CATALOG || [];
+        const totalMB = catalog.filter(p => selectedPairIds.has(p.id)).reduce((s, p) => s + (p.sizeMB || 0), 0);
+        sizeEl.textContent = `Total: ${totalMB < 1024 ? totalMB + ' MB' : (totalMB / 1024).toFixed(1) + ' GB'}`;
+      }
+    }
+
+    /**
+     * Filter pairs by region
+     */
+    function filterPairsByRegion(region) {
+      pairPickerRegion = region;
+      // Update button highlight
+      document.querySelectorAll('.pair-region-btn').forEach(btn => {
+        const r = btn.dataset.region;
+        const isActive = r === region;
+        btn.style.borderColor = isActive ? 'var(--green)' : 'var(--border)';
+        btn.style.background = isActive ? 'rgba(34,197,94,0.15)' : 'transparent';
+        btn.style.color = isActive ? 'var(--green)' : 'var(--text-dim)';
+      });
+      buildPairGrid();
+    }
+
+    /**
+     * Search filter for pair grid
+     */
+    function filterPairsSearch(query) {
+      pairPickerSearch = query;
+      buildPairGrid();
+    }
+
+    /**
+     * Proceed from pair picker (Screen 7) → start install.
+     * Adds selected pairs to the download queue.
+     */
+    function proceedFromPairPicker() {
+      // Copy selected pairs into the specialist-pair mechanism
+      // so they get included in startInstall()'s download list
+      startInstall();
+    }
+
+    /**
+     * Read selected pairs from Screen 7 pair picker.
+     * Returns array of pair IDs (both directions).
+     */
+    function getSelectedPairPickerPairs() {
+      const ids = [];
+      selectedPairIds.forEach(pairId => {
+        ids.push(pairId);
+        // Also add reverse direction (en-es → es-en)
+        const parts = pairId.replace('windy-pair-', '').split('-');
+        if (parts.length === 2) {
+          ids.push(`windy-pair-${parts[1]}-${parts[0]}`);
         }
       });
       return ids;

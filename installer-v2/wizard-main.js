@@ -30,6 +30,16 @@ const { BundledAssets } = require('./core/bundled-assets');
 
 const APP_DIR = path.join(os.homedir(), '.windy-pro');
 const ENGINES_DIR = path.join(APP_DIR, 'engines');
+const PAIRS_DIR = path.join(APP_DIR, 'pairs');
+
+// Load full pair catalog for download naming
+let PAIR_CATALOG = [];
+try {
+  const catalogPath = path.join(__dirname, '..', 'shared', 'pair-catalog.json');
+  if (fs.existsSync(catalogPath)) {
+    PAIR_CATALOG = JSON.parse(fs.readFileSync(catalogPath, 'utf-8'));
+  }
+} catch (_) { /* pair catalog optional */ }
 
 /**
  * Auto-detect Linux distro and return the appropriate platform adapter
@@ -277,8 +287,9 @@ class InstallWizard {
           // Per-model progress callback
           (modelId, progress) => {
             const modelInfo = ENGINE_CATALOG.find(m => m.id === modelId);
-            const modelName = modelInfo?.shortName || modelInfo?.name || modelId;
-            const modelSize = modelInfo ? formatSize(modelInfo.sizeMB) : '?';
+            const pairInfo = !modelInfo ? PAIR_CATALOG.find(p => p.id === modelId) : null;
+            const modelName = modelInfo?.shortName || modelInfo?.name || (pairInfo ? `${pairInfo.sourceName}↔${pairInfo.targetName}` : modelId);
+            const modelSize = modelInfo ? formatSize(modelInfo.sizeMB) : (pairInfo ? formatSize(pairInfo.sizeMB) : '?');
 
             // Calculate ETA based on elapsed time and overall progress
             const elapsed = (Date.now() - downloadStart) / 1000;
@@ -370,11 +381,15 @@ class InstallWizard {
             appVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version || appVersion;
           }
         } catch (_) { /* use default */ }
+        // Separate pairs from engines for config
+        const pairModels = models.filter(m => m.startsWith('windy-pair-'));
+        const engineModels = models.filter(m => !m.startsWith('windy-pair-'));
         fs.writeFileSync(configPath, JSON.stringify({
           version: appVersion,
           installedAt: new Date().toISOString(),
-          models: models,
-          defaultModel: models[0] || 'windy-stt-lite-ct2'
+          models: engineModels,
+          pairs: pairModels,
+          defaultModel: engineModels[0] || 'windy-stt-lite-ct2'
         }, null, 2));
 
         return { success: true, models };
