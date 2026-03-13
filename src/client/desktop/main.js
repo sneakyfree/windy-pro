@@ -1647,6 +1647,108 @@ function _updateTrayUnread(count) {
   } catch (e) { /* ignore badge errors */ }
 }
 
+// ═══ Pair Download Manager IPC (L1 + L6) ═══
+let _pairDownloadManager = null;
+function getPairDownloadManager() {
+  if (!_pairDownloadManager) {
+    const { PairDownloadManager } = require('./pair-download-manager');
+    const pairsDir = path.join(app.getPath('userData'), 'translation-pairs');
+    const licenseToken = store.get('license.stripeSessionId', '') || store.get('license.email', '') || 'free';
+    _pairDownloadManager = new PairDownloadManager(pairsDir, licenseToken);
+
+    // Forward progress events to all windows
+    _pairDownloadManager.on('progress', (data) => {
+      safeSend('pair-download-progress', data);
+      if (chatWindow && !chatWindow.isDestroyed()) {
+        chatWindow.webContents.send('pair-download-progress', data);
+      }
+    });
+  }
+  return _pairDownloadManager;
+}
+
+ipcMain.handle('pair-catalog', async () => {
+  try {
+    const catalogPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'shared', 'pair-catalog.json')
+      : path.join(__dirname, '..', '..', '..', 'shared', 'pair-catalog.json');
+    return JSON.parse(await fsp.readFile(catalogPath, 'utf-8'));
+  } catch (err) {
+    console.error('[PairDL] Failed to load catalog:', err.message);
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('pair-bundles', async () => {
+  try {
+    const bundlesPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'shared', 'pair-bundles.json')
+      : path.join(__dirname, '..', '..', '..', 'shared', 'pair-bundles.json');
+    return JSON.parse(await fsp.readFile(bundlesPath, 'utf-8'));
+  } catch (err) {
+    console.error('[PairDL] Failed to load bundles:', err.message);
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('pair-download', async (event, pairId) => {
+  try {
+    const mgr = getPairDownloadManager();
+    const catalogPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'shared', 'pair-catalog.json')
+      : path.join(__dirname, '..', '..', '..', 'shared', 'pair-catalog.json');
+    const catalog = JSON.parse(await fsp.readFile(catalogPath, 'utf-8'));
+    return await mgr.downloadPair(pairId, catalog);
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('pair-download-bundle', async (event, pairIds) => {
+  try {
+    const mgr = getPairDownloadManager();
+    const catalogPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'shared', 'pair-catalog.json')
+      : path.join(__dirname, '..', '..', '..', 'shared', 'pair-catalog.json');
+    const catalog = JSON.parse(await fsp.readFile(catalogPath, 'utf-8'));
+    return await mgr.downloadBundle(pairIds, catalog);
+  } catch (err) {
+    return { results: {}, error: err.message };
+  }
+});
+
+ipcMain.handle('pair-cancel', async (event, pairId) => {
+  try {
+    return getPairDownloadManager().cancelDownload(pairId);
+  } catch (err) {
+    return { cancelled: false, error: err.message };
+  }
+});
+
+ipcMain.handle('pair-delete', async (event, pairId) => {
+  try {
+    return await getPairDownloadManager().deletePair(pairId);
+  } catch (err) {
+    return { deleted: false, error: err.message };
+  }
+});
+
+ipcMain.handle('pair-list-downloaded', async () => {
+  try {
+    return getPairDownloadManager().getDownloadedPairs();
+  } catch (err) {
+    return [];
+  }
+});
+
+ipcMain.handle('pair-storage-info', async () => {
+  try {
+    return await getPairDownloadManager().getStorageInfo();
+  } catch (err) {
+    return { usedBytes: 0, availableBytes: 0, pairs: [], error: err.message };
+  }
+});
+
 // ── Live Listen: speech translation for Quick Translate ──
 ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, targetLang, apiKeys, options) => {
   const localOnly = options && options.localOnly;

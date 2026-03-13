@@ -78,5 +78,19 @@ contextBridge.exposeInMainWorld('windyChat', {
 
   // ═══ Utilities ═══
   getUserLanguage: () => ipcRenderer.invoke('chat-get-user-language'),
-  getTranslation: (text, srcLang, tgtLang) => ipcRenderer.invoke('chat-translate-text', text, srcLang, tgtLang)
+  getTranslation: (text, srcLang, tgtLang) => ipcRenderer.invoke('chat-translate-text', text, srcLang, tgtLang),
+
+  // ═══ Pair Download Manager (L1 + L6) ═══
+  pairCatalog: () => ipcRenderer.invoke('pair-catalog'),
+  pairBundles: () => ipcRenderer.invoke('pair-bundles'),
+  pairDownload: (pairId) => ipcRenderer.invoke('pair-download', pairId),
+  pairDownloadBundle: (pairIds) => ipcRenderer.invoke('pair-download-bundle', pairIds),
+  pairCancel: (pairId) => ipcRenderer.invoke('pair-cancel', pairId),
+  pairDelete: (pairId) => ipcRenderer.invoke('pair-delete', pairId),
+  pairListDownloaded: () => ipcRenderer.invoke('pair-list-downloaded'),
+  pairStorageInfo: () => ipcRenderer.invoke('pair-storage-info'),
+  onPairDownloadProgress: (callback) => {
+    ipcRenderer.removeAllListeners('pair-download-progress');
+    ipcRenderer.on('pair-download-progress', (event, data) => callback(data));
+  },
 });
