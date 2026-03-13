@@ -331,7 +331,7 @@ function autoCleanupArchive() {
 
     if (purgedCount > 0) {
       const mb = (purgedBytes / 1024 / 1024).toFixed(1);
-      console.log(`🗂️ Archive cleanup: purged ${purgedCount} media files (${mb} MB), kept transcripts. Retention: ${RETENTION_DAYS} days.`);
+      console.info(`🗂️ Archive cleanup: purged ${purgedCount} media files (${mb} MB), kept transcripts. Retention: ${RETENTION_DAYS} days.`);
     }
   } catch (err) {
     console.warn('[Archive] Cleanup error:', err.message);
@@ -402,8 +402,8 @@ function startPythonServer() {
     : path.join(__dirname, '..', '..', '..');
   const serverModule = app.isPackaged ? 'engine.server' : 'src.engine.server';
 
-  console.log(`[Python] Starting server with: ${pythonPath}`);
-  console.log(`[Python] cwd: ${projectRoot}, module: ${serverModule}`);
+  console.info(`[Python] Starting server with: ${pythonPath}`);
+  console.info(`[Python] cwd: ${projectRoot}, module: ${serverModule}`);
 
   // Kill any stale process on the server port before spawning
   const port = serverConfig.port || 9876;
@@ -415,7 +415,7 @@ function startPythonServer() {
       if (pids) {
         for (const pid of pids.split('\n')) {
           if (pid.trim()) {
-            console.log(`[Python] Killing stale process ${pid} on port ${port}`);
+            console.info(`[Python] Killing stale process ${pid} on port ${port}`);
             try { process.kill(parseInt(pid), 'SIGKILL'); } catch (e) { }
           }
         }
@@ -433,7 +433,7 @@ function startPythonServer() {
 
   // Soft performance note — runtime monitoring handles actual detection
   if (!['tiny', 'base'].includes(modelSize)) {
-    console.log(`[Performance] Using "${modelSize}" model — runtime monitoring will check if it keeps up`);
+    console.info(`[Performance] Using "${modelSize}" model — runtime monitoring will check if it keeps up`);
   }
 
   pythonProcess = spawn(pythonPath, [
@@ -463,14 +463,14 @@ function startPythonServer() {
   });
 
   pythonProcess.on('close', (code) => {
-    console.log(`[Python] Server exited with code ${code}`);
+    console.info(`[Python] Server exited with code ${code}`);
     pythonProcess = null;
 
     // Auto-restart on unexpected exit with exponential backoff
     if (code !== 0 && !app.isQuitting && pythonRestartCount < MAX_PYTHON_RESTARTS) {
       pythonRestartCount++;
       const delay = 3000 * pythonRestartCount; // 3s, 6s, 9s...
-      console.log(`[Python] Auto-restarting in ${delay}ms (attempt ${pythonRestartCount}/${MAX_PYTHON_RESTARTS})...`);
+      console.info(`[Python] Auto-restarting in ${delay}ms (attempt ${pythonRestartCount}/${MAX_PYTHON_RESTARTS})...`);
       setTimeout(() => startPythonServer(), delay);
     } else if (code !== 0 && pythonRestartCount >= MAX_PYTHON_RESTARTS) {
       console.error('[Python] Max restarts reached. Server will not restart.');
@@ -1072,7 +1072,7 @@ ipcMain.on('mini-move', (event, { dx, dy }) => {
 let _voiceLevelLogCount = 0;
 ipcMain.on('voice-level', (event, level) => {
   if (_voiceLevelLogCount < 5 && level > 0.05) {
-    console.log(`[VoiceLevel→Mini] level=${level.toFixed(3)} miniWindow=${!!miniWindow}`);
+
     _voiceLevelLogCount++;
   }
   if (miniWindow && !miniWindow.isDestroyed() && miniWindow.webContents && !miniWindow.webContents.isDestroyed()) {
@@ -1929,13 +1929,13 @@ function registerHotkeys() {
       setTimeout(restore, 1000);
     }
   });
-  console.log(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
+  console.info(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
 
   // Paste transcript
   const regPaste = globalShortcut.register(hotkeys.pasteTranscript, () => {
     pasteTranscript();
   });
-  console.log(`[Hotkey] Paste transcript (${hotkeys.pasteTranscript}): ${regPaste ? 'OK' : 'FAILED'}`);
+  console.info(`[Hotkey] Paste transcript (${hotkeys.pasteTranscript}): ${regPaste ? 'OK' : 'FAILED'}`);
 
   // Paste clipboard (screenshots, copied text, etc.) via simulated Ctrl+V
   const pasteClipAccel = hotkeys.pasteClipboard || 'CommandOrControl+Shift+B';
@@ -1953,7 +1953,7 @@ function registerHotkeys() {
       exec('powershell -command "Start-Sleep -Milliseconds 100; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"');
     }
   });
-  console.log(`[Hotkey] Paste clipboard (${pasteClipAccel}): ${regClipboard ? 'OK' : 'FAILED'}`);
+  console.info(`[Hotkey] Paste clipboard (${pasteClipAccel}): ${regClipboard ? 'OK' : 'FAILED'}`);
 
   // Show/hide window — three-state cycle: Full Window → Tornado → Hidden → Full Window
   const regShow = globalShortcut.register(hotkeys.showHide, () => {
@@ -1975,14 +1975,14 @@ function registerHotkeys() {
       mainWindow.focus();
     }
   });
-  console.log(`[Hotkey] Show/Hide (${hotkeys.showHide}): ${regShow ? 'OK' : 'FAILED'}`);
+  console.info(`[Hotkey] Show/Hide (${hotkeys.showHide}): ${regShow ? 'OK' : 'FAILED'}`);
 
   // Quick Translate hotkey
   const qtAccel = hotkeys.quickTranslate || 'CommandOrControl+Shift+T';
   const regTranslate = globalShortcut.register(qtAccel, () => {
     showMiniTranslateWindow();
   });
-  console.log(`[Hotkey] Quick Translate (${qtAccel}): ${regTranslate ? 'OK' : 'FAILED'}`);
+  console.info(`[Hotkey] Quick Translate (${qtAccel}): ${regTranslate ? 'OK' : 'FAILED'}`);
 }
 
 /**
@@ -2010,7 +2010,7 @@ function sanitizeHotkeys() {
   let fixed = false;
   for (const [key, accel] of Object.entries(hotkeys)) {
     if (RESERVED_SHORTCUTS.includes(accel)) {
-      console.log(`[Hotkey] Resetting reserved shortcut ${key}: ${accel} → ${HOTKEY_DEFAULTS[key]}`);
+      console.warn(`[Hotkey] Resetting reserved shortcut ${key}: ${accel} → ${HOTKEY_DEFAULTS[key]}`);
       hotkeys[key] = HOTKEY_DEFAULTS[key];
       fixed = true;
     }
@@ -2036,7 +2036,7 @@ ipcMain.handle('rebind-hotkey', (event, key, accelerator) => {
     // Re-register all shortcuts with updated config
     registerHotkeys();
 
-    console.log(`[Hotkey] Rebound ${key} → ${accelerator}`);
+    console.info(`[Hotkey] Rebound ${key} → ${accelerator}`);
     return { ok: true, key, accelerator };
   } catch (err) {
     console.error(`[Hotkey] Rebind failed:`, err);
@@ -2199,7 +2199,7 @@ ipcMain.handle('choose-archive-folder', async () => {
             }
           }
         }
-        console.log(`[Archive] Migrated ${copied} files from ${oldFolder} to ${selected}`);
+        console.info(`[Archive] Migrated ${copied} files from ${oldFolder} to ${selected}`);
       } catch (err) {
         console.error('[Archive] Migration error:', err.message);
         await dialog.showMessageBox({
@@ -2228,7 +2228,7 @@ ipcMain.handle('copy-to-clipboard', async (event, text) => {
 });
 
 ipcMain.handle('open-external-url', async (event, url) => {
-  console.log('[Main] open-external-url called with:', url);
+
   // Security: validate URL — allow https and mailto
   try {
     const parsed = new URL(url);
@@ -2261,7 +2261,7 @@ ipcMain.handle('open-external-url', async (event, url) => {
 
       // Allow OAuth popups — open them in new BrowserWindows
       extWin.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
-        console.log('[ExtBrowser] Popup requested:', popupUrl);
+
         // Open OAuth popups in a new BrowserWindow
         const popupWin = new BrowserWindow({
           width: 600,
@@ -2289,13 +2289,13 @@ ipcMain.handle('open-external-url', async (event, url) => {
 
       // Allow cross-domain navigation (OAuth redirects)
       extWin.webContents.on('will-navigate', (event, navUrl) => {
-        console.log('[ExtBrowser] Navigating to:', navUrl);
+
         // Allow all navigation — needed for OAuth flows
       });
 
       extWin.loadURL(url);
       extWin.focus();
-      console.log('[Main] ✅ Opened URL in BrowserWindow (Linux primary)');
+      console.info('[Main] ✅ Opened URL in BrowserWindow (Linux primary)');
       return { ok: true };
     } catch (e) {
       console.error('[Main] BrowserWindow failed:', e.message);
@@ -2306,7 +2306,7 @@ ipcMain.handle('open-external-url', async (event, url) => {
       const { spawn } = require('child_process');
       const child = spawn('xdg-open', [url], { detached: true, stdio: 'ignore' });
       child.unref();
-      console.log('[Main] ✅ Opened URL via xdg-open (Linux fallback)');
+      console.info('[Main] ✅ Opened URL via xdg-open (Linux fallback)');
       return { ok: true };
     } catch (e) {
       console.warn('[Main] xdg-open failed:', e.message);
@@ -2381,7 +2381,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
         '/usr/bin/python3'
       ];
     const pythonPath = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
-    console.log('[Batch] Using python:', pythonPath);
+
 
     // Run faster-whisper transcription via temp script
     const modelName = store.get('engine.model') || 'base';
@@ -2459,9 +2459,9 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
     if (mainWindow && !mainWindow.isDestroyed() && !wasUserHidden) {
       mainWindow.setOpacity(savedOpacity || 1);
       if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true);
-      console.log(`[AutoPaste] Pasted ${text.trim().length} chars, window restored`);
+      console.info(`[AutoPaste] Pasted ${text.trim().length} chars, window restored`);
     } else {
-      console.log(`[AutoPaste] Pasted ${text.trim().length} chars, window stays hidden (user preference)`);
+      console.info(`[AutoPaste] Pasted ${text.trim().length} chars, window stays hidden (user preference)`);
     }
     return true;
   } catch (err) {
@@ -2708,7 +2708,7 @@ async function getCloudStorageToken() {
       });
       store.set('engine.cloudStorageToken', token);
       store.set('auth.storageToken', token); // also save for sync manager
-      console.log(`[CloudStorage] Authenticated via ${endpoint}`);
+      console.info(`[CloudStorage] Authenticated via ${endpoint}`);
       return token;
     } catch (e) {
       if (endpoint === '/auth/register') console.error('[CloudStorage] Auth failed:', e.message);
@@ -2792,7 +2792,7 @@ ipcMain.on('archive-transcript', async (event, payload) => {
       }
     }
 
-    console.log('[Archive] Saved:', (res.files || []).join(', '), route, cloud.ok ? '+ cloud ✓' : '');
+    console.info('[Archive] Saved:', (res.files || []).join(', '), route, cloud.ok ? '+ cloud ✓' : '');
     event.reply('archive-result', { ok: true, ...res, route, cloud });
   } catch (err) {
     console.error('[Archive] Failed:', err.message);
@@ -2814,7 +2814,7 @@ ipcMain.handle('archive-audio', async (event, base64, timestamp) => {
     const audioPath = path.join(dayDir, `${timeKey}.webm`);
     const buffer = Buffer.from(base64, 'base64');
     fs.writeFileSync(audioPath, buffer);
-    console.log(`[Archive] Audio saved: ${audioPath} (${(buffer.length / 1024).toFixed(0)}KB)`);
+    console.info(`[Archive] Audio saved: ${audioPath} (${(buffer.length / 1024).toFixed(0)}KB)`);
     return { ok: true, path: audioPath };
   } catch (err) {
     console.error('[Archive] Audio save failed:', err.message);
@@ -2835,7 +2835,7 @@ ipcMain.handle('archive-video', async (event, base64, timestamp) => {
     const videoPath = path.join(dayDir, `${timeKey}-video.webm`);
     const buffer = Buffer.from(base64, 'base64');
     fs.writeFileSync(videoPath, buffer);
-    console.log(`[Archive] Video saved: ${videoPath} (${(buffer.length / 1024).toFixed(0)}KB)`);
+    console.info(`[Archive] Video saved: ${videoPath} (${(buffer.length / 1024).toFixed(0)}KB)`);
     return { ok: true, path: videoPath };
   } catch (err) {
     console.error('[Archive] Video save failed:', err.message);
@@ -3285,7 +3285,7 @@ ipcMain.handle('create-checkout-session', async (event, priceId, email) => {
     if (email) sessionParams.customer_email = email;
 
     const session = await stripe.checkout.sessions.create(sessionParams);
-    console.log(`[Stripe] Checkout session created: ${session.id} for tier=${priceConfig.tier}`);
+    console.info(`[Stripe] Checkout session created: ${session.id} for tier=${priceConfig.tier}`);
     return { ok: true, url: session.url, sessionId: session.id };
   } catch (err) {
     console.error('[Stripe] Checkout session error:', err.message);
@@ -3586,7 +3586,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
           's.style.width=(4+Math.random()*8)+"px";s.style.height=(4+Math.random()*8)+"px";c.appendChild(s);}' +
           '</script></body></html>';
         checkoutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(successHtml));
-        console.log('[Checkout] Payment success — showing confirmation page');
+        console.info('[Checkout] Payment success — showing confirmation page');
       } else if (navUrl.includes('/payment-cancel')) {
         navEvent.preventDefault();
         const cancelHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment Cancelled</title>' +
@@ -3601,11 +3601,11 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
           '<p>No worries! You can upgrade anytime from the app. Your free account is still active.</p>' +
           '</div></body></html>';
         checkoutWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(cancelHtml));
-        console.log('[Checkout] Payment cancelled');
+        console.info('[Checkout] Payment cancelled');
       }
     });
 
-    console.log('[Main] Opened interactive checkout window');
+    console.info('[Main] Opened interactive checkout window');
     return { ok: true };
   } catch (e) {
     console.error('[Main] Checkout window failed:', e.message);
@@ -3650,7 +3650,7 @@ ipcMain.handle('check-payment-status', async (event, sessionId) => {
         expiresAt,
         lastValidated: new Date().toISOString()
       });
-      console.log(`[Stripe] Payment confirmed! Tier: ${tier}, Billing: ${billingMode}, Expires: ${expiresAt || 'never'}`);
+      console.info(`[Stripe] Payment confirmed! Tier: ${tier}, Billing: ${billingMode}, Expires: ${expiresAt || 'never'}`);
       safeSend('license-updated', tier);
       // Trigger download wizard for the new tier
       showDownloadWizard(tier);
@@ -3716,7 +3716,7 @@ async function validateLicense() {
 
   // Lifetime purchases never expire
   if (license.billingMode === 'lifetime' || !license.billingMode) {
-    console.log('[License] Lifetime license — no validation needed');
+    console.info('[License] Lifetime license — no validation needed');
     return;
   }
 
@@ -3727,13 +3727,13 @@ async function validateLicense() {
     const gracePeriod = 7 * 24 * 60 * 60 * 1000; // 7 days
 
     if (now < expiryDate) {
-      console.log(`[License] Subscription valid until ${license.expiresAt}`);
+      console.info(`[License] Subscription valid until ${license.expiresAt}`);
       return; // Still within subscription period
     }
 
     // Past expiry — check if within grace period
     if (now - expiryDate < gracePeriod) {
-      console.log('[License] Subscription expired but within 7-day grace period');
+      console.warn('[License] Subscription expired but within 7-day grace period');
     }
   }
 
@@ -3745,12 +3745,12 @@ async function validateLicense() {
       const lastCheck = new Date(license.lastValidated);
       const daysSinceCheck = (Date.now() - lastCheck.getTime()) / (24 * 60 * 60 * 1000);
       if (daysSinceCheck < 7) {
-        console.log(`[License] Offline — ${Math.round(daysSinceCheck)}d since last check, grace allowed`);
+        console.warn(`[License] Offline — ${Math.round(daysSinceCheck)}d since last check, grace allowed`);
         return;
       }
     }
     // Grace period exceeded — downgrade
-    console.log('[License] Grace period exceeded — reverting to free tier');
+    console.warn('[License] Grace period exceeded — reverting to free tier');
     store.set('license.tier', 'free');
     safeSend('license-expired', { reason: 'grace_period_exceeded' });
     return;
@@ -3762,10 +3762,10 @@ async function validateLicense() {
       // Subscription active — extend local license
       store.set('license.expiresAt', new Date(sub.current_period_end * 1000).toISOString());
       store.set('license.lastValidated', new Date().toISOString());
-      console.log(`[License] Subscription active, extended to ${new Date(sub.current_period_end * 1000).toISOString()}`);
+      console.info(`[License] Subscription active, extended to ${new Date(sub.current_period_end * 1000).toISOString()}`);
     } else {
       // Subscription cancelled/past_due — downgrade
-      console.log(`[License] Subscription status: ${sub.status} — reverting to free tier`);
+      console.warn(`[License] Subscription status: ${sub.status} — reverting to free tier`);
       store.set('license.tier', 'free');
       store.set('license.expiresAt', null);
       safeSend('license-expired', { reason: sub.status });
@@ -3835,7 +3835,7 @@ function downloadModel(modelName) {
     const venvPython = path.join(os.homedir(), '.windy-pro', 'venv', 'bin', 'python');
     const pythonExe = require('fs').existsSync(venvPython) ? venvPython : 'python3';
 
-    console.log(`[ModelDownload] Starting download: ${modelName}`);
+    console.info(`[ModelDownload] Starting download: ${modelName}`);
 
     // Determine HuggingFace repo name (translation models use underscores)
     let repoName = modelName;
@@ -3885,7 +3885,7 @@ except Exception as e:
     });
     proc.on('close', (code) => {
       if (code === 0 && output.includes('DONE')) {
-        console.log(`[ModelDownload] Completed: ${modelName}`);
+        console.info(`[ModelDownload] Completed: ${modelName}`);
         resolve(true);
       } else {
         console.error(`[ModelDownload] Failed: ${modelName} (exit ${code})`);
@@ -3921,7 +3921,7 @@ function showDownloadWizard(newTier) {
   const toDownload = allowedModels.filter(m => !models[m]?.downloaded);
 
   if (toDownload.length === 0) {
-    console.log('[Wizard] All models already downloaded for tier:', newTier);
+    console.info('[Wizard] All models already downloaded for tier:', newTier);
     safeSend('license-updated', newTier);
     return;
   }
@@ -4070,7 +4070,7 @@ function showDownloadWizard(newTier) {
         console.error(`[Wizard] Download failed for ${modelName}:`, err.message);
       }
     }
-    console.log('[Wizard] All model downloads complete for tier:', newTier);
+    console.info('[Wizard] All model downloads complete for tier:', newTier);
     safeSend('license-updated', newTier);
   })();
 }
@@ -4153,7 +4153,7 @@ ipcMain.handle('translate-text', async (event, text, sourceLang, targetLang) => 
       req.end();
     });
 
-    console.log(`🌐 Text translation (${result.engine}): ${srcName}→${tgtName}`);
+    console.info(`🌐 Text translation (${result.engine}): ${srcName}→${tgtName}`);
     return result;
   } catch (err) {
     console.error('[Translate] AI text translation failed:', err.message);
@@ -4243,40 +4243,40 @@ ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
     // Write data URL to temp file
     const base64Match = dataUrl.match(/^data:[^;]+;base64,(.+)$/);
     if (!base64Match) {
-      console.log('[Identify] ❌ No base64 match in dataUrl (first 100 chars):', dataUrl.substring(0, 100));
+
       return { error: 'Invalid audio format' };
     }
     const buffer = Buffer.from(base64Match[1], 'base64');
     require('fs').writeFileSync(tmpFile, buffer);
-    console.log(`[Identify] ✅ Wrote ${buffer.length} bytes to ${tmpFile}`);
+
 
     // Method 1: Try fpcalc + AcoustID (free, no API key needed)
     try {
-      console.log('[Identify] Running fpcalc on:', tmpFile);
+
       const fingerprint = await new Promise((resolve, reject) => {
         execFile('fpcalc', ['-json', tmpFile], { timeout: 30000 }, (err, stdout, stderr) => {
           if (err) {
-            console.log('[Identify] ❌ fpcalc error:', err.message);
-            if (stderr) console.log('[Identify] fpcalc stderr:', stderr);
+            console.error('[Identify] ❌ fpcalc error:', err.message);
+            if (stderr) console.error('[Identify] fpcalc stderr:', stderr);
             return reject(err);
           }
-          console.log('[Identify] fpcalc raw output length:', stdout.length);
+
           try { resolve(JSON.parse(stdout)); } catch (e) { reject(e); }
         });
       });
 
-      console.log('[Identify] fpcalc result: duration=', fingerprint?.duration, 'fingerprint length=', fingerprint?.fingerprint?.length);
+
 
       if (fingerprint && fingerprint.fingerprint && fingerprint.duration) {
         // Look up on AcoustID (free API — client ID is for open-source apps)
         const acoustUrl = `https://api.acoustid.org/v2/lookup?client=8XaBELgH&duration=${Math.round(fingerprint.duration)}&fingerprint=${encodeURIComponent(fingerprint.fingerprint)}&meta=recordings+releasegroups`;
-        console.log('[Identify] Querying AcoustID... duration=', Math.round(fingerprint.duration));
+
         const acoustResult = await httpGet(acoustUrl);
-        console.log('[Identify] AcoustID response status=', acoustResult?.status, 'results count=', acoustResult?.results?.length);
+
 
         if (acoustResult.status === 'ok' && acoustResult.results && acoustResult.results.length > 0) {
           const best = acoustResult.results[0];
-          console.log('[Identify] Best match score=', best.score, 'recordings=', best.recordings?.length);
+
           if (best.recordings && best.recordings.length > 0) {
             const rec = best.recordings[0];
             const title = rec.title || 'Unknown Title';
@@ -4287,7 +4287,7 @@ ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
             // Clean up temp file
             try { require('fs').unlinkSync(tmpFile); } catch (_) { }
 
-            console.log(`[Identify] ✅ IDENTIFIED: ${artists} — ${title} (${score}% confidence)`);
+            console.info(`[Identify] ✅ IDENTIFIED: ${artists} — ${title} (${score}% confidence)`);
             return {
               success: true,
               method: 'chromaprint',
@@ -4298,16 +4298,16 @@ ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
               newName: `${artists} — ${title}`
             };
           } else {
-            console.log('[Identify] ⚠️ AcoustID returned results but no recordings in best match');
+            console.warn('[Identify] ⚠️ AcoustID returned results but no recordings in best match');
           }
         } else {
-          console.log('[Identify] ⚠️ AcoustID returned no matching results. Error:', acoustResult?.error?.message);
+          console.warn('[Identify] ⚠️ AcoustID returned no matching results. Error:', acoustResult?.error?.message);
         }
       } else {
-        console.log('[Identify] ⚠️ fpcalc returned no fingerprint or duration');
+        console.warn('[Identify] ⚠️ fpcalc returned no fingerprint or duration');
       }
     } catch (fpcalcErr) {
-      console.log('[Identify] ❌ fpcalc/AcoustID failed:', fpcalcErr.message);
+      console.error('[Identify] ❌ fpcalc/AcoustID failed:', fpcalcErr.message);
     }
 
     // Method 2: AudD API fallback (requires API key)
@@ -4360,7 +4360,7 @@ ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
           };
         }
       } catch (auddErr) {
-        console.log('[Identify] AudD fallback failed:', auddErr.message);
+        console.error('[Identify] AudD fallback failed:', auddErr.message);
       }
     }
 
@@ -4466,7 +4466,7 @@ app.on('web-contents-created', (event, contents) => {
       // Allow checkout windows (data: origin) to navigate to https (Stripe)
       const currentUrl = contents.getURL();
       if (parsed.protocol === 'https:' && (currentUrl.startsWith('data:') || currentUrl.includes('checkout.stripe.com'))) {
-        console.log('[Security] Allowed checkout navigation to:', navigationUrl);
+        console.info('[Security] Allowed checkout navigation to:', navigationUrl);
         return; // Allow
       }
       if (parsed.protocol !== 'file:') {
@@ -4516,9 +4516,9 @@ app.whenReady().then(async () => {
     : path.join(__dirname, '..', '..', '..', 'installer-v2', 'wizard-main');
   const { InstallWizard } = require(wizardPath);
   const APP_DATA_DIR = path.join(os.homedir(), '.windy-pro');
-  console.log('[Main] needsSetup:', InstallWizard.needsSetup(APP_DATA_DIR));
+
   if (InstallWizard.needsSetup(APP_DATA_DIR)) {
-    console.log('[Main] Wizard needed — launching setup wizard');
+    console.info('[Main] Wizard needed — launching setup wizard');
     // Load platform adapter for this OS
     let platformAdapter = null;
     try {
@@ -4528,12 +4528,12 @@ app.whenReady().then(async () => {
       const { getAdapter } = require(adapterPath);
       platformAdapter = getAdapter();
     } catch (e) {
-      console.log('[Main] Platform adapter not loaded:', e.message);
+      console.error('[Main] Platform adapter not loaded:', e.message);
     }
     const wizard = new InstallWizard({ platformAdapter });
-    console.log('[Main] Wizard created, showing...');
+
     const completed = await wizard.show();
-    console.log('[Main] Wizard completed:', completed);
+    console.info('[Main] Wizard completed:', completed);
     if (!completed) {
       app.quit();
       return;
@@ -4593,7 +4593,7 @@ app.whenReady().then(async () => {
         try { updaterInstance.checkForUpdates(); } catch (e) { /* silent */ }
       }, 6 * 60 * 60 * 1000);
     } catch (e) {
-      console.log('[Main] Auto-updater skipped:', e.message);
+      console.error('[Main] Auto-updater skipped:', e.message);
     }
     _perfMark('Deferred startup complete');
   }, 3000);
@@ -4624,7 +4624,7 @@ app.whenReady().then(async () => {
       const debUrl = `https://github.com/sneakyfree/windy-pro/releases/latest/download/windy-pro_${version}_amd64.deb`;
       const debPath = path.join(os.tmpdir(), 'windy-pro-update.deb');
 
-      console.log(`[Updater] Downloading .deb from ${debUrl}...`);
+      console.info(`[Updater] Downloading .deb from ${debUrl}...`);
       safeSend('update-toast', { message: '⬇️ Downloading update…', canRestart: false });
 
       // Download the .deb — follow redirects (GitHub returns 302)
@@ -4648,7 +4648,7 @@ app.whenReady().then(async () => {
         downloadWithRedirect(debUrl);
       });
 
-      console.log(`[Updater] Downloaded to ${debPath}, installing with pkexec...`);
+      console.info(`[Updater] Downloaded to ${debPath}, installing with pkexec...`);
       safeSend('update-toast', { message: '🔐 Installing update (admin password required)…', canRestart: false });
 
       // Install with pkexec (graphical sudo prompt)
@@ -4657,7 +4657,7 @@ app.whenReady().then(async () => {
 
       // Clean up and restart
       fs.unlinkSync(debPath);
-      console.log('[Updater] .deb installed, restarting...');
+      console.info('[Updater] .deb installed, restarting...');
       app.relaunch();
       app.exit(0);
       return { ok: true };
@@ -5266,7 +5266,7 @@ ipcMain.handle('delete-local-bundle-copy', async (event, bundleId) => {
 
 
 if (!gotLock) {
-  console.log('[Main] Another instance is running. Quitting.');
+  console.info('[Main] Another instance is running. Quitting.');
   app.quit();
 } else {
   app.on('second-instance', () => {

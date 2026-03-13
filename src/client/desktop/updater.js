@@ -33,27 +33,27 @@ class WindyUpdater {
 
         // Update events
         autoUpdater.on('checking-for-update', () => {
-            console.log('[Updater] Checking for updates...');
+            console.info('[Updater] Checking for updates...');
         });
 
         autoUpdater.on('update-available', (info) => {
-            console.log(`[Updater] Update available: ${info.version}`);
+            console.info(`[Updater] Update available: ${info.version}`);
             this.updateAvailable = true;
             // Non-intrusive toast — send to renderer
             this._sendToast(`🔄 Windy Pro v${info.version} is downloading in the background…`);
         });
 
         autoUpdater.on('update-not-available', () => {
-            console.log('[Updater] App is up to date.');
+            console.info('[Updater] App is up to date.');
         });
 
         autoUpdater.on('download-progress', (progress) => {
             this.downloadProgress = Math.round(progress.percent);
-            console.log(`[Updater] Download: ${this.downloadProgress}%`);
+            console.info(`[Updater] Download: ${this.downloadProgress}%`);
         });
 
         autoUpdater.on('update-downloaded', (info) => {
-            console.log(`[Updater] Update downloaded: ${info.version}`);
+            console.info(`[Updater] Update downloaded: ${info.version}`);
             this._sendToast(`✅ Windy Pro v${info.version} is ready. Restart to update.`, true);
         });
 
@@ -82,13 +82,13 @@ class WindyUpdater {
             const lastCheck = store.get('lastUpdateCheck', 0);
             const sixHoursMs = 6 * 60 * 60 * 1000;
             if (Date.now() - lastCheck < sixHoursMs) {
-                console.log('[Updater] Skipping — checked within last 6h');
+                
                 return;
             }
             store.set('lastUpdateCheck', Date.now());
             autoUpdater.checkForUpdates();
         } catch (error) {
-            console.log('[Updater] Check failed (offline?):', error.message);
+            console.error('[Updater] Check failed (offline?):', error.message);
         }
     }
 
@@ -101,7 +101,7 @@ class WindyUpdater {
             store.set('lastUpdateCheck', Date.now());
             autoUpdater.checkForUpdates();
         } catch (error) {
-            console.log('[Updater] Force check failed:', error.message);
+            console.error('[Updater] Force check failed:', error.message);
         }
     }
 
@@ -149,7 +149,7 @@ class WindyUpdater {
      * Install downloaded update immediately (quit and install)
      */
     installUpdate() {
-        console.log('[Updater] Installing update and restarting...');
+        console.info('[Updater] Installing update and restarting...');
         autoUpdater.quitAndInstall();
     }
 }

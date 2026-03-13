@@ -600,5 +600,5 @@ function stopListening() {
         }
     }, true);
 
-    console.log('[Tooltip] Initialized — found', document.querySelectorAll('[data-tooltip]').length, 'elements');
+
 })();

@@ -11,7 +11,7 @@ let voiceLevelReceived = false;
 if (window.windyMini) {
   // ═══ State changes ═══
   window.windyMini.onStateChange((state) => {
-    console.log('[MiniWidget] State:', state);
+
     currentState = state;
 
     // Clear everything
@@ -48,7 +48,7 @@ if (window.windyMini) {
 
   // ═══ Widget change ═══
   window.windyMini.onWidgetChange((data) => {
-    console.log('[MiniWidget] Widget change:', data?.type);
+
     if (data.type === 'stock' && data.svg) {
       tornado.innerHTML = '';
       tornado.style.fontSize = '0';
@@ -85,7 +85,7 @@ if (window.windyMini) {
 
 // ═══ Voice-reactive animation loop ═══
 function startVoiceAnimation() {
-  console.log('[MiniWidget] startVoiceAnimation');
+
   smoothLevel = 0;
   breathPhase = 0;
 

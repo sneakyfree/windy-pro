@@ -1067,7 +1067,7 @@ class WindyApp {
       this.transcript.push({ text: content, recovered: true, timestamp: Date.now() });
       banner.remove();
       // Don't delete the file yet — let the user copy/save first
-      console.log('[CrashRecovery] Text restored to transcript area');
+      console.info('[CrashRecovery] Text restored to transcript area');
     });
 
     // Dismiss: delete recovery file and remove banner
@@ -1076,7 +1076,7 @@ class WindyApp {
         await window.windyAPI.dismissCrashRecovery();
       }
       banner.remove();
-      console.log('[CrashRecovery] Dismissed and file deleted');
+      console.info('[CrashRecovery] Dismissed and file deleted');
     });
   }
 
@@ -1618,7 +1618,7 @@ class WindyApp {
 
       this.setState('listening');
       this.updateModelBadge('stream', false);
-      console.log('[Stream] Web Speech API started — streaming to Google');
+      
     } catch (err) {
       console.error('[Stream] Failed to start:', err);
       this.showReconnectToast('⚠️ Could not start speech recognition. Falling back to local.');
@@ -2077,7 +2077,7 @@ class WindyApp {
               }
               payload.mode = 'clone_capture';
               await window.windyAPI.archiveRecording(payload);
-              console.log('[CloneCapture] Archived successfully:', durationStr);
+              console.info('[CloneCapture] Archived successfully:', durationStr);
             } catch (archErr) {
               console.warn('[CloneCapture] Archive error:', archErr.message);
             }
