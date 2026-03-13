@@ -5,7 +5,7 @@
 class SetupWizard {
   constructor(app) {
     this.app = app;
-    this.totalSteps = 6;
+    this.totalSteps = 7;
     this.step = 0;
     this.overlay = null;
     this._micStream = null;
@@ -160,8 +160,22 @@ class SetupWizard {
             </div>
           </div>
 
-          <!-- Step 5: All Set -->
+          <!-- Step 5: Pair Picker (Translation Pairs) -->
           <div class="wizard-step" id="wizardStep5" style="display:none">
+            <div class="wizard-emoji">🌍</div>
+            <h2 class="wizard-title">Translation Pairs</h2>
+            <p class="wizard-desc">Download language pairs for offline translation.</p>
+            <div class="wiz-pair-counter" id="wizPairCounter">0 pairs selected</div>
+            <div class="wiz-pair-regions" id="wizPairRegions"></div>
+            <div class="wiz-pair-selected" id="wizPairSelected"></div>
+            <div class="wizard-nav">
+              <button class="wizard-btn secondary" data-action="back">← Back</button>
+              <button class="wizard-btn primary" data-action="next" id="wizPairNext">Next →</button>
+            </div>
+          </div>
+
+          <!-- Step 6: All Set -->
+          <div class="wizard-step" id="wizardStep6" style="display:none">
             <div class="wizard-emoji">🚀</div>
             <h2 class="wizard-title">You're All Set!</h2>
             <p class="wizard-desc">Press the shortcut below to start recording anywhere.</p>
@@ -205,6 +219,7 @@ class SetupWizard {
     // Step-specific init
     if (n === 2) this._initEngineStep();
     if (n === 4) this._initPlanStep();
+    if (n === 5) this._initPairPickerStep();
   }
 
   async _saveState() {
@@ -528,6 +543,104 @@ class SetupWizard {
     }
   }
 
+  // ═══ Step 5: Pair Picker ═══
+
+  _initPairPickerStep() {
+    const regionsEl = this.overlay.querySelector('#wizPairRegions');
+    const selectedEl = this.overlay.querySelector('#wizPairSelected');
+    if (!regionsEl) return;
+
+    // For free users, show skip message
+    if (this.choices.planTier === 'free') {
+      regionsEl.innerHTML = `
+        <div class="wiz-pair-free-msg">
+          <p>📦 Translation pairs are available on paid plans.</p>
+          <p class="wizard-desc">Upgrade anytime from Settings → Your Plan.</p>
+        </div>`;
+      selectedEl.innerHTML = '';
+      this._wizSelectedPairs = [];
+      this._updatePairCounter();
+      return;
+    }
+
+    const regions = [
+      { name: 'Europe', icon: '🇪🇺', pairs: ['en-es', 'en-fr', 'en-de', 'en-it', 'en-pt', 'en-nl', 'en-pl', 'en-ru', 'en-sv'] },
+      { name: 'Asia', icon: '🌏', pairs: ['en-zh', 'en-ja', 'en-ko', 'en-hi', 'en-th', 'en-vi', 'en-id'] },
+      { name: 'Middle East & Africa', icon: '🌍', pairs: ['en-ar', 'en-tr', 'en-he', 'en-fa'] },
+      { name: 'Americas', icon: '🌎', pairs: ['en-pt', 'es-pt'] },
+    ];
+
+    this._wizSelectedPairs = this._wizSelectedPairs || [];
+
+    const PAIR_LABELS = {
+      'en-es': '🇺🇸↔🇪🇸 English ↔ Spanish', 'en-fr': '🇺🇸↔🇫🇷 English ↔ French',
+      'en-de': '🇺🇸↔🇩🇪 English ↔ German', 'en-it': '🇺🇸↔🇮🇹 English ↔ Italian',
+      'en-pt': '🇺🇸↔🇧🇷 English ↔ Portuguese', 'en-nl': '🇺🇸↔🇳🇱 English ↔ Dutch',
+      'en-pl': '🇺🇸↔🇵🇱 English ↔ Polish', 'en-ru': '🇺🇸↔🇷🇺 English ↔ Russian',
+      'en-sv': '🇺🇸↔🇸🇪 English ↔ Swedish', 'en-zh': '🇺🇸↔🇨🇳 English ↔ Chinese',
+      'en-ja': '🇺🇸↔🇯🇵 English ↔ Japanese', 'en-ko': '🇺🇸↔🇰🇷 English ↔ Korean',
+      'en-hi': '🇺🇸↔🇮🇳 English ↔ Hindi', 'en-th': '🇺🇸↔🇹🇭 English ↔ Thai',
+      'en-vi': '🇺🇸↔🇻🇳 English ↔ Vietnamese', 'en-id': '🇺🇸↔🇮🇩 English ↔ Indonesian',
+      'en-ar': '🇺🇸↔🇸🇦 English ↔ Arabic', 'en-tr': '🇺🇸↔🇹🇷 English ↔ Turkish',
+      'en-he': '🇺🇸↔🇮🇱 English ↔ Hebrew', 'en-fa': '🇺🇸↔🇮🇷 English ↔ Persian',
+      'es-pt': '🇪🇸↔🇧🇷 Spanish ↔ Portuguese',
+    };
+
+    regionsEl.innerHTML = regions.map(r => `
+      <div class="wiz-pair-region">
+        <div class="wiz-pair-region-header">
+          <span>${r.icon} ${r.name}</span>
+          <button class="wizard-btn secondary wiz-pair-region-select" data-pairs="${r.pairs.join(',')}" style="font-size:11px;padding:4px 10px;">Select All</button>
+        </div>
+        <div class="wiz-pair-list">
+          ${r.pairs.map(p => `
+            <label class="wiz-pair-item">
+              <input type="checkbox" class="wiz-pair-cb" data-pair="${p}" ${this._wizSelectedPairs.includes(p) ? 'checked' : ''}>
+              <span>${PAIR_LABELS[p] || p}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+
+    // Bind checkbox changes
+    regionsEl.querySelectorAll('.wiz-pair-cb').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const pair = cb.dataset.pair;
+        if (cb.checked && !this._wizSelectedPairs.includes(pair)) {
+          this._wizSelectedPairs.push(pair);
+        } else if (!cb.checked) {
+          this._wizSelectedPairs = this._wizSelectedPairs.filter(p => p !== pair);
+        }
+        this._updatePairCounter();
+      });
+    });
+
+    // Region quick-select
+    regionsEl.querySelectorAll('.wiz-pair-region-select').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pairs = btn.dataset.pairs.split(',');
+        pairs.forEach(p => {
+          if (!this._wizSelectedPairs.includes(p)) this._wizSelectedPairs.push(p);
+          const cb = regionsEl.querySelector(`.wiz-pair-cb[data-pair="${p}"]`);
+          if (cb) cb.checked = true;
+        });
+        this._updatePairCounter();
+      });
+    });
+
+    this._updatePairCounter();
+  }
+
+  _updatePairCounter() {
+    const counter = this.overlay.querySelector('#wizPairCounter');
+    const count = (this._wizSelectedPairs || []).length;
+    if (counter) {
+      counter.textContent = `${count} pair${count !== 1 ? 's' : ''} selected`;
+      counter.style.color = count > 0 ? '#22C55E' : '#94A3B8';
+    }
+  }
+
   // ═══ Complete ═══
 
   async _complete() {
@@ -555,6 +668,16 @@ class SetupWizard {
           }
         }
       } catch (e) { console.debug('[Wizard] Checkout session error:', e.message); }
+    }
+
+    // Queue selected translation pairs for download
+    if (this._wizSelectedPairs && this._wizSelectedPairs.length > 0) {
+      try {
+        localStorage.setItem('windy_pendingPairDownloads', JSON.stringify(this._wizSelectedPairs));
+        if (window.windyAPI?.showDownloadWizard) {
+          window.windyAPI.showDownloadWizard();
+        }
+      } catch (e) { console.debug('[Wizard] Pair queue error:', e.message); }
     }
 
     // Setup autostart

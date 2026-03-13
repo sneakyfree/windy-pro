@@ -10,10 +10,20 @@
   position: fixed;
   inset: 32px 0 0 0;
   z-index: 8000;
-  background: #0F1219;
+  background: var(--bg-primary, #0F1219);
   overflow-y: auto;
   overflow-x: hidden;
   animation: mp-fadeIn .25s ease;
+
+  /* Marketplace scoped tokens (fall back to global vars) */
+  --mp-bg: var(--bg-primary, #0F1219);
+  --mp-card-bg: var(--bg-secondary, #1A1F2E);
+  --mp-text: var(--text-primary, #E5E7EB);
+  --mp-text-muted: var(--text-secondary, #94A3B8);
+  --mp-text-dim: var(--text-muted, #64748B);
+  --mp-star: #F59E0B;
+  --mp-green: #22C55E;
+  --mp-red: #EF4444;
 }
 .marketplace-panel.visible { display: block; }
 
@@ -32,7 +42,7 @@
 .mp-section-title {
   font-size: 18px;
   font-weight: 700;
-  color: #E5E7EB;
+  color: var(--mp-text, #E5E7EB);
   margin: 32px 0 16px;
   display: flex;
   align-items: center;
@@ -65,12 +75,12 @@
 .mp-hero-title {
   font-size: 26px;
   font-weight: 800;
-  color: #F5F5F5;
+  color: var(--mp-text, #F5F5F5);
   margin-bottom: 8px;
 }
 .mp-hero-sub {
   font-size: 14px;
-  color: #94A3B8;
+  color: var(--mp-text-muted, #94A3B8);
   line-height: 1.6;
   max-width: 520px;
   margin-bottom: 16px;
@@ -78,11 +88,11 @@
 .mp-hero-price {
   font-size: 20px;
   font-weight: 700;
-  color: #F59E0B;
+  color: var(--mp-star, #F59E0B);
   margin-bottom: 18px;
 }
 .mp-hero-price .mp-strike {
-  color: #64748B;
+  color: var(--mp-text-dim, #64748B);
   text-decoration: line-through;
   font-weight: 400;
   font-size: 16px;
@@ -90,7 +100,7 @@
 }
 .mp-hero-cta {
   background: linear-gradient(135deg, #F59E0B, #D97706);
-  color: #0F1219;
+  color: var(--mp-bg, #0F1219);
   border: none;
   padding: 12px 28px;
   border-radius: 10px;
@@ -109,7 +119,7 @@
   right: 16px;
   background: none;
   border: none;
-  color: #64748B;
+  color: var(--mp-text-dim, #64748B);
   font-size: 18px;
   cursor: pointer;
   width: 28px;
@@ -122,7 +132,7 @@
 }
 .mp-hero-dismiss:hover {
   background: rgba(255,255,255,.08);
-  color: #E5E7EB;
+  color: var(--mp-text, #E5E7EB);
 }
 
 /* ══════════════════════════════════
@@ -135,7 +145,7 @@
   margin-bottom: 32px;
 }
 .mp-bundle-card {
-  background: #1A1F2E;
+  background: var(--mp-card-bg, #1A1F2E);
   border: 1px solid rgba(255,255,255,.06);
   border-radius: 14px;
   padding: 24px;
