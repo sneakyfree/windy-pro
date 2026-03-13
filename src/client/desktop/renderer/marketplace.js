@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Marketplace Panel (L2)
+ * Windy Pro — Marketplace Panel (L2) — Hardened
  *
  * Browsable pair catalog, bundles, downloads, and storage management.
  * Loaded as a deferred script in the main renderer window.
@@ -37,6 +37,10 @@ class MarketplacePanel {
     // Panel element
     this.panel = null;
     this._initialized = false;
+    this._loading = false;
+
+    // Keyboard navigation cleanup
+    this._keydownHandlers = [];
   }
 
   /* ═══════════════════════════════════════
@@ -46,6 +50,7 @@ class MarketplacePanel {
   async init() {
     if (this._initialized) return;
     this._initialized = true;
+    this._loading = true;
 
     try {
       const api = window.windyAPI || {};
@@ -62,24 +67,35 @@ class MarketplacePanel {
       this.storageInfo = storage || { usedBytes: 0, availableBytes: 0, pairs: [] };
     } catch (err) {
       console.warn('[Marketplace] Init failed:', err.message);
+      this._showErrorBanner('Failed to load marketplace data. Please try again.', () => {
+        this._initialized = false;
+        this._loading = false;
+        this.init().then(() => this.render());
+      });
+    } finally {
+      this._loading = false;
     }
 
     // Listen for download progress events
-    const api2 = window.windyAPI || {};
-    if (api2.onPairDownloadProgress) {
-      api2.onPairDownloadProgress((data) => {
-        if (!data || !data.pairId) return;
-        if (data.percent >= 100) {
-          this.activeDownloads.delete(data.pairId);
-          if (!this.downloadedPairs.includes(data.pairId)) {
-            this.downloadedPairs.push(data.pairId);
+    try {
+      const api2 = window.windyAPI || {};
+      if (api2.onPairDownloadProgress) {
+        api2.onPairDownloadProgress((data) => {
+          if (!data || !data.pairId) return;
+          if (data.percent >= 100) {
+            this.activeDownloads.delete(data.pairId);
+            if (!this.downloadedPairs.includes(data.pairId)) {
+              this.downloadedPairs.push(data.pairId);
+            }
+            this._refreshStorageInfo();
+          } else {
+            this.activeDownloads.set(data.pairId, data);
           }
-          this._refreshStorageInfo();
-        } else {
-          this.activeDownloads.set(data.pairId, data);
-        }
-        this._updateDownloadUI(data.pairId);
-      });
+          this._updateDownloadUI(data.pairId);
+        });
+      }
+    } catch (err) {
+      console.warn('[Marketplace] Progress listener failed:', err.message);
     }
   }
 
@@ -125,6 +141,22 @@ class MarketplacePanel {
     if (!this.panel) return;
     this._visibleCount = this._PAGE_SIZE;
 
+    // Show loading skeleton if still loading
+    if (this._loading) {
+      this.panel.innerHTML = `<div class="marketplace-inner">
+        ${this._renderLoadingSkeleton()}
+      </div>`;
+      return;
+    }
+
+    // Handle empty catalog
+    if (this.catalog.length === 0 && this.bundles.length === 0) {
+      this.panel.innerHTML = `<div class="marketplace-inner">
+        ${this._renderEmptyCatalog()}
+      </div>`;
+      return;
+    }
+
     this.panel.innerHTML = `<div class="marketplace-inner">
       ${this._renderHero()}
       ${this._renderBundles()}
@@ -134,6 +166,77 @@ class MarketplacePanel {
     ${this._renderPickerModal()}`;
 
     this._bindEvents();
+  }
+
+  /* ── Loading Skeleton ── */
+
+  _renderLoadingSkeleton() {
+    const skeletonCard = `
+      <div class="mp-skeleton-card" aria-hidden="true">
+        <div class="mp-skeleton-line" style="width:60%;height:18px;margin-bottom:8px;"></div>
+        <div class="mp-skeleton-line" style="width:40%;height:14px;margin-bottom:12px;"></div>
+        <div class="mp-skeleton-line" style="width:80%;height:32px;"></div>
+      </div>`;
+
+    return `
+      <div class="mp-section-title"><span class="mp-icon">⏳</span> Loading Marketplace…</div>
+      <div class="mp-bundles-row">
+        ${skeletonCard}${skeletonCard}${skeletonCard}
+      </div>
+      <div class="mp-section-title" style="margin-top:20px;"><span class="mp-icon">🔍</span> Discover</div>
+      <div class="mp-catalog-grid">
+        ${skeletonCard}${skeletonCard}${skeletonCard}${skeletonCard}${skeletonCard}${skeletonCard}
+      </div>
+      <style>
+        .mp-skeleton-card { background:rgba(255,255,255,.03); border-radius:12px; padding:16px; }
+        .mp-skeleton-line { background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.08) 50%,rgba(255,255,255,.04) 75%);
+          background-size:200% 100%; border-radius:6px; animation:mpSkeletonPulse 1.5s infinite; }
+        @keyframes mpSkeletonPulse { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }
+      </style>`;
+  }
+
+  /* ── Empty Catalog ── */
+
+  _renderEmptyCatalog() {
+    return `
+      <div class="mp-empty-state" style="text-align:center;padding:60px 20px;">
+        <div style="font-size:48px;margin-bottom:12px;">🌐</div>
+        <div style="font-size:16px;font-weight:600;color:#F5F5F5;margin-bottom:8px;">No engines available</div>
+        <div style="font-size:13px;color:#94A3B8;margin-bottom:20px;">
+          The engine catalog couldn't be loaded. Check your connection and try again.
+        </div>
+        <button class="mp-retry-btn" id="mpRetryBtn" style="padding:10px 24px;border:none;border-radius:8px;
+          background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;font-weight:600;cursor:pointer;
+          font-size:14px;transition:transform .1s;">
+          🔄 Retry
+        </button>
+      </div>`;
+  }
+
+  /* ── Error Banner ── */
+
+  _showErrorBanner(message, retryFn) {
+    if (!this.panel) return;
+    const existing = this.panel.querySelector('.mp-error-banner');
+    if (existing) existing.remove();
+
+    const banner = document.createElement('div');
+    banner.className = 'mp-error-banner';
+    banner.style.cssText = 'background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px 16px;margin:12px 0;display:flex;align-items:center;gap:10px;';
+    banner.innerHTML = `
+      <span style="font-size:18px;">⚠️</span>
+      <span style="flex:1;font-size:13px;color:#FCA5A5;">${this._esc(message)}</span>
+      ${retryFn ? '<button class="mp-error-retry" style="padding:6px 14px;border:none;border-radius:6px;background:rgba(239,68,68,.2);color:#FCA5A5;cursor:pointer;font-size:12px;font-weight:600;">Retry</button>' : ''}
+      <button class="mp-error-dismiss" style="background:none;border:none;color:#64748B;cursor:pointer;font-size:16px;padding:2px 4px;">×</button>
+    `;
+    banner.querySelector('.mp-error-dismiss')?.addEventListener('click', () => banner.remove());
+    if (retryFn) {
+      banner.querySelector('.mp-error-retry')?.addEventListener('click', () => {
+        banner.remove();
+        retryFn();
+      });
+    }
+    this.panel.prepend(banner);
   }
 
   /* ── 1. Marco Polo Hero Banner ── */
@@ -174,7 +277,7 @@ class MarketplacePanel {
       const bundle = this.bundles.find(x => x.id === b.id);
       const name = bundle ? bundle.name : b.id;
       return `
-        <div class="mp-bundle-card" data-bundle="${this._esc(b.id)}">
+        <div class="mp-bundle-card" data-bundle="${this._esc(b.id)}" tabindex="0" role="button" aria-label="${this._esc(name)} — ${b.label}">
           <div class="mp-bundle-icon">${b.icon}</div>
           <div class="mp-bundle-name">${this._esc(name)}</div>
           <div class="mp-bundle-meta">${b.label}</div>
@@ -317,11 +420,18 @@ class MarketplacePanel {
       this._openPicker('marco-polo');
     });
 
-    // Bundle card clicks
+    // Bundle card clicks + keyboard
     this.panel.querySelectorAll('.mp-bundle-card').forEach(card => {
-      card.addEventListener('click', () => {
+      const handler = () => {
         const bundleId = card.dataset.bundle;
         this._openPicker(bundleId);
+      };
+      card.addEventListener('click', handler);
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handler();
+        }
       });
     });
 
@@ -338,6 +448,7 @@ class MarketplacePanel {
           this.render();
         } catch (err) {
           console.error('[Marketplace] Delete failed:', err);
+          this._showErrorBanner('Failed to delete engine. Please try again.');
         }
       });
     });
@@ -374,6 +485,14 @@ class MarketplacePanel {
     loadMore?.addEventListener('click', () => {
       this._visibleCount += this._PAGE_SIZE;
       this._renderCatalogGrid();
+    });
+
+    // Retry button (empty catalog)
+    const retryBtn = this.panel.querySelector('#mpRetryBtn');
+    retryBtn?.addEventListener('click', () => {
+      this._initialized = false;
+      this._loading = false;
+      this.init().then(() => this.render());
     });
 
     // Picker events
@@ -461,6 +580,14 @@ class MarketplacePanel {
       html += this._renderPairCard(pair);
     });
 
+    // Show empty search state
+    if (filtered.length === 0 && this.filters.search) {
+      html = `<div class="mp-empty-state" style="grid-column:1/-1;text-align:center;padding:30px;">
+        <div style="font-size:32px;margin-bottom:8px;">🔍</div>
+        <div style="color:#94A3B8;">No engines match "${this._esc(this.filters.search)}"</div>
+      </div>`;
+    }
+
     grid.innerHTML = html;
 
     // Load More visibility
@@ -483,6 +610,17 @@ class MarketplacePanel {
         e.stopPropagation();
         const pairId = btn.dataset.pairId;
         this._handleDownloadPair(pairId);
+      });
+    });
+
+    // Keyboard navigation for pair cards
+    grid.querySelectorAll('.mp-pair-card').forEach(card => {
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const actionBtn = card.querySelector('.mp-pair-action.buy, .mp-pair-action.included');
+          if (actionBtn) actionBtn.click();
+        }
       });
     });
   }
@@ -514,7 +652,8 @@ class MarketplacePanel {
       : `${this._esc(pair.sourceName)} → ${this._esc(pair.targetName)}`;
 
     return `
-      <div class="mp-pair-card" data-pair-id="${this._esc(pair.id)}">
+      <div class="mp-pair-card" data-pair-id="${this._esc(pair.id)}" tabindex="0" role="button"
+           aria-label="${this._esc(pair.sourceName)} to ${this._esc(pair.targetName)}, ${this._esc(pair.qualityLabel || '')}, ${pair.sizeMB || '?'} MB">
         <div class="mp-pair-flags">
           ${pair.sourceFlag || '🏳️'} <span class="mp-arrow">↔</span> ${pair.targetFlag || '🏳️'}
         </div>
@@ -593,7 +732,7 @@ class MarketplacePanel {
     list.innerHTML = pairs.map(p => {
       const sel = selectedIds.has(p.id) ? ' selected' : '';
       return `
-        <div class="mp-picker-item${sel}" data-pair-id="${this._esc(p.id)}">
+        <div class="mp-picker-item${sel}" data-pair-id="${this._esc(p.id)}" tabindex="0" role="checkbox" aria-checked="${selectedIds.has(p.id)}">
           <div class="mp-picker-check">✓</div>
           <span class="mp-picker-item-flags">${p.sourceFlag || ''} ${p.targetFlag || ''}</span>
           <span class="mp-picker-item-name">${this._esc(p.sourceName)} ↔ ${this._esc(p.targetName)}</span>
@@ -601,9 +740,9 @@ class MarketplacePanel {
         </div>`;
     }).join('');
 
-    // Bind click toggles
+    // Bind click + keyboard toggles
     list.querySelectorAll('.mp-picker-item').forEach(item => {
-      item.addEventListener('click', () => {
+      const toggleItem = () => {
         if (!this._currentPicker) return;
         const pairId = item.dataset.pairId;
         if (this._currentPicker.isAll) return; // Marco Polo = locked selection
@@ -611,12 +750,22 @@ class MarketplacePanel {
         if (this._currentPicker.selectedIds.has(pairId)) {
           this._currentPicker.selectedIds.delete(pairId);
           item.classList.remove('selected');
+          item.setAttribute('aria-checked', 'false');
         } else {
           if (this._currentPicker.selectedIds.size >= this._currentPicker.maxPairs) return;
           this._currentPicker.selectedIds.add(pairId);
           item.classList.add('selected');
+          item.setAttribute('aria-checked', 'true');
         }
         this._updatePickerCounter();
+      };
+
+      item.addEventListener('click', toggleItem);
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleItem();
+        }
       });
     });
   }
@@ -672,17 +821,18 @@ class MarketplacePanel {
       });
     });
 
-    // Escape to close
+    // Escape to close picker
     const escHandler = (e) => {
       if (e.key === 'Escape' && this._currentPicker) {
         this._closePicker();
       }
     };
     document.addEventListener('keydown', escHandler);
+    this._keydownHandlers.push(escHandler);
   }
 
   /* ═══════════════════════════════════════
-     Actions
+     Actions — with error boundaries
      ═══════════════════════════════════════ */
 
   async _handleBuyPair(pairId) {
@@ -697,12 +847,43 @@ class MarketplacePanel {
           await window.windyAPI.openCheckoutUrl({ priceId, product: pairId });
         } else {
           // No Stripe price yet — show info
-          alert(`${pair.sourceName} ↔ ${pair.targetName} — $${(pair.price || 6.99).toFixed(2)}\n\nPayment integration coming soon!`);
+          alert(`${this._esc(pair.sourceName)} ↔ ${this._esc(pair.targetName)} — $${(pair.price || 6.99).toFixed(2)}\n\nPayment integration coming soon!`);
         }
       } catch (err) {
         console.error('[Marketplace] Buy failed:', err);
+        this._showCheckoutError(pair, err);
       }
     }
+  }
+
+  /** Show a clear error message + retry button when Stripe checkout fails */
+  _showCheckoutError(pair, err) {
+    // Remove existing checkout errors
+    const existing = this.panel?.querySelector('.mp-checkout-error');
+    if (existing) existing.remove();
+
+    const errorCard = document.createElement('div');
+    errorCard.className = 'mp-checkout-error';
+    errorCard.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(239,68,68,.95);color:#fff;padding:14px 20px;border-radius:12px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.4);max-width:420px;backdrop-filter:blur(8px);';
+    errorCard.innerHTML = `
+      <span style="font-size:20px;">❌</span>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;">Checkout failed</div>
+        <div style="font-size:11px;opacity:.85;margin-top:2px;">${this._esc(err.message || 'Something went wrong. Please try again.')}</div>
+      </div>
+      <button class="mp-checkout-retry" style="padding:6px 14px;border:none;border-radius:8px;background:rgba(255,255,255,.2);color:#fff;cursor:pointer;font-weight:600;font-size:12px;">Retry</button>
+      <button class="mp-checkout-close" style="background:none;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-size:18px;padding:2px 4px;">×</button>
+    `;
+
+    errorCard.querySelector('.mp-checkout-close').addEventListener('click', () => errorCard.remove());
+    errorCard.querySelector('.mp-checkout-retry').addEventListener('click', () => {
+      errorCard.remove();
+      this._handleBuyPair(pair.id);
+    });
+
+    document.body.appendChild(errorCard);
+    // Auto-dismiss after 10 seconds
+    setTimeout(() => errorCard.remove(), 10000);
   }
 
   async _handleDownloadPair(pairId) {
@@ -735,25 +916,31 @@ class MarketplacePanel {
       } else {
         this.activeDownloads.delete(pairId);
         this._updateDownloadUI(pairId);
-        alert(`Download failed: ${result?.error || 'Unknown error'}`);
+        this._showErrorBanner(`Download failed: ${result?.error || 'Unknown error'}. Please try again.`);
       }
     } catch (err) {
       this.activeDownloads.delete(pairId);
       this._updateDownloadUI(pairId);
       console.error('[Marketplace] Download failed:', err);
+      this._showErrorBanner(`Download failed: ${err.message || 'Network error'}. Please check your connection.`);
     }
   }
 
   async _handleBundlePurchase(selectedIds) {
     if (!selectedIds || selectedIds.length === 0) return;
 
-    // For now, show confirmation and note that Stripe integration is coming
-    const bundle = this._currentPicker
-      ? this.bundles.find(b => b.id === this._currentPicker.bundleId) : null;
-    const bundleName = bundle ? bundle.name : 'Bundle';
-    const bundlePrice = bundle ? `$${bundle.price}` : '';
+    try {
+      // For now, show confirmation and note that Stripe integration is coming
+      const bundle = this._currentPicker
+        ? this.bundles.find(b => b.id === this._currentPicker.bundleId) : null;
+      const bundleName = bundle ? bundle.name : 'Bundle';
+      const bundlePrice = bundle ? `$${bundle.price}` : '';
 
-    alert(`${bundleName} ${bundlePrice}\n\n${selectedIds.length} pairs selected.\n\nPayment integration coming soon! Once purchased, all selected pairs will begin downloading automatically.`);
+      alert(`${bundleName} ${bundlePrice}\n\n${selectedIds.length} pairs selected.\n\nPayment integration coming soon! Once purchased, all selected pairs will begin downloading automatically.`);
+    } catch (err) {
+      console.error('[Marketplace] Bundle purchase failed:', err);
+      this._showErrorBanner('Bundle purchase failed. Please try again.');
+    }
   }
 
   /* ═══════════════════════════════════════
@@ -810,10 +997,11 @@ class MarketplacePanel {
     return '★'.repeat(n) + '☆'.repeat(5 - n);
   }
 
+  /** XSS-safe escaping using DOM textContent → innerHTML */
   _esc(str) {
     if (!str) return '';
     const div = document.createElement('div');
-    div.textContent = str;
+    div.textContent = String(str);
     return div.innerHTML;
   }
 
@@ -834,8 +1022,9 @@ class MarketplacePanel {
     overlay.id = 'upsellPlanOverlay';
     overlay.innerHTML = `
       <div class="upsell-plan-dialog">
+        <button class="upsell-plan-dismiss" style="position:absolute;top:8px;right:12px;background:none;border:none;color:#64748B;font-size:18px;cursor:pointer;" title="Dismiss">&times;</button>
         <div class="upsell-plan-icon">🔒</div>
-        <div class="upsell-plan-title">You've used all ${limit} engine${limit !== 1 ? 's' : ''} in your ${tierName} plan</div>
+        <div class="upsell-plan-title">You've used all ${limit} engine${limit !== 1 ? 's' : ''} in your ${this._esc(tierName)} plan</div>
         <div class="upsell-plan-desc">
           Upgrade your plan for more offline translation engines, or buy just this engine individually.
         </div>
@@ -847,6 +1036,9 @@ class MarketplacePanel {
     `;
 
     document.body.appendChild(overlay);
+
+    // Dismiss button
+    overlay.querySelector('.upsell-plan-dismiss')?.addEventListener('click', () => overlay.remove());
 
     // Close on backdrop click
     overlay.addEventListener('click', (e) => {
@@ -879,4 +1071,3 @@ class MarketplacePanel {
     document.addEventListener('keydown', escHandler);
   }
 }
-

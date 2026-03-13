@@ -35,6 +35,13 @@ const TEMP_SUFFIX = '.tmp';
 const MODEL_ENC_NAME = 'model.enc';
 const META_NAME = 'meta.json';
 
+// Hardening constants
+const CONNECT_TIMEOUT_MS = 60000;    // 60 seconds connect timeout
+const DOWNLOAD_TIMEOUT_MS = 300000;  // 300 seconds (5 min) total download timeout
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 1000;          // 1s base for exponential backoff
+const MAX_CONCURRENT_DOWNLOADS = 1;
+
 class PairDownloadManager extends EventEmitter {
   /**
    * @param {string} pairsDir — absolute path to translation-pairs/ directory
@@ -48,6 +55,38 @@ class PairDownloadManager extends EventEmitter {
 
     /** @type {Map<string, {req: http.ClientRequest, aborted: boolean}>} */
     this._activeDownloads = new Map();
+
+    /** Concurrency semaphore — only MAX_CONCURRENT_DOWNLOADS at a time */
+    this._downloadQueue = [];
+    this._currentDownloads = 0;
+  }
+
+  // ═══════════════════════════════════════════
+  // Logging
+  // ═══════════════════════════════════════════
+
+  /** Timestamped log helper */
+  _log(level, method, msg) {
+    const ts = new Date().toISOString();
+    const prefix = `[PairDL ${ts}]`;
+    if (level === 'error') {
+      console.error(`${prefix} [${method}] ${msg}`);
+    } else if (level === 'warn') {
+      console.warn(`${prefix} [${method}] ${msg}`);
+    } else {
+      console.log(`${prefix} [${method}] ${msg}`);
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // Input Validation
+  // ═══════════════════════════════════════════
+
+  /** Validate pairId is a non-empty string */
+  _validatePairId(pairId) {
+    if (typeof pairId !== 'string' || pairId.trim().length === 0) {
+      throw new Error('pairId must be a non-empty string');
+    }
   }
 
   // ═══════════════════════════════════════════
@@ -96,41 +135,75 @@ class PairDownloadManager extends EventEmitter {
   }
 
   // ═══════════════════════════════════════════
-  // Download (L1)
+  // Download (L1) — with retry + concurrency
   // ═══════════════════════════════════════════
 
   /**
    * Download a single translation pair from CDN.
-   *
-   * Flow: download → verify SHA-256 → encrypt → write .enc → delete temp
-   *
-   * Emits 'progress' events: { pairId, percent, speed, eta }
+   * Rate-limited to MAX_CONCURRENT_DOWNLOADS to prevent bandwidth flooding.
    *
    * @param {string} pairId — e.g. 'en-es'
    * @param {object} catalog — full pair-catalog object (pairs map)
    * @returns {Promise<{success: boolean, error?: string}>}
    */
   async downloadPair(pairId, catalog) {
+    // Input validation
+    try {
+      this._validatePairId(pairId);
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+
+    // Validate catalog entry exists
     const pairInfo = catalog?.pairs?.[pairId];
     if (!pairInfo) {
+      this._log('warn', 'downloadPair', `Unknown pair: ${pairId}`);
       return { success: false, error: `Unknown pair: ${pairId}` };
     }
 
     // Already downloaded?
     if (this.isDownloaded(pairId)) {
+      this._log('info', 'downloadPair', `${pairId} already downloaded`);
       return { success: true, alreadyExists: true };
     }
+
+    // Concurrency gate — wait in queue if at limit
+    if (this._currentDownloads >= MAX_CONCURRENT_DOWNLOADS) {
+      this._log('info', 'downloadPair', `${pairId} queued (${this._currentDownloads} active)`);
+      await new Promise(resolve => this._downloadQueue.push(resolve));
+    }
+    this._currentDownloads++;
+
+    try {
+      return await this._downloadPairImpl(pairId, pairInfo);
+    } finally {
+      this._currentDownloads--;
+      // Release next queued download
+      if (this._downloadQueue.length > 0) {
+        const next = this._downloadQueue.shift();
+        next();
+      }
+    }
+  }
+
+  /**
+   * Internal download implementation with retry logic.
+   */
+  async _downloadPairImpl(pairId, pairInfo) {
+    this._log('info', 'downloadPair', `Starting download: ${pairId}`);
 
     // Disk space check — require 2× model size
     const requiredBytes = pairInfo.sizeMB * 1024 * 1024 * 2;
     try {
       const storageInfo = await this.getStorageInfo();
       if (storageInfo.availableBytes < requiredBytes) {
-        return { success: false, error: `Insufficient disk space. Need ${(requiredBytes / 1024 / 1024).toFixed(0)} MB, have ${(storageInfo.availableBytes / 1024 / 1024).toFixed(0)} MB.` };
+        const msg = `Insufficient disk space. Need ${(requiredBytes / 1024 / 1024).toFixed(0)} MB, have ${(storageInfo.availableBytes / 1024 / 1024).toFixed(0)} MB.`;
+        this._log('error', 'downloadPair', msg);
+        return { success: false, error: msg };
       }
     } catch (e) {
       // Non-fatal — proceed anyway if we can't check disk space
-      console.warn('[PairDL] Could not check disk space:', e.message);
+      this._log('warn', 'downloadPair', `Could not check disk space: ${e.message}`);
     }
 
     const pairDir = path.join(this.pairsDir, pairId);
@@ -148,11 +221,31 @@ class PairDownloadManager extends EventEmitter {
         existingBytes = stat.size;
       } catch (_) { /* no partial file */ }
 
-      // Download with optional Range header for resume
-      const downloadedBuf = await this._httpDownload(pairId, pairInfo.cdnUrl, existingBytes, pairInfo.sizeMB * 1024 * 1024);
+      // Download with retry (3 attempts, exponential backoff)
+      let downloadedBuf = null;
+      let lastError = null;
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          this._log('info', 'downloadPair', `${pairId} attempt ${attempt}/${MAX_RETRIES}`);
+          downloadedBuf = await this._httpDownload(pairId, pairInfo.cdnUrl, existingBytes, pairInfo.sizeMB * 1024 * 1024);
+          break; // Success
+        } catch (err) {
+          lastError = err;
+          this._log('warn', 'downloadPair', `${pairId} attempt ${attempt} failed: ${err.message}`);
+          if (attempt < MAX_RETRIES) {
+            const delay = RETRY_BASE_MS * Math.pow(4, attempt - 1); // 1s, 4s, 16s
+            this._log('info', 'downloadPair', `Retrying in ${delay}ms...`);
+            await new Promise(r => setTimeout(r, delay));
+          }
+        }
+      }
 
       if (!downloadedBuf) {
-        return { success: false, error: 'Download cancelled' };
+        const msg = lastError?.message === 'Download cancelled'
+          ? 'Download cancelled'
+          : `Download failed after ${MAX_RETRIES} attempts: ${lastError?.message || 'unknown error'}`;
+        this._log('error', 'downloadPair', msg);
+        return { success: false, error: msg };
       }
 
       // If we resumed, combine with existing partial data
@@ -165,13 +258,25 @@ class PairDownloadManager extends EventEmitter {
       }
 
       // Write temp file for checksum verification
-      await fsp.writeFile(tempPath, fullBuffer);
+      try {
+        await fsp.writeFile(tempPath, fullBuffer);
+      } catch (writeErr) {
+        // Handle disk full (ENOSPC)
+        if (writeErr.code === 'ENOSPC') {
+          this._log('error', 'downloadPair', `Disk full writing ${pairId} — cleaning up`);
+          await fsp.unlink(tempPath).catch(() => {});
+          return { success: false, error: 'Disk full. Free some space and try again.' };
+        }
+        throw writeErr;
+      }
 
       // Verify SHA-256 checksum
       const hash = crypto.createHash('sha256').update(fullBuffer).digest('hex');
       if (hash !== pairInfo.sha256) {
         await fsp.unlink(tempPath).catch(() => {});
-        return { success: false, error: `Checksum mismatch. Expected ${pairInfo.sha256}, got ${hash}` };
+        const msg = `Checksum mismatch. Expected ${pairInfo.sha256}, got ${hash}`;
+        this._log('error', 'downloadPair', msg);
+        return { success: false, error: msg };
       }
 
       // Encrypt at rest
@@ -180,7 +285,17 @@ class PairDownloadManager extends EventEmitter {
       const encryptedData = this._encrypt(fullBuffer, salt, iv);
 
       // Write encrypted model
-      await fsp.writeFile(encPath, encryptedData);
+      try {
+        await fsp.writeFile(encPath, encryptedData);
+      } catch (writeErr) {
+        if (writeErr.code === 'ENOSPC') {
+          this._log('error', 'downloadPair', `Disk full writing encrypted ${pairId} — cleaning up`);
+          await fsp.unlink(tempPath).catch(() => {});
+          await fsp.unlink(encPath).catch(() => {});
+          return { success: false, error: 'Disk full. Free some space and try again.' };
+        }
+        throw writeErr;
+      }
 
       // Write metadata
       const meta = {
@@ -193,24 +308,38 @@ class PairDownloadManager extends EventEmitter {
         downloadedAt: new Date().toISOString(),
         encryptedSizeBytes: encryptedData.length
       };
-      await fsp.writeFile(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+
+      try {
+        await fsp.writeFile(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+      } catch (writeErr) {
+        if (writeErr.code === 'ENOSPC') {
+          this._log('error', 'downloadPair', `Disk full writing meta for ${pairId} — cleaning up`);
+          await fsp.unlink(tempPath).catch(() => {});
+          await fsp.unlink(encPath).catch(() => {});
+          return { success: false, error: 'Disk full. Free some space and try again.' };
+        }
+        throw writeErr;
+      }
 
       // Delete temp plaintext — NEVER leave plaintext on disk
       await fsp.unlink(tempPath).catch(() => {});
 
       this._activeDownloads.delete(pairId);
+      this._log('info', 'downloadPair', `${pairId} completed successfully`);
       return { success: true };
 
     } catch (err) {
       this._activeDownloads.delete(pairId);
-      // Clean up temp file on error
+      // Clean up temp and partial files on error
       await fsp.unlink(tempPath).catch(() => {});
+      await fsp.unlink(encPath).catch(() => {});
+      this._log('error', 'downloadPair', `${pairId} failed: ${err.message}`);
       return { success: false, error: err.message };
     }
   }
 
   /**
-   * Download file from URL with progress events and resume support.
+   * Download file from URL with progress events, resume support, and timeouts.
    * @param {string} pairId
    * @param {string} url
    * @param {number} existingBytes — bytes already downloaded (for Range header)
@@ -227,9 +356,30 @@ class PairDownloadManager extends EventEmitter {
         headers['Range'] = `bytes=${existingBytes}-`;
       }
 
+      // Connect timeout
+      let connectTimer = setTimeout(() => {
+        this._log('error', '_httpDownload', `Connect timeout for ${pairId} (${CONNECT_TIMEOUT_MS}ms)`);
+        req.destroy(new Error(`Connect timeout after ${CONNECT_TIMEOUT_MS / 1000}s`));
+      }, CONNECT_TIMEOUT_MS);
+
+      // Total download timeout
+      let downloadTimer = setTimeout(() => {
+        this._log('error', '_httpDownload', `Download timeout for ${pairId} (${DOWNLOAD_TIMEOUT_MS}ms)`);
+        req.destroy(new Error(`Download timeout after ${DOWNLOAD_TIMEOUT_MS / 1000}s`));
+      }, DOWNLOAD_TIMEOUT_MS);
+
+      const cleanup = () => {
+        clearTimeout(connectTimer);
+        clearTimeout(downloadTimer);
+      };
+
       const req = transport.get(url, { headers }, (res) => {
+        // Connection established — clear connect timeout
+        clearTimeout(connectTimer);
+
         // Handle redirects
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          cleanup();
           res.resume();
           this._httpDownload(pairId, res.headers.location, existingBytes, totalSize)
             .then(resolve).catch(reject);
@@ -237,6 +387,7 @@ class PairDownloadManager extends EventEmitter {
         }
 
         if (res.statusCode !== 200 && res.statusCode !== 206) {
+          cleanup();
           res.resume();
           reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
           return;
@@ -272,14 +423,21 @@ class PairDownloadManager extends EventEmitter {
         });
 
         res.on('end', () => {
+          cleanup();
           this.emit('progress', { pairId, percent: 100, speed: 0, eta: 0 });
           resolve(Buffer.concat(chunks));
         });
 
-        res.on('error', reject);
+        res.on('error', (err) => {
+          cleanup();
+          reject(err);
+        });
       });
 
-      req.on('error', reject);
+      req.on('error', (err) => {
+        cleanup();
+        reject(err);
+      });
 
       // Track active download for cancellation
       this._activeDownloads.set(pairId, { req, aborted: false });
@@ -295,10 +453,15 @@ class PairDownloadManager extends EventEmitter {
    * @returns {Promise<{results: Object.<string, {success: boolean, error?: string}>}>}
    */
   async downloadBundle(pairIds, catalog) {
+    if (!Array.isArray(pairIds)) {
+      return { results: {} };
+    }
+    this._log('info', 'downloadBundle', `Starting bundle: ${pairIds.length} pairs`);
     const results = {};
     for (const pairId of pairIds) {
       results[pairId] = await this.downloadPair(pairId, catalog);
     }
+    this._log('info', 'downloadBundle', `Bundle complete: ${Object.values(results).filter(r => r.success).length}/${pairIds.length} succeeded`);
     return { results };
   }
 
@@ -308,6 +471,8 @@ class PairDownloadManager extends EventEmitter {
    * @returns {{cancelled: boolean}}
    */
   cancelDownload(pairId) {
+    try { this._validatePairId(pairId); } catch { return { cancelled: false }; }
+
     const active = this._activeDownloads.get(pairId);
     if (active && !active.aborted) {
       active.aborted = true;
@@ -318,6 +483,7 @@ class PairDownloadManager extends EventEmitter {
       const tempPath = path.join(this.pairsDir, pairId, `model${TEMP_SUFFIX}`);
       fs.unlink(tempPath, () => {});
 
+      this._log('info', 'cancelDownload', `Cancelled: ${pairId}`);
       return { cancelled: true };
     }
     return { cancelled: false };
@@ -333,6 +499,8 @@ class PairDownloadManager extends EventEmitter {
    * @returns {boolean}
    */
   isDownloaded(pairId) {
+    try { this._validatePairId(pairId); } catch { return false; }
+
     const encPath = path.join(this.pairsDir, pairId, MODEL_ENC_NAME);
     const metaPath = path.join(this.pairsDir, pairId, META_NAME);
     return fs.existsSync(encPath) && fs.existsSync(metaPath);
@@ -359,11 +527,15 @@ class PairDownloadManager extends EventEmitter {
    * @returns {Promise<{deleted: boolean}>}
    */
   async deletePair(pairId) {
+    try { this._validatePairId(pairId); } catch { return { deleted: false }; }
+
     const pairDir = path.join(this.pairsDir, pairId);
     try {
       await fsp.rm(pairDir, { recursive: true, force: true });
+      this._log('info', 'deletePair', `Deleted: ${pairId}`);
       return { deleted: true };
-    } catch (_) {
+    } catch (err) {
+      this._log('error', 'deletePair', `Failed to delete ${pairId}: ${err.message}`);
       return { deleted: false };
     }
   }
@@ -426,6 +598,8 @@ class PairDownloadManager extends EventEmitter {
    * @returns {Promise<Buffer>} — decrypted model data
    */
   async loadPairModel(pairId) {
+    this._validatePairId(pairId);
+
     const pairDir = path.join(this.pairsDir, pairId);
     const encPath = path.join(pairDir, MODEL_ENC_NAME);
     const metaPath = path.join(pairDir, META_NAME);
@@ -434,6 +608,7 @@ class PairDownloadManager extends EventEmitter {
       throw new Error(`Pair ${pairId} is not downloaded`);
     }
 
+    this._log('info', 'loadPairModel', `Decrypting: ${pairId}`);
     const meta = JSON.parse(await fsp.readFile(metaPath, 'utf-8'));
     const iv = Buffer.from(meta.iv, 'hex');
     const salt = Buffer.from(meta.salt, 'hex');
