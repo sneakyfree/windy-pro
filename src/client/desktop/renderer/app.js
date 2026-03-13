@@ -435,6 +435,20 @@ class WindyApp {
       this.settingsPanel.toggle();
     });
 
+    // Marketplace tab
+    const marketplaceBtn = document.getElementById('marketplaceBtn');
+    if (marketplaceBtn) {
+      marketplaceBtn.addEventListener('click', () => {
+        if (!this.marketplacePanel) {
+          this.marketplacePanel = typeof MarketplacePanel !== 'undefined' ? new MarketplacePanel(this) : null;
+        }
+        if (this.marketplacePanel) {
+          this.marketplacePanel.toggle();
+          marketplaceBtn.classList.toggle('active', this.marketplacePanel.isVisible);
+        }
+      });
+    }
+
     // Controls collapse toggle — chevron is in the status bar
     const collapsible = document.getElementById('controlsCollapsible');
     const chevron = document.getElementById('controlsChevron');

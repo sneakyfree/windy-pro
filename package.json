@@ -61,6 +61,13 @@
       {
         "from": "scripts/linux/install-windy-pro.sh",
         "to": "install-windy-pro.sh"
+      },
+      {
+        "from": "shared/",
+        "to": "shared",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "productName": "Windy Pro",

@@ -198,4 +198,18 @@ contextBridge.exposeInMainWorld('windyAPI', {
 
   // System theme
   onSystemThemeChanged: (callback) => ipcRenderer.on('system-theme-changed', (_e, theme) => callback(theme)),
+
+  // ═══ Pair Download Manager / Marketplace (L1 + L2) ═══
+  pairCatalog: () => ipcRenderer.invoke('pair-catalog'),
+  pairBundles: () => ipcRenderer.invoke('pair-bundles'),
+  pairDownload: (pairId) => ipcRenderer.invoke('pair-download', pairId),
+  pairDownloadBundle: (pairIds) => ipcRenderer.invoke('pair-download-bundle', pairIds),
+  pairCancel: (pairId) => ipcRenderer.invoke('pair-cancel', pairId),
+  pairDelete: (pairId) => ipcRenderer.invoke('pair-delete', pairId),
+  pairListDownloaded: () => ipcRenderer.invoke('pair-list-downloaded'),
+  pairStorageInfo: () => ipcRenderer.invoke('pair-storage-info'),
+  onPairDownloadProgress: (callback) => {
+    ipcRenderer.removeAllListeners('pair-download-progress');
+    ipcRenderer.on('pair-download-progress', (event, data) => callback(data));
+  },
 });
