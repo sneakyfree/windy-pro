@@ -2692,7 +2692,7 @@
             </div>
             <div class="whats-next-item">
               <span class="nxt-icon">🌍</span>
-              <span class="nxt-text">Upgrade to Pro Max for Windy Translate in 99 languages</span>
+              <span class="nxt-text">Upgrade to Windy Max for Windy Translate in 99 languages</span>
             </div>
             <div class="whats-next-item">
               <span class="nxt-icon">☁️</span>
@@ -2780,7 +2780,7 @@
     let allModels = [];
     let selectedModels = new Set();
     // ═══ TIER GATING ═══
-    // Tier hierarchy: free < plus < pro < promax
+    // Tier hierarchy: free < pro < translate < translate_pro (Free / Windy Pro / Windy Ultra / Windy Max)
     // Engines with tier > userTier show a lock icon and can't be selected
     let userTier = 'free'; // Default until account is created/logged in
     const TIER_RANK = { free: 0, pro: 1, translate: 2, translate_pro: 3 };
@@ -2821,7 +2821,7 @@
       { title: '💎 15 Proprietary Engines', body: 'Developed in our lab. Fine-tuned by our engineers on dedicated GPU hardware. Not available anywhere else. Every engine is encrypted, fingerprinted to your account, and continually refined. These are OUR engines.' },
       { title: '🐕 MoboLoco — Go Local on Mobile', body: "42 megabytes. That's our smallest engine. Smaller than most selfies. Install it on your phone and forget it. It's always there. No internet required. The Green Strobe never lies — even on your phone." },
       { title: '📊 Your Soul File Journey', body: "5 hours → Basic voice profile. 20 hours → Good clone quality. 50 hours → Excellent, studio-grade. 200 hours → Full digital twin. ♾️ → Your legacy, preserved forever. Some people download Windy Pro just for this." },
-      { title: '💳 Pricing That Respects You', body: "Free to start. Plus: $4.99/mo. Pro: $9.99/mo. Pro Max: $19.99/mo with Translate. Or pay once: Lifetime $149, Lifetime+ $249. Translate add-on: $7.99/mo. Your choice. Your terms. No tricks." },
+      { title: '💳 Pricing That Respects You', body: "Free to start. Windy Pro: $99 lifetime or $49/yr. Windy Ultra: $199 lifetime or $79/yr. Windy Max: $299 lifetime or $149/yr. Pay once, own forever. No tricks." },
       { title: '🔐 Model Security', body: "Every engine is encrypted in our proprietary .wpr format. Fingerprinted to your account. Steganographically watermarked. If anyone tries to steal our engines, we trace it to the exact account. Our Terms of Service are very clear." },
       { title: '🐧 Linux? We Love Linux.', body: "Windows, macOS, AND Linux. Full feature parity. No compromises. No 'coming soon.' Linux users are loyal, vocal, and deserve great software. We're proud to have you." }
     ];
@@ -3865,7 +3865,7 @@
         </div>`;
     }
 
-    let upgradeBillingMode = 'annual'; // 'monthly', 'annual', or 'lifetime'
+    let upgradeBillingMode = 'lifetime'; // 'monthly', 'annual', or 'lifetime' — lifetime-first for front-loaded cash
 
     function showUpgradeFromChoose() {
       // Remove existing overlay if any
@@ -4101,7 +4101,7 @@
           const tierBadge = m.tier === 'free' ? '' :
             m.tier === 'plus' ? '<span style="background:#3B82F6; color:white; font-size:10px; padding:1px 5px; border-radius:4px; margin-left:4px;">PLUS</span>' :
               m.tier === 'pro' ? '<span style="background:#A855F7; color:white; font-size:10px; padding:1px 5px; border-radius:4px; margin-left:4px;">PRO</span>' :
-                '<span style="background:#F59E0B; color:black; font-size:10px; padding:1px 5px; border-radius:4px; margin-left:4px;">PRO MAX</span>';
+                '<span style="background:#F59E0B; color:black; font-size:10px; padding:1px 5px; border-radius:4px; margin-left:4px;">MAX</span>';
 
           const isLocked = !canAccessEngine(m.tier || 'free');
           const checkbox = document.createElement('input');
