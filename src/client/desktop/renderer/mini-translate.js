@@ -400,8 +400,8 @@ async function processChunk(audioBlob) {
         // Pass API keys from localStorage (renderer storage) since main process
         // uses electron-store which may not have them
         const apiKeys = {
-            groq: localStorage.getItem('windy_groqApiKey') || '',
-            openai: localStorage.getItem('windy_openaiApiKey') || ''
+            groq: window.windyAPI ? await window.windyAPI.getApiKey('groqApiKey') : '',
+            openai: window.windyAPI ? await window.windyAPI.getApiKey('openaiApiKey') : ''
         };
         const result = await miniAPI.translateSpeech(
             Array.from(new Uint8Array(arrayBuf)),

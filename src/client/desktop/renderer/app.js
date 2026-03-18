@@ -2134,9 +2134,11 @@ class WindyApp {
             // Use WindyPro Cloud batch endpoint
             result = await this._batchTranscribeCloud(audioBlob);
           } else if (engine === 'groq') {
-            result = await this._transcribeWithApi('groq', localStorage.getItem('windy_groqApiKey'), audioBlob);
+            const groqKey = window.windyAPI ? await window.windyAPI.getApiKey('groqApiKey') : '';
+            result = await this._transcribeWithApi('groq', groqKey, audioBlob);
           } else if (engine === 'openai') {
-            result = await this._transcribeWithApi('openai', localStorage.getItem('windy_openaiApiKey'), audioBlob);
+            const openaiKey = window.windyAPI ? await window.windyAPI.getApiKey('openaiApiKey') : '';
+            result = await this._transcribeWithApi('openai', openaiKey, audioBlob);
           } else {
             // Unknown engine — default to local
             result = await this._batchTranscribeLocal(audioBlob);
@@ -2716,7 +2718,7 @@ class WindyApp {
   async startApiRecording(engine) {
     // Get API key
     const keyMap = { deepgram: 'deepgramApiKey', groq: 'groqApiKey', openai: 'openaiApiKey' };
-    const apiKey = localStorage.getItem('windy_' + keyMap[engine]) || '';
+    const apiKey = window.windyAPI ? await window.windyAPI.getApiKey(keyMap[engine]) : '';
     if (!apiKey) {
       this.showReconnectToast(`⚠️ No ${engine} API key configured. Open Settings to add one.`);
       return;

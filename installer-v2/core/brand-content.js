@@ -12,7 +12,7 @@ const MONIKERS = [
   { emoji: '🟢', text: 'The Green Strobe Never Lies.', sub: 'If it\'s green, you\'re recording. Always. No guessing.' },
   { emoji: '🔒', text: 'Stay Local. Stay Private.', sub: 'Unlike competitors who upload your voice to the cloud — we don\'t.' },
   { emoji: '💊', text: 'Get Voice-Pilled.', sub: 'Once you try fully local voice-to-text, you can\'t go back.' },
-  { emoji: '🐕', text: '"WindyPro make me go MoboLoco!"', sub: '406 MB engine on your phone. Runs anywhere, no GPU needed.' },
+  { emoji: '🐕', text: '"Windy Pro make me go MoboLoco!"', sub: '406 MB engine on your phone. Runs anywhere, no GPU needed.' },
   { emoji: '💰', text: 'Pay Once. Use Forever.', sub: 'No subscription. No monthly fees. This is yours for life.' },
   { emoji: '🧬', text: 'Talk Today. Live Forever.', sub: 'Build your voice clone dataset automatically while you work.' },
   { emoji: '⌨️', text: 'Never Touch a Keyboard Again.', sub: 'Dictate everything. Paste anywhere. One hotkey.' },
@@ -46,8 +46,8 @@ const FEATURE_CARDS = [
     category: 'translate'
   },
   {
-    title: '☁️ WindyPro Cloud — YOUR Storage',
-    body: 'Your privacy is paramount! We never use your data — or data about your data — for anything. Period. Switch to WindyPro Cloud for all your storage. Cancel Dropbox. Cancel Google. Cancel iCloud. Your files belong to YOU.',
+    title: '☁️ Windy Pro Cloud — YOUR Storage',
+    body: 'Your privacy is paramount! We never use your data — or data about your data — for anything. Period. Switch to Windy Pro Cloud for all your storage. Cancel Dropbox. Cancel Google. Cancel iCloud. Your files belong to YOU.',
     category: 'cloud'
   },
   {

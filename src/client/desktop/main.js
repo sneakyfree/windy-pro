@@ -2258,6 +2258,48 @@ ipcMain.handle('get-settings', () => {
   };
 });
 
+// SEC-P0: Encrypted API key storage via safeStorage (replaces plaintext localStorage)
+ipcMain.handle('set-api-key', (event, keyName, keyValue) => {
+  const allowedKeys = ['groqApiKey', 'openaiApiKey', 'deepgramApiKey'];
+  if (!allowedKeys.includes(keyName)) return { ok: false, error: 'Unknown key name' };
+  if (!keyValue || typeof keyValue !== 'string') {
+    // Clear the key
+    store.delete(`engine.${keyName}`);
+    store.delete(`engine.${keyName}Encrypted`);
+    return { ok: true };
+  }
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(keyValue.trim());
+      store.set(`engine.${keyName}Encrypted`, encrypted.toString('base64'));
+      store.delete(`engine.${keyName}`); // Remove any old plaintext key
+    } else {
+      // Fallback: store in electron-store (still better than renderer localStorage)
+      store.set(`engine.${keyName}`, keyValue.trim());
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-api-key', (event, keyName) => {
+  const allowedKeys = ['groqApiKey', 'openaiApiKey', 'deepgramApiKey'];
+  if (!allowedKeys.includes(keyName)) return '';
+  try {
+    // Try encrypted first
+    const encB64 = store.get(`engine.${keyName}Encrypted`, '');
+    if (encB64 && safeStorage.isEncryptionAvailable()) {
+      return safeStorage.decryptString(Buffer.from(encB64, 'base64'));
+    }
+    // Fallback to plaintext store or env vars
+    const envMap = { groqApiKey: 'GROQ_API_KEY', openaiApiKey: 'OPENAI_API_KEY', deepgramApiKey: 'DEEPGRAM_API_KEY' };
+    return store.get(`engine.${keyName}`, '') || process.env[envMap[keyName]] || '';
+  } catch (err) {
+    return '';
+  }
+});
+
 ipcMain.handle('choose-archive-folder', async () => {
   const oldFolder = getArchiveFolder();
   const result = await dialog.showOpenDialog({

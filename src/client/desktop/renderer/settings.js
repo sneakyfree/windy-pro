@@ -2640,7 +2640,7 @@ class SettingsPanel {
     if (banner) {
       banner.style.display = 'block';
       const tierLabels = {
-        free: { name: 'Free', color: '#6B7280', hint: '2 engines included. Upgrade to Pro for all 15 engines, GPU models, and 30-min recordings.' },
+        free: { name: 'Free', color: '#6B7280', hint: '2 engines included. Upgrade to Windy Pro for all 15 engines, GPU models, and 30-min recordings.' },
         pro: { name: 'Pro', color: '#22C55E', hint: 'All 15 engines unlocked! Add Translate to get language-specialist engines for Spanish, French, and Hindi.' },
         translate: { name: 'Ultra', color: '#3B82F6', hint: 'All engines + language specialists unlocked. Upgrade to Windy Max for priority support.' },
         translate_pro: { name: 'Windy Max', color: '#8B5CF6', hint: 'All engines and features unlocked. You have the best plan! 👑' }

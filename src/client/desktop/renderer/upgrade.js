@@ -76,7 +76,7 @@ class UpgradePanel {
             const config = await window.windyAPI.getStripeConfig();
             if (!config) return;
             // Apply dynamic price IDs to tiers
-            for (const tier of this._tiers) {
+            for (const tier of this.plans) {
                 const cfg = config[tier.key];
                 if (cfg) {
                     tier.monthlyPriceId = cfg.monthlyPriceId || tier.monthlyPriceId;
