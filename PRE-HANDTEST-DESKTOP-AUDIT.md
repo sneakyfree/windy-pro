@@ -51,20 +51,20 @@ All screenshots saved to `tests/screenshots/`.
 | 2 | `mini-translate.html` | ✅ **FIXED** — Added CSP meta tag matching `index.html` (`script-src 'self'`, restricted `connect-src`). | **P0** | `mini-translate.html:7-8` |
 | 3 | `app.js` + `mini-translate.js` | ✅ **FIXED** — API keys now encrypted via `safeStorage` IPC. Added `set-api-key`/`get-api-key` handlers in `main.js`. Renderer reads keys via `window.windyAPI.getApiKey()` instead of localStorage. | **P0** | `main.js`, `preload.js`, `app.js`, `mini-translate.js` |
 | 4 | Wizard — Account | ✅ **FIXED** — Changed "Pro" → "Windy Pro", "Ultra" → "Windy Ultra", "Max" → "Windy Max". Also fixed settings.js:2643 and "WindyPro Cloud" → "Windy Pro Cloud" branding in wizard Ready, brand-content.js. | **P1** | `wizard.html:2034`, `settings.js:2643`, `brand-content.js` |
-| 5 | Wizard — Ready | **Deferred to P2** — Sticky button overlap is a CSS-only fix across 4 wizard screens, does not block core function. | **P1→P2** | `wizard_ready_*.png` |
-| 6 | Wizard — Welcome | **Deferred to P2** — Same sticky button overlap pattern. | **P1→P2** | `wizard_welcome_*.png` |
-| 7 | Wizard — Installing | **Deferred to P2** — Same sticky button overlap pattern. | **P1→P2** | `wizard_installing_*.png` |
+| 5 | Wizard — Ready | ✅ **FIXED** — Increased `.screen` padding-bottom to 70px to clear sticky `.btn-row`. | **P2** | `wizard.html` CSS |
+| 6 | Wizard — Welcome | ✅ **FIXED** — Same CSS fix as #5. | **P2** | `wizard.html` CSS |
+| 7 | Wizard — Installing | ✅ **FIXED** — Same CSS fix as #5. | **P2** | `wizard.html` CSS |
 | 8 | `chat.html` | ✅ **FIXED (partial)** — `unsafe-inline` in `script-src` is required by 20+ `onclick=` handlers. Documented why. Refactoring all handlers to `addEventListener` is a future task. | **P1** | `chat.html:6-9` |
 | 9 | `chat.html` | ✅ **FIXED** — `connect-src` tightened from wildcard `https: wss:` to specific origins: `matrix.thewindstorm.uk`, `*.thewindstorm.uk`, `localhost`, `127.0.0.1`. | **P1** | `chat.html:9` |
 | 10 | Wizard — Engine Info | **"Choose My Engines" button clipped at bottom** — Button partially obscured by page edge. | **P2** | `wizard_engine_info_*.png` |
 | 11 | Wizard — Ready (scrolled) | ✅ **FIXED** — "WindyPro Cloud" → "Windy Pro Cloud". Fixed in wizard.html and brand-content.js. | **P2** | `wizard_ready_scrolled_*.png` |
 | 12 | Wizard — Languages | **Click target issue on "+ Add"** — Language add buttons required multiple clicks to register during testing. | **P2** | `wizard_languages_*.png` |
-| 13 | Wizard nav bar | **Step labels truncated** — "Welco…", "Hard…", "Accou…", "Langu…", "Transl…" — not readable. | **P2** | All wizard screenshots |
+| 13 | Wizard nav bar | ✅ **FIXED** — Step labels font shrunk to 10px with `overflow: visible`. All 10 labels fully readable. | **P2** | All wizard screenshots |
 | 14 | `upgrade.js` | **Lifetime price IDs use placeholder suffix** — `price_1T5oYzBXIOBasDQibSlnIsPg_life` has a `_life` suffix that doesn't match Stripe price ID format — likely a placeholder. | **P2** | `upgrade.js:36,48,61` |
 | 15 | Sound Library | **"Sound Packs" and "Community" tabs show "Soon" badge** — Placeholder tabs with no content. If not shipping, hide them. | **P2** | `index.html:189-190` |
 | 16 | `settings.js` | **Heavy innerHTML usage without `_esc()`** — Many innerHTML assignments throughout settings don't use the global `_esc()` helper. While inputs come from app config (low risk), inconsistent sanitization practice. | **P2** | `settings.js` (22+ innerHTML calls) |
 | 17 | `renderer-logger.js` | **Logger scrubs secrets** — Good: logger at line 22 redacts `secretKey`, `STRIPE_SECRET_KEY`, etc. But list is hardcoded and may miss new patterns. | **P2** | `renderer-logger.js:22` |
-| 18 | `upgrade.js:395` | **Stripe config error message mentions env variable** — Error "Set STRIPE_SECRET_KEY environment variable" should not be shown to end users. This is a developer message leaking into production UI. | **P2** | `upgrade.js:395` |
+| 18 | `upgrade.js:395` | ✅ **FIXED** — Error now says "Payment system is not configured yet. Please contact support." instead of exposing env var name. | **P2** | `upgrade.js:395` |
 | 19 | Global | **Multiple wizard screens have sticky footer overlap** — Systematic issue across Welcome, Learn, Install, and Ready screens where fixed-position buttons overlap scrollable informational content. | **P2** | Multiple wizard screenshots |
 
 ---
