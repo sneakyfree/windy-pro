@@ -392,7 +392,7 @@ class UpgradePanel {
         } catch (err) {
             const msg = err.message || 'Unknown error';
             if (msg.includes('Payment system not configured') || msg.includes('Not available')) {
-                status.innerHTML = `❌ <strong>Stripe API key not set.</strong><br><span style="font-size:11px;color:#9CA3AF;">Set STRIPE_SECRET_KEY environment variable or configure in Settings → Advanced → Stripe Secret Key</span>`;
+                status.innerHTML = `❌ <strong>Payment system is not configured yet.</strong><br><span style="font-size:11px;color:#9CA3AF;">Please contact support or check your account settings.</span>`;
             } else {
                 const errSpan = document.createElement('span');
                 errSpan.textContent = '❌ ' + msg;
