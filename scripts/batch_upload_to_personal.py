@@ -8,6 +8,7 @@ import os
 import sys
 import json
 import time
+import subprocess
 from pathlib import Path
 from datetime import datetime
 from huggingface_hub import HfApi, create_repo, upload_folder
@@ -138,8 +139,22 @@ def main():
         # Save progress after each model
         save_results(results)
 
-        # Small delay to be nice to HF API
-        time.sleep(1)
+        # Throttle: wait if GPU or CPU is hot
+        for _ in range(30):  # max 30 min cooldown
+            try:
+                gpu_out = subprocess.check_output(
+                    ['nvidia-smi','--query-gpu=utilization.gpu,temperature.gpu','--format=csv,noheader,nounits'],
+                    text=True).strip().split(',')
+                gpu_util, gpu_temp = int(gpu_out[0].strip()), int(gpu_out[1].strip())
+            except Exception:
+                gpu_util, gpu_temp = 0, 0
+            if gpu_util <= 50 and gpu_temp <= 70:
+                break
+            print(f"  [throttle] GPU {gpu_util}% / {gpu_temp}°C — cooling 60s", flush=True)
+            time.sleep(60)
+
+        # Pacing delay between uploads (marathon, not sprint)
+        time.sleep(10)
 
     # Final summary
     summary = f"""
