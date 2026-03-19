@@ -105,6 +105,24 @@ module.exports = function createRouter({ db, authenticate }) {
         `).run(userId);
     }
 
+    /**
+     * Revoke a user's license — sets license_status = 'revoked' so next heartbeat
+     * returns valid=false. The client will then delete model files.
+     * @param {string} userId
+     * @param {string} reason — 'refund', 'dispute', 'payment_failed', 'subscription_deleted'
+     */
+    function revokeUserLicense(userId, reason) {
+        db.prepare(`
+            UPDATE subscriptions
+            SET license_status = 'revoked',
+                revoke_reason = ?,
+                status = 'revoked',
+                updated_at = datetime('now')
+            WHERE user_id = ?
+        `).run(reason, userId);
+        console.log(`[Stripe] License revoked: user=${userId} reason=${reason}`);
+    }
+
     // ─── POST /create-checkout ───
     router.post('/create-checkout', async (req, res) => {
         try {
@@ -297,8 +315,64 @@ module.exports = function createRouter({ db, authenticate }) {
 
                     const row = db.prepare('SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?').get(customerId);
                     if (row) {
-                        downgradeToFree(row.user_id);
-                        console.log(`[Stripe] 🗑️ Subscription deleted: user=${row.user_id} → free`);
+                        revokeUserLicense(row.user_id, 'subscription_deleted');
+                        console.log(`[Stripe] 🗑️ Subscription deleted: user=${row.user_id} → revoked`);
+                    }
+                    break;
+                }
+
+                // ── Refund → revoke license (Layer 3) ──
+                case 'charge.refunded': {
+                    const charge = event.data.object;
+                    const customerId = charge.customer;
+                    const row = db.prepare('SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?').get(customerId);
+                    if (row) {
+                        revokeUserLicense(row.user_id, 'refund');
+                        console.log(`[Stripe] 💸 Charge refunded: user=${row.user_id} → revoked`);
+                    }
+                    break;
+                }
+
+                // ── Dispute → immediate revoke (Layer 3) ──
+                case 'charge.dispute.created': {
+                    const dispute = event.data.object;
+                    const chargeId = dispute.charge;
+                    // Look up customer from charge
+                    try {
+                        const charge = await stripeClient.charges.retrieve(chargeId);
+                        const customerId = charge.customer;
+                        const row = db.prepare('SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?').get(customerId);
+                        if (row) {
+                            revokeUserLicense(row.user_id, 'dispute');
+                            console.log(`[Stripe] ⚠️ Dispute created: user=${row.user_id} → immediate revoke`);
+                        }
+                    } catch (e) {
+                        console.error('[Stripe] Dispute handler error:', e.message);
+                    }
+                    break;
+                }
+
+                // ── Payment failed → track retries, revoke after 3 failures over 7 days (Layer 3) ──
+                case 'invoice.payment_failed': {
+                    const invoice = event.data.object;
+                    const customerId = invoice.customer;
+                    const row = db.prepare('SELECT user_id, payment_fail_count, first_payment_fail_at FROM subscriptions WHERE stripe_customer_id = ?').get(customerId);
+                    if (row) {
+                        const failCount = (row.payment_fail_count || 0) + 1;
+                        const now = new Date().toISOString();
+                        const firstFail = row.first_payment_fail_at || now;
+
+                        db.prepare(`UPDATE subscriptions SET payment_fail_count = ?, first_payment_fail_at = COALESCE(first_payment_fail_at, ?), updated_at = datetime('now') WHERE user_id = ?`)
+                            .run(failCount, now, row.user_id);
+
+                        // Check if 3 failures AND first failure was > 7 days ago
+                        const daysSinceFirst = (Date.now() - new Date(firstFail).getTime()) / (24 * 60 * 60 * 1000);
+                        if (failCount >= 3 && daysSinceFirst >= 7) {
+                            revokeUserLicense(row.user_id, 'payment_failed');
+                            console.log(`[Stripe] ❌ Payment failed ${failCount}x over ${Math.round(daysSinceFirst)}d: user=${row.user_id} → revoked`);
+                        } else {
+                            console.log(`[Stripe] ⚠️ Payment failed (${failCount}/3): user=${row.user_id}`);
+                        }
                     }
                     break;
                 }

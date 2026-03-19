@@ -1654,13 +1654,59 @@ function _updateTrayUnread(count) {
   } catch (e) { /* ignore badge errors */ }
 }
 
+// ═══ License Token Storage (safeStorage) ═══
+
+/**
+ * Store a license token encrypted via OS keychain (safeStorage).
+ * @param {string} token — plaintext license token
+ */
+function storeLicenseToken(token) {
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = safeStorage.encryptString(token);
+    store.set('license.tokenEncrypted', encrypted.toString('base64'));
+    console.info('[License] Token stored in safeStorage');
+  } else {
+    // Fallback: store plaintext (less secure — logged as warning)
+    store.set('license.tokenPlaintext', token);
+    console.warn('[License] safeStorage unavailable — token stored in plaintext');
+  }
+}
+
+/**
+ * Retrieve the license token from safeStorage.
+ * @returns {string} plaintext license token, or 'free' if none stored
+ */
+function retrieveLicenseToken() {
+  const encB64 = store.get('license.tokenEncrypted', '');
+  if (encB64 && safeStorage.isEncryptionAvailable()) {
+    try {
+      return safeStorage.decryptString(Buffer.from(encB64, 'base64'));
+    } catch (e) {
+      console.error('[License] Failed to decrypt token from safeStorage:', e.message);
+    }
+  }
+  // Fallback chain
+  return store.get('license.tokenPlaintext', '')
+    || store.get('license.stripeSessionId', '')
+    || store.get('license.email', '')
+    || 'free';
+}
+
+ipcMain.handle('store-license-token', async (event, token) => {
+  if (typeof token !== 'string' || !token) return { ok: false, error: 'Invalid token' };
+  storeLicenseToken(token);
+  // Reset PairDownloadManager so it picks up the new token
+  _pairDownloadManager = null;
+  return { ok: true };
+});
+
 // ═══ Pair Download Manager IPC (L1 + L6) ═══
 let _pairDownloadManager = null;
 function getPairDownloadManager() {
   if (!_pairDownloadManager) {
     const { PairDownloadManager } = require('./pair-download-manager');
     const pairsDir = path.join(app.getPath('userData'), 'translation-pairs');
-    const licenseToken = store.get('license.stripeSessionId', '') || store.get('license.email', '') || 'free';
+    const licenseToken = retrieveLicenseToken();
     _pairDownloadManager = new PairDownloadManager(pairsDir, licenseToken);
 
     // Forward progress events to all windows
@@ -1672,6 +1718,108 @@ function getPairDownloadManager() {
     });
   }
   return _pairDownloadManager;
+}
+
+// ═══ Model Migration (unencrypted → WMOD) ═══
+
+/**
+ * Migrate unencrypted or legacy-encrypted models to WMOD format.
+ * - Detects missing WMOD magic bytes → re-encrypts
+ * - Handles legacy PBKDF2+meta.json → decrypt with old key, re-encrypt with HKDF
+ * - If no valid license exists, leaves files as-is until authentication
+ * Runs once on startup; idempotent.
+ */
+async function migrateUnencryptedModels() {
+  const { PairDownloadManager } = require('./pair-download-manager');
+  const pairsDir = path.join(app.getPath('userData'), 'translation-pairs');
+  const licenseToken = retrieveLicenseToken();
+
+  if (licenseToken === 'free' || !licenseToken) {
+    console.info('[Migration] No valid license — skipping model migration until user authenticates');
+    return;
+  }
+
+  try {
+    const entries = fs.readdirSync(pairsDir, { withFileTypes: true }).filter(e => e.isDirectory());
+    if (entries.length === 0) return;
+
+    let migratedCount = 0;
+    const total = entries.length;
+    safeSend('migration-progress', { status: 'starting', total });
+
+    for (const entry of entries) {
+      const pairDir = path.join(pairsDir, entry.name);
+      const encPath = path.join(pairDir, 'model.enc');
+      const metaPath = path.join(pairDir, 'meta.json');
+
+      if (!fs.existsSync(encPath)) continue;
+
+      // Read first 4 bytes to check for WMOD magic
+      const fd = fs.openSync(encPath, 'r');
+      const magicBuf = Buffer.alloc(4);
+      fs.readSync(fd, magicBuf, 0, 4, 0);
+      fs.closeSync(fd);
+
+      if (PairDownloadManager.hasWmodHeader(magicBuf)) {
+        continue; // Already WMOD format
+      }
+
+      // Need migration — try to decrypt with legacy scheme
+      console.info(`[Migration] Migrating ${entry.name} from legacy format to WMOD`);
+
+      try {
+        let plaintext;
+
+        if (fs.existsSync(metaPath)) {
+          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+
+          if (meta.iv && meta.salt) {
+            // Legacy PBKDF2 encrypted format
+            const iv = Buffer.from(meta.iv, 'hex');
+            const salt = Buffer.from(meta.salt, 'hex');
+            const legacyDeviceId = os.hostname() + '-' + os.platform();
+            const encData = fs.readFileSync(encPath);
+            plaintext = PairDownloadManager.decryptLegacy(encData, salt, iv, licenseToken, legacyDeviceId);
+          } else {
+            // meta.json exists but no iv/salt → raw unencrypted file
+            plaintext = fs.readFileSync(encPath);
+          }
+        } else {
+          // No meta.json → raw unencrypted .bin file
+          plaintext = fs.readFileSync(encPath);
+        }
+
+        // Re-encrypt with new HKDF scheme → WMOD format
+        const mgr = new PairDownloadManager(pairsDir, licenseToken);
+        const wmodBuffer = mgr._encrypt(plaintext);
+        fs.writeFileSync(encPath, wmodBuffer);
+
+        // Update meta.json — remove legacy iv/salt, add format marker
+        if (fs.existsSync(metaPath)) {
+          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+          delete meta.iv;
+          delete meta.salt;
+          meta.format = 'wmod-v1';
+          meta.migratedAt = new Date().toISOString();
+          fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+        }
+
+        migratedCount++;
+        safeSend('migration-progress', { status: 'migrating', current: migratedCount, total, pairId: entry.name });
+        console.info(`[Migration] ✅ ${entry.name} migrated to WMOD`);
+      } catch (err) {
+        console.error(`[Migration] ❌ Failed to migrate ${entry.name}:`, err.message);
+        // Don't delete — leave the file for manual recovery
+      }
+    }
+
+    if (migratedCount > 0) {
+      safeSend('migration-progress', { status: 'complete', migrated: migratedCount });
+      console.info(`[Migration] Completed: ${migratedCount}/${total} models migrated to WMOD`);
+    }
+  } catch (err) {
+    console.error('[Migration] Migration scan error:', err.message);
+  }
 }
 
 ipcMain.handle('pair-catalog', async () => {
@@ -3980,6 +4128,12 @@ ipcMain.handle('check-model-status', async () => {
 /**
  * Download a specific model by spawning a Python subprocess
  * Returns a promise that resolves when download completes
+ *
+ * TODO [L4-P3 — Model Watermarking]: When the server-side LSB fingerprinting
+ * pipeline is built, embed a per-user fingerprint into model weights before
+ * upload to CDN. This will be platform-agnostic and happen at scale.
+ * The desktop client does NOT need to watermark — it just downloads pre-
+ * fingerprinted models. See MODEL_PROTECTION_SPEC.md Layer 4 for details.
  */
 function downloadModel(modelName) {
   return new Promise((resolve, reject) => {
@@ -4315,6 +4469,16 @@ ipcMain.handle('translate-text', async (event, text, sourceLang, targetLang) => 
 // ═══ Offline Translation via Local Pair Model ═══
 ipcMain.handle('translate-offline', async (event, text, sourceLang, targetLang) => {
   if (!text || !targetLang) return { ok: false, error: 'Missing text or target language' };
+
+  // Check if models are locked (grace period expired or license revoked)
+  if (store.get('license.modelsLocked', false)) {
+    return {
+      ok: false,
+      error: 'Models are locked. Please connect to the internet to verify your Windy Word license.',
+      modelsLocked: true
+    };
+  }
+
   try {
     const mgr = getPairDownloadManager();
     const pairId = `${sourceLang}-${targetLang}`;
@@ -4756,12 +4920,53 @@ app.whenReady().then(async () => {
   });
 
   // ═══ Deferred startup tasks (non-critical — runs 3s after window appears) ═══
-  // This keeps the window snappy: archive cleanup, license validation, and update
-  // checks all involve disk I/O or network that doesn't need to block first paint.
+  // This keeps the window snappy: archive cleanup, license validation, model
+  // migration, heartbeat, and update checks all run after first paint.
   let updaterInstance = null;
   setTimeout(() => {
     // Validate license (non-blocking)
     validateLicense().catch(e => console.error('[License] Validation error:', e.message));
+
+    // Migrate unencrypted/legacy models to WMOD format (one-time, idempotent)
+    migrateUnencryptedModels().catch(e => console.error('[Migration] Error:', e.message));
+
+    // Start license heartbeat service
+    try {
+      const { HeartbeatService } = require('./heartbeat-service');
+      const heartbeat = new HeartbeatService({
+        store,
+        safeStorage,
+        retrieveLicenseToken,
+        getDeviceFingerprint: () => getPairDownloadManager().getDeviceFingerprintHex(),
+        appVersion: app.getVersion(),
+        onLicenseLocked: () => {
+          store.set('license.modelsLocked', true);
+          safeSend('license-locked', { reason: 'grace_expired' });
+          console.warn('[Heartbeat] Models locked — grace period expired');
+        },
+        onLicenseRestored: (tier) => {
+          store.set('license.modelsLocked', false);
+          store.set('license.tier', tier);
+          // Reset download manager to pick up fresh key
+          _pairDownloadManager = null;
+          safeSend('license-restored', { tier });
+          console.info('[Heartbeat] License restored — tier:', tier);
+        },
+        onLicenseRevoked: () => {
+          store.set('license.modelsLocked', true);
+          store.set('license.tier', 'free');
+          // Delete all model files
+          const pairsDir = path.join(app.getPath('userData'), 'translation-pairs');
+          fsp.rm(pairsDir, { recursive: true, force: true }).catch(() => {});
+          _pairDownloadManager = null;
+          safeSend('license-revoked', { reason: 'revoked' });
+          console.warn('[Heartbeat] License revoked — all models deleted');
+        }
+      });
+      heartbeat.start();
+    } catch (e) {
+      console.error('[Main] Heartbeat service skipped:', e.message);
+    }
 
     // Auto-cleanup old archive media files (keeps transcripts forever)
     autoCleanupArchive();

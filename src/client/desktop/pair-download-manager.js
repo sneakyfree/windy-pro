@@ -1,12 +1,20 @@
 /**
- * Windy Pro — Pair Download Manager (L1) + Encryption at Rest (L6)
+ * Windy Pro — Pair Download Manager (L1) + Encrypted Model Storage (L6)
  *
  * Downloads translation-pair models from CDN, verifies SHA-256 checksums,
- * encrypts at rest with AES-256-GCM, and decrypts only into memory.
+ * encrypts at rest with AES-256-GCM (HKDF-SHA256 key derivation), and
+ * decrypts only into memory. NEVER writes plaintext to disk.
+ *
+ * Key derivation: HKDF-SHA256(ikm=licenseToken, salt=deviceFingerprint, info=APP_SECRET+"windy-model-v1")
+ * Device fingerprint: SHA-256(cpuModel + platform + arch + hostname + homedir)
  *
  * Storage layout:
- *   {userData}/translation-pairs/{pairId}/model.enc   — encrypted model
- *   {userData}/translation-pairs/{pairId}/meta.json   — metadata + IV + salt
+ *   {userData}/translation-pairs/{pairId}/model.enc   — WMOD binary (encrypted model)
+ *   {userData}/translation-pairs/{pairId}/meta.json   — metadata (no crypto material)
+ *
+ * WMOD binary format:
+ *   [4-byte magic "WMOD"][2-byte version][12-byte IV/nonce][16-byte GCM auth tag][encrypted payload]
+ *   Total header: 34 bytes
  *
  * DNA Strand: L1, L6
  */
@@ -26,14 +34,21 @@ const os = require('os');
 // Constants
 // ═══════════════════════════════════════════
 
-const PBKDF2_ITERATIONS = 100000;
 const KEY_LENGTH = 32;            // 256 bits
 const IV_LENGTH = 12;             // 96 bits for GCM
-const SALT_LENGTH = 16;           // 128 bits
 const AUTH_TAG_LENGTH = 16;       // 128-bit GCM auth tag
 const TEMP_SUFFIX = '.tmp';
 const MODEL_ENC_NAME = 'model.enc';
 const META_NAME = 'meta.json';
+
+// WMOD binary header
+const WMOD_MAGIC = Buffer.from('WMOD', 'ascii');  // 4 bytes
+const WMOD_VERSION = Buffer.from([0x00, 0x01]);    // 2 bytes — v1
+const WMOD_HEADER_SIZE = 4 + 2 + IV_LENGTH + AUTH_TAG_LENGTH; // 34 bytes
+
+// HKDF key derivation
+const APP_SECRET = 'windy-pro-model-encryption-2026';
+const HKDF_INFO = APP_SECRET + 'windy-model-v1';
 
 // Hardening constants
 const CONNECT_TIMEOUT_MS = 60000;    // 60 seconds connect timeout
@@ -51,7 +66,9 @@ class PairDownloadManager extends EventEmitter {
     super();
     this.pairsDir = pairsDir;
     this.licenseToken = licenseToken || '';
-    this.deviceId = os.hostname() + '-' + os.platform();
+
+    // Device fingerprint: deterministic SHA-256 hash of hardware/OS identity
+    this._deviceFingerprint = null; // lazy-computed
 
     /** @type {Map<string, {req: http.ClientRequest, aborted: boolean}>} */
     this._activeDownloads = new Map();
@@ -90,43 +107,119 @@ class PairDownloadManager extends EventEmitter {
   }
 
   // ═══════════════════════════════════════════
-  // Key Derivation (L6)
+  // Device Fingerprint
   // ═══════════════════════════════════════════
 
   /**
-   * Derive a 256-bit AES key from licence + device identity.
-   * @param {Buffer} salt — 16-byte random salt
-   * @returns {Buffer} 32-byte key
+   * Compute a deterministic device fingerprint.
+   * SHA-256(cpuModel + platform + arch + hostname + homedir)
+   * Cached for session lifetime.
+   * @returns {Buffer} 32-byte fingerprint
    */
-  _deriveKey(salt) {
-    const passphrase = this.licenseToken + this.deviceId;
-    return crypto.pbkdf2Sync(passphrase, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha512');
+  getDeviceFingerprint() {
+    if (!this._deviceFingerprint) {
+      const cpuModel = (os.cpus()[0] && os.cpus()[0].model) || 'unknown-cpu';
+      const raw = cpuModel + os.platform() + os.arch() + os.hostname() + os.homedir();
+      this._deviceFingerprint = crypto.createHash('sha256').update(raw).digest();
+    }
+    return this._deviceFingerprint;
   }
 
   /**
-   * Encrypt a plaintext buffer with AES-256-GCM.
-   * @param {Buffer} plaintext
-   * @param {Buffer} salt
-   * @param {Buffer} iv
-   * @returns {Buffer} ciphertext || authTag (16 bytes appended)
+   * Get the device fingerprint as a hex string (for headers, logging).
+   * @returns {string} 64-char hex string
    */
-  _encrypt(plaintext, salt, iv) {
-    const key = this._deriveKey(salt);
+  getDeviceFingerprintHex() {
+    return this.getDeviceFingerprint().toString('hex');
+  }
+
+  // ═══════════════════════════════════════════
+  // Key Derivation — HKDF-SHA256 (L6)
+  // ═══════════════════════════════════════════
+
+  /**
+   * Derive a 256-bit AES key via HKDF-SHA256.
+   * ikm  = licenseToken
+   * salt = deviceFingerprint (32 bytes)
+   * info = APP_SECRET + "windy-model-v1"
+   * @returns {Buffer} 32-byte key
+   */
+  _deriveKey() {
+    const ikm = Buffer.from(this.licenseToken || 'free', 'utf-8');
+    const salt = this.getDeviceFingerprint();
+    const info = Buffer.from(HKDF_INFO, 'utf-8');
+    return Buffer.from(crypto.hkdfSync('sha256', ikm, salt, info, KEY_LENGTH));
+  }
+
+  /**
+   * Encrypt plaintext → WMOD binary format.
+   * Output: [WMOD magic][version][IV][authTag][encrypted payload]
+   * @param {Buffer} plaintext — raw model data
+   * @returns {Buffer} WMOD-formatted encrypted buffer
+   */
+  _encrypt(plaintext) {
+    const key = this._deriveKey();
+    const iv = crypto.randomBytes(IV_LENGTH);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
     const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
     const authTag = cipher.getAuthTag();
-    return Buffer.concat([encrypted, authTag]);
+
+    // WMOD format: magic(4) + version(2) + iv(12) + authTag(16) + ciphertext
+    return Buffer.concat([WMOD_MAGIC, WMOD_VERSION, iv, authTag, encrypted]);
   }
 
   /**
-   * Decrypt a ciphertext buffer (with appended auth tag) using AES-256-GCM.
+   * Decrypt a WMOD-formatted buffer.
+   * @param {Buffer} wmodBuffer — full WMOD binary (header + payload)
+   * @returns {Buffer} decrypted plaintext
+   * @throws {Error} if magic bytes mismatch or auth tag verification fails
+   */
+  _decrypt(wmodBuffer) {
+    // Validate minimum size
+    if (!Buffer.isBuffer(wmodBuffer) || wmodBuffer.length < WMOD_HEADER_SIZE) {
+      throw new Error('Invalid WMOD file: too small');
+    }
+
+    // Validate magic bytes
+    const magic = wmodBuffer.subarray(0, 4);
+    if (!magic.equals(WMOD_MAGIC)) {
+      throw new Error('Invalid WMOD file: bad magic bytes');
+    }
+
+    // Parse header
+    // const version = wmodBuffer.readUInt16BE(4); // reserved for future
+    const iv = wmodBuffer.subarray(6, 6 + IV_LENGTH);
+    const authTag = wmodBuffer.subarray(6 + IV_LENGTH, 6 + IV_LENGTH + AUTH_TAG_LENGTH);
+    const ciphertext = wmodBuffer.subarray(WMOD_HEADER_SIZE);
+
+    const key = this._deriveKey();
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  }
+
+  /**
+   * Check if a buffer has a valid WMOD header.
+   * @param {Buffer} buf — at least 4 bytes
+   * @returns {boolean}
+   */
+  static hasWmodHeader(buf) {
+    return Buffer.isBuffer(buf) && buf.length >= 4 && buf.subarray(0, 4).equals(WMOD_MAGIC);
+  }
+
+  /**
+   * Decrypt a legacy (pre-WMOD) encrypted buffer.
+   * Used only during migration from PBKDF2 format.
    * @param {Buffer} cipherWithTag — ciphertext || 16-byte authTag
-   * @param {Buffer} salt
-   * @param {Buffer} iv
+   * @param {Buffer} salt — from legacy meta.json
+   * @param {Buffer} iv — from legacy meta.json
+   * @param {string} legacyLicenseToken
+   * @param {string} legacyDeviceId
    * @returns {Buffer} plaintext
    */
-  _decrypt(cipherWithTag, salt, iv) {
-    const key = this._deriveKey(salt);
+  static decryptLegacy(cipherWithTag, salt, iv, legacyLicenseToken, legacyDeviceId) {
+    const passphrase = legacyLicenseToken + legacyDeviceId;
+    const key = crypto.pbkdf2Sync(passphrase, salt, 100000, KEY_LENGTH, 'sha512');
     const ciphertext = cipherWithTag.subarray(0, cipherWithTag.length - AUTH_TAG_LENGTH);
     const authTag = cipherWithTag.subarray(cipherWithTag.length - AUTH_TAG_LENGTH);
     const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
@@ -279,10 +372,8 @@ class PairDownloadManager extends EventEmitter {
         return { success: false, error: msg };
       }
 
-      // Encrypt at rest
-      const salt = crypto.randomBytes(SALT_LENGTH);
-      const iv = crypto.randomBytes(IV_LENGTH);
-      const encryptedData = this._encrypt(fullBuffer, salt, iv);
+      // Encrypt at rest → WMOD format (IV generated inside _encrypt)
+      const encryptedData = this._encrypt(fullBuffer);
 
       // Write encrypted model
       try {
@@ -297,14 +388,14 @@ class PairDownloadManager extends EventEmitter {
         throw writeErr;
       }
 
-      // Write metadata
+      // Write metadata (no crypto material — IV/tag now in WMOD header)
+      // TODO [L4-P3]: Add LSB watermark fingerprint field when server-side pipeline is ready
       const meta = {
         pairId,
         name: pairInfo.name,
         sizeMB: pairInfo.sizeMB,
         sha256: pairInfo.sha256,
-        iv: iv.toString('hex'),
-        salt: salt.toString('hex'),
+        format: 'wmod-v1',
         downloadedAt: new Date().toISOString(),
         encryptedSizeBytes: encryptedData.length
       };
@@ -594,6 +685,11 @@ class PairDownloadManager extends EventEmitter {
    * Load and decrypt a pair model into memory.
    * NEVER writes plaintext to disk.
    *
+   * If decryption fails (tampered file, wrong device, revoked key):
+   *   - Deletes the corrupted model file
+   *   - Logs the event
+   *   - Throws with clear message for re-download
+   *
    * @param {string} pairId
    * @returns {Promise<Buffer>} — decrypted model data
    */
@@ -609,12 +705,21 @@ class PairDownloadManager extends EventEmitter {
     }
 
     this._log('info', 'loadPairModel', `Decrypting: ${pairId}`);
-    const meta = JSON.parse(await fsp.readFile(metaPath, 'utf-8'));
-    const iv = Buffer.from(meta.iv, 'hex');
-    const salt = Buffer.from(meta.salt, 'hex');
     const encryptedData = await fsp.readFile(encPath);
 
-    return this._decrypt(encryptedData, salt, iv);
+    try {
+      return this._decrypt(encryptedData);
+    } catch (err) {
+      // Decryption failed — tampered file, wrong device, or revoked key
+      this._log('error', 'loadPairModel', `Decryption failed for ${pairId}: ${err.message}`);
+      this._log('warn', 'loadPairModel', `Deleting corrupted/inaccessible model: ${pairId}`);
+      await fsp.unlink(encPath).catch(() => {});
+      await fsp.unlink(metaPath).catch(() => {});
+      throw new Error(
+        `Model ${pairId} could not be decrypted (${err.message}). ` +
+        'The file has been removed. Please re-download from the Marketplace.'
+      );
+    }
   }
 }
 

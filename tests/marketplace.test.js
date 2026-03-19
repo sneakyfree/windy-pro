@@ -154,32 +154,32 @@ describe('PairDownloadManager', () => {
 
   test('encryption key derivation produces consistent output for same inputs', () => {
     const mgr = new PairDownloadManager(tmpDir, 'test-license-key-123');
-    const salt = Buffer.from('0123456789abcdef', 'hex'); // fixed 8-byte salt for test
 
-    const key1 = mgr._deriveKey(salt);
-    const key2 = mgr._deriveKey(salt);
+    // HKDF _deriveKey() uses device fingerprint as salt (no explicit salt arg)
+    const key1 = mgr._deriveKey();
+    const key2 = mgr._deriveKey();
 
     expect(Buffer.isBuffer(key1)).toBe(true);
     expect(key1.length).toBe(32); // 256 bits
     expect(key1.equals(key2)).toBe(true);
 
-    // Different salt → different key
-    const differentSalt = Buffer.from('fedcba9876543210', 'hex');
-    const key3 = mgr._deriveKey(differentSalt);
+    // Different license token → different key
+    const mgr2 = new PairDownloadManager(tmpDir, 'different-license-key');
+    const key3 = mgr2._deriveKey();
     expect(key1.equals(key3)).toBe(false);
   });
 
   test('encrypt/decrypt roundtrip produces original data', () => {
     const mgr = new PairDownloadManager(tmpDir, 'test-license-roundtrip');
-    const salt = crypto.randomBytes(16);
-    const iv = crypto.randomBytes(12);
     const plaintext = Buffer.from('Hello, this is a test model file content!');
 
-    const encrypted = mgr._encrypt(plaintext, salt, iv);
+    // WMOD _encrypt() handles IV internally
+    const encrypted = mgr._encrypt(plaintext);
     expect(Buffer.isBuffer(encrypted)).toBe(true);
-    expect(encrypted.length).toBeGreaterThan(plaintext.length); // auth tag adds 16 bytes
+    expect(encrypted.length).toBeGreaterThan(plaintext.length); // WMOD header (34 bytes) + ciphertext
 
-    const decrypted = mgr._decrypt(encrypted, salt, iv);
+    // WMOD _decrypt() reads IV/authTag from header
+    const decrypted = mgr._decrypt(encrypted);
     expect(decrypted.equals(plaintext)).toBe(true);
   });
 });
