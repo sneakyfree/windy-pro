@@ -18,6 +18,68 @@ Four-layer defense system to prevent model piracy, refund abuse, and unauthorize
 
 ---
 
+## ⚠️ SAFETY PRINCIPLES — INVIOLABLE RULES
+
+These rules override ALL other implementation details. No code path may violate them.
+
+### 1. Default State = UNLOCKED
+If anything goes wrong — server down, fingerprint mismatch, network timeout, unexpected error — the default behavior is **let them use their models**. Only an explicit, confirmed `{ valid: false }` response from a healthy server triggers any lock action. When in doubt, trust the user.
+
+### 2. Server Errors ≠ Revocation
+- `HTTP 5xx` or network timeout → "try again next cycle" (no lock, no warning)
+- `HTTP 200 { valid: true }` → normal operation
+- `HTTP 200 { valid: false }` → this is the ONLY signal that triggers the lock path
+- DNS failure, TLS error, connection refused → same as 5xx, try again later
+
+### 3. Lock, Never Delete (First Offense)
+When a license cannot be verified, models are **locked** (decryption key removed from memory/keychain). The encrypted files stay on disk. The user can unlock instantly by reconnecting and verifying. Deletion of model files happens ONLY after:
+- Confirmed refund/chargeback AND
+- 7-day warning period has elapsed AND
+- User has been notified at least twice (in-app + email if available)
+
+### 4. Every Lock Gets a Warning First
+No user should ever be surprised by a lockout. Before any lock action:
+- Show in-app warning: "Your license couldn't be verified. You have 7 days to connect and resolve this."
+- Start a visible countdown
+- Only lock after the warning period expires
+- Exception: confirmed fraud/chargeback may use a shorter (48-hour) warning
+
+### 5. Fuzzy Device Fingerprinting
+Device fingerprint is used for tracking and analytics, NOT for encryption key derivation. This prevents users from being locked out by:
+- OS upgrades
+- Hardware changes (new RAM, new SSD)
+- System reinstalls
+- Migrating to a new machine (just sign in again)
+
+The encryption key is derived from `HKDF(licenseToken + APP_SECRET)` only. Device fingerprint is sent as a header for multi-device tracking but does not affect model access.
+
+### 6. Generous Grace Periods
+Grace periods assume the user is a legitimate customer in a low-connectivity situation (airplane, rural area, international travel):
+- Free: 72 hours (not 24 — even free users deserve grace)
+- Pro: 7 days
+- Ultra: 14 days
+- Max / Marco Polo: 30 days
+- "Travel mode" toggle: extends any tier to 30 days when manually activated
+
+### 7. Multi-Device Tolerance
+- Allow up to 5 devices per license by default
+- When device limit is reached: warn, don't lock. "You've reached your device limit. Manage devices at windyword.com/account."
+- Deactivating a device is self-service, not support-ticket
+
+### 8. Manual Override
+Grant (and future support staff) must have a dashboard to:
+- Instantly unlock any user's models with one click
+- Override any revocation
+- Extend grace periods
+- View heartbeat history per user
+- This is non-negotiable. Build it before launch.
+
+### 9. The Golden Rule
+**It is better to let 10 pirates use free models than to lock out 1 paying customer.**
+Piracy is a rounding error. Customer trust is everything. When any implementation decision is ambiguous, choose the option that favors the user.
+
+---
+
 ## Layer 1: Encrypted Model Files (CRITICAL — implement first)
 
 ### Why This Matters More on Desktop
@@ -25,23 +87,25 @@ Mobile OSes sandbox app data — users can't browse to model files without jailb
 
 ### Implementation
 
-**Key Derivation:**
+**Key Derivation (Updated per Safety Principles §5):**
 ```
 decryptionKey = HKDF-SHA256(
   ikm: licenseToken,
-  salt: deviceFingerprint,
-  info: APP_SECRET + "windy-model-v1"
+  salt: APP_SECRET,
+  info: "windy-model-v1"
 )
 ```
 
-**Device Fingerprint (Desktop):**
+**NOTE:** Device fingerprint is intentionally EXCLUDED from key derivation. Per Safety Principle §5, tying encryption to hardware causes lockouts when users upgrade OS, swap drives, or migrate machines. The license token alone gates access. Device fingerprint is collected separately for analytics and multi-device tracking only.
+
+**Device Fingerprint (Desktop) — for tracking, NOT encryption:**
 Combine at least 3 of:
 - Machine UUID (`/etc/machine-id` on Linux, `IOPlatformUUID` on macOS, `MachineGuid` on Windows)
 - CPU model string
 - Primary disk serial number
 - OS install date
 
-Use a hash of the combination — tolerant of minor hardware changes but unique enough to bind to a specific machine.
+Sent as `X-Device-Fingerprint` header on heartbeat calls. Used to count devices per license and detect unusual patterns. Does NOT affect model access.
 
 **Encryption:**
 - Algorithm: AES-256-GCM (authenticated encryption — detects tampering)
@@ -83,11 +147,12 @@ The desktop app pings the license server periodically to confirm the subscriptio
 
 | Tier | Grace Period | Rationale |
 |------|-------------|-----------|
-| Free | 24 hours | Minimal investment, minimal trust |
+| Free | 72 hours | Even free users deserve grace |
 | Pro ($99) | 7 days | Standard grace |
 | Ultra ($199) | 14 days | Higher trust |
 | Max ($299) | 30 days | Premium customer |
 | Marco Polo ($999) | 30 days | VIP — treat with maximum respect |
+| Travel Mode (any tier) | 30 days | Manual toggle for travelers — our core users |
 
 **Behavior on grace expiry:**
 1. Models are **locked** (not deleted) — decryption key is wiped from memory/keychain
