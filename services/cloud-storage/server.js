@@ -572,9 +572,8 @@ app.post('/admin/users/:userId/tier', adminMiddleware, (req, res) => {
   const tierLimits = {
     free: 500 * 1024 * 1024,        // 500MB
     pro: 5 * 1024 * 1024 * 1024,    // 5GB
-    translate: 10 * 1024 * 1024 * 1024, // 10GB
-    translate_pro: 25 * 1024 * 1024 * 1024, // 25GB
-    'translate-pro': 25 * 1024 * 1024 * 1024, // 25GB (alias)
+    translate: 10 * 1024 * 1024 * 1024, // 10GB (Windy Ultra)
+    translate_pro: 25 * 1024 * 1024 * 1024, // 25GB (Windy Max)
     unlimited: -1
   };
 
@@ -713,7 +712,15 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), (req, res
   const type = event.type;
   const data = event.data?.object || {};
 
-  const tierByAmount = { 4900: 'pro', 799: 'translate', 7900: 'translate', 14900: 'translate-pro' };
+  // Amount (cents) → tier mapping for Stripe webhook events
+  // Monthly: Pro $4.99(499), Ultra $8.99(899), Max $14.99(1499)
+  // Annual:  Pro $49(4900), Ultra $79(7900), Max $149(14900)
+  // Lifetime: Pro $99(9900), Ultra $199(19900), Max $299(29900)
+  const tierByAmount = {
+    499: 'pro', 4900: 'pro', 9900: 'pro',
+    899: 'translate', 7900: 'translate', 19900: 'translate',
+    1499: 'translate_pro', 14900: 'translate_pro', 29900: 'translate_pro'
+  };
 
   try {
     if (type === 'payment_intent.succeeded' || type === 'invoice.paid') {
@@ -730,7 +737,7 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), (req, res
       if (user && data.amount) {
         const newTier = tierByAmount[data.amount];
         if (newTier) {
-          const tierLimits = { free: 500 * 1024 * 1024, pro: 5 * 1024 * 1024 * 1024, translate: 10 * 1024 * 1024 * 1024, 'translate-pro': 25 * 1024 * 1024 * 1024, unlimited: -1 };
+          const tierLimits = { free: 500 * 1024 * 1024, pro: 5 * 1024 * 1024 * 1024, translate: 10 * 1024 * 1024 * 1024, translate_pro: 25 * 1024 * 1024 * 1024, unlimited: -1 };
           user.tier = newTier;
           user.storageLimit = tierLimits[newTier] || tierLimits.free;
           usersDB.set(user.id, user);
@@ -1155,7 +1162,7 @@ app.post('/admin/seed', adminMiddleware, async (req, res) => {
 
   const tierLimits = {
     free: 500 * 1024 * 1024, pro: 5 * 1024 * 1024 * 1024,
-    translate: 10 * 1024 * 1024 * 1024, 'translate-pro': 25 * 1024 * 1024 * 1024
+    translate: 10 * 1024 * 1024 * 1024, translate_pro: 25 * 1024 * 1024 * 1024
   };
 
   const firstNames = ['alice', 'bob', 'carol', 'dave', 'eve', 'frank', 'grace', 'henry', 'ivy', 'jack',
@@ -1174,7 +1181,7 @@ app.post('/admin/seed', adminMiddleware, async (req, res) => {
     if (r < 0.60) return 'free';
     if (r < 0.85) return 'pro';
     if (r < 0.95) return 'translate';
-    return 'translate-pro';
+    return 'translate_pro';
   }
   function randomDate(daysBack) {
     return new Date(Date.now() - rand(0, daysBack * 24 * 60 * 60 * 1000)).toISOString();
@@ -1238,7 +1245,7 @@ app.post('/admin/seed', adminMiddleware, async (req, res) => {
   seededUsers.forEach(uid => {
     const u = usersDB.get(uid);
     if (!u || u.tier === 'free') return;
-    const amounts = { pro: 4900, translate: 7900, 'translate-pro': 14900 };
+    const amounts = { pro: 4900, translate: 7900, translate_pro: 14900 };
     const txId = uuidv4();
     transactionsDB.set(txId, {
       id: txId, userId: uid, email: u.email,
