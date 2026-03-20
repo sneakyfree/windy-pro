@@ -142,6 +142,10 @@ class UpgradePanel {
 
             const monthlyPrices = { pro: '$4.99', translate: '$8.99', translate_pro: '$14.99' };
             const lifetimePrices = { pro: '$99', translate: '$199', translate_pro: '$299' };
+            const cloudSttBadges = {
+                subscription: '☁️ Cloud STT included — powered by Windy Cloud',
+                lifetime: '🏠 Local engines only — Own Your Stack'
+            };
 
             let priceDisplay = plan.price;
             if (plan.monthlyPriceId) {
@@ -152,6 +156,13 @@ class UpgradePanel {
             let lifetimeDisplay = '';
             if (plan.monthlyPriceId) {
                 lifetimeDisplay = `<div class="upgrade-lifetime-price">💎 ${lifetimePrices[plan.key]} <span class="upgrade-lifetime-label">lifetime — own forever</span></div>`;
+            }
+
+            // Cloud STT badge (only for paid plans)
+            let cloudBadge = '';
+            if (plan.monthlyPriceId) {
+                cloudBadge = `<div style="margin:8px 0;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(59,130,246,0.08);color:#60A5FA;">${cloudSttBadges.subscription}</div>`;
+                cloudBadge += `<div style="margin:0 0 8px;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(139,92,246,0.08);color:#C084FC;">${cloudSttBadges.lifetime}</div>`;
             }
 
             const features = plan.features.map(f => `<li>✓ ${f}</li>`).join('');
@@ -177,6 +188,7 @@ class UpgradePanel {
           <div class="upgrade-card-price">${priceDisplay}</div>
           <div class="upgrade-card-period">${plan.period}</div>
           ${lifetimeDisplay}
+          ${cloudBadge}
           <ul class="upgrade-card-features">${features}</ul>
           <div class="upgrade-card-actions">${actionBtn}</div>
         </div>`;
