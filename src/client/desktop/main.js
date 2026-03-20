@@ -3965,7 +3965,10 @@ ipcMain.handle('check-payment-status', async (event, sessionId) => {
 ipcMain.handle('get-current-tier', async () => {
   const license = store.get('license') || { tier: 'free' };
   const limits = getTierLimits(license.tier);
-  return { tier: license.tier, limits, license };
+  // Include billingType for cloud STT gating (stored as billingMode from checkout)
+  const billingType = license.billingMode || store.get('license.billingType') || null;
+  const cloudSttEnabled = billingType !== 'lifetime' && license.tier !== 'free';
+  return { tier: license.tier, billingType, cloudSttEnabled, limits, license };
 });
 
 ipcMain.handle('get-stripe-config', async () => {

@@ -75,11 +75,16 @@ module.exports = function createRouter({ db, authenticate }) {
     };
 
     // ─── Helper: upsert subscription cache ───
-    function upsertSubscription(userId, tier, stripeCustomerId, stripeSubId, periodEnd) {
+    /**
+     * @param {string} billingType — 'subscription' (monthly/annual) or 'lifetime'
+     */
+    function upsertSubscription(userId, tier, stripeCustomerId, stripeSubId, periodEnd, billingType) {
         const storageLimitMb = TIER_STORAGE[tier] || TIER_STORAGE.free;
+        // Ensure billing_type column exists (safe to call multiple times)
+        try { db.prepare("ALTER TABLE subscriptions ADD COLUMN billing_type TEXT DEFAULT 'subscription'").run(); } catch (_) { /* column already exists */ }
         db.prepare(`
-            INSERT INTO subscriptions (user_id, tier, stripe_customer_id, stripe_subscription_id, storage_limit_mb, status, current_period_end, updated_at)
-            VALUES (?, ?, ?, ?, ?, 'active', ?, datetime('now'))
+            INSERT INTO subscriptions (user_id, tier, stripe_customer_id, stripe_subscription_id, storage_limit_mb, status, current_period_end, billing_type, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'active', ?, ?, datetime('now'))
             ON CONFLICT(user_id) DO UPDATE SET
                 tier = excluded.tier,
                 stripe_customer_id = COALESCE(excluded.stripe_customer_id, stripe_customer_id),
@@ -87,8 +92,9 @@ module.exports = function createRouter({ db, authenticate }) {
                 storage_limit_mb = excluded.storage_limit_mb,
                 status = 'active',
                 current_period_end = excluded.current_period_end,
+                billing_type = excluded.billing_type,
                 updated_at = datetime('now')
-        `).run(userId, tier, stripeCustomerId || null, stripeSubId || null, storageLimitMb, periodEnd || null);
+        `).run(userId, tier, stripeCustomerId || null, stripeSubId || null, storageLimitMb, periodEnd || null, billingType || 'subscription');
     }
 
     function downgradeToFree(userId) {
@@ -178,6 +184,8 @@ module.exports = function createRouter({ db, authenticate }) {
                 // No subscription record = free tier
                 return res.json({
                     tier: 'free',
+                    billingType: null,
+                    cloudSttEnabled: false,
                     storageLimitMb: TIER_STORAGE.free,
                     storageLimitBytes: TIER_STORAGE.free * 1024 * 1024,
                     status: 'active',
@@ -186,8 +194,14 @@ module.exports = function createRouter({ db, authenticate }) {
                 });
             }
 
+            // Cloud STT is only available for active subscriptions (monthly/annual), NOT lifetime
+            const billingType = sub.billing_type || 'subscription';
+            const cloudSttEnabled = billingType !== 'lifetime' && sub.status === 'active';
+
             res.json({
                 tier: sub.tier,
+                billingType,
+                cloudSttEnabled,
                 storageLimitMb: sub.storage_limit_mb,
                 storageLimitBytes: sub.storage_limit_mb * 1024 * 1024,
                 status: sub.status,
@@ -263,6 +277,8 @@ module.exports = function createRouter({ db, authenticate }) {
                     if (userId && tier) {
                         // Fetch period end if subscription
                         let periodEnd = null;
+                        // Determine billing type: subscription has a subscriptionId, lifetime (one-time) does not
+                        const billingType = subscriptionId ? 'subscription' : 'lifetime';
                         if (subscriptionId) {
                             try {
                                 const sub = await stripeClient.subscriptions.retrieve(subscriptionId);
@@ -270,7 +286,7 @@ module.exports = function createRouter({ db, authenticate }) {
                             } catch (_) { }
                         }
 
-                        upsertSubscription(userId, tier, customerId, subscriptionId, periodEnd);
+                        upsertSubscription(userId, tier, customerId, subscriptionId, periodEnd, billingType);
 
                         // Generate license key
                         const key = generateLicenseKey(tier);
@@ -298,7 +314,7 @@ module.exports = function createRouter({ db, authenticate }) {
                                 const product = Object.values(PRODUCTS).find(p => p.priceId === priceId);
                                 if (product) tier = product.tier;
                             }
-                            upsertSubscription(row.user_id, tier, customerId, subscriptionId, periodEnd);
+                            upsertSubscription(row.user_id, tier, customerId, subscriptionId, periodEnd, 'subscription');
                             console.log(`[Stripe] 🔄 Subscription updated: user=${row.user_id} tier=${tier} status=${status}`);
                         } else if (status === 'canceled' || status === 'unpaid') {
                             downgradeToFree(row.user_id);

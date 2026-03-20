@@ -2131,6 +2131,14 @@ class WindyApp {
             // Process locally via the Python WebSocket server (includes all named engines)
             result = await this._batchTranscribeLocal(audioBlob);
           } else if (engine === 'cloud') {
+            // Gate: Cloud STT requires active subscription (not lifetime)
+            if (window.windyAPI?.getCurrentTier) {
+              const tierInfo = await window.windyAPI.getCurrentTier();
+              if (tierInfo?.billingType === 'lifetime') {
+                this.showReconnectToast('☁️ Cloud STT requires an active subscription (Monthly or Annual). Lifetime plans include local engines only. Switch to a local engine in Settings.');
+                return;
+              }
+            }
             // Use WindyPro Cloud batch endpoint
             result = await this._batchTranscribeCloud(audioBlob);
           } else if (engine === 'groq') {
