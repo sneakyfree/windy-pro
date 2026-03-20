@@ -92,7 +92,7 @@ const FEATURE_CARDS = [
   },
   {
     title: '💳 Pricing That Respects You',
-    body: 'Free tier to get started. Plus at $4.99/mo. Pro at $9.99/mo. Pro Max at $19.99/mo with Translate included. Or pay once: Lifetime at $149, Lifetime+ at $249. Your choice. Your terms.',
+    body: 'Free to start. Windy Pro: $99 lifetime or $49/yr or $4.99/mo. Windy Ultra: $199 lifetime or $79/yr or $8.99/mo. Windy Max: $299 lifetime or $149/yr or $14.99/mo. Pay once, own forever. No tricks.',
     category: 'pricing'
   },
   {

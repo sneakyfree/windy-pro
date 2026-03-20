@@ -6,9 +6,9 @@
  *
  * Tiers & Storage Limits:
  *   Free           — $0        — 500 MB
- *   Pro            — $49/yr    — 5 GB
- *   Translate      — $79/yr    — 10 GB
- *   Translate Pro  — $149/yr   — 25 GB
+ *   Windy Pro      — $49/yr    — 5 GB
+ *   Windy Ultra    — $79/yr    — 10 GB
+ *   Windy Max      — $149/yr   — 25 GB
  */
 
 const stripe = require('stripe');
