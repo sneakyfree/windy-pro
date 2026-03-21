@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Retroactive certification of all 98 WindyProLabs HuggingFace models.
+Retroactive certification of all 98 WindyLabs HuggingFace models.
 Downloads each model, runs inference, certifies, logs results.
 """
 import os, sys, json, torch, logging, shutil
@@ -102,8 +102,8 @@ def certify_translate(repo_id, local_path):
 
 
 def main():
-    repos = sorted([r.id for r in api.list_models(author='WindyProLabs')])
-    log.info(f"Certifying {len(repos)} models from WindyProLabs")
+    repos = sorted([r.id for r in api.list_models(author='WindyLabs')])
+    log.info(f"Certifying {len(repos)} models from WindyLabs")
     
     os.makedirs(CACHE_DIR, exist_ok=True)
     

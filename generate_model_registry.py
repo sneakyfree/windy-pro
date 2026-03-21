@@ -30,7 +30,7 @@ def generate_registry():
             "size_mb": None,  # Will be filled
             "languages": ["en"],
             "base_architecture": "whisper-tiny",
-            "huggingface": "WindyProLabs/windy-nano",
+            "huggingface": "WindyLabs/windy-nano",
             "description": "Fastest STT model. Best for quick dictation on powerful hardware.",
             "cpu_variant": "windy-nano-ct2"
         },
@@ -42,7 +42,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-small",
-            "huggingface": "WindyProLabs/windy-lite",
+            "huggingface": "WindyLabs/windy-lite",
             "description": "Lightweight STT with improved accuracy. Balanced speed/quality.",
             "cpu_variant": "windy-lite-ct2"
         },
@@ -54,7 +54,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-base",
-            "huggingface": "WindyProLabs/windy-core",
+            "huggingface": "WindyLabs/windy-core",
             "description": "Core STT model. Recommended for most use cases.",
             "cpu_variant": "windy-core-ct2"
         },
@@ -66,7 +66,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-medium",
-            "huggingface": "WindyProLabs/windy-edge",
+            "huggingface": "WindyLabs/windy-edge",
             "description": "High-accuracy STT. Best for professional transcription.",
             "cpu_variant": "windy-edge-ct2"
         },
@@ -78,7 +78,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-large-v2",
-            "huggingface": "WindyProLabs/windy-plus",
+            "huggingface": "WindyLabs/windy-plus",
             "description": "Premium STT with excellent accuracy. Production-grade.",
             "cpu_variant": "windy-plus-ct2"
         },
@@ -90,7 +90,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-large-v3",
-            "huggingface": "WindyProLabs/windy-turbo",
+            "huggingface": "WindyLabs/windy-turbo",
             "description": "Latest-gen STT. State-of-the-art accuracy and robustness.",
             "cpu_variant": "windy-turbo-ct2"
         },
@@ -102,7 +102,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-large-v3-turbo",
-            "huggingface": "WindyProLabs/windy-pro-engine",
+            "huggingface": "WindyLabs/windy-pro-engine",
             "description": "Ultra-fast large model. Maximum speed without sacrificing quality.",
             "cpu_variant": "windy-pro-engine-ct2"
         },
@@ -118,7 +118,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-tiny",
-            "huggingface": "WindyProLabs/windy-nano-ct2",
+            "huggingface": "WindyLabs/windy-nano-ct2",
             "description": "CPU-optimized Nano. Best for resource-constrained environments.",
             "gpu_variant": "windy-nano"
         },
@@ -130,7 +130,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-small",
-            "huggingface": "WindyProLabs/windy-lite-ct2",
+            "huggingface": "WindyLabs/windy-lite-ct2",
             "description": "CPU-optimized Lite. Good balance for CPU-only systems.",
             "gpu_variant": "windy-lite"
         },
@@ -142,7 +142,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-base",
-            "huggingface": "WindyProLabs/windy-core-ct2",
+            "huggingface": "WindyLabs/windy-core-ct2",
             "description": "CPU-optimized Core. Recommended for most CPU deployments.",
             "gpu_variant": "windy-core"
         },
@@ -154,7 +154,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-medium",
-            "huggingface": "WindyProLabs/windy-edge-ct2",
+            "huggingface": "WindyLabs/windy-edge-ct2",
             "description": "CPU-optimized Edge. High accuracy on CPU hardware.",
             "gpu_variant": "windy-edge"
         },
@@ -166,7 +166,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-large-v2",
-            "huggingface": "WindyProLabs/windy-plus-ct2",
+            "huggingface": "WindyLabs/windy-plus-ct2",
             "description": "CPU-optimized Plus. Premium accuracy without GPU.",
             "gpu_variant": "windy-plus"
         },
@@ -178,7 +178,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-large-v3",
-            "huggingface": "WindyProLabs/windy-turbo-ct2",
+            "huggingface": "WindyLabs/windy-turbo-ct2",
             "description": "CPU-optimized Turbo. State-of-the-art accuracy on CPU.",
             "gpu_variant": "windy-turbo"
         },
@@ -190,7 +190,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-large-v3-turbo",
-            "huggingface": "WindyProLabs/windy-pro-engine-ct2",
+            "huggingface": "WindyLabs/windy-pro-engine-ct2",
             "description": "CPU-optimized Pro. Maximum CPU performance.",
             "gpu_variant": "windy-pro-engine"
         },
@@ -206,7 +206,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en", "es", "fr", "de", "ru", "fi", "pt", "zh", "ja", "ko", "ar"],
             "base_architecture": "m2m100-418M",
-            "huggingface": "WindyProLabs/windy-translate-spark",
+            "huggingface": "WindyLabs/windy-translate-spark",
             "description": "Fast multilingual translation. 100+ languages. LoRA-enhanced for priority pairs."
         },
         {
@@ -217,7 +217,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en", "es", "fr", "de", "ru", "fi", "pt", "zh", "ja", "ko", "ar"],
             "base_architecture": "m2m100-1.2B",
-            "huggingface": "WindyProLabs/windy-translate-standard",
+            "huggingface": "WindyLabs/windy-translate-standard",
             "description": "Standard multilingual translation. 100+ languages. Higher quality than Spark."
         },
     ]

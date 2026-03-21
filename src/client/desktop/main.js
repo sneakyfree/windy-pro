@@ -4164,7 +4164,7 @@ try:
     print("LOADING", flush=True)
     local_dir = "${localDir}"
     os.makedirs(local_dir, exist_ok=True)
-    snapshot_download("WindyProLabs/${repoName}", local_dir=local_dir)
+    snapshot_download("WindyLabs/${repoName}", local_dir=local_dir)
     print("DONE", flush=True)
 except Exception as e:
     print(f"ERROR {e}", flush=True)

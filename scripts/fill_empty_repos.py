@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Fill empty WindyProLabs repos with model content.
+Fill empty WindyLabs repos with model content.
 These repos already exist but the LFS uploads failed due to storage limits.
 Now uploading to sneakyfree personal account instead — but first,
-let's rebuild + upload to existing WindyProLabs repos that have space.
+let's rebuild + upload to existing WindyLabs repos that have space.
 
-Actually: we can't upload to WindyProLabs either (storage full at 100GB).
+Actually: we can't upload to WindyLabs either (storage full at 100GB).
 So we wait for tomorrow and upload to sneakyfree.
 
 This script: rebuilds models locally and queues them for upload tomorrow.
@@ -34,8 +34,8 @@ def main():
     from huggingface_hub import HfApi
     api = HfApi()
     
-    # Get all WindyProLabs repos
-    repos = list(api.list_models(author='WindyProLabs'))
+    # Get all WindyLabs repos
+    repos = list(api.list_models(author='WindyLabs'))
     
     empty = []
     has_content = []
