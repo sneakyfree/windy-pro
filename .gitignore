@@ -46,6 +46,11 @@ test_audio/
 *.log
 upload_log*.txt
 
+# ─── OLD WIZARD — PERMANENTLY KILLED 21Mar26 ───
+# The ONLY wizard is installer-v2/screens/wizard.html (tornado + wind particles)
+# DO NOT recreate this file. It caused session after session of editing the wrong wizard.
+src/client/desktop/renderer/wizard.js
+
 # Secrets / env files
 .env
 deploy/.env
