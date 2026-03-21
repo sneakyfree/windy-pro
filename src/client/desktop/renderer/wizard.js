@@ -5,7 +5,7 @@
 class SetupWizard {
   constructor(app) {
     this.app = app;
-    this.totalSteps = 7;
+    this.totalSteps = 8;
     this.step = 0;
     this.overlay = null;
     this._micStream = null;
@@ -161,8 +161,37 @@ class SetupWizard {
             </div>
           </div>
 
-          <!-- Step 5: Pair Picker (Translation Pairs) -->
+          <!-- Step 5: Processing Mode (paid plans only) -->
           <div class="wizard-step" id="wizardStep5" style="display:none">
+            <div class="wizard-emoji">🌪️</div>
+            <h2 class="wizard-title">How Should WindyTune Work?</h2>
+            <p class="wizard-desc">Your subscription includes both local and cloud-powered transcription. How do you want WindyTune to handle it?</p>
+            <div class="wiz-mode-cards" id="wizModeCards">
+              <div class="wiz-mode-card selected" data-mode="privacy" style="background:#1a2e1a;border:2px solid #22C55E;border-radius:12px;padding:16px;margin:8px 0;cursor:pointer;transition:all 0.2s;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                  <span style="font-size:20px;">🏠</span>
+                  <span style="font-size:15px;font-weight:700;color:#22C55E;">Privacy Mode</span>
+                  <span style="font-size:10px;background:#22C55E20;color:#22C55E;padding:2px 8px;border-radius:8px;font-weight:600;">DEFAULT</span>
+                </div>
+                <p style="font-size:12px;color:#9CA3AF;margin:0;line-height:1.5;">Always uses local models. Your voice never leaves this device. Best for sensitive work, offline use, or maximum privacy. If your device struggles, WindyTune will suggest options — but never switches without asking.</p>
+              </div>
+              <div class="wiz-mode-card" data-mode="bestquality" style="background:#1a1a2e;border:2px solid #333;border-radius:12px;padding:16px;margin:8px 0;cursor:pointer;transition:all 0.2s;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                  <span style="font-size:20px;">⚡</span>
+                  <span style="font-size:15px;font-weight:700;color:#60A5FA;">Best Quality Mode</span>
+                </div>
+                <p style="font-size:12px;color:#9CA3AF;margin:0;line-height:1.5;">WindyTune automatically picks the best option — cloud when connected for maximum speed and accuracy, local when offline. Your data is always encrypted end-to-end. Best for people who just want it to work perfectly.</p>
+              </div>
+            </div>
+            <p style="font-size:11px;color:#6B7280;text-align:center;margin-top:8px;">You can change this anytime in Settings → Voice Engine.</p>
+            <div class="wizard-nav">
+              <button class="wizard-btn secondary" data-action="back">← Back</button>
+              <button class="wizard-btn primary" data-action="next">Next →</button>
+            </div>
+          </div>
+
+          <!-- Step 6: Pair Picker (Translation Pairs) -->
+          <div class="wizard-step" id="wizardStep6" style="display:none">
             <div class="wizard-emoji">🌍</div>
             <h2 class="wizard-title">Translation Pairs</h2>
             <p class="wizard-desc">Download language pairs for offline translation.</p>
@@ -175,8 +204,8 @@ class SetupWizard {
             </div>
           </div>
 
-          <!-- Step 6: All Set -->
-          <div class="wizard-step" id="wizardStep6" style="display:none">
+          <!-- Step 7: All Set -->
+          <div class="wizard-step" id="wizardStep7" style="display:none">
             <div class="wizard-emoji">🚀</div>
             <h2 class="wizard-title">You're All Set!</h2>
             <p class="wizard-desc">Press the shortcut below to start recording anywhere.</p>
@@ -220,7 +249,8 @@ class SetupWizard {
     // Step-specific init
     if (n === 2) this._initEngineStep();
     if (n === 4) this._initPlanStep();
-    if (n === 5) this._initPairPickerStep();
+    if (n === 5) this._initProcessingModeStep();
+    if (n === 6) this._initPairPickerStep();
   }
 
   async _saveState() {
@@ -241,9 +271,19 @@ class SetupWizard {
     this.overlay.querySelectorAll('[data-action]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const action = e.currentTarget.dataset.action;
-        if (action === 'next') this._showStep(this.step + 1);
-        else if (action === 'back') this._showStep(this.step - 1);
-        else if (action === 'finish') this._complete();
+        if (action === 'next') {
+          let next = this.step + 1;
+          // Skip processing mode step (5) for free users — they don't have cloud
+          if (next === 5 && this.choices.planTier === 'free') next = 6;
+          this._showStep(next);
+        } else if (action === 'back') {
+          let prev = this.step - 1;
+          // Skip processing mode step (5) going backward for free users
+          if (prev === 5 && this.choices.planTier === 'free') prev = 4;
+          this._showStep(prev);
+        } else if (action === 'finish') {
+          this._complete();
+        }
       });
     });
 
@@ -528,6 +568,31 @@ class SetupWizard {
     });
   }
 
+  _initProcessingModeStep() {
+    // Add click handlers for mode cards
+    const cards = this.overlay.querySelectorAll('.wiz-mode-card');
+    this.choices.processingMode = 'privacy'; // default
+    cards.forEach(card => {
+      card.addEventListener('click', () => {
+        cards.forEach(c => {
+          c.classList.remove('selected');
+          c.style.borderColor = '#333';
+          c.style.background = '#1a1a2e';
+        });
+        card.classList.add('selected');
+        const mode = card.dataset.mode;
+        this.choices.processingMode = mode;
+        if (mode === 'privacy') {
+          card.style.borderColor = '#22C55E';
+          card.style.background = '#1a2e1a';
+        } else {
+          card.style.borderColor = '#60A5FA';
+          card.style.background = '#1a1a3e';
+        }
+      });
+    });
+  }
+
   async _applyCoupon() {
     const input = this.overlay.querySelector('#wizCouponInput');
     const result = this.overlay.querySelector('#wizCouponResult');
@@ -666,6 +731,17 @@ class SetupWizard {
       window.windyAPI.updateSettings({
         engine: this.choices.engine,
         recordingMode: this.choices.recordingMode
+      });
+    }
+
+    // Save processing mode preference
+    const processingMode = this.choices.processingMode || 'privacy';
+    localStorage.setItem('windy_processingMode', processingMode);
+    if (window.windyAPI?.updateSettings) {
+      // In best quality mode, enable cloud fallback; in privacy mode, keep it off
+      window.windyAPI.updateSettings({
+        processingMode,
+        cloudFallbackEnabled: processingMode === 'bestquality',
       });
     }
 
