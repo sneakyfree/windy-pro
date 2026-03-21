@@ -285,7 +285,7 @@ export default function Landing() {
                                 <li>✓ All 15 engines</li>
                                 <li>✓ 99 languages</li>
                                 <li>✓ 30-minute recordings</li>
-                                <li>✓ ☁️ Cloud STT (subscription)</li>
+                                <li>✓ ☁️ Cloud Processing (subscription)</li>
                                 <li>✓ Batch mode + LLM polish</li>
                                 <li>✓ Speaker identification</li>
                                 <li>✓ 5 GB WindyCloud storage</li>
@@ -367,7 +367,7 @@ export default function Landing() {
                                     ['Languages', '99 (auto-detect)', '99', '99', '99'],
                                     ['Engines', '2 (Tiny + Base)', 'All 15', 'All 15', 'All 15'],
                                     ['Max Recording', '5 min', '30 min', '30 min', '60 min'],
-                                    ['Cloud STT', '✕', '✓', '✓', 'Priority'],
+                                    ['Cloud Processing', '✕', '✓', '✓', 'Priority'],
                                     ['Batch Mode', '✕', '✓', '✓', '✓'],
                                     ['LLM Polish', '✕', '✓', '✓', '✓'],
                                     ['Speaker ID', '✕', '✓', '✓', '✓'],

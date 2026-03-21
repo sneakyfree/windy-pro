@@ -33,7 +33,7 @@ const RETRY_DELAY_MS = 2000;
  * This is the source of truth for download URLs.
  */
 const MODEL_REGISTRY = {
-  // ─── STT Engines (GPU) ───
+  // ─── Voice Engines (GPU) ───
   'windy-stt-nano': { hfRepo: 'WindyProLabs/windy-stt-nano', sizeMB: 77, format: 'safetensors' },
   'windy-stt-lite': { hfRepo: 'WindyProLabs/windy-stt-lite', sizeMB: 144, format: 'safetensors' },
   'windy-stt-core': { hfRepo: 'WindyProLabs/windy-stt-core', sizeMB: 466, format: 'safetensors' },
@@ -42,7 +42,7 @@ const MODEL_REGISTRY = {
   'windy-stt-pro': { hfRepo: 'WindyProLabs/windy-stt-pro', sizeMB: 2949, format: 'safetensors' },
   'windy-stt-edge': { hfRepo: 'WindyProLabs/windy-stt-edge', sizeMB: 1448, format: 'safetensors' },
 
-  // ─── STT Engines (CPU INT8 via CTranslate2) ───
+  // ─── Voice Engines (CPU INT8 via CTranslate2) ───
   'windy-stt-nano-ct2': { hfRepo: 'WindyProLabs/windy-stt-nano-ct2', sizeMB: 38, format: 'ctranslate2' },
   'windy-stt-lite-ct2': { hfRepo: 'WindyProLabs/windy-stt-lite-ct2', sizeMB: 72, format: 'ctranslate2' },
   'windy-stt-core-ct2': { hfRepo: 'WindyProLabs/windy-stt-core-ct2', sizeMB: 234, format: 'ctranslate2' },

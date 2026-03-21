@@ -188,20 +188,20 @@ class SettingsPanel {
             <select id="engineSelect">
               <option value="windytune" selected>🌪️ WindyTune — auto-pilot, monitors & optimizes</option>
               <option value="local">🏠 Local — manual model selection</option>
-              <option value="windy-stt-nano">⚡ Windy STT Nano (73 MB) — fastest GPU, quick dictation</option>
-              <option value="windy-stt-lite">⚡ Windy STT Lite (140 MB) — lightweight, balanced speed/quality</option>
-              <option value="windy-stt-core">⚡ Windy STT Core (462 MB) — recommended for most use cases</option>
-              <option value="windy-stt-edge">⚡ Windy STT Edge (1444 MB) — high-accuracy, professional grade</option>
-              <option value="windy-stt-plus">⚡ Windy STT Plus (1458 MB) — premium accuracy, production-grade</option>
-              <option value="windy-stt-turbo">⚡ Windy STT Turbo (1544 MB) — latest-gen, state-of-the-art</option>
-              <option value="windy-stt-pro">⚡ Windy STT Pro (2945 MB) — ultra-fast large model</option>
-              <option value="windy-stt-nano-cpu">🛡️ Windy STT Nano CPU (406 MB) — CPU-optimized, resource-constrained</option>
-              <option value="windy-stt-lite-cpu">🛡️ Windy STT Lite CPU (668 MB) — CPU-optimized, good balance</option>
-              <option value="windy-stt-core-cpu">🛡️ Windy STT Core CPU (1760 MB) — CPU-optimized, recommended for CPU</option>
-              <option value="windy-stt-edge-cpu">🛡️ Windy STT Edge CPU (3824 MB) — CPU-optimized, high accuracy</option>
-              <option value="windy-stt-plus-cpu">🛡️ Windy STT Plus CPU (4872 MB) — CPU-optimized, premium accuracy</option>
-              <option value="windy-stt-turbo-cpu">🛡️ Windy STT Turbo CPU (4200 MB) — CPU-optimized, state-of-the-art</option>
-              <option value="windy-stt-pro-cpu">🛡️ Windy STT Pro CPU (9456 MB) — CPU-optimized, maximum performance</option>
+              <option value="windy-stt-nano">⚡ Windy Nano (73 MB) — fastest GPU, quick dictation</option>
+              <option value="windy-stt-lite">⚡ Windy Lite (140 MB) — lightweight, balanced speed/quality</option>
+              <option value="windy-stt-core">⚡ Windy Core (462 MB) — recommended for most use cases</option>
+              <option value="windy-stt-edge">⚡ Windy Edge (1444 MB) — high-accuracy, professional grade</option>
+              <option value="windy-stt-plus">⚡ Windy Plus (1458 MB) — premium accuracy, production-grade</option>
+              <option value="windy-stt-turbo">⚡ Windy Turbo (1544 MB) — latest-gen, state-of-the-art</option>
+              <option value="windy-stt-pro">⚡ Windy Pro Engine (2945 MB) — ultra-fast large model</option>
+              <option value="windy-stt-nano-cpu">🛡️ Windy Nano CPU (406 MB) — CPU-optimized, resource-constrained</option>
+              <option value="windy-stt-lite-cpu">🛡️ Windy Lite CPU (668 MB) — CPU-optimized, good balance</option>
+              <option value="windy-stt-core-cpu">🛡️ Windy Core CPU (1760 MB) — CPU-optimized, recommended for CPU</option>
+              <option value="windy-stt-edge-cpu">🛡️ Windy Edge CPU (3824 MB) — CPU-optimized, high accuracy</option>
+              <option value="windy-stt-plus-cpu">🛡️ Windy Plus CPU (4872 MB) — CPU-optimized, premium accuracy</option>
+              <option value="windy-stt-turbo-cpu">🛡️ Windy Turbo CPU (4200 MB) — CPU-optimized, state-of-the-art</option>
+              <option value="windy-stt-pro-cpu">🛡️ Windy Pro Engine CPU (9456 MB) — CPU-optimized, maximum performance</option>
             </select>
           </div>
           <p class="settings-hint" id="engineHint">Audio processed on your device. Nothing sent anywhere.</p>
@@ -248,11 +248,11 @@ class SettingsPanel {
           <div class="setting-row" id="modelSizeRow">
             <label for="modelSelect">Model Size</label>
             <select id="modelSelect">
-              <option value="tiny" selected>Windy STT Nano (73MB — fastest, GPU ✅)</option>
-              <option value="base">Windy STT Core (462MB — recommended, GPU ✅)</option>
-              <option value="small">Windy STT Lite (140MB — lightweight, GPU ✅)</option>
-              <option value="medium">Windy STT Edge (1444MB — high-accuracy, GPU ✅)</option>
-              <option value="large-v3">Windy STT Pro (2945MB — ultra-fast large model, GPU ✅)</option>
+              <option value="tiny" selected>Windy Nano (73MB — fastest, GPU ✅)</option>
+              <option value="base">Windy Core (462MB — recommended, GPU ✅)</option>
+              <option value="small">Windy Lite (140MB — lightweight, GPU ✅)</option>
+              <option value="medium">Windy Edge (1444MB — high-accuracy, GPU ✅)</option>
+              <option value="large-v3">Windy Pro Engine (2945MB — ultra-fast large model, GPU ✅)</option>
             </select>
           </div>
           <div class="setting-row">
@@ -543,12 +543,12 @@ class SettingsPanel {
         local: { hint: '🏠 <b>Manual mode.</b> Select your model below. Full control over which engine model runs.', color: '#22C55E', cloud: false, local: true, api: false },
         windytune: { hint: '🌪️ <b>Auto-pilot.</b> Monitors your performance in real-time. Auto-switches to the best model for your hardware. Logs every change to the status bar.', color: '#22C55E', cloud: false, local: true, api: false },
         cloud: { hint: '🔒 <b>E2E encrypted.</b> Streamed to WindyPro servers. Large-v3 on RTX 5090 GPU. Zero data retention.', color: '#4ecdc4', cloud: true, local: false, api: false },
-        'windy-stt-nano': { hint: '⚡ <b>Fastest STT (73 MB).</b> Quick dictation on powerful hardware.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'windy-stt-lite': { hint: '⚡ <b>Lightweight STT (140 MB).</b> Balanced speed and quality.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'windy-stt-core': { hint: '⚡ <b>Core STT (462 MB).</b> Recommended for most use cases.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'windy-stt-edge': { hint: '⚡ <b>High-accuracy STT (1.4 GB).</b> Professional transcription.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'windy-stt-plus': { hint: '⚡ <b>Premium STT (1.4 GB).</b> Excellent accuracy, production-grade.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'windy-stt-turbo': { hint: '⚡ <b>State-of-the-art STT (1.5 GB).</b> Best balance of accuracy & speed.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-nano': { hint: '⚡ <b>Fastest engine (73 MB).</b> Quick dictation on powerful hardware.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-lite': { hint: '⚡ <b>Lightweight engine (140 MB).</b> Balanced speed and quality.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-core': { hint: '⚡ <b>Core engine (462 MB).</b> Recommended for most use cases.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-edge': { hint: '⚡ <b>High-accuracy engine (1.4 GB).</b> Professional transcription.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-plus': { hint: '⚡ <b>Premium engine (1.4 GB).</b> Excellent accuracy, production-grade.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-stt-turbo': { hint: '⚡ <b>State-of-the-art engine (1.5 GB).</b> Best balance of accuracy & speed.', color: '#F59E0B', cloud: false, local: true, api: false },
         'windy-stt-pro': { hint: '⚡ <b>BEST accuracy (2.9 GB).</b> Broadcast, legal, medical, professional.', color: '#F59E0B', cloud: false, local: true, api: false },
         'windy-stt-nano-cpu': { hint: '🛡️ <b>Ultra-light CPU (406 MB).</b> Runs on any hardware.', color: '#22C55E', cloud: false, local: true, api: false },
         'windy-stt-lite-cpu': { hint: '🛡️ <b>Lightweight CPU (668 MB).</b> Fast and efficient.', color: '#22C55E', cloud: false, local: true, api: false },
@@ -2578,7 +2578,7 @@ class SettingsPanel {
   /**
    * Gray out engines/models not available on the user's plan tier.
    * Free: WindyTune + smallest 3 GPU models
-   * Pro: All GPU and CPU STT models
+   * Pro: All GPU and CPU voice engines
    * Translate: Pro + Windy Translate Spark
    * Windy Max: Everything
    */

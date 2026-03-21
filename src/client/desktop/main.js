@@ -173,22 +173,22 @@ const MAX_PYTHON_RESTARTS = 3;
 // ═══ Model Download Manifest ═══
 const MODEL_MANIFEST = {
   models: {
-    // GPU STT models
-    'windy-stt-nano': { size: '73MB', bytes: 73 * 1024 * 1024, label: 'Windy STT Nano', desc: 'Fastest GPU, great for dictation' },
-    'windy-stt-lite': { size: '140MB', bytes: 140 * 1024 * 1024, label: 'Windy STT Lite', desc: 'Lightweight, balanced speed/quality' },
-    'windy-stt-core': { size: '462MB', bytes: 462 * 1024 * 1024, label: 'Windy STT Core', desc: 'Recommended for most use cases' },
-    'windy-stt-edge': { size: '1444MB', bytes: 1444 * 1024 * 1024, label: 'Windy STT Edge', desc: 'High-accuracy, professional grade' },
-    'windy-stt-plus': { size: '1458MB', bytes: 1458 * 1024 * 1024, label: 'Windy STT Plus', desc: 'Premium accuracy, production-grade' },
-    'windy-stt-turbo': { size: '1544MB', bytes: 1544 * 1024 * 1024, label: 'Windy STT Turbo', desc: 'Latest-gen, state-of-the-art' },
-    'windy-stt-pro': { size: '2945MB', bytes: 2945 * 1024 * 1024, label: 'Windy STT Pro', desc: 'Ultra-fast large model, maximum speed' },
-    // CPU STT models
-    'windy-stt-nano-cpu': { size: '406MB', bytes: 406 * 1024 * 1024, label: 'Windy STT Nano (CPU)', desc: 'CPU-optimized, resource-constrained' },
-    'windy-stt-lite-cpu': { size: '668MB', bytes: 668 * 1024 * 1024, label: 'Windy STT Lite (CPU)', desc: 'CPU-optimized, good balance' },
-    'windy-stt-core-cpu': { size: '1760MB', bytes: 1760 * 1024 * 1024, label: 'Windy STT Core (CPU)', desc: 'CPU-optimized, recommended for CPU' },
-    'windy-stt-edge-cpu': { size: '3824MB', bytes: 3824 * 1024 * 1024, label: 'Windy STT Edge (CPU)', desc: 'CPU-optimized, high accuracy' },
-    'windy-stt-plus-cpu': { size: '4872MB', bytes: 4872 * 1024 * 1024, label: 'Windy STT Plus (CPU)', desc: 'CPU-optimized, premium accuracy' },
-    'windy-stt-turbo-cpu': { size: '4200MB', bytes: 4200 * 1024 * 1024, label: 'Windy STT Turbo (CPU)', desc: 'CPU-optimized, state-of-the-art' },
-    'windy-stt-pro-cpu': { size: '9456MB', bytes: 9456 * 1024 * 1024, label: 'Windy STT Pro (CPU)', desc: 'CPU-optimized, maximum performance' },
+    // GPU voice models
+    'windy-stt-nano': { size: '73MB', bytes: 73 * 1024 * 1024, label: 'Windy Nano', desc: 'Fastest GPU, great for dictation' },
+    'windy-stt-lite': { size: '140MB', bytes: 140 * 1024 * 1024, label: 'Windy Lite', desc: 'Lightweight, balanced speed/quality' },
+    'windy-stt-core': { size: '462MB', bytes: 462 * 1024 * 1024, label: 'Windy Core', desc: 'Recommended for most use cases' },
+    'windy-stt-edge': { size: '1444MB', bytes: 1444 * 1024 * 1024, label: 'Windy Edge', desc: 'High-accuracy, professional grade' },
+    'windy-stt-plus': { size: '1458MB', bytes: 1458 * 1024 * 1024, label: 'Windy Plus', desc: 'Premium accuracy, production-grade' },
+    'windy-stt-turbo': { size: '1544MB', bytes: 1544 * 1024 * 1024, label: 'Windy Turbo', desc: 'Latest-gen, state-of-the-art' },
+    'windy-stt-pro': { size: '2945MB', bytes: 2945 * 1024 * 1024, label: 'Windy Pro Engine', desc: 'Ultra-fast large model, maximum speed' },
+    // CPU voice models
+    'windy-stt-nano-cpu': { size: '406MB', bytes: 406 * 1024 * 1024, label: 'Windy Nano (CPU)', desc: 'CPU-optimized, resource-constrained' },
+    'windy-stt-lite-cpu': { size: '668MB', bytes: 668 * 1024 * 1024, label: 'Windy Lite (CPU)', desc: 'CPU-optimized, good balance' },
+    'windy-stt-core-cpu': { size: '1760MB', bytes: 1760 * 1024 * 1024, label: 'Windy Core (CPU)', desc: 'CPU-optimized, recommended for CPU' },
+    'windy-stt-edge-cpu': { size: '3824MB', bytes: 3824 * 1024 * 1024, label: 'Windy Edge (CPU)', desc: 'CPU-optimized, high accuracy' },
+    'windy-stt-plus-cpu': { size: '4872MB', bytes: 4872 * 1024 * 1024, label: 'Windy Plus (CPU)', desc: 'CPU-optimized, premium accuracy' },
+    'windy-stt-turbo-cpu': { size: '4200MB', bytes: 4200 * 1024 * 1024, label: 'Windy Turbo (CPU)', desc: 'CPU-optimized, state-of-the-art' },
+    'windy-stt-pro-cpu': { size: '9456MB', bytes: 9456 * 1024 * 1024, label: 'Windy Pro Engine (CPU)', desc: 'CPU-optimized, maximum performance' },
     // Translation models
     'windy-translate-spark': { size: '929MB', bytes: 929 * 1024 * 1024, label: 'Windy Translate Spark', desc: 'Fast multilingual, 100+ languages' },
     'windy-translate-standard': { size: '2371MB', bytes: 2371 * 1024 * 1024, label: 'Windy Translate Standard', desc: 'Higher quality than Spark, 100+ languages' }
@@ -548,7 +548,7 @@ function createWindow() {
           "script-src 'self'; " +
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
           "font-src 'self' https://fonts.gstatic.com; " +
-          "connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.deepgram.com https://api.groq.com https://api.openai.com wss://api.deepgram.com https://api.audd.io; " +
+          "connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk; " +
           "img-src 'self' data:; " +
           "media-src 'self' blob: data:;"
         ]
@@ -1927,35 +1927,35 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     'cloud': { name: 'Windy Cloud', size: '', specialty: 'Cloud-based transcription' },
     'local': { name: 'Local', size: '', specialty: '' },
 
-    // Real GPU STT models from model_registry.json
-    'windy-stt-nano': { name: 'Windy STT Nano', size: '73 MB', specialty: 'Fastest STT model. Best for quick dictation on powerful hardware.' },
-    'windy-stt-lite': { name: 'Windy STT Lite', size: '140 MB', specialty: 'Lightweight STT with improved accuracy. Balanced speed/quality.' },
-    'windy-stt-core': { name: 'Windy STT Core', size: '462 MB', specialty: 'Core STT model. Recommended for most use cases.' },
-    'windy-stt-edge': { name: 'Windy STT Edge', size: '1444 MB', specialty: 'High-accuracy STT. Best for professional transcription.' },
-    'windy-stt-plus': { name: 'Windy STT Plus', size: '1458 MB', specialty: 'Premium STT with excellent accuracy. Production-grade.' },
-    'windy-stt-turbo': { name: 'Windy STT Turbo', size: '1544 MB', specialty: 'Latest-gen STT. State-of-the-art accuracy and robustness.' },
-    'windy-stt-pro': { name: 'Windy STT Pro', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
+    // Real GPU voice models from model_registry.json
+    'windy-stt-nano': { name: 'Windy Nano', size: '73 MB', specialty: 'Fastest engine. Best for quick dictation on powerful hardware.' },
+    'windy-stt-lite': { name: 'Windy Lite', size: '140 MB', specialty: 'Lightweight engine with improved accuracy. Balanced speed/quality.' },
+    'windy-stt-core': { name: 'Windy Core', size: '462 MB', specialty: 'Core engine. Recommended for most use cases.' },
+    'windy-stt-edge': { name: 'Windy Edge', size: '1444 MB', specialty: 'High-accuracy engine. Best for professional transcription.' },
+    'windy-stt-plus': { name: 'Windy Plus', size: '1458 MB', specialty: 'Premium STT with excellent accuracy. Production-grade.' },
+    'windy-stt-turbo': { name: 'Windy Turbo', size: '1544 MB', specialty: 'Latest-gen engine. State-of-the-art accuracy and robustness.' },
+    'windy-stt-pro': { name: 'Windy Pro Engine', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
 
-    // Real CPU STT models from model_registry.json
-    'windy-stt-nano-cpu': { name: 'Windy STT Nano (CPU)', size: '406 MB', specialty: 'CPU-optimized Nano. Best for resource-constrained environments.' },
-    'windy-stt-lite-cpu': { name: 'Windy STT Lite (CPU)', size: '668 MB', specialty: 'CPU-optimized Lite. Good balance for CPU-only systems.' },
-    'windy-stt-core-cpu': { name: 'Windy STT Core (CPU)', size: '1760 MB', specialty: 'CPU-optimized Core. Recommended for most CPU deployments.' },
-    'windy-stt-edge-cpu': { name: 'Windy STT Edge (CPU)', size: '3824 MB', specialty: 'CPU-optimized Edge. High accuracy on CPU hardware.' },
-    'windy-stt-plus-cpu': { name: 'Windy STT Plus (CPU)', size: '4872 MB', specialty: 'CPU-optimized Plus. Premium accuracy without GPU.' },
-    'windy-stt-turbo-cpu': { name: 'Windy STT Turbo (CPU)', size: '4200 MB', specialty: 'CPU-optimized Turbo. State-of-the-art accuracy on CPU.' },
-    'windy-stt-pro-cpu': { name: 'Windy STT Pro (CPU)', size: '9456 MB', specialty: 'CPU-optimized Pro. Maximum CPU performance.' },
+    // Real CPU voice models from model_registry.json
+    'windy-stt-nano-cpu': { name: 'Windy Nano (CPU)', size: '406 MB', specialty: 'CPU-optimized Nano. Best for resource-constrained environments.' },
+    'windy-stt-lite-cpu': { name: 'Windy Lite (CPU)', size: '668 MB', specialty: 'CPU-optimized Lite. Good balance for CPU-only systems.' },
+    'windy-stt-core-cpu': { name: 'Windy Core (CPU)', size: '1760 MB', specialty: 'CPU-optimized Core. Recommended for most CPU deployments.' },
+    'windy-stt-edge-cpu': { name: 'Windy Edge (CPU)', size: '3824 MB', specialty: 'CPU-optimized Edge. High accuracy on CPU hardware.' },
+    'windy-stt-plus-cpu': { name: 'Windy Plus (CPU)', size: '4872 MB', specialty: 'CPU-optimized Plus. Premium accuracy without GPU.' },
+    'windy-stt-turbo-cpu': { name: 'Windy Turbo (CPU)', size: '4200 MB', specialty: 'CPU-optimized Turbo. State-of-the-art accuracy on CPU.' },
+    'windy-stt-pro-cpu': { name: 'Windy Pro Engine (CPU)', size: '9456 MB', specialty: 'CPU-optimized Pro. Maximum CPU performance.' },
 
     // Real Translation models from model_registry.json
     'windy-translate-spark': { name: 'Windy Translate Spark', size: '929 MB', specialty: 'Fast multilingual translation. 100+ languages. LoRA-enhanced for priority pairs.' },
     'windy-translate-standard': { name: 'Windy Translate Standard', size: '2371 MB', specialty: 'Standard multilingual translation. 100+ languages. Higher quality than Spark.' },
 
     // Legacy model names → Real Windy model equivalents (based on base_architecture)
-    'tiny': { name: 'Windy STT Nano', size: '73 MB', specialty: 'Fastest STT model. Best for quick dictation on powerful hardware.' },
-    'base': { name: 'Windy STT Core', size: '462 MB', specialty: 'Core STT model. Recommended for most use cases.' },
-    'small': { name: 'Windy STT Lite', size: '140 MB', specialty: 'Lightweight STT with improved accuracy. Balanced speed/quality.' },
-    'medium': { name: 'Windy STT Edge', size: '1444 MB', specialty: 'High-accuracy STT. Best for professional transcription.' },
-    'large-v3': { name: 'Windy STT Pro', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
-    'turbo': { name: 'Windy STT Turbo', size: '1544 MB', specialty: 'Latest-gen STT. State-of-the-art accuracy and robustness.' },
+    'tiny': { name: 'Windy Nano', size: '73 MB', specialty: 'Fastest engine. Best for quick dictation on powerful hardware.' },
+    'base': { name: 'Windy Core', size: '462 MB', specialty: 'Core engine. Recommended for most use cases.' },
+    'small': { name: 'Windy Lite', size: '140 MB', specialty: 'Lightweight engine with improved accuracy. Balanced speed/quality.' },
+    'medium': { name: 'Windy Edge', size: '1444 MB', specialty: 'High-accuracy engine. Best for professional transcription.' },
+    'large-v3': { name: 'Windy Pro Engine', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
+    'turbo': { name: 'Windy Turbo', size: '1544 MB', specialty: 'Latest-gen engine. State-of-the-art accuracy and robustness.' },
   };
   const mi = MODEL_INFO[engineId] || { name: engineId, size: '', specialty: '' };
   const modelInfo = { model: mi.name, size: mi.size, windyTune, engineId, specialty: mi.specialty };
@@ -3472,19 +3472,19 @@ ipcMain.handle('detect-hardware', async () => {
   // Engine recommendation
   if (result.gpu && result.gpu.vramMB >= 6000) {
     result.recommendedEngine = 'windy-stt-pro';
-    result.recommendation = `Your ${result.gpu.name} (${Math.round(result.gpu.vramMB / 1024)}GB VRAM) can run the best model. We recommend Windy STT Pro for maximum accuracy.`;
+    result.recommendation = `Your ${result.gpu.name} (${Math.round(result.gpu.vramMB / 1024)}GB VRAM) can run the best model. We recommend Windy Pro Engine for maximum accuracy.`;
   } else if (result.gpu && result.gpu.vramMB >= 2000) {
     result.recommendedEngine = 'windy-stt-core';
-    result.recommendation = `Your ${result.gpu.name} has ${Math.round(result.gpu.vramMB / 1024)}GB VRAM. We recommend Windy STT Core for a great balance of speed and quality.`;
+    result.recommendation = `Your ${result.gpu.name} has ${Math.round(result.gpu.vramMB / 1024)}GB VRAM. We recommend Windy Core for a great balance of speed and quality.`;
   } else if (result.totalRAM >= 16) {
     result.recommendedEngine = 'windy-stt-edge-cpu';
-    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy STT Edge (CPU) — high accuracy on CPU, no GPU needed.`;
+    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy Edge (CPU) — high accuracy on CPU, no GPU needed.`;
   } else if (result.totalRAM >= 8) {
     result.recommendedEngine = 'windy-stt-core-cpu';
-    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy STT Core (CPU) — great balance of speed and quality for your hardware.`;
+    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy Core (CPU) — great balance of speed and quality for your hardware.`;
   } else {
     result.recommendedEngine = 'windy-stt-nano-cpu';
-    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy STT Nano (CPU) — ultra-light, runs great on any hardware.`;
+    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy Nano (CPU) — ultra-light, runs great on any hardware.`;
   }
 
   return result;
@@ -3965,7 +3965,7 @@ ipcMain.handle('check-payment-status', async (event, sessionId) => {
 ipcMain.handle('get-current-tier', async () => {
   const license = store.get('license') || { tier: 'free' };
   const limits = getTierLimits(license.tier);
-  // Include billingType for cloud STT gating (stored as billingMode from checkout)
+  // Include billingType for cloud processing gating (stored as billingMode from checkout)
   const billingType = license.billingMode || store.get('license.billingType') || null;
   const cloudSttEnabled = billingType !== 'lifetime' && license.tier !== 'free';
   return { tier: license.tier, billingType, cloudSttEnabled, limits, license };

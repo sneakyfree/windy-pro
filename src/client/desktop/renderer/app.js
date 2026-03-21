@@ -1341,9 +1341,9 @@ class WindyApp {
         const modelSizeMB = { 'large-v3': 2945, 'windy-stt-pro': 2945, 'turbo': 1544, 'windy-stt-turbo': 1544, 'medium': 1444, 'windy-stt-edge': 1444, 'small': 140, 'windy-stt-lite': 140, 'base': 462, 'windy-stt-core': 462, 'tiny': 73, 'windy-stt-nano': 73 };
         const currentModelSize = modelSizeMB[msg.model] || 0;
         if (currentModelSize > 500) {
-          suggestions.push('Try Windy STT Core (462MB, balanced)');
+          suggestions.push('Try Windy Core (462MB, balanced)');
         } else if (currentModelSize > 150) {
-          suggestions.push('Try Windy STT Lite (140MB) for faster dictation');
+          suggestions.push('Try Windy Lite (140MB) for faster dictation');
         }
         const tip = suggestions.length > 0 ? ` 💡 ${suggestions[0]}` : '';
         this.showReconnectToast(`⚠️ ${displayName} is struggling.${tip}`);
@@ -2130,11 +2130,11 @@ class WindyApp {
             // Process locally via the Python WebSocket server (includes all named engines)
             result = await this._batchTranscribeLocal(audioBlob);
           } else if (engine === 'cloud') {
-            // Gate: Cloud STT requires active subscription (not lifetime)
+            // Gate: Cloud Processing requires active subscription (not lifetime)
             if (window.windyAPI?.getCurrentTier) {
               const tierInfo = await window.windyAPI.getCurrentTier();
               if (tierInfo?.billingType === 'lifetime') {
-                this.showReconnectToast('☁️ Cloud STT requires an active subscription (Monthly or Annual). Lifetime plans include local engines only. Switch to a local engine in Settings.');
+                this.showReconnectToast('☁️ Cloud Processing requires an active subscription (Monthly or Annual). Lifetime plans include local engines only. Switch to a local engine in Settings.');
                 return;
               }
             }

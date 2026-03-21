@@ -7,7 +7,7 @@
   "models": [
     {
       "id": "windy-stt-nano",
-      "name": "Windy STT Nano",
+      "name": "Windy Nano",
       "type": "stt",
       "format": "safetensors",
       "lang": "en",
@@ -72,7 +72,7 @@
     },
     {
       "id": "windy-stt-lite",
-      "name": "Windy STT Lite",
+      "name": "Windy Lite",
       "type": "stt",
       "format": "safetensors",
       "lang": "en",
@@ -138,7 +138,7 @@
     },
     {
       "id": "windy-stt-core",
-      "name": "Windy STT Core",
+      "name": "Windy Core",
       "type": "stt",
       "format": "safetensors",
       "lang": "en",
@@ -203,7 +203,7 @@
     },
     {
       "id": "windy-stt-plus",
-      "name": "Windy STT Plus",
+      "name": "Windy Plus",
       "type": "stt",
       "format": "safetensors",
       "lang": "en",
@@ -268,7 +268,7 @@
     },
     {
       "id": "windy-stt-turbo",
-      "name": "Windy STT Turbo",
+      "name": "Windy Turbo",
       "type": "stt",
       "format": "safetensors",
       "lang": "en",
@@ -334,7 +334,7 @@
     },
     {
       "id": "windy-stt-pro",
-      "name": "Windy STT Pro",
+      "name": "Windy Pro Engine",
       "type": "stt",
       "format": "safetensors",
       "lang": "en",
@@ -399,7 +399,7 @@
     },
     {
       "id": "windy-stt-edge",
-      "name": "Windy STT Edge",
+      "name": "Windy Edge",
       "type": "stt",
       "format": "safetensors",
       "lang": "multilingual",
@@ -465,7 +465,7 @@
     },
     {
       "id": "windy-stt-nano-ct2",
-      "name": "Windy STT Nano (CPU)",
+      "name": "Windy Nano (CPU)",
       "type": "stt",
       "format": "ctranslate2-int8",
       "lang": "en",
@@ -531,7 +531,7 @@
     },
     {
       "id": "windy-stt-lite-ct2",
-      "name": "Windy STT Lite (CPU)",
+      "name": "Windy Lite (CPU)",
       "type": "stt",
       "format": "ctranslate2-int8",
       "lang": "en",
@@ -597,7 +597,7 @@
     },
     {
       "id": "windy-stt-core-ct2",
-      "name": "Windy STT Core (CPU)",
+      "name": "Windy Core (CPU)",
       "type": "stt",
       "format": "ctranslate2-int8",
       "lang": "en",
@@ -663,7 +663,7 @@
     },
     {
       "id": "windy-stt-plus-ct2",
-      "name": "Windy STT Plus (CPU)",
+      "name": "Windy Plus (CPU)",
       "type": "stt",
       "format": "ctranslate2-int8",
       "lang": "en",
@@ -729,7 +729,7 @@
     },
     {
       "id": "windy-stt-turbo-ct2",
-      "name": "Windy STT Turbo (CPU)",
+      "name": "Windy Turbo (CPU)",
       "type": "stt",
       "format": "ctranslate2-int8",
       "lang": "en",
@@ -795,7 +795,7 @@
     },
     {
       "id": "windy-stt-pro-ct2",
-      "name": "Windy STT Pro (CPU)",
+      "name": "Windy Pro Engine (CPU)",
       "type": "stt",
       "format": "ctranslate2-int8",
       "lang": "en",
@@ -861,7 +861,7 @@
     },
     {
       "id": "windy-stt-edge-ct2",
-      "name": "Windy STT Edge (CPU)",
+      "name": "Windy Edge (CPU)",
       "type": "stt",
       "format": "ctranslate2-int8",
       "lang": "multilingual",
@@ -927,7 +927,7 @@
     },
     {
       "id": "windy-stt-distil-small",
-      "name": "Windy STT Distil Small",
+      "name": "Windy Distil Small",
       "type": "stt",
       "format": "safetensors",
       "lang": "en",
@@ -993,7 +993,7 @@
     },
     {
       "id": "windy-stt-distil-medium",
-      "name": "Windy STT Distil Medium",
+      "name": "Windy Distil Medium",
       "type": "stt",
       "format": "safetensors",
       "lang": "en",
@@ -1059,7 +1059,7 @@
     },
     {
       "id": "windy-stt-distil-large",
-      "name": "Windy STT Distil Large",
+      "name": "Windy Distil Large",
       "type": "stt",
       "format": "safetensors",
       "lang": "en",

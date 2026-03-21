@@ -14,7 +14,7 @@
   "models": [
     {
       "id": "windy-stt-nano",
-      "name": "Windy STT Nano",
+      "name": "Windy Nano",
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
@@ -32,7 +32,7 @@
     },
     {
       "id": "windy-stt-lite",
-      "name": "Windy STT Lite",
+      "name": "Windy Lite",
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
@@ -50,7 +50,7 @@
     },
     {
       "id": "windy-stt-core",
-      "name": "Windy STT Core",
+      "name": "Windy Core",
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
@@ -68,7 +68,7 @@
     },
     {
       "id": "windy-stt-plus",
-      "name": "Windy STT Plus",
+      "name": "Windy Plus",
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
@@ -86,7 +86,7 @@
     },
     {
       "id": "windy-stt-turbo",
-      "name": "Windy STT Turbo",
+      "name": "Windy Turbo",
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
@@ -104,7 +104,7 @@
     },
     {
       "id": "windy-stt-pro",
-      "name": "Windy STT Pro",
+      "name": "Windy Pro Engine",
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
@@ -122,7 +122,7 @@
     },
     {
       "id": "windy-stt-edge",
-      "name": "Windy STT Edge",
+      "name": "Windy Edge",
       "category": "stt",
       "variant": "gpu",
       "format": "safetensors",
@@ -140,7 +140,7 @@
     },
     {
       "id": "windy-stt-nano-ct2",
-      "name": "Windy STT Nano (CPU INT8)",
+      "name": "Windy Nano (CPU INT8)",
       "category": "stt",
       "variant": "cpu-int8",
       "format": "ctranslate2",
@@ -159,7 +159,7 @@
     },
     {
       "id": "windy-stt-lite-ct2",
-      "name": "Windy STT Lite (CPU INT8)",
+      "name": "Windy Lite (CPU INT8)",
       "category": "stt",
       "variant": "cpu-int8",
       "format": "ctranslate2",
@@ -178,7 +178,7 @@
     },
     {
       "id": "windy-stt-core-ct2",
-      "name": "Windy STT Core (CPU INT8)",
+      "name": "Windy Core (CPU INT8)",
       "category": "stt",
       "variant": "cpu-int8",
       "format": "ctranslate2",
@@ -197,7 +197,7 @@
     },
     {
       "id": "windy-stt-plus-ct2",
-      "name": "Windy STT Plus (CPU INT8)",
+      "name": "Windy Plus (CPU INT8)",
       "category": "stt",
       "variant": "cpu-int8",
       "format": "ctranslate2",
@@ -216,7 +216,7 @@
     },
     {
       "id": "windy-stt-turbo-ct2",
-      "name": "Windy STT Turbo (CPU INT8)",
+      "name": "Windy Turbo (CPU INT8)",
       "category": "stt",
       "variant": "cpu-int8",
       "format": "ctranslate2",
@@ -235,7 +235,7 @@
     },
     {
       "id": "windy-stt-pro-ct2",
-      "name": "Windy STT Pro (CPU INT8)",
+      "name": "Windy Pro Engine (CPU INT8)",
       "category": "stt",
       "variant": "cpu-int8",
       "format": "ctranslate2",
@@ -254,7 +254,7 @@
     },
     {
       "id": "windy-stt-edge-ct2",
-      "name": "Windy STT Edge (CPU INT8)",
+      "name": "Windy Edge (CPU INT8)",
       "category": "stt",
       "variant": "cpu-int8",
       "format": "ctranslate2",
@@ -273,7 +273,7 @@
     },
     {
       "id": "windy-stt-distil-small",
-      "name": "Windy STT Distil Small",
+      "name": "Windy Distil Small",
       "category": "stt",
       "variant": "cpu-optimized",
       "format": "safetensors",
@@ -298,7 +298,7 @@
     },
     {
       "id": "windy-stt-distil-medium",
-      "name": "Windy STT Distil Medium",
+      "name": "Windy Distil Medium",
       "category": "stt",
       "variant": "cpu-optimized",
       "format": "safetensors",
@@ -323,7 +323,7 @@
     },
     {
       "id": "windy-stt-distil-large",
-      "name": "Windy STT Distil Large",
+      "name": "Windy Distil Large",
       "category": "stt",
       "variant": "cpu-optimized",
       "format": "safetensors",

@@ -26,7 +26,7 @@ const ICE_SERVERS = [
 
 const CALL_TIMEOUT_MS = 30000;  // Auto-decline after 30 seconds
 const SUBTITLE_FADE_MS = 5000;  // Subtitle fade-out after silence
-const STT_BUFFER_MS = 2000;     // 2-second sliding window for STT
+const VOICE_BUFFER_MS = 2000;     // 2-second sliding window for voice processing
 
 const log = require('../logger')('ChatVoIP');
 
@@ -524,7 +524,7 @@ class SubtitleEngine {
    * Real-time translated subtitles for video calls.
    *
    * Architecture:
-   *   Remote audio → local STT (Whisper) → translate → render subtitle
+   *   Remote audio → local transcription → translate → render subtitle
    *   ALL processing on LOCAL device — zero cloud, zero data leak
    *   ~1.5s latency target
    */
@@ -544,7 +544,7 @@ class SubtitleEngine {
 
   /**
    * Attach to a remote media stream and start processing.
-   * K5.4.2: Audio Routing for STT
+   * K5.4.2: Audio Routing for voice processing
    */
   attachStream(remoteStream) {
     try {
@@ -579,7 +579,7 @@ class SubtitleEngine {
           this.bufferDuration += inputData.length / this.audioContext.sampleRate;
 
           // Process when buffer reaches 2 seconds
-          if (this.bufferDuration >= STT_BUFFER_MS / 1000) {
+          if (this.bufferDuration >= VOICE_BUFFER_MS / 1000) {
             this._processBuffer();
           }
         } else if (this.vadActive && this.audioBuffer.length > 0) {
@@ -601,7 +601,7 @@ class SubtitleEngine {
   }
 
   /**
-   * Process the audio buffer: STT → translate → render.
+   * Process the audio buffer: Transcribe → translate → render.
    */
   async _processBuffer() {
     if (this.audioBuffer.length === 0) return;
@@ -611,9 +611,9 @@ class SubtitleEngine {
     this.bufferDuration = 0;
 
     try {
-      // Step 1: Local STT (Whisper)
+      // Step 1: Local transcription (Whisper)
       // In production: send buffer to local Whisper server via WebSocket
-      const transcript = await this._performSTT(buffer);
+      const transcript = await this._performTranscription(buffer);
       if (!transcript) return;
 
       // Step 2: Local translate
@@ -638,9 +638,9 @@ class SubtitleEngine {
   }
 
   /**
-   * STT stub — connect to local Whisper in production.
+   * Transcription stub — connect to local Whisper in production.
    */
-  async _performSTT(_audioBuffer) {
+  async _performTranscription(_audioBuffer) {
     // Stub: in production, encode buffer to WAV/Opus and send to
     // local Whisper server for transcription
     return null;

@@ -34,7 +34,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T60GeBXIOBasDQi4aitcq8O',
                 annualPriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg',
                 lifetimePriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg_life',
-                features: ['All 15 engines', '99 languages', '30-min recordings', 'Cloud STT', 'Batch mode', 'LLM polish', '5 GB WindyCloud storage'],
+                features: ['All 15 engines', '99 languages', '30-min recordings', 'Cloud Processing', 'Batch mode', 'LLM polish', '5 GB WindyCloud storage'],
                 color: '#22C55E',
                 icon: '⚡'
             },
@@ -158,7 +158,7 @@ class UpgradePanel {
                 lifetimeDisplay = `<div class="upgrade-lifetime-price">💎 ${lifetimePrices[plan.key]} <span class="upgrade-lifetime-label">lifetime — own forever</span></div>`;
             }
 
-            // Cloud STT badge (only for paid plans)
+            // Cloud Processing badge (only for paid plans)
             let cloudBadge = '';
             if (plan.monthlyPriceId) {
                 cloudBadge = `<div style="margin:8px 0;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(59,130,246,0.08);color:#60A5FA;">${cloudSttBadges.subscription}</div>`;
