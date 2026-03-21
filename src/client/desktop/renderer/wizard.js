@@ -125,7 +125,8 @@ class SetupWizard {
           <div class="wizard-step" id="wizardStep3" style="display:none">
             <div class="wizard-emoji">👤</div>
             <h2 class="wizard-title">Create Your Account</h2>
-            <p class="wizard-desc">Optional — sync settings and unlock cloud features.</p>
+            <p class="wizard-desc">Optional — sync settings and unlock cloud-powered transcription.</p>
+            <p class="wizard-desc" style="font-size:11px;color:#9CA3AF;margin-top:4px;">☁️ Monthly & Annual plans include Cloud STT. 🏠 Lifetime = local engines only (Own Your Stack).</p>
             <div class="wiz-account-form" id="wizAccountForm">
               <input type="text" class="wizard-input" id="wizAccName" placeholder="Your name">
               <input type="email" class="wizard-input" id="wizAccEmail" placeholder="Email address">
@@ -501,6 +502,7 @@ class SetupWizard {
         <div class="wiz-plan-price" style="color:${p.color}">${p.price}</div>
         <div class="wiz-plan-period">${p.period}</div>
         <ul class="wiz-plan-features">${p.features.map(f => `<li>✓ ${f}</li>`).join('')}</ul>
+        ${p.key !== 'free' ? '<div style="margin-top:6px;font-size:10px;color:#60A5FA;font-weight:600;">☁️ Cloud STT (monthly/annual) · 🏠 Local only (lifetime)</div>' : '<div style="margin-top:6px;font-size:10px;color:#9CA3AF;font-weight:600;">🏠 Local engines only</div>'}
       </div>`).join('');
 
     container.querySelectorAll('.wiz-plan-card').forEach(card => {
