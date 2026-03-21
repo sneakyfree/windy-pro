@@ -143,8 +143,8 @@ class UpgradePanel {
             const monthlyPrices = { pro: '$4.99', translate: '$8.99', translate_pro: '$14.99' };
             const lifetimePrices = { pro: '$99', translate: '$199', translate_pro: '$299' };
             const cloudSttBadges = {
-                subscription: '☁️ Subscription (monthly/annual) → Cloud STT included, powered by Windy Cloud',
-                lifetime: '🏠 Lifetime → Local engines only — Own Your Stack, no cloud dependency'
+                subscription: '🌪️ Subscribers get 3 processing modes: Device Only, Device + WindyCloud, or Auto. All fully private.',
+                lifetime: '🏠 Lifetime → Device-only processing. Your voice never leaves this machine. Always private.'
             };
 
             let priceDisplay = plan.price;

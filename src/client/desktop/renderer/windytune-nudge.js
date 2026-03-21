@@ -40,9 +40,9 @@ class WindyTuneNudge {
     // Don't nudge if cloud is already the engine
     if (engine === 'cloud' || engine === 'windy-cloud') return;
 
-    // Don't nudge if user already chose best quality mode
+    // Don't nudge if user already chose auto or hybrid mode
     const mode = localStorage.getItem('windy_processingMode');
-    if (mode === 'bestquality') return;
+    if (mode === 'auto' || mode === 'hybrid') return;
 
     if (this._state.permanentlyDismissed) return;
     if (this._state.dismissCount >= MAX_DISMISSALS) {
@@ -90,7 +90,7 @@ class WindyTuneNudge {
         </p>
         <div style="font-size:11px;color:#ccc;line-height:1.6;">
           🔄 <b>Try a lighter model</b> — smaller models run faster on your hardware<br>
-          ☁️ <b>Try Best Quality mode</b> — uses cloud when connected for speed<br>
+          ☁️ <b>Switch to "Auto" mode</b> — lets WindyTune pick cloud or local for the best result<br>
           ❄️ <b>Cool down</b> — give your device a moment to breathe
         </div>
         <div style="display:flex;gap:8px;margin-top:12px;">
