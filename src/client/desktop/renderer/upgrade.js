@@ -59,7 +59,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T60H8BXIOBasDQiy5eorTWR',
                 annualPriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG',
                 lifetimePriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG_life',
-                features: ['Everything in Ultra', '30-min recordings', 'Offline translation', '99 language pairs', 'Text-to-speech', 'Medical/legal glossaries', '100 offline translation engines'],
+                features: ['Everything in Ultra', '60-min recordings', 'Offline translation', '99 language pairs', 'Text-to-speech', 'Medical/legal glossaries', '100 offline translation engines'],
                 color: '#8B5CF6',
                 icon: '👑'
             }

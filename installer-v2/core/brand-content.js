@@ -77,7 +77,7 @@ const FEATURE_CARDS = [
   },
   {
     title: '☁️ Cloud Storage Plans',
-    body: 'Free: 5 GB (~100 hours of transcripts). Starter: 50 GB for $2/mo. Builder: 500 GB for $8/mo. Unlimited: $15/mo. Store everything — not just voice files, but all your documents, photos, and files. Your privacy is paramount!',
+    body: 'Free: 500 MB included. Starter: 50 GB for $9/mo. Pro: 250 GB for $19/mo. Business: 1 TB for $49/mo. Enterprise: Custom pricing. Store everything — not just voice files, but all your documents, photos, and files. Your privacy is paramount!',
     category: 'cloud'
   },
   {

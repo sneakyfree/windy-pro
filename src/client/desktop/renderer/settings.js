@@ -69,10 +69,16 @@ class SettingsPanel {
           <div class="setting-row" id="maxDurationRow">
             <label for="maxRecordingSelect">Max Recording</label>
             <select id="maxRecordingSelect">
-              <option value="5">5 minutes</option>
-              <option value="10" selected>10 minutes</option>
-              <option value="15">15 minutes</option>
-              <option value="30">30 minutes</option>
+              ${(() => {
+                const tier = localStorage.getItem('windy_license_tier') || 'free';
+                const tierMaxMap = { free: 5, pro: 30, translate: 30, translate_pro: 60 };
+                const tierMax = tierMaxMap[tier] || 5;
+                const allOptions = [5, 10, 15, 30, 60];
+                return allOptions
+                  .filter(v => v <= tierMax)
+                  .map(v => `<option value="${v}" ${v === tierMax ? 'selected' : ''}>${v} minutes</option>`)
+                  .join('');
+              })()}
             </select>
           </div>
           <p class="settings-hint">Longer recordings = more context = better quality. Processing time increases with length.</p>

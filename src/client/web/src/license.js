@@ -29,12 +29,21 @@ const TIERS = {
         restrictedFeatures: ['translation', 'conversation_mode']
     },
     translate: {
-        name: 'Translate',
+        name: 'Ultra',
         price: 79,
         maxEngines: 15,
         maxLanguages: 99,
         maxRecordingMinutes: 30,
         features: ['local_transcription', 'cloud_transcription', 'tornado_widget', 'crash_recovery', 'batch_mode', 'llm_polish', 'soul_file', 'vault_sync', 'clone_capture', 'translation', 'conversation_mode'],
+        restrictedFeatures: []
+    },
+    translate_pro: {
+        name: 'Max',
+        price: 149,
+        maxEngines: 15,
+        maxLanguages: 99,
+        maxRecordingMinutes: 60,
+        features: ['local_transcription', 'cloud_transcription', 'tornado_widget', 'crash_recovery', 'batch_mode', 'llm_polish', 'soul_file', 'vault_sync', 'clone_capture', 'translation', 'conversation_mode', 'tts', 'medical_glossary', 'legal_glossary', 'priority_cloud'],
         restrictedFeatures: []
     }
 }
