@@ -164,25 +164,35 @@ class SetupWizard {
           <!-- Step 5: Processing Mode (paid plans only) -->
           <div class="wizard-step" id="wizardStep5" style="display:none">
             <div class="wizard-emoji">🌪️</div>
-            <h2 class="wizard-title">What matters most to you?</h2>
-            <p class="wizard-desc">This helps WindyTune optimize your experience. You can always change it later.</p>
+            <h2 class="wizard-title">Where should WindyTune process your voice?</h2>
+            <p class="wizard-desc">All three options are fully private — we never store your audio or sell your data.</p>
             <div class="wiz-mode-cards" id="wizModeCards">
-              <div class="wiz-mode-card" data-mode="privacy" style="background:#1a1a2e;border:2px solid #333;border-radius:12px;padding:16px;margin:8px 0;cursor:pointer;transition:all 0.2s;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                  <span style="font-size:22px;">🔒</span>
-                  <span style="font-size:15px;font-weight:700;color:#22C55E;">"I value privacy above all else"</span>
+              <div class="wiz-mode-card" data-mode="local" style="background:#1a1a2e;border:2px solid #333;border-radius:12px;padding:14px;margin:6px 0;cursor:pointer;transition:all 0.2s;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                  <span style="font-size:20px;">🏠</span>
+                  <span style="font-size:14px;font-weight:700;color:#22C55E;">This device only</span>
                 </div>
-                <p style="font-size:12px;color:#9CA3AF;margin:0;line-height:1.5;">Everything stays on your device, always. WindyTune only uses local models — your voice never leaves this machine. If your device ever struggles, we'll let you know your options, but we'll never switch without asking.</p>
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.5;">Everything runs right here. Works offline, in airplane mode, anywhere. Your voice never leaves this machine.</p>
               </div>
-              <div class="wiz-mode-card" data-mode="bestquality" style="background:#1a1a2e;border:2px solid #333;border-radius:12px;padding:16px;margin:8px 0;cursor:pointer;transition:all 0.2s;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                  <span style="font-size:22px;">✨</span>
-                  <span style="font-size:15px;font-weight:700;color:#60A5FA;">"I just want it to work perfectly"</span>
+              <div class="wiz-mode-card" data-mode="hybrid" style="background:#1a1a2e;border:2px solid #333;border-radius:12px;padding:14px;margin:6px 0;cursor:pointer;transition:all 0.2s;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                  <span style="font-size:20px;">☁️</span>
+                  <span style="font-size:14px;font-weight:700;color:#A78BFA;">This device + WindyCloud</span>
                 </div>
-                <p style="font-size:12px;color:#9CA3AF;margin:0;line-height:1.5;">WindyTune handles everything. Uses cloud for speed when you're connected, switches to local seamlessly when you're offline. Always encrypted end-to-end. You never have to think about it — it just works.</p>
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.5;">Choose cloud when you want extra speed, fall back to local anytime. You're always in control of which one runs. Encrypted end-to-end.</p>
+              </div>
+              <div class="wiz-mode-card" data-mode="auto" style="background:#1a1a2e;border:2px solid #333;border-radius:12px;padding:14px;margin:6px 0;cursor:pointer;transition:all 0.2s;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                  <span style="font-size:20px;">🌪️</span>
+                  <span style="font-size:14px;font-weight:700;color:#60A5FA;">Auto — always the best quality</span>
+                </div>
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.5;">WindyTune picks the fastest, most accurate option automatically. Cloud when you have strong Wi-Fi or cell signal, local when you're offline or it's faster. You never have to think about it.</p>
               </div>
             </div>
-            <p style="font-size:11px;color:#6B7280;text-align:center;margin-top:8px;">You can change this anytime in Settings → Voice Engine.</p>
+            <div style="margin-top:10px;padding:10px 12px;background:rgba(96,165,250,0.06);border-radius:8px;border:1px solid rgba(96,165,250,0.1);">
+              <p style="font-size:10px;color:#60A5FA;margin:0;line-height:1.5;">💡 <b>Good to know:</b> On strong Wi-Fi or cell signal, cloud is usually faster and more accurate. On slow connections or offline, local is better. Auto mode handles this for you — but all three options keep your data private and encrypted.</p>
+            </div>
+            <p style="font-size:11px;color:#6B7280;text-align:center;margin-top:6px;">You can change this anytime in Settings → Voice Engine.</p>
             <div class="wizard-nav">
               <button class="wizard-btn secondary" data-action="back">← Back</button>
               <button class="wizard-btn primary" data-action="next" id="wizModeNext" disabled style="opacity:0.5;">Next →</button>
@@ -571,6 +581,7 @@ class SetupWizard {
     const cards = this.overlay.querySelectorAll('.wiz-mode-card');
     const nextBtn = this.overlay.querySelector('#wizModeNext');
     this.choices.processingMode = null; // no default — force a choice
+    const modeColors = { local: '#22C55E', hybrid: '#A78BFA', auto: '#60A5FA' };
     cards.forEach(card => {
       card.addEventListener('click', () => {
         cards.forEach(c => {
@@ -581,14 +592,8 @@ class SetupWizard {
         card.classList.add('selected');
         const mode = card.dataset.mode;
         this.choices.processingMode = mode;
-        if (mode === 'privacy') {
-          card.style.borderColor = '#22C55E';
-          card.style.background = '#1a2e1a';
-        } else {
-          card.style.borderColor = '#60A5FA';
-          card.style.background = '#1a1a3e';
-        }
-        // Enable Next button once they've chosen
+        card.style.borderColor = modeColors[mode] || '#60A5FA';
+        card.style.background = mode === 'local' ? '#1a2e1a' : mode === 'hybrid' ? '#1e1a2e' : '#1a1a3e';
         if (nextBtn) {
           nextBtn.disabled = false;
           nextBtn.style.opacity = '1';
@@ -739,13 +744,14 @@ class SetupWizard {
     }
 
     // Save processing mode preference
-    const processingMode = this.choices.processingMode || 'privacy';
+    const processingMode = this.choices.processingMode || 'local';
     localStorage.setItem('windy_processingMode', processingMode);
     if (window.windyAPI?.updateSettings) {
-      // In best quality mode, enable cloud fallback; in privacy mode, keep it off
+      // local = no cloud ever, hybrid = user controls cloud manually, auto = WindyTune picks best
       window.windyAPI.updateSettings({
         processingMode,
-        cloudFallbackEnabled: processingMode === 'bestquality',
+        cloudFallbackEnabled: processingMode === 'auto',
+        cloudManualEnabled: processingMode === 'hybrid',
       });
     }
 
