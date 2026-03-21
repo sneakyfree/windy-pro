@@ -147,7 +147,7 @@ class SetupWizard {
           <!-- Step 4: Plan -->
           <div class="wizard-step" id="wizardStep4" style="display:none">
             <h2 class="wizard-title">Choose Your Plan</h2>
-            <p class="wizard-desc">Start free — upgrade anytime from Settings.</p>
+            <p class="wizard-desc">Start free with local transcription — or unlock <strong>cloud-powered voice-to-text</strong> for blazing speed, zero CPU drain, and always-updated models.</p>
             <div class="wiz-plan-cards" id="wizPlanCards"></div>
             <div class="wiz-plan-coupon">
               <input type="text" class="wizard-input" id="wizCouponInput" placeholder="Have a coupon code?">
@@ -493,6 +493,19 @@ class SetupWizard {
 
     this.choices.planTier = 'free';
 
+    // Cloud STT persuasion block per tier
+    const cloudSttSell = {
+      free: `<div class="wiz-cloud-stt-box" style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(107,114,128,0.1);border:1px solid rgba(107,114,128,0.2);">
+        <div style="font-size:11px;font-weight:700;color:#9CA3AF;margin-bottom:2px;">🏠 Local Transcription</div>
+        <div style="font-size:10px;color:#6B7280;line-height:1.4;">Your voice never leaves your device. Powered by on-device AI engines. Private by default.</div>
+      </div>`,
+      paid: `<div class="wiz-cloud-stt-box" style="margin-top:8px;padding:8px 10px;border-radius:8px;background:linear-gradient(135deg,rgba(59,130,246,0.1),rgba(139,92,246,0.1));border:1px solid rgba(59,130,246,0.2);">
+        <div style="font-size:11px;font-weight:700;color:#60A5FA;margin-bottom:2px;">☁️ Cloud Voice-to-Text — Supercharged</div>
+        <div style="font-size:10px;color:#9CA3AF;line-height:1.4;">Monthly & Annual subscribers get GPU-powered cloud transcription via WindyCloud. <strong style="color:#F59E0B;">3-5x faster</strong> than local, always the latest models, zero CPU drain on your machine.</div>
+        <div style="font-size:9px;color:#8B5CF6;margin-top:4px;font-weight:600;">🏠 Prefer to own it? Lifetime = local engines only. Your stack, your rules, forever.</div>
+      </div>`
+    };
+
     container.innerHTML = plans.map(p => `
       <div class="wiz-plan-card ${p.key === 'free' ? 'selected' : ''} ${p.recommended ? 'wiz-plan-recommended' : ''}" 
            data-plan="${p.key}" data-price="${p.priceId || ''}" style="--plan-color: ${p.color}">
@@ -502,7 +515,7 @@ class SetupWizard {
         <div class="wiz-plan-price" style="color:${p.color}">${p.price}</div>
         <div class="wiz-plan-period">${p.period}</div>
         <ul class="wiz-plan-features">${p.features.map(f => `<li>✓ ${f}</li>`).join('')}</ul>
-        ${p.key !== 'free' ? '<div style="margin-top:6px;font-size:10px;color:#60A5FA;font-weight:600;">☁️ Cloud STT (monthly/annual) · 🏠 Local only (lifetime)</div>' : '<div style="margin-top:6px;font-size:10px;color:#9CA3AF;font-weight:600;">🏠 Local engines only</div>'}
+        ${p.key === 'free' ? cloudSttSell.free : cloudSttSell.paid}
       </div>`).join('');
 
     container.querySelectorAll('.wiz-plan-card').forEach(card => {
