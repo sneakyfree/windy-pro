@@ -71,10 +71,10 @@ class SetupWizard {
           <div class="wizard-step" id="wizardStep0">
             <div class="wizard-emoji">🌪️</div>
             <h2 class="wizard-title">Welcome to Windy Pro</h2>
-            <p class="wizard-desc">Record your voice, get polished text.<br>100% local. 100% private.</p>
+            <p class="wizard-desc">Record your voice, get polished text.<br>Local-first. Private by default. You control your data.</p>
             <ul class="wizard-features">
               <li>🎙️ Record your voice, get polished text instantly</li>
-              <li>🔒 Privacy-first — everything stays on your device</li>
+              <li>🔒 Privacy-first — local by default, cloud only if YOU choose it</li>
               <li>⚡ 15 transcription engines to choose from</li>
               <li>✨ AI cleanup for perfect punctuation & formatting</li>
               <li>🌍 99 languages supported</li>
@@ -497,7 +497,7 @@ class SetupWizard {
     const cloudSttSell = {
       free: `<div class="wiz-cloud-stt-box" style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(107,114,128,0.1);border:1px solid rgba(107,114,128,0.2);">
         <div style="font-size:11px;font-weight:700;color:#9CA3AF;margin-bottom:2px;">🏠 Local Transcription</div>
-        <div style="font-size:10px;color:#6B7280;line-height:1.4;">Your voice never leaves your device. Powered by on-device AI engines. Private by default.</div>
+        <div style="font-size:10px;color:#6B7280;line-height:1.4;">Powered by on-device AI engines. Your voice stays on your device by default — always under your control.</div>
       </div>`,
       paid: `<div class="wiz-cloud-stt-box" style="margin-top:8px;padding:8px 10px;border-radius:8px;background:linear-gradient(135deg,rgba(59,130,246,0.1),rgba(139,92,246,0.1));border:1px solid rgba(59,130,246,0.2);">
         <div style="font-size:11px;font-weight:700;color:#60A5FA;margin-bottom:2px;">☁️ Cloud Voice-to-Text — Supercharged</div>

@@ -127,7 +127,7 @@ class SettingsPanel {
               <option value="both">🔄 Both — local + Windy Cloud backup</option>
             </select>
           </div>
-          <p class="settings-hint" id="storageHint">Your data stays on this machine. Nothing uploaded anywhere. Maximum privacy.</p>
+          <p class="settings-hint" id="storageHint">Local storage selected — your data stays on this machine. Change to Windy Cloud or Both to enable syncing.</p>
           <div class="setting-row" title="Where to save files on this device.">
             <label for="archiveFolder">Local folder</label>
             <div class="setting-inline">
