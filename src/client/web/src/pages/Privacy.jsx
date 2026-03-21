@@ -28,7 +28,7 @@ export default function Privacy() {
                 <h2 id="overview">Overview</h2>
                 <p>
                     Windy Pro is built on the principle of <strong>local-first privacy</strong>.
-                    When you use Windy Pro in local mode, your audio and transcriptions never leave your machine.
+                    When you use Windy Pro in "Device Only" mode, your audio and transcriptions stay entirely on your machine.
                     This privacy policy explains how we handle data in both local and cloud modes.
                 </p>
 

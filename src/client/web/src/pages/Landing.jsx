@@ -183,8 +183,8 @@ export default function Landing() {
                         </div>
                         <div className="feature-card">
                             <div className="feature-icon">🔒</div>
-                            <h3>100% Local</h3>
-                            <p>Windy Pro runs on YOUR hardware. Audio never leaves your machine. Zero cloud dependency.</p>
+                            <h3>Local-First</h3>
+                            <p>Windy Pro runs on YOUR hardware by default. Audio stays on your machine unless you choose cloud processing.</p>
                         </div>
                         <div className="feature-card">
                             <div className="feature-icon">⚡</div>
@@ -267,7 +267,7 @@ export default function Landing() {
                                 <li>✓ 5-minute recordings</li>
                                 <li>✓ Local transcription</li>
                                 <li>✓ Tornado widget</li>
-                                <li>✓ 100% offline & private</li>
+                                <li>✓ Offline-capable & private</li>
                             </ul>
                             <a href="#download" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>Download</a>
                         </div>
