@@ -4,18 +4,18 @@
   "generated_by": "Kit 0C1 Alpha",
   "summary": {
     "total_models": 19,
-    "stt_gpu": 7,
-    "stt_ct2_cpu": 7,
-    "stt_distil": 3,
+    "voice_gpu": 7,
+    "voice_ct2_cpu": 7,
+    "voice_distil": 3,
     "translation": 2,
-    "champion": "windy-stt-turbo (eval_loss=0.4563)",
+    "champion": "windy-turbo (eval_loss=0.4563)",
     "total_disk_gb": 17.6
   },
   "models": [
     {
-      "id": "windy-stt-nano",
-      "name": "Windy STT Nano",
-      "category": "stt",
+      "id": "windy-nano",
+      "name": "Windy Nano",
+      "category": "voice",
       "variant": "gpu",
       "format": "safetensors",
       "size_on_disk_mb": 77.2,
@@ -23,17 +23,17 @@
       "base_license": "MIT",
       "base_params": "39M",
       "eval_loss": 3.4728,
-      "ct2_variant": "windy-stt-nano-ct2",
-      "huggingface": "WindyProLabs/windy-stt-nano",
+      "ct2_variant": "windy-nano-ct2",
+      "huggingface": "WindyLabs/windy-nano",
       "qa": {
         "status": "PASS",
         "date": "2026-03-09"
       }
     },
     {
-      "id": "windy-stt-lite",
-      "name": "Windy STT Lite",
-      "category": "stt",
+      "id": "windy-lite",
+      "name": "Windy Lite",
+      "category": "voice",
       "variant": "gpu",
       "format": "safetensors",
       "size_on_disk_mb": 143.6,
@@ -41,17 +41,17 @@
       "base_license": "MIT",
       "base_params": "74M",
       "eval_loss": 4.1797,
-      "ct2_variant": "windy-stt-lite-ct2",
-      "huggingface": "WindyProLabs/windy-stt-lite",
+      "ct2_variant": "windy-lite-ct2",
+      "huggingface": "WindyLabs/windy-lite",
       "qa": {
         "status": "PASS",
         "date": "2026-03-09"
       }
     },
     {
-      "id": "windy-stt-core",
-      "name": "Windy STT Core",
-      "category": "stt",
+      "id": "windy-core",
+      "name": "Windy Core",
+      "category": "voice",
       "variant": "gpu",
       "format": "safetensors",
       "size_on_disk_mb": 466.3,
@@ -59,17 +59,17 @@
       "base_license": "MIT",
       "base_params": "244M",
       "eval_loss": 1.8765,
-      "ct2_variant": "windy-stt-core-ct2",
-      "huggingface": "WindyProLabs/windy-stt-core",
+      "ct2_variant": "windy-core-ct2",
+      "huggingface": "WindyLabs/windy-core",
       "qa": {
         "status": "PASS",
         "date": "2026-03-09"
       }
     },
     {
-      "id": "windy-stt-plus",
-      "name": "Windy STT Plus",
-      "category": "stt",
+      "id": "windy-plus",
+      "name": "Windy Plus",
+      "category": "voice",
       "variant": "gpu",
       "format": "safetensors",
       "size_on_disk_mb": 1462.2,
@@ -77,17 +77,17 @@
       "base_license": "MIT",
       "base_params": "769M",
       "eval_loss": 1.5445,
-      "ct2_variant": "windy-stt-plus-ct2",
-      "huggingface": "WindyProLabs/windy-stt-plus",
+      "ct2_variant": "windy-plus-ct2",
+      "huggingface": "WindyLabs/windy-plus",
       "qa": {
         "status": "PASS",
         "date": "2026-03-09"
       }
     },
     {
-      "id": "windy-stt-turbo",
-      "name": "Windy STT Turbo",
-      "category": "stt",
+      "id": "windy-turbo",
+      "name": "Windy Turbo",
+      "category": "voice",
       "variant": "gpu",
       "format": "safetensors",
       "size_on_disk_mb": 1548.2,
@@ -95,17 +95,17 @@
       "base_license": "MIT",
       "base_params": "809M",
       "eval_loss": 0.4563,
-      "ct2_variant": "windy-stt-turbo-ct2",
-      "huggingface": "WindyProLabs/windy-stt-turbo",
+      "ct2_variant": "windy-turbo-ct2",
+      "huggingface": "WindyLabs/windy-turbo",
       "qa": {
         "status": "PASS",
         "date": "2026-03-09"
       }
     },
     {
-      "id": "windy-stt-pro",
-      "name": "Windy STT Pro",
-      "category": "stt",
+      "id": "windy-pro-engine",
+      "name": "Windy Pro Engine",
+      "category": "voice",
       "variant": "gpu",
       "format": "safetensors",
       "size_on_disk_mb": 2949.4,
@@ -113,17 +113,17 @@
       "base_license": "MIT",
       "base_params": "1.55B",
       "eval_loss": 1.2331,
-      "ct2_variant": "windy-stt-pro-ct2",
-      "huggingface": "WindyProLabs/windy-stt-pro",
+      "ct2_variant": "windy-pro-engine-ct2",
+      "huggingface": "WindyLabs/windy-pro-engine",
       "qa": {
         "status": "PASS",
         "date": "2026-03-09"
       }
     },
     {
-      "id": "windy-stt-edge",
-      "name": "Windy STT Edge",
-      "category": "stt",
+      "id": "windy-edge",
+      "name": "Windy Edge",
+      "category": "voice",
       "variant": "gpu",
       "format": "safetensors",
       "size_on_disk_mb": 1448.1,
@@ -131,150 +131,150 @@
       "base_license": "MIT",
       "base_params": "756M",
       "eval_loss": 4.814,
-      "ct2_variant": "windy-stt-edge-ct2",
-      "huggingface": "WindyProLabs/windy-stt-edge",
+      "ct2_variant": "windy-edge-ct2",
+      "huggingface": "WindyLabs/windy-edge",
       "qa": {
         "status": "PASS",
         "date": "2026-03-09"
       }
     },
     {
-      "id": "windy-stt-nano-ct2",
-      "name": "Windy STT Nano (CPU INT8)",
-      "category": "stt",
+      "id": "windy-nano-ct2",
+      "name": "Windy Nano (CPU INT8)",
+      "category": "voice",
       "variant": "cpu-int8",
       "format": "ctranslate2",
       "size_on_disk_mb": 37.9,
       "base_model": "openai/whisper-tiny",
       "base_license": "MIT",
-      "derived_from": "windy-stt-nano",
+      "derived_from": "windy-nano",
       "quantization": "int8 via CTranslate2 4.7.1",
       "eval_loss": 3.4728,
-      "gpu_variant": "windy-stt-nano",
-      "huggingface": "WindyProLabs/windy-stt-nano-ct2",
+      "gpu_variant": "windy-nano",
+      "huggingface": "WindyLabs/windy-nano-ct2",
       "qa": {
         "status": "PENDING"
       },
       "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
-      "id": "windy-stt-lite-ct2",
-      "name": "Windy STT Lite (CPU INT8)",
-      "category": "stt",
+      "id": "windy-lite-ct2",
+      "name": "Windy Lite (CPU INT8)",
+      "category": "voice",
       "variant": "cpu-int8",
       "format": "ctranslate2",
       "size_on_disk_mb": 71.5,
       "base_model": "openai/whisper-base",
       "base_license": "MIT",
-      "derived_from": "windy-stt-lite",
+      "derived_from": "windy-lite",
       "quantization": "int8 via CTranslate2 4.7.1",
       "eval_loss": 4.1797,
-      "gpu_variant": "windy-stt-lite",
-      "huggingface": "WindyProLabs/windy-stt-lite-ct2",
+      "gpu_variant": "windy-lite",
+      "huggingface": "WindyLabs/windy-lite-ct2",
       "qa": {
         "status": "PENDING"
       },
       "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
-      "id": "windy-stt-core-ct2",
-      "name": "Windy STT Core (CPU INT8)",
-      "category": "stt",
+      "id": "windy-core-ct2",
+      "name": "Windy Core (CPU INT8)",
+      "category": "voice",
       "variant": "cpu-int8",
       "format": "ctranslate2",
       "size_on_disk_mb": 234.1,
       "base_model": "openai/whisper-small",
       "base_license": "MIT",
-      "derived_from": "windy-stt-core",
+      "derived_from": "windy-core",
       "quantization": "int8 via CTranslate2 4.7.1",
       "eval_loss": 1.8765,
-      "gpu_variant": "windy-stt-core",
-      "huggingface": "WindyProLabs/windy-stt-core-ct2",
+      "gpu_variant": "windy-core",
+      "huggingface": "WindyLabs/windy-core-ct2",
       "qa": {
         "status": "PENDING"
       },
       "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
-      "id": "windy-stt-plus-ct2",
-      "name": "Windy STT Plus (CPU INT8)",
-      "category": "stt",
+      "id": "windy-plus-ct2",
+      "name": "Windy Plus (CPU INT8)",
+      "category": "voice",
       "variant": "cpu-int8",
       "format": "ctranslate2",
       "size_on_disk_mb": 734.3,
       "base_model": "openai/whisper-medium",
       "base_license": "MIT",
-      "derived_from": "windy-stt-plus",
+      "derived_from": "windy-plus",
       "quantization": "int8 via CTranslate2 4.7.1",
       "eval_loss": 1.5445,
-      "gpu_variant": "windy-stt-plus",
-      "huggingface": "WindyProLabs/windy-stt-plus-ct2",
+      "gpu_variant": "windy-plus",
+      "huggingface": "WindyLabs/windy-plus-ct2",
       "qa": {
         "status": "PENDING"
       },
       "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
-      "id": "windy-stt-turbo-ct2",
-      "name": "Windy STT Turbo (CPU INT8)",
-      "category": "stt",
+      "id": "windy-turbo-ct2",
+      "name": "Windy Turbo (CPU INT8)",
+      "category": "voice",
       "variant": "cpu-int8",
       "format": "ctranslate2",
       "size_on_disk_mb": 777.4,
       "base_model": "openai/whisper-large-v3-turbo",
       "base_license": "MIT",
-      "derived_from": "windy-stt-turbo",
+      "derived_from": "windy-turbo",
       "quantization": "int8 via CTranslate2 4.7.1",
       "eval_loss": 0.4563,
-      "gpu_variant": "windy-stt-turbo",
-      "huggingface": "WindyProLabs/windy-stt-turbo-ct2",
+      "gpu_variant": "windy-turbo",
+      "huggingface": "WindyLabs/windy-turbo-ct2",
       "qa": {
         "status": "PENDING"
       },
       "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
-      "id": "windy-stt-pro-ct2",
-      "name": "Windy STT Pro (CPU INT8)",
-      "category": "stt",
+      "id": "windy-pro-engine-ct2",
+      "name": "Windy Pro Engine (CPU INT8)",
+      "category": "voice",
       "variant": "cpu-int8",
       "format": "ctranslate2",
       "size_on_disk_mb": 1480.5,
       "base_model": "openai/whisper-large-v3",
       "base_license": "MIT",
-      "derived_from": "windy-stt-pro",
+      "derived_from": "windy-pro-engine",
       "quantization": "int8 via CTranslate2 4.7.1",
       "eval_loss": 1.2331,
-      "gpu_variant": "windy-stt-pro",
-      "huggingface": "WindyProLabs/windy-stt-pro-ct2",
+      "gpu_variant": "windy-pro-engine",
+      "huggingface": "WindyLabs/windy-pro-engine-ct2",
       "qa": {
         "status": "PENDING"
       },
       "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
-      "id": "windy-stt-edge-ct2",
-      "name": "Windy STT Edge (CPU INT8)",
-      "category": "stt",
+      "id": "windy-edge-ct2",
+      "name": "Windy Edge (CPU INT8)",
+      "category": "voice",
       "variant": "cpu-int8",
       "format": "ctranslate2",
       "size_on_disk_mb": 727.1,
       "base_model": "distil-whisper/distil-large-v3",
       "base_license": "MIT",
-      "derived_from": "windy-stt-edge",
+      "derived_from": "windy-edge",
       "quantization": "int8 via CTranslate2 4.7.1",
       "eval_loss": 4.814,
-      "gpu_variant": "windy-stt-edge",
-      "huggingface": "WindyProLabs/windy-stt-edge-ct2",
+      "gpu_variant": "windy-edge",
+      "huggingface": "WindyLabs/windy-edge-ct2",
       "qa": {
         "status": "PENDING"
       },
       "description": "CTranslate2 INT8 quantized \u2014 ~50% size of GPU version. Use with faster-whisper."
     },
     {
-      "id": "windy-stt-distil-small",
-      "name": "Windy STT Distil Small",
-      "category": "stt",
+      "id": "windy-distil-small",
+      "name": "Windy Distil Small",
+      "category": "voice",
       "variant": "cpu-optimized",
       "format": "safetensors",
       "size_on_disk_mb": 318.6,
@@ -290,16 +290,16 @@
       },
       "eval_loss": 3.52,
       "languages_supported": "English",
-      "huggingface": "WindyProLabs/windy-stt-distil-small",
+      "huggingface": "WindyLabs/windy-distil-small",
       "qa": {
         "status": "PENDING"
       },
       "description": "Distilled architecture \u2014 genuinely faster on CPU than standard Whisper."
     },
     {
-      "id": "windy-stt-distil-medium",
-      "name": "Windy STT Distil Medium",
-      "category": "stt",
+      "id": "windy-distil-medium",
+      "name": "Windy Distil Medium",
+      "category": "voice",
       "variant": "cpu-optimized",
       "format": "safetensors",
       "size_on_disk_mb": 754.0,
@@ -315,16 +315,16 @@
       },
       "eval_loss": 5.45,
       "languages_supported": "English",
-      "huggingface": "WindyProLabs/windy-stt-distil-medium",
+      "huggingface": "WindyLabs/windy-distil-medium",
       "qa": {
         "status": "PENDING"
       },
       "description": "Distilled architecture \u2014 genuinely faster on CPU than standard Whisper."
     },
     {
-      "id": "windy-stt-distil-large",
-      "name": "Windy STT Distil Large",
-      "category": "stt",
+      "id": "windy-distil-large",
+      "name": "Windy Distil Large",
+      "category": "voice",
       "variant": "cpu-optimized",
       "format": "safetensors",
       "size_on_disk_mb": 1444.6,
@@ -340,7 +340,7 @@
       },
       "eval_loss": 4.31,
       "languages_supported": "100+ (multilingual)",
-      "huggingface": "WindyProLabs/windy-stt-distil-large",
+      "huggingface": "WindyLabs/windy-distil-large",
       "qa": {
         "status": "PENDING"
       },
@@ -355,7 +355,7 @@
       "size_on_disk_mb": 928.9,
       "base_model": "facebook/m2m100_418M",
       "base_license": "MIT",
-      "huggingface": "WindyProLabs/windy_translate_spark",
+      "huggingface": "WindyLabs/windy-translate-spark",
       "qa": {
         "status": "PASS",
         "date": "2026-03-09"
@@ -370,7 +370,7 @@
       "size_on_disk_mb": 2370.1,
       "base_model": "facebook/m2m100_1.2B",
       "base_license": "MIT",
-      "huggingface": "WindyProLabs/windy_translate_standard",
+      "huggingface": "WindyLabs/windy-translate-standard",
       "qa": {
         "status": "PASS",
         "date": "2026-03-09"
@@ -388,7 +388,7 @@
       "language": "es",
       "size_mb": 466,
       "base": "clu-ling/whisper-small-spanish",
-      "hf_repo": "WindyProLabs/windy-lingua-spanish",
+      "hf_repo": "WindyLabs/windy-lingua-spanish",
       "requires_gpu": true
     },
     {
@@ -399,7 +399,7 @@
       "language": "es",
       "size_mb": 235,
       "base": "clu-ling/whisper-small-spanish",
-      "hf_repo": "WindyProLabs/windy-lingua-spanish-ct2",
+      "hf_repo": "WindyLabs/windy-lingua-spanish-ct2",
       "requires_gpu": false
     },
     {
@@ -410,7 +410,7 @@
       "language": "zh",
       "size_mb": 466,
       "base": "Jingmiao/whisper-small-chinese_base",
-      "hf_repo": "WindyProLabs/windy-lingua-chinese",
+      "hf_repo": "WindyLabs/windy-lingua-chinese",
       "requires_gpu": true
     },
     {
@@ -421,7 +421,7 @@
       "language": "zh",
       "size_mb": 235,
       "base": "Jingmiao/whisper-small-chinese_base",
-      "hf_repo": "WindyProLabs/windy-lingua-chinese-ct2",
+      "hf_repo": "WindyLabs/windy-lingua-chinese-ct2",
       "requires_gpu": false
     },
     {
@@ -432,7 +432,7 @@
       "language": "hi",
       "size_mb": 144,
       "base": "Oriserve/Whisper-Hindi2Hinglish-Swift",
-      "hf_repo": "WindyProLabs/windy-lingua-hindi",
+      "hf_repo": "WindyLabs/windy-lingua-hindi",
       "requires_gpu": true
     },
     {
@@ -443,7 +443,7 @@
       "language": "hi",
       "size_mb": 72,
       "base": "Oriserve/Whisper-Hindi2Hinglish-Swift",
-      "hf_repo": "WindyProLabs/windy-lingua-hindi-ct2",
+      "hf_repo": "WindyLabs/windy-lingua-hindi-ct2",
       "requires_gpu": false
     },
     {
@@ -454,7 +454,7 @@
       "language": "fr",
       "size_mb": 1462,
       "base": "bofenghuang/whisper-medium-french",
-      "hf_repo": "WindyProLabs/windy-lingua-french",
+      "hf_repo": "WindyLabs/windy-lingua-french",
       "requires_gpu": true
     },
     {
@@ -465,7 +465,7 @@
       "language": "fr",
       "size_mb": 735,
       "base": "bofenghuang/whisper-medium-french",
-      "hf_repo": "WindyProLabs/windy-lingua-french-ct2",
+      "hf_repo": "WindyLabs/windy-lingua-french-ct2",
       "requires_gpu": false
     },
     {
@@ -476,7 +476,7 @@
       "language": "ar",
       "size_mb": 2950,
       "base": "Byne/whisper-large-v3-arabic",
-      "hf_repo": "WindyProLabs/windy-lingua-arabic",
+      "hf_repo": "WindyLabs/windy-lingua-arabic",
       "requires_gpu": true
     },
     {
@@ -487,7 +487,7 @@
       "language": "ar",
       "size_mb": 1481,
       "base": "Byne/whisper-large-v3-arabic",
-      "hf_repo": "WindyProLabs/windy-lingua-arabic-ct2",
+      "hf_repo": "WindyLabs/windy-lingua-arabic-ct2",
       "requires_gpu": false
     }
   ],
@@ -500,7 +500,7 @@
       "language_pair": "en-es",
       "size_mb": 299,
       "base": "Helsinki-NLP/opus-mt-en-es",
-      "hf_repo": "WindyProLabs/windy-pair-en-es",
+      "hf_repo": "WindyLabs/windy-pair-en-es",
       "requires_gpu": false
     },
     {
@@ -511,7 +511,7 @@
       "language_pair": "es-en",
       "size_mb": 299,
       "base": "Helsinki-NLP/opus-mt-es-en",
-      "hf_repo": "WindyProLabs/windy-pair-es-en",
+      "hf_repo": "WindyLabs/windy-pair-es-en",
       "requires_gpu": false
     },
     {
@@ -522,7 +522,7 @@
       "language_pair": "en-zh",
       "size_mb": 299,
       "base": "Helsinki-NLP/opus-mt-en-zh",
-      "hf_repo": "WindyProLabs/windy-pair-en-zh",
+      "hf_repo": "WindyLabs/windy-pair-en-zh",
       "requires_gpu": false
     },
     {
@@ -533,7 +533,7 @@
       "language_pair": "zh-en",
       "size_mb": 299,
       "base": "Helsinki-NLP/opus-mt-zh-en",
-      "hf_repo": "WindyProLabs/windy-pair-zh-en",
+      "hf_repo": "WindyLabs/windy-pair-zh-en",
       "requires_gpu": false
     },
     {
@@ -544,7 +544,7 @@
       "language_pair": "en-fr",
       "size_mb": 288,
       "base": "Helsinki-NLP/opus-mt-en-fr",
-      "hf_repo": "WindyProLabs/windy-pair-en-fr",
+      "hf_repo": "WindyLabs/windy-pair-en-fr",
       "requires_gpu": false
     },
     {
@@ -555,7 +555,7 @@
       "language_pair": "fr-en",
       "size_mb": 288,
       "base": "Helsinki-NLP/opus-mt-fr-en",
-      "hf_repo": "WindyProLabs/windy-pair-fr-en",
+      "hf_repo": "WindyLabs/windy-pair-fr-en",
       "requires_gpu": false
     },
     {
@@ -566,7 +566,7 @@
       "language_pair": "en-de",
       "size_mb": 285,
       "base": "Helsinki-NLP/opus-mt-en-de",
-      "hf_repo": "WindyProLabs/windy-pair-en-de",
+      "hf_repo": "WindyLabs/windy-pair-en-de",
       "requires_gpu": false
     },
     {
@@ -577,7 +577,7 @@
       "language_pair": "de-en",
       "size_mb": 285,
       "base": "Helsinki-NLP/opus-mt-de-en",
-      "hf_repo": "WindyProLabs/windy-pair-de-en",
+      "hf_repo": "WindyLabs/windy-pair-de-en",
       "requires_gpu": false
     },
     {
@@ -588,7 +588,7 @@
       "language_pair": "en-ar",
       "size_mb": 296,
       "base": "Helsinki-NLP/opus-mt-en-ar",
-      "hf_repo": "WindyProLabs/windy-pair-en-ar",
+      "hf_repo": "WindyLabs/windy-pair-en-ar",
       "requires_gpu": false
     },
     {
@@ -599,7 +599,7 @@
       "language_pair": "ar-en",
       "size_mb": 296,
       "base": "Helsinki-NLP/opus-mt-ar-en",
-      "hf_repo": "WindyProLabs/windy-pair-ar-en",
+      "hf_repo": "WindyLabs/windy-pair-ar-en",
       "requires_gpu": false
     },
     {
@@ -610,7 +610,7 @@
       "language_pair": "en-hi",
       "size_mb": 294,
       "base": "Helsinki-NLP/opus-mt-en-hi",
-      "hf_repo": "WindyProLabs/windy-pair-en-hi",
+      "hf_repo": "WindyLabs/windy-pair-en-hi",
       "requires_gpu": false
     },
     {
@@ -621,7 +621,7 @@
       "language_pair": "hi-en",
       "size_mb": 292,
       "base": "Helsinki-NLP/opus-mt-hi-en",
-      "hf_repo": "WindyProLabs/windy-pair-hi-en",
+      "hf_repo": "WindyLabs/windy-pair-hi-en",
       "requires_gpu": false
     },
     {
@@ -632,7 +632,7 @@
       "language_pair": "en-pt",
       "size_mb": 890,
       "base": "Helsinki-NLP/opus-mt-tc-big-en-pt",
-      "hf_repo": "WindyProLabs/windy-pair-en-pt",
+      "hf_repo": "WindyLabs/windy-pair-en-pt",
       "requires_gpu": false
     },
     {
@@ -643,7 +643,7 @@
       "language_pair": "pt-en",
       "size_mb": 299,
       "base": "Helsinki-NLP/opus-mt-ROMANCE-en",
-      "hf_repo": "WindyProLabs/windy-pair-pt-en",
+      "hf_repo": "WindyLabs/windy-pair-pt-en",
       "requires_gpu": false
     },
     {
@@ -654,7 +654,7 @@
       "language_pair": "en-ru",
       "size_mb": 296,
       "base": "Helsinki-NLP/opus-mt-en-ru",
-      "hf_repo": "WindyProLabs/windy-pair-en-ru",
+      "hf_repo": "WindyLabs/windy-pair-en-ru",
       "requires_gpu": false
     },
     {
@@ -665,7 +665,7 @@
       "language_pair": "ru-en",
       "size_mb": 296,
       "base": "Helsinki-NLP/opus-mt-ru-en",
-      "hf_repo": "WindyProLabs/windy-pair-ru-en",
+      "hf_repo": "WindyLabs/windy-pair-ru-en",
       "requires_gpu": false
     }
   ]

@@ -6,7 +6,7 @@ Tests 5 language pairs: en→es, en→fr, en→de, en→zh, en→ja
 import torch
 from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
 
-def verify_translations(model_path: str = "models/windy_translate_standard"):
+def verify_translations(model_path: str = "models/windy-translate-standard"):
     """Test translation quality on 5 language pairs."""
 
     print(f"{'='*60}")

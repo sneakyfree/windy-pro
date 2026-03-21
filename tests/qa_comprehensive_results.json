@@ -1,6 +1,6 @@
 [
   {
-    "model": "windy-stt-nano",
+    "model": "windy-nano",
     "category": "GPU STT",
     "base_model": "openai/whisper-tiny.en",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
@@ -13,7 +13,7 @@
     "error": null
   },
   {
-    "model": "windy-stt-lite",
+    "model": "windy-lite",
     "category": "GPU STT",
     "base_model": "openai/whisper-base.en",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
@@ -26,7 +26,7 @@
     "error": null
   },
   {
-    "model": "windy-stt-core",
+    "model": "windy-core",
     "category": "GPU STT",
     "base_model": "openai/whisper-small.en",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
@@ -39,7 +39,7 @@
     "error": null
   },
   {
-    "model": "windy-stt-plus",
+    "model": "windy-plus",
     "category": "GPU STT",
     "base_model": "openai/whisper-medium.en",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
@@ -52,7 +52,7 @@
     "error": null
   },
   {
-    "model": "windy-stt-pro",
+    "model": "windy-pro-engine",
     "category": "GPU STT",
     "base_model": "openai/whisper-large-v3",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
@@ -65,7 +65,7 @@
     "error": null
   },
   {
-    "model": "windy-stt-turbo",
+    "model": "windy-turbo",
     "category": "GPU STT",
     "base_model": "openai/whisper-large-v3-turbo",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
@@ -78,7 +78,7 @@
     "error": null
   },
   {
-    "model": "windy-stt-edge",
+    "model": "windy-edge",
     "category": "GPU STT",
     "base_model": "distil-whisper/distil-large-v3",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
@@ -91,9 +91,9 @@
     "error": null
   },
   {
-    "model": "windy-stt-nano-cpu",
+    "model": "windy-nano-ct2",
     "category": "CPU ONNX STT",
-    "base_model": "windy-stt-nano",
+    "base_model": "windy-nano",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
     "our_output": "Concord returned to its place amidst the tents.",
     "base_output": "Concord returned to its place amidst the tents.",
@@ -104,9 +104,9 @@
     "error": null
   },
   {
-    "model": "windy-stt-lite-cpu",
+    "model": "windy-lite-ct2",
     "category": "CPU ONNX STT",
-    "base_model": "windy-stt-lite",
+    "base_model": "windy-lite",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
     "our_output": "Concorde returned to its place amidst the tents.",
     "base_output": "Concorde returned to its place amidst the tents.",
@@ -117,9 +117,9 @@
     "error": null
   },
   {
-    "model": "windy-stt-core-cpu",
+    "model": "windy-core-ct2",
     "category": "CPU ONNX STT",
-    "base_model": "windy-stt-core",
+    "base_model": "windy-core",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
     "our_output": "Concord returned to its place amidst the tents.",
     "base_output": "Concord returned to its place amidst the tents.",
@@ -130,9 +130,9 @@
     "error": null
   },
   {
-    "model": "windy-stt-plus-cpu",
+    "model": "windy-plus-ct2",
     "category": "CPU ONNX STT",
-    "base_model": "windy-stt-plus",
+    "base_model": "windy-plus",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
     "our_output": "Concord returned to its place amidst the tents.",
     "base_output": "Concord returned to its place amidst the tents.",
@@ -143,9 +143,9 @@
     "error": null
   },
   {
-    "model": "windy-stt-pro-cpu",
+    "model": "windy-pro-engine-ct2",
     "category": "CPU ONNX STT",
-    "base_model": "windy-stt-pro",
+    "base_model": "windy-pro-engine",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
     "our_output": "Concord returned to its place amidst the tents.",
     "base_output": "Concord returned to its place amidst the tents.",
@@ -156,9 +156,9 @@
     "error": null
   },
   {
-    "model": "windy-stt-turbo-cpu",
+    "model": "windy-turbo-ct2",
     "category": "CPU ONNX STT",
-    "base_model": "windy-stt-turbo",
+    "base_model": "windy-turbo",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
     "our_output": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS.",
     "base_output": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS.",
@@ -169,9 +169,9 @@
     "error": null
   },
   {
-    "model": "windy-stt-edge-cpu",
+    "model": "windy-edge-ct2",
     "category": "CPU ONNX STT",
-    "base_model": "windy-stt-edge",
+    "base_model": "windy-edge",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
     "our_output": "Concord returned to its place amidst the tents.",
     "base_output": "Concord returned to its place amidst the tents.",

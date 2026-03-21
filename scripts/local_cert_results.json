@@ -282,8 +282,8 @@
     "windy-pair-de-ase": "Unable to open file 'model.bin' in model '/home/user1-gpu/Desktop/grants_folder/windy-pro/models/win",
     "windy-pair-de-ase-ct2": "No sentencepiece model found",
     "windy-pair-de-pag": "Unable to open file 'model.bin' in model '/home/user1-gpu/Desktop/grants_folder/windy-pro/models/win",
-    "windy_translate_lora": "No sentencepiece model found",
-    "windy_translate_standard_lora": "No sentencepiece model found"
+    "windy-translate-lora": "No sentencepiece model found",
+    "windy-translate-standard_lora": "No sentencepiece model found"
   },
   "skip": [
     "windy-pair-Helsinki-NLP",

@@ -34,13 +34,13 @@ LANGUAGE_PAIRS = {
 MODELS = [
     {
         'name': 'Windy Translate Spark',
-        'our_path': 'models/windy_translate_spark/',
+        'our_path': 'models/windy-translate-spark/',
         'base_path': 'facebook/m2m100_418M',
         'use_cpu': False  # Try GPU first
     },
     {
         'name': 'Windy Translate Standard',
-        'our_path': 'models/windy_translate_standard/',
+        'our_path': 'models/windy-translate-standard/',
         'base_path': 'facebook/m2m100_1.2B',
         'use_cpu': True  # Force CPU due to memory constraints
     }

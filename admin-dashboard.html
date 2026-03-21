@@ -1379,9 +1379,10 @@
     <script>
         // ═══════════════════════ CONFIG ═══════════════════════
         const BASE_URL = localStorage.getItem('wp_base_url') || window.location.origin || 'http://192.168.4.126:8099';
-        const TIERS = ['free', 'pro', 'translate', 'translate-pro', 'unlimited'];
-        const TIER_LIMITS = { free: '500 MB', pro: '5 GB', translate: '10 GB', 'translate-pro': '50 GB', unlimited: 'Unlimited' };
-        const TIER_COLORS = { free: 'var(--text-dim)', pro: 'var(--blue)', translate: 'var(--purple)', 'translate-pro': 'var(--gold)', unlimited: 'var(--green)' };
+        const TIERS = ['free', 'pro', 'translate', 'translate_pro'];
+        const TIER_LABELS = { free: 'Free', pro: 'Windy Pro', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
+        const TIER_LIMITS = { free: '500 MB', pro: '5 GB', translate: '10 GB', translate_pro: '25 GB' };
+        const TIER_COLORS = { free: 'var(--text-dim)', pro: 'var(--blue)', translate: 'var(--purple)', translate_pro: 'var(--gold)' };
         const PAGES = ['overview', 'users', 'nodes', 'billing', 'audit', 'settings'];
         const PAGE_LABELS = { overview: 'Overview', users: 'Users', nodes: 'Storage Nodes', billing: 'Billing', audit: 'Audit Log', settings: 'Settings' };
         let TOKEN = localStorage.getItem('wp_token');
@@ -1396,7 +1397,7 @@
         function timeAgo(d) { if (!d) return 'Never'; const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000); if (s < 60) return s + 's ago'; if (s < 3600) return Math.floor(s / 60) + 'm ago'; if (s < 86400) return Math.floor(s / 3600) + 'h ago'; return Math.floor(s / 86400) + 'd ago'; }
         function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleString(); }
         function pct(a, b) { if (!b || b === 0) return 0; return Math.min(100, Math.round((a / b) * 100)); }
-        function tierBadge(t) { const c = { free: 'badge-gray', pro: 'badge-blue', translate: 'badge-purple', 'translate-pro': 'badge-gold', unlimited: 'badge-green' }; return `<span class="badge ${c[t] || 'badge-gray'}">${t}</span>`; }
+        function tierBadge(t) { const c = { free: 'badge-gray', pro: 'badge-blue', translate: 'badge-purple', translate_pro: 'badge-gold' }; return `<span class="badge ${c[t] || 'badge-gray'}">${TIER_LABELS[t] || t}</span>`; }
         function statusDot(ok) { return `<span class="dot ${ok ? 'green' : 'red'}"></span>`; }
         function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -1772,7 +1773,7 @@
     <div class="stats-grid">
       <div class="stat-card"><div class="label">Monthly Recurring Revenue</div><div class="value" style="color:var(--green)">${summary.mrr}</div><div class="sub">↑ 12% from last month</div></div>
       <div class="stat-card"><div class="label">Total Revenue</div><div class="value">${summary.totalRevenue}</div><div class="sub">All time</div></div>
-      <div class="stat-card"><div class="label">Active Subscriptions</div><div class="value">${summary.activeSubs}</div><div class="sub">Pro + Translate tiers</div></div>
+      <div class="stat-card"><div class="label">Active Subscriptions</div><div class="value">${summary.activeSubs}</div><div class="sub">Pro + Ultra + Max tiers</div></div>
       <div class="stat-card"><div class="label">Churn Rate</div><div class="value" style="color:var(--yellow)">${summary.churn}</div><div class="sub">Last 30 days</div></div>
     </div>
     <div class="chart-row">

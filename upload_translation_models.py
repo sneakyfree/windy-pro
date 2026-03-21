@@ -1,6 +1,6 @@
 """
 Windy Pro - Upload Translation Models to HuggingFace
-Uploads the ultra-light LoRA retrained models to WindyProLabs.
+Uploads the ultra-light LoRA retrained models to WindyLabs.
 """
 
 from huggingface_hub import HfApi, create_repo
@@ -11,7 +11,7 @@ def upload_model_to_hf(model_path: str, repo_name: str):
     """Upload a model to HuggingFace."""
 
     api = HfApi()
-    repo_id = f"WindyProLabs/{repo_name}"
+    repo_id = f"WindyLabs/{repo_name}"
 
     print(f"\n{'='*80}")
     print(f"Uploading: {repo_name}")
@@ -49,8 +49,8 @@ def main():
     print("="*80)
 
     models = [
-        ("models/windy_translate_spark", "windy_translate_spark"),
-        ("models/windy_translate_standard", "windy_translate_standard")
+        ("models/windy-translate-spark", "windy-translate-spark"),
+        ("models/windy-translate-standard", "windy-translate-standard")
     ]
 
     results = []

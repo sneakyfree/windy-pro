@@ -279,7 +279,7 @@ def main():
     print("\n### STEP 1/2: Translate Spark (418M) ###\n")
     spark_output = train_ultralight_lora(
         base_model_path="models/m2m100_418M",
-        output_model_path="models/windy_translate_spark",
+        output_model_path="models/windy-translate-spark",
         data_dir=data_dir,
         model_size="418M"
     )
@@ -288,7 +288,7 @@ def main():
     print("\n### STEP 2/2: Translate Standard (1.2B) ###\n")
     standard_output = train_ultralight_lora(
         base_model_path="models/m2m100_1.2B",
-        output_model_path="models/windy_translate_standard",
+        output_model_path="models/windy-translate-standard",
         data_dir=data_dir,
         model_size="1.2B"
     )

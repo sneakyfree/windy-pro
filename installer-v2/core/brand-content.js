@@ -12,7 +12,7 @@ const MONIKERS = [
   { emoji: '🟢', text: 'The Green Strobe Never Lies.', sub: 'If it\'s green, you\'re recording. Always. No guessing.' },
   { emoji: '🔒', text: 'Stay Local. Stay Private.', sub: 'Unlike competitors who upload your voice to the cloud — we don\'t.' },
   { emoji: '💊', text: 'Get Voice-Pilled.', sub: 'Once you try fully local voice-to-text, you can\'t go back.' },
-  { emoji: '🐕', text: '"WindyPro make me go MoboLoco!"', sub: '406 MB engine on your phone. Runs anywhere, no GPU needed.' },
+  { emoji: '🐕', text: '"Windy Pro make me go MoboLoco!"', sub: '406 MB engine on your phone. Runs anywhere, no GPU needed.' },
   { emoji: '💰', text: 'Pay Once. Use Forever.', sub: 'No subscription. No monthly fees. This is yours for life.' },
   { emoji: '🧬', text: 'Talk Today. Live Forever.', sub: 'Build your voice clone dataset automatically while you work.' },
   { emoji: '⌨️', text: 'Never Touch a Keyboard Again.', sub: 'Dictate everything. Paste anywhere. One hotkey.' },
@@ -46,8 +46,8 @@ const FEATURE_CARDS = [
     category: 'translate'
   },
   {
-    title: '☁️ WindyPro Cloud — YOUR Storage',
-    body: 'Your privacy is paramount! We never use your data — or data about your data — for anything. Period. Switch to WindyPro Cloud for all your storage. Cancel Dropbox. Cancel Google. Cancel iCloud. Your files belong to YOU.',
+    title: '☁️ Windy Pro Cloud — YOUR Storage',
+    body: 'Your privacy is paramount! We never use your data — or data about your data — for anything. Period. Switch to Windy Pro Cloud for all your storage. Cancel Dropbox. Cancel Google. Cancel iCloud. Your files belong to YOU.',
     category: 'cloud'
   },
   {
@@ -77,7 +77,7 @@ const FEATURE_CARDS = [
   },
   {
     title: '☁️ Cloud Storage Plans',
-    body: 'Free: 5 GB (~100 hours of transcripts). Starter: 50 GB for $2/mo. Builder: 500 GB for $8/mo. Unlimited: $15/mo. Store everything — not just voice files, but all your documents, photos, and files. Your privacy is paramount!',
+    body: 'Free: 500 MB included. Starter: 50 GB for $9/mo. Pro: 250 GB for $19/mo. Business: 1 TB for $49/mo. Enterprise: Custom pricing. Store everything — not just voice files, but all your documents, photos, and files. Your privacy is paramount!',
     category: 'cloud'
   },
   {
@@ -92,7 +92,7 @@ const FEATURE_CARDS = [
   },
   {
     title: '💳 Pricing That Respects You',
-    body: 'Free tier to get started. Plus at $4.99/mo. Pro at $9.99/mo. Pro Max at $19.99/mo with Translate included. Or pay once: Lifetime at $149, Lifetime+ at $249. Your choice. Your terms.',
+    body: 'Free to start. Windy Pro: $99 lifetime or $49/yr or $4.99/mo. Windy Ultra: $199 lifetime or $79/yr or $8.99/mo. Windy Max: $299 lifetime or $149/yr or $14.99/mo. Pay once, own forever. No tricks.',
     category: 'pricing'
   },
   {
@@ -170,7 +170,7 @@ const INSTALL_STEP_MESSAGES = {
   },
   'download-model': {
     title: '🧠 Downloading Windy Pro Engine',
-    detail: 'Pulling your engine from WindyProLabs on HuggingFace. This engine was fine-tuned by our team specifically for Windy Pro.',
+    detail: 'Pulling your engine from WindyLabs on HuggingFace. This engine was fine-tuned by our team specifically for Windy Pro.',
     tip: 'Engines are optimized for local, private transcription. Nobody else has these configurations.'
   },
   'verify': {

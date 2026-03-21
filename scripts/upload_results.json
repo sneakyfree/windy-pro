@@ -244,8 +244,8 @@
     "windy-pair-fi-gaa-ct2",
     "windy-pair-fi-gil",
     "windy-pair-fi-gil-ct2",
-    "windy_translate_lora",
-    "windy_translate_standard_lora"
+    "windy-translate-lora",
+    "windy-translate-standard_lora"
   ],
   "failed": {
     "windy-pair-en-id-ct2": "429 Client Error: Too Many Requests for url: https://huggingface.co/api/repos/create (Request ID: Root=1-69b491ef-2b3cc83e6b7a639b23ae0748;2b514fe3-e8f0-4b75-8970-5d1343c0354c)\n\nYou have exceeded the ",

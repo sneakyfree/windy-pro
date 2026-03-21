@@ -1,5 +1,5 @@
 /**
- * Windy Pro — History Panel (Wispr Flow-style)
+ * Windy Pro — History Panel (slide-panel style)
  *
  * Full-height panel with date grouping, search, expand/collapse,
  * stats header, media indicators, audio playback, and lazy loading

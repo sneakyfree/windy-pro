@@ -6,9 +6,9 @@
  *
  * Tiers & Storage Limits:
  *   Free           — $0        — 500 MB
- *   Pro            — $49/yr    — 5 GB
- *   Translate      — $79/yr    — 10 GB
- *   Translate Pro  — $149/yr   — 25 GB
+ *   Windy Pro      — $49/yr    — 5 GB
+ *   Windy Ultra    — $79/yr    — 10 GB
+ *   Windy Max      — $149/yr   — 25 GB
  */
 
 const stripe = require('stripe');
@@ -75,11 +75,16 @@ module.exports = function createRouter({ db, authenticate }) {
     };
 
     // ─── Helper: upsert subscription cache ───
-    function upsertSubscription(userId, tier, stripeCustomerId, stripeSubId, periodEnd) {
+    /**
+     * @param {string} billingType — 'subscription' (monthly/annual) or 'lifetime'
+     */
+    function upsertSubscription(userId, tier, stripeCustomerId, stripeSubId, periodEnd, billingType) {
         const storageLimitMb = TIER_STORAGE[tier] || TIER_STORAGE.free;
+        // Ensure billing_type column exists (safe to call multiple times)
+        try { db.prepare("ALTER TABLE subscriptions ADD COLUMN billing_type TEXT DEFAULT 'subscription'").run(); } catch (_) { /* column already exists */ }
         db.prepare(`
-            INSERT INTO subscriptions (user_id, tier, stripe_customer_id, stripe_subscription_id, storage_limit_mb, status, current_period_end, updated_at)
-            VALUES (?, ?, ?, ?, ?, 'active', ?, datetime('now'))
+            INSERT INTO subscriptions (user_id, tier, stripe_customer_id, stripe_subscription_id, storage_limit_mb, status, current_period_end, billing_type, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'active', ?, ?, datetime('now'))
             ON CONFLICT(user_id) DO UPDATE SET
                 tier = excluded.tier,
                 stripe_customer_id = COALESCE(excluded.stripe_customer_id, stripe_customer_id),
@@ -87,8 +92,9 @@ module.exports = function createRouter({ db, authenticate }) {
                 storage_limit_mb = excluded.storage_limit_mb,
                 status = 'active',
                 current_period_end = excluded.current_period_end,
+                billing_type = excluded.billing_type,
                 updated_at = datetime('now')
-        `).run(userId, tier, stripeCustomerId || null, stripeSubId || null, storageLimitMb, periodEnd || null);
+        `).run(userId, tier, stripeCustomerId || null, stripeSubId || null, storageLimitMb, periodEnd || null, billingType || 'subscription');
     }
 
     function downgradeToFree(userId) {
@@ -103,6 +109,24 @@ module.exports = function createRouter({ db, authenticate }) {
                 current_period_end = NULL,
                 updated_at = datetime('now')
         `).run(userId);
+    }
+
+    /**
+     * Revoke a user's license — sets license_status = 'revoked' so next heartbeat
+     * returns valid=false. The client will then delete model files.
+     * @param {string} userId
+     * @param {string} reason — 'refund', 'dispute', 'payment_failed', 'subscription_deleted'
+     */
+    function revokeUserLicense(userId, reason) {
+        db.prepare(`
+            UPDATE subscriptions
+            SET license_status = 'revoked',
+                revoke_reason = ?,
+                status = 'revoked',
+                updated_at = datetime('now')
+            WHERE user_id = ?
+        `).run(reason, userId);
+        console.log(`[Stripe] License revoked: user=${userId} reason=${reason}`);
     }
 
     // ─── POST /create-checkout ───
@@ -160,6 +184,8 @@ module.exports = function createRouter({ db, authenticate }) {
                 // No subscription record = free tier
                 return res.json({
                     tier: 'free',
+                    billingType: null,
+                    cloudSttEnabled: false,
                     storageLimitMb: TIER_STORAGE.free,
                     storageLimitBytes: TIER_STORAGE.free * 1024 * 1024,
                     status: 'active',
@@ -168,8 +194,14 @@ module.exports = function createRouter({ db, authenticate }) {
                 });
             }
 
+            // Cloud STT is only available for active subscriptions (monthly/annual), NOT lifetime
+            const billingType = sub.billing_type || 'subscription';
+            const cloudSttEnabled = billingType !== 'lifetime' && sub.status === 'active';
+
             res.json({
                 tier: sub.tier,
+                billingType,
+                cloudSttEnabled,
                 storageLimitMb: sub.storage_limit_mb,
                 storageLimitBytes: sub.storage_limit_mb * 1024 * 1024,
                 status: sub.status,
@@ -245,6 +277,8 @@ module.exports = function createRouter({ db, authenticate }) {
                     if (userId && tier) {
                         // Fetch period end if subscription
                         let periodEnd = null;
+                        // Determine billing type: subscription has a subscriptionId, lifetime (one-time) does not
+                        const billingType = subscriptionId ? 'subscription' : 'lifetime';
                         if (subscriptionId) {
                             try {
                                 const sub = await stripeClient.subscriptions.retrieve(subscriptionId);
@@ -252,7 +286,7 @@ module.exports = function createRouter({ db, authenticate }) {
                             } catch (_) { }
                         }
 
-                        upsertSubscription(userId, tier, customerId, subscriptionId, periodEnd);
+                        upsertSubscription(userId, tier, customerId, subscriptionId, periodEnd, billingType);
 
                         // Generate license key
                         const key = generateLicenseKey(tier);
@@ -280,7 +314,7 @@ module.exports = function createRouter({ db, authenticate }) {
                                 const product = Object.values(PRODUCTS).find(p => p.priceId === priceId);
                                 if (product) tier = product.tier;
                             }
-                            upsertSubscription(row.user_id, tier, customerId, subscriptionId, periodEnd);
+                            upsertSubscription(row.user_id, tier, customerId, subscriptionId, periodEnd, 'subscription');
                             console.log(`[Stripe] 🔄 Subscription updated: user=${row.user_id} tier=${tier} status=${status}`);
                         } else if (status === 'canceled' || status === 'unpaid') {
                             downgradeToFree(row.user_id);
@@ -297,8 +331,64 @@ module.exports = function createRouter({ db, authenticate }) {
 
                     const row = db.prepare('SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?').get(customerId);
                     if (row) {
-                        downgradeToFree(row.user_id);
-                        console.log(`[Stripe] 🗑️ Subscription deleted: user=${row.user_id} → free`);
+                        revokeUserLicense(row.user_id, 'subscription_deleted');
+                        console.log(`[Stripe] 🗑️ Subscription deleted: user=${row.user_id} → revoked`);
+                    }
+                    break;
+                }
+
+                // ── Refund → revoke license (Layer 3) ──
+                case 'charge.refunded': {
+                    const charge = event.data.object;
+                    const customerId = charge.customer;
+                    const row = db.prepare('SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?').get(customerId);
+                    if (row) {
+                        revokeUserLicense(row.user_id, 'refund');
+                        console.log(`[Stripe] 💸 Charge refunded: user=${row.user_id} → revoked`);
+                    }
+                    break;
+                }
+
+                // ── Dispute → immediate revoke (Layer 3) ──
+                case 'charge.dispute.created': {
+                    const dispute = event.data.object;
+                    const chargeId = dispute.charge;
+                    // Look up customer from charge
+                    try {
+                        const charge = await stripeClient.charges.retrieve(chargeId);
+                        const customerId = charge.customer;
+                        const row = db.prepare('SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?').get(customerId);
+                        if (row) {
+                            revokeUserLicense(row.user_id, 'dispute');
+                            console.log(`[Stripe] ⚠️ Dispute created: user=${row.user_id} → immediate revoke`);
+                        }
+                    } catch (e) {
+                        console.error('[Stripe] Dispute handler error:', e.message);
+                    }
+                    break;
+                }
+
+                // ── Payment failed → track retries, revoke after 3 failures over 7 days (Layer 3) ──
+                case 'invoice.payment_failed': {
+                    const invoice = event.data.object;
+                    const customerId = invoice.customer;
+                    const row = db.prepare('SELECT user_id, payment_fail_count, first_payment_fail_at FROM subscriptions WHERE stripe_customer_id = ?').get(customerId);
+                    if (row) {
+                        const failCount = (row.payment_fail_count || 0) + 1;
+                        const now = new Date().toISOString();
+                        const firstFail = row.first_payment_fail_at || now;
+
+                        db.prepare(`UPDATE subscriptions SET payment_fail_count = ?, first_payment_fail_at = COALESCE(first_payment_fail_at, ?), updated_at = datetime('now') WHERE user_id = ?`)
+                            .run(failCount, now, row.user_id);
+
+                        // Check if 3 failures AND first failure was > 7 days ago
+                        const daysSinceFirst = (Date.now() - new Date(firstFail).getTime()) / (24 * 60 * 60 * 1000);
+                        if (failCount >= 3 && daysSinceFirst >= 7) {
+                            revokeUserLicense(row.user_id, 'payment_failed');
+                            console.log(`[Stripe] ❌ Payment failed ${failCount}x over ${Math.round(daysSinceFirst)}d: user=${row.user_id} → revoked`);
+                        } else {
+                            console.log(`[Stripe] ⚠️ Payment failed (${failCount}/3): user=${row.user_id}`);
+                        }
                     }
                     break;
                 }

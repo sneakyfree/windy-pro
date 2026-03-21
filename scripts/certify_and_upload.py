@@ -46,7 +46,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 MODELS_DIR = "/home/user1-gpu/Desktop/grants_folder/windy-pro/models"
-ORG = "sneakyfree"  # Staging on personal account; transfer to WindyProLabs later
+ORG = "sneakyfree"  # Staging on personal account; transfer to WindyLabs later
 TEST_AUDIO = "/home/user1-gpu/Desktop/grants_folder/windy-pro/test_audio/librispeech_sample.wav"
 GROUND_TRUTH = "mister quilter is the apostle of the middle classes and we are glad to welcome his gospel"
 CERT_REPORT_PATH = "/home/user1-gpu/Desktop/grants_folder/windy-pro/docs/CERTIFICATION_REPORT.md"
@@ -296,13 +296,13 @@ def classify_model(model_name):
         return "lingua_ct2"
     elif model_name.startswith("windy-lingua-"):
         return "lingua_gpu"
-    elif model_name.startswith("windy-stt-") and "-ct2" in model_name:
+    elif model_name.endswith("-ct2") and not "lingua" in model_name and not "pair" in model_name and not "translate" in model_name in model_name:
         return "stt_ct2"
-    elif model_name.startswith("windy-stt-distil"):
+    elif model_name.startswith("windy-distil"):
         return "stt_gpu"
-    elif model_name.startswith("windy-stt-"):
+    elif model_name.startswith("windy-") and not "lingua" in model_name and not "pair" in model_name:
         return "stt_gpu"
-    elif model_name.startswith("windy_translate_"):
+    elif model_name.startswith("windy-translate-"):
         return "translation_generalist"
     else:
         return "unknown"

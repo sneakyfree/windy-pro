@@ -86,81 +86,81 @@ function recommend(hardware) {
 
   switch (deviceType) {
     case 'phone':
-      recommended = ['windy-stt-nano-cpu', 'windy-stt-lite-cpu'];
-      optional = ['windy-stt-core-cpu'];
+      recommended = ['windy-nano-ct2', 'windy-lite-ct2'];
+      optional = ['windy-core-ct2'];
       explanation = `Your phone is perfect for our lightweight CPU engines. ${formatSize(getTotalSize(recommended))} total — smaller than most selfies combined. Go MoboLoco! 🐕`;
       break;
 
     case 'desktop-gpu-heavy':
       // Beast mode — 8+ GB VRAM, recommend GPU powerhouses
-      recommended = ['windy-stt-core', 'windy-stt-turbo', 'windy-stt-pro'];
-      optional = ['windy-stt-edge', 'windy-stt-plus', 'windy-stt-nano', 'windy-stt-lite'];
+      recommended = ['windy-core', 'windy-turbo', 'windy-pro-engine'];
+      optional = ['windy-edge', 'windy-plus', 'windy-nano', 'windy-lite'];
       explanation = `${gpu.name} with ${gpu.vramGB} GB VRAM — you've got a powerhouse. We recommend Windy Core as your default. WindyTune will auto-switch between engines based on workload and temperature. Maximum everything. 🚀`;
       break;
 
     case 'desktop-gpu':
       // 4-8 GB VRAM
-      recommended = ['windy-stt-core', 'windy-stt-lite', 'windy-stt-edge'];
-      optional = ['windy-stt-turbo', 'windy-stt-plus', 'windy-stt-nano'];
+      recommended = ['windy-core', 'windy-lite', 'windy-edge'];
+      optional = ['windy-turbo', 'windy-plus', 'windy-nano'];
       explanation = `${gpu.name} with ${gpu.vramGB} GB VRAM — solid GPU. Windy Core is your daily driver. WindyTune switches to lighter engines when your GPU is busy or gets hot.`;
       break;
 
     case 'desktop-apple':
       // Apple Silicon desktop with unified memory
-      recommended = ['windy-stt-core', 'windy-stt-turbo', 'windy-stt-lite'];
-      optional = ['windy-stt-edge', 'windy-stt-plus', 'windy-stt-nano'];
+      recommended = ['windy-core', 'windy-turbo', 'windy-lite'];
+      optional = ['windy-edge', 'windy-plus', 'windy-nano'];
       explanation = `${gpu.name} with ${ram.totalGB} GB unified memory — Apple Silicon runs our engines beautifully via Metal GPU acceleration. Near-desktop-GPU performance, completely silent.`;
       break;
 
     case 'laptop-gpu':
-      recommended = ['windy-stt-core', 'windy-stt-lite', 'windy-stt-core-cpu'];
-      optional = ['windy-stt-turbo', 'windy-stt-lite-cpu', 'windy-stt-edge'];
+      recommended = ['windy-core', 'windy-lite', 'windy-core-ct2'];
+      optional = ['windy-turbo', 'windy-lite-ct2', 'windy-edge'];
       explanation = `Your laptop has a dedicated GPU — you get GPU-accelerated engines for when you're plugged in, and CPU variants for battery mode. WindyTune switches automatically based on power and temperature.`;
       break;
 
     case 'laptop-apple':
-      recommended = ['windy-stt-core', 'windy-stt-lite', 'windy-stt-core-cpu'];
-      optional = ['windy-stt-turbo', 'windy-stt-edge', 'windy-stt-lite-cpu'];
+      recommended = ['windy-core', 'windy-lite', 'windy-core-ct2'];
+      optional = ['windy-turbo', 'windy-edge', 'windy-lite-ct2'];
       explanation = `Apple Silicon runs our engines with Metal GPU acceleration. Windy Core is your daily driver. WindyTune drops to CPU engines when battery is low or temperature rises.`;
       break;
 
     case 'laptop-powerful':
       // 16+ GB RAM, no GPU
-      recommended = ['windy-stt-core-cpu', 'windy-stt-lite-cpu', 'windy-stt-edge-cpu'];
-      optional = ['windy-stt-turbo-cpu', 'windy-stt-plus-cpu', 'windy-stt-nano-cpu'];
+      recommended = ['windy-core-ct2', 'windy-lite-ct2', 'windy-edge-ct2'];
+      optional = ['windy-turbo-ct2', 'windy-plus-ct2', 'windy-nano-ct2'];
       explanation = `${ram.totalGB} GB RAM gives you room for our mid-range CPU engines. Windy Core (CPU) will be your daily driver — great accuracy, no GPU needed. WindyTune adapts when RAM gets tight.`;
       break;
 
     case 'laptop-standard':
       // 8-16 GB RAM
-      recommended = ['windy-stt-core-cpu', 'windy-stt-lite-cpu', 'windy-stt-nano-cpu'];
-      optional = ['windy-stt-edge-cpu'];
+      recommended = ['windy-core-ct2', 'windy-lite-ct2', 'windy-nano-ct2'];
+      optional = ['windy-edge-ct2'];
       explanation = `${ram.totalGB} GB RAM — Windy Core (CPU) and Windy Lite (CPU) are perfect for your hardware. Great accuracy, efficient on CPU. WindyTune switches to Nano if memory gets tight.`;
       break;
 
     case 'laptop-light':
       // Under 8 GB
-      recommended = ['windy-stt-nano-cpu', 'windy-stt-lite-cpu'];
-      optional = ['windy-stt-core-cpu'];
+      recommended = ['windy-nano-ct2', 'windy-lite-ct2'];
+      optional = ['windy-core-ct2'];
       explanation = `With ${ram.totalGB} GB RAM, our lightweight CPU engines are your best bet. Windy Nano (CPU) is only 406 MB and runs beautifully on any hardware. No internet, no problem.`;
       break;
 
     case 'desktop-cpu':
       // Desktop, no GPU, good RAM
-      recommended = ['windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-lite-cpu'];
-      optional = ['windy-stt-turbo-cpu', 'windy-stt-plus-cpu', 'windy-stt-nano-cpu'];
+      recommended = ['windy-core-ct2', 'windy-edge-ct2', 'windy-lite-ct2'];
+      optional = ['windy-turbo-ct2', 'windy-plus-ct2', 'windy-nano-ct2'];
       explanation = `No GPU detected, but ${ram.totalGB} GB RAM means our CPU lineup runs great. Windy Core (CPU) gives you excellent accuracy without a GPU.`;
       break;
 
     case 'desktop-light':
     case 'desktop-minimal':
-      recommended = ['windy-stt-nano-cpu', 'windy-stt-lite-cpu'];
-      optional = ['windy-stt-core-cpu'];
+      recommended = ['windy-nano-ct2', 'windy-lite-ct2'];
+      optional = ['windy-core-ct2'];
       explanation = `We'll start you with our most efficient engines. Small footprint, fast performance. You can always add more later.`;
       break;
 
     default:
-      recommended = ['windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu'];
+      recommended = ['windy-nano-ct2', 'windy-lite-ct2', 'windy-core-ct2'];
       optional = [];
       explanation = 'WindyTune selected a balanced set of engines for your hardware.';
   }

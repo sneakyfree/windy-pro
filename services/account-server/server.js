@@ -146,11 +146,29 @@ db.exec(`
     stripe_subscription_id TEXT,
     storage_limit_mb INTEGER NOT NULL DEFAULT 500,
     status TEXT NOT NULL DEFAULT 'active',
+    license_status TEXT NOT NULL DEFAULT 'active',
+    revoke_reason TEXT,
+    payment_fail_count INTEGER NOT NULL DEFAULT 0,
+    first_payment_fail_at TEXT,
     current_period_end TEXT,
     updated_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `);
+
+// Schema migration: add new columns if upgrading from older schema
+try {
+    db.exec(`ALTER TABLE subscriptions ADD COLUMN license_status TEXT NOT NULL DEFAULT 'active'`);
+} catch (_) { /* already exists */ }
+try {
+    db.exec(`ALTER TABLE subscriptions ADD COLUMN revoke_reason TEXT`);
+} catch (_) { /* already exists */ }
+try {
+    db.exec(`ALTER TABLE subscriptions ADD COLUMN payment_fail_count INTEGER NOT NULL DEFAULT 0`);
+} catch (_) { /* already exists */ }
+try {
+    db.exec(`ALTER TABLE subscriptions ADD COLUMN first_payment_fail_at TEXT`);
+} catch (_) { /* already exists */ }
 
 // ═══════════════════════════════════════════════
 // JWT Helpers (zero-dependency)
@@ -1052,7 +1070,76 @@ app.post('/api/v1/user/favorites', writeLimiter, authenticate, (req, res) => {
 });
 
 // ═══════════════════════════════════════════════
-// Payments (Ghost Feature 1 — Stripe)
+// License Heartbeat (Layer 2 — Model Protection)
+// ═══════════════════════════════════════════════
+
+// Grace periods by tier (hours)
+const TIER_GRACE_HOURS = {
+    free: 24,
+    pro: 168,           // 7 days
+    translate: 336,     // 14 days (Ultra)
+    translate_pro: 720, // 30 days (Max)
+    marco_polo: 720     // 30 days
+};
+
+// POST /api/v1/license/heartbeat — validate license from desktop client
+app.post('/api/v1/license/heartbeat', authenticate, (req, res) => {
+    try {
+        const userId = req.user.sub;
+        const deviceFingerprint = req.headers['x-device-fingerprint'] || '';
+        const appVersion = req.headers['x-app-version'] || '';
+        const platform = req.headers['x-platform'] || '';
+
+        // Update device last_seen if fingerprint matches
+        if (deviceFingerprint) {
+            db.prepare("UPDATE devices SET last_seen = datetime('now') WHERE user_id = ? AND device_hash = ?")
+                .run(userId, deviceFingerprint);
+        }
+
+        // Look up subscription
+        const sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(userId);
+
+        if (!sub) {
+            // No subscription → free tier, valid
+            return res.json({
+                valid: true,
+                tier: 'free',
+                graceHours: TIER_GRACE_HOURS.free,
+                nextCheck: 48,
+                pairsEntitled: []
+            });
+        }
+
+        // Check if license is revoked
+        if (sub.license_status === 'revoked') {
+            return res.json({
+                valid: false,
+                tier: sub.tier,
+                reason: 'revoked',
+                revokeReason: sub.revoke_reason || 'unknown'
+            });
+        }
+
+        // Active license
+        const graceHours = TIER_GRACE_HOURS[sub.tier] || TIER_GRACE_HOURS.free;
+        res.json({
+            valid: true,
+            tier: sub.tier,
+            graceHours,
+            nextCheck: 48,
+            pairsEntitled: [],  // TODO: populate from pair entitlements table
+            status: sub.status
+        });
+
+        console.log(`[Heartbeat] ✅ user=${userId} tier=${sub.tier} platform=${platform} v=${appVersion}`);
+    } catch (err) {
+        console.error('[Heartbeat]', err.message);
+        res.status(500).json({ error: 'Heartbeat failed' });
+    }
+});
+
+// ═══════════════════════════════════════════════
+// Payments + Stripe Webhooks (Layers 2-3)
 // ═══════════════════════════════════════════════
 try {
     const paymentsRouter = require('./routes/payments');

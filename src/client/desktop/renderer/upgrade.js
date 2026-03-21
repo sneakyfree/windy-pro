@@ -22,7 +22,7 @@ class UpgradePanel {
                 name: 'Free',
                 price: '$0',
                 period: 'forever',
-                features: ['1 language', '3 engines', '2-min recordings', 'Local transcription', '1 offline translation engine'],
+                features: ['99 languages (auto-detect)', 'Tiny & Base engines', '5-min recordings', 'Local transcription', '500 MB WindyCloud storage'],
                 color: '#6B7280',
                 icon: '🌱'
             },
@@ -34,7 +34,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T60GeBXIOBasDQi4aitcq8O',
                 annualPriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg',
                 lifetimePriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg_life',
-                features: ['All 15 engines', '99 languages', '15-min recordings', 'Batch mode', 'LLM polish', '5 offline translation engines'],
+                features: ['All 15 engines', '99 languages', '30-min recordings', 'Cloud Processing', 'Batch mode', 'LLM polish', '5 GB WindyCloud storage'],
                 color: '#22C55E',
                 icon: '⚡'
             },
@@ -46,7 +46,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T5oZJBXIOBasDQijBW23Gow',
                 annualPriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7',
                 lifetimePriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7_life',
-                features: ['Everything in Pro', '60-min recordings', 'Real-time translation', '99 language pairs', '25 offline translation engines'],
+                features: ['Everything in Pro', 'Real-time translation (5 pairs)', 'Conversation mode', '25 offline translation engines', '10 GB WindyCloud storage'],
                 color: '#3B82F6',
                 icon: '🚀',
                 recommended: true
@@ -59,7 +59,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T60H8BXIOBasDQiy5eorTWR',
                 annualPriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG',
                 lifetimePriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG_life',
-                features: ['Everything in Ultra', 'Unlimited recordings', 'Text-to-speech', 'Medical/legal glossaries', '100 offline translation engines'],
+                features: ['Everything in Ultra', '60-min recordings', 'Offline translation', '99 language pairs', 'Text-to-speech', 'Medical/legal glossaries', '100 offline engines', '25 GB WindyCloud storage'],
                 color: '#8B5CF6',
                 icon: '👑'
             }
@@ -76,7 +76,7 @@ class UpgradePanel {
             const config = await window.windyAPI.getStripeConfig();
             if (!config) return;
             // Apply dynamic price IDs to tiers
-            for (const tier of this._tiers) {
+            for (const tier of this.plans) {
                 const cfg = config[tier.key];
                 if (cfg) {
                     tier.monthlyPriceId = cfg.monthlyPriceId || tier.monthlyPriceId;
@@ -142,6 +142,10 @@ class UpgradePanel {
 
             const monthlyPrices = { pro: '$4.99', translate: '$8.99', translate_pro: '$14.99' };
             const lifetimePrices = { pro: '$99', translate: '$199', translate_pro: '$299' };
+            const cloudSttBadges = {
+                subscription: '🌪️ Subscribers get 3 processing modes: Device Only, Device + WindyCloud, or Auto. All fully private.',
+                lifetime: '🏠 Lifetime → Device-only processing. Your voice never leaves this machine. Always private.'
+            };
 
             let priceDisplay = plan.price;
             if (plan.monthlyPriceId) {
@@ -152,6 +156,13 @@ class UpgradePanel {
             let lifetimeDisplay = '';
             if (plan.monthlyPriceId) {
                 lifetimeDisplay = `<div class="upgrade-lifetime-price">💎 ${lifetimePrices[plan.key]} <span class="upgrade-lifetime-label">lifetime — own forever</span></div>`;
+            }
+
+            // Cloud Processing badge (only for paid plans)
+            let cloudBadge = '';
+            if (plan.monthlyPriceId) {
+                cloudBadge = `<div style="margin:8px 0;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(59,130,246,0.08);color:#60A5FA;">${cloudSttBadges.subscription}</div>`;
+                cloudBadge += `<div style="margin:0 0 8px;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(139,92,246,0.08);color:#C084FC;">${cloudSttBadges.lifetime}</div>`;
             }
 
             const features = plan.features.map(f => `<li>✓ ${f}</li>`).join('');
@@ -177,6 +188,7 @@ class UpgradePanel {
           <div class="upgrade-card-price">${priceDisplay}</div>
           <div class="upgrade-card-period">${plan.period}</div>
           ${lifetimeDisplay}
+          ${cloudBadge}
           <ul class="upgrade-card-features">${features}</ul>
           <div class="upgrade-card-actions">${actionBtn}</div>
         </div>`;
@@ -392,7 +404,7 @@ class UpgradePanel {
         } catch (err) {
             const msg = err.message || 'Unknown error';
             if (msg.includes('Payment system not configured') || msg.includes('Not available')) {
-                status.innerHTML = `❌ <strong>Stripe API key not set.</strong><br><span style="font-size:11px;color:#9CA3AF;">Set STRIPE_SECRET_KEY environment variable or configure in Settings → Advanced → Stripe Secret Key</span>`;
+                status.innerHTML = `❌ <strong>Payment system is not configured yet.</strong><br><span style="font-size:11px;color:#9CA3AF;">Please contact support or check your account settings.</span>`;
             } else {
                 const errSpan = document.createElement('span');
                 errSpan.textContent = '❌ ' + msg;

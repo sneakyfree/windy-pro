@@ -27,7 +27,7 @@ class TranslationConfig:
             project_root = Path(__file__).parent.parent.parent
             if self.model_type == "finetuned":
                 # Use fine-tuned merged model
-                self.model_path = str(project_root / "models" / "windy_translate_spark")
+                self.model_path = str(project_root / "models" / "windy-translate-spark")
             else:
                 # Default to base model
                 self.model_path = str(project_root / "models" / "m2m100_418M")
@@ -208,7 +208,7 @@ class Translator:
             # Determine model name
             model_name = "m2m100_418M"
             if self.config.model_type == "finetuned":
-                model_name = "windy_translate_spark"
+                model_name = "windy-translate-spark"
             elif self.config.model_type == "lora":
                 model_name = "m2m100_418M_lora"
 

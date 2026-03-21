@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- SEC-P1: unsafe-inline in script-src is required for onclick= handlers (20+ inline handlers).
+       Refactoring to addEventListener is a future task. connect-src is tightened to specific origins. -->
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self' https: wss:">
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self' wss://matrix.thewindstorm.uk https://matrix.thewindstorm.uk https://*.thewindstorm.uk wss://localhost:* ws://localhost:* wss://127.0.0.1:* ws://127.0.0.1:*">
   <title>Windy Chat</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="chat.css">
@@ -28,7 +30,7 @@
       </div>
       <div class="feature-card">
         <div class="icon">✈️</div>
-        <div class="label">100% Offline<br>Capable</div>
+        <div class="label">Offline<br>Capable</div>
       </div>
     </div>
 
@@ -840,7 +842,7 @@
 
     // ═══ Share / Invite ═══
     function shareInvite() {
-      const inviteText = `Join me on Windy Chat! Talk in any language, 100% private.\nhttps://windypro.com/chat/invite/${myUserId}`;
+      const inviteText = `Join me on Windy Chat! Talk in any language, private by default.\nhttps://windypro.com/chat/invite/${myUserId}`;
       navigator.clipboard.writeText(inviteText);
       const btn = event.target;
       btn.textContent = '✅';

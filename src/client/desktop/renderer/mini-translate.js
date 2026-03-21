@@ -195,8 +195,8 @@ localOnlyCheckbox.addEventListener('change', () => {
     cloudOpts.forEach(opt => { opt.disabled = isLocalOnly; });
     // If cloud was selected, switch to default local
     if (isLocalOnly) {
-        if (listenModelSelect.value === 'cloud') listenModelSelect.value = 'windy-stt-core';
-        if (translateModelSelect.value === 'cloud') translateModelSelect.value = 'windy-stt-core';
+        if (listenModelSelect.value === 'cloud') listenModelSelect.value = 'windy-core';
+        if (translateModelSelect.value === 'cloud') translateModelSelect.value = 'windy-core';
     }
     if (isWindyTune) {
         const suffix = isLocalOnly ? 'local only' : 'auto';
@@ -400,8 +400,8 @@ async function processChunk(audioBlob) {
         // Pass API keys from localStorage (renderer storage) since main process
         // uses electron-store which may not have them
         const apiKeys = {
-            groq: localStorage.getItem('windy_groqApiKey') || '',
-            openai: localStorage.getItem('windy_openaiApiKey') || ''
+            groq: window.windyAPI ? await window.windyAPI.getApiKey('groqApiKey') : '',
+            openai: window.windyAPI ? await window.windyAPI.getApiKey('openaiApiKey') : ''
         };
         const result = await miniAPI.translateSpeech(
             Array.from(new Uint8Array(arrayBuf)),

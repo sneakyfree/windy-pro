@@ -212,4 +212,8 @@ contextBridge.exposeInMainWorld('windyAPI', {
     ipcRenderer.removeAllListeners('pair-download-progress');
     ipcRenderer.on('pair-download-progress', (event, data) => callback(data));
   },
+
+  // SEC-P0: Encrypted API key storage via main process safeStorage
+  setApiKey: (keyName, keyValue) => ipcRenderer.invoke('set-api-key', keyName, keyValue),
+  getApiKey: (keyName) => ipcRenderer.invoke('get-api-key', keyName),
 });

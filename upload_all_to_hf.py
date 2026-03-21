@@ -1,5 +1,5 @@
 """
-Upload all Windy models to HuggingFace WindyProLabs organization.
+Upload all Windy models to HuggingFace WindyLabs organization.
 """
 
 from huggingface_hub import HfApi, create_repo
@@ -14,7 +14,7 @@ def upload_all_models():
 
     print(f"{'='*60}")
     print("Uploading ALL Windy Models to HuggingFace")
-    print("Organization: WindyProLabs")
+    print("Organization: WindyLabs")
     print(f"{'='*60}\n")
 
     uploaded = []
@@ -44,7 +44,7 @@ def upload_all_models():
             skipped.append(dirname)
             continue
 
-        repo_id = f'WindyProLabs/{dirname}'
+        repo_id = f'WindyLabs/{dirname}'
         size_mb = total_size / 1e6
 
         print(f'\n{"─"*60}')
@@ -86,7 +86,7 @@ def upload_all_models():
 
     print(f'\n{"="*60}')
     print(f'All uploads complete! 🎉')
-    print(f'View at: https://huggingface.co/WindyProLabs')
+    print(f'View at: https://huggingface.co/WindyLabs')
     print(f'{"="*60}\n')
 
 if __name__ == "__main__":

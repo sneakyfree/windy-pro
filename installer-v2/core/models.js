@@ -4,7 +4,7 @@
  * All engines developed by Windy Pro Labs. Fine-tuned, optimized, and secured.
  *
  * USER-FACING NAMES: No "STT" in any displayed name
- * INTERNAL IDs: windy-stt-* for code/downloads
+ * INTERNAL IDs: windy-{name} for code/downloads (NO STT in any ID)
  *
  * 7 ENGINE NAMES (GPU + CPU variants):
  * - Windy Nano, Windy Lite, Windy Core (FREE tier)
@@ -56,7 +56,7 @@ const ENGINE_FAMILIES = {
 const ENGINE_CATALOG = [
   // ─── GPU-ACCELERATED ENGINES ───
   {
-    id: 'windy-stt-nano',
+    id: 'windy-nano',
     family: 'gpu',
     name: 'Windy Nano',
     displayName: 'Windy Nano',
@@ -79,7 +79,7 @@ const ENGINE_CATALOG = [
     badge: '⚡ Fastest'
   },
   {
-    id: 'windy-stt-lite',
+    id: 'windy-lite',
     family: 'gpu',
     name: 'Windy Lite',
     displayName: 'Windy Lite',
@@ -101,7 +101,7 @@ const ENGINE_CATALOG = [
     format: 'Safetensors'
   },
   {
-    id: 'windy-stt-core',
+    id: 'windy-core',
     family: 'gpu',
     name: 'Windy Core',
     displayName: 'Windy Core',
@@ -124,7 +124,7 @@ const ENGINE_CATALOG = [
     badge: '⭐ Recommended'
   },
   {
-    id: 'windy-stt-edge',
+    id: 'windy-edge',
     family: 'gpu',
     name: 'Windy Edge',
     displayName: 'Windy Edge',
@@ -146,7 +146,7 @@ const ENGINE_CATALOG = [
     format: 'Safetensors'
   },
   {
-    id: 'windy-stt-plus',
+    id: 'windy-plus',
     family: 'gpu',
     name: 'Windy Plus',
     displayName: 'Windy Plus',
@@ -168,7 +168,7 @@ const ENGINE_CATALOG = [
     format: 'Safetensors'
   },
   {
-    id: 'windy-stt-turbo',
+    id: 'windy-turbo',
     family: 'gpu',
     name: 'Windy Turbo',
     displayName: 'Windy Turbo',
@@ -191,7 +191,7 @@ const ENGINE_CATALOG = [
     badge: '🏆 Champion'
   },
   {
-    id: 'windy-stt-pro',
+    id: 'windy-pro-engine',
     family: 'gpu',
     name: 'Windy Pro',
     displayName: 'Windy Pro',
@@ -216,7 +216,7 @@ const ENGINE_CATALOG = [
 
   // ─── CPU-OPTIMIZED ENGINES ───
   {
-    id: 'windy-stt-nano-cpu',
+    id: 'windy-nano-cpu',
     family: 'cpu',
     name: 'Windy Nano',
     displayName: 'Windy Nano (CPU)',
@@ -239,7 +239,7 @@ const ENGINE_CATALOG = [
     badge: '📱 Mobile-Ready'
   },
   {
-    id: 'windy-stt-lite-cpu',
+    id: 'windy-lite-cpu',
     family: 'cpu',
     name: 'Windy Lite',
     displayName: 'Windy Lite (CPU)',
@@ -261,7 +261,7 @@ const ENGINE_CATALOG = [
     format: 'INT8 Quantized'
   },
   {
-    id: 'windy-stt-core-cpu',
+    id: 'windy-core-cpu',
     family: 'cpu',
     name: 'Windy Core',
     displayName: 'Windy Core (CPU)',
@@ -284,7 +284,7 @@ const ENGINE_CATALOG = [
     badge: '⭐ CPU Recommended'
   },
   {
-    id: 'windy-stt-edge-cpu',
+    id: 'windy-edge-cpu',
     family: 'cpu',
     name: 'Windy Edge',
     displayName: 'Windy Edge (CPU)',
@@ -306,7 +306,7 @@ const ENGINE_CATALOG = [
     format: 'INT8 Quantized'
   },
   {
-    id: 'windy-stt-plus-cpu',
+    id: 'windy-plus-cpu',
     family: 'cpu',
     name: 'Windy Plus',
     displayName: 'Windy Plus (CPU)',
@@ -328,7 +328,7 @@ const ENGINE_CATALOG = [
     format: 'INT8 Quantized'
   },
   {
-    id: 'windy-stt-turbo-cpu',
+    id: 'windy-turbo-cpu',
     family: 'cpu',
     name: 'Windy Turbo',
     displayName: 'Windy Turbo (CPU)',
@@ -351,7 +351,7 @@ const ENGINE_CATALOG = [
     badge: '🏆 CPU Champion'
   },
   {
-    id: 'windy-stt-pro-cpu',
+    id: 'windy-pro-engine-cpu',
     family: 'cpu',
     name: 'Windy Pro',
     displayName: 'Windy Pro (CPU)',
@@ -622,29 +622,29 @@ const ENGINE_CATALOG = [
  */
 const TIER_ACCESS = {
   free: [
-    'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core',
-    'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu'
+    'windy-nano', 'windy-lite', 'windy-core',
+    'windy-nano-cpu', 'windy-lite-cpu', 'windy-core-cpu'
   ],
   pro: [
-    'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core',
-    'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro',
-    'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu',
-    'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu'
+    'windy-nano', 'windy-lite', 'windy-core',
+    'windy-edge', 'windy-plus', 'windy-turbo', 'windy-pro-engine',
+    'windy-nano-cpu', 'windy-lite-cpu', 'windy-core-cpu',
+    'windy-edge-cpu', 'windy-plus-cpu', 'windy-turbo-cpu', 'windy-pro-engine-cpu'
   ],
   translate: [
-    'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core',
-    'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro',
-    'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu',
-    'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu',
+    'windy-nano', 'windy-lite', 'windy-core',
+    'windy-edge', 'windy-plus', 'windy-turbo', 'windy-pro-engine',
+    'windy-nano-cpu', 'windy-lite-cpu', 'windy-core-cpu',
+    'windy-edge-cpu', 'windy-plus-cpu', 'windy-turbo-cpu', 'windy-pro-engine-cpu',
     'windy-translate-spark',
     'windy-pair-en-es', 'windy-pair-en-zh', 'windy-pair-en-fr', 'windy-pair-en-de',
     'windy-pair-en-ar', 'windy-pair-en-hi', 'windy-pair-en-pt', 'windy-pair-en-ru'
   ],
   translate_pro: [
-    'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core',
-    'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro',
-    'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu',
-    'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu',
+    'windy-nano', 'windy-lite', 'windy-core',
+    'windy-edge', 'windy-plus', 'windy-turbo', 'windy-pro-engine',
+    'windy-nano-cpu', 'windy-lite-cpu', 'windy-core-cpu',
+    'windy-edge-cpu', 'windy-plus-cpu', 'windy-turbo-cpu', 'windy-pro-engine-cpu',
     'windy-translate-spark', 'windy-translate-standard',
     'windy-pair-en-es', 'windy-pair-en-zh', 'windy-pair-en-fr', 'windy-pair-en-de',
     'windy-pair-en-ar', 'windy-pair-en-hi', 'windy-pair-en-pt', 'windy-pair-en-ru'

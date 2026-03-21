@@ -165,12 +165,12 @@ def main():
 
     # Test both models
     spark_results = test_translation(
-        model_path="models/windy_translate_spark",
+        model_path="models/windy-translate-spark",
         model_name="Translate Spark (418M)"
     )
 
     standard_results = test_translation(
-        model_path="models/windy_translate_standard",
+        model_path="models/windy-translate-standard",
         model_name="Translate Standard (1.2B)"
     )
 

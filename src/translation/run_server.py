@@ -10,7 +10,7 @@ Usage:
     python run_server.py --model-type finetuned
 
     # LoRA adapter
-    python run_server.py --model-type lora --lora-adapter models/windy_translate_lora/final_model
+    python run_server.py --model-type lora --lora-adapter models/windy-translate-lora/final_model
 
     # Custom model path
     python run_server.py --model-path models/custom_model
@@ -20,7 +20,7 @@ Examples:
     python run_server.py --model-type finetuned
 
     # Run with LoRA adapter on base model
-    python run_server.py --model-type lora --lora-adapter models/windy_translate_lora/checkpoint-5000
+    python run_server.py --model-type lora --lora-adapter models/windy-translate-lora/checkpoint-5000
 """
 
 import sys

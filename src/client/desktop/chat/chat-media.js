@@ -379,7 +379,7 @@ class VoiceTranslator {
    * Translate a voice message before sending.
    *
    * Flow:
-   *   1. STT: voice → text (in sender's language)
+   *   1. Transcribe: voice → text (in sender's language)
    *   2. Translate: text → translated text
    *   3. TTS: translated text → audio (in recipient's language)
    *   4. Attach both original + translated audio to message
@@ -388,9 +388,9 @@ class VoiceTranslator {
    */
   static async translateVoiceMessage(audioBlob, srcLang, tgtLang, translateFn) {
     // Step 1: Speech-to-text (local Whisper)
-    const transcript = await performSTT(audioBlob, srcLang);
+    const transcript = await performTranscription(audioBlob, srcLang);
     if (!transcript || !transcript.text) {
-      return { translated: false, reason: 'STT failed — sending original only' };
+      return { translated: false, reason: 'Transcription failed — sending original only' };
     }
 
     // Step 2: Translate text (local engine)
@@ -722,9 +722,9 @@ async function generateWaveformData(blob) {
 /**
  * Perform speech-to-text (stub — connects to local Whisper engine).
  */
-async function performSTT(audioBlob, language) {
+async function performTranscription(audioBlob, language) {
   // In production: send to local Whisper server or use Web Worker
-  log.entry('performSTT', { size: audioBlob.size, language });
+  log.entry('performTranscription', { size: audioBlob.size, language });
   return { text: null }; // Stub — implement with local Whisper
 }
 

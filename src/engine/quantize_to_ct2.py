@@ -11,13 +11,13 @@ from pathlib import Path
 
 # Models to quantize
 MODELS = [
-    ("models/windy-stt-nano", "models/windy-stt-nano-cpu"),
-    ("models/windy-stt-lite", "models/windy-stt-lite-cpu"),
-    ("models/windy-stt-core", "models/windy-stt-core-cpu"),
-    ("models/windy-stt-plus", "models/windy-stt-plus-cpu"),
-    ("models/windy-stt-pro", "models/windy-stt-pro-cpu"),
-    ("models/windy-stt-turbo", "models/windy-stt-turbo-cpu"),
-    ("models/windy-stt-edge", "models/windy-stt-edge-cpu"),
+    ("models/windy-nano", "models/windy-nano-ct2"),
+    ("models/windy-lite", "models/windy-lite-ct2"),
+    ("models/windy-core", "models/windy-core-ct2"),
+    ("models/windy-plus", "models/windy-plus-ct2"),
+    ("models/windy-pro-engine", "models/windy-pro-engine-ct2"),
+    ("models/windy-turbo", "models/windy-turbo-ct2"),
+    ("models/windy-edge", "models/windy-edge-ct2"),
 ]
 
 

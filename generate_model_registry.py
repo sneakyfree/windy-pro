@@ -23,176 +23,176 @@ def generate_registry():
     # STT models - GPU variants
     stt_gpu_models = [
         {
-            "id": "windy-stt-nano",
-            "name": "Windy STT Nano",
+            "id": "windy-nano",
+            "name": "Windy Nano",
             "category": "stt",
             "format": "gpu",
             "size_mb": None,  # Will be filled
             "languages": ["en"],
             "base_architecture": "whisper-tiny",
-            "huggingface": "WindyProLabs/windy-stt-nano",
+            "huggingface": "WindyLabs/windy-nano",
             "description": "Fastest STT model. Best for quick dictation on powerful hardware.",
-            "cpu_variant": "windy-stt-nano-cpu"
+            "cpu_variant": "windy-nano-ct2"
         },
         {
-            "id": "windy-stt-lite",
-            "name": "Windy STT Lite",
+            "id": "windy-lite",
+            "name": "Windy Lite",
             "category": "stt",
             "format": "gpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-small",
-            "huggingface": "WindyProLabs/windy-stt-lite",
+            "huggingface": "WindyLabs/windy-lite",
             "description": "Lightweight STT with improved accuracy. Balanced speed/quality.",
-            "cpu_variant": "windy-stt-lite-cpu"
+            "cpu_variant": "windy-lite-ct2"
         },
         {
-            "id": "windy-stt-core",
-            "name": "Windy STT Core",
+            "id": "windy-core",
+            "name": "Windy Core",
             "category": "stt",
             "format": "gpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-base",
-            "huggingface": "WindyProLabs/windy-stt-core",
+            "huggingface": "WindyLabs/windy-core",
             "description": "Core STT model. Recommended for most use cases.",
-            "cpu_variant": "windy-stt-core-cpu"
+            "cpu_variant": "windy-core-ct2"
         },
         {
-            "id": "windy-stt-edge",
-            "name": "Windy STT Edge",
+            "id": "windy-edge",
+            "name": "Windy Edge",
             "category": "stt",
             "format": "gpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-medium",
-            "huggingface": "WindyProLabs/windy-stt-edge",
+            "huggingface": "WindyLabs/windy-edge",
             "description": "High-accuracy STT. Best for professional transcription.",
-            "cpu_variant": "windy-stt-edge-cpu"
+            "cpu_variant": "windy-edge-ct2"
         },
         {
-            "id": "windy-stt-plus",
-            "name": "Windy STT Plus",
+            "id": "windy-plus",
+            "name": "Windy Plus",
             "category": "stt",
             "format": "gpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-large-v2",
-            "huggingface": "WindyProLabs/windy-stt-plus",
+            "huggingface": "WindyLabs/windy-plus",
             "description": "Premium STT with excellent accuracy. Production-grade.",
-            "cpu_variant": "windy-stt-plus-cpu"
+            "cpu_variant": "windy-plus-ct2"
         },
         {
-            "id": "windy-stt-turbo",
-            "name": "Windy STT Turbo",
+            "id": "windy-turbo",
+            "name": "Windy Turbo",
             "category": "stt",
             "format": "gpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-large-v3",
-            "huggingface": "WindyProLabs/windy-stt-turbo",
+            "huggingface": "WindyLabs/windy-turbo",
             "description": "Latest-gen STT. State-of-the-art accuracy and robustness.",
-            "cpu_variant": "windy-stt-turbo-cpu"
+            "cpu_variant": "windy-turbo-ct2"
         },
         {
-            "id": "windy-stt-pro",
-            "name": "Windy STT Pro",
+            "id": "windy-pro-engine",
+            "name": "Windy Pro Engine",
             "category": "stt",
             "format": "gpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-large-v3-turbo",
-            "huggingface": "WindyProLabs/windy-stt-pro",
+            "huggingface": "WindyLabs/windy-pro-engine",
             "description": "Ultra-fast large model. Maximum speed without sacrificing quality.",
-            "cpu_variant": "windy-stt-pro-cpu"
+            "cpu_variant": "windy-pro-engine-ct2"
         },
     ]
 
     # STT models - CPU variants
     stt_cpu_models = [
         {
-            "id": "windy-stt-nano-cpu",
-            "name": "Windy STT Nano (CPU)",
+            "id": "windy-nano-ct2",
+            "name": "Windy Nano (CPU)",
             "category": "stt",
             "format": "cpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-tiny",
-            "huggingface": "WindyProLabs/windy-stt-nano-cpu",
+            "huggingface": "WindyLabs/windy-nano-ct2",
             "description": "CPU-optimized Nano. Best for resource-constrained environments.",
-            "gpu_variant": "windy-stt-nano"
+            "gpu_variant": "windy-nano"
         },
         {
-            "id": "windy-stt-lite-cpu",
-            "name": "Windy STT Lite (CPU)",
+            "id": "windy-lite-ct2",
+            "name": "Windy Lite (CPU)",
             "category": "stt",
             "format": "cpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-small",
-            "huggingface": "WindyProLabs/windy-stt-lite-cpu",
+            "huggingface": "WindyLabs/windy-lite-ct2",
             "description": "CPU-optimized Lite. Good balance for CPU-only systems.",
-            "gpu_variant": "windy-stt-lite"
+            "gpu_variant": "windy-lite"
         },
         {
-            "id": "windy-stt-core-cpu",
-            "name": "Windy STT Core (CPU)",
+            "id": "windy-core-ct2",
+            "name": "Windy Core (CPU)",
             "category": "stt",
             "format": "cpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-base",
-            "huggingface": "WindyProLabs/windy-stt-core-cpu",
+            "huggingface": "WindyLabs/windy-core-ct2",
             "description": "CPU-optimized Core. Recommended for most CPU deployments.",
-            "gpu_variant": "windy-stt-core"
+            "gpu_variant": "windy-core"
         },
         {
-            "id": "windy-stt-edge-cpu",
-            "name": "Windy STT Edge (CPU)",
+            "id": "windy-edge-ct2",
+            "name": "Windy Edge (CPU)",
             "category": "stt",
             "format": "cpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-medium",
-            "huggingface": "WindyProLabs/windy-stt-edge-cpu",
+            "huggingface": "WindyLabs/windy-edge-ct2",
             "description": "CPU-optimized Edge. High accuracy on CPU hardware.",
-            "gpu_variant": "windy-stt-edge"
+            "gpu_variant": "windy-edge"
         },
         {
-            "id": "windy-stt-plus-cpu",
-            "name": "Windy STT Plus (CPU)",
+            "id": "windy-plus-ct2",
+            "name": "Windy Plus (CPU)",
             "category": "stt",
             "format": "cpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-large-v2",
-            "huggingface": "WindyProLabs/windy-stt-plus-cpu",
+            "huggingface": "WindyLabs/windy-plus-ct2",
             "description": "CPU-optimized Plus. Premium accuracy without GPU.",
-            "gpu_variant": "windy-stt-plus"
+            "gpu_variant": "windy-plus"
         },
         {
-            "id": "windy-stt-turbo-cpu",
-            "name": "Windy STT Turbo (CPU)",
+            "id": "windy-turbo-ct2",
+            "name": "Windy Turbo (CPU)",
             "category": "stt",
             "format": "cpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-large-v3",
-            "huggingface": "WindyProLabs/windy-stt-turbo-cpu",
+            "huggingface": "WindyLabs/windy-turbo-ct2",
             "description": "CPU-optimized Turbo. State-of-the-art accuracy on CPU.",
-            "gpu_variant": "windy-stt-turbo"
+            "gpu_variant": "windy-turbo"
         },
         {
-            "id": "windy-stt-pro-cpu",
-            "name": "Windy STT Pro (CPU)",
+            "id": "windy-pro-engine-ct2",
+            "name": "Windy Pro Engine (CPU)",
             "category": "stt",
             "format": "cpu",
             "size_mb": None,
             "languages": ["en"],
             "base_architecture": "whisper-large-v3-turbo",
-            "huggingface": "WindyProLabs/windy-stt-pro-cpu",
+            "huggingface": "WindyLabs/windy-pro-engine-ct2",
             "description": "CPU-optimized Pro. Maximum CPU performance.",
-            "gpu_variant": "windy-stt-pro"
+            "gpu_variant": "windy-pro-engine"
         },
     ]
 
@@ -206,7 +206,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en", "es", "fr", "de", "ru", "fi", "pt", "zh", "ja", "ko", "ar"],
             "base_architecture": "m2m100-418M",
-            "huggingface": "WindyProLabs/windy_translate_spark",
+            "huggingface": "WindyLabs/windy-translate-spark",
             "description": "Fast multilingual translation. 100+ languages. LoRA-enhanced for priority pairs."
         },
         {
@@ -217,7 +217,7 @@ def generate_registry():
             "size_mb": None,
             "languages": ["en", "es", "fr", "de", "ru", "fi", "pt", "zh", "ja", "ko", "ar"],
             "base_architecture": "m2m100-1.2B",
-            "huggingface": "WindyProLabs/windy_translate_standard",
+            "huggingface": "WindyLabs/windy-translate-standard",
             "description": "Standard multilingual translation. 100+ languages. Higher quality than Spark."
         },
     ]

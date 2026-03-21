@@ -59,7 +59,7 @@ export const TIER_FEATURES: Record<LicenseTier, TierFeatures> = {
         priceCents: 0,
     },
     pro: {
-        maxRecordingMinutes: 60,
+        maxRecordingMinutes: 30,
         maxDevices: 5,
         cloudSync: true,
         translation: false,

@@ -30,12 +30,12 @@ class WindyApp {
     this._engineModelMap = {
       'local': null, // auto-detect
       'windytune': 'small', // auto-pilot: starts with small, auto-adjusts
-      'windy-stt-nano': 'tiny', 'windy-stt-lite': 'small', 'windy-stt-core': 'base',
-      'windy-stt-edge': 'medium', 'windy-stt-plus': 'large-v2', 'windy-stt-turbo': 'large-v3',
-      'windy-stt-pro': 'large-v3-turbo',
-      'windy-stt-nano-cpu': 'tiny', 'windy-stt-lite-cpu': 'small', 'windy-stt-core-cpu': 'base',
-      'windy-stt-edge-cpu': 'medium', 'windy-stt-plus-cpu': 'large-v2', 'windy-stt-turbo-cpu': 'large-v3',
-      'windy-stt-pro-cpu': 'large-v3-turbo',
+      'windy-nano': 'tiny', 'windy-lite': 'small', 'windy-core': 'base',
+      'windy-edge': 'medium', 'windy-plus': 'large-v2', 'windy-turbo': 'large-v3',
+      'windy-pro-engine': 'large-v3-turbo',
+      'windy-nano-cpu': 'tiny', 'windy-lite-cpu': 'small', 'windy-core-cpu': 'base',
+      'windy-edge-cpu': 'medium', 'windy-plus-cpu': 'large-v2', 'windy-turbo-cpu': 'large-v3',
+      'windy-pro-engine-cpu': 'large-v3-turbo',
       'windy-translate-spark': null, 'windy-translate-standard': null
     };
 
@@ -141,9 +141,8 @@ class WindyApp {
       }
     }
 
-    // First-run wizard (v2 — 6-step onboarding)
-    const wizard = new SetupWizard(this);
-    wizard.show();  // Will no-op if already completed
+    // OLD in-app wizard DELETED 21Mar26 — installer-v2/screens/wizard.html is the ONLY wizard
+    // First-run onboarding is handled by installer-v2, launched from main.js line 4860
 
     // What's New popup (shows once per version)
     const changelog = new ChangelogPopup();
@@ -1205,8 +1204,8 @@ class WindyApp {
     // Engine-specific icons
     const engineIcons = {
       stream: '🎙️', cloud: '☁️🔒', smart: '🧠',
-      'windy-stt-nano': '⚡', 'windy-stt-lite': '⚡', 'windy-stt-core': '⚡', 'windy-stt-edge': '⚡', 'windy-stt-plus': '⚡', 'windy-stt-turbo': '⚡', 'windy-stt-pro': '⚡',
-      'windy-stt-nano-cpu': '🛡️', 'windy-stt-lite-cpu': '🛡️', 'windy-stt-core-cpu': '🛡️', 'windy-stt-edge-cpu': '🛡️', 'windy-stt-plus-cpu': '🛡️', 'windy-stt-turbo-cpu': '🛡️', 'windy-stt-pro-cpu': '🛡️',
+      'windy-nano': '⚡', 'windy-lite': '⚡', 'windy-core': '⚡', 'windy-edge': '⚡', 'windy-plus': '⚡', 'windy-turbo': '⚡', 'windy-pro-engine': '⚡',
+      'windy-nano-cpu': '🛡️', 'windy-lite-cpu': '🛡️', 'windy-core-cpu': '🛡️', 'windy-edge-cpu': '🛡️', 'windy-plus-cpu': '🛡️', 'windy-turbo-cpu': '🛡️', 'windy-pro-engine-cpu': '🛡️',
       'windy-translate-spark': '🌍', 'windy-translate-standard': '🌍'
     };
 
@@ -1226,7 +1225,7 @@ class WindyApp {
       return;
     }
 
-    // Custom named engine (windy-stt-pro, windy-stt-core-cpu, etc.) — ALWAYS show engine name, never raw model
+    // Custom named engine (windy-pro-engine, windy-core-cpu, etc.) — ALWAYS show engine name, never raw model
     if (isCustomEngine) {
       const icon = engineIcons[activeEngine] || '⚡';
       const engineModel = this._engineModelMap[activeEngine];
@@ -1290,8 +1289,8 @@ class WindyApp {
     const isCustomEngine = this._engineModelMap && activeEngine in this._engineModelMap && activeEngine !== 'local';
     const displayName = isCustomEngine ? activeEngine : msg.model;
     const engineIcons = {
-      'windy-stt-nano': '⚡', 'windy-stt-lite': '⚡', 'windy-stt-core': '⚡', 'windy-stt-edge': '⚡', 'windy-stt-plus': '⚡', 'windy-stt-turbo': '⚡', 'windy-stt-pro': '⚡',
-      'windy-stt-nano-cpu': '🛡️', 'windy-stt-lite-cpu': '🛡️', 'windy-stt-core-cpu': '🛡️', 'windy-stt-edge-cpu': '🛡️', 'windy-stt-plus-cpu': '🛡️', 'windy-stt-turbo-cpu': '🛡️', 'windy-stt-pro-cpu': '🛡️',
+      'windy-nano': '⚡', 'windy-lite': '⚡', 'windy-core': '⚡', 'windy-edge': '⚡', 'windy-plus': '⚡', 'windy-turbo': '⚡', 'windy-pro-engine': '⚡',
+      'windy-nano-cpu': '🛡️', 'windy-lite-cpu': '🛡️', 'windy-core-cpu': '🛡️', 'windy-edge-cpu': '🛡️', 'windy-plus-cpu': '🛡️', 'windy-turbo-cpu': '🛡️', 'windy-pro-engine-cpu': '🛡️',
       'windy-translate-spark': '🌍', 'windy-translate-standard': '🌍'
     };
     const engineIcon = engineIcons[activeEngine] || '🏠';
@@ -1339,12 +1338,12 @@ class WindyApp {
         if (recordingMode !== 'batch') {
           suggestions.push('Switch to Batch mode for best accuracy');
         }
-        const modelSizeMB = { 'large-v3': 2945, 'windy-stt-pro': 2945, 'turbo': 1544, 'windy-stt-turbo': 1544, 'medium': 1444, 'windy-stt-edge': 1444, 'small': 140, 'windy-stt-lite': 140, 'base': 462, 'windy-stt-core': 462, 'tiny': 73, 'windy-stt-nano': 73 };
+        const modelSizeMB = { 'large-v3': 2945, 'windy-pro-engine': 2945, 'turbo': 1544, 'windy-turbo': 1544, 'medium': 1444, 'windy-edge': 1444, 'small': 140, 'windy-lite': 140, 'base': 462, 'windy-core': 462, 'tiny': 73, 'windy-nano': 73 };
         const currentModelSize = modelSizeMB[msg.model] || 0;
         if (currentModelSize > 500) {
-          suggestions.push('Try Windy STT Core (462MB, balanced)');
+          suggestions.push('Try Windy Core (462MB, balanced)');
         } else if (currentModelSize > 150) {
-          suggestions.push('Try Windy STT Lite (140MB) for faster dictation');
+          suggestions.push('Try Windy Lite (140MB) for faster dictation');
         }
         const tip = suggestions.length > 0 ? ` 💡 ${suggestions[0]}` : '';
         this.showReconnectToast(`⚠️ ${displayName} is struggling.${tip}`);
@@ -2131,12 +2130,22 @@ class WindyApp {
             // Process locally via the Python WebSocket server (includes all named engines)
             result = await this._batchTranscribeLocal(audioBlob);
           } else if (engine === 'cloud') {
+            // Gate: Cloud Processing requires active subscription (not lifetime)
+            if (window.windyAPI?.getCurrentTier) {
+              const tierInfo = await window.windyAPI.getCurrentTier();
+              if (tierInfo?.billingType === 'lifetime') {
+                this.showReconnectToast('☁️ Cloud Processing requires an active subscription (Monthly or Annual). Lifetime plans include local engines only. Switch to a local engine in Settings.');
+                return;
+              }
+            }
             // Use WindyPro Cloud batch endpoint
             result = await this._batchTranscribeCloud(audioBlob);
           } else if (engine === 'groq') {
-            result = await this._transcribeWithApi('groq', localStorage.getItem('windy_groqApiKey'), audioBlob);
+            const groqKey = window.windyAPI ? await window.windyAPI.getApiKey('groqApiKey') : '';
+            result = await this._transcribeWithApi('groq', groqKey, audioBlob);
           } else if (engine === 'openai') {
-            result = await this._transcribeWithApi('openai', localStorage.getItem('windy_openaiApiKey'), audioBlob);
+            const openaiKey = window.windyAPI ? await window.windyAPI.getApiKey('openaiApiKey') : '';
+            result = await this._transcribeWithApi('openai', openaiKey, audioBlob);
           } else {
             // Unknown engine — default to local
             result = await this._batchTranscribeLocal(audioBlob);
@@ -2716,7 +2725,7 @@ class WindyApp {
   async startApiRecording(engine) {
     // Get API key
     const keyMap = { deepgram: 'deepgramApiKey', groq: 'groqApiKey', openai: 'openaiApiKey' };
-    const apiKey = localStorage.getItem('windy_' + keyMap[engine]) || '';
+    const apiKey = window.windyAPI ? await window.windyAPI.getApiKey(keyMap[engine]) : '';
     if (!apiKey) {
       this.showReconnectToast(`⚠️ No ${engine} API key configured. Open Settings to add one.`);
       return;

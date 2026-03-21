@@ -1,6 +1,6 @@
 [
   {
-    "model": "windy-stt-nano",
+    "model": "windy-nano",
     "type": "GPU STT",
     "test": "Transcription Quality",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",
@@ -13,7 +13,7 @@
     "notes": "Tested on CPU due to GPU memory constraints"
   },
   {
-    "model": "windy-stt-lite",
+    "model": "windy-lite",
     "type": "GPU STT",
     "test": "Transcription Quality",
     "ground_truth": "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS",

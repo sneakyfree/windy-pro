@@ -173,31 +173,31 @@ const MAX_PYTHON_RESTARTS = 3;
 // ═══ Model Download Manifest ═══
 const MODEL_MANIFEST = {
   models: {
-    // GPU STT models
-    'windy-stt-nano': { size: '73MB', bytes: 73 * 1024 * 1024, label: 'Windy STT Nano', desc: 'Fastest GPU, great for dictation' },
-    'windy-stt-lite': { size: '140MB', bytes: 140 * 1024 * 1024, label: 'Windy STT Lite', desc: 'Lightweight, balanced speed/quality' },
-    'windy-stt-core': { size: '462MB', bytes: 462 * 1024 * 1024, label: 'Windy STT Core', desc: 'Recommended for most use cases' },
-    'windy-stt-edge': { size: '1444MB', bytes: 1444 * 1024 * 1024, label: 'Windy STT Edge', desc: 'High-accuracy, professional grade' },
-    'windy-stt-plus': { size: '1458MB', bytes: 1458 * 1024 * 1024, label: 'Windy STT Plus', desc: 'Premium accuracy, production-grade' },
-    'windy-stt-turbo': { size: '1544MB', bytes: 1544 * 1024 * 1024, label: 'Windy STT Turbo', desc: 'Latest-gen, state-of-the-art' },
-    'windy-stt-pro': { size: '2945MB', bytes: 2945 * 1024 * 1024, label: 'Windy STT Pro', desc: 'Ultra-fast large model, maximum speed' },
-    // CPU STT models
-    'windy-stt-nano-cpu': { size: '406MB', bytes: 406 * 1024 * 1024, label: 'Windy STT Nano (CPU)', desc: 'CPU-optimized, resource-constrained' },
-    'windy-stt-lite-cpu': { size: '668MB', bytes: 668 * 1024 * 1024, label: 'Windy STT Lite (CPU)', desc: 'CPU-optimized, good balance' },
-    'windy-stt-core-cpu': { size: '1760MB', bytes: 1760 * 1024 * 1024, label: 'Windy STT Core (CPU)', desc: 'CPU-optimized, recommended for CPU' },
-    'windy-stt-edge-cpu': { size: '3824MB', bytes: 3824 * 1024 * 1024, label: 'Windy STT Edge (CPU)', desc: 'CPU-optimized, high accuracy' },
-    'windy-stt-plus-cpu': { size: '4872MB', bytes: 4872 * 1024 * 1024, label: 'Windy STT Plus (CPU)', desc: 'CPU-optimized, premium accuracy' },
-    'windy-stt-turbo-cpu': { size: '4200MB', bytes: 4200 * 1024 * 1024, label: 'Windy STT Turbo (CPU)', desc: 'CPU-optimized, state-of-the-art' },
-    'windy-stt-pro-cpu': { size: '9456MB', bytes: 9456 * 1024 * 1024, label: 'Windy STT Pro (CPU)', desc: 'CPU-optimized, maximum performance' },
+    // GPU voice models
+    'windy-nano': { size: '73MB', bytes: 73 * 1024 * 1024, label: 'Windy Nano', desc: 'Fastest GPU, great for dictation' },
+    'windy-lite': { size: '140MB', bytes: 140 * 1024 * 1024, label: 'Windy Lite', desc: 'Lightweight, balanced speed/quality' },
+    'windy-core': { size: '462MB', bytes: 462 * 1024 * 1024, label: 'Windy Core', desc: 'Recommended for most use cases' },
+    'windy-edge': { size: '1444MB', bytes: 1444 * 1024 * 1024, label: 'Windy Edge', desc: 'High-accuracy, professional grade' },
+    'windy-plus': { size: '1458MB', bytes: 1458 * 1024 * 1024, label: 'Windy Plus', desc: 'Premium accuracy, production-grade' },
+    'windy-turbo': { size: '1544MB', bytes: 1544 * 1024 * 1024, label: 'Windy Turbo', desc: 'Latest-gen, state-of-the-art' },
+    'windy-pro-engine': { size: '2945MB', bytes: 2945 * 1024 * 1024, label: 'Windy Pro Engine', desc: 'Ultra-fast large model, maximum speed' },
+    // CPU voice models
+    'windy-nano-cpu': { size: '406MB', bytes: 406 * 1024 * 1024, label: 'Windy Nano (CPU)', desc: 'CPU-optimized, resource-constrained' },
+    'windy-lite-cpu': { size: '668MB', bytes: 668 * 1024 * 1024, label: 'Windy Lite (CPU)', desc: 'CPU-optimized, good balance' },
+    'windy-core-cpu': { size: '1760MB', bytes: 1760 * 1024 * 1024, label: 'Windy Core (CPU)', desc: 'CPU-optimized, recommended for CPU' },
+    'windy-edge-cpu': { size: '3824MB', bytes: 3824 * 1024 * 1024, label: 'Windy Edge (CPU)', desc: 'CPU-optimized, high accuracy' },
+    'windy-plus-cpu': { size: '4872MB', bytes: 4872 * 1024 * 1024, label: 'Windy Plus (CPU)', desc: 'CPU-optimized, premium accuracy' },
+    'windy-turbo-cpu': { size: '4200MB', bytes: 4200 * 1024 * 1024, label: 'Windy Turbo (CPU)', desc: 'CPU-optimized, state-of-the-art' },
+    'windy-pro-engine-cpu': { size: '9456MB', bytes: 9456 * 1024 * 1024, label: 'Windy Pro Engine (CPU)', desc: 'CPU-optimized, maximum performance' },
     // Translation models
     'windy-translate-spark': { size: '929MB', bytes: 929 * 1024 * 1024, label: 'Windy Translate Spark', desc: 'Fast multilingual, 100+ languages' },
     'windy-translate-standard': { size: '2371MB', bytes: 2371 * 1024 * 1024, label: 'Windy Translate Standard', desc: 'Higher quality than Spark, 100+ languages' }
   },
   tierModels: {
-    free: ['windy-stt-nano', 'windy-stt-lite', 'windy-stt-core'],
-    pro: ['windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro', 'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu'],
-    translate: ['windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro', 'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu', 'windy-translate-spark'],
-    translate_pro: ['windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro', 'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu', 'windy-translate-spark', 'windy-translate-standard']
+    free: ['windy-nano', 'windy-lite', 'windy-core'],
+    pro: ['windy-nano', 'windy-lite', 'windy-core', 'windy-edge', 'windy-plus', 'windy-turbo', 'windy-pro-engine', 'windy-nano-cpu', 'windy-lite-cpu', 'windy-core-cpu', 'windy-edge-cpu', 'windy-plus-cpu', 'windy-turbo-cpu', 'windy-pro-engine-cpu'],
+    translate: ['windy-nano', 'windy-lite', 'windy-core', 'windy-edge', 'windy-plus', 'windy-turbo', 'windy-pro-engine', 'windy-nano-cpu', 'windy-lite-cpu', 'windy-core-cpu', 'windy-edge-cpu', 'windy-plus-cpu', 'windy-turbo-cpu', 'windy-pro-engine-cpu', 'windy-translate-spark'],
+    translate_pro: ['windy-nano', 'windy-lite', 'windy-core', 'windy-edge', 'windy-plus', 'windy-turbo', 'windy-pro-engine', 'windy-nano-cpu', 'windy-lite-cpu', 'windy-core-cpu', 'windy-edge-cpu', 'windy-plus-cpu', 'windy-turbo-cpu', 'windy-pro-engine-cpu', 'windy-translate-spark', 'windy-translate-standard']
   }
 };
 let activeModelDownload = null; // Track background download process
@@ -548,7 +548,7 @@ function createWindow() {
           "script-src 'self'; " +
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
           "font-src 'self' https://fonts.gstatic.com; " +
-          "connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.deepgram.com https://api.groq.com https://api.openai.com wss://api.deepgram.com https://api.audd.io; " +
+          "connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk; " +
           "img-src 'self' data:; " +
           "media-src 'self' blob: data:;"
         ]
@@ -1654,13 +1654,59 @@ function _updateTrayUnread(count) {
   } catch (e) { /* ignore badge errors */ }
 }
 
+// ═══ License Token Storage (safeStorage) ═══
+
+/**
+ * Store a license token encrypted via OS keychain (safeStorage).
+ * @param {string} token — plaintext license token
+ */
+function storeLicenseToken(token) {
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = safeStorage.encryptString(token);
+    store.set('license.tokenEncrypted', encrypted.toString('base64'));
+    console.info('[License] Token stored in safeStorage');
+  } else {
+    // Fallback: store plaintext (less secure — logged as warning)
+    store.set('license.tokenPlaintext', token);
+    console.warn('[License] safeStorage unavailable — token stored in plaintext');
+  }
+}
+
+/**
+ * Retrieve the license token from safeStorage.
+ * @returns {string} plaintext license token, or 'free' if none stored
+ */
+function retrieveLicenseToken() {
+  const encB64 = store.get('license.tokenEncrypted', '');
+  if (encB64 && safeStorage.isEncryptionAvailable()) {
+    try {
+      return safeStorage.decryptString(Buffer.from(encB64, 'base64'));
+    } catch (e) {
+      console.error('[License] Failed to decrypt token from safeStorage:', e.message);
+    }
+  }
+  // Fallback chain
+  return store.get('license.tokenPlaintext', '')
+    || store.get('license.stripeSessionId', '')
+    || store.get('license.email', '')
+    || 'free';
+}
+
+ipcMain.handle('store-license-token', async (event, token) => {
+  if (typeof token !== 'string' || !token) return { ok: false, error: 'Invalid token' };
+  storeLicenseToken(token);
+  // Reset PairDownloadManager so it picks up the new token
+  _pairDownloadManager = null;
+  return { ok: true };
+});
+
 // ═══ Pair Download Manager IPC (L1 + L6) ═══
 let _pairDownloadManager = null;
 function getPairDownloadManager() {
   if (!_pairDownloadManager) {
     const { PairDownloadManager } = require('./pair-download-manager');
     const pairsDir = path.join(app.getPath('userData'), 'translation-pairs');
-    const licenseToken = store.get('license.stripeSessionId', '') || store.get('license.email', '') || 'free';
+    const licenseToken = retrieveLicenseToken();
     _pairDownloadManager = new PairDownloadManager(pairsDir, licenseToken);
 
     // Forward progress events to all windows
@@ -1672,6 +1718,108 @@ function getPairDownloadManager() {
     });
   }
   return _pairDownloadManager;
+}
+
+// ═══ Model Migration (unencrypted → WMOD) ═══
+
+/**
+ * Migrate unencrypted or legacy-encrypted models to WMOD format.
+ * - Detects missing WMOD magic bytes → re-encrypts
+ * - Handles legacy PBKDF2+meta.json → decrypt with old key, re-encrypt with HKDF
+ * - If no valid license exists, leaves files as-is until authentication
+ * Runs once on startup; idempotent.
+ */
+async function migrateUnencryptedModels() {
+  const { PairDownloadManager } = require('./pair-download-manager');
+  const pairsDir = path.join(app.getPath('userData'), 'translation-pairs');
+  const licenseToken = retrieveLicenseToken();
+
+  if (licenseToken === 'free' || !licenseToken) {
+    console.info('[Migration] No valid license — skipping model migration until user authenticates');
+    return;
+  }
+
+  try {
+    const entries = fs.readdirSync(pairsDir, { withFileTypes: true }).filter(e => e.isDirectory());
+    if (entries.length === 0) return;
+
+    let migratedCount = 0;
+    const total = entries.length;
+    safeSend('migration-progress', { status: 'starting', total });
+
+    for (const entry of entries) {
+      const pairDir = path.join(pairsDir, entry.name);
+      const encPath = path.join(pairDir, 'model.enc');
+      const metaPath = path.join(pairDir, 'meta.json');
+
+      if (!fs.existsSync(encPath)) continue;
+
+      // Read first 4 bytes to check for WMOD magic
+      const fd = fs.openSync(encPath, 'r');
+      const magicBuf = Buffer.alloc(4);
+      fs.readSync(fd, magicBuf, 0, 4, 0);
+      fs.closeSync(fd);
+
+      if (PairDownloadManager.hasWmodHeader(magicBuf)) {
+        continue; // Already WMOD format
+      }
+
+      // Need migration — try to decrypt with legacy scheme
+      console.info(`[Migration] Migrating ${entry.name} from legacy format to WMOD`);
+
+      try {
+        let plaintext;
+
+        if (fs.existsSync(metaPath)) {
+          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+
+          if (meta.iv && meta.salt) {
+            // Legacy PBKDF2 encrypted format
+            const iv = Buffer.from(meta.iv, 'hex');
+            const salt = Buffer.from(meta.salt, 'hex');
+            const legacyDeviceId = os.hostname() + '-' + os.platform();
+            const encData = fs.readFileSync(encPath);
+            plaintext = PairDownloadManager.decryptLegacy(encData, salt, iv, licenseToken, legacyDeviceId);
+          } else {
+            // meta.json exists but no iv/salt → raw unencrypted file
+            plaintext = fs.readFileSync(encPath);
+          }
+        } else {
+          // No meta.json → raw unencrypted .bin file
+          plaintext = fs.readFileSync(encPath);
+        }
+
+        // Re-encrypt with new HKDF scheme → WMOD format
+        const mgr = new PairDownloadManager(pairsDir, licenseToken);
+        const wmodBuffer = mgr._encrypt(plaintext);
+        fs.writeFileSync(encPath, wmodBuffer);
+
+        // Update meta.json — remove legacy iv/salt, add format marker
+        if (fs.existsSync(metaPath)) {
+          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+          delete meta.iv;
+          delete meta.salt;
+          meta.format = 'wmod-v1';
+          meta.migratedAt = new Date().toISOString();
+          fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+        }
+
+        migratedCount++;
+        safeSend('migration-progress', { status: 'migrating', current: migratedCount, total, pairId: entry.name });
+        console.info(`[Migration] ✅ ${entry.name} migrated to WMOD`);
+      } catch (err) {
+        console.error(`[Migration] ❌ Failed to migrate ${entry.name}:`, err.message);
+        // Don't delete — leave the file for manual recovery
+      }
+    }
+
+    if (migratedCount > 0) {
+      safeSend('migration-progress', { status: 'complete', migrated: migratedCount });
+      console.info(`[Migration] Completed: ${migratedCount}/${total} models migrated to WMOD`);
+    }
+  } catch (err) {
+    console.error('[Migration] Migration scan error:', err.message);
+  }
 }
 
 ipcMain.handle('pair-catalog', async () => {
@@ -1779,35 +1927,35 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     'cloud': { name: 'Windy Cloud', size: '', specialty: 'Cloud-based transcription' },
     'local': { name: 'Local', size: '', specialty: '' },
 
-    // Real GPU STT models from model_registry.json
-    'windy-stt-nano': { name: 'Windy STT Nano', size: '73 MB', specialty: 'Fastest STT model. Best for quick dictation on powerful hardware.' },
-    'windy-stt-lite': { name: 'Windy STT Lite', size: '140 MB', specialty: 'Lightweight STT with improved accuracy. Balanced speed/quality.' },
-    'windy-stt-core': { name: 'Windy STT Core', size: '462 MB', specialty: 'Core STT model. Recommended for most use cases.' },
-    'windy-stt-edge': { name: 'Windy STT Edge', size: '1444 MB', specialty: 'High-accuracy STT. Best for professional transcription.' },
-    'windy-stt-plus': { name: 'Windy STT Plus', size: '1458 MB', specialty: 'Premium STT with excellent accuracy. Production-grade.' },
-    'windy-stt-turbo': { name: 'Windy STT Turbo', size: '1544 MB', specialty: 'Latest-gen STT. State-of-the-art accuracy and robustness.' },
-    'windy-stt-pro': { name: 'Windy STT Pro', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
+    // Real GPU voice models from model_registry.json
+    'windy-nano': { name: 'Windy Nano', size: '73 MB', specialty: 'Fastest engine. Best for quick dictation on powerful hardware.' },
+    'windy-lite': { name: 'Windy Lite', size: '140 MB', specialty: 'Lightweight engine with improved accuracy. Balanced speed/quality.' },
+    'windy-core': { name: 'Windy Core', size: '462 MB', specialty: 'Core engine. Recommended for most use cases.' },
+    'windy-edge': { name: 'Windy Edge', size: '1444 MB', specialty: 'High-accuracy engine. Best for professional transcription.' },
+    'windy-plus': { name: 'Windy Plus', size: '1458 MB', specialty: 'Premium STT with excellent accuracy. Production-grade.' },
+    'windy-turbo': { name: 'Windy Turbo', size: '1544 MB', specialty: 'Latest-gen engine. State-of-the-art accuracy and robustness.' },
+    'windy-pro-engine': { name: 'Windy Pro Engine', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
 
-    // Real CPU STT models from model_registry.json
-    'windy-stt-nano-cpu': { name: 'Windy STT Nano (CPU)', size: '406 MB', specialty: 'CPU-optimized Nano. Best for resource-constrained environments.' },
-    'windy-stt-lite-cpu': { name: 'Windy STT Lite (CPU)', size: '668 MB', specialty: 'CPU-optimized Lite. Good balance for CPU-only systems.' },
-    'windy-stt-core-cpu': { name: 'Windy STT Core (CPU)', size: '1760 MB', specialty: 'CPU-optimized Core. Recommended for most CPU deployments.' },
-    'windy-stt-edge-cpu': { name: 'Windy STT Edge (CPU)', size: '3824 MB', specialty: 'CPU-optimized Edge. High accuracy on CPU hardware.' },
-    'windy-stt-plus-cpu': { name: 'Windy STT Plus (CPU)', size: '4872 MB', specialty: 'CPU-optimized Plus. Premium accuracy without GPU.' },
-    'windy-stt-turbo-cpu': { name: 'Windy STT Turbo (CPU)', size: '4200 MB', specialty: 'CPU-optimized Turbo. State-of-the-art accuracy on CPU.' },
-    'windy-stt-pro-cpu': { name: 'Windy STT Pro (CPU)', size: '9456 MB', specialty: 'CPU-optimized Pro. Maximum CPU performance.' },
+    // Real CPU voice models from model_registry.json
+    'windy-nano-cpu': { name: 'Windy Nano (CPU)', size: '406 MB', specialty: 'CPU-optimized Nano. Best for resource-constrained environments.' },
+    'windy-lite-cpu': { name: 'Windy Lite (CPU)', size: '668 MB', specialty: 'CPU-optimized Lite. Good balance for CPU-only systems.' },
+    'windy-core-cpu': { name: 'Windy Core (CPU)', size: '1760 MB', specialty: 'CPU-optimized Core. Recommended for most CPU deployments.' },
+    'windy-edge-cpu': { name: 'Windy Edge (CPU)', size: '3824 MB', specialty: 'CPU-optimized Edge. High accuracy on CPU hardware.' },
+    'windy-plus-cpu': { name: 'Windy Plus (CPU)', size: '4872 MB', specialty: 'CPU-optimized Plus. Premium accuracy without GPU.' },
+    'windy-turbo-cpu': { name: 'Windy Turbo (CPU)', size: '4200 MB', specialty: 'CPU-optimized Turbo. State-of-the-art accuracy on CPU.' },
+    'windy-pro-engine-cpu': { name: 'Windy Pro Engine (CPU)', size: '9456 MB', specialty: 'CPU-optimized Pro. Maximum CPU performance.' },
 
     // Real Translation models from model_registry.json
     'windy-translate-spark': { name: 'Windy Translate Spark', size: '929 MB', specialty: 'Fast multilingual translation. 100+ languages. LoRA-enhanced for priority pairs.' },
     'windy-translate-standard': { name: 'Windy Translate Standard', size: '2371 MB', specialty: 'Standard multilingual translation. 100+ languages. Higher quality than Spark.' },
 
     // Legacy model names → Real Windy model equivalents (based on base_architecture)
-    'tiny': { name: 'Windy STT Nano', size: '73 MB', specialty: 'Fastest STT model. Best for quick dictation on powerful hardware.' },
-    'base': { name: 'Windy STT Core', size: '462 MB', specialty: 'Core STT model. Recommended for most use cases.' },
-    'small': { name: 'Windy STT Lite', size: '140 MB', specialty: 'Lightweight STT with improved accuracy. Balanced speed/quality.' },
-    'medium': { name: 'Windy STT Edge', size: '1444 MB', specialty: 'High-accuracy STT. Best for professional transcription.' },
-    'large-v3': { name: 'Windy STT Pro', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
-    'turbo': { name: 'Windy STT Turbo', size: '1544 MB', specialty: 'Latest-gen STT. State-of-the-art accuracy and robustness.' },
+    'tiny': { name: 'Windy Nano', size: '73 MB', specialty: 'Fastest engine. Best for quick dictation on powerful hardware.' },
+    'base': { name: 'Windy Core', size: '462 MB', specialty: 'Core engine. Recommended for most use cases.' },
+    'small': { name: 'Windy Lite', size: '140 MB', specialty: 'Lightweight engine with improved accuracy. Balanced speed/quality.' },
+    'medium': { name: 'Windy Edge', size: '1444 MB', specialty: 'High-accuracy engine. Best for professional transcription.' },
+    'large-v3': { name: 'Windy Pro Engine', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
+    'turbo': { name: 'Windy Turbo', size: '1544 MB', specialty: 'Latest-gen engine. State-of-the-art accuracy and robustness.' },
   };
   const mi = MODEL_INFO[engineId] || { name: engineId, size: '', specialty: '' };
   const modelInfo = { model: mi.name, size: mi.size, windyTune, engineId, specialty: mi.specialty };
@@ -2256,6 +2404,48 @@ ipcMain.handle('get-settings', () => {
     ...store.get('engine', {}),
     hotkeys: store.get('hotkeys')
   };
+});
+
+// SEC-P0: Encrypted API key storage via safeStorage (replaces plaintext localStorage)
+ipcMain.handle('set-api-key', (event, keyName, keyValue) => {
+  const allowedKeys = ['groqApiKey', 'openaiApiKey', 'deepgramApiKey'];
+  if (!allowedKeys.includes(keyName)) return { ok: false, error: 'Unknown key name' };
+  if (!keyValue || typeof keyValue !== 'string') {
+    // Clear the key
+    store.delete(`engine.${keyName}`);
+    store.delete(`engine.${keyName}Encrypted`);
+    return { ok: true };
+  }
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(keyValue.trim());
+      store.set(`engine.${keyName}Encrypted`, encrypted.toString('base64'));
+      store.delete(`engine.${keyName}`); // Remove any old plaintext key
+    } else {
+      // Fallback: store in electron-store (still better than renderer localStorage)
+      store.set(`engine.${keyName}`, keyValue.trim());
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-api-key', (event, keyName) => {
+  const allowedKeys = ['groqApiKey', 'openaiApiKey', 'deepgramApiKey'];
+  if (!allowedKeys.includes(keyName)) return '';
+  try {
+    // Try encrypted first
+    const encB64 = store.get(`engine.${keyName}Encrypted`, '');
+    if (encB64 && safeStorage.isEncryptionAvailable()) {
+      return safeStorage.decryptString(Buffer.from(encB64, 'base64'));
+    }
+    // Fallback to plaintext store or env vars
+    const envMap = { groqApiKey: 'GROQ_API_KEY', openaiApiKey: 'OPENAI_API_KEY', deepgramApiKey: 'DEEPGRAM_API_KEY' };
+    return store.get(`engine.${keyName}`, '') || process.env[envMap[keyName]] || '';
+  } catch (err) {
+    return '';
+  }
 });
 
 ipcMain.handle('choose-archive-folder', async () => {
@@ -3281,20 +3471,20 @@ ipcMain.handle('detect-hardware', async () => {
 
   // Engine recommendation
   if (result.gpu && result.gpu.vramMB >= 6000) {
-    result.recommendedEngine = 'windy-stt-pro';
-    result.recommendation = `Your ${result.gpu.name} (${Math.round(result.gpu.vramMB / 1024)}GB VRAM) can run the best model. We recommend Windy STT Pro for maximum accuracy.`;
+    result.recommendedEngine = 'windy-pro-engine';
+    result.recommendation = `Your ${result.gpu.name} (${Math.round(result.gpu.vramMB / 1024)}GB VRAM) can run the best model. We recommend Windy Pro Engine for maximum accuracy.`;
   } else if (result.gpu && result.gpu.vramMB >= 2000) {
-    result.recommendedEngine = 'windy-stt-core';
-    result.recommendation = `Your ${result.gpu.name} has ${Math.round(result.gpu.vramMB / 1024)}GB VRAM. We recommend Windy STT Core for a great balance of speed and quality.`;
+    result.recommendedEngine = 'windy-core';
+    result.recommendation = `Your ${result.gpu.name} has ${Math.round(result.gpu.vramMB / 1024)}GB VRAM. We recommend Windy Core for a great balance of speed and quality.`;
   } else if (result.totalRAM >= 16) {
-    result.recommendedEngine = 'windy-stt-edge-cpu';
-    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy STT Edge (CPU) — high accuracy on CPU, no GPU needed.`;
+    result.recommendedEngine = 'windy-edge-cpu';
+    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy Edge (CPU) — high accuracy on CPU, no GPU needed.`;
   } else if (result.totalRAM >= 8) {
-    result.recommendedEngine = 'windy-stt-core-cpu';
-    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy STT Core (CPU) — great balance of speed and quality for your hardware.`;
+    result.recommendedEngine = 'windy-core-cpu';
+    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy Core (CPU) — great balance of speed and quality for your hardware.`;
   } else {
-    result.recommendedEngine = 'windy-stt-nano-cpu';
-    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy STT Nano (CPU) — ultra-light, runs great on any hardware.`;
+    result.recommendedEngine = 'windy-nano-cpu';
+    result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy Nano (CPU) — ultra-light, runs great on any hardware.`;
   }
 
   return result;
@@ -3775,7 +3965,10 @@ ipcMain.handle('check-payment-status', async (event, sessionId) => {
 ipcMain.handle('get-current-tier', async () => {
   const license = store.get('license') || { tier: 'free' };
   const limits = getTierLimits(license.tier);
-  return { tier: license.tier, limits, license };
+  // Include billingType for cloud processing gating (stored as billingMode from checkout)
+  const billingType = license.billingMode || store.get('license.billingType') || null;
+  const cloudSttEnabled = billingType !== 'lifetime' && license.tier !== 'free';
+  return { tier: license.tier, billingType, cloudSttEnabled, limits, license };
 });
 
 ipcMain.handle('get-stripe-config', async () => {
@@ -3938,6 +4131,12 @@ ipcMain.handle('check-model-status', async () => {
 /**
  * Download a specific model by spawning a Python subprocess
  * Returns a promise that resolves when download completes
+ *
+ * TODO [L4-P3 — Model Watermarking]: When the server-side LSB fingerprinting
+ * pipeline is built, embed a per-user fingerprint into model weights before
+ * upload to CDN. This will be platform-agnostic and happen at scale.
+ * The desktop client does NOT need to watermark — it just downloads pre-
+ * fingerprinted models. See MODEL_PROTECTION_SPEC.md Layer 4 for details.
  */
 function downloadModel(modelName) {
   return new Promise((resolve, reject) => {
@@ -3949,9 +4148,9 @@ function downloadModel(modelName) {
     // Determine HuggingFace repo name (translation models use underscores)
     let repoName = modelName;
     if (modelName === 'windy-translate-spark') {
-      repoName = 'windy_translate_spark';
+      repoName = 'windy-translate-spark';
     } else if (modelName === 'windy-translate-standard') {
-      repoName = 'windy_translate_standard';
+      repoName = 'windy-translate-standard';
     }
 
     const localDir = path.join(os.homedir(), '.windy-pro', 'models', modelName);
@@ -3965,7 +4164,7 @@ try:
     print("LOADING", flush=True)
     local_dir = "${localDir}"
     os.makedirs(local_dir, exist_ok=True)
-    snapshot_download("WindyProLabs/${repoName}", local_dir=local_dir)
+    snapshot_download("WindyLabs/${repoName}", local_dir=local_dir)
     print("DONE", flush=True)
 except Exception as e:
     print(f"ERROR {e}", flush=True)
@@ -4273,6 +4472,16 @@ ipcMain.handle('translate-text', async (event, text, sourceLang, targetLang) => 
 // ═══ Offline Translation via Local Pair Model ═══
 ipcMain.handle('translate-offline', async (event, text, sourceLang, targetLang) => {
   if (!text || !targetLang) return { ok: false, error: 'Missing text or target language' };
+
+  // Check if models are locked (grace period expired or license revoked)
+  if (store.get('license.modelsLocked', false)) {
+    return {
+      ok: false,
+      error: 'Models are locked. Please connect to the internet to verify your Windy Word license.',
+      modelsLocked: true
+    };
+  }
+
   try {
     const mgr = getPairDownloadManager();
     const pairId = `${sourceLang}-${targetLang}`;
@@ -4714,12 +4923,53 @@ app.whenReady().then(async () => {
   });
 
   // ═══ Deferred startup tasks (non-critical — runs 3s after window appears) ═══
-  // This keeps the window snappy: archive cleanup, license validation, and update
-  // checks all involve disk I/O or network that doesn't need to block first paint.
+  // This keeps the window snappy: archive cleanup, license validation, model
+  // migration, heartbeat, and update checks all run after first paint.
   let updaterInstance = null;
   setTimeout(() => {
     // Validate license (non-blocking)
     validateLicense().catch(e => console.error('[License] Validation error:', e.message));
+
+    // Migrate unencrypted/legacy models to WMOD format (one-time, idempotent)
+    migrateUnencryptedModels().catch(e => console.error('[Migration] Error:', e.message));
+
+    // Start license heartbeat service
+    try {
+      const { HeartbeatService } = require('./heartbeat-service');
+      const heartbeat = new HeartbeatService({
+        store,
+        safeStorage,
+        retrieveLicenseToken,
+        getDeviceFingerprint: () => getPairDownloadManager().getDeviceFingerprintHex(),
+        appVersion: app.getVersion(),
+        onLicenseLocked: () => {
+          store.set('license.modelsLocked', true);
+          safeSend('license-locked', { reason: 'grace_expired' });
+          console.warn('[Heartbeat] Models locked — grace period expired');
+        },
+        onLicenseRestored: (tier) => {
+          store.set('license.modelsLocked', false);
+          store.set('license.tier', tier);
+          // Reset download manager to pick up fresh key
+          _pairDownloadManager = null;
+          safeSend('license-restored', { tier });
+          console.info('[Heartbeat] License restored — tier:', tier);
+        },
+        onLicenseRevoked: () => {
+          store.set('license.modelsLocked', true);
+          store.set('license.tier', 'free');
+          // Delete all model files
+          const pairsDir = path.join(app.getPath('userData'), 'translation-pairs');
+          fsp.rm(pairsDir, { recursive: true, force: true }).catch(() => {});
+          _pairDownloadManager = null;
+          safeSend('license-revoked', { reason: 'revoked' });
+          console.warn('[Heartbeat] License revoked — all models deleted');
+        }
+      });
+      heartbeat.start();
+    } catch (e) {
+      console.error('[Main] Heartbeat service skipped:', e.message);
+    }
 
     // Auto-cleanup old archive media files (keeps transcripts forever)
     autoCleanupArchive();

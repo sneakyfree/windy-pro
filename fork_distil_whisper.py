@@ -23,19 +23,19 @@ MODELS_CONFIG = [
     {
         "name": "distil-small.en",
         "hf_model": "distil-whisper/distil-small.en",
-        "output_dir": "models/windy-stt-distil-small",
+        "output_dir": "models/windy-distil-small",
         "expected_size_mb": 166,
     },
     {
         "name": "distil-medium.en",
         "hf_model": "distil-whisper/distil-medium.en",
-        "output_dir": "models/windy-stt-distil-medium",
+        "output_dir": "models/windy-distil-medium",
         "expected_size_mb": 488,
     },
     {
         "name": "distil-large-v3",
         "hf_model": "distil-whisper/distil-large-v3",
-        "output_dir": "models/windy-stt-distil-large",
+        "output_dir": "models/windy-distil-large",
         "expected_size_mb": 756,
     },
 ]
