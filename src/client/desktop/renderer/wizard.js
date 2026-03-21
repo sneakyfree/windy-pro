@@ -164,29 +164,28 @@ class SetupWizard {
           <!-- Step 5: Processing Mode (paid plans only) -->
           <div class="wizard-step" id="wizardStep5" style="display:none">
             <div class="wizard-emoji">🌪️</div>
-            <h2 class="wizard-title">How Should WindyTune Work?</h2>
-            <p class="wizard-desc">Your subscription includes both local and cloud-powered transcription. How do you want WindyTune to handle it?</p>
+            <h2 class="wizard-title">What matters most to you?</h2>
+            <p class="wizard-desc">This helps WindyTune optimize your experience. You can always change it later.</p>
             <div class="wiz-mode-cards" id="wizModeCards">
-              <div class="wiz-mode-card selected" data-mode="privacy" style="background:#1a2e1a;border:2px solid #22C55E;border-radius:12px;padding:16px;margin:8px 0;cursor:pointer;transition:all 0.2s;">
+              <div class="wiz-mode-card" data-mode="privacy" style="background:#1a1a2e;border:2px solid #333;border-radius:12px;padding:16px;margin:8px 0;cursor:pointer;transition:all 0.2s;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                  <span style="font-size:20px;">🏠</span>
-                  <span style="font-size:15px;font-weight:700;color:#22C55E;">Privacy Mode</span>
-                  <span style="font-size:10px;background:#22C55E20;color:#22C55E;padding:2px 8px;border-radius:8px;font-weight:600;">DEFAULT</span>
+                  <span style="font-size:22px;">🔒</span>
+                  <span style="font-size:15px;font-weight:700;color:#22C55E;">"I value privacy above all else"</span>
                 </div>
-                <p style="font-size:12px;color:#9CA3AF;margin:0;line-height:1.5;">Always uses local models. Your voice never leaves this device. Best for sensitive work, offline use, or maximum privacy. If your device struggles, WindyTune will suggest options — but never switches without asking.</p>
+                <p style="font-size:12px;color:#9CA3AF;margin:0;line-height:1.5;">Everything stays on your device, always. WindyTune only uses local models — your voice never leaves this machine. If your device ever struggles, we'll let you know your options, but we'll never switch without asking.</p>
               </div>
               <div class="wiz-mode-card" data-mode="bestquality" style="background:#1a1a2e;border:2px solid #333;border-radius:12px;padding:16px;margin:8px 0;cursor:pointer;transition:all 0.2s;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                  <span style="font-size:20px;">⚡</span>
-                  <span style="font-size:15px;font-weight:700;color:#60A5FA;">Best Quality Mode</span>
+                  <span style="font-size:22px;">✨</span>
+                  <span style="font-size:15px;font-weight:700;color:#60A5FA;">"I just want it to work perfectly"</span>
                 </div>
-                <p style="font-size:12px;color:#9CA3AF;margin:0;line-height:1.5;">WindyTune automatically picks the best option — cloud when connected for maximum speed and accuracy, local when offline. Your data is always encrypted end-to-end. Best for people who just want it to work perfectly.</p>
+                <p style="font-size:12px;color:#9CA3AF;margin:0;line-height:1.5;">WindyTune handles everything. Uses cloud for speed when you're connected, switches to local seamlessly when you're offline. Always encrypted end-to-end. You never have to think about it — it just works.</p>
               </div>
             </div>
             <p style="font-size:11px;color:#6B7280;text-align:center;margin-top:8px;">You can change this anytime in Settings → Voice Engine.</p>
             <div class="wizard-nav">
               <button class="wizard-btn secondary" data-action="back">← Back</button>
-              <button class="wizard-btn primary" data-action="next">Next →</button>
+              <button class="wizard-btn primary" data-action="next" id="wizModeNext" disabled style="opacity:0.5;">Next →</button>
             </div>
           </div>
 
@@ -569,9 +568,9 @@ class SetupWizard {
   }
 
   _initProcessingModeStep() {
-    // Add click handlers for mode cards
     const cards = this.overlay.querySelectorAll('.wiz-mode-card');
-    this.choices.processingMode = 'privacy'; // default
+    const nextBtn = this.overlay.querySelector('#wizModeNext');
+    this.choices.processingMode = null; // no default — force a choice
     cards.forEach(card => {
       card.addEventListener('click', () => {
         cards.forEach(c => {
@@ -588,6 +587,11 @@ class SetupWizard {
         } else {
           card.style.borderColor = '#60A5FA';
           card.style.background = '#1a1a3e';
+        }
+        // Enable Next button once they've chosen
+        if (nextBtn) {
+          nextBtn.disabled = false;
+          nextBtn.style.opacity = '1';
         }
       });
     });
