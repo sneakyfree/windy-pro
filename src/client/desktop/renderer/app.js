@@ -141,9 +141,8 @@ class WindyApp {
       }
     }
 
-    // First-run wizard (v2 — 6-step onboarding)
-    const wizard = new SetupWizard(this);
-    wizard.show();  // Will no-op if already completed
+    // OLD in-app wizard DELETED 21Mar26 — installer-v2/screens/wizard.html is the ONLY wizard
+    // First-run onboarding is handled by installer-v2, launched from main.js line 4860
 
     // What's New popup (shows once per version)
     const changelog = new ChangelogPopup();
