@@ -22,7 +22,7 @@ class UpgradePanel {
                 name: 'Free',
                 price: '$0',
                 period: 'forever',
-                features: ['English only', 'Tiny & Base engines', '5-min recordings', 'Local transcription', '1 offline translation engine'],
+                features: ['99 languages (auto-detect)', 'Tiny & Base engines', '5-min recordings', 'Local transcription', '500 MB WindyCloud storage'],
                 color: '#6B7280',
                 icon: '🌱'
             },
@@ -34,7 +34,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T60GeBXIOBasDQi4aitcq8O',
                 annualPriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg',
                 lifetimePriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg_life',
-                features: ['All 15 engines', '99 languages', '30-min recordings', 'Batch mode', 'LLM polish', '5 offline translation engines'],
+                features: ['All 15 engines', '99 languages', '30-min recordings', 'Cloud STT', 'Batch mode', 'LLM polish', '5 GB WindyCloud storage'],
                 color: '#22C55E',
                 icon: '⚡'
             },
@@ -46,7 +46,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T5oZJBXIOBasDQijBW23Gow',
                 annualPriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7',
                 lifetimePriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7_life',
-                features: ['Everything in Pro', '30-min recordings', 'Real-time translation (5 pairs)', 'Conversation mode', '25 offline translation engines'],
+                features: ['Everything in Pro', 'Real-time translation (5 pairs)', 'Conversation mode', '25 offline translation engines', '10 GB WindyCloud storage'],
                 color: '#3B82F6',
                 icon: '🚀',
                 recommended: true
@@ -59,7 +59,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T60H8BXIOBasDQiy5eorTWR',
                 annualPriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG',
                 lifetimePriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG_life',
-                features: ['Everything in Ultra', '60-min recordings', 'Offline translation', '99 language pairs', 'Text-to-speech', 'Medical/legal glossaries', '100 offline translation engines'],
+                features: ['Everything in Ultra', '60-min recordings', 'Offline translation', '99 language pairs', 'Text-to-speech', 'Medical/legal glossaries', '100 offline engines', '25 GB WindyCloud storage'],
                 color: '#8B5CF6',
                 icon: '👑'
             }

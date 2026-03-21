@@ -110,8 +110,8 @@ export default function Landing() {
                             <div className="stat-label">Latency</div>
                         </div>
                         <div className="stat">
-                            <div className="stat-value">100%</div>
-                            <div className="stat-label">Private</div>
+                            <div className="stat-value">99</div>
+                            <div className="stat-label">Languages</div>
                         </div>
                     </div>
                 </div>
@@ -219,7 +219,7 @@ export default function Landing() {
                         <div className="feature-card feature-card--trust">
                             <div className="feature-icon"><USFlag size={24} /></div>
                             <h3>US-Based & Privacy-First</h3>
-                            <p>Built in New York, hosted on US infrastructure, subject to US privacy law. Your recordings are processed locally on your device and never sent to external servers.</p>
+                            <p>Built in New York, hosted on US infrastructure, subject to US privacy law. Your recordings are processed locally on your device by default. Cloud processing is opt-in, encrypted, and private.</p>
                         </div>
                     </div>
                 </div>
@@ -255,61 +255,93 @@ export default function Landing() {
             <section className="pricing" id="pricing">
                 <div className="container">
                     <h2 className="section-title">Simple Pricing</h2>
-                    <p className="section-subtitle">Start free. Upgrade when you're ready.</p>
+                    <p className="section-subtitle">Start free in any language. Upgrade when you're ready.</p>
+                    <div className="pricing-toggle" style={{ display: 'flex', justifyContent: 'center', gap: '4px', marginBottom: '24px', background: 'rgba(30,30,40,0.8)', borderRadius: '12px', padding: '4px', maxWidth: '360px', margin: '0 auto 24px' }}>
+                        <button className="pricing-toggle-btn active" data-billing="monthly" style={{ flex: 1, padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Monthly</button>
+                        <button className="pricing-toggle-btn" data-billing="annual" style={{ flex: 1, padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Annual <span style={{ fontSize: '10px', fontWeight: 700 }}>Save 17%</span></button>
+                        <button className="pricing-toggle-btn" data-billing="lifetime" style={{ flex: 1, padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Lifetime <span style={{ fontSize: '10px', fontWeight: 700 }}>Own Forever</span></button>
+                    </div>
                     <div className="pricing-grid pricing-grid-4">
                         <div className="pricing-card">
-                            <div className="pricing-badge">FREE</div>
+                            <div className="pricing-badge">🌱 FREE</div>
                             <div className="pricing-price">$0</div>
                             <div className="pricing-period">forever</div>
                             <ul className="pricing-features">
-                                <li>✓ 1 language</li>
-                                <li>✓ 3 transcription engines</li>
+                                <li>✓ Auto-detect any language</li>
+                                <li>✓ 2 engines (Tiny + Base)</li>
                                 <li>✓ 5-minute recordings</li>
-                                <li>✓ Local transcription</li>
-                                <li>✓ Tornado widget</li>
-                                <li>✓ Offline-capable & private</li>
+                                <li>✓ 100% local — your device, your data</li>
+                                <li>✓ Offline-capable</li>
+                                <li>✓ 500 MB WindyCloud storage</li>
                             </ul>
-                            <a href="#download" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>Download</a>
+                            <a href="#download" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>Download Free</a>
+                            <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>No sign-up. No credit card. No catch.</p>
                         </div>
                         <div className="pricing-card">
-                            <div className="pricing-badge pro">PRO</div>
-                            <div className="pricing-price">$49</div>
-                            <div className="pricing-period">one-time</div>
+                            <div className="pricing-badge pro">⚡ WINDY PRO</div>
+                            <div className="pricing-price" data-monthly="$4.99" data-annual="$49" data-lifetime="$99">$4.99</div>
+                            <div className="pricing-period" data-monthly="/month" data-annual="/year" data-lifetime="one-time">/month</div>
                             <ul className="pricing-features">
                                 <li>✓ All 15 engines</li>
                                 <li>✓ 99 languages</li>
-                                <li>✓ 30-min recordings</li>
-                                <li>✓ Batch mode</li>
-                                <li>✓ LLM polish</li>
-                                <li>✓ Audio archive</li>
+                                <li>✓ 30-minute recordings</li>
+                                <li>✓ ☁️ Cloud STT (subscription)</li>
+                                <li>✓ Batch mode + LLM polish</li>
+                                <li>✓ Speaker identification</li>
+                                <li>✓ 5 GB WindyCloud storage</li>
                             </ul>
-                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Upgrade →</Link>
+                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Pro →</Link>
+                            <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>14-day free trial. Cancel anytime.</p>
                         </div>
                         <div className="pricing-card pricing-card-pro">
-                            <div className="pricing-badge pro">TRANSLATE</div>
-                            <div className="pricing-price">$79<span> or $7.99/mo</span></div>
-                            <div className="pricing-period">one-time or monthly</div>
+                            <div className="pricing-recommended">RECOMMENDED</div>
+                            <div className="pricing-badge pro">🚀 WINDY ULTRA</div>
+                            <div className="pricing-price" data-monthly="$8.99" data-annual="$79" data-lifetime="$199">$8.99</div>
+                            <div className="pricing-period" data-monthly="/month" data-annual="/year" data-lifetime="one-time">/month</div>
                             <ul className="pricing-features">
                                 <li>✓ Everything in Pro</li>
-                                <li>✓ Real-time translation</li>
+                                <li>✓ Live translation (5 pairs)</li>
                                 <li>✓ Conversation mode</li>
-                                <li>✓ 99 language pairs</li>
-                                <li>✓ Cloud sync</li>
+                                <li>✓ 25 offline translation engines</li>
+                                <li>✓ 10 GB WindyCloud storage</li>
                             </ul>
-                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Upgrade →</Link>
+                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Ultra →</Link>
+                            <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>14-day free trial. Cancel anytime.</p>
                         </div>
                         <div className="pricing-card">
-                            <div className="pricing-badge pro">TRANSLATE PRO</div>
-                            <div className="pricing-price">$149</div>
-                            <div className="pricing-period">one-time</div>
+                            <div className="pricing-badge pro">👑 WINDY MAX</div>
+                            <div className="pricing-price" data-monthly="$14.99" data-annual="$149" data-lifetime="$299">$14.99</div>
+                            <div className="pricing-period" data-monthly="/month" data-annual="/year" data-lifetime="one-time">/month</div>
                             <ul className="pricing-features">
-                                <li>✓ Everything in Translate</li>
-                                <li>✓ Text-to-speech</li>
-                                <li>✓ Medical/legal glossaries</li>
-                                <li>✓ Priority support</li>
-                                <li>✓ Voice clone-ready exports</li>
+                                <li>✓ Everything in Ultra</li>
+                                <li>✓ 60-minute recordings</li>
+                                <li>✓ 99 translation pairs</li>
+                                <li>✓ Text-to-speech output</li>
+                                <li>✓ Medical & legal glossaries</li>
+                                <li>✓ Priority cloud processing</li>
+                                <li>✓ 100 offline engines</li>
+                                <li>✓ 25 GB WindyCloud storage</li>
                             </ul>
-                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Upgrade →</Link>
+                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Max →</Link>
+                            <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>14-day free trial. Cancel anytime.</p>
+                        </div>
+                    </div>
+                    {/* Ecosystem cross-promotion */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', maxWidth: '800px', margin: '32px auto 0', textAlign: 'center' }}>
+                        <div style={{ padding: '16px', background: 'rgba(30,30,40,0.6)', borderRadius: '12px', border: '1px solid rgba(100,100,120,0.2)' }}>
+                            <span style={{ fontSize: '24px' }}>☁️</span>
+                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#F8FAFC', margin: '4px 0 2px' }}>Need more storage?</p>
+                            <p style={{ fontSize: '11px', color: '#94A3B8' }}>WindyCloud — your AI data vault</p>
+                        </div>
+                        <div style={{ padding: '16px', background: 'rgba(30,30,40,0.6)', borderRadius: '12px', border: '1px solid rgba(100,100,120,0.2)' }}>
+                            <span style={{ fontSize: '24px' }}>✈️</span>
+                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#F8FAFC', margin: '4px 0 2px' }}>Traveling soon?</p>
+                            <p style={{ fontSize: '11px', color: '#94A3B8' }}>WindyTraveler — your AI travel companion</p>
+                        </div>
+                        <div style={{ padding: '16px', background: 'rgba(30,30,40,0.6)', borderRadius: '12px', border: '1px solid rgba(100,100,120,0.2)' }}>
+                            <span style={{ fontSize: '24px' }}>🧬</span>
+                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#F8FAFC', margin: '4px 0 2px' }}>Own your AI identity</p>
+                            <p style={{ fontSize: '11px', color: '#94A3B8' }}>WindyClone — your digital twin</p>
                         </div>
                     </div>
                 </div>
@@ -326,24 +358,26 @@ export default function Landing() {
                                     <th>Feature</th>
                                     <th>Free</th>
                                     <th>Pro</th>
-                                    <th className="highlight-col">Translate</th>
-                                    <th>Translate Pro</th>
+                                    <th className="highlight-col">Ultra</th>
+                                    <th>Max</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {[
-                                    ['Languages', '1', '99', '99', '99'],
-                                    ['Engines', '3', '15', '15', '15'],
-                                    ['Max Recording', '5 min', '30 min', '30 min', '30 min'],
+                                    ['Languages', '99 (auto-detect)', '99', '99', '99'],
+                                    ['Engines', '2 (Tiny + Base)', 'All 15', 'All 15', 'All 15'],
+                                    ['Max Recording', '5 min', '30 min', '30 min', '60 min'],
+                                    ['Cloud STT', '✕', '✓', '✓', 'Priority'],
                                     ['Batch Mode', '✕', '✓', '✓', '✓'],
                                     ['LLM Polish', '✕', '✓', '✓', '✓'],
-                                    ['Cloud Sync', '✕', '✕', '✓', '✓'],
-                                    ['Translation', '✕', '✕', '✓', '✓'],
+                                    ['Speaker ID', '✕', '✓', '✓', '✓'],
+                                    ['Cloud Sync', '✕', '✓', '✓', '✓'],
+                                    ['Translation', '✕', '✕', '5 pairs', '99 pairs'],
                                     ['Conversation Mode', '✕', '✕', '✓', '✓'],
+                                    ['Offline Translation', '✕', '✕', '✕', '✓'],
                                     ['Text-to-Speech', '✕', '✕', '✕', '✓'],
-                                    ['Medical Glossaries', '✕', '✕', '✕', '✓'],
-                                    ['Voice Clone Export', '✕', '✕', '✕', '✓'],
-                                    ['Priority Support', '✕', '✕', '✕', '✓'],
+                                    ['Medical/Legal Glossary', '✕', '✕', '✕', '✓'],
+                                    ['WindyCloud Storage', '500 MB', '5 GB', '10 GB', '25 GB'],
                                 ].map(([feature, ...vals], i) => (
                                     <tr key={i}>
                                         <td>{feature}</td>
