@@ -4,7 +4,7 @@
   "models": {
     "translate_spark": {
       "model_name": "Translate Spark (418M)",
-      "model_path": "models/windy_translate_spark",
+      "model_path": "models/windy-translate-spark",
       "total_tests": 30,
       "passed": 30,
       "failed": 0,
@@ -225,7 +225,7 @@
     },
     "translate_standard": {
       "model_name": "Translate Standard (1.2B)",
-      "model_path": "models/windy_translate_standard",
+      "model_path": "models/windy-translate-standard",
       "total_tests": 30,
       "passed": 30,
       "failed": 0,

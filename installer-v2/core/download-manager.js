@@ -9,12 +9,12 @@
  * - Automatic retry with exponential backoff
  * 
  * Model naming conventions (from Alpha/OC1):
- * - STT engines: WindyProLabs/windy-stt-{name}[-ct2]
+ * - Voice engines: WindyProLabs/windy-{name}[-ct2]
  * - Lingua specialists: WindyProLabs/windy-lingua-{language}[-ct2]
  *   (full language names, NOT ISO codes: spanish, chinese, hindi, french, arabic)
  * - Pair specialists: WindyProLabs/windy-pair-{src}-{tgt}
  *   (ISO codes: en-es, es-en, en-zh, zh-en, etc.)
- * - Translation engines: WindyProLabs/windy_translate_{name}
+ * - Translation engines: WindyProLabs/windy-translate-{name}
  *   (note: underscore, not hyphen, for translate models)
  */
 
@@ -34,31 +34,31 @@ const RETRY_DELAY_MS = 2000;
  */
 const MODEL_REGISTRY = {
   // ─── Voice Engines (GPU) ───
-  'windy-stt-nano': { hfRepo: 'WindyProLabs/windy-stt-nano', sizeMB: 77, format: 'safetensors' },
-  'windy-stt-lite': { hfRepo: 'WindyProLabs/windy-stt-lite', sizeMB: 144, format: 'safetensors' },
-  'windy-stt-core': { hfRepo: 'WindyProLabs/windy-stt-core', sizeMB: 466, format: 'safetensors' },
-  'windy-stt-plus': { hfRepo: 'WindyProLabs/windy-stt-plus', sizeMB: 1462, format: 'safetensors' },
-  'windy-stt-turbo': { hfRepo: 'WindyProLabs/windy-stt-turbo', sizeMB: 1548, format: 'safetensors' },
-  'windy-stt-pro': { hfRepo: 'WindyProLabs/windy-stt-pro', sizeMB: 2949, format: 'safetensors' },
-  'windy-stt-edge': { hfRepo: 'WindyProLabs/windy-stt-edge', sizeMB: 1448, format: 'safetensors' },
+  'windy-nano': { hfRepo: 'WindyProLabs/windy-nano', sizeMB: 77, format: 'safetensors' },
+  'windy-lite': { hfRepo: 'WindyProLabs/windy-lite', sizeMB: 144, format: 'safetensors' },
+  'windy-core': { hfRepo: 'WindyProLabs/windy-core', sizeMB: 466, format: 'safetensors' },
+  'windy-plus': { hfRepo: 'WindyProLabs/windy-plus', sizeMB: 1462, format: 'safetensors' },
+  'windy-turbo': { hfRepo: 'WindyProLabs/windy-turbo', sizeMB: 1548, format: 'safetensors' },
+  'windy-pro-engine': { hfRepo: 'WindyProLabs/windy-pro-engine', sizeMB: 2949, format: 'safetensors' },
+  'windy-edge': { hfRepo: 'WindyProLabs/windy-edge', sizeMB: 1448, format: 'safetensors' },
 
   // ─── Voice Engines (CPU INT8 via CTranslate2) ───
-  'windy-stt-nano-ct2': { hfRepo: 'WindyProLabs/windy-stt-nano-ct2', sizeMB: 38, format: 'ctranslate2' },
-  'windy-stt-lite-ct2': { hfRepo: 'WindyProLabs/windy-stt-lite-ct2', sizeMB: 72, format: 'ctranslate2' },
-  'windy-stt-core-ct2': { hfRepo: 'WindyProLabs/windy-stt-core-ct2', sizeMB: 234, format: 'ctranslate2' },
-  'windy-stt-plus-ct2': { hfRepo: 'WindyProLabs/windy-stt-plus-ct2', sizeMB: 734, format: 'ctranslate2' },
-  'windy-stt-turbo-ct2': { hfRepo: 'WindyProLabs/windy-stt-turbo-ct2', sizeMB: 777, format: 'ctranslate2' },
-  'windy-stt-pro-ct2': { hfRepo: 'WindyProLabs/windy-stt-pro-ct2', sizeMB: 1481, format: 'ctranslate2' },
-  'windy-stt-edge-ct2': { hfRepo: 'WindyProLabs/windy-stt-edge-ct2', sizeMB: 727, format: 'ctranslate2' },
+  'windy-nano-ct2': { hfRepo: 'WindyProLabs/windy-nano-ct2', sizeMB: 38, format: 'ctranslate2' },
+  'windy-lite-ct2': { hfRepo: 'WindyProLabs/windy-lite-ct2', sizeMB: 72, format: 'ctranslate2' },
+  'windy-core-ct2': { hfRepo: 'WindyProLabs/windy-core-ct2', sizeMB: 234, format: 'ctranslate2' },
+  'windy-plus-ct2': { hfRepo: 'WindyProLabs/windy-plus-ct2', sizeMB: 734, format: 'ctranslate2' },
+  'windy-turbo-ct2': { hfRepo: 'WindyProLabs/windy-turbo-ct2', sizeMB: 777, format: 'ctranslate2' },
+  'windy-pro-engine-ct2': { hfRepo: 'WindyProLabs/windy-pro-engine-ct2', sizeMB: 1481, format: 'ctranslate2' },
+  'windy-edge-ct2': { hfRepo: 'WindyProLabs/windy-edge-ct2', sizeMB: 727, format: 'ctranslate2' },
 
   // ─── Distil-Whisper (CPU optimized — NOT recommended for wizard, high eval losses) ───
-  'windy-stt-distil-small': { hfRepo: 'WindyProLabs/windy-stt-distil-small', sizeMB: 319, format: 'safetensors' },
-  'windy-stt-distil-medium': { hfRepo: 'WindyProLabs/windy-stt-distil-medium', sizeMB: 754, format: 'safetensors' },
-  'windy-stt-distil-large': { hfRepo: 'WindyProLabs/windy-stt-distil-large', sizeMB: 1445, format: 'safetensors' },
+  'windy-distil-small': { hfRepo: 'WindyProLabs/windy-distil-small', sizeMB: 319, format: 'safetensors' },
+  'windy-distil-medium': { hfRepo: 'WindyProLabs/windy-distil-medium', sizeMB: 754, format: 'safetensors' },
+  'windy-distil-large': { hfRepo: 'WindyProLabs/windy-distil-large', sizeMB: 1445, format: 'safetensors' },
 
   // ─── Translation Engines ───
-  'windy-translate-spark': { hfRepo: 'WindyProLabs/windy_translate_spark', sizeMB: 929, format: 'safetensors' },
-  'windy-translate-standard': { hfRepo: 'WindyProLabs/windy_translate_standard', sizeMB: 2371, format: 'safetensors' },
+  'windy-translate-spark': { hfRepo: 'WindyProLabs/windy-translate-spark', sizeMB: 929, format: 'safetensors' },
+  'windy-translate-standard': { hfRepo: 'WindyProLabs/windy-translate-standard', sizeMB: 2371, format: 'safetensors' },
 
   // ─── Lingua Specialists (GPU) — full language names ───
   'windy-lingua-spanish': { hfRepo: 'WindyProLabs/windy-lingua-spanish', sizeMB: 466, format: 'safetensors', lang: 'es' },
@@ -133,8 +133,8 @@ class DownloadManager {
   getModelsByCategory(category) {
     return Object.entries(MODEL_REGISTRY)
       .filter(([id, info]) => {
-        if (category === 'stt-gpu') return id.startsWith('windy-stt-') && !id.includes('-ct2') && !id.includes('distil');
-        if (category === 'stt-cpu') return id.includes('-ct2') && id.startsWith('windy-stt-');
+        if (category === 'voice-gpu') return id.startsWith('windy-') && !id.includes('lingua') && !id.includes('pair') && !id.includes('translate') && !id.includes('-ct2') && !id.includes('distil');
+        if (category === 'voice-cpu') return id.includes('-ct2') && !id.includes('lingua') && !id.includes('pair');
         if (category === 'translation') return id.startsWith('windy-translate-');
         if (category === 'lingua-gpu') return id.startsWith('windy-lingua-') && !id.includes('-ct2');
         if (category === 'lingua-cpu') return id.startsWith('windy-lingua-') && id.includes('-ct2');

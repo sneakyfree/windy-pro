@@ -210,7 +210,7 @@ class InstallWizard {
 
     // ─── Install ───
     ipcMain.handle('wizard-install', async () => {
-      const models = this.selectedEngines.length > 0 ? this.selectedEngines : this.recommendation?.recommended || ['windy-stt-lite-ct2'];
+      const models = this.selectedEngines.length > 0 ? this.selectedEngines : this.recommendation?.recommended || ['windy-lite-ct2'];
       console.log('[InstallWizard] Starting install for models:', models);
 
       try {
@@ -389,7 +389,7 @@ class InstallWizard {
           installedAt: new Date().toISOString(),
           models: engineModels,
           pairs: pairModels,
-          defaultModel: engineModels[0] || 'windy-stt-lite-ct2'
+          defaultModel: engineModels[0] || 'windy-lite-ct2'
         }, null, 2));
 
         return { success: true, models };

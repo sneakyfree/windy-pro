@@ -2,7 +2,7 @@
 Windy Pro - INT8 Quantizer for STT Models
 Quantizes all 7 GPU Whisper models to INT8 for CPU deployment.
 
-Target directories: models/windy-stt-{name}-int8/
+Target directories: models/windy-{name}-int8/
 """
 
 import os
@@ -16,13 +16,13 @@ import numpy as np
 
 # Models to quantize
 MODELS = [
-    "windy-stt-nano",
-    "windy-stt-lite",
-    "windy-stt-core",
-    "windy-stt-plus",
-    "windy-stt-turbo",
-    "windy-stt-pro",
-    "windy-stt-edge",
+    "windy-nano",
+    "windy-lite",
+    "windy-core",
+    "windy-plus",
+    "windy-turbo",
+    "windy-pro-engine",
+    "windy-edge",
 ]
 
 def get_dir_size_mb(path):

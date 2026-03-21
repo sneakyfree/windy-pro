@@ -174,30 +174,30 @@ const MAX_PYTHON_RESTARTS = 3;
 const MODEL_MANIFEST = {
   models: {
     // GPU voice models
-    'windy-stt-nano': { size: '73MB', bytes: 73 * 1024 * 1024, label: 'Windy Nano', desc: 'Fastest GPU, great for dictation' },
-    'windy-stt-lite': { size: '140MB', bytes: 140 * 1024 * 1024, label: 'Windy Lite', desc: 'Lightweight, balanced speed/quality' },
-    'windy-stt-core': { size: '462MB', bytes: 462 * 1024 * 1024, label: 'Windy Core', desc: 'Recommended for most use cases' },
-    'windy-stt-edge': { size: '1444MB', bytes: 1444 * 1024 * 1024, label: 'Windy Edge', desc: 'High-accuracy, professional grade' },
-    'windy-stt-plus': { size: '1458MB', bytes: 1458 * 1024 * 1024, label: 'Windy Plus', desc: 'Premium accuracy, production-grade' },
-    'windy-stt-turbo': { size: '1544MB', bytes: 1544 * 1024 * 1024, label: 'Windy Turbo', desc: 'Latest-gen, state-of-the-art' },
-    'windy-stt-pro': { size: '2945MB', bytes: 2945 * 1024 * 1024, label: 'Windy Pro Engine', desc: 'Ultra-fast large model, maximum speed' },
+    'windy-nano': { size: '73MB', bytes: 73 * 1024 * 1024, label: 'Windy Nano', desc: 'Fastest GPU, great for dictation' },
+    'windy-lite': { size: '140MB', bytes: 140 * 1024 * 1024, label: 'Windy Lite', desc: 'Lightweight, balanced speed/quality' },
+    'windy-core': { size: '462MB', bytes: 462 * 1024 * 1024, label: 'Windy Core', desc: 'Recommended for most use cases' },
+    'windy-edge': { size: '1444MB', bytes: 1444 * 1024 * 1024, label: 'Windy Edge', desc: 'High-accuracy, professional grade' },
+    'windy-plus': { size: '1458MB', bytes: 1458 * 1024 * 1024, label: 'Windy Plus', desc: 'Premium accuracy, production-grade' },
+    'windy-turbo': { size: '1544MB', bytes: 1544 * 1024 * 1024, label: 'Windy Turbo', desc: 'Latest-gen, state-of-the-art' },
+    'windy-pro-engine': { size: '2945MB', bytes: 2945 * 1024 * 1024, label: 'Windy Pro Engine', desc: 'Ultra-fast large model, maximum speed' },
     // CPU voice models
-    'windy-stt-nano-cpu': { size: '406MB', bytes: 406 * 1024 * 1024, label: 'Windy Nano (CPU)', desc: 'CPU-optimized, resource-constrained' },
-    'windy-stt-lite-cpu': { size: '668MB', bytes: 668 * 1024 * 1024, label: 'Windy Lite (CPU)', desc: 'CPU-optimized, good balance' },
-    'windy-stt-core-cpu': { size: '1760MB', bytes: 1760 * 1024 * 1024, label: 'Windy Core (CPU)', desc: 'CPU-optimized, recommended for CPU' },
-    'windy-stt-edge-cpu': { size: '3824MB', bytes: 3824 * 1024 * 1024, label: 'Windy Edge (CPU)', desc: 'CPU-optimized, high accuracy' },
-    'windy-stt-plus-cpu': { size: '4872MB', bytes: 4872 * 1024 * 1024, label: 'Windy Plus (CPU)', desc: 'CPU-optimized, premium accuracy' },
-    'windy-stt-turbo-cpu': { size: '4200MB', bytes: 4200 * 1024 * 1024, label: 'Windy Turbo (CPU)', desc: 'CPU-optimized, state-of-the-art' },
-    'windy-stt-pro-cpu': { size: '9456MB', bytes: 9456 * 1024 * 1024, label: 'Windy Pro Engine (CPU)', desc: 'CPU-optimized, maximum performance' },
+    'windy-nano-cpu': { size: '406MB', bytes: 406 * 1024 * 1024, label: 'Windy Nano (CPU)', desc: 'CPU-optimized, resource-constrained' },
+    'windy-lite-cpu': { size: '668MB', bytes: 668 * 1024 * 1024, label: 'Windy Lite (CPU)', desc: 'CPU-optimized, good balance' },
+    'windy-core-cpu': { size: '1760MB', bytes: 1760 * 1024 * 1024, label: 'Windy Core (CPU)', desc: 'CPU-optimized, recommended for CPU' },
+    'windy-edge-cpu': { size: '3824MB', bytes: 3824 * 1024 * 1024, label: 'Windy Edge (CPU)', desc: 'CPU-optimized, high accuracy' },
+    'windy-plus-cpu': { size: '4872MB', bytes: 4872 * 1024 * 1024, label: 'Windy Plus (CPU)', desc: 'CPU-optimized, premium accuracy' },
+    'windy-turbo-cpu': { size: '4200MB', bytes: 4200 * 1024 * 1024, label: 'Windy Turbo (CPU)', desc: 'CPU-optimized, state-of-the-art' },
+    'windy-pro-engine-cpu': { size: '9456MB', bytes: 9456 * 1024 * 1024, label: 'Windy Pro Engine (CPU)', desc: 'CPU-optimized, maximum performance' },
     // Translation models
     'windy-translate-spark': { size: '929MB', bytes: 929 * 1024 * 1024, label: 'Windy Translate Spark', desc: 'Fast multilingual, 100+ languages' },
     'windy-translate-standard': { size: '2371MB', bytes: 2371 * 1024 * 1024, label: 'Windy Translate Standard', desc: 'Higher quality than Spark, 100+ languages' }
   },
   tierModels: {
-    free: ['windy-stt-nano', 'windy-stt-lite', 'windy-stt-core'],
-    pro: ['windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro', 'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu'],
-    translate: ['windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro', 'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu', 'windy-translate-spark'],
-    translate_pro: ['windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro', 'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu', 'windy-translate-spark', 'windy-translate-standard']
+    free: ['windy-nano', 'windy-lite', 'windy-core'],
+    pro: ['windy-nano', 'windy-lite', 'windy-core', 'windy-edge', 'windy-plus', 'windy-turbo', 'windy-pro-engine', 'windy-nano-cpu', 'windy-lite-cpu', 'windy-core-cpu', 'windy-edge-cpu', 'windy-plus-cpu', 'windy-turbo-cpu', 'windy-pro-engine-cpu'],
+    translate: ['windy-nano', 'windy-lite', 'windy-core', 'windy-edge', 'windy-plus', 'windy-turbo', 'windy-pro-engine', 'windy-nano-cpu', 'windy-lite-cpu', 'windy-core-cpu', 'windy-edge-cpu', 'windy-plus-cpu', 'windy-turbo-cpu', 'windy-pro-engine-cpu', 'windy-translate-spark'],
+    translate_pro: ['windy-nano', 'windy-lite', 'windy-core', 'windy-edge', 'windy-plus', 'windy-turbo', 'windy-pro-engine', 'windy-nano-cpu', 'windy-lite-cpu', 'windy-core-cpu', 'windy-edge-cpu', 'windy-plus-cpu', 'windy-turbo-cpu', 'windy-pro-engine-cpu', 'windy-translate-spark', 'windy-translate-standard']
   }
 };
 let activeModelDownload = null; // Track background download process
@@ -1928,22 +1928,22 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     'local': { name: 'Local', size: '', specialty: '' },
 
     // Real GPU voice models from model_registry.json
-    'windy-stt-nano': { name: 'Windy Nano', size: '73 MB', specialty: 'Fastest engine. Best for quick dictation on powerful hardware.' },
-    'windy-stt-lite': { name: 'Windy Lite', size: '140 MB', specialty: 'Lightweight engine with improved accuracy. Balanced speed/quality.' },
-    'windy-stt-core': { name: 'Windy Core', size: '462 MB', specialty: 'Core engine. Recommended for most use cases.' },
-    'windy-stt-edge': { name: 'Windy Edge', size: '1444 MB', specialty: 'High-accuracy engine. Best for professional transcription.' },
-    'windy-stt-plus': { name: 'Windy Plus', size: '1458 MB', specialty: 'Premium STT with excellent accuracy. Production-grade.' },
-    'windy-stt-turbo': { name: 'Windy Turbo', size: '1544 MB', specialty: 'Latest-gen engine. State-of-the-art accuracy and robustness.' },
-    'windy-stt-pro': { name: 'Windy Pro Engine', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
+    'windy-nano': { name: 'Windy Nano', size: '73 MB', specialty: 'Fastest engine. Best for quick dictation on powerful hardware.' },
+    'windy-lite': { name: 'Windy Lite', size: '140 MB', specialty: 'Lightweight engine with improved accuracy. Balanced speed/quality.' },
+    'windy-core': { name: 'Windy Core', size: '462 MB', specialty: 'Core engine. Recommended for most use cases.' },
+    'windy-edge': { name: 'Windy Edge', size: '1444 MB', specialty: 'High-accuracy engine. Best for professional transcription.' },
+    'windy-plus': { name: 'Windy Plus', size: '1458 MB', specialty: 'Premium STT with excellent accuracy. Production-grade.' },
+    'windy-turbo': { name: 'Windy Turbo', size: '1544 MB', specialty: 'Latest-gen engine. State-of-the-art accuracy and robustness.' },
+    'windy-pro-engine': { name: 'Windy Pro Engine', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
 
     // Real CPU voice models from model_registry.json
-    'windy-stt-nano-cpu': { name: 'Windy Nano (CPU)', size: '406 MB', specialty: 'CPU-optimized Nano. Best for resource-constrained environments.' },
-    'windy-stt-lite-cpu': { name: 'Windy Lite (CPU)', size: '668 MB', specialty: 'CPU-optimized Lite. Good balance for CPU-only systems.' },
-    'windy-stt-core-cpu': { name: 'Windy Core (CPU)', size: '1760 MB', specialty: 'CPU-optimized Core. Recommended for most CPU deployments.' },
-    'windy-stt-edge-cpu': { name: 'Windy Edge (CPU)', size: '3824 MB', specialty: 'CPU-optimized Edge. High accuracy on CPU hardware.' },
-    'windy-stt-plus-cpu': { name: 'Windy Plus (CPU)', size: '4872 MB', specialty: 'CPU-optimized Plus. Premium accuracy without GPU.' },
-    'windy-stt-turbo-cpu': { name: 'Windy Turbo (CPU)', size: '4200 MB', specialty: 'CPU-optimized Turbo. State-of-the-art accuracy on CPU.' },
-    'windy-stt-pro-cpu': { name: 'Windy Pro Engine (CPU)', size: '9456 MB', specialty: 'CPU-optimized Pro. Maximum CPU performance.' },
+    'windy-nano-cpu': { name: 'Windy Nano (CPU)', size: '406 MB', specialty: 'CPU-optimized Nano. Best for resource-constrained environments.' },
+    'windy-lite-cpu': { name: 'Windy Lite (CPU)', size: '668 MB', specialty: 'CPU-optimized Lite. Good balance for CPU-only systems.' },
+    'windy-core-cpu': { name: 'Windy Core (CPU)', size: '1760 MB', specialty: 'CPU-optimized Core. Recommended for most CPU deployments.' },
+    'windy-edge-cpu': { name: 'Windy Edge (CPU)', size: '3824 MB', specialty: 'CPU-optimized Edge. High accuracy on CPU hardware.' },
+    'windy-plus-cpu': { name: 'Windy Plus (CPU)', size: '4872 MB', specialty: 'CPU-optimized Plus. Premium accuracy without GPU.' },
+    'windy-turbo-cpu': { name: 'Windy Turbo (CPU)', size: '4200 MB', specialty: 'CPU-optimized Turbo. State-of-the-art accuracy on CPU.' },
+    'windy-pro-engine-cpu': { name: 'Windy Pro Engine (CPU)', size: '9456 MB', specialty: 'CPU-optimized Pro. Maximum CPU performance.' },
 
     // Real Translation models from model_registry.json
     'windy-translate-spark': { name: 'Windy Translate Spark', size: '929 MB', specialty: 'Fast multilingual translation. 100+ languages. LoRA-enhanced for priority pairs.' },
@@ -3471,19 +3471,19 @@ ipcMain.handle('detect-hardware', async () => {
 
   // Engine recommendation
   if (result.gpu && result.gpu.vramMB >= 6000) {
-    result.recommendedEngine = 'windy-stt-pro';
+    result.recommendedEngine = 'windy-pro-engine';
     result.recommendation = `Your ${result.gpu.name} (${Math.round(result.gpu.vramMB / 1024)}GB VRAM) can run the best model. We recommend Windy Pro Engine for maximum accuracy.`;
   } else if (result.gpu && result.gpu.vramMB >= 2000) {
-    result.recommendedEngine = 'windy-stt-core';
+    result.recommendedEngine = 'windy-core';
     result.recommendation = `Your ${result.gpu.name} has ${Math.round(result.gpu.vramMB / 1024)}GB VRAM. We recommend Windy Core for a great balance of speed and quality.`;
   } else if (result.totalRAM >= 16) {
-    result.recommendedEngine = 'windy-stt-edge-cpu';
+    result.recommendedEngine = 'windy-edge-cpu';
     result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy Edge (CPU) — high accuracy on CPU, no GPU needed.`;
   } else if (result.totalRAM >= 8) {
-    result.recommendedEngine = 'windy-stt-core-cpu';
+    result.recommendedEngine = 'windy-core-cpu';
     result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy Core (CPU) — great balance of speed and quality for your hardware.`;
   } else {
-    result.recommendedEngine = 'windy-stt-nano-cpu';
+    result.recommendedEngine = 'windy-nano-cpu';
     result.recommendation = `Your system has ${result.totalRAM}GB RAM. We recommend Windy Nano (CPU) — ultra-light, runs great on any hardware.`;
   }
 
@@ -4148,9 +4148,9 @@ function downloadModel(modelName) {
     // Determine HuggingFace repo name (translation models use underscores)
     let repoName = modelName;
     if (modelName === 'windy-translate-spark') {
-      repoName = 'windy_translate_spark';
+      repoName = 'windy-translate-spark';
     } else if (modelName === 'windy-translate-standard') {
-      repoName = 'windy_translate_standard';
+      repoName = 'windy-translate-standard';
     }
 
     const localDir = path.join(os.homedir(), '.windy-pro', 'models', modelName);

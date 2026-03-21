@@ -117,8 +117,8 @@ def main():
             
             # Determine type and certify
             is_ct2 = name.endswith('-ct2')
-            is_stt = name.startswith('windy-stt-') or name.startswith('windy-lingua-')
-            is_translate = name.startswith('windy-pair-') or name.startswith('windy_translate')
+            is_stt = name.startswith('windy-') and not name.startswith('windy-lingua') and not name.startswith('windy-pair') and not name.startswith('windy-translate') or name.startswith('windy-lingua-')
+            is_translate = name.startswith('windy-pair-') or name.startswith('windy-translate')
             is_distil = 'distil' in name
             
             if is_stt and is_ct2:

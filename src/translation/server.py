@@ -64,7 +64,7 @@ class TranslationServer:
         model_name = "m2m100_418M"
         if self.translator and hasattr(self.translator, 'config'):
             if self.translator.config.model_type == "finetuned":
-                model_name = "windy_translate_spark"
+                model_name = "windy-translate-spark"
             elif self.translator.config.model_type == "lora":
                 model_name = "m2m100_418M_lora"
 
@@ -117,7 +117,7 @@ class TranslationServer:
             model_name = "m2m100_418M"
             if self.translator and hasattr(self.translator, 'config'):
                 if self.translator.config.model_type == "finetuned":
-                    model_name = "windy_translate_spark"
+                    model_name = "windy-translate-spark"
                 elif self.translator.config.model_type == "lora":
                     model_name = "m2m100_418M_lora"
             return {
@@ -212,7 +212,7 @@ class TranslationServer:
         model_display = "m2m100_418M"
         if hasattr(self.translator, 'config'):
             if self.translator.config.model_type == "finetuned":
-                model_display = "windy_translate_spark"
+                model_display = "windy-translate-spark"
             elif self.translator.config.model_type == "lora":
                 model_display = "m2m100_418M_lora"
 

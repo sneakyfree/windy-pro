@@ -188,20 +188,20 @@ class SettingsPanel {
             <select id="engineSelect">
               <option value="windytune" selected>🌪️ WindyTune — auto-pilot, monitors & optimizes</option>
               <option value="local">🏠 Local — manual model selection</option>
-              <option value="windy-stt-nano">⚡ Windy Nano (73 MB) — fastest GPU, quick dictation</option>
-              <option value="windy-stt-lite">⚡ Windy Lite (140 MB) — lightweight, balanced speed/quality</option>
-              <option value="windy-stt-core">⚡ Windy Core (462 MB) — recommended for most use cases</option>
-              <option value="windy-stt-edge">⚡ Windy Edge (1444 MB) — high-accuracy, professional grade</option>
-              <option value="windy-stt-plus">⚡ Windy Plus (1458 MB) — premium accuracy, production-grade</option>
-              <option value="windy-stt-turbo">⚡ Windy Turbo (1544 MB) — latest-gen, state-of-the-art</option>
-              <option value="windy-stt-pro">⚡ Windy Pro Engine (2945 MB) — ultra-fast large model</option>
-              <option value="windy-stt-nano-cpu">🛡️ Windy Nano CPU (406 MB) — CPU-optimized, resource-constrained</option>
-              <option value="windy-stt-lite-cpu">🛡️ Windy Lite CPU (668 MB) — CPU-optimized, good balance</option>
-              <option value="windy-stt-core-cpu">🛡️ Windy Core CPU (1760 MB) — CPU-optimized, recommended for CPU</option>
-              <option value="windy-stt-edge-cpu">🛡️ Windy Edge CPU (3824 MB) — CPU-optimized, high accuracy</option>
-              <option value="windy-stt-plus-cpu">🛡️ Windy Plus CPU (4872 MB) — CPU-optimized, premium accuracy</option>
-              <option value="windy-stt-turbo-cpu">🛡️ Windy Turbo CPU (4200 MB) — CPU-optimized, state-of-the-art</option>
-              <option value="windy-stt-pro-cpu">🛡️ Windy Pro Engine CPU (9456 MB) — CPU-optimized, maximum performance</option>
+              <option value="windy-nano">⚡ Windy Nano (73 MB) — fastest GPU, quick dictation</option>
+              <option value="windy-lite">⚡ Windy Lite (140 MB) — lightweight, balanced speed/quality</option>
+              <option value="windy-core">⚡ Windy Core (462 MB) — recommended for most use cases</option>
+              <option value="windy-edge">⚡ Windy Edge (1444 MB) — high-accuracy, professional grade</option>
+              <option value="windy-plus">⚡ Windy Plus (1458 MB) — premium accuracy, production-grade</option>
+              <option value="windy-turbo">⚡ Windy Turbo (1544 MB) — latest-gen, state-of-the-art</option>
+              <option value="windy-pro-engine">⚡ Windy Pro Engine (2945 MB) — ultra-fast large model</option>
+              <option value="windy-nano-cpu">🛡️ Windy Nano CPU (406 MB) — CPU-optimized, resource-constrained</option>
+              <option value="windy-lite-cpu">🛡️ Windy Lite CPU (668 MB) — CPU-optimized, good balance</option>
+              <option value="windy-core-cpu">🛡️ Windy Core CPU (1760 MB) — CPU-optimized, recommended for CPU</option>
+              <option value="windy-edge-cpu">🛡️ Windy Edge CPU (3824 MB) — CPU-optimized, high accuracy</option>
+              <option value="windy-plus-cpu">🛡️ Windy Plus CPU (4872 MB) — CPU-optimized, premium accuracy</option>
+              <option value="windy-turbo-cpu">🛡️ Windy Turbo CPU (4200 MB) — CPU-optimized, state-of-the-art</option>
+              <option value="windy-pro-engine-cpu">🛡️ Windy Pro Engine CPU (9456 MB) — CPU-optimized, maximum performance</option>
             </select>
           </div>
           <p class="settings-hint" id="engineHint">Audio processed on your device. Nothing sent anywhere.</p>
@@ -543,20 +543,20 @@ class SettingsPanel {
         local: { hint: '🏠 <b>Manual mode.</b> Select your model below. Full control over which engine model runs.', color: '#22C55E', cloud: false, local: true, api: false },
         windytune: { hint: '🌪️ <b>Auto-pilot.</b> Monitors your performance in real-time. Auto-switches to the best model for your hardware. Logs every change to the status bar.', color: '#22C55E', cloud: false, local: true, api: false },
         cloud: { hint: '🔒 <b>E2E encrypted.</b> Streamed to WindyPro servers. Large-v3 on RTX 5090 GPU. Zero data retention.', color: '#4ecdc4', cloud: true, local: false, api: false },
-        'windy-stt-nano': { hint: '⚡ <b>Fastest engine (73 MB).</b> Quick dictation on powerful hardware.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'windy-stt-lite': { hint: '⚡ <b>Lightweight engine (140 MB).</b> Balanced speed and quality.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'windy-stt-core': { hint: '⚡ <b>Core engine (462 MB).</b> Recommended for most use cases.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'windy-stt-edge': { hint: '⚡ <b>High-accuracy engine (1.4 GB).</b> Professional transcription.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'windy-stt-plus': { hint: '⚡ <b>Premium engine (1.4 GB).</b> Excellent accuracy, production-grade.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'windy-stt-turbo': { hint: '⚡ <b>State-of-the-art engine (1.5 GB).</b> Best balance of accuracy & speed.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'windy-stt-pro': { hint: '⚡ <b>BEST accuracy (2.9 GB).</b> Broadcast, legal, medical, professional.', color: '#F59E0B', cloud: false, local: true, api: false },
-        'windy-stt-nano-cpu': { hint: '🛡️ <b>Ultra-light CPU (406 MB).</b> Runs on any hardware.', color: '#22C55E', cloud: false, local: true, api: false },
-        'windy-stt-lite-cpu': { hint: '🛡️ <b>Lightweight CPU (668 MB).</b> Fast and efficient.', color: '#22C55E', cloud: false, local: true, api: false },
-        'windy-stt-core-cpu': { hint: '🛡️ <b>Core CPU (1.7 GB).</b> Great balance, no GPU needed.', color: '#22C55E', cloud: false, local: true, api: false },
-        'windy-stt-edge-cpu': { hint: '🛡️ <b>High-accuracy CPU (3.8 GB).</b> Professional-grade on CPU.', color: '#22C55E', cloud: false, local: true, api: false },
-        'windy-stt-plus-cpu': { hint: '🛡️ <b>Premium CPU (4.9 GB).</b> Premium accuracy without GPU.', color: '#22C55E', cloud: false, local: true, api: false },
-        'windy-stt-turbo-cpu': { hint: '🛡️ <b>State-of-the-art CPU (4.2 GB).</b> Best CPU accuracy.', color: '#22C55E', cloud: false, local: true, api: false },
-        'windy-stt-pro-cpu': { hint: '🛡️ <b>Maximum CPU (9.5 GB).</b> Best possible accuracy on CPU.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-nano': { hint: '⚡ <b>Fastest engine (73 MB).</b> Quick dictation on powerful hardware.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-lite': { hint: '⚡ <b>Lightweight engine (140 MB).</b> Balanced speed and quality.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-core': { hint: '⚡ <b>Core engine (462 MB).</b> Recommended for most use cases.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-edge': { hint: '⚡ <b>High-accuracy engine (1.4 GB).</b> Professional transcription.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-plus': { hint: '⚡ <b>Premium engine (1.4 GB).</b> Excellent accuracy, production-grade.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-turbo': { hint: '⚡ <b>State-of-the-art engine (1.5 GB).</b> Best balance of accuracy & speed.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-pro-engine': { hint: '⚡ <b>BEST accuracy (2.9 GB).</b> Broadcast, legal, medical, professional.', color: '#F59E0B', cloud: false, local: true, api: false },
+        'windy-nano-cpu': { hint: '🛡️ <b>Ultra-light CPU (406 MB).</b> Runs on any hardware.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-lite-cpu': { hint: '🛡️ <b>Lightweight CPU (668 MB).</b> Fast and efficient.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-core-cpu': { hint: '🛡️ <b>Core CPU (1.7 GB).</b> Great balance, no GPU needed.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-edge-cpu': { hint: '🛡️ <b>High-accuracy CPU (3.8 GB).</b> Professional-grade on CPU.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-plus-cpu': { hint: '🛡️ <b>Premium CPU (4.9 GB).</b> Premium accuracy without GPU.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-turbo-cpu': { hint: '🛡️ <b>State-of-the-art CPU (4.2 GB).</b> Best CPU accuracy.', color: '#22C55E', cloud: false, local: true, api: false },
+        'windy-pro-engine-cpu': { hint: '🛡️ <b>Maximum CPU (9.5 GB).</b> Best possible accuracy on CPU.', color: '#22C55E', cloud: false, local: true, api: false },
         'windy-translate-spark': { hint: '🌍 <b>Fast translation (929 MB).</b> 100+ languages. LoRA-enhanced.', color: '#3B82F6', cloud: false, local: true, api: false },
         'windy-translate-standard': { hint: '🌍 <b>Standard translation (2.4 GB).</b> 100+ languages. Higher quality.', color: '#3B82F6', cloud: false, local: true, api: false },
         cloud: { hint: '☁️ <b>WindyPro Cloud.</b> End-to-end encrypted. For when you want server-grade accuracy.', color: '#4ecdc4', cloud: true, local: false, api: false }
@@ -581,7 +581,7 @@ class SettingsPanel {
       } else {
         const badge = document.getElementById('modelBadge');
         if (badge) {
-          const icons = { local: '🌪️', cloud: '☁️', 'windy-stt-nano': '⚡', 'windy-stt-lite': '⚡', 'windy-stt-core': '⚡', 'windy-stt-edge': '⚡', 'windy-stt-plus': '⚡', 'windy-stt-turbo': '⚡', 'windy-stt-pro': '⚡', 'windy-stt-nano-cpu': '🛡️', 'windy-stt-lite-cpu': '🛡️', 'windy-stt-core-cpu': '🛡️', 'windy-stt-edge-cpu': '🛡️', 'windy-stt-plus-cpu': '🛡️', 'windy-stt-turbo-cpu': '🛡️', 'windy-stt-pro-cpu': '🛡️', 'windy-translate-spark': '🌍', 'windy-translate-standard': '🌍' };
+          const icons = { local: '🌪️', cloud: '☁️', 'windy-nano': '⚡', 'windy-lite': '⚡', 'windy-core': '⚡', 'windy-edge': '⚡', 'windy-plus': '⚡', 'windy-turbo': '⚡', 'windy-pro-engine': '⚡', 'windy-nano-cpu': '🛡️', 'windy-lite-cpu': '🛡️', 'windy-core-cpu': '🛡️', 'windy-edge-cpu': '🛡️', 'windy-plus-cpu': '🛡️', 'windy-turbo-cpu': '🛡️', 'windy-pro-engine-cpu': '🛡️', 'windy-translate-spark': '🌍', 'windy-translate-standard': '🌍' };
           badge.textContent = `${icons[engine] || '🌪️'} ${engine}`;
         }
       }
@@ -2584,11 +2584,11 @@ class SettingsPanel {
    */
   _applyTierGating(tier) {
     const tierEngines = {
-      free: ['windytune', 'local', 'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core'],
-      pro: ['windytune', 'local', 'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro',
-        'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu'],
-      translate: ['windytune', 'local', 'windy-stt-nano', 'windy-stt-lite', 'windy-stt-core', 'windy-stt-edge', 'windy-stt-plus', 'windy-stt-turbo', 'windy-stt-pro',
-        'windy-stt-nano-cpu', 'windy-stt-lite-cpu', 'windy-stt-core-cpu', 'windy-stt-edge-cpu', 'windy-stt-plus-cpu', 'windy-stt-turbo-cpu', 'windy-stt-pro-cpu',
+      free: ['windytune', 'local', 'windy-nano', 'windy-lite', 'windy-core'],
+      pro: ['windytune', 'local', 'windy-nano', 'windy-lite', 'windy-core', 'windy-edge', 'windy-plus', 'windy-turbo', 'windy-pro-engine',
+        'windy-nano-cpu', 'windy-lite-cpu', 'windy-core-cpu', 'windy-edge-cpu', 'windy-plus-cpu', 'windy-turbo-cpu', 'windy-pro-engine-cpu'],
+      translate: ['windytune', 'local', 'windy-nano', 'windy-lite', 'windy-core', 'windy-edge', 'windy-plus', 'windy-turbo', 'windy-pro-engine',
+        'windy-nano-cpu', 'windy-lite-cpu', 'windy-core-cpu', 'windy-edge-cpu', 'windy-plus-cpu', 'windy-turbo-cpu', 'windy-pro-engine-cpu',
         'windy-translate-spark'],
       translate_pro: null, // all engines
       unlimited: null  // all engines

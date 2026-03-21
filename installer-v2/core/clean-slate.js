@@ -483,7 +483,7 @@ class CleanSlate {
       return fs.readdirSync(MODELS_DIR).filter(f => {
         const fullPath = path.join(MODELS_DIR, f);
         const stat = fs.statSync(fullPath);
-        // Models are directories (e.g., windy-stt-nano/) or large files
+        // Models are directories (e.g., windy-nano/) or large files
         return stat.isDirectory() || stat.size > 1000;
       });
     } catch (e) {

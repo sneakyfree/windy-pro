@@ -195,8 +195,8 @@ localOnlyCheckbox.addEventListener('change', () => {
     cloudOpts.forEach(opt => { opt.disabled = isLocalOnly; });
     // If cloud was selected, switch to default local
     if (isLocalOnly) {
-        if (listenModelSelect.value === 'cloud') listenModelSelect.value = 'windy-stt-core';
-        if (translateModelSelect.value === 'cloud') translateModelSelect.value = 'windy-stt-core';
+        if (listenModelSelect.value === 'cloud') listenModelSelect.value = 'windy-core';
+        if (translateModelSelect.value === 'cloud') translateModelSelect.value = 'windy-core';
     }
     if (isWindyTune) {
         const suffix = isLocalOnly ? 'local only' : 'auto';

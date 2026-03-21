@@ -24,13 +24,13 @@ torch.set_num_threads(4)
 
 # Model configurations
 STT_MODELS = [
-    ('windy-stt-nano', 'openai/whisper-tiny.en'),
-    ('windy-stt-lite', 'openai/whisper-base.en'),
-    ('windy-stt-core', 'openai/whisper-small.en'),
-    ('windy-stt-plus', 'openai/whisper-medium.en'),
-    ('windy-stt-pro', 'openai/whisper-large-v3'),
-    ('windy-stt-turbo', 'openai/whisper-large-v3-turbo'),
-    ('windy-stt-edge', 'distil-whisper/distil-large-v3'),
+    ('windy-nano', 'openai/whisper-tiny.en'),
+    ('windy-lite', 'openai/whisper-base.en'),
+    ('windy-core', 'openai/whisper-small.en'),
+    ('windy-plus', 'openai/whisper-medium.en'),
+    ('windy-pro-engine', 'openai/whisper-large-v3'),
+    ('windy-turbo', 'openai/whisper-large-v3-turbo'),
+    ('windy-edge', 'distil-whisper/distil-large-v3'),
 ]
 
 results = []

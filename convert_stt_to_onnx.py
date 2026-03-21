@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Convert Windy STT models to ONNX INT8 format for CPU inference.
+Convert Windy voice models to ONNX INT8 format for CPU inference.
 Uses Optimum library for export and quantization.
 """
 import os
@@ -63,15 +63,15 @@ def convert_model_to_onnx(model_name: str, gpu_path: str, cpu_path: str):
         return False
 
 def main():
-    """Convert all 7 Windy STT models to ONNX INT8."""
+    """Convert all 7 Windy voice models to ONNX INT8."""
     models = [
-        "windy-stt-nano",
-        "windy-stt-lite",
-        "windy-stt-core",
-        "windy-stt-plus",
-        "windy-stt-pro",
-        "windy-stt-turbo",
-        "windy-stt-edge",
+        "windy-nano",
+        "windy-lite",
+        "windy-core",
+        "windy-plus",
+        "windy-pro-engine",
+        "windy-turbo",
+        "windy-edge",
     ]
 
     base_dir = Path("models")

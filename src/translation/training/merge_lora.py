@@ -187,11 +187,11 @@ def main():
     parser.add_argument(
         "--lora-adapter",
         required=True,
-        help="Path to LoRA adapter (e.g., models/windy_translate_lora/final_model)"
+        help="Path to LoRA adapter (e.g., models/windy-translate-lora/final_model)"
     )
     parser.add_argument(
         "--output",
-        default="models/windy_translate_spark",
+        default="models/windy-translate-spark",
         help="Output path for merged model"
     )
     parser.add_argument(

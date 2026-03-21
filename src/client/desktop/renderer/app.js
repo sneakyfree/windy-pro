@@ -30,12 +30,12 @@ class WindyApp {
     this._engineModelMap = {
       'local': null, // auto-detect
       'windytune': 'small', // auto-pilot: starts with small, auto-adjusts
-      'windy-stt-nano': 'tiny', 'windy-stt-lite': 'small', 'windy-stt-core': 'base',
-      'windy-stt-edge': 'medium', 'windy-stt-plus': 'large-v2', 'windy-stt-turbo': 'large-v3',
-      'windy-stt-pro': 'large-v3-turbo',
-      'windy-stt-nano-cpu': 'tiny', 'windy-stt-lite-cpu': 'small', 'windy-stt-core-cpu': 'base',
-      'windy-stt-edge-cpu': 'medium', 'windy-stt-plus-cpu': 'large-v2', 'windy-stt-turbo-cpu': 'large-v3',
-      'windy-stt-pro-cpu': 'large-v3-turbo',
+      'windy-nano': 'tiny', 'windy-lite': 'small', 'windy-core': 'base',
+      'windy-edge': 'medium', 'windy-plus': 'large-v2', 'windy-turbo': 'large-v3',
+      'windy-pro-engine': 'large-v3-turbo',
+      'windy-nano-cpu': 'tiny', 'windy-lite-cpu': 'small', 'windy-core-cpu': 'base',
+      'windy-edge-cpu': 'medium', 'windy-plus-cpu': 'large-v2', 'windy-turbo-cpu': 'large-v3',
+      'windy-pro-engine-cpu': 'large-v3-turbo',
       'windy-translate-spark': null, 'windy-translate-standard': null
     };
 
@@ -1204,8 +1204,8 @@ class WindyApp {
     // Engine-specific icons
     const engineIcons = {
       stream: '🎙️', cloud: '☁️🔒', smart: '🧠',
-      'windy-stt-nano': '⚡', 'windy-stt-lite': '⚡', 'windy-stt-core': '⚡', 'windy-stt-edge': '⚡', 'windy-stt-plus': '⚡', 'windy-stt-turbo': '⚡', 'windy-stt-pro': '⚡',
-      'windy-stt-nano-cpu': '🛡️', 'windy-stt-lite-cpu': '🛡️', 'windy-stt-core-cpu': '🛡️', 'windy-stt-edge-cpu': '🛡️', 'windy-stt-plus-cpu': '🛡️', 'windy-stt-turbo-cpu': '🛡️', 'windy-stt-pro-cpu': '🛡️',
+      'windy-nano': '⚡', 'windy-lite': '⚡', 'windy-core': '⚡', 'windy-edge': '⚡', 'windy-plus': '⚡', 'windy-turbo': '⚡', 'windy-pro-engine': '⚡',
+      'windy-nano-cpu': '🛡️', 'windy-lite-cpu': '🛡️', 'windy-core-cpu': '🛡️', 'windy-edge-cpu': '🛡️', 'windy-plus-cpu': '🛡️', 'windy-turbo-cpu': '🛡️', 'windy-pro-engine-cpu': '🛡️',
       'windy-translate-spark': '🌍', 'windy-translate-standard': '🌍'
     };
 
@@ -1225,7 +1225,7 @@ class WindyApp {
       return;
     }
 
-    // Custom named engine (windy-stt-pro, windy-stt-core-cpu, etc.) — ALWAYS show engine name, never raw model
+    // Custom named engine (windy-pro-engine, windy-core-cpu, etc.) — ALWAYS show engine name, never raw model
     if (isCustomEngine) {
       const icon = engineIcons[activeEngine] || '⚡';
       const engineModel = this._engineModelMap[activeEngine];
@@ -1289,8 +1289,8 @@ class WindyApp {
     const isCustomEngine = this._engineModelMap && activeEngine in this._engineModelMap && activeEngine !== 'local';
     const displayName = isCustomEngine ? activeEngine : msg.model;
     const engineIcons = {
-      'windy-stt-nano': '⚡', 'windy-stt-lite': '⚡', 'windy-stt-core': '⚡', 'windy-stt-edge': '⚡', 'windy-stt-plus': '⚡', 'windy-stt-turbo': '⚡', 'windy-stt-pro': '⚡',
-      'windy-stt-nano-cpu': '🛡️', 'windy-stt-lite-cpu': '🛡️', 'windy-stt-core-cpu': '🛡️', 'windy-stt-edge-cpu': '🛡️', 'windy-stt-plus-cpu': '🛡️', 'windy-stt-turbo-cpu': '🛡️', 'windy-stt-pro-cpu': '🛡️',
+      'windy-nano': '⚡', 'windy-lite': '⚡', 'windy-core': '⚡', 'windy-edge': '⚡', 'windy-plus': '⚡', 'windy-turbo': '⚡', 'windy-pro-engine': '⚡',
+      'windy-nano-cpu': '🛡️', 'windy-lite-cpu': '🛡️', 'windy-core-cpu': '🛡️', 'windy-edge-cpu': '🛡️', 'windy-plus-cpu': '🛡️', 'windy-turbo-cpu': '🛡️', 'windy-pro-engine-cpu': '🛡️',
       'windy-translate-spark': '🌍', 'windy-translate-standard': '🌍'
     };
     const engineIcon = engineIcons[activeEngine] || '🏠';
@@ -1338,7 +1338,7 @@ class WindyApp {
         if (recordingMode !== 'batch') {
           suggestions.push('Switch to Batch mode for best accuracy');
         }
-        const modelSizeMB = { 'large-v3': 2945, 'windy-stt-pro': 2945, 'turbo': 1544, 'windy-stt-turbo': 1544, 'medium': 1444, 'windy-stt-edge': 1444, 'small': 140, 'windy-stt-lite': 140, 'base': 462, 'windy-stt-core': 462, 'tiny': 73, 'windy-stt-nano': 73 };
+        const modelSizeMB = { 'large-v3': 2945, 'windy-pro-engine': 2945, 'turbo': 1544, 'windy-turbo': 1544, 'medium': 1444, 'windy-edge': 1444, 'small': 140, 'windy-lite': 140, 'base': 462, 'windy-core': 462, 'tiny': 73, 'windy-nano': 73 };
         const currentModelSize = modelSizeMB[msg.model] || 0;
         if (currentModelSize > 500) {
           suggestions.push('Try Windy Core (462MB, balanced)');

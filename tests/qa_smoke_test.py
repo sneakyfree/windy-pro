@@ -22,18 +22,18 @@ from optimum.onnxruntime import ORTModelForSpeechSeq2Seq
 
 # Test configuration
 STT_MODELS = [
-    ('windy-stt-nano', 'openai/whisper-tiny.en'),
-    ('windy-stt-lite', 'openai/whisper-base.en'),
-    ('windy-stt-core', 'openai/whisper-small.en'),
-    ('windy-stt-plus', 'openai/whisper-medium.en'),
-    ('windy-stt-pro', 'openai/whisper-large-v3'),
-    ('windy-stt-turbo', 'openai/whisper-large-v3-turbo'),
-    ('windy-stt-edge', 'distil-whisper/distil-large-v3'),
+    ('windy-nano', 'openai/whisper-tiny.en'),
+    ('windy-lite', 'openai/whisper-base.en'),
+    ('windy-core', 'openai/whisper-small.en'),
+    ('windy-plus', 'openai/whisper-medium.en'),
+    ('windy-pro-engine', 'openai/whisper-large-v3'),
+    ('windy-turbo', 'openai/whisper-large-v3-turbo'),
+    ('windy-edge', 'distil-whisper/distil-large-v3'),
 ]
 
 TRANSLATION_MODELS = [
-    ('windy_translate_spark', 'facebook/m2m100_418M'),
-    ('windy_translate_standard', 'facebook/m2m100_1.2B'),
+    ('windy-translate-spark', 'facebook/m2m100_418M'),
+    ('windy-translate-standard', 'facebook/m2m100_1.2B'),
 ]
 
 TRANSLATION_TEST_PAIRS = [

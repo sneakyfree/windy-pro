@@ -14,13 +14,13 @@ from peft import PeftModel
 
 # Model configurations: (base_model_id, lora_checkpoint_path, output_dir)
 MODELS_TO_MERGE = [
-    ("openai/whisper-tiny.en", "artifacts/lora_checkpoints/lora-tiny-en-20260225T181843Z", "models/windy-stt-nano"),
-    ("openai/whisper-base.en", "artifacts/lora_checkpoints/lora-base-en-v2", "models/windy-stt-lite"),
-    ("openai/whisper-small.en", "artifacts/lora_checkpoints/lora-small-en-20260225T182403Z", "models/windy-stt-core"),
-    ("openai/whisper-medium.en", "artifacts/lora_checkpoints/lora-medium-en-20260226T021334Z", "models/windy-stt-plus"),
-    ("openai/whisper-large-v3", "artifacts/lora_checkpoints/lora-large-v3-en-20260226T022215Z", "models/windy-stt-pro"),
-    ("openai/whisper-large-v3-turbo", "artifacts/lora_checkpoints/lora-large-v3-turbo-en-20260226T023039Z", "models/windy-stt-turbo"),
-    ("distil-whisper/distil-large-v3", "artifacts/lora_checkpoints/lora-distil-whisper_distil-large-v3-en-20260226T165243Z", "models/windy-stt-edge"),
+    ("openai/whisper-tiny.en", "artifacts/lora_checkpoints/lora-tiny-en-20260225T181843Z", "models/windy-nano"),
+    ("openai/whisper-base.en", "artifacts/lora_checkpoints/lora-base-en-v2", "models/windy-lite"),
+    ("openai/whisper-small.en", "artifacts/lora_checkpoints/lora-small-en-20260225T182403Z", "models/windy-core"),
+    ("openai/whisper-medium.en", "artifacts/lora_checkpoints/lora-medium-en-20260226T021334Z", "models/windy-plus"),
+    ("openai/whisper-large-v3", "artifacts/lora_checkpoints/lora-large-v3-en-20260226T022215Z", "models/windy-pro-engine"),
+    ("openai/whisper-large-v3-turbo", "artifacts/lora_checkpoints/lora-large-v3-turbo-en-20260226T023039Z", "models/windy-turbo"),
+    ("distil-whisper/distil-large-v3", "artifacts/lora_checkpoints/lora-distil-whisper_distil-large-v3-en-20260226T165243Z", "models/windy-edge"),
 ]
 
 

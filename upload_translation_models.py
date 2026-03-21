@@ -49,8 +49,8 @@ def main():
     print("="*80)
 
     models = [
-        ("models/windy_translate_spark", "windy_translate_spark"),
-        ("models/windy_translate_standard", "windy_translate_standard")
+        ("models/windy-translate-spark", "windy-translate-spark"),
+        ("models/windy-translate-standard", "windy-translate-standard")
     ]
 
     results = []
