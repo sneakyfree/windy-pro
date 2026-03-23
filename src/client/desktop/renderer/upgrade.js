@@ -34,7 +34,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T60GeBXIOBasDQi4aitcq8O',
                 annualPriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg',
                 lifetimePriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg_life',
-                features: ['All 15 engines', '99 languages', '30-min recordings', 'Cloud Processing', 'Batch mode', 'LLM polish', '5 GB WindyCloud storage'],
+                features: ['All 15 engines', '99 languages', 'Unlimited local recording', '15-min cloud sessions', 'Ad-free experience', 'Cloud Processing', 'Batch mode', 'LLM polish', '3 devices', '5 GB WindyCloud storage'],
                 color: '#22C55E',
                 icon: '⚡'
             },
@@ -46,7 +46,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T5oZJBXIOBasDQijBW23Gow',
                 annualPriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7',
                 lifetimePriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7_life',
-                features: ['Everything in Pro', 'Real-time translation (5 pairs)', 'Conversation mode', '25 offline translation engines', '10 GB WindyCloud storage'],
+                features: ['Everything in Pro', 'Unlimited local recording', '30-min cloud sessions', 'Ad-free experience', 'Real-time translation (5 pairs)', 'Conversation mode', '25 offline translation engines', '5 devices', '10 GB WindyCloud storage'],
                 color: '#3B82F6',
                 icon: '🚀',
                 recommended: true
@@ -59,7 +59,7 @@ class UpgradePanel {
                 monthlyPriceId: 'price_1T60H8BXIOBasDQiy5eorTWR',
                 annualPriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG',
                 lifetimePriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG_life',
-                features: ['Everything in Ultra', '60-min recordings', 'Offline translation', '99 language pairs', 'Text-to-speech', 'Medical/legal glossaries', '100 offline engines', '25 GB WindyCloud storage'],
+                features: ['Everything in Ultra', 'Unlimited local recording', '60-min cloud sessions', 'Ad-free experience', 'Offline translation', '99 language pairs', 'Text-to-speech', 'Medical/legal glossaries', '100 offline engines', '10 devices', '25 GB WindyCloud storage'],
                 color: '#8B5CF6',
                 icon: '👑'
             }
@@ -221,7 +221,7 @@ class UpgradePanel {
         <p class="upgrade-guarantee">🔒 Secure payment via Stripe · 30-day money-back guarantee</p>
         <div class="upgrade-marco-polo" style="margin-top:20px;padding:16px;background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid #F59E0B33;border-radius:12px;text-align:center;">
           <div style="font-size:15px;margin-bottom:4px;">🧭 Want every language?</div>
-          <div style="font-size:13px;color:#D1D5DB;"><strong style="color:#F59E0B;">Marco Polo's Magic Box</strong> — 2,500 engines, $999, yours forever.</div>
+          <div style="font-size:13px;color:#D1D5DB;"><strong style="color:#F59E0B;">Marco Polo's Magic Box</strong> — 3,500+ engines, $399, yours forever. Add ☁️ Cloud Boost ($2.99/mo) anytime.</div>
         </div>
       </div>`;
     }

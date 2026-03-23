@@ -257,9 +257,9 @@ class MarketplacePanel {
       <div class="mp-hero" id="mpHero">
         <button class="mp-hero-dismiss" id="mpHeroDismiss" title="Dismiss" aria-label="Dismiss banner">&times;</button>
         <div class="mp-hero-title">🧭 Marco Polo's Magic Box</div>
-        <div class="mp-hero-sub">Every language on Earth. 2,500 engines. Offline forever.<br>
+        <div class="mp-hero-sub">Every language on Earth. 3,500+ engines. Offline forever.<br>
           Download once, translate anywhere — no internet needed.</div>
-        <div class="mp-hero-price"><span class="mp-strike">$17,475 value</span> → $999</div>
+        <div class="mp-hero-price"><span class="mp-strike">$435 value</span> → $399</div>
         <button class="mp-hero-cta" id="mpHeroCta">Get Marco Polo's Magic Box →</button>
       </div>`;
   }
@@ -268,9 +268,13 @@ class MarketplacePanel {
 
   _renderBundles() {
     const bundleData = [
-      { id: 'traveler-25', icon: '🧳', label: '25 engines · $49', cta: 'Browse & Pick' },
-      { id: 'polyglot-200', icon: '🗣️', label: '200 engines · $149', cta: 'Browse & Pick' },
-      { id: 'marco-polo', icon: '🧭', label: 'ALL 2,500 · $999', cta: 'Own Everything' }
+      { id: 'pack_grand_tour', icon: '🇪🇺', label: 'Europe · $129', cta: 'Browse' },
+      { id: 'pack_safari', icon: '🌍', label: 'Africa · $79', cta: 'Browse' },
+      { id: 'pack_silk_road', icon: '🌏', label: 'Middle East & S. Asia · $59', cta: 'Browse' },
+      { id: 'pack_dragon', icon: '🐉', label: 'East Asia · $49', cta: 'Browse' },
+      { id: 'pack_archipelago', icon: '🌺', label: 'SE Asia & Pacific · $69', cta: 'Browse' },
+      { id: 'pack_explorer', icon: '🌎', label: 'Americas · $49', cta: 'Browse' },
+      { id: 'pack_marco_polo', icon: '🧭', label: 'ALL regions · $399', cta: 'Own Everything' }
     ];
 
     const cards = bundleData.map(b => {

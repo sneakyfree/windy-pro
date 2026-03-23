@@ -5,7 +5,7 @@
  * 
  * Tiers:
  *   free     — 3 engines, 1 language, 5-min recordings, local only
- *   pro      — 15 engines, 99 languages, 30-min, batch mode, LLM polish
+ *   pro      — 15 engines, 99 languages, unlimited local / 15-min cloud, batch mode, LLM polish
  *   translate — Everything in Pro + real-time translation, conversation mode
  */
 

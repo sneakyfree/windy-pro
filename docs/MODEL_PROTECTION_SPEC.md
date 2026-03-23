@@ -151,7 +151,7 @@ The desktop app pings the license server periodically to confirm the subscriptio
 | Pro ($99) | 7 days | Standard grace |
 | Ultra ($199) | 14 days | Higher trust |
 | Max ($299) | 30 days | Premium customer |
-| Marco Polo ($999) | 30 days | VIP — treat with maximum respect |
+| Marco Polo ($399) | 30 days | VIP — treat with maximum respect |
 | Travel Mode (any tier) | 30 days | Manual toggle for travelers — our core users |
 
 **Behavior on grace expiry:**

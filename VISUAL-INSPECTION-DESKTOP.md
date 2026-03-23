@@ -19,7 +19,7 @@
 | 11 | `desktop-11-translate-idle.png` | Translate panel — idle state | ✅ Captured |
 | 12 | `desktop-12-language-picker.png` | Translate panel — language dropdown open | ✅ Captured |
 | 13 | `desktop-13-translate-error.png` | Translate panel — error state (API key needed) | ✅ Captured |
-| 16 | `desktop-16-marketplace-hero.png` | Marketplace — Marco Polo's Magic Box hero card ($999) | ✅ Captured |
+| 16 | `desktop-16-marketplace-hero.png` | Marketplace — Marco Polo's Magic Box hero card ($399) | ✅ Captured |
 | 17 | `desktop-17-marketplace-bundles.png` | Marketplace — Bundles section (25 engines $49, 200 engines $149) | ✅ Captured |
 | 24 | `desktop-24-wizard-step1.png` | Installer Wizard — Step 1 "Welcome to Windy Pro" | ✅ Captured |
 | 34 | `desktop-34-changelog-overlay.png` | Changelog overlay — "What's New in v0.4.0" | ✅ Captured |
@@ -38,7 +38,7 @@
 - **Translate panel (11):** Auto-detect source, Spanish target, mic button, text input all present and properly spaced.
 - **Language picker (12):** Dropdown shows 11 languages (English through Russian), proper highlight on selected item.
 - **Translate error (13):** Yellow warning banner correctly tells user to add API key via Settings → Transcription Engine. Good UX.
-- **Marketplace hero (16):** Marco Polo's Magic Box card — dark gradient, pricing ($17,475 → $999), CTA button all render well.
+- **Marketplace hero (16):** Marco Polo's Magic Box card — dark gradient, pricing ($17,475 → $399), CTA button all render well.
 - **Marketplace bundles (17):** Bundle cards with icons and pricing display correctly.
 - **Wizard Step 1 (24):** Dark theme, step navigation tabs across top, feature cards (Green Strobe, 100% Private, 15 Engines, Configurable Duration) all render cleanly. "Get Started" CTA visible.
 - **Changelog overlay (34):** "What's New in v0.4.0" overlay renders on top of main app. Lists Batch Mode, Multi-Engine, Duration, LLM Cleanup features. "Got it!" dismiss button present.

@@ -31,7 +31,7 @@
             "description": "View your recordings and stats"
         },
         {
-            "name": "Translate",
+            "name": "WindyTranslate",
             "url": "/translate",
             "description": "Open the translator"
         },

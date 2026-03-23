@@ -508,9 +508,9 @@ Users can sync to multiple destinations simultaneously. Transcribe a meeting →
 ### Windy Cloud (Revenue Opportunity)
 
 - Free tier: 5 GB (enough for ~100 hours of audio-only archive)
-- Basic: 50 GB — $2/month or $20/year
-- Pro: 500 GB — $8/month or $80/year
-- Unlimited: $15/month or $150/year
+- Breeze: 100 GB — $9/month or $84/year
+- Gale: 250 GB — $19/month or $180/year
+- Tempest: 1 TB — $49/month or $468/year
 
 This is recurring revenue that complements the one-time license fee. Users who are building voice clone datasets over years will need storage. Windy Cloud is the natural choice — optimized for our data formats, integrated into the app, one-click setup.
 

@@ -28,7 +28,7 @@ maps perfectly without requiring any AI/ML knowledge. Decision by Grant, 27 Feb 
 | Decision | Details | By |
 |----------|---------|----|
 | "Engines" not "models" | All user-facing text uses "engine" exclusively | Grant |
-| $7.99/mo monthly option | Windy Translate: $79 one-time **OR** $7.99/mo monthly alongside one-time | Grant + Kit 0C3 |
+| $8.99/mo monthly option | Windy Translate: $79 one-time **OR** $8.99/mo monthly alongside one-time | Grant + Kit 0C3 |
 | Two-tier translation | Hand-translate Top 10 languages, dynamic-translate remaining 89 via Veron | Grant + Kit 0C3 |
 | Top 10 = 82% market | Top 10 languages capture ~82% of global addressable market | Kit 0C3 |
 
@@ -1326,7 +1326,7 @@ CODONS:
 │   │  │  ├── All Whisper model sizes                           │
 │   │  │  └── No translation                                    │
 │   │  │                                                        │
-│   │  │  WINDY TRANSLATE — $79 one-time OR $7.99/mo            │
+│   │  │  WINDY TRANSLATE — $79 one-time OR $8.99/mo            │
 │   │  │  ├── 2-way conversation translation                    │
 │   │  │  ├── Up to 5 language pairs                            │
 │   │  │  ├── Manual + Auto conversation modes                  │
@@ -4083,7 +4083,7 @@ EXISTING CODE REUSE:
 | 2026-02-27 | Kit 0C3 Charlie + Antigravity | Added F4: Wizard i18n integration (✅ complete — 7 langs × 138 keys) |
 | 2026-02-27 | Grant | Architecture decision: Two-tier translation (hand-translate 10, dynamic 89) |
 | 2026-02-27 | Grant | Terminology standard: "engines" not "models" in all user-facing text |
-| 2026-02-27 | Grant + Kit 0C3 | Pricing update: $7.99/mo monthly option for Windy Translate |
+| 2026-02-27 | Grant + Kit 0C3 | Pricing update: $8.99/mo monthly option for Windy Translate |
 | 2026-02-27 | Kit 0C3 | Top 10 languages = ~82% of global addressable market |
 | 2026-02-27 | Kit 0C3 Charlie | **v1.4.1**: Full alignment audit — Website ↔ DNA ↔ Wizard |
 | 2026-02-27 | Kit 0C3 | Fixed website: "5 engines" → "15 Voice Engines", "13 Languages" → "99 Languages" |

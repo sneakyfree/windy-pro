@@ -21,7 +21,7 @@ Rules:
 - Natural/native-sounding translations — NOT literal Google Translate quality
 - Adapt marketing tone for each culture
 - Keep product names UNTRANSLATED: "Windy Pro", "WindyTune", "Windy Translate", "Green Strobe"
-- Keep prices in USD ($79, $7.99/mo)
+- Keep prices in USD ($79, $8.99/mo)
 - Arabic is already RTL-handled in the CSS
 
 Read the existing i18n.json file, add the new languages, write the updated file back, and copy to dist.
@@ -164,7 +164,7 @@ Also update Strand F to add:
 
 Key decisions to document:
 - "Engines" not "models" in all user-facing text (decided 27 Feb 2026)
-- $7.99/mo monthly option alongside $79 one-time for Translate (decided 27 Feb 2026)
+- $8.99/mo monthly option alongside $79 one-time for Translate (decided 27 Feb 2026)
 - Website auto-detects language from browser, user can override, choice persists
 - 12 languages on website, 7 in wizard (expanding to match)
 

@@ -1924,7 +1924,7 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   const MODEL_INFO = {
     // Keep special model types
     'windytune': { name: 'WindyTune Auto', size: '', specialty: 'Auto-selects best model' },
-    'cloud': { name: 'Windy Cloud', size: '', specialty: 'Cloud-based transcription' },
+    'cloud': { name: 'WindyCloud', size: '', specialty: 'Cloud-based transcription' },
     'local': { name: 'Local', size: '', specialty: '' },
 
     // Real GPU voice models from model_registry.json
@@ -2082,7 +2082,7 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     });
 
     if (!transcription.text || !transcription.text.trim()) {
-      return { text: '', detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai', modelInfo: { ...modelInfo, model: 'Windy Cloud' } };
+      return { text: '', detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai', modelInfo: { ...modelInfo, model: 'WindyCloud' } };
     }
 
     // Step 2: If target is different from source, translate the text
@@ -2090,11 +2090,11 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     if (needsTranslation) {
       const textResult = await translateTextViaAI(transcription.text, transcription.language || 'auto', targetLang);
       if (textResult && textResult.ok) {
-        return { text: textResult.translatedText, detectedLang: transcription.language, engine: textResult.engine || (isGroq ? 'groq' : 'openai'), modelInfo: { ...modelInfo, model: 'Windy Cloud' } };
+        return { text: textResult.translatedText, detectedLang: transcription.language, engine: textResult.engine || (isGroq ? 'groq' : 'openai'), modelInfo: { ...modelInfo, model: 'WindyCloud' } };
       }
     }
 
-    return { text: transcription.text, detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai', modelInfo: { ...modelInfo, model: 'Windy Cloud' } };
+    return { text: transcription.text, detectedLang: transcription.language, engine: isGroq ? 'groq' : 'openai', modelInfo: { ...modelInfo, model: 'WindyCloud' } };
 
   } catch (cloudErr) {
     // Detect offline errors and show friendly message instead of raw ENOTFOUND
@@ -4477,7 +4477,7 @@ ipcMain.handle('translate-offline', async (event, text, sourceLang, targetLang) 
   if (store.get('license.modelsLocked', false)) {
     return {
       ok: false,
-      error: 'Models are locked. Please connect to the internet to verify your Windy Word license.',
+      error: 'Models are locked. Please connect to the internet to verify your WindyWord license.',
       modelsLocked: true
     };
   }

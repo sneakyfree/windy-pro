@@ -68,14 +68,14 @@ describe('pair-bundles.json', () => {
     bundles = require('../shared/pair-bundles.json');
   });
 
-  test('loads and has exactly 3 entries', () => {
+  test('loads and has exactly 7 entries (6 regional packs + Marco Polo)', () => {
     expect(Array.isArray(bundles)).toBe(true);
-    expect(bundles).toHaveLength(3);
+    expect(bundles).toHaveLength(7);
   });
 
-  test('bundles have correct prices ($49, $149, $999)', () => {
+  test('bundles have correct prices ($49, $49, $59, $69, $79, $129, $399)', () => {
     const prices = bundles.map(b => b.price).sort((a, b) => a - b);
-    expect(prices).toEqual([49, 149, 999]);
+    expect(prices).toEqual([49, 49, 59, 69, 79, 129, 399]);
   });
 
   test('every bundle has required fields', () => {

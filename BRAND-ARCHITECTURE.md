@@ -36,7 +36,7 @@ Five interlocking companies that form a flywheel — each one feeds the others, 
 **Bundles:**
 - **Traveler:** $49 — 25 pairs
 - **Polyglot:** $149 — 200 pairs
-- **Marco Polo:** $999 — ALL 2,500 pairs
+- **Marco Polo:** $399 — ALL 3,500+ pairs
 **The moat:** 2,500 fine-tuned translation pair models. Each is a legally distinct derivative work via LoRA.
 **Ship priority:** #2 — Pairs already being built (1,188 on HuggingFace, targeting 2,500). Monetized through Windy Word from day one.
 
@@ -130,7 +130,7 @@ The concept of **creative power through spoken word** is the single most univers
 ## Model Protection Architecture
 
 ### The Threat
-Buy Marco Polo ($999) → download all 2,500 .bin model files → airplane mode → request refund → keep models forever.
+Buy Marco Polo ($399) → download all 3,500+ .bin model files → airplane mode → request refund → keep models forever.
 
 ### Defense Stack (4 layers)
 
@@ -168,7 +168,7 @@ Both repos will be rebranded to reflect the Windy Word name when the time is rig
 ## Key Dates
 
 - **2025:** Windy Pro development begins (desktop + mobile)
-- **2026-01:** HuggingFace model pipeline starts (target: 2,500 pairs)
+- **2026-01:** HuggingFace model pipeline starts (target: 3,500+ pairs)
 - **2026-03-19:** Brand architecture formalized (this document)
 - **TBD:** Domain purchases, website launches, app store listings updated
 

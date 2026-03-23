@@ -29,8 +29,8 @@ async function apiFetch(path, options = {}) {
 const PLANS = {
     free: { name: 'Free', color: '#64748B', icon: '🌪️' },
     pro: { name: 'Pro', color: '#22C55E', icon: '⚡' },
-    translate: { name: 'Translate', color: '#3B82F6', icon: '🌍' },
-    translate_pro: { name: 'Translate Pro', color: '#8B5CF6', icon: '👑' },
+    translate: { name: 'Windy Ultra', color: '#3B82F6', icon: '🚀' },
+    translate_pro: { name: 'Windy Max', color: '#8B5CF6', icon: '👑' },
 }
 
 export default function Settings() {

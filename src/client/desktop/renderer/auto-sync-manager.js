@@ -221,7 +221,7 @@ class AutoSyncManager {
         const bundles = localBundles?.bundles || [];
 
         const cloudUsedPct = stats.cloudLimit > 0 ? Math.min(100, Math.round((stats.cloud / stats.cloudLimit) * 100)) : 0;
-        const tierLabel = { free: 'Free', pro: 'Pro', translate: 'Translate', 'translate-pro': 'Translate Pro' }[stats.cloudTier] || 'Free';
+        const tierLabel = { free: 'Free', pro: 'Pro', translate: 'Windy Ultra', 'translate-pro': 'Windy Max', translate_pro: 'Windy Max' }[stats.cloudTier] || 'Free';
         const barColor = cloudUsedPct >= 90 ? '#ff4444' : cloudUsedPct >= 70 ? '#ffaa00' : '#00cc66';
 
         container.innerHTML = `

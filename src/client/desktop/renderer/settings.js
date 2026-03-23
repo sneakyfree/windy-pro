@@ -2556,7 +2556,7 @@ class SettingsPanel {
       const upgradeBtn = this.panel.querySelector('#settingsUpgradeBtn');
       const tierInfo = {
         free: { label: '🌱 Free', color: '#6B7280', hint: 'Unlock more engines, languages, and recording time.' },
-        pro: { label: '⚡ Pro', color: '#22C55E', hint: 'All 15 engines, 99 languages, 30-min recordings.' },
+        pro: { label: '⚡ Pro', color: '#22C55E', hint: 'All 15 engines, 99 languages, unlimited local recording, 15-min cloud sessions.' },
         translate: { label: '🚀 Ultra', color: '#3B82F6', hint: 'Pro + 60-min recordings, real-time translation, conversation mode.' },
         translate_pro: { label: '👑 Windy Max', color: '#8B5CF6', hint: 'All features unlocked. Premium support.' }
       };
@@ -2646,7 +2646,7 @@ class SettingsPanel {
     if (banner) {
       banner.style.display = 'block';
       const tierLabels = {
-        free: { name: 'Free', color: '#6B7280', hint: '2 engines included. Upgrade to Windy Pro for all 15 engines, GPU models, and 30-min recordings.' },
+        free: { name: 'Free', color: '#6B7280', hint: '2 engines included. 5-min local recordings. Upgrade to Windy Pro for all 15 engines, unlimited local recording, and cloud sessions.' },
         pro: { name: 'Pro', color: '#22C55E', hint: 'All 15 engines unlocked! Add Translate to get language-specialist engines for Spanish, French, and Hindi.' },
         translate: { name: 'Ultra', color: '#3B82F6', hint: 'All engines + language specialists unlocked. Upgrade to Windy Max for priority support.' },
         translate_pro: { name: 'Windy Max', color: '#8B5CF6', hint: 'All engines and features unlocked. You have the best plan! 👑' }
