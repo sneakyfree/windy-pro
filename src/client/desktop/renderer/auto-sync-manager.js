@@ -231,7 +231,7 @@ class AutoSyncManager {
           <div class="sync-status-bar">
             <span class="sync-dot ${this.isOnline ? 'sync-online' : 'sync-offline'}"></span>
             <span>${this.isOnline ? 'Online' : 'Offline'}</span>
-            <span class="sync-last">Last sync: ${this.lastSyncTimestamp ? new Date(this.lastSyncTimestamp).toLocaleString() : 'Never'}</span>
+            <span class="sync-last">Last sync: ${this.lastSyncTimestamp ? (window.WindyDateUtils ? WindyDateUtils.formatFull(new Date(this.lastSyncTimestamp)) : new Date(this.lastSyncTimestamp).toLocaleString()) : 'Never'}</span>
           </div>
           <button class="conv-close-btn" id="sync-close">✕</button>
         </div>
@@ -275,7 +275,7 @@ class AutoSyncManager {
                   <span class="sync-device-icon">${dev.platform === 'ios' ? '📱' : dev.platform === 'android' ? '📱' : '💻'}</span>
                   <div class="sync-device-info">
                     <span class="sync-device-name">${dev.name}</span>
-                    <span class="sync-device-meta">Last sync: ${new Date(dev.lastSync).toLocaleString()} · ${dev.bundleCount} bundles</span>
+                    <span class="sync-device-meta">Last sync: ${window.WindyDateUtils ? WindyDateUtils.formatFull(new Date(dev.lastSync)) : new Date(dev.lastSync).toLocaleString()} · ${dev.bundleCount} bundles</span>
                   </div>
                 </div>
               `).join('')}
@@ -318,7 +318,7 @@ class AutoSyncManager {
             <div class="sync-queue-item">
               <span>${u.bundle_id?.slice(0, 8) || '?'}...</span>
               <span class="sync-queue-meta">${u.retries > 0 ? `Retry ${u.retries}/${u.max_retries}` : 'Pending'}</span>
-              <span>${new Date(u.queued_at).toLocaleString()}</span>
+              <span>${window.WindyDateUtils ? WindyDateUtils.formatFull(new Date(u.queued_at)) : new Date(u.queued_at).toLocaleString()}</span>
             </div>
           `).join('')}
         </div>

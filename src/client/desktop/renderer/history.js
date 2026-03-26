@@ -474,19 +474,21 @@ class HistoryPanel {
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
 
-        const todayStr = today.toDateString();
-        const yesterdayStr = yesterday.toDateString();
+        // Use timezone-aware date strings for Today/Yesterday comparison
+        const useUtils = !!window.WindyDateUtils;
+        const todayStr = useUtils ? WindyDateUtils.toDateString(today) : today.toDateString();
+        const yesterdayStr = useUtils ? WindyDateUtils.toDateString(yesterday) : yesterday.toDateString();
 
         for (const entry of entries) {
             const d = new Date(entry.date);
-            const ds = d.toDateString();
+            const ds = useUtils ? WindyDateUtils.toDateString(d) : d.toDateString();
             let label;
             if (ds === todayStr) {
                 label = 'TODAY';
             } else if (ds === yesterdayStr) {
                 label = 'YESTERDAY';
             } else {
-                label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                label = useUtils ? WindyDateUtils.formatDateOnly(d) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             }
             if (!groups.has(label)) groups.set(label, []);
             groups.get(label).push(entry);
@@ -506,21 +508,31 @@ class HistoryPanel {
     }
 
     /**
-     * Format date like: Feb 28, 2026 5:07pm EST
+     * Format date with timezone awareness.
+     * Uses Intl.DateTimeFormat.formatToParts() inline — no external dependency.
+     * Reads timezone from localStorage 'windy_timezone'.
      * @param {Date} d
      * @param {boolean} long - if true, use full month name
      */
     _formatDate(d, long = false) {
-        const month = d.toLocaleString([], { month: long ? 'long' : 'short' });
-        const day = d.getDate();
-        const year = d.getFullYear();
-        let hours = d.getHours();
-        const mins = d.getMinutes().toString().padStart(2, '0');
-        const ampm = hours >= 12 ? 'pm' : 'am';
-        hours = hours % 12 || 12;
-        // Get timezone abbreviation
-        const tz = d.toLocaleTimeString([], { timeZoneName: 'short' }).split(' ').pop();
-        return `${month} ${day}, ${year} ${hours}:${mins}${ampm} ${tz}`;
+        try {
+            const savedTz = localStorage.getItem('windy_timezone');
+            const tz = (savedTz && savedTz !== 'auto') ? savedTz : Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const result = new Intl.DateTimeFormat('en-US', {
+                month: long ? 'long' : 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: tz,
+                timeZoneName: 'short'
+            }).format(d);
+            // DEBUG: prefix with marker so we can verify this code path runs
+            return result;
+        } catch (e) {
+            return '✖' + d.toLocaleString('en-US', { timeZoneName: 'short' });
+        }
     }
 
     /* ═══════════════════════════
@@ -759,11 +771,11 @@ class HistoryPanel {
 
         if (format === 'txt') {
             let content = 'WINDY PRO — TRANSCRIPT HISTORY\n';
-            content += `Exported: ${new Date().toLocaleString()}\n`;
+            content += `Exported: ${window.WindyDateUtils ? WindyDateUtils.formatFull(new Date()) : new Date().toLocaleString()}\n`;
             content += `Total: ${entries.length} recordings\n`;
             content += '═'.repeat(50) + '\n\n';
             entries.forEach((item, i) => {
-                const date = new Date(item.date).toLocaleString();
+                const date = window.WindyDateUtils ? WindyDateUtils.formatFull(new Date(item.date)) : new Date(item.date).toLocaleString();
                 content += `[${i + 1}] ${date} — ${item.wordCount || 0} words (${item.engine || 'unknown'})\n`;
                 content += (item.text || '(no transcript)') + '\n\n';
                 content += '—'.repeat(40) + '\n\n';
@@ -787,9 +799,9 @@ class HistoryPanel {
 
         if (format === 'md') {
             let content = '# Windy Pro — Transcript History\n\n';
-            content += `> Exported: ${new Date().toLocaleString()} · ${entries.length} recordings\n\n`;
+            content += `> Exported: ${window.WindyDateUtils ? WindyDateUtils.formatFull(new Date()) : new Date().toLocaleString()} · ${entries.length} recordings\n\n`;
             entries.forEach(item => {
-                const date = new Date(item.date).toLocaleString();
+                const date = window.WindyDateUtils ? WindyDateUtils.formatFull(new Date(item.date)) : new Date(item.date).toLocaleString();
                 content += `## ${date} (${item.wordCount || 0}w · ${item.engine || 'unknown'})\n\n${item.text}\n\n---\n\n`;
             });
             return { content, filename: `windy-transcripts-${dateStr}.md`, type: 'text/markdown' };
@@ -838,7 +850,7 @@ class HistoryPanel {
         const body = data.content.length > 1800
             ? data.content.substring(0, 1800) + '\n\n… (truncated — use Save to File for full export)'
             : data.content;
-        const subject = `Windy Pro Transcripts — ${new Date().toLocaleDateString()}`;
+        const subject = `Windy Pro Transcripts — ${window.WindyDateUtils ? WindyDateUtils.formatDateOnly(new Date()) : new Date().toLocaleDateString()}`;
         const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.windyAPI.openExternalUrl(mailto);
         this._showExportToast('📧 Opening email client…');

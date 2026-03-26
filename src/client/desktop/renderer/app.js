@@ -2666,7 +2666,7 @@ class WindyApp {
       filters = [{ name: 'Text', extensions: ['txt'] }];
     } else if (format === 'md') {
       const paragraphs = text.split(/\n+/).filter(p => p.trim());
-      content = `# Transcript — ${new Date().toLocaleString()}\n\n${paragraphs.map(p => p.trim()).join('\n\n')}\n`;
+      content = `# Transcript — ${window.WindyDateUtils ? WindyDateUtils.formatFull(new Date()) : new Date().toLocaleString()}\n\n${paragraphs.map(p => p.trim()).join('\n\n')}\n`;
       defaultName = `transcript-${timestamp}.md`;
       filters = [{ name: 'Markdown', extensions: ['md'] }];
     } else if (format === 'srt') {

@@ -272,8 +272,8 @@ function getStripe() {
 
 function getTierLimits(tier) {
   const tiers = {
-    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 2, storageMb: 500, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
-    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 15, storageMb: 5120, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
+    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, storageMb: 500, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
+    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, storageMb: 5120, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
     translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 60, storageMb: 10240, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
     translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: Infinity, storageMb: 25600, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
   };
@@ -1106,6 +1106,7 @@ ipcMain.on('update-widget', (event, data) => {
 // ═══════════════════════════════════════════
 
 let videoWindow = null;
+let videoDismissed = false; // User closed preview — don't auto-show until app restart
 
 function createVideoWindow() {
   if (videoWindow && !videoWindow.isDestroyed()) {
@@ -1177,6 +1178,7 @@ function createVideoWindow() {
 
 // Show video preview
 ipcMain.handle('show-video-preview', async () => {
+  if (videoDismissed) return { ok: false, dismissed: true };
   const win = createVideoWindow();
   win.show();
   return { ok: true };
@@ -1283,12 +1285,29 @@ ipcMain.on('stop-resize-video', () => {
   if (resizeInterval) { clearInterval(resizeInterval); resizeInterval = null; }
 });
 
-// Close video preview
 ipcMain.on('close-video-preview', () => {
+  videoDismissed = true; // Don't auto-show again until app restart
   if (videoWindow && !videoWindow.isDestroyed()) {
     videoWindow.webContents.send('stop-camera');
     videoWindow.hide();
   }
+});
+
+// Minimize video preview
+ipcMain.on('minimize-video-preview', () => {
+  if (videoWindow && !videoWindow.isDestroyed()) {
+    videoWindow.minimize();
+  }
+});
+
+// Toggle always-on-top for video preview (send to back / bring to front)
+ipcMain.handle('toggle-video-always-on-top', async () => {
+  if (videoWindow && !videoWindow.isDestroyed()) {
+    const isOnTop = videoWindow.isAlwaysOnTop();
+    videoWindow.setAlwaysOnTop(!isOnTop);
+    return !isOnTop;
+  }
+  return false;
 });
 
 // ═══════════════════════════════════════════
@@ -3643,7 +3662,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
   const featureDefs = [
     { key: 'maxEngines', label: 'AI Engines', tip: 'Number of transcription engines. More = better accuracy across accents and noise.' },
     { key: 'maxLanguages', label: 'Languages', tip: 'Free: 1, Paid: all 99 languages including rare dialects.' },
-    { key: 'maxMinutes', label: 'Recording Length', tip: 'Maximum length of a single recording session. Free: 2 min. Pro: 15 min. Ultra: 60 min. Max: unlimited!' },
+    { key: 'maxMinutes', label: 'Recording Length', tip: 'Maximum length of a single recording session. Free: 5 min. Pro: 30 min. Ultra: 60 min. Max: unlimited!' },
     { key: 'batchMode', label: 'Batch Mode', tip: 'Drag-drop a folder of recordings and transcribe them all at once.' },
     { key: 'llmPolish', label: 'LLM Polish', tip: 'AI fixes grammar, removes filler words, adds punctuation automatically.' },
     { key: 'translation', label: 'Real-time Translation', tip: 'Live speech translation across 99 language pairs.' },
@@ -3652,7 +3671,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
   ];
 
   const tiers = {
-    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 2, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
+    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
     pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 15, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
     translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 60, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
     translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 'Unlimited', batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
@@ -4855,6 +4874,10 @@ app.on('ready', () => {
 
 app.whenReady().then(async () => {
   _perfMark('app.whenReady()');
+  // Clear file cache in dev mode to ensure fresh JS files
+  if (process.argv.includes('--dev')) {
+    try { await session.defaultSession.clearCache(); } catch (_) {}
+  }
   // ═══════════════════════════════════════════════════════════════════
   // INSTALLATION WIZARD v2.0 — TurboTax-style 9-screen setup
   // Source: installer-v2/ (the ONLY wizard — there is no other)

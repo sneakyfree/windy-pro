@@ -95,7 +95,7 @@ class CloneDataArchive {
     renderBundleCard(bundle) {
         const hasVideo = !!bundle.video;
         const duration = this.formatDuration(bundle.duration_seconds || 0);
-        const date = new Date(bundle.created_at || Date.now()).toLocaleDateString();
+        const date = window.WindyDateUtils ? WindyDateUtils.formatDateOnly(new Date(bundle.created_at || Date.now())) : new Date(bundle.created_at || Date.now()).toLocaleDateString();
         const size = bundle.file_size ? `${(bundle.file_size / 1048576).toFixed(1)} MB` : '?';
         const segments = bundle.transcript?.segments?.length || 0;
         const selected = this.selectedBundles.has(bundle.bundle_id);

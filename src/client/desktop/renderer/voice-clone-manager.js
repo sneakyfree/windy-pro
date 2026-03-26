@@ -58,7 +58,7 @@ class VoiceCloneManager {
                 <div class="vc-clone-card ${clone.id === this.activeCloneId ? 'vc-active' : ''}" data-id="${clone.id}">
                   <div class="vc-clone-info">
                     <span class="vc-clone-name">${clone.name || 'Unnamed Clone'}</span>
-                    <span class="vc-clone-meta">${clone.duration || '?'}s sample · Created ${new Date(clone.created_at || Date.now()).toLocaleDateString()}</span>
+                    <span class="vc-clone-meta">${clone.duration || '?'}s sample · Created ${window.WindyDateUtils ? WindyDateUtils.formatDateOnly(new Date(clone.created_at || Date.now())) : new Date(clone.created_at || Date.now()).toLocaleDateString()}</span>
                     <span class="vc-clone-status">${clone.status === 'ready' ? '✅ Ready' : clone.status === 'processing' ? '⏳ Processing' : '❌ ' + (clone.status || 'Unknown')}</span>
                   </div>
                   <div class="vc-clone-actions">

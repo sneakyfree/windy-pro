@@ -378,6 +378,91 @@ class SettingsPanel {
               <option value="light">☀️ Light</option>
             </select>
           </div>
+          <div class="setting-row">
+            <label for="timezoneSelect">Timezone</label>
+            <select id="timezoneSelect">
+              <option value="auto">🌐 Auto-detect</option>
+              <optgroup label="Americas">
+                <option value="America/New_York">Eastern (New York)</option>
+                <option value="America/Chicago">Central (Chicago)</option>
+                <option value="America/Denver">Mountain (Denver)</option>
+                <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
+                <option value="America/Anchorage">Alaska (Anchorage)</option>
+                <option value="Pacific/Honolulu">Hawaii (Honolulu)</option>
+                <option value="America/Phoenix">Arizona (Phoenix, no DST)</option>
+                <option value="America/Toronto">Eastern (Toronto)</option>
+                <option value="America/Vancouver">Pacific (Vancouver)</option>
+                <option value="America/Mexico_City">Mexico City</option>
+                <option value="America/Sao_Paulo">São Paulo</option>
+                <option value="America/Argentina/Buenos_Aires">Buenos Aires</option>
+                <option value="America/Bogota">Bogotá</option>
+              </optgroup>
+              <optgroup label="Europe">
+                <option value="Europe/London">London (GMT/BST)</option>
+                <option value="Europe/Paris">Paris (CET/CEST)</option>
+                <option value="Europe/Berlin">Berlin</option>
+                <option value="Europe/Madrid">Madrid</option>
+                <option value="Europe/Rome">Rome</option>
+                <option value="Europe/Amsterdam">Amsterdam</option>
+                <option value="Europe/Moscow">Moscow</option>
+                <option value="Europe/Istanbul">Istanbul</option>
+                <option value="Europe/Athens">Athens</option>
+                <option value="Europe/Warsaw">Warsaw</option>
+              </optgroup>
+              <optgroup label="Asia & Pacific">
+                <option value="Asia/Tokyo">Tokyo (JST)</option>
+                <option value="Asia/Shanghai">Shanghai (CST)</option>
+                <option value="Asia/Hong_Kong">Hong Kong</option>
+                <option value="Asia/Singapore">Singapore</option>
+                <option value="Asia/Seoul">Seoul (KST)</option>
+                <option value="Asia/Kolkata">India (IST)</option>
+                <option value="Asia/Dubai">Dubai (GST)</option>
+                <option value="Asia/Bangkok">Bangkok (ICT)</option>
+                <option value="Asia/Jakarta">Jakarta (WIB)</option>
+                <option value="Asia/Taipei">Taipei</option>
+                <option value="Australia/Sydney">Sydney (AEST)</option>
+                <option value="Australia/Melbourne">Melbourne</option>
+                <option value="Australia/Perth">Perth (AWST)</option>
+                <option value="Pacific/Auckland">Auckland (NZST)</option>
+              </optgroup>
+              <optgroup label="Africa & Middle East">
+                <option value="Africa/Cairo">Cairo (EET)</option>
+                <option value="Africa/Lagos">Lagos (WAT)</option>
+                <option value="Africa/Johannesburg">Johannesburg (SAST)</option>
+                <option value="Africa/Nairobi">Nairobi (EAT)</option>
+                <option value="Asia/Riyadh">Riyadh (AST)</option>
+                <option value="Asia/Tehran">Tehran (IRST)</option>
+              </optgroup>
+              <optgroup label="UTC Offsets">
+                <option value="Etc/GMT+12">UTC−12</option>
+                <option value="Etc/GMT+11">UTC−11</option>
+                <option value="Etc/GMT+10">UTC−10</option>
+                <option value="Etc/GMT+9">UTC−9</option>
+                <option value="Etc/GMT+8">UTC−8</option>
+                <option value="Etc/GMT+7">UTC−7</option>
+                <option value="Etc/GMT+6">UTC−6</option>
+                <option value="Etc/GMT+5">UTC−5</option>
+                <option value="Etc/GMT+4">UTC−4</option>
+                <option value="Etc/GMT+3">UTC−3</option>
+                <option value="Etc/GMT+2">UTC−2</option>
+                <option value="Etc/GMT+1">UTC−1</option>
+                <option value="Etc/GMT">UTC±0</option>
+                <option value="Etc/GMT-1">UTC+1</option>
+                <option value="Etc/GMT-2">UTC+2</option>
+                <option value="Etc/GMT-3">UTC+3</option>
+                <option value="Etc/GMT-4">UTC+4</option>
+                <option value="Etc/GMT-5">UTC+5</option>
+                <option value="Etc/GMT-6">UTC+6</option>
+                <option value="Etc/GMT-7">UTC+7</option>
+                <option value="Etc/GMT-8">UTC+8</option>
+                <option value="Etc/GMT-9">UTC+9</option>
+                <option value="Etc/GMT-10">UTC+10</option>
+                <option value="Etc/GMT-11">UTC+11</option>
+                <option value="Etc/GMT-12">UTC+12</option>
+              </optgroup>
+            </select>
+          </div>
+          <p class="settings-hint" id="timezoneHint">Detected: ${(() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch(_) { return 'Unknown'; } })()}</p>
         </div>
 
         <div class="settings-section">
@@ -2322,6 +2407,31 @@ class SettingsPanel {
         const theme = e.target.value;
         localStorage.setItem('windy_theme', theme);
         document.body.classList.toggle('light-theme', theme === 'light');
+      });
+    }
+
+    // Timezone selector
+    const timezoneSelect = this.panel.querySelector('#timezoneSelect');
+    const timezoneHint = this.panel.querySelector('#timezoneHint');
+    if (timezoneSelect) {
+      const savedTz = localStorage.getItem('windy_timezone') || 'auto';
+      timezoneSelect.value = savedTz;
+      // Update hint to show effective timezone
+      if (timezoneHint) {
+        const effective = savedTz === 'auto'
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone
+          : savedTz;
+        timezoneHint.textContent = `Detected: ${Intl.DateTimeFormat().resolvedOptions().timeZone}` +
+          (savedTz !== 'auto' ? ` · Using: ${savedTz}` : '');
+      }
+      timezoneSelect.addEventListener('change', (e) => {
+        const tz = e.target.value;
+        localStorage.setItem('windy_timezone', tz);
+        if (timezoneHint) {
+          const systemTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          timezoneHint.textContent = `Detected: ${systemTz}` +
+            (tz !== 'auto' ? ` · Using: ${tz}` : '');
+        }
       });
     }
   }

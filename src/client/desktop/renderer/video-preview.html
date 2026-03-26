@@ -88,11 +88,11 @@
             }
         }
 
-        /* Resolution badge */
+        /* Resolution badge — bottom left to avoid button conflict */
         .res-badge {
             position: absolute;
-            top: 6px;
-            right: 28px;
+            bottom: 6px;
+            left: 8px;
             background: rgba(0, 0, 0, 0.6);
             color: #A78BFA;
             font-size: 9px;
@@ -225,36 +225,72 @@
             opacity: 1;
         }
 
-        /* Close button */
-        .close-btn {
+        /* ─── Window control button bar ─── */
+        .btn-bar {
             position: absolute;
-            top: 4px;
+            top: 5px;
             right: 6px;
-            background: rgba(0, 0, 0, 0.6);
-            color: #ddd;
+            display: flex;
+            gap: 4px;
+            z-index: 20;
+            -webkit-app-region: no-drag;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .video-container:hover .btn-bar {
+            opacity: 1;
+        }
+
+        .btn-bar button {
+            width: 22px;
+            height: 22px;
             border: none;
-            font-size: 14px;
+            border-radius: 6px;
             cursor: pointer;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            opacity: 0.4;
-            transition: opacity 0.2s, background 0.2s;
+            font-size: 13px;
+            line-height: 1;
+            transition: background 0.15s, transform 0.1s;
             -webkit-app-region: no-drag;
-            z-index: 20;
         }
 
-        .video-container:hover .close-btn {
-            opacity: 0.8;
+        .btn-bar button:active {
+            transform: scale(0.9);
         }
 
-        .close-btn:hover {
-            opacity: 1 !important;
-            color: #ffffff;
+        .btn-minimize {
+            background: #f59e0b;
+            color: #422006;
+        }
+        .btn-minimize:hover {
+            background: #fbbf24;
+        }
+
+        .btn-sendback {
+            background: #3b82f6;
+            color: #fff;
+        }
+        .btn-sendback:hover {
+            background: #60a5fa;
+        }
+        .btn-sendback.on-back {
+            background: #1e3a5f;
+            color: #93c5fd;
+        }
+        .btn-sendback.on-back:hover {
+            background: #2563eb;
+            color: #fff;
+        }
+
+        .btn-close {
             background: #ef4444;
+            color: #fff;
+        }
+        .btn-close:hover {
+            background: #f87171;
         }
     </style>
 </head>
@@ -266,7 +302,11 @@
         <span class="res-badge" id="resBadge">—</span>
         <span class="standby-label" id="standbyLabel">⏸ Standby</span>
         <span class="size-label" id="sizeLabel"></span>
-        <button class="close-btn" id="closeBtn" title="Close preview for this session">✕</button>
+        <div class="btn-bar">
+            <button class="btn-minimize" id="minimizeBtn" title="Minimize">─</button>
+            <button class="btn-sendback" id="sendBackBtn" title="Send to back">▾</button>
+            <button class="btn-close" id="closeBtn" title="Close for this session">✕</button>
+        </div>
         <!-- Four corner resize handles -->
         <div class="resize-handle resize-br" data-corner="br"></div>
         <div class="resize-handle resize-bl" data-corner="bl"></div>
@@ -330,9 +370,29 @@
             resBadge.textContent = label;
         }
 
-        // ═══ Close ═══
+        // ═══ Close (persistent for session) ═══
         document.getElementById('closeBtn').addEventListener('click', () => {
-            if (window.videoPreviewAPI) window.videoPreviewAPI.closeWindow();
+            // Set flag so it doesn't auto-show on next recording
+            if (window.videoPreviewAPI) {
+                window.videoPreviewAPI.closeWindow();
+            }
+        });
+
+        // ═══ Minimize ═══
+        document.getElementById('minimizeBtn').addEventListener('click', () => {
+            if (window.videoPreviewAPI) window.videoPreviewAPI.minimizeWindow();
+        });
+
+        // ═══ Send to back / Bring to front ═══
+        const sendBackBtn = document.getElementById('sendBackBtn');
+        let isOnTop = true;
+        sendBackBtn.addEventListener('click', async () => {
+            if (window.videoPreviewAPI) {
+                isOnTop = await window.videoPreviewAPI.toggleAlwaysOnTop();
+                sendBackBtn.textContent = isOnTop ? '▾' : '▴';
+                sendBackBtn.title = isOnTop ? 'Send to back' : 'Bring to front';
+                sendBackBtn.classList.toggle('on-back', !isOnTop);
+            }
         });
 
         // ═══ Double-click: cycle presets ═══
