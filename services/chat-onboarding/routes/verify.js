@@ -18,6 +18,7 @@
  */
 
 const express = require('express');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const rateLimit = require('express-rate-limit');
 
@@ -85,10 +86,11 @@ function validateEmail(email) {
 }
 
 /**
- * Generate a cryptographically-influenced 6-digit OTP.
+ * Generate a cryptographically secure 6-digit OTP.
+ * SEC-C2: Uses crypto.randomInt() instead of Math.random().
  */
 function generateOTP() {
-  return String(100000 + Math.floor(Math.random() * 900000));
+  return String(crypto.randomInt(100000, 999999));
 }
 
 /**
@@ -100,8 +102,9 @@ async function sendSmsOTP(phone, code) {
   const fromNumber = process.env.TWILIO_PHONE_NUMBER;
 
   if (!accountSid || !authToken || !fromNumber) {
-    console.warn('⚠️  Twilio not configured — OTP logged to console');
-    console.log(`📱 SMS OTP for ${phone}: ${code}`);
+    console.warn('⚠️  Twilio not configured — OTP sent to dev stub');
+    // SEC-C6: Never log OTP codes or full phone numbers
+    console.log(`📱 SMS OTP sent to ***${phone.slice(-4)} (dev stub)`);
     return { success: true, stub: true };
   }
 
@@ -115,7 +118,8 @@ async function sendSmsOTP(phone, code) {
       to: phone,
     });
 
-    console.log(`📱 SMS OTP sent to ${phone}`);
+    // SEC-C6: Redact PII — log only last 4 digits
+    console.log(`📱 SMS OTP sent to ***${phone.slice(-4)}`);
     return { success: true };
   } catch (err) {
     console.error('Twilio SMS error:', err.message);
@@ -131,8 +135,10 @@ async function sendEmailOTP(email, code) {
   const fromEmail = process.env.SENDGRID_FROM_EMAIL || 'noreply@windypro.com';
 
   if (!apiKey) {
-    console.warn('⚠️  SendGrid not configured — OTP logged to console');
-    console.log(`📧 Email OTP for ${email}: ${code}`);
+    console.warn('⚠️  SendGrid not configured — OTP sent to dev stub');
+    // SEC-C6: Never log OTP codes or full email addresses
+    const [user, domain] = email.split('@');
+    console.log(`📧 Email OTP sent to ${user[0]}***@${domain} (dev stub)`);
     return { success: true, stub: true };
   }
 
@@ -158,7 +164,9 @@ async function sendEmailOTP(email, code) {
       `,
     });
 
-    console.log(`📧 Email OTP sent to ${email}`);
+    // SEC-C6: Redact PII — mask email
+    const [u, d] = email.split('@');
+    console.log(`📧 Email OTP sent to ${u[0]}***@${d}`);
     return { success: true };
   } catch (err) {
     console.error('SendGrid email error:', err.message);
@@ -332,7 +340,11 @@ router.post('/check', async (req, res) => {
       type: stored.type,
     });
 
-    console.log(`✅ Verified ${stored.type}: ${normalizedId}`);
+    // SEC-C6: Redact PII in verification success log
+    const redactedId = stored.type === 'phone'
+      ? `***${normalizedId.slice(-4)}`
+      : `${normalizedId[0]}***@${normalizedId.split('@')[1]}`;
+    console.log(`✅ Verified ${stored.type}: ${redactedId}`);
 
     res.json({
       success: true,

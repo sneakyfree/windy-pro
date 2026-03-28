@@ -3,6 +3,7 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { config } from '../config';
 
 export interface AuthUser {
@@ -30,7 +31,21 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
     }
 
     try {
-        const decoded = jwt.verify(token, config.JWT_SECRET) as AuthUser;
+        // SEC-H5: Whitelist HS256 to block algorithm confusion / 'alg: none' attacks
+        const decoded = jwt.verify(token, config.JWT_SECRET, { algorithms: ['HS256'] }) as AuthUser;
+
+        // SEC-M6: Check token blacklist (logout invalidation)
+        try {
+            const { getDb } = require('../db/schema');
+            const db = getDb();
+            const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+            const blacklisted = db.prepare('SELECT 1 FROM token_blacklist WHERE token_hash = ?').get(tokenHash);
+            if (blacklisted) {
+                res.status(401).json({ error: 'Token revoked' });
+                return;
+            }
+        } catch { /* blacklist table may not exist yet — allow through */ }
+
         (req as AuthRequest).user = decoded;
         next();
     } catch (err: any) {
@@ -50,7 +65,8 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
     const token = authHeader && authHeader.split(' ')[1];
     if (token) {
         try {
-            (req as AuthRequest).user = jwt.verify(token, config.JWT_SECRET) as AuthUser;
+            // SEC-H5: Whitelist HS256 to block algorithm confusion / 'alg: none' attacks
+            (req as AuthRequest).user = jwt.verify(token, config.JWT_SECRET, { algorithms: ['HS256'] }) as AuthUser;
         } catch { /* ignore invalid tokens */ }
     }
     next();

@@ -243,8 +243,50 @@ app.post('/auth/login', async (req, res) => {
 // ── User File Routes ────────────────────────────────────────────
 
 // Upload file (multer stages locally, then streams to R2)
+// SEC-C7: Magic-byte file type validation
+const ALLOWED_MAGIC = [
+  { ext: ['.wav'], magic: Buffer.from([0x52, 0x49, 0x46, 0x46]) },        // RIFF (WAV)
+  { ext: ['.mp3'], magic: Buffer.from([0xFF, 0xFB]) },                     // MP3 (MPEG sync)
+  { ext: ['.mp3'], magic: Buffer.from([0x49, 0x44, 0x33]) },               // MP3 (ID3 tag)
+  { ext: ['.ogg'], magic: Buffer.from([0x4F, 0x67, 0x67, 0x53]) },         // Ogg
+  { ext: ['.flac'], magic: Buffer.from([0x66, 0x4C, 0x61, 0x43]) },        // FLAC
+  { ext: ['.webm', '.mkv'], magic: Buffer.from([0x1A, 0x45, 0xDF, 0xA3]) },// WebM/MKV (EBML)
+  { ext: ['.mp4', '.m4a'], magic: null, check: (b) => b.length >= 8 && b.toString('ascii', 4, 8) === 'ftyp' }, // MP4/M4A
+  { ext: ['.pdf'], magic: Buffer.from([0x25, 0x50, 0x44, 0x46]) },         // PDF
+  { ext: ['.zip'], magic: Buffer.from([0x50, 0x4B, 0x03, 0x04]) },         // ZIP
+  { ext: ['.png'], magic: Buffer.from([0x89, 0x50, 0x4E, 0x47]) },         // PNG
+  { ext: ['.jpg', '.jpeg'], magic: Buffer.from([0xFF, 0xD8, 0xFF]) },      // JPEG
+];
+// Text-based formats validated by extension only (no magic bytes for plain text)
+const TEXT_EXTS = new Set(['.txt', '.md', '.json', '.csv', '.srt', '.vtt', '.xml', '.html', '.log']);
+
+function validateFileMagic(filePath, originalName) {
+  const ext = path.extname(originalName).toLowerCase();
+  // Allow known text formats by extension (they have no magic bytes)
+  if (TEXT_EXTS.has(ext)) return true;
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(12);
+    fs.readSync(fd, buf, 0, 12, 0);
+    fs.closeSync(fd);
+    for (const rule of ALLOWED_MAGIC) {
+      if (rule.magic && buf.slice(0, rule.magic.length).equals(rule.magic)) return true;
+      if (rule.check && rule.check(buf)) return true;
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
 app.post('/files/upload', authMiddleware, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+  // SEC-C7: Validate file magic bytes before accepting
+  if (!validateFileMagic(req.file.path, req.file.originalname)) {
+    try { fs.unlinkSync(req.file.path); } catch (_) { }
+    return res.status(415).json({ error: 'Unsupported file type. File content does not match expected format.' });
+  }
 
   const fileId = uuidv4();
   const fileSize = req.file.size;
@@ -275,6 +317,21 @@ app.post('/files/upload', authMiddleware, upload.single('file'), async (req, res
       console.error('[R2] Upload failed, keeping local:', err.message);
     }
   }
+  // SEC-M9: Validate metadata — flat object with string values only, limited size
+  let parsedMeta = {};
+  if (req.body.metadata) {
+    try {
+      const raw = JSON.parse(req.body.metadata);
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        const entries = Object.entries(raw).slice(0, 10); // Max 10 keys
+        for (const [k, v] of entries) {
+          if (typeof k === 'string' && k.length <= 64 && typeof v === 'string' && v.length <= 500) {
+            parsedMeta[k] = v.replace(/[<>]/g, ''); // Strip angle brackets
+          }
+        }
+      }
+    } catch (_) { }
+  }
 
   const fileMeta = {
     id: fileId,
@@ -288,7 +345,7 @@ app.post('/files/upload', authMiddleware, upload.single('file'), async (req, res
     r2Key: r2Key, // R2 object key
     type: fileType,
     sessionDate: req.body.sessionDate || new Date().toISOString().slice(0, 10),
-    metadata: req.body.metadata ? (() => { try { return JSON.parse(req.body.metadata); } catch (_) { return {}; } })() : {},
+    metadata: parsedMeta,
     uploadedAt: new Date().toISOString()
   };
 
@@ -1341,6 +1398,21 @@ function formatBytes(bytes) {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
+
+// SEC-M12: Clean up multer temp files on upload errors
+app.use((err, req, res, _next) => {
+  // If multer staged a file and the request errored, clean it up
+  if (req.file && req.file.path) {
+    try { fs.unlinkSync(req.file.path); } catch (_) { }
+  }
+  if (req.files && Array.isArray(req.files)) {
+    for (const f of req.files) {
+      try { if (f.path) fs.unlinkSync(f.path); } catch (_) { }
+    }
+  }
+  console.error('Upload error:', err.message || err);
+  res.status(err.status || 500).json({ error: err.message || 'Upload failed' });
+});
 
 // ── Start ───────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {

@@ -12,6 +12,23 @@
 const http = require('http');
 const PORT = process.env.GATEWAY_PORT || 8100;
 
+// SEC-C5: Explicit CORS origin whitelist — no wildcards
+const ALLOWED_ORIGINS = new Set([
+  'https://windypro.thewindstorm.uk',
+  'http://localhost:8098',
+  'http://localhost:8099',
+  'http://localhost:8100',
+  'file://',  // Electron app
+]);
+
+function getCorsOrigin(requestOrigin) {
+  if (!requestOrigin) return null;
+  if (ALLOWED_ORIGINS.has(requestOrigin)) return requestOrigin;
+  // Allow Electron file:// origins (sent as 'file://' by Chromium)
+  if (requestOrigin.startsWith('file://')) return requestOrigin;
+  return null;
+}
+
 const ROUTES = [
   { prefix: '/api/storage', target: 8099, strip: '/api/storage' },
   { prefix: '/api/auth', target: 8098 },
@@ -47,11 +64,15 @@ function proxy(req, res, targetPort, stripPrefix) {
   };
 
   const proxyReq = http.request(options, (proxyRes) => {
-    // Add CORS headers for mobile app
+    // SEC-C5: Reflect allowed origin instead of wildcard
     const headers = { ...proxyRes.headers };
-    headers['access-control-allow-origin'] = '*';
-    headers['access-control-allow-methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
-    headers['access-control-allow-headers'] = 'Content-Type, Authorization';
+    const allowedOrigin = getCorsOrigin(req.headers.origin);
+    if (allowedOrigin) {
+      headers['access-control-allow-origin'] = allowedOrigin;
+      headers['access-control-allow-methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
+      headers['access-control-allow-headers'] = 'Content-Type, Authorization';
+      headers['access-control-allow-credentials'] = 'true';
+    }
 
     res.writeHead(proxyRes.statusCode, headers);
     proxyRes.pipe(res);
@@ -75,10 +96,16 @@ function proxy(req, res, targetPort, stripPrefix) {
 const server = http.createServer((req, res) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
+    const allowedOrigin = getCorsOrigin(req.headers.origin);
+    if (!allowedOrigin) {
+      res.writeHead(403);
+      return res.end();
+    }
     res.writeHead(204, {
-      'access-control-allow-origin': '*',
+      'access-control-allow-origin': allowedOrigin,
       'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'access-control-allow-headers': 'Content-Type, Authorization',
+      'access-control-allow-credentials': 'true',
       'access-control-max-age': '86400',
     });
     return res.end();

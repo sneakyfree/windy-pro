@@ -26,7 +26,8 @@ function proxyToApi(req, res) {
   prx.on('error', (e) => {
     console.error('API proxy error:', e.message);
     res.writeHead(502, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'API server unavailable', details: e.message }));
+    // SEC-H7: Don't expose internal error details to client
+    res.end(JSON.stringify({ error: 'API server unavailable' }));
   });
   req.pipe(prx);
 }
@@ -57,10 +58,16 @@ const server = http.createServer((req, res) => {
     cacheControl = 'public, max-age=3600';
   }
 
+  // SEC-L3: Standard security headers on all static responses
   res.writeHead(200, {
     'Content-Type': MIME[ext] || 'application/octet-stream',
     'Cache-Control': cacheControl,
     'Vary': 'Accept-Encoding',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'X-XSS-Protection': '0',
   });
   fs.createReadStream(filePath).pipe(res);
 });

@@ -37,7 +37,8 @@ const SUPPORTED_LANGUAGES: Language[] = [
 
 // ─── POST /api/v1/translate/speech ───────────────────────────
 
-router.post('/speech', optionalAuth, upload.single('audio'), validate(SpeechTranslateBodySchema), (req: Request, res: Response) => {
+// SEC-H2: authenticateToken instead of optionalAuth — resource-intensive endpoints require auth
+router.post('/speech', authenticateToken, upload.single('audio'), validate(SpeechTranslateBodySchema), (req: Request, res: Response) => {
     try {
         // Normalize: mobile sends source/target, desktop sends sourceLang/targetLang
         const sourceLang = req.body.sourceLang || req.body.source;
@@ -54,13 +55,13 @@ router.post('/speech', optionalAuth, upload.single('audio'), validate(SpeechTran
         const translationId = uuidv4();
 
         stmts.insertTranslation.run(
-            translationId, (req as AuthRequest).user?.userId || 'guest',
+            translationId, (req as AuthRequest).user?.userId || 'anonymous',
             sourceLang, targetLang,
             detectedText, translatedText,
             confidence, 'speech'
         );
 
-        console.log(`🗣️  Speech translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'guest').slice(0, 8)}`);
+        console.log(`🗣️  Speech translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'anonymous').slice(0, 8)}`);
 
         res.set('X-Stub', 'true');
         res.json({
@@ -75,13 +76,15 @@ router.post('/speech', optionalAuth, upload.single('audio'), validate(SpeechTran
         });
     } catch (err: any) {
         console.error('Speech translation error:', err);
-        res.status(500).json({ error: 'Speech translation failed: ' + err.message });
+        // SEC-H7: Don't expose internal error details
+        res.status(500).json({ error: 'Speech translation failed' });
     }
 });
 
 // ─── POST /api/v1/translate/text ─────────────────────────────
 
-router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (req: Request, res: Response) => {
+// SEC-H2: authenticateToken instead of optionalAuth — resource-intensive endpoints require auth
+router.post('/text', authenticateToken, validate(TranslateTextRequestSchema), async (req: Request, res: Response) => {
     try {
         const text = req.body.text;
         // Normalize: mobile sends source/target, desktop sends sourceLang/targetLang
@@ -143,13 +146,13 @@ router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (
         const translationId = uuidv4();
 
         stmts.insertTranslation.run(
-            translationId, (req as AuthRequest).user?.userId || 'guest',
+            translationId, (req as AuthRequest).user?.userId || 'anonymous',
             sourceLang, targetLang,
             text, translatedText,
             confidence, 'text'
         );
 
-        console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'guest').slice(0, 8)} (engine: ${engine})`);
+        console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'anonymous').slice(0, 8)} (engine: ${engine})`);
 
         if (engine === 'stub') res.set('X-Stub', 'true');
         res.json({
@@ -164,7 +167,8 @@ router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (
         });
     } catch (err: any) {
         console.error('Text translation error:', err);
-        res.status(500).json({ error: 'Text translation failed: ' + err.message });
+        // SEC-H7: Don't expose internal error details
+        res.status(500).json({ error: 'Text translation failed' });
     }
 });
 
@@ -192,7 +196,8 @@ export function historyHandler(req: Request, res: Response): void {
         });
     } catch (err: any) {
         console.error('History error:', err);
-        res.status(500).json({ error: 'Failed to fetch history: ' + err.message });
+        // SEC-H7: Don't expose internal error details
+        res.status(500).json({ error: 'Failed to fetch history' });
     }
 }
 
@@ -228,7 +233,8 @@ export function favoritesHandler(req: Request, res: Response): void {
         res.json({ favorited: true, translationId, favoriteId });
     } catch (err: any) {
         console.error('Favorite error:', err);
-        res.status(500).json({ error: 'Failed to save favorite: ' + err.message });
+        // SEC-H7: Don't expose internal error details
+        res.status(500).json({ error: 'Failed to save favorite' });
     }
 }
 

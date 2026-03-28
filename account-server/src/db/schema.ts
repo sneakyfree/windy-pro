@@ -169,6 +169,13 @@ function initSchema(db: Database.Database): void {
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- SEC-M6: Token blacklist for logout invalidation
+    CREATE TABLE IF NOT EXISTS token_blacklist (
+      token_hash TEXT PRIMARY KEY,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Safe column migrations — silently skip if column already exists

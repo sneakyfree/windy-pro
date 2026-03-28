@@ -222,7 +222,13 @@ FAILED MODELS:
     print(f"Summary saved to {SUMMARY_FILE}")
 
     # Notify
-    os.system("openclaw system event --text 'Done: Local model cert complete — check /tmp/local_cert_summary.txt' --mode now")
+    # SEC-L6: Use subprocess.run with array args instead of os.system
+    import subprocess
+    subprocess.run([
+        "openclaw", "system", "event",
+        "--text", "Done: Local model cert complete — check /tmp/local_cert_summary.txt",
+        "--mode", "now"
+    ], check=False)
 
 
 if __name__ == "__main__":

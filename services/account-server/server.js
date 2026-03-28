@@ -44,7 +44,12 @@ fs.mkdirSync(MEDIA_PATH, { recursive: true });
 
 const app = express();
 const PORT = process.env.PORT || 8098;
-const JWT_SECRET = process.env.JWT_SECRET || 'windy-pro-dev-secret-change-in-production';
+// SEC-C4: Never use a hardcoded JWT secret. Generate ephemeral random secret if env var is missing.
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  const s = crypto.randomBytes(32).toString('hex');
+  console.warn('⚠️  [SEC-C4] JWT_SECRET not set — generated ephemeral secret. Set JWT_SECRET in .env for persistent tokens.');
+  return s;
+})();
 const JWT_EXPIRY_HOURS = 168; // 7 days
 const REFRESH_EXPIRY_DAYS = 30;
 const MAX_DEVICES = 5;

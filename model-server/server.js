@@ -21,9 +21,16 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 
+const crypto = require('crypto');
+
 const app = express();
 const PORT = process.env.PORT || 8099;
-const JWT_SECRET = process.env.JWT_SECRET || 'windy-pro-dev-secret-2024';
+// SEC-C4: Never use a hardcoded JWT secret
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  const s = crypto.randomBytes(32).toString('hex');
+  console.warn('⚠️  [SEC-C4] JWT_SECRET not set — generated ephemeral secret. Set JWT_SECRET in .env for persistent tokens.');
+  return s;
+})();
 const MODELS_DIR = path.join(__dirname, 'models');
 const LOG_FILE = path.join(__dirname, 'downloads.log');
 
@@ -61,7 +68,21 @@ const TIER_ACCESS = {
 
 // ─── Middleware ───
 
-app.use(cors());
+// SEC-M4: Explicit CORS origin whitelist — no wildcards
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // Server-to-server, Electron
+    const allowed = [
+      'https://windypro.thewindstorm.uk',
+      /^http:\/\/localhost(:\d+)?$/,
+    ];
+    if (allowed.some(o => o instanceof RegExp ? o.test(origin) : o === origin)) {
+      return callback(null, true);
+    }
+    callback(new Error('CORS: origin not allowed'));
+  },
+  credentials: true,
+}));
 app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response-time ms'));
 app.use(express.json());
 
@@ -76,14 +97,15 @@ function authenticateToken(req, res, next) {
     }
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
+        // SEC-H5: Explicit algorithm whitelist
+        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
         req.user = decoded;
         next();
     } catch (err) {
         if (err.name === 'TokenExpiredError') {
             return res.status(401).json({ error: 'Token expired', message: 'Please re-authenticate' });
         }
-        return res.status(403).json({ error: 'Invalid token', message: err.message });
+        return res.status(403).json({ error: 'Invalid token' });
     }
 }
 
@@ -259,7 +281,8 @@ app.get('/dev/token', (req, res) => {
 
 app.use((err, req, res, next) => {
     console.error('Server error:', err);
-    res.status(500).json({ error: 'Internal server error', message: err.message });
+    // SEC-H7: Don't expose internal error details
+    res.status(500).json({ error: 'Internal server error' });
 });
 
 // ─── Start ───

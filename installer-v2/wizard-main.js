@@ -105,6 +105,7 @@ class InstallWizard {
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
+          sandbox: true, // SEC-M1: Enable renderer sandbox
           preload: path.join(__dirname, 'wizard-preload.js')
         }
       });

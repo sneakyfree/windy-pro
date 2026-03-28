@@ -4,6 +4,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import rateLimit from 'express-rate-limit';
 import { config } from '../config';
@@ -35,10 +36,11 @@ const authLimiter = rateLimit({
 // ─── Helpers ─────────────────────────────────────────────────
 
 function generateTokens(user: { id: string; email: string; tier: string }, deviceId?: string) {
+    // SEC-H5: Explicitly lock algorithm to HS256 to prevent algorithm confusion attacks
     const accessToken = jwt.sign(
         { userId: user.id, email: user.email, tier: user.tier, accountId: user.id },
         config.JWT_SECRET,
-        { expiresIn: config.JWT_EXPIRY }
+        { algorithm: 'HS256', expiresIn: config.JWT_EXPIRY }
     );
 
     const refreshToken = uuidv4();
@@ -286,11 +288,33 @@ router.post('/refresh', validate(RefreshRequestSchema), (req: Request, res: Resp
 router.post('/logout', authenticateToken, (req: Request, res: Response) => {
     try {
         const db = getDb();
-        db.prepare('DELETE FROM refresh_tokens WHERE user_id = ?').run((req as AuthRequest).user.userId);
-        console.log(`🔒 Logout: user ${(req as AuthRequest).user.userId.slice(0, 8)}`);
+        const userId = (req as AuthRequest).user.userId;
+
+        // Delete refresh tokens
+        db.prepare('DELETE FROM refresh_tokens WHERE user_id = ?').run(userId);
+
+        // SEC-M6: Blacklist the current access token
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
+        if (token) {
+            const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+            // Set expiry to match token's own expiry (max 15 minutes from now)
+            const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+            try {
+                db.prepare('INSERT OR IGNORE INTO token_blacklist (token_hash, expires_at) VALUES (?, ?)').run(tokenHash, expiresAt);
+            } catch { /* table may not exist on first run */ }
+        }
+
+        // Periodically clean expired blacklist entries
+        try {
+            db.prepare("DELETE FROM token_blacklist WHERE expires_at < datetime('now')").run();
+        } catch { /* ignore */ }
+
+        console.log(`🔒 Logout: user ${userId.slice(0, 8)}`);
         res.json({ success: true });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        // SEC-H7: Don't expose internal error details
+        res.status(500).json({ error: 'Logout failed' });
     }
 });
 

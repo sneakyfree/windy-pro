@@ -127,9 +127,22 @@ wss.on('connection', (ws: WebSocket) => {
 
     ws.send(JSON.stringify({ type: 'ack' }));
 
+    // SEC-H1: Close connection if no auth within 10 seconds
+    const authTimeout = setTimeout(() => {
+        if (!authenticated) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Authentication timeout' }));
+            ws.close(4001, 'Authentication timeout');
+        }
+    }, 10000);
+
     ws.on('message', (data: Buffer | ArrayBuffer | string) => {
         // Binary audio chunk
         if (Buffer.isBuffer(data) || data instanceof ArrayBuffer) {
+            // SEC-H1: Reject binary data until authenticated
+            if (!authenticated) {
+                ws.send(JSON.stringify({ type: 'error', message: 'Authentication required before sending audio' }));
+                return;
+            }
             chunkCount++;
             if (chunkCount % 10 === 0) {
                 ws.send(JSON.stringify({
@@ -153,8 +166,10 @@ wss.on('connection', (ws: WebSocket) => {
                 case 'auth':
                     if (msg.token) {
                         try {
-                            jwt.verify(msg.token, config.JWT_SECRET);
+                            // SEC-H5: Explicit algorithm whitelist
+                            jwt.verify(msg.token, config.JWT_SECRET, { algorithms: ['HS256'] });
                             authenticated = true;
+                            clearTimeout(authTimeout);
                         } catch {
                             authenticated = false;
                         }
@@ -163,6 +178,11 @@ wss.on('connection', (ws: WebSocket) => {
                     break;
 
                 case 'config':
+                    // SEC-H1: Reject config before auth
+                    if (!authenticated) {
+                        ws.send(JSON.stringify({ type: 'error', message: 'Authentication required' }));
+                        return;
+                    }
                     wsConfig.language = msg.language || wsConfig.language;
                     wsConfig.engine = msg.engine || wsConfig.engine;
                     ws.send(JSON.stringify({ type: 'state', state: 'listening' }));
@@ -192,6 +212,7 @@ wss.on('connection', (ws: WebSocket) => {
     });
 
     ws.on('close', () => {
+        clearTimeout(authTimeout);
         console.log(`🎙️  WS transcribe: client disconnected (${chunkCount} chunks)`);
     });
 });

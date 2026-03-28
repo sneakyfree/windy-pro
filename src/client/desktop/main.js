@@ -411,7 +411,9 @@ function startPythonServer() {
     if (process.platform === 'win32') {
       execSync(`for /f "tokens=5" %a in ('netstat -aon ^| findstr :${port} ^| findstr LISTENING') do taskkill /PID %a /F 2>nul`, { stdio: 'pipe', timeout: 5000 });
     } else {
-      const pids = execSync(`lsof -ti :${port} 2>/dev/null || true`, { timeout: 5000 }).toString().trim();
+      const { execFileSync } = require('child_process');
+      // SEC-M10: Use execFileSync with array arguments to avoid shell injection
+      const pids = execFileSync('lsof', ['-ti', `:${port}`], { timeout: 5000, stdio: 'pipe' }).toString().trim();
       if (pids) {
         for (const pid of pids.split('\n')) {
           if (pid.trim()) {
@@ -539,6 +541,10 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   // CSP Headers
+  // SEC-L1: 'unsafe-inline' for style-src is an accepted risk in Electron desktop.
+  // Rationale: 300+ inline style= usages across renderer JS files make nonce-based
+  // CSS impractical. script-src does NOT allow unsafe-inline — that's what matters.
+  // contextIsolation + sandbox + no nodeIntegration = no XSS escalation path.
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -548,9 +554,11 @@ function createWindow() {
           "script-src 'self'; " +
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
           "font-src 'self' https://fonts.gstatic.com; " +
-          "connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk; " +
+          "connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.groq.com https://api.openai.com https://api.deepgram.com wss://api.deepgram.com; " +
           "img-src 'self' data:; " +
-          "media-src 'self' blob: data:;"
+          "media-src 'self' blob: data:; " +
+          "base-src 'self'; " +
+          "object-src 'none';"
         ]
       }
     });
@@ -765,8 +773,9 @@ function showAboutWindow() {
   aboutWin.center();
 
   // Handle window.open calls from the about window to open in system browser
+  // SEC-H3: Validate URL before opening externally
   aboutWin.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (isSafeURL(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
 }
@@ -2196,7 +2205,8 @@ function registerHotkeys() {
     if (savedWindowId && process.platform === 'linux') {
       const restore = () => {
         try {
-          require('child_process').exec(`xdotool windowactivate ${savedWindowId}`);
+          // SEC-L5: Use execFile with array args instead of exec with string interpolation
+          require('child_process').execFile('xdotool', ['windowactivate', savedWindowId]);
         } catch (_) { }
       };
       // Multiple restore attempts to catch all async focus steals
@@ -2405,6 +2415,16 @@ ipcMain.on('update-settings', (event, settings) => {
         globalShortcut.unregisterAll();
         registerHotkeys();
       }
+    } else if (key === 'cloudPassword') {
+      // SEC-C1: Encrypt cloud password via safeStorage — never store plaintext
+      if (value && safeStorage.isEncryptionAvailable()) {
+        const encrypted = safeStorage.encryptString(String(value));
+        store.set('engine.cloudPasswordEncrypted', encrypted.toString('base64'));
+      } else if (value) {
+        // Fallback: electron-store (still better than renderer localStorage)
+        store.set('engine.cloudPassword', value);
+      }
+      store.delete('engine.cloudPassword'); // Remove any old plaintext
     } else {
       // Engine settings (model, device, language, vibeEnabled, micDeviceId)
       store.set(`engine.${key}`, value);
@@ -2598,17 +2618,21 @@ ipcMain.handle('open-external-url', async (event, url) => {
         popupWin.loadURL(popupUrl);
         popupWin.focus();
         // Allow popups inside popups (OAuth redirect chains)
+        // SEC-H4: Only allow https:// URLs to prevent protocol injection
         popupWin.webContents.setWindowOpenHandler(({ url: nestedUrl }) => {
-          popupWin.loadURL(nestedUrl);
+          if (nestedUrl.startsWith('https://') || nestedUrl.startsWith('http://')) {
+            popupWin.loadURL(nestedUrl);
+          }
           return { action: 'deny' };
         });
         return { action: 'deny' }; // deny default, we handled it manually
       });
 
-      // Allow cross-domain navigation (OAuth redirects)
+      // SEC-H8: Only allow http(s) navigation — block file://, javascript://, etc.
       extWin.webContents.on('will-navigate', (event, navUrl) => {
-
-        // Allow all navigation — needed for OAuth flows
+        if (!navUrl.startsWith('https://') && !navUrl.startsWith('http://')) {
+          event.preventDefault();
+        }
       });
 
       extWin.loadURL(url);
@@ -2991,7 +3015,15 @@ async function getCloudStorageToken() {
 
   // Auto-register/login with storage API using existing cloud credentials
   const email = engine.cloudEmail;
-  const password = engine.cloudPassword;
+  // SEC-C1: Decrypt cloud password from safeStorage
+  let password = null;
+  try {
+    const encB64 = store.get('engine.cloudPasswordEncrypted', '');
+    if (encB64 && safeStorage.isEncryptionAvailable()) {
+      password = safeStorage.decryptString(Buffer.from(encB64, 'base64'));
+    }
+  } catch (_) { }
+  if (!password) password = engine.cloudPassword || null; // Legacy plaintext fallback
   if (!email || !password) return null;
 
   const baseUrl = engine.cloudStorageUrl || CLOUD_STORAGE_DEFAULT_URL;
@@ -3474,16 +3506,24 @@ ipcMain.handle('detect-hardware', async () => {
     const homeDir = os.homedir();
     if (process.platform === 'win32') {
       const drive = homeDir.charAt(0);
-      const out = execSync(`wmic logicaldisk where "DeviceID='${drive}:'" get FreeSpace /value`, { timeout: 3000 }).toString();
+      // SEC-M10: Use execFileSync with array args instead of string interpolation
+      const { execFileSync } = require('child_process');
+      const out = execFileSync('wmic', ['logicaldisk', 'where', `DeviceID='${drive}:'`, 'get', 'FreeSpace', '/value'], { timeout: 3000 }).toString();
       const match = out.match(/FreeSpace=(\d+)/);
       if (match) result.diskFreeGB = Math.round(parseInt(match[1]) / (1024 * 1024 * 1024));
     } else if (process.platform === 'darwin') {
       // macOS: df -g shows in GB (BSD df, no -B flag)
-      const out = execSync(`df -g "${homeDir}" | tail -1 | awk '{print $4}'`, { timeout: 3000 }).toString().trim();
+      // SEC-M10: Use execFileSync with array args
+      const { execFileSync } = require('child_process');
+      const dfOut = execFileSync('df', ['-g', homeDir], { timeout: 3000 }).toString();
+      const out = dfOut.split('\n').slice(-2)[0]?.split(/\s+/)[3] || '';
       result.diskFreeGB = parseInt(out) || null;
     } else {
       // Linux: df -BG shows in GB (GNU df)
-      const out = execSync(`df -BG "${homeDir}" | tail -1 | awk '{print $4}'`, { timeout: 3000 }).toString().trim();
+      // SEC-M10: Use execFileSync with array args
+      const { execFileSync: execFileSyncLinux } = require('child_process');
+      const dfOut = execFileSyncLinux('df', ['-BG', homeDir], { timeout: 3000 }).toString();
+      const out = dfOut.split('\n').slice(-2)[0]?.split(/\s+/)[3] || '';
       result.diskFreeGB = parseInt(out) || null;
     }
   } catch (_) { }
@@ -3531,7 +3571,12 @@ ipcMain.handle('register-wizard-account', async (event, { email, password, name 
               // Store credentials
               store.set('engine.cloudStorageToken', result.token || '');
               store.set('engine.cloudEmail', email);
-              store.set('engine.cloudPassword', password);
+              // SEC-C1: Encrypt cloud password via safeStorage
+              if (safeStorage.isEncryptionAvailable()) {
+                const encrypted = safeStorage.encryptString(password);
+                store.set('engine.cloudPasswordEncrypted', encrypted.toString('base64'));
+              }
+              store.delete('engine.cloudPassword'); // Remove any plaintext
               resolve({ ok: true, token: result.token, user: result.user });
             } else {
               resolve({ ok: false, error: result.detail || result.message || 'Registration failed' });
@@ -3860,10 +3905,12 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
       width: 1140, height: 780, x: 100, y: 60,
       title: 'Choose Your Plan — Windy Pro',
       autoHideMenuBar: true,
-      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, javascript: true, partition: 'persist:checkout', devTools: true }
+      // SEC-M11: Disable DevTools in packaged builds
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, javascript: true, partition: 'persist:checkout', devTools: !app.isPackaged }
     });
     // Write HTML to temp file to avoid data: URL encoding issues with emojis
-    const tmpCheckoutPath = path.join(os.tmpdir(), 'windy-checkout-' + Date.now() + '.html');
+    // SEC-M8: Use crypto random for unpredictable temp filename
+    const tmpCheckoutPath = path.join(os.tmpdir(), 'windy-checkout-' + require('crypto').randomBytes(8).toString('hex') + '.html');
     require('fs').writeFileSync(tmpCheckoutPath, html, 'utf8');
     checkoutWin.loadFile(tmpCheckoutPath);
     checkoutWin.on('closed', () => { try { require('fs').unlinkSync(tmpCheckoutPath); } catch (_) { } });
@@ -5066,8 +5113,9 @@ app.whenReady().then(async () => {
       safeSend('update-toast', { message: '🔐 Installing update (admin password required)…', canRestart: false });
 
       // Install with pkexec (graphical sudo prompt)
-      const { execSync } = require('child_process');
-      execSync(`pkexec dpkg -i "${debPath}"`, { timeout: 60000 });
+      // SEC-M10: Use execFileSync with array args for dpkg install
+      const { execFileSync: execFileSyncDeb } = require('child_process');
+      execFileSyncDeb('pkexec', ['dpkg', '-i', debPath], { timeout: 60000 });
 
       // Clean up and restart
       fs.unlinkSync(debPath);

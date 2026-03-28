@@ -1,9 +1,9 @@
 # 🧬 WINDY PRO — DNA STRAND MASTER PLAN
 
-**Version:** 2.0.0
+**Version:** 2.1.0
 **Created:** 2026-02-04
-**Last Updated:** 2026-03-12
-**Authors:** Kit 0 + Kit-0C1Veron + Antigravity + Kit 0C3 Charlie + Grant Whitmer
+**Last Updated:** 2026-03-28
+**Authors:** Kit 0 + Kit-0C1Veron + Antigravity + Kit 0C3 Charlie + Grant Whitmer + Claude Opus 4.6
 **Philosophy:** Begin with the end in mind. — Stephen R. Covey
 
 ---
@@ -68,6 +68,22 @@ maps perfectly without requiring any AI/ML knowledge. Decision by Grant, 27 Feb 
 
 ### The Vision in One Sentence
 **Windy Pro is a push-button, TurboTax-simple voice platform that provides unlimited real-time transcription AND real-time offline translation — local-first for power users, cloud-backed for everyone else. Your voice, your languages, your device, your privacy.**
+
+### Ecosystem Context
+
+Windy Pro is one product in a family of nine (see `BRAND-ARCHITECTURE.md` for the full picture). This DNA plan covers the Windy Pro desktop/mobile app and its directly integrated components. The broader ecosystem includes:
+
+- **Windy Word** (windyword.com) — the consumer-facing brand for Windy Pro's voice-to-text capability
+- **Windy Traveler** (windytraveler.com) — translation pair marketplace, monetized through Windy Pro
+- **Windy Chat** (windychat.com) — messaging + social platform (Strand K in this plan, separate mobile repo)
+- **Windy Mail** (windymail.ai) — agent-friendly email for humans and bots (separate repo: `sneakyfree/windy-mail`)
+- **Windy Fly** (windyfly.ai) — AI agent born into the ecosystem (repo: `sneakyfree/windy-agent`)
+- **HiFly** (hifly.ai) — open-source agent framework (will fork from windy-agent)
+- **Windy Clone** (windyclone.com) — digital likeness / voice clone
+- **Windy Cloud** (windycloud.com) — storage, sync, infrastructure backbone (Strand D in this plan)
+- **Eternitas** (eternitas.ai) — independent bot registry, separate entity (separate repo: `sneakyfree/eternitas`)
+
+Infrastructure decisions in this repo (especially Strands D and K) should account for future integration with Windy Mail, Eternitas, and the Windy Fly agent hatch experience. The brand architecture document is the canonical source of truth for how all products relate to each other.
 
 ### The User Experience (End State)
 
@@ -784,6 +800,43 @@ STATUS: 🔲 NOT STARTED
 PRIORITY: MEDIUM (before launch)
 
 [Unchanged from v1.0]
+```
+
+#### D3: Ecosystem Infrastructure (Windy Cloud Forward Planning)
+```
+STATUS: 🔲 PLANNING — No code yet. Documenting future requirements.
+PRIORITY: LOW (post-Windy Chat launch)
+ADDED: 2026-03-28
+
+Windy Cloud (windycloud.com) will eventually serve as the backbone for:
+
+1. WINDY MAIL INFRASTRUCTURE
+   ├── Mail server hosting (Postfix/Dovecot or managed Mailcow)
+   ├── Domain setup: windymail.ai (MX, SPF, DKIM, DMARC)
+   ├── Account provisioning API (called during Windy Fly hatch)
+   ├── Rate limiting engine (per-tier daily caps + velocity controls)
+   ├── Reputation scoring system (spam reports degrade sending score)
+   ├── IMAP/SMTP access per account
+   └── Eternitas kill switch integration (passport revoked → inbox dies)
+
+2. TWILIO PHONE NUMBER POOL
+   ├── Managed pool of Twilio numbers assigned to bots on hatch
+   ├── Number provisioning API (called during Windy Fly hatch)
+   ├── Number recycling (revoked passport → number returns to pool)
+   ├── Rate limits: SMS/day and calls/day per tier
+   └── Cost model: ~$1.15/month per number, absorbed into registration/subscription
+
+3. ETERNITAS CASCADE
+   ├── When an Eternitas passport is revoked, Windy Cloud must:
+   │   ├── Kill Windy Mail inbox
+   │   ├── Return Twilio number to pool
+   │   ├── Suspend Windy Chat access
+   │   └── Notify owner
+   └── Revocation webhook endpoint for Eternitas → Windy Cloud
+
+NOTE: Windy Mail and Eternitas have their own repos (sneakyfree/windy-mail,
+sneakyfree/eternitas). This codon tracks only the Windy Cloud infrastructure
+that supports them. See BRAND-ARCHITECTURE.md for the full ecosystem picture.
 ```
 
 ---
@@ -2842,9 +2895,14 @@ on Veron (GPU server) for production translation.
 ## 🧬 STRAND K: WINDY CHAT PLATFORM (The Chat Chromosome)
 
 **Added:** 2026-03-12 by Kit 0C3 Charlie + Grant Whitmer
-**Priority:** CRITICAL — This is the biggest addition since the original DNA plan. Windy Chat transforms Windy Pro from a transcription tool into a full communication platform.
+**Updated:** 2026-03-28 — Social layer + Eternitas bot integration added
+**Priority:** CRITICAL — This is the biggest addition since the original DNA plan. Windy Chat transforms Windy Pro from a transcription tool into a full communication and social platform.
 **Status:** 🔲 NOT STARTED (foundation code exists — see K0)
 **Vision:** A WhatsApp-level cross-platform encrypted messaging, media sharing, and video calling system — built on the Matrix protocol, powered by Windy Translate's offline translation engine. Every message, every call, every voice note — translated in real-time, on-device, private by default.
+
+**Social Layer (added 2026-03-28):** Windy Chat is not just private messaging — it evolves into the social platform for the entire Windy ecosystem. Rather than building a separate social media product, the public social layer (feeds, posts, follows, discovery) lives inside Windy Chat. This concentrates the network effect in one place. Eternitas-verified bots participate as first-class citizens alongside humans — they can post, reply, follow, and be followed. The feed is multilingual by default via Windy Traveler. Every Windy Fly agent hatched gets a Windy Chat social presence automatically.
+
+**Bot Integration (added 2026-03-28):** Any bot registered with Eternitas (eternitas.ai) can participate in Windy Chat as a verified citizen. Bot accounts are visually distinguishable (Eternitas badge) but not segregated — they appear in the same feeds, conversations, and discovery as humans. Bot identity verification is handled by Eternitas, not by Windy Chat. Windy Chat trusts the Eternitas passport. If a passport is revoked, Windy Chat access is suspended via the Windy Cloud cascade (see Strand D3).
 
 ### K0: Foundation — Existing Chat Codebase
 
@@ -4141,6 +4199,10 @@ EXISTING CODE REUSE:
 | 2026-03-12 | Kit 0C3 Charlie | K7: E2E Encryption — Olm/Megolm production, device verification, key backup (SSSS), cross-signing |
 | 2026-03-12 | Kit 0C3 Charlie | K8: Chat Cloud Backup — encrypted R2 backup, restore on new device, Soul File integration |
 | 2026-03-12 | Kit 0C3 Charlie | K9: Translation Integration — auto-translate, voice message translation, video call subtitles, group multi-language |
+| 2026-03-28 | Grant Whitmer + Claude Opus 4.6 | **v2.1.0**: Ecosystem context added to vision statement |
+| 2026-03-28 | Grant Whitmer + Claude Opus 4.6 | Strand D3: Windy Cloud forward planning — Windy Mail infra, Twilio pool, Eternitas cascade |
+| 2026-03-28 | Grant Whitmer + Claude Opus 4.6 | Strand K: Social layer + Eternitas bot integration added to vision |
+| 2026-03-28 | Grant Whitmer + Claude Opus 4.6 | New repos planned: sneakyfree/windy-mail, sneakyfree/eternitas |
 | 2026-03-12 | Grant Whitmer | K9.6: Group multi-language — the Holy Grail: 5 people, 5 languages, everyone reads their own language |
 | 2026-03-12 | Grant Whitmer | K9.7: Critical invariant — chat translation LOCAL by default, never fall back to cloud without consent |
 | 2026-03-12 | Kit 0C3 Charlie | K-DEP: 4-phase build plan (16 engineer-weeks), 40% code reuse from existing foundation |

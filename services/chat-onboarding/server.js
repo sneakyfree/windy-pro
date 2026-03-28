@@ -33,8 +33,8 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (server-to-server, curl, mobile apps)
     if (!origin) return callback(null, true);
-    // Allow localhost in dev
-    if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+    // SEC-M3: Only allow localhost in non-production environments
+    if (process.env.NODE_ENV !== 'production' && /^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
     if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
     callback(new Error('CORS: origin not allowed'));
   },
@@ -44,7 +44,12 @@ app.use(cors({
 app.use(express.json({ limit: '5mb' }));
 
 // ── Auth middleware — Bearer token validation ──
-const CHAT_API_TOKEN = process.env.CHAT_API_TOKEN || '';
+// SEC-H9: Fail hard if CHAT_API_TOKEN is not set — don't accept empty string
+const CHAT_API_TOKEN = process.env.CHAT_API_TOKEN;
+if (!CHAT_API_TOKEN || CHAT_API_TOKEN.trim().length === 0) {
+  console.error('❌ CHAT_API_TOKEN is required. Set it in your .env file.');
+  process.exit(1);
+}
 
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
