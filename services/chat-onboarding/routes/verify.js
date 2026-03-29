@@ -36,7 +36,7 @@ const cooldownStore = new RedisStore('cooldown', 86400);  // 24h TTL
 const sendLimiter = rateLimit({
   windowMs: 60 * 1000,  // 1 minute
   max: 5,               // verification: 5/min
-  keyGenerator: (req) => req.body.identifier || req.ip,
+  keyGenerator: (req) => `${req.ip}:${req.body.identifier || 'unknown'}`,
   message: { error: 'Too many verification attempts. Try again in a minute.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -45,7 +45,7 @@ const sendLimiter = rateLimit({
 const hourlyLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,  // 1 hour
   max: 5,
-  keyGenerator: (req) => req.body.identifier || req.ip,
+  keyGenerator: (req) => `${req.ip}:${req.body.identifier || 'unknown'}`,
   message: { error: 'Hourly verification limit reached. Try again later.' },
   standardHeaders: true,
   legacyHeaders: false,

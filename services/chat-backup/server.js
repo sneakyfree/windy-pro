@@ -18,6 +18,9 @@ const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 
+const fs = require('fs');
+const pathModule = require('path');
+
 const app = express();
 const PORT = process.env.PORT || 8104;
 
@@ -71,8 +74,45 @@ function isValidUserId(val) {
   return typeof val === 'string' && val.length > 0 && val.length <= 255 && /^[a-zA-Z0-9_-]+$/.test(val);
 }
 
-// ── In-memory stores (replace with DB in production) ──
+// ── In-memory stores with file-based persistence (M2) ──
 const backupRegistry = new Map(); // userId → [{ version, timestamp, size, path }]
+
+const BACKUP_DATA_DIR = pathModule.join(__dirname, 'data');
+const BACKUP_REGISTRY_FILE = pathModule.join(BACKUP_DATA_DIR, 'backup-registry.json');
+
+function loadBackupRegistry() {
+  try {
+    if (fs.existsSync(BACKUP_REGISTRY_FILE)) {
+      const raw = fs.readFileSync(BACKUP_REGISTRY_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (data.registry && typeof data.registry === 'object') {
+        for (const [key, value] of Object.entries(data.registry)) {
+          backupRegistry.set(key, value);
+        }
+      }
+      console.log(`[Backup] Loaded ${backupRegistry.size} user backup registries from disk`);
+    }
+  } catch (err) {
+    console.error('[Backup] Failed to load persisted registry:', err.message);
+  }
+}
+
+function persistBackupRegistry() {
+  try {
+    if (!fs.existsSync(BACKUP_DATA_DIR)) {
+      fs.mkdirSync(BACKUP_DATA_DIR, { recursive: true });
+    }
+    const data = {
+      registry: Object.fromEntries(backupRegistry),
+    };
+    fs.writeFileSync(BACKUP_REGISTRY_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[Backup] Failed to persist registry:', err.message);
+  }
+}
+
+// Load persisted data on startup
+loadBackupRegistry();
 
 // ── R2/S3 Config ──
 const R2_BUCKET = process.env.R2_BUCKET || 'windy-chat-backups';
@@ -213,11 +253,28 @@ app.post('/api/v1/chat/backup/create', authMiddleware, async (req, res) => {
     // K8.1.3: Keep last 7 daily backups
     if (userBackups.length > 7) {
       const pruned = userBackups.splice(7);
-      // In production: delete pruned backups from R2
+      // M3: Actually delete pruned backups from R2
+      for (const old of pruned) {
+        if (s3Client) {
+          try {
+            const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+            await s3Client.send(new DeleteObjectCommand({
+              Bucket: R2_BUCKET,
+              Key: old.path,
+            }));
+            console.log(`🗑️  Deleted pruned backup from R2: ${old.path}`);
+          } catch (err) {
+            console.error(`🗑️  Failed to delete pruned backup from R2: ${old.path}`, err.message);
+          }
+        } else {
+          console.log(`🗑️  [STUB] Would delete pruned backup: ${old.path}`);
+        }
+      }
       console.log(`🗑️  Pruned ${pruned.length} old backup(s) for ${userId.slice(0, 12)}`);
     }
 
     backupRegistry.set(userId, userBackups);
+    persistBackupRegistry();
 
     console.log(`☁️  Backup created: ${userId.slice(0, 12)} → ${formatSize(dataSize)}`);
 
@@ -338,8 +395,24 @@ app.delete('/api/v1/chat/backup/delete', authMiddleware, async (req, res) => {
 
     const removed = userBackups.splice(idx, 1)[0];
     backupRegistry.set(userId, userBackups);
+    persistBackupRegistry();
 
-    // In production: delete from R2
+    // M3: Actually delete from R2
+    if (s3Client) {
+      try {
+        const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+        await s3Client.send(new DeleteObjectCommand({
+          Bucket: R2_BUCKET,
+          Key: removed.path,
+        }));
+        console.log(`🗑️  Deleted backup from R2: ${removed.path}`);
+      } catch (err) {
+        console.error(`🗑️  Failed to delete backup from R2: ${removed.path}`, err.message);
+      }
+    } else {
+      console.log(`🗑️  [STUB] Would delete backup: ${removed.path}`);
+    }
+
     res.json({ success: true, deleted: removed.id });
   } catch (err) {
     console.error('Backup delete error:', err);

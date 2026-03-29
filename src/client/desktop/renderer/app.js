@@ -181,7 +181,7 @@ class WindyApp {
       if (settings?.cloudToken) this.cloudToken = settings.cloudToken;
       if (settings?.cloudEmail) this.cloudEmail = settings.cloudEmail;
       if (settings?.cloudPassword) this.cloudPassword = settings.cloudPassword;
-      console.debug(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
+      console.debug(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? 'configured' : 'empty'}`);
 
       // Show current engine/model in status bar badge on startup
       const savedModel = settings?.model || localStorage.getItem('windy_model') || 'small';
@@ -261,7 +261,7 @@ class WindyApp {
       if (lsCloudUrl) this.cloudUrl = lsCloudUrl;
       if (lsCloudToken) this.cloudToken = lsCloudToken;
       if (lsCloudEmail) this.cloudEmail = lsCloudEmail;
-      console.debug(`[Init] Final: Engine=${this.transcriptionEngine}, CloudToken=${this.cloudToken ? '✅' : '❌'}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
+      console.debug(`[Init] Final: Engine=${this.transcriptionEngine}, CloudToken=${this.cloudToken ? 'present' : 'missing'}, CloudURL=${this.cloudUrl ? 'configured' : 'empty'}`);
     } catch (e) { console.warn('[Init] Settings load error:', e.message); }
 
     // Check for crash recovery via Electron IPC
@@ -1395,7 +1395,7 @@ class WindyApp {
       if (res.ok) {
         const data = await res.json();
         this.cloudToken = data.token;
-        console.debug('[Cloud] Token refreshed ✅');
+        console.debug('[Cloud] Token refreshed');
         return;
       }
     } catch (e) {
@@ -1421,7 +1421,7 @@ class WindyApp {
         if (res.ok) {
           const data = await res.json();
           this.cloudToken = data.token;
-          console.debug('[Cloud] Got fresh token via REST login');
+          console.debug('[Cloud] Authenticated via REST login');
           if (window.windyAPI) {
             window.windyAPI.updateSettings({ cloudToken: data.token });
           }
@@ -1435,24 +1435,25 @@ class WindyApp {
       throw new Error('No cloud token available. Please sign in first.');
     }
 
-    // Step 2: Connect WS with token as query param (Veron 1 protocol)
+    // Step 2: Connect WS and authenticate via first-message pattern (H2 fix: no token in query params)
     return new Promise((resolve, reject) => {
       const baseUrl = this.cloudUrl.replace(/\/$/, '') + '/ws/transcribe';
-      const url = baseUrl + '?token=' + encodeURIComponent(this.cloudToken);
-      console.debug(`[Cloud] Connecting to ${baseUrl} (with token query param)`);
-      this.cloudWs = new WebSocket(url);
+      console.debug('[Cloud] Connecting (token present)');
+      this.cloudWs = new WebSocket(baseUrl);
       this.cloudWs.binaryType = 'arraybuffer';
       let startSent = false;
       let resolved = false;
 
       this.cloudWs.onopen = () => {
-        console.debug('[Cloud] WebSocket opened');
+        console.debug('[Cloud] WebSocket opened, sending auth message');
+        // Send token as first message instead of query parameter
+        this.cloudWs.send(JSON.stringify({ action: 'auth', token: this.cloudToken }));
       };
 
       this.cloudWs.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          console.debug('[Cloud] ← ' + msg.type + ':', JSON.stringify(msg).substring(0, 200));
+          console.debug('[Cloud] <- ' + msg.type);
 
           if (msg.type === 'transcript') {
             // Cloud uses 'is_partial', local uses 'partial' — normalize

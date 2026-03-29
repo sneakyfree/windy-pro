@@ -584,12 +584,29 @@ router.post('/secretary/consent', authenticateToken, (req: Request, res: Respons
 
 // GET /api/v1/identity/secretary/status — Check secretary consent status
 router.get('/secretary/status', authenticateToken, (req: Request, res: Response) => {
+  const userId = (req as AuthRequest).user.userId;
+  const db = getDb();
+
+  // Check if the authenticated user is a human — secretary consent only applies to bots
+  const user = db.prepare('SELECT identity_type FROM users WHERE id = ?').get(userId) as any;
+  if (!user) {
+    return res.status(404).json({ error: 'Identity not found' });
+  }
+
+  if (user.identity_type !== 'bot') {
+    return res.json({
+      consented: false,
+      identity_type: user.identity_type || 'human',
+      message: 'Secretary consent is only applicable to bot identities',
+    });
+  }
+
   const botIdentityId = req.query.botIdentityId as string;
   if (!botIdentityId) {
     return res.status(400).json({ error: 'botIdentityId query param required' });
   }
 
-  const ownerId = (req as AuthRequest).user.userId;
+  const ownerId = userId;
   const hasConsent = hasSecretaryConsent(ownerId, botIdentityId);
 
   res.json({ botIdentityId, hasConsent });

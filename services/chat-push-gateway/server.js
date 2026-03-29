@@ -17,6 +17,9 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 
+const fs = require('fs');
+const path = require('path');
+
 const app = express();
 const PORT = process.env.PORT || 8103;
 
@@ -76,9 +79,52 @@ function stripHtml(str) {
   return str.replace(/<[^>]*>/g, '');
 }
 
-// ── In-memory stores (replace with Redis/DB in production) ──
+// ── In-memory stores with file-based persistence (M1) ──
 const pushTokens = new Map();  // pushkey → { userId, platform, appId, token, deviceName }
 const muteSettings = new Map();  // `${userId}:${roomId}` → { mutedUntil, mentionOverride }
+
+const PUSH_DATA_DIR = path.join(__dirname, 'data');
+const PUSH_TOKENS_FILE = path.join(PUSH_DATA_DIR, 'push-tokens.json');
+
+function loadPushData() {
+  try {
+    if (fs.existsSync(PUSH_TOKENS_FILE)) {
+      const raw = fs.readFileSync(PUSH_TOKENS_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (data.pushTokens && typeof data.pushTokens === 'object') {
+        for (const [key, value] of Object.entries(data.pushTokens)) {
+          pushTokens.set(key, value);
+        }
+      }
+      if (data.muteSettings && typeof data.muteSettings === 'object') {
+        for (const [key, value] of Object.entries(data.muteSettings)) {
+          muteSettings.set(key, value);
+        }
+      }
+      console.log(`[Push] Loaded ${pushTokens.size} push tokens, ${muteSettings.size} mute settings from disk`);
+    }
+  } catch (err) {
+    console.error('[Push] Failed to load persisted data:', err.message);
+  }
+}
+
+function persistPushData() {
+  try {
+    if (!fs.existsSync(PUSH_DATA_DIR)) {
+      fs.mkdirSync(PUSH_DATA_DIR, { recursive: true });
+    }
+    const data = {
+      pushTokens: Object.fromEntries(pushTokens),
+      muteSettings: Object.fromEntries(muteSettings),
+    };
+    fs.writeFileSync(PUSH_TOKENS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[Push] Failed to persist data:', err.message);
+  }
+}
+
+// Load persisted data on startup
+loadPushData();
 
 // ── FCM / APNs setup ──
 
@@ -317,6 +363,7 @@ app.post('/api/v1/chat/push/register', pushRegisterLimiter, authMiddleware, (req
       deviceName: sanitizedDeviceName,
       registeredAt: Date.now(),
     });
+    persistPushData();
 
     console.log(`🔔 Push token registered: ${platform} for ${userId.slice(0, 12)}`);
     res.status(201).json({ success: true });
@@ -359,6 +406,7 @@ app.post('/api/v1/chat/push/mute', authMiddleware, (req, res) => {
       mutedUntil: Date.now() + ms,
       mentionOverride: mentionOverride !== false,
     });
+    persistPushData();
 
     res.json({ success: true, mutedUntil: new Date(Date.now() + ms).toISOString() });
   } catch (err) {
@@ -380,6 +428,7 @@ app.post('/api/v1/chat/push/unmute', authMiddleware, (req, res) => {
     }
 
     muteSettings.delete(`${userId}:${roomId}`);
+    persistPushData();
     res.json({ success: true });
   } catch (err) {
     console.error('Unmute error:', err);
