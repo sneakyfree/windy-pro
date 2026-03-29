@@ -116,6 +116,72 @@ router.get('/clients', authenticateToken, adminOnly, (_req: Request, res: Respon
 });
 
 // ═══════════════════════════════════════════
+//  ECOSYSTEM CLIENT REGISTRATION
+// ═══════════════════════════════════════════
+
+/**
+ * POST /api/v1/oauth/register-client — Register an ecosystem service as an OAuth client
+ *
+ * Allows Windy ecosystem services (Chat, Mail, Fly, Eternitas) to register
+ * themselves as OAuth clients for "Sign in with Windy" flows.
+ *
+ * Body: { client_id, client_name, redirect_uris[], allowed_scopes[], client_secret }
+ */
+router.post('/register-client', oauthLimiter, (req: Request, res: Response) => {
+  try {
+    const { client_id, client_name, redirect_uris, allowed_scopes, client_secret } = req.body;
+
+    if (!client_id || typeof client_id !== 'string') {
+      return res.status(400).json({ error: 'client_id is required and must be a string' });
+    }
+    if (!client_name || typeof client_name !== 'string') {
+      return res.status(400).json({ error: 'client_name is required and must be a string' });
+    }
+    if (!Array.isArray(redirect_uris) || redirect_uris.length === 0) {
+      return res.status(400).json({ error: 'redirect_uris must be a non-empty array' });
+    }
+    if (!Array.isArray(allowed_scopes) || allowed_scopes.length === 0) {
+      return res.status(400).json({ error: 'allowed_scopes must be a non-empty array' });
+    }
+    if (!client_secret || typeof client_secret !== 'string') {
+      return res.status(400).json({ error: 'client_secret is required and must be a string' });
+    }
+
+    const db = getDb();
+
+    // Check if client_id already exists
+    const existing = db.prepare('SELECT client_id FROM oauth_clients WHERE client_id = ?').get(client_id);
+    if (existing) {
+      return res.status(409).json({ error: 'client_id already registered' });
+    }
+
+    const secretHash = bcrypt.hashSync(client_secret, 12);
+
+    db.prepare(`
+      INSERT INTO oauth_clients (client_id, client_secret_hash, name, redirect_uris, allowed_scopes, is_first_party, is_public)
+      VALUES (?, ?, ?, ?, ?, 1, 0)
+    `).run(
+      client_id,
+      secretHash,
+      client_name,
+      JSON.stringify(redirect_uris),
+      JSON.stringify(allowed_scopes),
+    );
+
+    res.status(201).json({
+      client_id,
+      client_name,
+      redirect_uris,
+      allowed_scopes,
+      registered: true,
+    });
+  } catch (err: any) {
+    console.error('[oauth] Ecosystem client registration error:', err);
+    res.status(500).json({ error: 'Client registration failed' });
+  }
+});
+
+// ═══════════════════════════════════════════
 //  AUTHORIZATION ENDPOINT
 // ═══════════════════════════════════════════
 
@@ -680,7 +746,7 @@ router.get('/userinfo', authenticateToken, (req: Request, res: Response) => {
     const db = getDb();
 
     const user = db.prepare(`
-      SELECT id, email, name, display_name, avatar_url, phone,
+      SELECT id, windy_identity_id, email, name, display_name, avatar_url, phone,
              email_verified, phone_verified, identity_type, preferred_lang
       FROM users WHERE id = ?
     `).get(userId) as any;
@@ -691,7 +757,7 @@ router.get('/userinfo', authenticateToken, (req: Request, res: Response) => {
 
     // Standard OIDC claims
     const claims: Record<string, unknown> = {
-      sub: user.id,
+      sub: user.windy_identity_id || user.id,
     };
 
     // Profile claims
@@ -711,7 +777,16 @@ router.get('/userinfo', authenticateToken, (req: Request, res: Response) => {
     }
 
     // Windy-specific claims
+    claims.windy_identity_id = user.windy_identity_id;
     claims.identity_type = user.identity_type || 'human';
+
+    // Product accounts
+    const products = getProductAccounts(user.id);
+    claims.products = products.map((p: any) => ({
+      product: p.product,
+      status: p.status,
+      externalId: p.external_id,
+    }));
 
     res.json(claims);
   } catch (err: any) {
@@ -1028,7 +1103,7 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
   const db = getDb();
 
   // Fetch user info for token payload
-  const user = db.prepare('SELECT email, tier, identity_type FROM users WHERE id = ?').get(identityId) as any;
+  const user = db.prepare('SELECT email, tier, identity_type, windy_identity_id FROM users WHERE id = ?').get(identityId) as any;
   if (!user) throw new Error('User not found');
 
   // Fetch scopes from identity_scopes table
@@ -1047,6 +1122,7 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
 
   const tokenPayload = {
     userId: identityId,
+    windyIdentityId: user.windy_identity_id,
     email: user.email,
     tier: user.tier,
     accountId: identityId,
@@ -1099,6 +1175,37 @@ function generateUserCode(): string {
     if (i === 3) code += '-';
   }
   return code;
+}
+
+// ═══════════════════════════════════════════
+//  SEED ECOSYSTEM CLIENTS
+// ═══════════════════════════════════════════
+
+const ECOSYSTEM_CLIENTS = [
+  { client_id: 'windy_chat', name: 'Windy Chat', scopes: ['windy_chat:*'] },
+  { client_id: 'windy_mail', name: 'Windy Mail', scopes: ['windy_mail:*'] },
+  { client_id: 'eternitas', name: 'Eternitas', scopes: ['eternitas:*'] },
+  { client_id: 'windy_fly', name: 'Windy Fly', scopes: ['windy_fly:*'] },
+];
+
+/**
+ * Pre-seed the oauth_clients table with Windy ecosystem services.
+ * Safe to call multiple times — skips clients that already exist.
+ */
+export function seedEcosystemClients(): void {
+  const db = getDb();
+
+  for (const client of ECOSYSTEM_CLIENTS) {
+    const existing = db.prepare('SELECT client_id FROM oauth_clients WHERE client_id = ?').get(client.client_id);
+    if (existing) continue;
+
+    db.prepare(`
+      INSERT INTO oauth_clients (client_id, client_secret_hash, name, redirect_uris, allowed_scopes, is_first_party, is_public)
+      VALUES (?, NULL, ?, '[]', ?, 1, 1)
+    `).run(client.client_id, client.name, JSON.stringify(client.scopes));
+
+    console.log(`[oauth] Seeded ecosystem client: ${client.client_id}`);
+  }
 }
 
 export default router;

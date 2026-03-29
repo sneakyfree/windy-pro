@@ -27,7 +27,7 @@ import miscRoutes from './routes/misc';
 import storageRoutes from './routes/storage';
 import identityRoutes from './routes/identity';
 import verificationRoutes from './routes/verification';
-import oauthRoutes from './routes/oauth';
+import oauthRoutes, { seedEcosystemClients } from './routes/oauth';
 import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
 import { authenticateToken } from './middleware/auth';
@@ -288,6 +288,9 @@ wss.on('connection', (ws: WebSocket) => {
 
 // Ensure DB is initialized
 const db = getDb();
+
+// Seed ecosystem OAuth clients (windy_chat, windy_mail, eternitas, windy_fly)
+seedEcosystemClients();
 
 // Phase 4: Initialize RS256 key management (falls back to HS256 if unconfigured)
 initializeJWKS();
