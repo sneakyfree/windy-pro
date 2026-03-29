@@ -102,7 +102,7 @@ router.post('/upload', authenticateToken, upload.single('file'), validateFileMag
         });
     } catch (err: any) {
         console.error('[Storage] Upload error:', err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Upload failed' });
     }
 });
 
@@ -141,7 +141,7 @@ router.get('/', authenticateToken, (req: Request, res: Response) => {
             storageLimit: userRow?.storage_limit || 524288000,
         });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -173,7 +173,7 @@ router.get('/:fileId', authenticateToken, (req: Request, res: Response) => {
 
         res.download(filePath, file.original_name);
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -210,7 +210,7 @@ router.delete('/:fileId', authenticateToken, (req: Request, res: Response) => {
 
         res.json({ ok: true });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

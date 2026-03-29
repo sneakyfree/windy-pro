@@ -76,7 +76,7 @@ router.get('/latest/:platform', async (req: Request, res: Response) => {
         console.log(`[Download] ${platform} → ${asset.name} (${release.tag_name})`);
         return res.redirect(302, downloadUrl);
     } catch (err: any) {
-        res.status(502).json({ error: 'Failed to fetch latest release', details: err.message });
+        res.status(502).json({ error: 'Failed to fetch latest release' });
     }
 });
 
@@ -112,7 +112,7 @@ router.get('/verify', async (_req: Request, res: Response) => {
             cache_age_seconds: Math.round((Date.now() - _ghReleaseCacheTime) / 1000),
         });
     } catch (err: any) {
-        res.status(502).json({ error: 'Failed to fetch release info', details: err.message });
+        res.status(502).json({ error: 'Failed to fetch release info' });
     }
 });
 

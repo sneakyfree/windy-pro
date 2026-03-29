@@ -60,13 +60,15 @@ function generateTokens(user: { id: string; email: string; tier: string }, devic
         products = productRows.length > 0 ? productRows.map(r => r.product) : ['windy_pro'];
     } catch { products = ['windy_pro']; }
 
-    // Fetch identity type
+    // Fetch identity type and windy_identity_id
     let identityType = 'human';
+    let windyIdentityId: string | undefined;
     try {
         const identity = db.prepare(
-            'SELECT identity_type FROM users WHERE id = ?',
-        ).get(user.id) as { identity_type: string } | undefined;
+            'SELECT identity_type, windy_identity_id FROM users WHERE id = ?',
+        ).get(user.id) as { identity_type: string; windy_identity_id: string } | undefined;
         identityType = identity?.identity_type || 'human';
+        windyIdentityId = identity?.windy_identity_id;
     } catch { /* default human */ }
 
     // Phase 4: Sign with RS256 if available, HS256 fallback
@@ -75,6 +77,7 @@ function generateTokens(user: { id: string; email: string; tier: string }, devic
         email: user.email,
         tier: user.tier,
         accountId: user.id,
+        windyIdentityId,
         // Phase 10.1: Unified Identity fields
         type: identityType,
         scopes,
@@ -136,8 +139,15 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
         }
 
         const userId = uuidv4();
+        const windyIdentityId = crypto.randomUUID();
         const passwordHash = await bcrypt.hash(password, config.BCRYPT_ROUNDS);
         stmts.createUser.run(userId, email.toLowerCase(), name, passwordHash, 'free');
+
+        // Set the universal cross-product identity ID
+        try {
+            const db = getDb();
+            db.prepare('UPDATE users SET windy_identity_id = ? WHERE id = ?').run(windyIdentityId, userId);
+        } catch { /* column may not exist during first migration cycle */ }
 
         if (deviceId) {
             stmts.addDevice.run(deviceId, userId, deviceName || 'Unknown Device', platform || 'unknown');
@@ -170,6 +180,7 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
 
         res.status(201).json({
             userId,
+            windyIdentityId,
             name,
             email: email.toLowerCase(),
             tier: 'free',
@@ -179,7 +190,7 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
         });
     } catch (err: any) {
         console.error('Register error:', err);
-        res.status(500).json({ error: 'Registration failed: ' + err.message });
+        res.status(500).json({ error: 'Registration failed' });
     }
 });
 
@@ -228,6 +239,7 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
 
         res.json({
             userId: user.id,
+            windyIdentityId: user.windy_identity_id,
             name: user.name,
             email: user.email,
             tier: user.tier,
@@ -237,7 +249,7 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
         });
     } catch (err: any) {
         console.error('Login error:', err);
-        res.status(500).json({ error: 'Login failed: ' + err.message });
+        res.status(500).json({ error: 'Login failed' });
     }
 });
 
@@ -343,7 +355,7 @@ router.post('/devices/remove', authenticateToken, validate(RemoveDeviceRequestSc
 
 // ─── POST /api/v1/auth/refresh ───────────────────────────────
 
-router.post('/refresh', validate(RefreshRequestSchema), (req: Request, res: Response) => {
+router.post('/refresh', authLimiter, validate(RefreshRequestSchema), (req: Request, res: Response) => {
     const { refreshToken, deviceId } = req.body;
 
     stmts.cleanExpiredTokens.run();
@@ -430,7 +442,7 @@ router.post('/logout', authenticateToken, (req: Request, res: Response) => {
 
 // ─── POST /api/v1/auth/change-password ───────────────────────
 
-router.post('/change-password', authenticateToken, validate(ChangePasswordRequestSchema), (req: Request, res: Response) => {
+router.post('/change-password', authenticateToken, validate(ChangePasswordRequestSchema), async (req: Request, res: Response) => {
     try {
         const { currentPassword, newPassword } = req.body;
         const userId = (req as AuthRequest).user.userId;
@@ -439,18 +451,19 @@ router.post('/change-password', authenticateToken, validate(ChangePasswordReques
         const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as any;
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        if (!bcrypt.compareSync(currentPassword, user.password_hash)) {
+        const passwordValid = await bcrypt.compare(currentPassword, user.password_hash);
+        if (!passwordValid) {
             return res.status(401).json({ error: 'Current password is incorrect' });
         }
 
-        const newHash = bcrypt.hashSync(newPassword, config.BCRYPT_ROUNDS);
+        const newHash = await bcrypt.hash(newPassword, config.BCRYPT_ROUNDS);
         db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, userId);
 
         logAuditEvent('password_change', userId, {}, req.ip, req.get('user-agent'));
 
         res.json({ success: true });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Password change failed' });
     }
 });
 
@@ -471,7 +484,7 @@ router.get('/billing', authenticateToken, (req: Request, res: Response) => {
             payments: [],
         });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Failed to fetch billing info' });
     }
 });
 

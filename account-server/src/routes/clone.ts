@@ -24,7 +24,7 @@ router.get('/training-data', authenticateToken, (req: Request, res: Response) =>
         ).all((req as AuthRequest).user.userId);
         res.json({ bundles, total: bundles.length });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -56,7 +56,7 @@ router.post('/start-training', authenticateToken, validate(StartTrainingRequestS
             message: 'Clone training job queued successfully',
         });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

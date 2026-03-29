@@ -47,25 +47,36 @@ stripeRouter.post('/webhook', (req: Request, res: Response) => {
     try {
         const rawBody = typeof req.body === 'string' ? req.body : req.body?.toString?.() || JSON.stringify(req.body);
 
-        if (config.STRIPE_WEBHOOK_SECRET) {
-            const sig = req.headers['stripe-signature'] as string | undefined;
-            const ts = sig?.split(',').find((s: string) => s.startsWith('t='))?.split('=')[1];
-            const v1 = sig?.split(',').find((s: string) => s.startsWith('v1='))?.split('=')[1];
-
-            if (ts && v1) {
-                const expected = crypto.createHmac('sha256', config.STRIPE_WEBHOOK_SECRET)
-                    .update(`${ts}.${rawBody}`).digest('hex');
-                if (expected !== v1) {
-                    res.status(400).json({ error: 'Invalid signature' });
-                    return;
-                }
-            }
-            event = JSON.parse(rawBody);
-        } else {
-            event = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        if (!config.STRIPE_WEBHOOK_SECRET) {
+            console.warn('[Billing] STRIPE_WEBHOOK_SECRET not set — rejecting webhook');
+            res.status(500).json({ error: 'Webhook secret not configured' });
+            return;
         }
+
+        const sig = req.headers['stripe-signature'] as string | undefined;
+        if (!sig) {
+            res.status(400).json({ error: 'Missing stripe-signature header' });
+            return;
+        }
+
+        const ts = sig.split(',').find((s: string) => s.startsWith('t='))?.split('=')[1];
+        const v1 = sig.split(',').find((s: string) => s.startsWith('v1='))?.split('=')[1];
+
+        if (!ts || !v1) {
+            res.status(400).json({ error: 'Malformed stripe-signature header' });
+            return;
+        }
+
+        const expected = crypto.createHmac('sha256', config.STRIPE_WEBHOOK_SECRET)
+            .update(`${ts}.${rawBody}`).digest('hex');
+        if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(v1))) {
+            res.status(400).json({ error: 'Invalid signature' });
+            return;
+        }
+
+        event = JSON.parse(rawBody);
     } catch (e: any) {
-        res.status(400).json({ error: 'Webhook parse error: ' + e.message });
+        res.status(400).json({ error: 'Webhook parse error' });
         return;
     }
 
@@ -164,7 +175,7 @@ billingRouter.get('/transactions', authenticateToken, (req: Request, res: Respon
 
         res.json({ ok: true, transactions: txs, total, limit: query.limit, offset: query.offset });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -193,6 +204,6 @@ billingRouter.get('/summary', authenticateToken, (req: Request, res: Response) =
             storageLimit: userRow?.storage_limit || TIER_LIMITS.free,
         });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });

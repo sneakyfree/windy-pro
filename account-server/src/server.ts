@@ -36,7 +36,12 @@ const app = express();
 
 // ─── Middleware ───────────────────────────────────────────────
 
-app.use(cors());
+app.use(cors({
+    origin: process.env.CORS_ALLOWED_ORIGINS
+        ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim())
+        : true, // Allow all in development; set CORS_ALLOWED_ORIGINS in production
+    credentials: true,
+}));
 app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response-time ms'));
 
 // Stripe webhook needs raw body — must come BEFORE express.json()

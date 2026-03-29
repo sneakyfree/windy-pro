@@ -36,8 +36,20 @@ const videoUpload = multer({
     limits: { fileSize: 500 * 1024 * 1024 },
 });
 
-// In-memory chunk store
-const chunkStore = new Map<string, { chunks: Map<number, string>; total: number; file_type: string }>();
+// In-memory chunk store with limits
+const MAX_CHUNK_BUNDLES = 50;
+const MAX_CHUNK_DATA_BYTES = 10 * 1024 * 1024; // 10 MB per chunk
+const chunkStore = new Map<string, { chunks: Map<number, string>; total: number; file_type: string; createdAt: number }>();
+
+// Periodic cleanup of stale chunk uploads (older than 10 minutes)
+setInterval(() => {
+    const now = Date.now();
+    for (const [id, entry] of chunkStore) {
+        if (now - entry.createdAt > 10 * 60 * 1000) {
+            chunkStore.delete(id);
+        }
+    }
+}, 60 * 1000);
 
 // ─── Helper: list recordings query ──────────────────────────
 
@@ -72,7 +84,7 @@ router.get('/', authenticateToken, (req: Request, res: Response) => {
         const mapped = listRecordings((req as AuthRequest).user.userId, since);
         res.json({ bundles: mapped, total: mapped.length, since });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -84,7 +96,7 @@ router.get('/list', authenticateToken, (req: Request, res: Response) => {
         const mapped = listRecordings((req as AuthRequest).user.userId, since);
         res.json({ bundles: mapped, total: mapped.length, since });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -100,7 +112,7 @@ router.get('/check', authenticateToken, (req: Request, res: Response) => {
             .get(bundle_id, (req as AuthRequest).user.userId);
         res.json({ exists: !!row, bundle_id });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -135,7 +147,7 @@ router.get('/stats', authenticateToken, (req: Request, res: Response) => {
             lastRecording: stats.lastRecording,
         });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -155,7 +167,7 @@ router.get('/:id', authenticateToken, (req: Request, res: Response) => {
         }
         res.json(recording);
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -182,7 +194,7 @@ router.delete('/:id', authenticateToken, (req: Request, res: Response) => {
         console.log(`🗑️  Recording deleted: ${req.params.id.slice(0, 8)}`);
         res.json({ deleted: true, id: req.params.id });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -217,7 +229,7 @@ router.post('/upload', authenticateToken, videoUpload.single('media'), validateF
 
         res.status(201).json({ id, bundle_id: bundleId, file_size: fileSize });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -232,11 +244,18 @@ router.post('/upload/chunk', authenticateToken, (req: Request, res: Response) =>
         }
 
         if (!chunkStore.has(bundle_id)) {
-            chunkStore.set(bundle_id, { chunks: new Map(), total: total_chunks, file_type: file_type || 'audio/webm' });
+            if (chunkStore.size >= MAX_CHUNK_BUNDLES) {
+                return res.status(503).json({ error: 'Too many concurrent chunk uploads' });
+            }
+            chunkStore.set(bundle_id, { chunks: new Map(), total: total_chunks, file_type: file_type || 'audio/webm', createdAt: Date.now() });
         }
 
         const entry = chunkStore.get(bundle_id)!;
-        entry.chunks.set(chunk_index, data || '');
+        const chunkData = data || '';
+        if (typeof chunkData === 'string' && chunkData.length > MAX_CHUNK_DATA_BYTES) {
+            return res.status(413).json({ error: 'Chunk data too large' });
+        }
+        entry.chunks.set(chunk_index, chunkData);
 
         console.log(`📦 Chunk ${chunk_index + 1}/${total_chunks} for bundle ${bundle_id.slice(0, 8)}`);
 
@@ -246,7 +265,7 @@ router.post('/upload/chunk', authenticateToken, (req: Request, res: Response) =>
 
         res.json({ received: true, chunk_index, bundle_id });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -295,7 +314,7 @@ router.post('/upload/batch', authenticateToken, (req: Request, res: Response) =>
         console.log(`📦 Batch upload: ${uploaded} recordings, ${errors.length} errors`);
         res.json({ uploaded, errors });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -355,7 +374,7 @@ router.post('/sync', authenticateToken, (req: Request, res: Response) => {
         }
         res.json({ synced, skipped, errors });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -396,7 +415,7 @@ router.get('/:id/video', authenticateToken, (req: Request, res: Response) => {
             fs.createReadStream(recording.file_path).pipe(res);
         }
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

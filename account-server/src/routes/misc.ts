@@ -3,6 +3,7 @@
  */
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import { getDb } from '../db/schema';
 import { config } from '../config';
 import { authenticateToken, optionalAuth, AuthRequest } from '../middleware/auth';
@@ -14,11 +15,31 @@ import {
 } from '@windy-pro/contracts';
 import { tierFromKey } from '@windy-pro/contracts';
 
+const analyticsLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: { error: 'Too many requests' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-// In-memory RTC session store
-const rtcSessions = new Map<string, { offer: string | null; answer: string | null; candidates: any[]; switchCamera?: boolean }>();
+// In-memory RTC session store with TTL cleanup
+const RTC_SESSION_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const RTC_MAX_SESSIONS = 1000;
+const rtcSessions = new Map<string, { offer: string | null; answer: string | null; candidates: any[]; switchCamera?: boolean; createdAt: number }>();
+
+// Periodic cleanup of expired RTC sessions
+setInterval(() => {
+    const now = Date.now();
+    for (const [token, session] of rtcSessions) {
+        if (now - session.createdAt > RTC_SESSION_TTL_MS) {
+            rtcSessions.delete(token);
+        }
+    }
+}, 60 * 1000);
 
 // ─── GET /health ─────────────────────────────────────────────
 
@@ -40,9 +61,9 @@ router.get('/health', (_req: Request, res: Response) => {
 
 // ─── POST /api/v1/analytics ──────────────────────────────────
 
-router.post('/api/v1/analytics', (req: Request, res: Response) => {
+router.post('/api/v1/analytics', analyticsLimiter, validate(AnalyticsRequestSchema), (req: Request, res: Response) => {
     const { event, properties } = req.body || {};
-    console.log(`📊 Analytics: ${event || 'unknown'}`, properties ? JSON.stringify(properties).slice(0, 200) : '');
+    console.log(`📊 Analytics: ${event || 'unknown'}`);
     res.json({ received: true });
 });
 
@@ -79,18 +100,21 @@ router.post('/api/v1/license/activate', authenticateToken, validate(LicenseActiv
         });
     } catch (err: any) {
         console.error('License activation error:', err);
-        res.status(500).json({ error: 'License activation failed: ' + err.message });
+        res.status(500).json({ error: 'License activation failed' });
     }
 });
 
 // ─── POST /api/v1/rtc/signal ─────────────────────────────────
 
-router.post('/api/v1/rtc/signal', (req: Request, res: Response) => {
+router.post('/api/v1/rtc/signal', authenticateToken, (req: Request, res: Response) => {
     const { type, token, sdp, candidate } = req.body;
     if (!token) return res.status(400).json({ error: 'Token required' });
 
     if (!rtcSessions.has(token)) {
-        rtcSessions.set(token, { offer: null, answer: null, candidates: [] });
+        if (rtcSessions.size >= RTC_MAX_SESSIONS) {
+            return res.status(503).json({ error: 'Too many active RTC sessions' });
+        }
+        rtcSessions.set(token, { offer: null, answer: null, candidates: [], createdAt: Date.now() });
     }
     const session = rtcSessions.get(token)!;
 
@@ -113,7 +137,7 @@ router.post('/api/v1/rtc/signal', (req: Request, res: Response) => {
 
 // ─── GET /api/v1/rtc/signal ──────────────────────────────────
 
-router.get('/api/v1/rtc/signal', (req: Request, res: Response) => {
+router.get('/api/v1/rtc/signal', authenticateToken, (req: Request, res: Response) => {
     const { token, type } = req.query as { token?: string; type?: string };
     if (!token) return res.status(400).json({ error: 'Token required' });
     const session = rtcSessions.get(token);
@@ -141,7 +165,7 @@ router.post('/api/v1/ocr/translate', optionalAuth, upload.single('image'), (req:
         });
     } catch (err: any) {
         console.error('OCR translate error:', err);
-        res.status(500).json({ error: 'OCR translation failed: ' + err.message });
+        res.status(500).json({ error: 'OCR translation failed' });
     }
 });
 

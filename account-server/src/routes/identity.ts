@@ -47,7 +47,7 @@ router.get('/me', authenticateToken, (req: Request, res: Response) => {
     const user = db.prepare(`
       SELECT id, email, name, tier, identity_type, phone, display_name,
              avatar_url, email_verified, phone_verified, passport_id,
-             preferred_lang, last_login_at, created_at, updated_at
+             preferred_lang, last_login_at, windy_identity_id, created_at, updated_at
       FROM users WHERE id = ?
     `).get(userId) as any;
 
@@ -71,6 +71,7 @@ router.get('/me', authenticateToken, (req: Request, res: Response) => {
     res.json({
       identity: {
         id: user.id,
+        windyIdentityId: user.windy_identity_id,
         email: user.email,
         name: user.name,
         tier: user.tier,
@@ -331,7 +332,7 @@ router.post('/backfill', authenticateToken, adminOnly, (_req: Request, res: Resp
       accountsCreated: result.accountsCreated,
     });
   } catch (err: any) {
-    res.status(500).json({ error: 'Backfill failed: ' + err.message });
+    res.status(500).json({ error: 'Backfill failed' });
   }
 });
 
@@ -677,6 +678,250 @@ router.post('/hatch/credentials', authenticateToken, adminOnly, (req: Request, r
   } catch (err: any) {
     console.error('[identity] Hatch credentials error:', err);
     res.status(500).json({ error: 'Failed to generate hatch credentials' });
+  }
+});
+
+// ─── GET /api/v1/identity/resolve/:windyIdentityId — Cross-product identity resolution ───
+// The "Google Account dashboard" equivalent: given a universal identity ID,
+// return everything linked to that person across the Windy ecosystem.
+
+router.get('/resolve/:windyIdentityId', authenticateToken, (req: Request, res: Response) => {
+  try {
+    const { windyIdentityId } = req.params;
+    const db = getDb();
+    const requestingUser = (req as AuthRequest).user;
+
+    // Look up the user by windy_identity_id
+    const user = db.prepare(
+      `SELECT id, windy_identity_id, email, name, tier, identity_type,
+              phone, display_name, avatar_url, email_verified, phone_verified,
+              passport_id, preferred_lang, last_login_at, created_at
+       FROM users WHERE windy_identity_id = ?`,
+    ).get(windyIdentityId) as any;
+
+    if (!user) {
+      return res.status(404).json({ error: 'Identity not found' });
+    }
+
+    // Authorization: only the identity owner or an admin can resolve
+    const isAdmin = requestingUser.role === 'admin' || (requestingUser.scopes || []).some(
+      (s: string) => s === 'admin:*',
+    );
+    if (user.id !== requestingUser.userId && !isAdmin) {
+      return res.status(403).json({ error: 'You can only resolve your own identity' });
+    }
+
+    // Fetch all linked product accounts
+    const products = db.prepare(
+      `SELECT id, product, status, external_id, metadata, provisioned_at
+       FROM product_accounts WHERE identity_id = ? ORDER BY product`,
+    ).all(user.id) as any[];
+
+    // Fetch scopes
+    const scopes = db.prepare(
+      'SELECT scope, granted_at FROM identity_scopes WHERE identity_id = ?',
+    ).all(user.id) as any[];
+
+    // Fetch chat profile if exists
+    const chatProfile = db.prepare(
+      `SELECT chat_user_id, matrix_user_id, display_name, primary_language, onboarding_complete
+       FROM chat_profiles WHERE identity_id = ?`,
+    ).get(user.id) as any | undefined;
+
+    // Fetch Eternitas passport if exists
+    const passport = db.prepare(
+      `SELECT passport_number, status, trust_score, registered_at
+       FROM eternitas_passports WHERE identity_id = ?`,
+    ).get(user.id) as any | undefined;
+
+    // Build the product detail map
+    const productDetails = products.map((p: any) => {
+      const detail: Record<string, any> = {
+        product: p.product,
+        status: p.status,
+        externalId: p.external_id,
+        provisionedAt: p.provisioned_at,
+      };
+
+      // Merge in product-specific metadata
+      try {
+        const meta = JSON.parse(p.metadata || '{}');
+        if (Object.keys(meta).length > 0) detail.metadata = meta;
+      } catch { /* ignore invalid JSON */ }
+
+      // Enrich with chat profile data
+      if (p.product === 'windy_chat' && chatProfile) {
+        detail.chatUserId = chatProfile.chat_user_id;
+        detail.matrixUserId = chatProfile.matrix_user_id;
+        detail.displayName = chatProfile.display_name;
+        detail.onboardingComplete = !!chatProfile.onboarding_complete;
+      }
+
+      // Enrich with mail address for bots
+      if (p.product === 'windy_mail' && passport) {
+        detail.emailAddress = `${passport.passport_number.toLowerCase()}@windymail.ai`;
+      }
+
+      return detail;
+    });
+
+    res.json({
+      windyIdentityId: user.windy_identity_id,
+      identity: {
+        name: user.name,
+        email: user.email,
+        tier: user.tier,
+        identityType: user.identity_type || 'human',
+        displayName: user.display_name,
+        avatarUrl: user.avatar_url,
+        emailVerified: !!user.email_verified,
+        phoneVerified: !!user.phone_verified,
+        preferredLang: user.preferred_lang || 'en',
+        createdAt: user.created_at,
+      },
+      products: productDetails,
+      scopes: scopes.map((s: any) => s.scope),
+      passport: passport ? {
+        passportNumber: passport.passport_number,
+        status: passport.status,
+        trustScore: passport.trust_score,
+        registeredAt: passport.registered_at,
+      } : null,
+    });
+  } catch (err: any) {
+    console.error('[identity] Resolve error:', err);
+    res.status(500).json({ error: 'Failed to resolve identity' });
+  }
+});
+
+// ─── POST /api/v1/identity/provision-all — Provision pending products via webhooks ───
+// Fires provisioning webhooks to external services (Windy Chat, Windy Mail)
+// so they can create accounts for this identity in their own systems.
+
+router.post('/provision-all', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { windyIdentityId } = req.body;
+    const requestingUser = (req as AuthRequest).user;
+    const db = getDb();
+
+    // Resolve identity
+    const identityIdSource = windyIdentityId || requestingUser.userId;
+    let user: any;
+
+    if (windyIdentityId) {
+      user = db.prepare('SELECT id, windy_identity_id, name, email, display_name, tier FROM users WHERE windy_identity_id = ?')
+        .get(windyIdentityId);
+    } else {
+      user = db.prepare('SELECT id, windy_identity_id, name, email, display_name, tier FROM users WHERE id = ?')
+        .get(requestingUser.userId);
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'Identity not found' });
+    }
+
+    // Authorization: only self or admin
+    const isAdmin = requestingUser.role === 'admin' || (requestingUser.scopes || []).some(
+      (s: string) => s === 'admin:*',
+    );
+    if (user.id !== requestingUser.userId && !isAdmin) {
+      return res.status(403).json({ error: 'You can only provision your own identity' });
+    }
+
+    const results: Record<string, { status: string; externalId?: string; error?: string }> = {};
+
+    // Ensure product account rows exist (idempotent)
+    provisionProduct(user.id, 'windy_chat', { source: 'provision-all' });
+    provisionProduct(user.id, 'windy_mail', { source: 'provision-all' });
+
+    const webhookPayload = {
+      windyIdentityId: user.windy_identity_id,
+      internalId: user.id,
+      email: user.email,
+      name: user.name,
+      displayName: user.display_name || user.name,
+      tier: user.tier,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Fire webhook to Windy Chat
+    const chatWebhookUrl = config.WINDY_CHAT_WEBHOOK_URL;
+    if (chatWebhookUrl) {
+      try {
+        const chatRes = await fetch(chatWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...webhookPayload, product: 'windy_chat' }),
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (chatRes.ok) {
+          const chatData = await chatRes.json() as any;
+          const externalId = chatData.externalId || chatData.matrixUserId || chatData.chatUserId;
+
+          // Update product account to active with external ID
+          db.prepare(
+            "UPDATE product_accounts SET status = 'active', external_id = ? WHERE identity_id = ? AND product = 'windy_chat'",
+          ).run(externalId || null, user.id);
+
+          results.windy_chat = { status: 'active', externalId };
+        } else {
+          results.windy_chat = { status: 'webhook_failed', error: `HTTP ${chatRes.status}` };
+        }
+      } catch (err: any) {
+        results.windy_chat = { status: 'webhook_error', error: err.message };
+      }
+    } else {
+      // No webhook configured — leave as pending
+      results.windy_chat = { status: 'pending', error: 'WINDY_CHAT_WEBHOOK_URL not configured' };
+    }
+
+    // Fire webhook to Windy Mail
+    const mailWebhookUrl = config.WINDY_MAIL_WEBHOOK_URL;
+    if (mailWebhookUrl) {
+      try {
+        const mailRes = await fetch(mailWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...webhookPayload, product: 'windy_mail' }),
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (mailRes.ok) {
+          const mailData = await mailRes.json() as any;
+          const externalId = mailData.externalId || mailData.emailAddress;
+
+          db.prepare(
+            "UPDATE product_accounts SET status = 'active', external_id = ? WHERE identity_id = ? AND product = 'windy_mail'",
+          ).run(externalId || null, user.id);
+
+          results.windy_mail = { status: 'active', externalId };
+        } else {
+          results.windy_mail = { status: 'webhook_failed', error: `HTTP ${mailRes.status}` };
+        }
+      } catch (err: any) {
+        results.windy_mail = { status: 'webhook_error', error: err.message };
+      }
+    } else {
+      results.windy_mail = { status: 'pending', error: 'WINDY_MAIL_WEBHOOK_URL not configured' };
+    }
+
+    logAuditEvent('product_provision', user.id, {
+      action: 'provision-all',
+      results,
+    }, req.ip, req.get('user-agent'));
+
+    // Return the full current product state
+    const allProducts = getProductAccounts(user.id);
+
+    res.json({
+      windyIdentityId: user.windy_identity_id,
+      provisioned: results,
+      products: allProducts,
+    });
+  } catch (err: any) {
+    console.error('[identity] Provision-all error:', err);
+    res.status(500).json({ error: 'Failed to provision products' });
   }
 });
 

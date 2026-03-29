@@ -5,7 +5,7 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
-import { optionalAuth } from '../middleware/auth';
+import { authenticateToken } from '../middleware/auth';
 import { config } from '../config';
 import FormData from 'form-data';
 
@@ -87,7 +87,7 @@ async function callWhisperAPI(
 
 // ─── POST /api/v1/transcribe ─────────────────────────────────
 
-router.post('/', optionalAuth, upload.single('audio'), async (req: Request, res: Response) => {
+router.post('/', authenticateToken, upload.single('audio'), async (req: Request, res: Response) => {
     try {
         const language = req.body.language || 'en';
         const engine = req.body.engine || 'cloud-standard';
@@ -166,13 +166,13 @@ router.post('/', optionalAuth, upload.single('audio'), async (req: Request, res:
         });
     } catch (err: any) {
         console.error('Transcribe error:', err);
-        res.status(500).json({ error: 'Transcription failed: ' + err.message });
+        res.status(500).json({ error: 'Transcription failed' });
     }
 });
 
 // ─── POST /api/v1/transcribe/batch ───────────────────────────
 
-router.post('/batch', optionalAuth, upload.array('audio', 20), async (req: Request, res: Response) => {
+router.post('/batch', authenticateToken, upload.array('audio', 20), async (req: Request, res: Response) => {
     try {
         const language = req.body.language || 'en';
         const engine = req.body.engine || 'cloud-standard';
@@ -232,7 +232,7 @@ router.post('/batch', optionalAuth, upload.array('audio', 20), async (req: Reque
         res.json({ results });
     } catch (err: any) {
         console.error('Batch transcribe error:', err);
-        res.status(500).json({ error: 'Batch transcription failed: ' + err.message });
+        res.status(500).json({ error: 'Batch transcription failed' });
     }
 });
 

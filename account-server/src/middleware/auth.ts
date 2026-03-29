@@ -129,17 +129,17 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
             // Async Redis blacklist check
             redisIsBlacklisted(tokenHash).then(blacklisted => {
                 if (blacklisted) {
-                    res.status(401).json({ error: 'Token revoked' });
+                    if (!res.headersSent) res.status(401).json({ error: 'Token revoked' });
                     return;
                 }
-                finalizeAuth(decoded, req, res, next);
+                if (!res.headersSent) finalizeAuth(decoded, req, res, next);
             }).catch(() => {
                 // Redis error — fall back to DB check
                 if (checkDbBlacklist(tokenHash)) {
-                    res.status(401).json({ error: 'Token revoked' });
+                    if (!res.headersSent) res.status(401).json({ error: 'Token revoked' });
                     return;
                 }
-                finalizeAuth(decoded, req, res, next);
+                if (!res.headersSent) finalizeAuth(decoded, req, res, next);
             });
             return;
         }
