@@ -186,4 +186,59 @@ export {
     AdminFreezeRequestSchema,
     AdminTierRequestSchema,
     AdminCouponCreateSchema,
+    // Identity validation schemas (Phase 10.0)
+    IdentityUpdateSchema,
+    IdentityProvisionSchema,
+    IdentityScopeGrantSchema,
+    IdentityAuditQuerySchema,
+    EternitasWebhookSchema,
+    // Password validation (Phase 1 — unified mobile + server standard)
+    PasswordSchema,
+    // Verification schemas (Phase 1 — promoted from chat-onboarding)
+    VerificationSendSchema,
+    VerificationCheckSchema,
+    // Bot API key schemas (Phase 3)
+    BotApiKeyCreateSchema,
+    SecretaryConsentSchema,
 } from './validation';
+
+// Identity types — Unified Windy Identity
+export type {
+    IdentityType,
+    WindyProduct,
+    ProductAccountStatus,
+    PassportStatus,
+    WindyIdentity,
+    ProductAccount,
+    ProvisionProductRequest,
+    ProvisionProductResponse,
+    IdentityScope,
+    IdentityScopeRecord,
+    WindyIdentityToken,
+    IdentityAuditEvent,
+    IdentityAuditEntry,
+    EternitasPassport,
+    EternitasWebhookPayload,
+    EternitasWebhookResponse,
+    ChatProfile,
+    IdentityMeResponse,
+    IdentityProvisionRequest,
+    IdentityScopeGrantRequest,
+    IdentityEternitasWebhookRequest,
+    IdentityAuditQuery,
+    IdentityAuditResponse,
+    // Phase 1: Verification
+    VerificationSendRequest,
+    VerificationCheckRequest,
+    VerificationSendResponse,
+    VerificationCheckResponse,
+    // Phase 3: Bot API Keys
+    BotApiKey,
+    BotApiKeyCreateRequest,
+    BotApiKeyCreateResponse,
+    // Phase 3: Secretary Mode
+    SecretaryConsent,
+    SecretaryConsentRequest,
+    // Phase 3: Hatch Flow
+    WindyIdentityCredentials,
+} from './identity';

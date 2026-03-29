@@ -22,12 +22,15 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const rateLimit = require('express-rate-limit');
 
+const { RedisStore } = require('../lib/redis-store');
+
 const router = express.Router();
 
-// ── In-memory stores (replace with Redis in production) ──
-const otpStore = new Map();       // key: identifier → { code, expiresAt, attempts, sentAt }
-const verifiedStore = new Map();  // key: identifier → { verifiedAt, token, userId }
-const cooldownStore = new Map();  // key: identifier → lastRegistrationTime
+// ── Redis-backed stores (auto-fallback to in-memory if Redis unavailable) ──
+// TTLs match the business logic: OTP=10min, verified=24h, cooldown=24h
+const otpStore = new RedisStore('otp', 600);             // 10 min TTL
+const verifiedStore = new RedisStore('verified', 86400);  // 24h TTL
+const cooldownStore = new RedisStore('cooldown', 86400);  // 24h TTL
 
 // ── Rate limiters ──
 const sendLimiter = rateLimit({
@@ -214,7 +217,7 @@ router.post('/send', sendLimiter, hourlyLimiter, async (req, res) => {
     }
 
     // Check 24h cooling period
-    const lastRegistration = cooldownStore.get(normalizedId);
+    const lastRegistration = await cooldownStore.get(normalizedId);
     if (lastRegistration) {
       const hoursSince = (Date.now() - lastRegistration) / (1000 * 60 * 60);
       if (hoursSince < 24) {
@@ -227,7 +230,7 @@ router.post('/send', sendLimiter, hourlyLimiter, async (req, res) => {
     }
 
     // Check resend cooldown (60 seconds)
-    const existing = otpStore.get(normalizedId);
+    const existing = await otpStore.get(normalizedId);
     if (existing && existing.sentAt) {
       const secondsSince = (Date.now() - existing.sentAt) / 1000;
       if (secondsSince < 60) {
@@ -241,7 +244,7 @@ router.post('/send', sendLimiter, hourlyLimiter, async (req, res) => {
 
     // Generate and store OTP
     const code = generateOTP();
-    otpStore.set(normalizedId, {
+    await otpStore.set(normalizedId, {
       code,
       expiresAt: Date.now() + 10 * 60 * 1000,  // 10 minutes
       attempts: 0,
@@ -303,26 +306,27 @@ router.post('/check', async (req, res) => {
       normalizedId = (identifier || '').toLowerCase().trim();
     }
 
-    const stored = otpStore.get(normalizedId);
+    const stored = await otpStore.get(normalizedId);
     if (!stored) {
       return res.status(400).json({ error: 'No verification code found. Request a new one.' });
     }
 
     // Check expiration
     if (Date.now() > stored.expiresAt) {
-      otpStore.delete(normalizedId);
+      await otpStore.delete(normalizedId);
       return res.status(400).json({ error: 'Verification code expired. Request a new one.' });
     }
 
     // Check attempts (max 3 per OTP)
     if (stored.attempts >= 3) {
-      otpStore.delete(normalizedId);
+      await otpStore.delete(normalizedId);
       return res.status(429).json({ error: 'Too many incorrect attempts. Request a new code.' });
     }
 
     // Validate code
     if (stored.code !== code.trim()) {
       stored.attempts++;
+      await otpStore.set(normalizedId, stored);  // Persist updated attempts
       const remaining = 3 - stored.attempts;
       return res.status(400).json({
         error: 'Invalid verification code',
@@ -331,10 +335,10 @@ router.post('/check', async (req, res) => {
     }
 
     // ✅ Success — generate verification token
-    otpStore.delete(normalizedId);
+    await otpStore.delete(normalizedId);
     const verificationToken = uuidv4();
 
-    verifiedStore.set(normalizedId, {
+    await verifiedStore.set(normalizedId, {
       verifiedAt: Date.now(),
       token: verificationToken,
       type: stored.type,
@@ -363,7 +367,7 @@ router.post('/check', async (req, res) => {
 
 // ── GET /api/v1/chat/verify/status ──
 
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
   try {
     const { identifier } = req.query;
     if (!identifier) {
@@ -374,7 +378,7 @@ router.get('/status', (req, res) => {
       return res.status(400).json({ error: 'identifier must be a string, max 255 characters' });
     }
 
-    const verified = verifiedStore.get(identifier);
+    const verified = await verifiedStore.get(identifier);
     res.json({
       identifier,
       verified: !!verified,

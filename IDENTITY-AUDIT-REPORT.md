@@ -822,12 +822,12 @@ User visits ANY Windy product for the first time:
 
 | Phase | Work | Timeline Estimate |
 |-------|------|-------------------|
-| **Phase 0: Foundation** | PostgreSQL migration. RS256 key pair generation. JWKS endpoint. New `identities` + `identity_products` tables. | Week 1-2 |
-| **Phase 1: Core Identity** | Unified registration + login. Product-scoped JWT issuance. Scope enforcement middleware (shared npm package). Migrate existing users. | Week 3-4 |
-| **Phase 2: Product Integration** | Refactor account-server to validate new JWTs. Refactor chat services to validate new JWTs (replace `CHAT_API_TOKEN`). Update mobile app. Update desktop app. | Week 5-6 |
-| **Phase 3: OAuth2/OIDC** | Authorization server. "Sign in with Windy" for Eternitas. Client registration. Consent screens. | Week 7-8 |
-| **Phase 4: Agent Identity** | Agent registration endpoint. Client Credentials flow. Hatch integration. Eternitas webhook receiver. Revocation cascade. | Week 9-10 |
-| **Phase 5: Advanced** | Token exchange (RFC 8693). Secretary mode consent. Mail provisioning. Twilio pool integration. Admin console. | Week 11+ |
+| **Phase 0: Foundation** | [x] SQLite schema (5 new tables + 9 user columns). [x] Identity service (420 lines). [x] REST endpoints. [x] JWT fields (type, scopes, products). [x] Backward compat. [x] 37/37 security findings. | Week 1-2 |
+| **Phase 1: Core Identity** | [x] Scoped JWT issuance (DB-backed scopes/products). [x] requireScopes() middleware. [x] Password validation unified (8+ chars, upper+lower+digit). [x] OTP verification promoted to identity-level (Twilio SMS + SendGrid email). [x] Email/phone verification flows. [x] Shared contracts updated. [x] All audit events wired. | Week 3-4 |
+| **Phase 2: Product Integration** | [x] Chat profiles activated (chat_profiles table wired). [x] Auto-pending windy_chat on signup. [x] Lazy Matrix provisioning endpoint. [x] SecureStore-compatible credential format for mobile. [x] Chat profile CRUD endpoints. | Week 5-6 |
+| **Phase 3: OAuth2/OIDC + Agent Identity** | [x] Bot API keys (wk_ prefix, SHA-256 hashed). [x] Eternitas webhook fully functional (registered, revoked, suspended, verified, trust_updated). [x] Revocation cascade. [x] Secretary mode consent (explicit OAuth-style). [x] Hatch flow credential injection (data/.windy_identity.json). [x] Bot-specific rate limits. | Week 7-10 |
+| **Phase 4: PostgreSQL Migration** | Database migration from SQLite to PostgreSQL. RS256 key pair. JWKS endpoint. | Week 11-12 |
+| **Phase 5: Cross-Product SSO** | "Sign in with Windy" for Eternitas. Client registration. Consent screens. Token exchange (RFC 8693). Admin console. | Week 13+ |
 
 ### 7.5 Key Decisions Needed
 

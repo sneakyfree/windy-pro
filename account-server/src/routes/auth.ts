@@ -10,6 +10,7 @@ import rateLimit from 'express-rate-limit';
 import { config } from '../config';
 import { getDb } from '../db/schema';
 import { getStatements } from '../db/statements';
+import { logAuditEvent, provisionProduct, grantScopes } from '../identity-service';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validation';
 import {
@@ -36,9 +37,49 @@ const authLimiter = rateLimit({
 // ─── Helpers ─────────────────────────────────────────────────
 
 function generateTokens(user: { id: string; email: string; tier: string }, deviceId?: string) {
+    // Phase 10.1: Build scoped identity token payload
+    const db = getDb();
+
+    // Fetch identity scopes (fallback to windy_pro:* if no scopes assigned yet)
+    let scopes: string[];
+    try {
+        const scopeRows = db.prepare(
+            'SELECT scope FROM identity_scopes WHERE identity_id = ?',
+        ).all(user.id) as { scope: string }[];
+        scopes = scopeRows.length > 0 ? scopeRows.map(r => r.scope) : ['windy_pro:*'];
+    } catch { scopes = ['windy_pro:*']; }
+
+    // Fetch active product accounts
+    let products: string[];
+    try {
+        const productRows = db.prepare(
+            "SELECT product FROM product_accounts WHERE identity_id = ? AND status = 'active'",
+        ).all(user.id) as { product: string }[];
+        products = productRows.length > 0 ? productRows.map(r => r.product) : ['windy_pro'];
+    } catch { products = ['windy_pro']; }
+
+    // Fetch identity type
+    let identityType = 'human';
+    try {
+        const identity = db.prepare(
+            'SELECT identity_type FROM users WHERE id = ?',
+        ).get(user.id) as { identity_type: string } | undefined;
+        identityType = identity?.identity_type || 'human';
+    } catch { /* default human */ }
+
     // SEC-H5: Explicitly lock algorithm to HS256 to prevent algorithm confusion attacks
     const accessToken = jwt.sign(
-        { userId: user.id, email: user.email, tier: user.tier, accountId: user.id },
+        {
+            userId: user.id,
+            email: user.email,
+            tier: user.tier,
+            accountId: user.id,
+            // Phase 10.1: Unified Identity fields
+            type: identityType,
+            scopes,
+            products,
+            iss: 'windy-identity',
+        },
         config.JWT_SECRET,
         { algorithm: 'HS256', expiresIn: config.JWT_EXPIRY }
     );
@@ -49,7 +90,13 @@ function generateTokens(user: { id: string; email: string; tier: string }, devic
     stmts.deleteUserRefreshTokens.run(user.id, deviceId || '');
     stmts.saveRefreshToken.run(refreshToken, user.id, deviceId || '', expiresAt);
 
+    // Update last_login_at
+    try {
+        db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(user.id);
+    } catch { /* column may not exist yet */ }
+
     return { token: accessToken, refreshToken };
+
 }
 
 function getDeviceList(userId: string) {
@@ -79,6 +126,24 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
         const tokens = generateTokens(user, deviceId);
         const devices = getDeviceList(userId);
 
+        // Phase 10.0: Auto-provision Windy Pro product account + default scopes
+        provisionProduct(userId, 'windy_pro', { tier: 'free', registeredVia: 'api' });
+        grantScopes(userId, ['windy_pro:*'], 'registration');
+
+        // Phase 2: Auto-create pending windy_chat product account
+        provisionProduct(userId, 'windy_chat', { status: 'pending', registeredVia: 'api' });
+        // Mark as pending (not yet provisioned on Matrix)
+        try {
+            const db = getDb();
+            db.prepare("UPDATE product_accounts SET status = 'pending' WHERE identity_id = ? AND product = 'windy_chat'").run(userId);
+        } catch { /* non-critical */ }
+
+        logAuditEvent('register', userId, {
+            email: email.toLowerCase(),
+            deviceId,
+            platform: platform || 'unknown',
+        }, req.ip, req.get('user-agent'));
+
         console.log(`✅ Registered: ${email} (${userId.slice(0, 8)}...)`);
 
         res.status(201).json({
@@ -104,11 +169,13 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
 
         const user = stmts.findUserByEmail.get(email.toLowerCase()) as any;
         if (!user) {
+            logAuditEvent('login_failed', null, { email: email.toLowerCase(), reason: 'user_not_found' }, req.ip, req.get('user-agent'));
             return res.status(401).json({ error: 'Invalid email or password' });
         }
 
         const passwordValid = await bcrypt.compare(password, user.password_hash);
         if (!passwordValid) {
+            logAuditEvent('login_failed', user.id, { email: email.toLowerCase(), reason: 'invalid_password' }, req.ip, req.get('user-agent'));
             return res.status(401).json({ error: 'Invalid email or password' });
         }
 
@@ -128,6 +195,12 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
 
         const tokens = generateTokens(user, deviceId);
         const devices = getDeviceList(user.id);
+
+        logAuditEvent('login', user.id, {
+            email: email.toLowerCase(),
+            deviceId,
+            platform: platform || 'unknown',
+        }, req.ip, req.get('user-agent'));
 
         console.log(`🔓 Login: ${email} (${user.id.slice(0, 8)}...)`);
 
@@ -207,6 +280,8 @@ router.post('/devices/register', authenticateToken, validate(RegisterDeviceReque
     stmts.addDevice.run(deviceId, userId, deviceName || 'Unknown Device', platform || 'unknown');
     const devices = getDeviceList(userId);
 
+    logAuditEvent('device_add', userId, { deviceId, deviceName, platform }, req.ip, req.get('user-agent'));
+
     console.log(`📱 Device registered: ${deviceName || deviceId.slice(0, 8)} for user ${userId.slice(0, 8)}`);
 
     res.status(201).json({
@@ -230,6 +305,8 @@ router.post('/devices/remove', authenticateToken, validate(RemoveDeviceRequestSc
 
     stmts.removeDevice.run(deviceId, userId);
     const devices = getDeviceList(userId);
+
+    logAuditEvent('device_remove', userId, { deviceId }, req.ip, req.get('user-agent'));
 
     console.log(`🗑️  Device removed: ${deviceId.slice(0, 8)} from user ${userId.slice(0, 8)}`);
 
@@ -272,6 +349,8 @@ router.post('/refresh', validate(RefreshRequestSchema), (req: Request, res: Resp
         stmts.touchDevice.run(deviceId, user.id);
     }
 
+    logAuditEvent('token_refresh', user.id, { deviceId: deviceId || stored.device_id }, req.ip, req.get('user-agent'));
+
     console.log(`🔄 Token refresh: ${user.email}`);
 
     res.json({
@@ -310,6 +389,8 @@ router.post('/logout', authenticateToken, (req: Request, res: Response) => {
             db.prepare("DELETE FROM token_blacklist WHERE expires_at < datetime('now')").run();
         } catch { /* ignore */ }
 
+        logAuditEvent('logout', userId, {}, req.ip, req.get('user-agent'));
+
         console.log(`🔒 Logout: user ${userId.slice(0, 8)}`);
         res.json({ success: true });
     } catch (err: any) {
@@ -335,6 +416,9 @@ router.post('/change-password', authenticateToken, validate(ChangePasswordReques
 
         const newHash = bcrypt.hashSync(newPassword, config.BCRYPT_ROUNDS);
         db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, userId);
+
+        logAuditEvent('password_change', userId, {}, req.ip, req.get('user-agent'));
+
         res.json({ success: true });
     } catch (err: any) {
         res.status(500).json({ error: err.message });

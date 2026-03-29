@@ -9,10 +9,25 @@ import { z } from 'zod';
 
 // ─── Auth Schemas ────────────────────────────────────────────
 
+/**
+ * Password must match the mobile app's enforced standard:
+ *   - At least 8 characters
+ *   - At least one uppercase letter
+ *   - At least one lowercase letter
+ *   - At least one digit
+ *
+ * Unified server + mobile validation — SEC-P1.
+ */
+export const PasswordSchema = z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one digit');
+
 export const RegisterRequestSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     email: z.string().email('Invalid email address'),
-    password: z.string().min(6, 'Password must be at least 6 characters'),
+    password: PasswordSchema,
     deviceId: z.string().optional(),
     deviceName: z.string().optional(),
     platform: z.string().optional(),
@@ -43,7 +58,7 @@ export const RemoveDeviceRequestSchema = z.object({
 
 export const ChangePasswordRequestSchema = z.object({
     currentPassword: z.string().min(1, 'Current password is required'),
-    newPassword: z.string().min(6, 'Password must be at least 6 characters'),
+    newPassword: PasswordSchema,
 });
 
 // ─── Translation Schemas ─────────────────────────────────────
@@ -218,4 +233,72 @@ export const AdminCouponCreateSchema = z.object({
     discountPercent: z.number().int().min(1).max(100),
     maxUses: z.number().int().optional().default(999),
     expiresAt: z.string().optional(),
+});
+
+// ─── Identity Schemas (Phase 10.0) ───────────────────────────
+
+export const IdentityUpdateSchema = z.object({
+    displayName: z.string().min(2).max(64).optional(),
+    preferredLang: z.string().min(2).max(10).optional(),
+    avatarUrl: z.string().url().optional(),
+    phone: z.string().regex(/^\+[1-9]\d{1,14}$/, 'Phone must be E.164 format').optional(),
+});
+
+export const IdentityProvisionSchema = z.object({
+    product: z.enum(['windy_pro', 'windy_chat', 'windy_mail', 'windy_fly']),
+    metadata: z.record(z.unknown()).optional(),
+});
+
+export const IdentityScopeGrantSchema = z.object({
+    identityId: z.string().uuid('identityId must be a valid UUID'),
+    scopes: z.array(z.string().regex(/^[a-z_]+:[a-z_*]+$/, 'Scope format: product:permission')).min(1),
+});
+
+export const IdentityAuditQuerySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+    offset: z.coerce.number().int().min(0).optional().default(0),
+    event: z.string().optional(),
+    identityId: z.string().optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+});
+
+export const EternitasWebhookSchema = z.object({
+    event: z.enum(['passport.registered', 'passport.revoked', 'passport.suspended', 'passport.verified', 'trust_updated']),
+    passportNumber: z.string().regex(/^ET-[A-Z0-9]{5}$/, 'Passport format: ET-XXXXX'),
+    agentName: z.string().min(1).optional(),
+    operatorEmail: z.string().email().optional(),
+    timestamp: z.string(),
+    signature: z.string().min(1, 'Webhook signature required'),
+    payload: z.record(z.unknown()).optional(),
+    trustScore: z.number().min(0).max(1).optional(),
+});
+
+// ─── Verification Schemas (Phase 1 — Promoted from chat-onboarding) ──
+
+export const VerificationSendSchema = z.object({
+    type: z.enum(['phone', 'email']),
+    identifier: z.string().min(1).max(255),
+    countryCode: z.string().max(5).optional(),
+});
+
+export const VerificationCheckSchema = z.object({
+    type: z.enum(['phone', 'email']).optional(),
+    identifier: z.string().min(1).max(255),
+    code: z.string().min(1).max(10),
+    countryCode: z.string().max(5).optional(),
+});
+
+// ─── Bot API Key Schemas (Phase 3) ──
+
+export const BotApiKeyCreateSchema = z.object({
+    identityId: z.string().uuid('identityId must be a valid UUID'),
+    scopes: z.array(z.string().regex(/^[a-z_]+:[a-z_*]+$/, 'Scope format: product:permission')).min(1),
+    label: z.string().min(1).max(100).optional(),
+    expiresInDays: z.number().int().min(1).max(3650).optional(),
+});
+
+export const SecretaryConsentSchema = z.object({
+    botIdentityId: z.string().uuid('botIdentityId must be a valid UUID'),
+    consent: z.boolean(),
 });

@@ -22,6 +22,8 @@ import adminRoutes from './routes/admin';
 import downloadRoutes from './routes/downloads';
 import miscRoutes from './routes/misc';
 import storageRoutes from './routes/storage';
+import identityRoutes from './routes/identity';
+import verificationRoutes from './routes/verification';
 import { billingRouter, stripeRouter } from './routes/billing';
 import { authenticateToken } from './middleware/auth';
 
@@ -74,6 +76,12 @@ app.use(express.static(webDistDir, {
 app.use('/api/v1/auth', authRoutes);
 // Also mount at /v1/auth for backward compat with test-api.sh
 app.use('/v1/auth', authRoutes);
+
+// Identity (Unified Windy Identity — Phase 10.0)
+app.use('/api/v1/identity', identityRoutes);
+
+// Verification (Phase 1 — promoted from chat-onboarding to identity-level)
+app.use('/api/v1/identity/verify', verificationRoutes);
 
 // Translations
 app.use('/api/v1/translate', translationRoutes);

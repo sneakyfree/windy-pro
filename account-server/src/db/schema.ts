@@ -207,9 +207,139 @@ function initSchema(db: Database.Database): void {
     "ALTER TABLE users ADD COLUMN storage_used INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN storage_limit INTEGER DEFAULT 524288000",
     "ALTER TABLE users ADD COLUMN frozen INTEGER DEFAULT 0",
+
+    // ─── Unified Windy Identity (Phase 10.0) ───
+    // These columns extend users into a full identity record.
+    // All nullable with defaults so existing queries work unchanged.
+    "ALTER TABLE users ADD COLUMN identity_type TEXT DEFAULT 'human'",      // 'human' | 'bot'
+    "ALTER TABLE users ADD COLUMN phone TEXT",                               // E.164 format
+    "ALTER TABLE users ADD COLUMN display_name TEXT",                        // Public display name
+    "ALTER TABLE users ADD COLUMN avatar_url TEXT",                          // MXC or HTTPS URL
+    "ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0",         // 0 = unverified
+    "ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0",         // 0 = unverified
+    "ALTER TABLE users ADD COLUMN passport_id TEXT",                         // Eternitas passport (ET-XXXXX) for bots
+    "ALTER TABLE users ADD COLUMN preferred_lang TEXT DEFAULT 'en'",         // ISO 639-1 language code
+    "ALTER TABLE users ADD COLUMN last_login_at TEXT",                       // Tracks login recency
   ];
 
   for (const sql of migrations) {
     try { db.exec(sql); } catch { /* column already exists */ }
   }
+
+  // ─── Unified Identity: New Tables ───
+  // These are additive — CREATE TABLE IF NOT EXISTS is safe.
+  db.exec(`
+    -- Product accounts: maps identities to ecosystem products
+    -- One identity can have accounts across Windy Pro, Chat, Mail, etc.
+    CREATE TABLE IF NOT EXISTS product_accounts (
+      id TEXT PRIMARY KEY,
+      identity_id TEXT NOT NULL,
+      product TEXT NOT NULL,                          -- 'windy_pro' | 'windy_chat' | 'windy_mail' | 'windy_fly'
+      external_id TEXT,                               -- Matrix user ID, email address, etc.
+      status TEXT NOT NULL DEFAULT 'active',           -- 'active' | 'suspended' | 'pending' | 'deprovisioned'
+      provisioned_at TEXT NOT NULL DEFAULT (datetime('now')),
+      metadata TEXT NOT NULL DEFAULT '{}',             -- Product-specific JSON (tier, config, etc.)
+      FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(identity_id, product)
+    );
+    CREATE INDEX IF NOT EXISTS idx_product_accounts_identity ON product_accounts(identity_id);
+    CREATE INDEX IF NOT EXISTS idx_product_accounts_product ON product_accounts(product);
+
+    -- Identity scopes: JWT scopes granted to each identity
+    -- Enables per-product access control (e.g., windy_pro:read, windy_chat:write)
+    CREATE TABLE IF NOT EXISTS identity_scopes (
+      id TEXT PRIMARY KEY,
+      identity_id TEXT NOT NULL,
+      scope TEXT NOT NULL,                            -- 'windy_pro:*' | 'windy_chat:read' | 'admin:*', etc.
+      granted_at TEXT NOT NULL DEFAULT (datetime('now')),
+      granted_by TEXT,                                -- Who/what granted this scope
+      FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(identity_id, scope)
+    );
+    CREATE INDEX IF NOT EXISTS idx_identity_scopes_identity ON identity_scopes(identity_id);
+
+    -- Identity audit log: tracks all authentication and identity events
+    -- Required for security compliance and debugging
+    CREATE TABLE IF NOT EXISTS identity_audit_log (
+      id TEXT PRIMARY KEY,
+      identity_id TEXT,                               -- Nullable for failed login attempts
+      event TEXT NOT NULL,                            -- 'login' | 'register' | 'logout' | 'password_change' | 'scope_grant' | 'device_add' | 'token_refresh' | 'account_freeze' | 'passport_register' | 'passport_revoke'
+      details TEXT NOT NULL DEFAULT '{}',             -- Event-specific JSON payload
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_identity ON identity_audit_log(identity_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_event ON identity_audit_log(event);
+    CREATE INDEX IF NOT EXISTS idx_audit_created ON identity_audit_log(created_at);
+
+    -- Eternitas passports: bot identity verification records
+    -- Windy Fly agents registered through eternitas.ai get tracked here
+    CREATE TABLE IF NOT EXISTS eternitas_passports (
+      id TEXT PRIMARY KEY,
+      identity_id TEXT NOT NULL,
+      passport_number TEXT UNIQUE NOT NULL,            -- 'ET-XXXXX' format
+      operator_identity_id TEXT,                       -- Human who owns/operates the bot
+      status TEXT NOT NULL DEFAULT 'active',           -- 'active' | 'suspended' | 'revoked'
+      trust_score REAL NOT NULL DEFAULT 1.0,           -- 0.0 to 1.0
+      birth_certificate TEXT NOT NULL DEFAULT '{}',    -- Eternitas registration metadata
+      registered_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_verified_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (operator_identity_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_passports_identity ON eternitas_passports(identity_id);
+    CREATE INDEX IF NOT EXISTS idx_passports_operator ON eternitas_passports(operator_identity_id);
+    CREATE INDEX IF NOT EXISTS idx_passports_status ON eternitas_passports(status);
+
+    -- Bot API keys: long-lived keys for bot agents (Phase 3)
+    -- Bots use API keys instead of JWTs — no browser-style refresh flow needed
+    CREATE TABLE IF NOT EXISTS bot_api_keys (
+      id TEXT PRIMARY KEY,
+      identity_id TEXT NOT NULL,
+      key_hash TEXT UNIQUE NOT NULL,                    -- SHA-256 hash of the raw key
+      key_prefix TEXT NOT NULL,                          -- First 11 chars for identification: "wk_xxxxxxxx"
+      label TEXT,                                        -- Human-readable label
+      scopes TEXT NOT NULL DEFAULT '[]',                 -- JSON array of granted scopes
+      status TEXT NOT NULL DEFAULT 'active',              -- 'active' | 'revoked'
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at TEXT,
+      last_used_at TEXT,
+      created_by TEXT NOT NULL,                           -- Identity that created this key
+      FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_keys_identity ON bot_api_keys(identity_id);
+    CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON bot_api_keys(key_hash);
+
+    -- Secretary mode consents: explicit OAuth-style permission for bot-as-delegate email (Phase 3)
+    -- Required for mail:secretary scope — the scope alone is not sufficient without recorded consent
+    CREATE TABLE IF NOT EXISTS secretary_consents (
+      id TEXT PRIMARY KEY,
+      owner_identity_id TEXT NOT NULL,                   -- Human who grants consent
+      bot_identity_id TEXT NOT NULL,                     -- Bot that receives consent
+      active INTEGER NOT NULL DEFAULT 1,
+      granted_at TEXT NOT NULL DEFAULT (datetime('now')),
+      revoked_at TEXT,
+      FOREIGN KEY (owner_identity_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (bot_identity_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_secretary_owner ON secretary_consents(owner_identity_id);
+    CREATE INDEX IF NOT EXISTS idx_secretary_bot ON secretary_consents(bot_identity_id);
+
+    -- Chat profiles: links Matrix accounts to Windy identities
+    -- Bridge between account-server identity and Synapse Matrix account
+    CREATE TABLE IF NOT EXISTS chat_profiles (
+      identity_id TEXT PRIMARY KEY,
+      chat_user_id TEXT UNIQUE,                        -- Internal chat user ID
+      matrix_user_id TEXT UNIQUE,                      -- @windy_abc123:chat.windypro.com
+      matrix_access_token TEXT,                        -- Encrypted Matrix access token
+      matrix_device_id TEXT,
+      display_name TEXT,
+      languages TEXT NOT NULL DEFAULT '["en"]',        -- JSON array of ISO 639-1 codes
+      primary_language TEXT NOT NULL DEFAULT 'en',
+      onboarding_complete INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
 }
