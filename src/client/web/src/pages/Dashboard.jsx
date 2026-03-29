@@ -81,7 +81,7 @@ export default function Dashboard() {
 
     const loadStats = useCallback(async () => {
         const data = await apiFetch('/recordings/stats')
-        if (data) setStats(data.stats)
+        if (data) setStats(data)
     }, [])
 
     useEffect(() => { loadRecordings() }, [loadRecordings])
@@ -93,7 +93,7 @@ export default function Dashboard() {
                 languages: data.languages || [],
                 favorites: data.favoriteCount || 0
             })
-        }).catch(() => { })
+        }).catch(err => console.warn('API error:', err.message))
     }, [])
 
     const handleExpand = async (id) => {
@@ -117,7 +117,7 @@ export default function Dashboard() {
     }
 
     const handleLogout = () => {
-        apiFetch('/auth/logout', { method: 'POST' }).catch(() => { })
+        apiFetch('/auth/logout', { method: 'POST' }).catch(err => console.warn('Logout error:', err.message))
         localStorage.removeItem('windy_token')
         localStorage.removeItem('windy_user')
         navigate('/auth')
@@ -165,23 +165,23 @@ export default function Dashboard() {
             {stats && (
                 <div className="dash-stats">
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{stats.totalRecordings}</span>
+                        <span className="dash-stat-value">{stats?.totalRecordings?.toLocaleString() || '0'}</span>
                         <span className="dash-stat-label">Recordings</span>
                     </div>
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{stats.totalWords.toLocaleString()}</span>
-                        <span className="dash-stat-label">Words</span>
+                        <span className="dash-stat-value">{stats?.totalSize ? Math.round(stats.totalSize / 1024).toLocaleString() + ' KB' : '0'}</span>
+                        <span className="dash-stat-label">Size</span>
                     </div>
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{stats.totalHours}h</span>
+                        <span className="dash-stat-value">{Math.round((stats?.totalDuration || 0) / 3600)}h</span>
                         <span className="dash-stat-label">Hours</span>
                     </div>
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{stats.audioCount}</span>
-                        <span className="dash-stat-label">🎤 Audio</span>
+                        <span className="dash-stat-value">{stats?.cloneReady?.toLocaleString() || '0'}</span>
+                        <span className="dash-stat-label">Clone Ready</span>
                     </div>
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{stats.videoCount}</span>
+                        <span className="dash-stat-value">{stats?.videoRecordings?.toLocaleString() || '0'}</span>
                         <span className="dash-stat-label">🎬 Video</span>
                     </div>
                     {translationStats && (

@@ -15,14 +15,60 @@
  */
 
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { checkProfanity } = require('../lib/profanity');
 
 const router = express.Router();
 
-// ── In-memory display name registry (replace with DB in production) ──
+// ── File-based persistence for in-memory Maps ──
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
+
+function loadPersistedData() {
+  try {
+    if (fs.existsSync(PROFILES_FILE)) {
+      const raw = fs.readFileSync(PROFILES_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (data.displayNames && typeof data.displayNames === 'object') {
+        for (const [key, value] of Object.entries(data.displayNames)) {
+          displayNameRegistry.set(key, value);
+        }
+      }
+      if (data.profiles && typeof data.profiles === 'object') {
+        for (const [key, value] of Object.entries(data.profiles)) {
+          userProfiles.set(key, value);
+        }
+      }
+      console.log(`[Profile] Loaded ${displayNameRegistry.size} display names, ${userProfiles.size} profiles from disk`);
+    }
+  } catch (err) {
+    console.error('[Profile] Failed to load persisted data:', err.message);
+  }
+}
+
+function persistData() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const data = {
+      displayNames: Object.fromEntries(displayNameRegistry),
+      profiles: Object.fromEntries(userProfiles),
+    };
+    fs.writeFileSync(PROFILES_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[Profile] Failed to persist data:', err.message);
+  }
+}
+
+// ── In-memory display name registry (persisted to disk as bridge until Redis/PostgreSQL) ──
 const displayNameRegistry = new Map();  // name (lowercase) → { userId, displayName, languages, avatarUrl, createdAt }
 const userProfiles = new Map();         // userId → profile
+
+// Load persisted data on startup
+loadPersistedData();
 
 // ── Supported languages (subset — matches Windy Pro language list) ──
 const SUPPORTED_LANGUAGES = new Set([
@@ -225,6 +271,9 @@ router.post('/setup', async (req, res) => {
 
     // Store profile
     userProfiles.set(chatUserId, profile);
+
+    // Persist to disk (bridge until Redis/PostgreSQL migration)
+    persistData();
 
     console.log(`👤 Profile created: "${nameResult.displayName}" (${chatUserId}), languages: [${validLanguages.join(', ')}]`);
 

@@ -17,7 +17,12 @@ async function apiFetch(path, options = {}) {
             ...options.headers
         }
     })
-    if (res.status === 401) { window.location.href = '/auth'; return null }
+    if (res.status === 401) {
+        localStorage.removeItem('windy_user')
+        localStorage.removeItem('windy_token')
+        window.location.href = '/auth'
+        return null
+    }
     return res.json()
 }
 
@@ -104,7 +109,7 @@ export default function Admin() {
         const d = new Date()
         d.setDate(d.getDate() - i)
         const key = d.toLocaleDateString('en-US', { weekday: 'short' })
-        chartData.push({ label: key, value: stats?.dailyTranslations?.[i] || Math.floor(Math.random() * 50) })
+        chartData.push({ label: key, value: stats?.dailyTranslations?.[i] || 0 })
     }
 
     return (

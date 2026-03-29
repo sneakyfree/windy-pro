@@ -161,6 +161,12 @@ app.use('/api/v1/files', storageRoutes);
 // Billing
 app.use('/api/v1/billing', billingRouter);
 
+// ─── JSON 404 for unmatched API routes ──────────────────────
+
+app.use('/api/', (req: express.Request, res: express.Response) => {
+    res.status(404).json({ error: 'Not found', path: req.path });
+});
+
 // ─── Error Handler ───────────────────────────────────────────
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

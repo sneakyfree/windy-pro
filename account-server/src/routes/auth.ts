@@ -143,11 +143,8 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
             stmts.addDevice.run(deviceId, userId, deviceName || 'Unknown Device', platform || 'unknown');
         }
 
-        const user = { id: userId, email: email.toLowerCase(), tier: 'free' };
-        const tokens = generateTokens(user, deviceId);
-        const devices = getDeviceList(userId);
-
         // Phase 10.0: Auto-provision Windy Pro product account + default scopes
+        // NOTE: Provision BEFORE generateTokens so the access token includes correct scopes/products
         provisionProduct(userId, 'windy_pro', { tier: 'free', registeredVia: 'api' });
         grantScopes(userId, ['windy_pro:*'], 'registration');
 
@@ -158,6 +155,10 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
             const db = getDb();
             db.prepare("UPDATE product_accounts SET status = 'pending' WHERE identity_id = ? AND product = 'windy_chat'").run(userId);
         } catch { /* non-critical */ }
+
+        const user = { id: userId, email: email.toLowerCase(), tier: 'free' };
+        const tokens = generateTokens(user, deviceId);
+        const devices = getDeviceList(userId);
 
         logAuditEvent('register', userId, {
             email: email.toLowerCase(),

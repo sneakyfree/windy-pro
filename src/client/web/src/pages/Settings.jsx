@@ -28,7 +28,7 @@ async function apiFetch(path, options = {}) {
 
 const PLANS = {
     free: { name: 'Free', color: '#64748B', icon: '🌪️' },
-    pro: { name: 'Pro', color: '#22C55E', icon: '⚡' },
+    pro: { name: 'Windy Pro', color: '#22C55E', icon: '⚡' },
     translate: { name: 'Windy Ultra', color: '#3B82F6', icon: '🚀' },
     translate_pro: { name: 'Windy Max', color: '#8B5CF6', icon: '👑' },
 }
@@ -124,11 +124,11 @@ export default function Settings() {
                     )}
                     <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
                         {billing?.tier === 'free' && (
-                            <Link to="/#pricing" className="settings-upgrade-btn">⚡ Upgrade to Pro — $49</Link>
+                            <Link to="/#pricing" className="settings-upgrade-btn">⚡ Upgrade to Windy Pro — $49/year</Link>
                         )}
                         {billing?.tier === 'pro' && (
                             <Link to="/#pricing" className="settings-upgrade-btn" style={{ borderColor: '#3B82F6', color: '#3B82F6' }}>
-                                🌍 Upgrade to Translate — $79
+                                🚀 Upgrade to Windy Ultra — $79/year
                             </Link>
                         )}
                         <button className="dash-btn" onClick={handlePortal}>💳 Manage Billing</button>

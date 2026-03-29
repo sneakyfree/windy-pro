@@ -12,12 +12,14 @@ export default function Transcribe() {
     const [elapsed, setElapsed] = useState(0)
     const [copyMsg, setCopyMsg] = useState('')
     const [reconnectCount, setReconnectCount] = useState(0)
+    const [authStatus, setAuthStatus] = useState('pending') // pending | authenticated | failed
     const navigate = useNavigate()
 
     const wsRef = useRef(null)
     const mediaStreamRef = useRef(null)
     const audioContextRef = useRef(null)
     const transcriptRef = useRef(null)
+    const authTimeoutRef = useRef(null)
 
     // Connect to cloud WebSocket (first-message auth)
     const connect = useCallback(() => {
@@ -28,18 +30,34 @@ export default function Transcribe() {
         ws.onopen = () => {
             // Send auth as first message (token never in URL)
             if (token) {
-                ws.send(JSON.stringify({ action: 'auth', token }))
+                ws.send(JSON.stringify({ type: 'auth', token }))
             }
             setConnected(true)
-            // WebSocket connected — send auth token
+            setAuthStatus('pending')
+            // Start auth timeout — if no confirmation in 5s, mark as failed
+            authTimeoutRef.current = setTimeout(() => {
+                setAuthStatus('failed')
+            }, 5000)
         }
 
         ws.onmessage = (event) => {
             try {
                 const msg = JSON.parse(event.data)
 
+                if (msg.type === 'ack' && msg.authenticated !== undefined) {
+                    clearTimeout(authTimeoutRef.current)
+                    if (msg.authenticated) {
+                        setAuthStatus('authenticated')
+                    } else {
+                        setAuthStatus('failed')
+                    }
+                    return
+                }
+
                 if (msg.type === 'error' && msg.message?.includes('token')) {
                     // Auth failure — redirect to login
+                    clearTimeout(authTimeoutRef.current)
+                    setAuthStatus('failed')
                     localStorage.removeItem('windy_token')
                     navigate('/auth')
                     return
@@ -68,6 +86,8 @@ export default function Transcribe() {
 
         ws.onclose = () => {
             setConnected(false)
+            setAuthStatus('pending')
+            clearTimeout(authTimeoutRef.current)
             setReconnectCount(prev => {
                 const next = prev + 1
                 const delay = Math.min(1000 * Math.pow(2, next), 30000)
@@ -81,7 +101,10 @@ export default function Transcribe() {
 
     useEffect(() => {
         connect()
-        return () => wsRef.current?.close()
+        return () => {
+            clearTimeout(authTimeoutRef.current)
+            wsRef.current?.close()
+        }
     }, [connect])
 
     // Auto-scroll transcript
@@ -140,7 +163,7 @@ export default function Transcribe() {
             if (audioCtx.state === 'suspended') await audioCtx.resume()
 
             // Tell server to start
-            wsRef.current?.send(JSON.stringify({ action: 'start' }))
+            wsRef.current?.send(JSON.stringify({ type: 'config' }))
             setIsRecording(true)
             setSessionStart(Date.now())
 
@@ -171,7 +194,7 @@ export default function Transcribe() {
         }
 
         // Tell server to stop
-        wsRef.current?.send(JSON.stringify({ action: 'stop' }))
+        wsRef.current?.send(JSON.stringify({ type: 'stop' }))
         setIsRecording(false)
         setSessionStart(null)
         setElapsed(0)
@@ -219,9 +242,9 @@ export default function Transcribe() {
             <nav className="transcribe-nav">
                 <Link to="/" className="transcribe-back">← Windy Pro</Link>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div className={`connection-dot ${connected ? 'connected' : ''}`}></div>
-                    <span style={{ fontSize: '12px', color: connected ? '#22C55E' : '#EF4444' }}>
-                        {connected ? 'Connected' : `Reconnecting${'.'.repeat((reconnectCount % 3) + 1)}`}
+                    <div className={`connection-dot ${connected && authStatus === 'authenticated' ? 'connected' : ''}`}></div>
+                    <span style={{ fontSize: '12px', color: !connected ? '#EF4444' : authStatus === 'authenticated' ? '#22C55E' : authStatus === 'failed' ? '#EF4444' : '#F59E0B' }}>
+                        {!connected ? `Reconnecting${'.'.repeat((reconnectCount % 3) + 1)}` : authStatus === 'authenticated' ? 'Connected' : authStatus === 'failed' ? 'Authentication failed' : 'Authenticating...'}
                     </span>
                     <Link to="/dashboard" style={{ color: '#94A3B8', fontSize: '12px', textDecoration: 'none' }}>Dashboard</Link>
                     <button onClick={handleLogout} className="btn-logout">Logout</button>

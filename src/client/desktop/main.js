@@ -346,44 +346,52 @@ function appendArchiveEntry({ text, startedAt, endedAt }) {
   const engine = store.get('engine', {});
   if (!engine.autoArchive || !engine.archiveLocalEnabled || !text || !text.trim()) return { archived: false };
 
-  const archiveRoot = getArchiveFolder();
-  ensureDir(archiveRoot);
+  try {
+    const archiveRoot = getArchiveFolder();
+    ensureDir(archiveRoot);
 
-  const start = startedAt ? new Date(startedAt) : new Date();
-  const end = endedAt ? new Date(endedAt) : new Date();
-  const yyyy = String(start.getFullYear());
-  const mm = String(start.getMonth() + 1).padStart(2, '0');
-  const dd = String(start.getDate()).padStart(2, '0');
-  const HH = String(start.getHours()).padStart(2, '0');
-  const MM = String(start.getMinutes()).padStart(2, '0');
-  const SS = String(start.getSeconds()).padStart(2, '0');
-  const dateKey = `${yyyy}-${mm}-${dd}`;
-  const timeKey = `${HH}${MM}${SS}`;
+    const start = startedAt ? new Date(startedAt) : new Date();
+    const end = endedAt ? new Date(endedAt) : new Date();
+    const yyyy = String(start.getFullYear());
+    const mm = String(start.getMonth() + 1).padStart(2, '0');
+    const dd = String(start.getDate()).padStart(2, '0');
+    const HH = String(start.getHours()).padStart(2, '0');
+    const MM = String(start.getMinutes()).padStart(2, '0');
+    const SS = String(start.getSeconds()).padStart(2, '0');
+    const dateKey = `${yyyy}-${mm}-${dd}`;
+    const timeKey = `${HH}${MM}${SS}`;
 
-  const dayDir = path.join(archiveRoot, dateKey);
-  ensureDir(dayDir);
+    const dayDir = path.join(archiveRoot, dateKey);
+    ensureDir(dayDir);
 
-  const safeText = text.trim();
-  const mode = engine.archiveMode || 'both';
-  const meta = `Start: ${start.toISOString()}\nEnd: ${end.toISOString()}\nWords: ${safeText.split(/\s+/).filter(Boolean).length}`;
+    const safeText = text.trim();
+    const mode = engine.archiveMode || 'both';
+    const meta = `Start: ${start.toISOString()}\nEnd: ${end.toISOString()}\nWords: ${safeText.split(/\s+/).filter(Boolean).length}`;
 
-  const wrote = [];
+    const wrote = [];
 
-  if (mode === 'chunk' || mode === 'both') {
-    const chunkPath = path.join(dayDir, `${timeKey}.md`);
-    const chunk = `# Windy Pro Dictation\n\n${meta}\n\n---\n\n${safeText}\n`;
-    fs.writeFileSync(chunkPath, chunk, 'utf-8');
-    wrote.push(chunkPath);
+    if (mode === 'chunk' || mode === 'both') {
+      const chunkPath = path.join(dayDir, `${timeKey}.md`);
+      const chunk = `# Windy Pro Dictation\n\n${meta}\n\n---\n\n${safeText}\n`;
+      fs.writeFileSync(chunkPath, chunk, 'utf-8');
+      wrote.push(chunkPath);
+    }
+
+    if (mode === 'daily' || mode === 'both') {
+      const dailyPath = path.join(dayDir, `${dateKey}.md`);
+      const block = `\n## ${HH}:${MM}:${SS}\n\n${meta.replace(/\n/g, ' | ')}\n\n${safeText}\n`;
+      fs.appendFileSync(dailyPath, block, 'utf-8');
+      wrote.push(dailyPath);
+    }
+
+    return { archived: true, files: wrote };
+  } catch (err) {
+    console.error('[appendArchiveEntry] Archive I/O error:', err.message);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      safeSend('archive-error', { error: err.message });
+    }
+    return { archived: false, error: err.message };
   }
-
-  if (mode === 'daily' || mode === 'both') {
-    const dailyPath = path.join(dayDir, `${dateKey}.md`);
-    const block = `\n## ${HH}:${MM}:${SS}\n\n${meta.replace(/\n/g, ' | ')}\n\n${safeText}\n`;
-    fs.appendFileSync(dailyPath, block, 'utf-8');
-    wrote.push(dailyPath);
-  }
-
-  return { archived: true, files: wrote };
 }
 
 /**
@@ -1385,33 +1393,38 @@ ipcMain.on('open-mini-translate', () => {
 
 // Mini-translate IPC text translation
 ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang) => {
-  const https = require('https');
-  const token = store.get('license.cloudToken') || '';
-  const postData = JSON.stringify({ text, sourceLang, targetLang });
+  try {
+    const https = require('https');
+    const token = store.get('license.cloudToken') || '';
+    const postData = JSON.stringify({ text, sourceLang, targetLang });
 
-  return new Promise((resolve, reject) => {
-    const req = https.request('https://windypro.thewindstorm.uk/api/v1/translate/text', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData),
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-      }
-    }, (res) => {
-      let body = '';
-      res.on('data', (chunk) => body += chunk);
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch (e) {
-          reject(new Error('Invalid response'));
+    return await new Promise((resolve, reject) => {
+      const req = https.request('https://windypro.thewindstorm.uk/api/v1/translate/text', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         }
+      }, (res) => {
+        let body = '';
+        res.on('data', (chunk) => body += chunk);
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            resolve({ error: 'Invalid response from translation server' });
+          }
+        });
       });
+      req.on('error', (e) => resolve({ error: e.message }));
+      req.write(postData);
+      req.end();
     });
-    req.on('error', reject);
-    req.write(postData);
-    req.end();
-  });
+  } catch (err) {
+    console.error('[mini-translate-text] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // ═══════════════════════════════════════════════════
@@ -1514,132 +1527,236 @@ ipcMain.on('open-windy-chat', () => showChatWindow());
 
 // Chat IPC — Authentication
 ipcMain.handle('chat-login', async (event, userId, password) => {
-  const client = getChatClient();
-  const result = await client.login(userId, password);
-  if (result.success) _setupChatForwarding(client);
-  return result;
+  try {
+    const client = getChatClient();
+    const result = await client.login(userId, password);
+    if (result.success) _setupChatForwarding(client);
+    return result;
+  } catch (err) {
+    console.error('[chat-login] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-register', async (event, username, password, displayName) => {
-  const client = getChatClient();
-  const result = await client.register(username, password, displayName);
-  if (result.success) _setupChatForwarding(client);
-  return result;
+  try {
+    const client = getChatClient();
+    const result = await client.register(username, password, displayName);
+    if (result.success) _setupChatForwarding(client);
+    return result;
+  } catch (err) {
+    console.error('[chat-register] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-logout', async () => {
-  if (chatClient) return chatClient.logout();
-  return { success: true };
+  try {
+    if (chatClient) return chatClient.logout();
+    return { success: true };
+  } catch (err) {
+    console.error('[chat-logout] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-get-session', async () => {
-  const client = getChatClient();
-  const result = await client.resumeSession();
-  if (result.success) _setupChatForwarding(client);
-  return result;
+  try {
+    const client = getChatClient();
+    const result = await client.resumeSession();
+    if (result.success) _setupChatForwarding(client);
+    return result;
+  } catch (err) {
+    console.error('[chat-get-session] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Chat IPC — Messaging (client handles translation metadata internally)
 ipcMain.handle('chat-send-message', async (event, roomId, text) => {
-  // Validate inputs
-  if (typeof roomId !== 'string' || roomId.length > 500) return { error: 'Invalid room ID' };
-  if (typeof text !== 'string' || text.length === 0 || text.length > 65535) return { error: 'Message too long or empty' };
-  return getChatClient().sendMessage(roomId, text);
+  try {
+    // Validate inputs
+    if (typeof roomId !== 'string' || roomId.length > 500) return { error: 'Invalid room ID' };
+    if (typeof text !== 'string' || text.length === 0 || text.length > 65535) return { error: 'Message too long or empty' };
+    return getChatClient().sendMessage(roomId, text);
+  } catch (err) {
+    console.error('[chat-send-message] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-get-messages', async (event, roomId, limit) => {
-  return getChatClient().getMessages(roomId, limit || 50);
+  try {
+    return getChatClient().getMessages(roomId, limit || 50);
+  } catch (err) {
+    console.error('[chat-get-messages] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-send-typing', async (event, roomId, isTyping) => {
-  try { return getChatClient().sendTyping(roomId, isTyping); }
-  catch (e) { console.debug('[Chat IPC] sendTyping error:', e.message); }
+  try {
+    return getChatClient().sendTyping(roomId, isTyping);
+  } catch (err) {
+    console.error('[chat-send-typing] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Chat IPC — Cached messages (offline access)
 ipcMain.handle('chat-get-cached-messages', async (event, roomId) => {
-  return getChatClient().getCachedMessages(roomId);
+  try {
+    return getChatClient().getCachedMessages(roomId);
+  } catch (err) {
+    console.error('[chat-get-cached-messages] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Chat IPC — Contacts & Rooms
 ipcMain.handle('chat-get-contacts', async () => {
-  return getChatClient().getContacts();
+  try {
+    return getChatClient().getContacts();
+  } catch (err) {
+    console.error('[chat-get-contacts] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-create-dm', async (event, userId) => {
-  return getChatClient().createDM(userId);
+  try {
+    return getChatClient().createDM(userId);
+  } catch (err) {
+    console.error('[chat-create-dm] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-accept-invite', async (event, roomId) => {
-  return getChatClient().acceptInvite(roomId);
+  try {
+    return getChatClient().acceptInvite(roomId);
+  } catch (err) {
+    console.error('[chat-accept-invite] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-decline-invite', async (event, roomId) => {
-  return getChatClient().declineInvite(roomId);
+  try {
+    return getChatClient().declineInvite(roomId);
+  } catch (err) {
+    console.error('[chat-decline-invite] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Chat IPC — Encryption
 ipcMain.handle('chat-get-crypto-status', async () => {
-  return chatClient ? chatClient.getCryptoStatus() : { enabled: false, deviceId: null, syncState: null };
+  try {
+    return chatClient ? chatClient.getCryptoStatus() : { enabled: false, deviceId: null, syncState: null };
+  } catch (err) {
+    console.error('[chat-get-crypto-status] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Chat IPC — Profile & Presence
 ipcMain.handle('chat-set-display-name', async (event, displayName) => {
-  return getChatClient().setDisplayName(displayName);
+  try {
+    return getChatClient().setDisplayName(displayName);
+  } catch (err) {
+    console.error('[chat-set-display-name] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-set-presence', async (event, status) => {
-  return getChatClient().setPresence(status);
+  try {
+    return getChatClient().setPresence(status);
+  } catch (err) {
+    console.error('[chat-set-presence] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-get-user-profile', async (event, userId) => {
-  return getChatClient().getUserProfile(userId);
+  try {
+    return getChatClient().getUserProfile(userId);
+  } catch (err) {
+    console.error('[chat-get-user-profile] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-get-total-unread', async () => {
-  return getChatClient().getTotalUnread();
+  try {
+    return getChatClient().getTotalUnread();
+  } catch (err) {
+    console.error('[chat-get-total-unread] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Chat IPC — Settings
 ipcMain.handle('chat-get-settings', async () => {
-  return {
-    homeserver: store.get('chat.homeserver', 'https://matrix.org'),
-    displayName: store.get('chat.displayName', ''),
-    language: store.get('chat.language', 'en'),
-    userId: store.get('chat.userId', '')
-  };
+  try {
+    return {
+      homeserver: store.get('chat.homeserver', 'https://matrix.org'),
+      displayName: store.get('chat.displayName', ''),
+      language: store.get('chat.language', 'en'),
+      userId: store.get('chat.userId', '')
+    };
+  } catch (err) {
+    console.error('[chat-get-settings] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-set-settings', async (event, settings) => {
-  if (settings.homeserver) {
-    // Validate homeserver URL before saving
-    try {
-      const parsed = new URL(settings.homeserver);
-      const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
-      if (parsed.protocol !== 'https:' && !isLocalhost) {
-        return { ok: false, error: 'Homeserver must use HTTPS (except localhost for development)' };
+  try {
+    if (settings.homeserver) {
+      // Validate homeserver URL before saving
+      try {
+        const parsed = new URL(settings.homeserver);
+        const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+        if (parsed.protocol !== 'https:' && !isLocalhost) {
+          return { ok: false, error: 'Homeserver must use HTTPS (except localhost for development)' };
+        }
+      } catch (e) {
+        return { ok: false, error: 'Invalid homeserver URL' };
       }
-    } catch (e) {
-      return { ok: false, error: 'Invalid homeserver URL' };
+      store.set('chat.homeserver', settings.homeserver);
     }
-    store.set('chat.homeserver', settings.homeserver);
+    if (settings.displayName) {
+      store.set('chat.displayName', settings.displayName);
+      try { getChatClient().setDisplayName(settings.displayName); } catch (e) { console.debug('[Chat] setDisplayName failed:', e.message); }
+    }
+    if (settings.language) store.set('chat.language', settings.language);
+    return { ok: true };
+  } catch (err) {
+    console.error('[chat-set-settings] Error:', err.message);
+    return { error: err.message };
   }
-  if (settings.displayName) {
-    store.set('chat.displayName', settings.displayName);
-    try { getChatClient().setDisplayName(settings.displayName); } catch (e) { console.debug('[Chat] setDisplayName failed:', e.message); }
-  }
-  if (settings.language) store.set('chat.language', settings.language);
-  return { ok: true };
 });
 
 // Chat IPC — Translation utilities
 ipcMain.handle('chat-get-user-language', async () => {
-  return chatTranslator ? chatTranslator.getUserLanguage() : store.get('chat.language', 'en');
+  try {
+    return chatTranslator ? chatTranslator.getUserLanguage() : store.get('chat.language', 'en');
+  } catch (err) {
+    console.error('[chat-get-user-language] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-translate-text', async (event, text, srcLang, tgtLang) => {
-  if (!chatTranslator) chatTranslator = new ChatTranslator(store);
-  return chatTranslator.translate(text, srcLang, tgtLang);
+  try {
+    if (!chatTranslator) chatTranslator = new ChatTranslator(store);
+    return chatTranslator.translate(text, srcLang, tgtLang);
+  } catch (err) {
+    console.error('[chat-translate-text] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Forward events from Matrix client → chat BrowserWindow

@@ -155,15 +155,15 @@ export default function Vault() {
             {stats && (
                 <div className="dash-stats">
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{stats.total_recordings || 0}</span>
+                        <span className="dash-stat-value">{stats?.totalRecordings?.toLocaleString() || '0'}</span>
                         <span className="dash-stat-label">Transcripts</span>
                     </div>
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{(stats.total_words || 0).toLocaleString()}</span>
-                        <span className="dash-stat-label">Total Words</span>
+                        <span className="dash-stat-value">{stats?.totalSize ? Math.round(stats.totalSize / 1024).toLocaleString() + ' KB' : '0'}</span>
+                        <span className="dash-stat-label">Total Size</span>
                     </div>
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{Math.round((stats.total_duration || 0) / 3600)}h</span>
+                        <span className="dash-stat-value">{Math.round((stats?.totalDuration || 0) / 3600)}h</span>
                         <span className="dash-stat-label">Recorded</span>
                     </div>
                 </div>

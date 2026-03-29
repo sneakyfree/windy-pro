@@ -17,7 +17,12 @@ async function apiFetch(path, options = {}) {
             ...options.headers
         }
     })
-    if (res.status === 401) { window.location.href = '/auth'; return null }
+    if (res.status === 401) {
+        localStorage.removeItem('windy_user')
+        localStorage.removeItem('windy_token')
+        window.location.href = '/auth'
+        return null
+    }
     return res.json()
 }
 
@@ -34,7 +39,7 @@ export default function Profile() {
             apiFetch('/recordings/stats')
         ]).then(([histData, statsData]) => {
             if (histData) setHistory(histData.translations || [])
-            if (statsData) setStats(statsData.stats)
+            if (statsData) setStats(statsData)
             setLoading(false)
         }).catch(() => setLoading(false))
     }, [])
@@ -95,13 +100,13 @@ export default function Profile() {
                                 padding: '3px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 600,
                                 background: 'rgba(34, 197, 94, 0.15)', color: '#22C55E'
                             }}>
-                                {stats ? `${stats.totalRecordings} recordings` : '—'}
+                                {stats ? `${stats?.totalRecordings?.toLocaleString() || '0'} recordings` : '—'}
                             </span>
                             <span style={{
                                 padding: '3px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 600,
                                 background: 'rgba(59, 130, 246, 0.15)', color: '#3B82F6'
                             }}>
-                                {stats ? `${stats.totalWords.toLocaleString()} words` : '—'}
+                                {stats ? `${Math.round((stats?.totalDuration || 0) / 3600)}h recorded` : '—'}
                             </span>
                         </div>
                     </div>

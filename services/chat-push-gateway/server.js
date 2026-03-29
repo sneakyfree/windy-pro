@@ -275,7 +275,15 @@ async function sendAPNs(pushkey, payload) {
 
 // ── Push token registration (auth required) ──
 
-app.post('/api/v1/chat/push/register', authMiddleware, (req, res) => {
+const pushRegisterLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many push registration attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.post('/api/v1/chat/push/register', pushRegisterLimiter, authMiddleware, (req, res) => {
   try {
     const { pushkey, userId, platform, appId, deviceName } = req.body;
 
