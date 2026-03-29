@@ -302,3 +302,50 @@ export const SecretaryConsentSchema = z.object({
     botIdentityId: z.string().uuid('botIdentityId must be a valid UUID'),
     consent: z.boolean(),
 });
+
+// ─── OAuth2 Schemas (Phase 5 — "Sign in with Windy") ──
+
+export const OAuthClientCreateSchema = z.object({
+    name: z.string().min(1).max(100),
+    redirectUris: z.array(z.string().url()).min(1),
+    allowedScopes: z.array(z.string()).optional(),
+    isFirstParty: z.boolean().optional(),
+    isPublic: z.boolean().optional(),
+});
+
+export const OAuthAuthorizeSchema = z.object({
+    client_id: z.string().min(1),
+    redirect_uri: z.string().url(),
+    response_type: z.literal('code'),
+    scope: z.string().optional(),
+    state: z.string().optional(),
+    code_challenge: z.string().min(43).max(128).optional(), // S256 produces 43 base64url chars
+    code_challenge_method: z.literal('S256').optional(),
+});
+
+export const OAuthTokenSchema = z.object({
+    grant_type: z.enum([
+        'authorization_code',
+        'client_credentials',
+        'refresh_token',
+        'urn:ietf:params:oauth:grant-type:device_code',
+    ]),
+    code: z.string().optional(),
+    redirect_uri: z.string().optional(),
+    client_id: z.string().optional(),
+    client_secret: z.string().optional(),
+    code_verifier: z.string().min(43).max(128).optional(),
+    refresh_token: z.string().optional(),
+    device_code: z.string().optional(),
+    scope: z.string().optional(),
+});
+
+export const DeviceCodeRequestSchema = z.object({
+    client_id: z.string().min(1),
+    scope: z.string().optional(),
+});
+
+export const DeviceCodeApproveSchema = z.object({
+    user_code: z.string().min(1),
+    approved: z.boolean(),
+});

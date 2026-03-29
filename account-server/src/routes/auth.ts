@@ -12,6 +12,7 @@ import { getDb } from '../db/schema';
 import { getStatements } from '../db/statements';
 import { logAuditEvent, provisionProduct, grantScopes } from '../identity-service';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { isRS256Available, getSigningKey } from '../jwks';
 import { validate } from '../middleware/validation';
 import {
     RegisterRequestSchema,
@@ -67,22 +68,41 @@ function generateTokens(user: { id: string; email: string; tier: string }, devic
         identityType = identity?.identity_type || 'human';
     } catch { /* default human */ }
 
-    // SEC-H5: Explicitly lock algorithm to HS256 to prevent algorithm confusion attacks
-    const accessToken = jwt.sign(
-        {
-            userId: user.id,
-            email: user.email,
-            tier: user.tier,
-            accountId: user.id,
-            // Phase 10.1: Unified Identity fields
-            type: identityType,
-            scopes,
-            products,
-            iss: 'windy-identity',
-        },
-        config.JWT_SECRET,
-        { algorithm: 'HS256', expiresIn: config.JWT_EXPIRY }
-    );
+    // Phase 4: Sign with RS256 if available, HS256 fallback
+    const tokenPayload = {
+        userId: user.id,
+        email: user.email,
+        tier: user.tier,
+        accountId: user.id,
+        // Phase 10.1: Unified Identity fields
+        type: identityType,
+        scopes,
+        products,
+        iss: 'windy-identity',
+    };
+
+    let accessToken: string;
+    const signingKey = getSigningKey();
+
+    if (signingKey) {
+        // RS256 — asymmetric signing with key ID for JWKS verification
+        accessToken = jwt.sign(
+            tokenPayload,
+            signingKey.privateKey,
+            {
+                algorithm: 'RS256',
+                expiresIn: config.JWT_EXPIRY,
+                keyid: signingKey.kid,
+            },
+        );
+    } else {
+        // SEC-H5: HS256 fallback — lock algorithm to prevent algorithm confusion attacks
+        accessToken = jwt.sign(
+            tokenPayload,
+            config.JWT_SECRET,
+            { algorithm: 'HS256', expiresIn: config.JWT_EXPIRY },
+        );
+    }
 
     const refreshToken = uuidv4();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();

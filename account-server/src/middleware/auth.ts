@@ -1,10 +1,15 @@
 /**
  * Authentication middleware — JWT verification, optional auth, admin guard, scope checking.
+ *
+ * Phase 4: RS256 support with HS256 backward compatibility.
+ * If RS256 keys are configured, tokens are verified against JWKS public keys first.
+ * Falls back to HS256 with JWT_SECRET for legacy tokens.
  */
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { config } from '../config';
+import { isRS256Available, getVerificationKeys, getPublicKeyByKid } from '../jwks';
 
 export interface AuthUser {
     userId: string;
@@ -21,6 +26,48 @@ export interface AuthUser {
 
 export interface AuthRequest extends Request {
     user: AuthUser;
+}
+
+/**
+ * Verify a JWT token. Tries RS256 first (if available), then HS256 fallback.
+ *
+ * Phase 4: Multi-algorithm support for migration. Tokens signed with RS256
+ * include a `kid` header that maps to a JWKS public key. Old HS256 tokens
+ * have no `kid` and fall back to symmetric verification.
+ */
+function verifyToken(token: string): AuthUser {
+    // If RS256 is available, try RS256 first
+    if (isRS256Available()) {
+        try {
+            // Decode header to get kid
+            const header = jwt.decode(token, { complete: true })?.header;
+
+            if (header?.alg === 'RS256' && header?.kid) {
+                const publicKey = getPublicKeyByKid(header.kid);
+                if (publicKey) {
+                    return jwt.verify(token, publicKey, { algorithms: ['RS256'] }) as AuthUser;
+                }
+
+                // kid not found — try all verification keys (rotation window)
+                const keys = getVerificationKeys();
+                for (const key of keys) {
+                    try {
+                        return jwt.verify(token, key.publicKey, { algorithms: ['RS256'] }) as AuthUser;
+                    } catch {
+                        continue;
+                    }
+                }
+            }
+        } catch (err: any) {
+            // If RS256 verification fails with a specific error, don't fall back
+            if (err.name === 'TokenExpiredError') throw err;
+            // Otherwise try HS256 fallback below
+        }
+    }
+
+    // HS256 fallback (backward compatible — always available)
+    // SEC-H5: Whitelist HS256 to block algorithm confusion / 'alg: none' attacks
+    return jwt.verify(token, config.JWT_SECRET, { algorithms: ['HS256'] }) as AuthUser;
 }
 
 /**
@@ -71,8 +118,7 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
     }
 
     try {
-        // SEC-H5: Whitelist HS256 to block algorithm confusion / 'alg: none' attacks
-        const decoded = jwt.verify(token, config.JWT_SECRET, { algorithms: ['HS256'] }) as AuthUser;
+        const decoded = verifyToken(token);
 
         // SEC-M6: Check token blacklist (logout invalidation)
         try {
@@ -135,7 +181,7 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
             } catch { /* ignore */ }
         } else {
             try {
-                const decoded = jwt.verify(token, config.JWT_SECRET, { algorithms: ['HS256'] }) as AuthUser;
+                const decoded = verifyToken(token);
                 if (!decoded.scopes) decoded.scopes = ['windy_pro:*'];
                 if (!decoded.products) decoded.products = ['windy_pro'];
                 if (!decoded.type) decoded.type = 'human';

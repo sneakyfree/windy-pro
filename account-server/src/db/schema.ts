@@ -326,6 +326,68 @@ function initSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_secretary_owner ON secretary_consents(owner_identity_id);
     CREATE INDEX IF NOT EXISTS idx_secretary_bot ON secretary_consents(bot_identity_id);
 
+    -- OAuth2 clients: registered applications for "Sign in with Windy" (Phase 5)
+    CREATE TABLE IF NOT EXISTS oauth_clients (
+      client_id TEXT PRIMARY KEY,
+      client_secret_hash TEXT,                       -- bcrypt hash of client_secret (null for public clients)
+      name TEXT NOT NULL,
+      redirect_uris TEXT NOT NULL DEFAULT '[]',      -- JSON array of allowed redirect URIs
+      allowed_scopes TEXT NOT NULL DEFAULT '[]',     -- JSON array of scopes this client can request
+      owner_identity_id TEXT,                         -- Identity that registered this client
+      is_first_party INTEGER NOT NULL DEFAULT 0,      -- 1 = Windy ecosystem app (auto-approve consent)
+      is_public INTEGER NOT NULL DEFAULT 0,           -- 1 = public client (PKCE required)
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (owner_identity_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    -- OAuth2 authorization codes: short-lived, single-use (Phase 5)
+    CREATE TABLE IF NOT EXISTS oauth_codes (
+      code TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL,
+      identity_id TEXT NOT NULL,
+      redirect_uri TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT '',                  -- Space-separated scopes
+      state TEXT,
+      code_challenge TEXT,                            -- PKCE S256 code_challenge
+      code_challenge_method TEXT DEFAULT 'S256',
+      used INTEGER NOT NULL DEFAULT 0,                -- 1 = already exchanged (single-use enforcement)
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (client_id) REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+      FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_oauth_codes_client ON oauth_codes(client_id);
+    CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON oauth_codes(expires_at);
+
+    -- OAuth2 consent records: tracks which scopes a user has approved per client (Phase 5)
+    CREATE TABLE IF NOT EXISTS oauth_consents (
+      id TEXT PRIMARY KEY,
+      identity_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      scopes TEXT NOT NULL DEFAULT '',                 -- Space-separated approved scopes
+      granted_at TEXT NOT NULL DEFAULT (datetime('now')),
+      revoked_at TEXT,
+      FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (client_id) REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+      UNIQUE(identity_id, client_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_oauth_consents_identity ON oauth_consents(identity_id);
+
+    -- OAuth2 device codes: for CLI / headless device authorization (Phase 5)
+    CREATE TABLE IF NOT EXISTS oauth_device_codes (
+      device_code TEXT PRIMARY KEY,
+      user_code TEXT UNIQUE NOT NULL,                  -- Short human-readable code
+      client_id TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT '',
+      identity_id TEXT,                                -- Set when user approves
+      status TEXT NOT NULL DEFAULT 'pending',           -- 'pending' | 'approved' | 'denied' | 'expired'
+      expires_at TEXT NOT NULL,
+      interval_seconds INTEGER NOT NULL DEFAULT 5,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (client_id) REFERENCES oauth_clients(client_id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_device_codes_user ON oauth_device_codes(user_code);
+
     -- Chat profiles: links Matrix accounts to Windy identities
     -- Bridge between account-server identity and Synapse Matrix account
     CREATE TABLE IF NOT EXISTS chat_profiles (

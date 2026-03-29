@@ -16,6 +16,7 @@ import {
     RecordingCheckQuerySchema,
     RecordingsListQuerySchema,
 } from '@windy-pro/contracts';
+import { validateFileMagicBytes } from '../middleware/file-validation';
 
 const router = Router();
 
@@ -187,7 +188,7 @@ router.delete('/:id', authenticateToken, (req: Request, res: Response) => {
 
 // ─── POST /api/v1/recordings/upload ──────────────────────────
 
-router.post('/upload', authenticateToken, videoUpload.single('media'), (req: Request, res: Response) => {
+router.post('/upload', authenticateToken, videoUpload.single('media'), validateFileMagicBytes(['audio', 'video']), (req: Request, res: Response) => {
     try {
         const db = getDb();
         const { duration_seconds, has_video, video_resolution, camera_source,

@@ -18,6 +18,7 @@ import {
     FileUploadBodySchema,
     FileListQuerySchema,
 } from '@windy-pro/contracts';
+import { validateFileMagicBytes } from '../middleware/file-validation';
 
 // ─── Multer config ───────────────────────────────────────────
 
@@ -41,7 +42,7 @@ const router = Router();
 
 // ─── POST /upload — upload file ──────────────────────────────
 
-router.post('/upload', authenticateToken, upload.single('file'), (req: Request, res: Response) => {
+router.post('/upload', authenticateToken, upload.single('file'), validateFileMagicBytes(), (req: Request, res: Response) => {
     try {
         const user = (req as AuthRequest).user;
         if (!req.file) {

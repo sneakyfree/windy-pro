@@ -380,3 +380,113 @@ export interface WindyIdentityCredentials {
   createdAt: string;
   expiresAt?: string;
 }
+
+// ═══════════════════════════════════════════
+//  OAUTH2 / SSO — "Sign in with Windy" (Phase 5)
+// ═══════════════════════════════════════════
+
+/** Registered OAuth2 client */
+export interface OAuthClient {
+  clientId: string;
+  name: string;
+  redirectUris: string[];
+  allowedScopes: string[];
+  isFirstParty: boolean;
+  isPublic: boolean;
+  createdAt: string;
+}
+
+/** GET /api/v1/oauth/authorize query parameters */
+export interface OAuthAuthorizeRequest {
+  client_id: string;
+  redirect_uri: string;
+  response_type: 'code';
+  scope?: string;
+  state?: string;
+  code_challenge?: string;
+  code_challenge_method?: 'S256';
+}
+
+/** POST /api/v1/oauth/token request body */
+export interface OAuthTokenRequest {
+  grant_type: 'authorization_code' | 'client_credentials' | 'refresh_token' | 'urn:ietf:params:oauth:grant-type:device_code';
+  code?: string;
+  redirect_uri?: string;
+  client_id?: string;
+  client_secret?: string;
+  code_verifier?: string;
+  refresh_token?: string;
+  device_code?: string;
+  scope?: string;
+}
+
+/** POST /api/v1/oauth/token response */
+export interface OAuthTokenResponse {
+  access_token: string;
+  token_type: 'Bearer';
+  expires_in: number;
+  refresh_token?: string;
+  scope?: string;
+}
+
+/** POST /api/v1/oauth/device request */
+export interface DeviceCodeRequest {
+  client_id: string;
+  scope?: string;
+}
+
+/** POST /api/v1/oauth/device response */
+export interface DeviceCodeResponse {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  verification_uri_complete: string;
+  expires_in: number;
+  interval: number;
+}
+
+/** GET /.well-known/openid-configuration */
+export interface OIDCDiscovery {
+  issuer: string;
+  authorization_endpoint: string;
+  token_endpoint: string;
+  userinfo_endpoint: string;
+  jwks_uri: string;
+  device_authorization_endpoint: string;
+  scopes_supported: string[];
+  response_types_supported: string[];
+  grant_types_supported: string[];
+  token_endpoint_auth_methods_supported: string[];
+  subject_types_supported: string[];
+  id_token_signing_alg_values_supported: string[];
+  code_challenge_methods_supported: string[];
+}
+
+/** GET /api/v1/oauth/userinfo response (OIDC standard claims) */
+export interface UserInfoResponse {
+  sub: string;
+  name?: string;
+  preferred_username?: string;
+  picture?: string;
+  locale?: string;
+  email?: string;
+  email_verified?: boolean;
+  phone_number?: string;
+  phone_number_verified?: boolean;
+  identity_type?: 'human' | 'bot';
+}
+
+/** JWKS Document */
+export interface JWKSDocument {
+  keys: JWKKey[];
+}
+
+/** JSON Web Key */
+export interface JWKKey {
+  kty: 'RSA';
+  use: 'sig';
+  alg: 'RS256';
+  kid: string;
+  n: string;
+  e: string;
+}

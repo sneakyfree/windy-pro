@@ -200,6 +200,12 @@ export {
     // Bot API key schemas (Phase 3)
     BotApiKeyCreateSchema,
     SecretaryConsentSchema,
+    // OAuth2 schemas (Phase 5)
+    OAuthClientCreateSchema,
+    OAuthAuthorizeSchema,
+    OAuthTokenSchema,
+    DeviceCodeRequestSchema,
+    DeviceCodeApproveSchema,
 } from './validation';
 
 // Identity types — Unified Windy Identity
@@ -241,4 +247,15 @@ export type {
     SecretaryConsentRequest,
     // Phase 3: Hatch Flow
     WindyIdentityCredentials,
+    // Phase 5: OAuth2 / SSO
+    OAuthClient,
+    OAuthAuthorizeRequest,
+    OAuthTokenRequest,
+    OAuthTokenResponse,
+    DeviceCodeRequest,
+    DeviceCodeResponse,
+    OIDCDiscovery,
+    UserInfoResponse,
+    JWKSDocument,
+    JWKKey,
 } from './identity';

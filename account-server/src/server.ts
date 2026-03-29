@@ -13,6 +13,8 @@ import jwt from 'jsonwebtoken';
 
 import { config } from './config';
 import { getDb, closeDb } from './db/schema';
+import { initializeJWKS, getJWKSDocument } from './jwks';
+import { startWALCheckpoint } from './db-maintenance';
 import authRoutes from './routes/auth';
 import translationRoutes, { historyHandler, favoritesHandler } from './routes/translations';
 import recordingRoutes from './routes/recordings';
@@ -24,6 +26,7 @@ import miscRoutes from './routes/misc';
 import storageRoutes from './routes/storage';
 import identityRoutes from './routes/identity';
 import verificationRoutes from './routes/verification';
+import oauthRoutes from './routes/oauth';
 import { billingRouter, stripeRouter } from './routes/billing';
 import { authenticateToken } from './middleware/auth';
 
@@ -82,6 +85,45 @@ app.use('/api/v1/identity', identityRoutes);
 
 // Verification (Phase 1 — promoted from chat-onboarding to identity-level)
 app.use('/api/v1/identity/verify', verificationRoutes);
+
+// OAuth2 / SSO (Phase 5 — "Sign in with Windy")
+app.use('/api/v1/oauth', oauthRoutes);
+
+// JWKS endpoint (Phase 4 — public keys for RS256 token verification)
+app.get('/.well-known/jwks.json', (_req, res) => {
+    const jwks = getJWKSDocument();
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.json(jwks);
+});
+
+// OIDC Discovery (Phase 5 — OpenID Connect provider metadata)
+app.get('/.well-known/openid-configuration', (req, res) => {
+    const issuer = process.env.OIDC_ISSUER || `${req.protocol}://${req.get('host')}`;
+    res.json({
+        issuer,
+        authorization_endpoint: `${issuer}/api/v1/oauth/authorize`,
+        token_endpoint: `${issuer}/api/v1/oauth/token`,
+        userinfo_endpoint: `${issuer}/api/v1/oauth/userinfo`,
+        jwks_uri: `${issuer}/.well-known/jwks.json`,
+        device_authorization_endpoint: `${issuer}/api/v1/oauth/device`,
+        scopes_supported: [
+            'openid', 'profile', 'email', 'phone',
+            'windy_pro:*', 'windy_chat:read', 'windy_chat:write',
+            'windy_mail:read', 'windy_mail:send', 'windy_fly:*',
+        ],
+        response_types_supported: ['code'],
+        grant_types_supported: [
+            'authorization_code',
+            'client_credentials',
+            'refresh_token',
+            'urn:ietf:params:oauth:grant-type:device_code',
+        ],
+        token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
+        subject_types_supported: ['public'],
+        id_token_signing_alg_values_supported: ['RS256', 'HS256'],
+        code_challenge_methods_supported: ['S256'],
+    });
+});
 
 // Translations
 app.use('/api/v1/translate', translationRoutes);
@@ -229,6 +271,12 @@ wss.on('connection', (ws: WebSocket) => {
 
 // Ensure DB is initialized
 const db = getDb();
+
+// Phase 4: Initialize RS256 key management (falls back to HS256 if unconfigured)
+initializeJWKS();
+
+// Phase 4: Start periodic WAL checkpoint to prevent unbounded WAL growth
+startWALCheckpoint();
 
 server.listen(config.PORT, () => {
     const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;
