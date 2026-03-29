@@ -357,6 +357,44 @@ describe('Register then immediately refresh (Bug #1 fix)', () => {
   });
 });
 
+// ─── BUG FIX #2: Response Field Names Are camelCase ───────────
+
+describe('API response field names are camelCase (Bug #2 fix)', () => {
+  it('GET /recordings/stats returns camelCase fields', async () => {
+    // Register a fresh user to get a valid token
+    const statsUser = {
+      name: 'Stats Test User',
+      email: `stats-test-${Date.now()}@example.com`,
+      password: 'StatsPass1',
+    };
+    const regRes = await request(app)
+      .post('/api/v1/auth/register')
+      .send(statsUser);
+    if (regRes.status === 429) {
+      console.warn('Rate-limited — skipping camelCase test');
+      return;
+    }
+    expect(regRes.status).toBe(201);
+    const token = regRes.body.token;
+
+    const statsRes = await request(app)
+      .get('/api/v1/recordings/stats')
+      .set('Authorization', `Bearer ${token}`);
+    expect(statsRes.status).toBe(200);
+
+    // Verify all field names are camelCase — no snake_case allowed
+    const fieldNames = Object.keys(statsRes.body);
+    for (const name of fieldNames) {
+      expect(name).not.toMatch(/_[a-z]/); // snake_case pattern should NOT match
+    }
+
+    // Verify expected camelCase fields exist
+    expect(statsRes.body).toHaveProperty('totalRecordings');
+    expect(statsRes.body).toHaveProperty('totalDuration');
+    expect(statsRes.body).toHaveProperty('totalSize');
+  });
+});
+
 // ─── Full Auth Flow (happy path) ──────────────────────────────
 
 describe('Full auth flow', () => {

@@ -132,7 +132,7 @@ export default function Dashboard() {
     // Group recordings by date
     const groups = {}
     recordings.forEach(r => {
-        const key = formatDate(r.recorded_at)
+        const key = formatDate(r.createdAt)
         if (!groups[key]) groups[key] = []
         groups[key].push(r)
     })
@@ -228,14 +228,14 @@ export default function Dashboard() {
                             {recs.map(r => (
                                 <div key={r.id} className={`dash-entry ${expanded === r.id ? 'expanded' : ''}`}>
                                     <div className="dash-entry-header" onClick={() => handleExpand(r.id)}>
-                                        <div className="dash-entry-time">{formatTime(r.recorded_at)}</div>
+                                        <div className="dash-entry-time">{formatTime(r.createdAt)}</div>
                                         <div className="dash-entry-preview">{r.preview || '(no text)'}</div>
                                         <div className="dash-entry-meta">
-                                            {r.has_audio ? <span className="dash-badge audio">🎤</span> : null}
-                                            {r.has_video ? <span className="dash-badge video">🎬</span> : null}
+                                            {r.hasAudio ? <span className="dash-badge audio">🎤</span> : null}
+                                            {r.hasVideo ? <span className="dash-badge video">🎬</span> : null}
                                             {r.mode === 'clone_capture' ? <span className="dash-badge clone">🧬</span> : null}
-                                            <span className="dash-entry-words">{r.word_count} words</span>
-                                            <span className="dash-entry-duration">{formatDuration(r.duration_seconds)}</span>
+                                            <span className="dash-entry-words">{r.wordCount} words</span>
+                                            <span className="dash-entry-duration">{formatDuration(r.durationSeconds)}</span>
                                             <span className="dash-entry-engine">{r.engine}</span>
                                         </div>
                                         <span className="dash-entry-chevron">{expanded === r.id ? '▼' : '▶'}</span>
@@ -244,14 +244,14 @@ export default function Dashboard() {
                                     {expanded === r.id && expandedData && (
                                         <div className="dash-entry-body">
                                             {/* Media Players */}
-                                            {expandedData.has_audio ? (
+                                            {expandedData.hasAudio ? (
                                                 <div className="dash-player">
                                                     <audio controls preload="metadata"
                                                         src={`${API_BASE}/recordings/${r.id}/audio?token=${getToken()}`}>
                                                     </audio>
                                                 </div>
                                             ) : null}
-                                            {expandedData.has_video ? (
+                                            {expandedData.hasVideo ? (
                                                 <div className="dash-player video-player">
                                                     <video controls preload="metadata"
                                                         src={`${API_BASE}/recordings/${r.id}/video?token=${getToken()}`}>

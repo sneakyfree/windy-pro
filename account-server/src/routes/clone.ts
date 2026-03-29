@@ -15,13 +15,26 @@ const router = Router();
 router.get('/training-data', authenticateToken, (req: Request, res: Response) => {
     try {
         const db = getDb();
-        const bundles = db.prepare(
+        const rows = db.prepare(
             `SELECT id, bundle_id, duration_seconds, has_video, video_resolution,
               camera_source, transcript_text, file_size, device_platform,
               clone_training_ready, created_at
        FROM recordings WHERE user_id = ? AND clone_training_ready = 1
        ORDER BY created_at DESC`
-        ).all((req as AuthRequest).user.userId);
+        ).all((req as AuthRequest).user.userId) as any[];
+        const bundles = rows.map(r => ({
+            id: r.id,
+            bundleId: r.bundle_id,
+            durationSeconds: r.duration_seconds,
+            hasVideo: r.has_video,
+            videoResolution: r.video_resolution,
+            cameraSource: r.camera_source,
+            transcript: r.transcript_text,
+            fileSize: r.file_size,
+            devicePlatform: r.device_platform,
+            cloneTrainingReady: r.clone_training_ready,
+            createdAt: r.created_at,
+        }));
         res.json({ bundles, total: bundles.length });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });
@@ -51,8 +64,8 @@ router.post('/start-training', authenticateToken, validate(StartTrainingRequestS
         res.json({
             jobId,
             status: 'queued',
-            bundle_count: bundle_ids.length,
-            estimated_time: `${Math.ceil(bundle_ids.length * 15)} minutes`,
+            bundleCount: bundle_ids.length,
+            estimatedTime: `${Math.ceil(bundle_ids.length * 15)} minutes`,
             message: 'Clone training job queued successfully',
         });
     } catch (err: any) {

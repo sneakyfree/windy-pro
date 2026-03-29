@@ -66,12 +66,26 @@ function listRecordings(userId: string, since: string) {
      LIMIT 100`
     ).all(userId, since) as any[];
 
-    // Cross-platform field mapping
+    // Cross-platform field mapping — camelCase for JS consumers
     return recordings.map(r => ({
-        ...r,
-        transcript: r.transcript_text,
-        segments_json: r.transcript_segments,
+        id: r.id,
+        bundleId: r.bundle_id,
         duration: r.duration_seconds,
+        durationSeconds: r.duration_seconds,
+        hasVideo: r.has_video,
+        videoResolution: r.video_resolution,
+        cameraSource: r.camera_source,
+        transcript: r.transcript_text,
+        transcriptText: r.transcript_text,
+        transcriptSegments: r.transcript_segments,
+        segmentsJson: r.transcript_segments,
+        fileSize: r.file_size,
+        devicePlatform: r.device_platform,
+        deviceId: r.device_id,
+        deviceName: r.device_name,
+        cloneTrainingReady: r.clone_training_ready,
+        syncStatus: r.sync_status,
+        createdAt: r.created_at,
     }));
 }
 
@@ -110,7 +124,7 @@ router.get('/check', authenticateToken, (req: Request, res: Response) => {
         const db = getDb();
         const row = db.prepare('SELECT id FROM recordings WHERE bundle_id = ? AND user_id = ?')
             .get(bundle_id, (req as AuthRequest).user.userId);
-        res.json({ exists: !!row, bundle_id });
+        res.json({ exists: !!row, bundleId: bundle_id });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });
     }
@@ -165,7 +179,18 @@ router.get('/:id', authenticateToken, (req: Request, res: Response) => {
         if (!recording) {
             return res.status(404).json({ error: 'Recording not found' });
         }
-        res.json(recording);
+        const r = recording as any;
+        res.json({
+            id: r.id,
+            bundleId: r.bundle_id,
+            createdAt: r.created_at,
+            durationSeconds: r.duration_seconds,
+            transcript: r.transcript_text,
+            source: r.source,
+            devicePlatform: r.device_platform,
+            appVersion: r.app_version,
+            hasVideo: r.has_video,
+        });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });
     }
@@ -227,7 +252,7 @@ router.post('/upload', authenticateToken, videoUpload.single('media'), validateF
             clone_training_ready === 'true' || clone_training_ready === true ? 1 : 0
         );
 
-        res.status(201).json({ id, bundle_id: bundleId, file_size: fileSize });
+        res.status(201).json({ id, bundleId, fileSize });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });
     }
@@ -263,7 +288,7 @@ router.post('/upload/chunk', authenticateToken, (req: Request, res: Response) =>
             setTimeout(() => chunkStore.delete(bundle_id), 5 * 60 * 1000);
         }
 
-        res.json({ received: true, chunk_index, bundle_id });
+        res.json({ received: true, chunkIndex: chunk_index, bundleId: bundle_id });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });
     }
