@@ -339,10 +339,44 @@ function autoCleanupArchive() {
 }
 
 function ensureDir(dir) {
-  fs.mkdirSync(dir, { recursive: true });
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (err) {
+    console.error('[ensureDir] Failed to create directory:', dir, err.message);
+    throw err; // Re-throw so callers (inside try/catch) can handle it
+  }
 }
 
-function appendArchiveEntry({ text, startedAt, endedAt }) {
+// ═══ Archive Retry Queue ═══
+// When archive writes fail (disk full, folder unavailable), queue for retry instead of losing data
+const _archiveRetryQueue = [];
+const MAX_ARCHIVE_RETRIES = 3;
+const ARCHIVE_RETRY_INTERVAL_MS = 30000; // 30 seconds
+
+let _archiveRetryTimer = null;
+function _startArchiveRetryTimer() {
+  if (_archiveRetryTimer) return;
+  _archiveRetryTimer = setInterval(() => {
+    if (_archiveRetryQueue.length === 0) {
+      clearInterval(_archiveRetryTimer);
+      _archiveRetryTimer = null;
+      return;
+    }
+    const pending = [..._archiveRetryQueue];
+    _archiveRetryQueue.length = 0;
+    for (const item of pending) {
+      const result = appendArchiveEntry(item.entry, true);
+      if (!result.archived && item.retries < MAX_ARCHIVE_RETRIES) {
+        _archiveRetryQueue.push({ entry: item.entry, retries: item.retries + 1 });
+        console.warn(`[Archive] Retry ${item.retries + 1}/${MAX_ARCHIVE_RETRIES} queued for entry at ${item.entry.startedAt}`);
+      } else if (!result.archived) {
+        console.error(`[Archive] Permanently failed after ${MAX_ARCHIVE_RETRIES} retries:`, item.entry.startedAt);
+      }
+    }
+  }, ARCHIVE_RETRY_INTERVAL_MS);
+}
+
+function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
   const engine = store.get('engine', {});
   if (!engine.autoArchive || !engine.archiveLocalEnabled || !text || !text.trim()) return { archived: false };
 
@@ -388,7 +422,13 @@ function appendArchiveEntry({ text, startedAt, endedAt }) {
   } catch (err) {
     console.error('[appendArchiveEntry] Archive I/O error:', err.message);
     if (mainWindow && !mainWindow.isDestroyed()) {
-      safeSend('archive-error', { error: err.message });
+      safeSend('archive-error', { error: err.message, queued: !isRetry });
+    }
+    // Queue for retry if this is the first attempt
+    if (!isRetry) {
+      _archiveRetryQueue.push({ entry: { text, startedAt, endedAt }, retries: 0 });
+      _startArchiveRetryTimer();
+      console.warn('[Archive] Entry queued for retry. Queue size:', _archiveRetryQueue.length);
     }
     return { archived: false, error: err.message };
   }
