@@ -25,12 +25,15 @@ import {
 } from '@windy-pro/contracts';
 
 const router = Router();
-const stmts = getStatements();
 
-// Rate limit on auth endpoints: 5 attempts per minute
+// Lazy getter — ensures statements are always from the current DB instance
+// (avoids stale prepared statements if DB is re-initialized, e.g. in tests)
+function stmts() { return getStatements(); }
+
+// Rate limit on auth endpoints: 5 attempts per minute (disabled in test env)
 const authLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 5,
+    max: process.env.NODE_ENV === 'test' ? 10000 : 5,
     message: { error: 'Too many attempts, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -111,8 +114,8 @@ function generateTokens(user: { id: string; email: string; tier: string }, devic
     const refreshToken = uuidv4();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    stmts.deleteUserRefreshTokens.run(user.id, deviceId || '');
-    stmts.saveRefreshToken.run(refreshToken, user.id, deviceId || '', expiresAt);
+    stmts().deleteUserRefreshTokens.run(user.id, deviceId || '');
+    stmts().saveRefreshToken.run(refreshToken, user.id, deviceId || '', expiresAt);
 
     // Update last_login_at
     try {
@@ -124,7 +127,7 @@ function generateTokens(user: { id: string; email: string; tier: string }, devic
 }
 
 function getDeviceList(userId: string) {
-    return stmts.getDevices.all(userId);
+    return stmts().getDevices.all(userId);
 }
 
 // ─── POST /api/v1/auth/register ──────────────────────────────
@@ -133,7 +136,7 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
     try {
         const { name, email, password, deviceId, deviceName, platform } = req.body;
 
-        const existing = stmts.findUserByEmail.get(email.toLowerCase()) as any;
+        const existing = stmts().findUserByEmail.get(email.toLowerCase()) as any;
         if (existing) {
             return res.status(409).json({ error: 'An account with this email already exists' });
         }
@@ -141,7 +144,7 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
         const userId = uuidv4();
         const windyIdentityId = crypto.randomUUID();
         const passwordHash = await bcrypt.hash(password, config.BCRYPT_ROUNDS);
-        stmts.createUser.run(userId, email.toLowerCase(), name, passwordHash, 'free');
+        stmts().createUser.run(userId, email.toLowerCase(), name, passwordHash, 'free');
 
         // Set the universal cross-product identity ID
         try {
@@ -150,7 +153,7 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
         } catch { /* column may not exist during first migration cycle */ }
 
         if (deviceId) {
-            stmts.addDevice.run(deviceId, userId, deviceName || 'Unknown Device', platform || 'unknown');
+            stmts().addDevice.run(deviceId, userId, deviceName || 'Unknown Device', platform || 'unknown');
         }
 
         // Phase 10.0: Auto-provision Windy Pro product account + default scopes
@@ -200,7 +203,7 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
     try {
         const { email, password, deviceId, deviceName, platform } = req.body;
 
-        const user = stmts.findUserByEmail.get(email.toLowerCase()) as any;
+        const user = stmts().findUserByEmail.get(email.toLowerCase()) as any;
         if (!user) {
             logAuditEvent('login_failed', null, { email: email.toLowerCase(), reason: 'user_not_found' }, req.ip, req.get('user-agent'));
             return res.status(401).json({ error: 'Invalid email or password' });
@@ -213,18 +216,18 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
         }
 
         if (deviceId) {
-            const existingDevice = stmts.findDevice.get(deviceId, user.id) as any;
+            const existingDevice = stmts().findDevice.get(deviceId, user.id) as any;
             if (existingDevice) {
-                stmts.touchDevice.run(deviceId, user.id);
+                stmts().touchDevice.run(deviceId, user.id);
             } else {
-                const deviceCount = (stmts.countDevices.get(user.id) as any).count;
+                const deviceCount = (stmts().countDevices.get(user.id) as any).count;
                 if (deviceCount < config.MAX_DEVICES) {
-                    stmts.addDevice.run(deviceId, user.id, deviceName || 'Unknown Device', platform || 'unknown');
+                    stmts().addDevice.run(deviceId, user.id, deviceName || 'Unknown Device', platform || 'unknown');
                 }
             }
         }
 
-        stmts.updateUserSeen.run(user.id);
+        stmts().updateUserSeen.run(user.id);
 
         const tokens = generateTokens(user, deviceId);
         const devices = getDeviceList(user.id);
@@ -256,7 +259,7 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
 // ─── GET /api/v1/auth/me ─────────────────────────────────────
 
 router.get('/me', authenticateToken, (req: Request, res: Response) => {
-    const user = stmts.findUserById.get((req as AuthRequest).user.userId) as any;
+    const user = stmts().findUserById.get((req as AuthRequest).user.userId) as any;
     if (!user) {
         return res.status(404).json({ error: 'User not found' });
     }
@@ -292,14 +295,14 @@ router.post('/devices/register', authenticateToken, validate(RegisterDeviceReque
     const { deviceId, deviceName, platform } = req.body;
     const userId = (req as AuthRequest).user.userId;
 
-    const existing = stmts.findDevice.get(deviceId, userId) as any;
+    const existing = stmts().findDevice.get(deviceId, userId) as any;
     if (existing) {
-        stmts.touchDevice.run(deviceId, userId);
+        stmts().touchDevice.run(deviceId, userId);
         const devices = getDeviceList(userId);
         return res.json({ message: 'Device already registered', devices });
     }
 
-    const count = (stmts.countDevices.get(userId) as any).count;
+    const count = (stmts().countDevices.get(userId) as any).count;
     if (count >= config.MAX_DEVICES) {
         const devices = getDeviceList(userId);
         return res.status(403).json({
@@ -311,7 +314,7 @@ router.post('/devices/register', authenticateToken, validate(RegisterDeviceReque
         });
     }
 
-    stmts.addDevice.run(deviceId, userId, deviceName || 'Unknown Device', platform || 'unknown');
+    stmts().addDevice.run(deviceId, userId, deviceName || 'Unknown Device', platform || 'unknown');
     const devices = getDeviceList(userId);
 
     logAuditEvent('device_add', userId, { deviceId, deviceName, platform }, req.ip, req.get('user-agent'));
@@ -332,12 +335,12 @@ router.post('/devices/remove', authenticateToken, validate(RemoveDeviceRequestSc
     const { deviceId } = req.body;
     const userId = (req as AuthRequest).user.userId;
 
-    const existing = stmts.findDevice.get(deviceId, userId) as any;
+    const existing = stmts().findDevice.get(deviceId, userId) as any;
     if (!existing) {
         return res.status(404).json({ error: 'Device not found on this account' });
     }
 
-    stmts.removeDevice.run(deviceId, userId);
+    stmts().removeDevice.run(deviceId, userId);
     const devices = getDeviceList(userId);
 
     logAuditEvent('device_remove', userId, { deviceId }, req.ip, req.get('user-agent'));
@@ -358,29 +361,29 @@ router.post('/devices/remove', authenticateToken, validate(RemoveDeviceRequestSc
 router.post('/refresh', authLimiter, validate(RefreshRequestSchema), (req: Request, res: Response) => {
     const { refreshToken, deviceId } = req.body;
 
-    stmts.cleanExpiredTokens.run();
+    stmts().cleanExpiredTokens.run();
 
-    const stored = stmts.findRefreshToken.get(refreshToken) as any;
+    const stored = stmts().findRefreshToken.get(refreshToken) as any;
     if (!stored) {
         return res.status(401).json({ error: 'Invalid or expired refresh token' });
     }
 
     if (new Date(stored.expires_at) < new Date()) {
-        stmts.deleteRefreshToken.run(refreshToken);
+        stmts().deleteRefreshToken.run(refreshToken);
         return res.status(401).json({ error: 'Refresh token expired' });
     }
 
-    const user = stmts.findUserById.get(stored.user_id) as any;
+    const user = stmts().findUserById.get(stored.user_id) as any;
     if (!user) {
-        stmts.deleteRefreshToken.run(refreshToken);
+        stmts().deleteRefreshToken.run(refreshToken);
         return res.status(401).json({ error: 'User not found' });
     }
 
-    stmts.deleteRefreshToken.run(refreshToken);
+    stmts().deleteRefreshToken.run(refreshToken);
     const tokens = generateTokens(user, deviceId || stored.device_id);
 
     if (deviceId) {
-        stmts.touchDevice.run(deviceId, user.id);
+        stmts().touchDevice.run(deviceId, user.id);
     }
 
     logAuditEvent('token_refresh', user.id, { deviceId: deviceId || stored.device_id }, req.ip, req.get('user-agent'));

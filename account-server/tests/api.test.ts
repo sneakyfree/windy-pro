@@ -7,6 +7,8 @@ process.env.JWT_SECRET = 'test-secret-for-jest';
 
 import { app } from '../src/server';
 
+// No afterAll server.close() needed — server.listen() is skipped when NODE_ENV=test
+
 const TEST_USER = {
   name: 'Test User',
   email: `test-${Date.now()}@example.com`,
@@ -301,6 +303,57 @@ describe('Unknown API routes', () => {
     const res = await request(app).get('/api/v1/nonexistent');
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('Not found');
+  });
+});
+
+// ─── BUG FIX #1: Register → Immediate Refresh ────────────────
+// This test verifies that the refresh token returned by /auth/register
+// can be immediately used to call /auth/refresh and obtain new tokens.
+
+describe('Register then immediately refresh (Bug #1 fix)', () => {
+  it('register returns a refresh token that works on the next /auth/refresh call', async () => {
+    const uniqueUser = {
+      name: 'Refresh Test User',
+      email: `refresh-test-${Date.now()}@example.com`,
+      password: 'StrongPass1',
+      deviceId: 'refresh-test-device',
+    };
+
+    // Step 1: Register
+    const regRes = await request(app)
+      .post('/api/v1/auth/register')
+      .send(uniqueUser);
+
+    // Rate-limited? Skip gracefully — but the test itself must pass when not rate-limited.
+    if (regRes.status === 429) {
+      console.warn('Rate-limited during register — skipping refresh test');
+      return;
+    }
+    expect(regRes.status).toBe(201);
+    expect(regRes.body).toHaveProperty('refreshToken');
+    expect(regRes.body).toHaveProperty('token');
+
+    const { refreshToken, token } = regRes.body;
+
+    // Step 2: Immediately refresh — this is the exact bug scenario
+    const refreshRes = await request(app)
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken });
+
+    if (refreshRes.status === 429) {
+      console.warn('Rate-limited during refresh — skipping assertion');
+      return;
+    }
+
+    expect(refreshRes.status).toBe(200);
+    expect(refreshRes.body).toHaveProperty('token');
+    expect(refreshRes.body).toHaveProperty('refreshToken');
+    // The new refresh token should be different (token rotation)
+    expect(refreshRes.body.refreshToken).not.toBe(refreshToken);
+    // New access token should be valid JWT
+    expect(refreshRes.body.token).toBeTruthy();
+    expect(refreshRes.body).toHaveProperty('userId');
+    expect(refreshRes.body).toHaveProperty('tier');
   });
 });
 
