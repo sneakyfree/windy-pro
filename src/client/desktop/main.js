@@ -1552,7 +1552,7 @@ ipcMain.handle('chat-register', async (event, username, password, displayName) =
 
 ipcMain.handle('chat-logout', async () => {
   try {
-    if (chatClient) return chatClient.logout();
+    if (chatClient) return await chatClient.logout();
     return { success: true };
   } catch (err) {
     console.error('[chat-logout] Error:', err.message);
@@ -1578,7 +1578,7 @@ ipcMain.handle('chat-send-message', async (event, roomId, text) => {
     // Validate inputs
     if (typeof roomId !== 'string' || roomId.length > 500) return { error: 'Invalid room ID' };
     if (typeof text !== 'string' || text.length === 0 || text.length > 65535) return { error: 'Message too long or empty' };
-    return getChatClient().sendMessage(roomId, text);
+    return await getChatClient().sendMessage(roomId, text);
   } catch (err) {
     console.error('[chat-send-message] Error:', err.message);
     return { error: err.message };
@@ -1587,7 +1587,7 @@ ipcMain.handle('chat-send-message', async (event, roomId, text) => {
 
 ipcMain.handle('chat-get-messages', async (event, roomId, limit) => {
   try {
-    return getChatClient().getMessages(roomId, limit || 50);
+    return await getChatClient().getMessages(roomId, limit || 50);
   } catch (err) {
     console.error('[chat-get-messages] Error:', err.message);
     return { error: err.message };
@@ -1596,7 +1596,7 @@ ipcMain.handle('chat-get-messages', async (event, roomId, limit) => {
 
 ipcMain.handle('chat-send-typing', async (event, roomId, isTyping) => {
   try {
-    return getChatClient().sendTyping(roomId, isTyping);
+    return await getChatClient().sendTyping(roomId, isTyping);
   } catch (err) {
     console.error('[chat-send-typing] Error:', err.message);
     return { error: err.message };
@@ -1606,7 +1606,7 @@ ipcMain.handle('chat-send-typing', async (event, roomId, isTyping) => {
 // Chat IPC — Cached messages (offline access)
 ipcMain.handle('chat-get-cached-messages', async (event, roomId) => {
   try {
-    return getChatClient().getCachedMessages(roomId);
+    return await getChatClient().getCachedMessages(roomId);
   } catch (err) {
     console.error('[chat-get-cached-messages] Error:', err.message);
     return { error: err.message };
@@ -1616,7 +1616,7 @@ ipcMain.handle('chat-get-cached-messages', async (event, roomId) => {
 // Chat IPC — Contacts & Rooms
 ipcMain.handle('chat-get-contacts', async () => {
   try {
-    return getChatClient().getContacts();
+    return await getChatClient().getContacts();
   } catch (err) {
     console.error('[chat-get-contacts] Error:', err.message);
     return { error: err.message };
@@ -1625,7 +1625,7 @@ ipcMain.handle('chat-get-contacts', async () => {
 
 ipcMain.handle('chat-create-dm', async (event, userId) => {
   try {
-    return getChatClient().createDM(userId);
+    return await getChatClient().createDM(userId);
   } catch (err) {
     console.error('[chat-create-dm] Error:', err.message);
     return { error: err.message };
@@ -1634,7 +1634,7 @@ ipcMain.handle('chat-create-dm', async (event, userId) => {
 
 ipcMain.handle('chat-accept-invite', async (event, roomId) => {
   try {
-    return getChatClient().acceptInvite(roomId);
+    return await getChatClient().acceptInvite(roomId);
   } catch (err) {
     console.error('[chat-accept-invite] Error:', err.message);
     return { error: err.message };
@@ -1643,7 +1643,7 @@ ipcMain.handle('chat-accept-invite', async (event, roomId) => {
 
 ipcMain.handle('chat-decline-invite', async (event, roomId) => {
   try {
-    return getChatClient().declineInvite(roomId);
+    return await getChatClient().declineInvite(roomId);
   } catch (err) {
     console.error('[chat-decline-invite] Error:', err.message);
     return { error: err.message };
@@ -1653,7 +1653,7 @@ ipcMain.handle('chat-decline-invite', async (event, roomId) => {
 // Chat IPC — Encryption
 ipcMain.handle('chat-get-crypto-status', async () => {
   try {
-    return chatClient ? chatClient.getCryptoStatus() : { enabled: false, deviceId: null, syncState: null };
+    return chatClient ? await chatClient.getCryptoStatus() : { enabled: false, deviceId: null, syncState: null };
   } catch (err) {
     console.error('[chat-get-crypto-status] Error:', err.message);
     return { error: err.message };
@@ -1663,7 +1663,7 @@ ipcMain.handle('chat-get-crypto-status', async () => {
 // Chat IPC — Profile & Presence
 ipcMain.handle('chat-set-display-name', async (event, displayName) => {
   try {
-    return getChatClient().setDisplayName(displayName);
+    return await getChatClient().setDisplayName(displayName);
   } catch (err) {
     console.error('[chat-set-display-name] Error:', err.message);
     return { error: err.message };
@@ -1672,7 +1672,7 @@ ipcMain.handle('chat-set-display-name', async (event, displayName) => {
 
 ipcMain.handle('chat-set-presence', async (event, status) => {
   try {
-    return getChatClient().setPresence(status);
+    return await getChatClient().setPresence(status);
   } catch (err) {
     console.error('[chat-set-presence] Error:', err.message);
     return { error: err.message };
@@ -1681,7 +1681,7 @@ ipcMain.handle('chat-set-presence', async (event, status) => {
 
 ipcMain.handle('chat-get-user-profile', async (event, userId) => {
   try {
-    return getChatClient().getUserProfile(userId);
+    return await getChatClient().getUserProfile(userId);
   } catch (err) {
     console.error('[chat-get-user-profile] Error:', err.message);
     return { error: err.message };
@@ -1690,7 +1690,7 @@ ipcMain.handle('chat-get-user-profile', async (event, userId) => {
 
 ipcMain.handle('chat-get-total-unread', async () => {
   try {
-    return getChatClient().getTotalUnread();
+    return await getChatClient().getTotalUnread();
   } catch (err) {
     console.error('[chat-get-total-unread] Error:', err.message);
     return { error: err.message };
@@ -1752,7 +1752,7 @@ ipcMain.handle('chat-get-user-language', async () => {
 ipcMain.handle('chat-translate-text', async (event, text, srcLang, tgtLang) => {
   try {
     if (!chatTranslator) chatTranslator = new ChatTranslator(store);
-    return chatTranslator.translate(text, srcLang, tgtLang);
+    return await chatTranslator.translate(text, srcLang, tgtLang);
   } catch (err) {
     console.error('[chat-translate-text] Error:', err.message);
     return { error: err.message };
