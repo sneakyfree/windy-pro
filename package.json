@@ -15,8 +15,11 @@
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux",
+    "install:web": "cd src/client/web && npm install",
+    "build:web": "cd src/client/web && npm install && npm run build",
     "server": "python -m src.engine.server",
     "test": "python3 -m pytest tests/ -v --ignore=tests/test_cloud_api.py",
+    "test:api": "cd account-server && npx jest tests/api.test.ts --forceExit",
     "dist:all": "npm run build:linux && npm run build:win && npm run build:mac",
     "postinstall": "electron-builder install-app-deps"
   },
