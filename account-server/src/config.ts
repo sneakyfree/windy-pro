@@ -49,4 +49,7 @@ export const config = {
     // Stripe billing — set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET in .env or system env
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
+    // Phase 7A: PostgreSQL + Redis (optional — omit for SQLite + in-memory defaults)
+    DATABASE_URL: process.env.DATABASE_URL || '',   // postgres://... or '' for SQLite
+    REDIS_URL: process.env.REDIS_URL || '',          // redis://... or '' for in-memory
 } as const;

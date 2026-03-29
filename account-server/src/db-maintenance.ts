@@ -4,7 +4,7 @@
  * Phase 4: Ensures SQLite WAL doesn't grow unbounded and provides
  * a safe backup mechanism for the database file.
  */
-import { getDb } from './db/schema';
+import { getDb, getRawSqliteDb } from './db/schema';
 import { config } from './config';
 import path from 'path';
 import fs from 'fs';
@@ -23,6 +23,10 @@ let walCheckpointTimer: ReturnType<typeof setInterval> | null = null;
  */
 export function runWALCheckpoint(): { busy: number; log: number; checkpointed: number } {
   const db = getDb();
+  // WAL checkpoint is SQLite-only — skip on PostgreSQL
+  if (db.engine !== 'sqlite') {
+    return { busy: 0, log: 0, checkpointed: 0 };
+  }
   try {
     const result = db.pragma('wal_checkpoint(PASSIVE)') as any[];
     const row = result[0] || { busy: 0, log: 0, checkpointed: 0 };
@@ -97,10 +101,14 @@ export function backupDatabase(backupDir?: string): string | null {
   const backupPath = path.join(dir, `accounts-${timestamp}.db`);
 
   try {
-    const db = getDb();
+    const rawDb = getRawSqliteDb();
+    if (!rawDb) {
+      console.log('[db-maintenance] Backup skipped — not using SQLite');
+      return null;
+    }
 
     // Use better-sqlite3's backup API for a consistent snapshot
-    db.backup(backupPath);
+    rawDb.backup(backupPath);
 
     const stats = fs.statSync(backupPath);
     console.log(`[db-maintenance] Backup created: ${backupPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);

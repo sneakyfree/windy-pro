@@ -189,13 +189,11 @@ export function grantScopes(
     VALUES (?, ?, ?, ?)
   `);
 
-  const insertMany = db.transaction((scopeList: string[]) => {
-    for (const scope of scopeList) {
+  db.transaction(() => {
+    for (const scope of scopes) {
       stmt.run(crypto.randomUUID(), identityId, scope, grantedBy);
     }
   });
-
-  insertMany(scopes);
   logAuditEvent('scope_grant', identityId, { scopes, grantedBy });
 }
 

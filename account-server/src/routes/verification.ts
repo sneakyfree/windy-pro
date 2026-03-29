@@ -24,29 +24,15 @@ import { validate } from '../middleware/validation';
 import { getDb } from '../db/schema';
 import { logAuditEvent } from '../identity-service';
 import {
+  setOTP, getOTP, deleteOTP,
+  type OTPData,
+} from '../redis';
+import {
   VerificationSendSchema,
   VerificationCheckSchema,
 } from '@windy-pro/contracts';
 
 const router = Router();
-
-// ─── In-memory OTP store (replace with Redis in production) ──
-// Structure: identifier → { code, expiresAt, attempts, sentAt, type }
-const otpStore = new Map<string, {
-  code: string;
-  expiresAt: number;
-  attempts: number;
-  sentAt: number;
-  type: 'phone' | 'email';
-}>();
-
-// Periodic cleanup of expired OTPs (every 5 minutes)
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of otpStore) {
-    if (now > value.expiresAt) otpStore.delete(key);
-  }
-}, 5 * 60 * 1000);
 
 // ─── Rate limiters ──
 
@@ -187,7 +173,7 @@ router.post('/send', authenticateToken, sendLimiter, hourlyLimiter, validate(Ver
     }
 
     // Check resend cooldown (60 seconds)
-    const existing = otpStore.get(normalizedId);
+    const existing = await getOTP(normalizedId);
     if (existing?.sentAt) {
       const secondsSince = (Date.now() - existing.sentAt) / 1000;
       if (secondsSince < 60) {
@@ -201,13 +187,13 @@ router.post('/send', authenticateToken, sendLimiter, hourlyLimiter, validate(Ver
 
     // Generate and store OTP
     const code = generateOTP();
-    otpStore.set(normalizedId, {
+    await setOTP(normalizedId, {
       code,
       expiresAt: Date.now() + 10 * 60 * 1000,
       attempts: 0,
       sentAt: Date.now(),
       type,
-    });
+    }, 600);
 
     // Send OTP
     const sendResult = type === 'phone'
@@ -253,23 +239,25 @@ router.post('/check', authenticateToken, validate(VerificationCheckSchema), asyn
       normalizedId = (identifier || '').toLowerCase().trim();
     }
 
-    const stored = otpStore.get(normalizedId);
+    const stored = await getOTP(normalizedId);
     if (!stored) {
       return res.status(400).json({ error: 'No verification code found. Request a new one.' });
     }
 
     if (Date.now() > stored.expiresAt) {
-      otpStore.delete(normalizedId);
+      await deleteOTP(normalizedId);
       return res.status(400).json({ error: 'Verification code expired. Request a new one.' });
     }
 
     if (stored.attempts >= 3) {
-      otpStore.delete(normalizedId);
+      await deleteOTP(normalizedId);
       return res.status(429).json({ error: 'Too many incorrect attempts. Request a new code.' });
     }
 
     if (stored.code !== code.trim()) {
       stored.attempts++;
+      // Persist updated attempt count
+      await setOTP(normalizedId, stored, Math.ceil((stored.expiresAt - Date.now()) / 1000));
       return res.status(400).json({
         error: 'Invalid verification code',
         attemptsRemaining: 3 - stored.attempts,
@@ -277,7 +265,7 @@ router.post('/check', authenticateToken, validate(VerificationCheckSchema), asyn
     }
 
     // Success — update identity record
-    otpStore.delete(normalizedId);
+    await deleteOTP(normalizedId);
     const db = getDb();
 
     if (stored.type === 'email') {

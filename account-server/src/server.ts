@@ -15,6 +15,7 @@ import { config } from './config';
 import { getDb, closeDb } from './db/schema';
 import { initializeJWKS, getJWKSDocument } from './jwks';
 import { startWALCheckpoint } from './db-maintenance';
+import { initRedis, closeRedis } from './redis';
 import authRoutes from './routes/auth';
 import translationRoutes, { historyHandler, favoritesHandler } from './routes/translations';
 import recordingRoutes from './routes/recordings';
@@ -27,6 +28,7 @@ import storageRoutes from './routes/storage';
 import identityRoutes from './routes/identity';
 import verificationRoutes from './routes/verification';
 import oauthRoutes from './routes/oauth';
+import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
 import { authenticateToken } from './middleware/auth';
 
@@ -41,6 +43,7 @@ app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response
 app.use('/api/v1/stripe', express.raw({ type: 'application/json' }), stripeRouter);
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: false })); // Admin console HTML forms
 
 // ─── Static Website ──────────────────────────────────────────
 // Serve the Windy Pro landing page and web app from the web dist folder
@@ -140,8 +143,11 @@ app.use('/api/v1/transcribe', transcriptionRoutes);
 // Clone/Training
 app.use('/api/v1/clone', cloneRoutes);
 
-// Admin
+// Admin API
 app.use('/api/v1/admin', adminRoutes);
+
+// Admin Console (server-rendered HTML — Phase 7B)
+app.use('/admin', adminConsoleRoutes);
 
 // Downloads
 app.use('/download', downloadRoutes);
@@ -278,13 +284,19 @@ initializeJWKS();
 // Phase 4: Start periodic WAL checkpoint to prevent unbounded WAL growth
 startWALCheckpoint();
 
+// Phase 7A: Initialize Redis (non-blocking — falls back to in-memory if unavailable)
+initRedis().catch(err => {
+    console.warn('[redis] Init warning:', err.message);
+});
+
 server.listen(config.PORT, () => {
     const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;
+    const dbType = process.env.DATABASE_URL?.startsWith('postgres') ? 'PostgreSQL' : 'SQLite';
 
     console.log('');
     console.log('🔑 Windy Pro Account Server v2.0 (TypeScript)');
     console.log(`   Port:     http://localhost:${config.PORT}`);
-    console.log(`   Database: ${config.DB_PATH}`);
+    console.log(`   Database: ${dbType === 'PostgreSQL' ? 'PostgreSQL' : config.DB_PATH}`);
     console.log(`   Users:    ${userCount}`);
     console.log(`   Devices:  ${config.MAX_DEVICES} per account`);
     console.log('');
@@ -331,10 +343,12 @@ server.listen(config.PORT, () => {
 
 // Graceful shutdown
 process.on('SIGINT', () => {
+    closeRedis().catch(() => {});
     closeDb();
     process.exit(0);
 });
 process.on('SIGTERM', () => {
+    closeRedis().catch(() => {});
     closeDb();
     process.exit(0);
 });

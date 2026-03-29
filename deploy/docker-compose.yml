@@ -31,8 +31,14 @@ services:
       - MEDIA_PATH=/data/media
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - NODE_ENV=production
+      # Phase 7A: PostgreSQL + Redis (optional — omit or leave blank for SQLite + in-memory)
+      - DATABASE_URL=${ACCOUNT_DATABASE_URL:-}
+      - REDIS_URL=${ACCOUNT_REDIS_URL:-redis://redis:6379/1}
     volumes:
       - account_data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "wget", "-qO-", "http://localhost:8098/health" ]

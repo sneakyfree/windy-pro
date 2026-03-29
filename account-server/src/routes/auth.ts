@@ -12,6 +12,7 @@ import { getDb } from '../db/schema';
 import { getStatements } from '../db/statements';
 import { logAuditEvent, provisionProduct, grantScopes } from '../identity-service';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { blacklistToken as redisBlacklistToken, isRedisAvailable } from '../redis';
 import { isRS256Available, getSigningKey } from '../jwks';
 import { validate } from '../middleware/validation';
 import {
@@ -397,8 +398,15 @@ router.post('/logout', authenticateToken, (req: Request, res: Response) => {
         const token = authHeader && authHeader.split(' ')[1];
         if (token) {
             const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-            // Set expiry to match token's own expiry (max 15 minutes from now)
-            const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+            const ttlSeconds = 15 * 60; // 15 minutes — matches token expiry
+
+            // Phase 7A-4: Blacklist in Redis if available
+            if (isRedisAvailable()) {
+                redisBlacklistToken(tokenHash, ttlSeconds).catch(() => {});
+            }
+
+            // Also blacklist in DB (belt-and-suspenders for Redis downtime)
+            const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
             try {
                 db.prepare('INSERT OR IGNORE INTO token_blacklist (token_hash, expires_at) VALUES (?, ?)').run(tokenHash, expiresAt);
             } catch { /* table may not exist on first run */ }

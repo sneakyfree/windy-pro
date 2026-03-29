@@ -10,6 +10,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { config } from '../config';
 import { isRS256Available, getVerificationKeys, getPublicKeyByKid } from '../jwks';
+import { isRedisAvailable, isTokenBlacklisted as redisIsBlacklisted } from '../redis';
 
 export interface AuthUser {
     userId: string;
@@ -121,31 +122,35 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
         const decoded = verifyToken(token);
 
         // SEC-M6: Check token blacklist (logout invalidation)
-        try {
-            const { getDb } = require('../db/schema');
-            const db = getDb();
-            const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-            const blacklisted = db.prepare('SELECT 1 FROM token_blacklist WHERE token_hash = ?').get(tokenHash);
-            if (blacklisted) {
-                res.status(401).json({ error: 'Token revoked' });
-                return;
-            }
-        } catch { /* blacklist table may not exist yet — allow through */ }
+        // Phase 7A-4: Use Redis if available, fall back to DB
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-        // Phase 10.1: Normalize identity fields for backward compatibility
-        // Old tokens without scopes → treat as windy_pro:* (full access)
-        if (!decoded.scopes) {
-            decoded.scopes = ['windy_pro:*'];
-        }
-        if (!decoded.products) {
-            decoded.products = ['windy_pro'];
-        }
-        if (!decoded.type) {
-            decoded.type = 'human';
+        if (isRedisAvailable()) {
+            // Async Redis blacklist check
+            redisIsBlacklisted(tokenHash).then(blacklisted => {
+                if (blacklisted) {
+                    res.status(401).json({ error: 'Token revoked' });
+                    return;
+                }
+                finalizeAuth(decoded, req, res, next);
+            }).catch(() => {
+                // Redis error — fall back to DB check
+                if (checkDbBlacklist(tokenHash)) {
+                    res.status(401).json({ error: 'Token revoked' });
+                    return;
+                }
+                finalizeAuth(decoded, req, res, next);
+            });
+            return;
         }
 
-        (req as AuthRequest).user = decoded;
-        next();
+        // No Redis — use synchronous DB blacklist check
+        if (checkDbBlacklist(tokenHash)) {
+            res.status(401).json({ error: 'Token revoked' });
+            return;
+        }
+
+        finalizeAuth(decoded, req, res, next);
     } catch (err: any) {
         if (err.name === 'TokenExpiredError') {
             res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
@@ -153,6 +158,40 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
         }
         res.status(403).json({ error: 'Invalid token' });
     }
+}
+
+/**
+ * Check token blacklist in the database (synchronous).
+ */
+function checkDbBlacklist(tokenHash: string): boolean {
+    try {
+        const { getDb } = require('../db/schema');
+        const db = getDb();
+        const blacklisted = db.prepare('SELECT 1 FROM token_blacklist WHERE token_hash = ?').get(tokenHash);
+        return !!blacklisted;
+    } catch {
+        return false; // blacklist table may not exist yet — allow through
+    }
+}
+
+/**
+ * Finalize authentication by normalizing identity fields and attaching user to request.
+ */
+function finalizeAuth(decoded: AuthUser, req: Request, res: Response, next: NextFunction): void {
+    // Phase 10.1: Normalize identity fields for backward compatibility
+    // Old tokens without scopes -> treat as windy_pro:* (full access)
+    if (!decoded.scopes) {
+        decoded.scopes = ['windy_pro:*'];
+    }
+    if (!decoded.products) {
+        decoded.products = ['windy_pro'];
+    }
+    if (!decoded.type) {
+        decoded.type = 'human';
+    }
+
+    (req as AuthRequest).user = decoded;
+    next();
 }
 
 /**

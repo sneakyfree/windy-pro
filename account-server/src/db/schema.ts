@@ -1,17 +1,34 @@
 /**
- * Database schema — table creation and migrations.
+ * Database schema — table creation, migrations, and adapter selection.
+ *
+ * Phase 7A-1: Returns a DbAdapter instead of raw better-sqlite3.
+ * When DATABASE_URL is set and starts with "postgres://", PostgreSQL is used.
+ * Otherwise, SQLite at DB_PATH is used — preserving all existing behavior.
  */
-import Database from 'better-sqlite3';
 import { config } from '../config';
+import type { DbAdapter } from './adapter';
+import { SqliteAdapter } from './sqlite-adapter';
 
-let db: Database.Database;
+let db: DbAdapter;
 
-export function getDb(): Database.Database {
+export function getDb(): DbAdapter {
   if (!db) {
-    db = new Database(config.DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initSchema(db);
+    const databaseUrl = process.env.DATABASE_URL;
+
+    if (databaseUrl && databaseUrl.startsWith('postgres')) {
+      // PostgreSQL mode — schema is managed by postgres-schema.sql
+      // and the migration script. We still run initSchema for the
+      // ALTER TABLE migrations (they use IF NOT EXISTS / try-catch).
+      const { PostgresAdapter } = require('./postgres-adapter');
+      db = new PostgresAdapter(databaseUrl);
+      console.log('[schema] Using PostgreSQL adapter');
+      // Skip initSchema — PostgreSQL schema is managed separately
+    } else {
+      // SQLite mode — default, backward compatible
+      db = new SqliteAdapter(config.DB_PATH);
+      console.log(`[schema] Using SQLite adapter (${config.DB_PATH})`);
+      initSchema(db);
+    }
   }
   return db;
 }
@@ -22,7 +39,18 @@ export function closeDb(): void {
   }
 }
 
-function initSchema(db: Database.Database): void {
+/**
+ * Get the underlying SQLite database for SQLite-specific operations
+ * (backup, WAL checkpoint). Returns null if using PostgreSQL.
+ */
+export function getRawSqliteDb(): any | null {
+  if (db && db.engine === 'sqlite') {
+    return (db as SqliteAdapter).raw;
+  }
+  return null;
+}
+
+function initSchema(db: DbAdapter): void {
   // Core tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
