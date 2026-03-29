@@ -210,6 +210,7 @@ export {
 
 // Identity types — Unified Windy Identity
 export type {
+    WindyIdentityId,
     IdentityType,
     WindyProduct,
     ProductAccountStatus,
@@ -224,6 +225,13 @@ export type {
     IdentityAuditEvent,
     IdentityAuditEntry,
     EternitasPassport,
+    // Webhook payloads (typed per event)
+    WebhookPayloadBase,
+    WebhookPassportRegistered,
+    WebhookPassportRevoked,
+    WebhookIdentityCreated,
+    WebhookPassportSuspended,
+    WebhookPassportVerified,
     EternitasWebhookPayload,
     EternitasWebhookResponse,
     ChatProfile,
@@ -259,3 +267,4 @@ export type {
     JWKSDocument,
     JWKKey,
 } from './identity';
+export { EcosystemProduct } from './identity';

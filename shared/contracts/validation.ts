@@ -245,7 +245,7 @@ export const IdentityUpdateSchema = z.object({
 });
 
 export const IdentityProvisionSchema = z.object({
-    product: z.enum(['windy_pro', 'windy_chat', 'windy_mail', 'windy_fly']),
+    product: z.enum(['windy_pro', 'windy_chat', 'windy_mail', 'windy_fly', 'windy_word', 'windy_traveler', 'windy_clone', 'windy_cloud']),
     metadata: z.record(z.unknown()).optional(),
 });
 
@@ -264,7 +264,7 @@ export const IdentityAuditQuerySchema = z.object({
 });
 
 export const EternitasWebhookSchema = z.object({
-    event: z.enum(['passport.registered', 'passport.revoked', 'passport.suspended', 'passport.verified', 'trust_updated']),
+    event: z.enum(['passport.registered', 'passport.revoked', 'passport.suspended', 'passport.verified', 'identity.created', 'trust_updated']),
     passportNumber: z.string().regex(/^ET-[A-Z0-9]{5}$/, 'Passport format: ET-XXXXX'),
     agentName: z.string().min(1).optional(),
     operatorEmail: z.string().email().optional(),

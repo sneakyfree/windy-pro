@@ -9,11 +9,27 @@
 //  IDENTITY CORE
 // ═══════════════════════════════════════════
 
+/** Branded string type for Windy Identity IDs (UUIDv4) */
+export type WindyIdentityId = string & { readonly __brand: 'WindyIdentityId' };
+
 /** Identity type discriminator — human user or bot agent */
 export type IdentityType = 'human' | 'bot';
 
-/** Products in the Windy ecosystem that share unified identity */
-export type WindyProduct = 'windy_pro' | 'windy_chat' | 'windy_mail' | 'windy_fly';
+/** All products in the Windy ecosystem */
+export enum EcosystemProduct {
+  WindyWord = 'windy_word',
+  WindyTraveler = 'windy_traveler',
+  WindyChat = 'windy_chat',
+  WindyMail = 'windy_mail',
+  WindyFly = 'windy_fly',
+  WindyClone = 'windy_clone',
+  WindyCloud = 'windy_cloud',
+  HiFly = 'hifly',
+  Eternitas = 'eternitas',
+}
+
+/** Products that support provisioned identity accounts */
+export type WindyProduct = 'windy_pro' | 'windy_chat' | 'windy_mail' | 'windy_fly' | 'windy_word' | 'windy_traveler' | 'windy_clone' | 'windy_cloud';
 
 /** Account status within a product */
 export type ProductAccountStatus = 'active' | 'suspended' | 'pending' | 'deprovisioned';
@@ -23,7 +39,7 @@ export type PassportStatus = 'active' | 'suspended' | 'revoked';
 
 /** The extended user record with identity fields */
 export interface WindyIdentity {
-  id: string;
+  id: WindyIdentityId;
   email: string;
   name: string;
   tier: string;
@@ -47,7 +63,7 @@ export interface WindyIdentity {
 /** Maps an identity to a specific product (e.g., Windy Chat, Windy Mail) */
 export interface ProductAccount {
   id: string;
-  identityId: string;
+  identityId: WindyIdentityId;
   product: WindyProduct;
   externalId?: string;           // Matrix user ID, email address, etc.
   status: ProductAccountStatus;
@@ -57,7 +73,7 @@ export interface ProductAccount {
 
 /** Request to provision a new product account for an identity */
 export interface ProvisionProductRequest {
-  identityId: string;
+  identityId: WindyIdentityId;
   product: WindyProduct;
   externalId?: string;
   metadata?: Record<string, unknown>;
@@ -90,7 +106,7 @@ export type IdentityScope = string;
 /** Scope record from the database */
 export interface IdentityScopeRecord {
   id: string;
-  identityId: string;
+  identityId: WindyIdentityId;
   scope: IdentityScope;
   grantedAt: string;
   grantedBy?: string;
@@ -152,13 +168,14 @@ export type IdentityAuditEvent =
   | 'secretary_consent_granted'
   | 'secretary_consent_revoked'
   | 'secretary_email_sent'
+  | 'identity_created'
   | 'trust_updated'
   | 'revocation_cascade';
 
 /** Audit log entry */
 export interface IdentityAuditEntry {
   id: string;
-  identityId?: string;          // Nullable for failed login attempts
+  identityId?: WindyIdentityId;  // Nullable for failed login attempts
   event: IdentityAuditEvent;
   details: Record<string, unknown>;
   ipAddress?: string;
@@ -173,9 +190,9 @@ export interface IdentityAuditEntry {
 /** Eternitas passport — bot identity verification record */
 export interface EternitasPassport {
   id: string;
-  identityId: string;
+  identityId: WindyIdentityId;
   passportNumber: string;        // ET-XXXXX format
-  operatorIdentityId?: string;   // Human who owns/operates the bot
+  operatorIdentityId?: WindyIdentityId;   // Human who owns/operates the bot
   status: PassportStatus;
   trustScore: number;            // 0.0 to 1.0
   birthCertificate: Record<string, unknown>;
@@ -183,16 +200,74 @@ export interface EternitasPassport {
   lastVerifiedAt: string;
 }
 
-/** Webhook payload from Eternitas when a passport event occurs */
-export interface EternitasWebhookPayload {
-  event: 'passport.registered' | 'passport.revoked' | 'passport.suspended' | 'passport.verified';
+/** Base fields shared by all webhook payloads */
+export interface WebhookPayloadBase {
   passportNumber: string;
-  agentName: string;
-  operatorEmail?: string;
   timestamp: string;
   signature: string;             // HMAC-SHA256 for webhook verification
-  payload: Record<string, unknown>;
 }
+
+/** Webhook payload: passport.registered — new bot passport created */
+export interface WebhookPassportRegistered extends WebhookPayloadBase {
+  event: 'passport.registered';
+  agentName: string;
+  operatorEmail: string;
+  payload: {
+    trustScore: number;
+    birthCertificate: Record<string, unknown>;
+  };
+}
+
+/** Webhook payload: passport.revoked — bot passport permanently revoked */
+export interface WebhookPassportRevoked extends WebhookPayloadBase {
+  event: 'passport.revoked';
+  agentName: string;
+  operatorEmail?: string;
+  payload: {
+    reason: string;
+    revokedBy: string;
+  };
+}
+
+/** Webhook payload: identity.created — new Windy identity provisioned */
+export interface WebhookIdentityCreated extends WebhookPayloadBase {
+  event: 'identity.created';
+  agentName: string;
+  operatorEmail?: string;
+  payload: {
+    identityId: WindyIdentityId;
+    identityType: IdentityType;
+    products: WindyProduct[];
+  };
+}
+
+/** Webhook payload: passport.suspended */
+export interface WebhookPassportSuspended extends WebhookPayloadBase {
+  event: 'passport.suspended';
+  agentName: string;
+  operatorEmail?: string;
+  payload: {
+    reason: string;
+  };
+}
+
+/** Webhook payload: passport.verified */
+export interface WebhookPassportVerified extends WebhookPayloadBase {
+  event: 'passport.verified';
+  agentName: string;
+  operatorEmail?: string;
+  payload: {
+    trustScore: number;
+  };
+}
+
+/** Union of all typed webhook payloads */
+export type EternitasWebhookPayload =
+  | WebhookPassportRegistered
+  | WebhookPassportRevoked
+  | WebhookIdentityCreated
+  | WebhookPassportSuspended
+  | WebhookPassportVerified;
 
 /** Response to Eternitas webhook */
 export interface EternitasWebhookResponse {
@@ -207,7 +282,7 @@ export interface EternitasWebhookResponse {
 
 /** Chat profile — links Matrix account to Windy identity */
 export interface ChatProfile {
-  identityId: string;
+  identityId: WindyIdentityId;
   chatUserId?: string;
   matrixUserId?: string;         // @windy_abc123:chat.windypro.com
   displayName?: string;
@@ -238,7 +313,7 @@ export interface IdentityProvisionRequest {
 
 /** POST /api/v1/identity/scopes/grant */
 export interface IdentityScopeGrantRequest {
-  identityId: string;
+  identityId: WindyIdentityId;
   scopes: IdentityScope[];
 }
 
@@ -304,7 +379,7 @@ export interface VerificationCheckResponse {
 /** Bot API key record — long-lived key for bot agents */
 export interface BotApiKey {
   id: string;
-  identityId: string;
+  identityId: WindyIdentityId;
   keyHash: string;            // SHA-256 hash (never store raw key)
   keyPrefix: string;          // First 8 chars for identification: "wk_xxxx"
   label?: string;
@@ -313,12 +388,12 @@ export interface BotApiKey {
   createdAt: string;
   expiresAt?: string;
   lastUsedAt?: string;
-  createdBy: string;          // Identity that created this key
+  createdBy: WindyIdentityId;  // Identity that created this key
 }
 
 /** Create bot API key request */
 export interface BotApiKeyCreateRequest {
-  identityId: string;
+  identityId: WindyIdentityId;
   scopes: string[];
   label?: string;
   expiresInDays?: number;
@@ -340,8 +415,8 @@ export interface BotApiKeyCreateResponse {
 /** Secretary consent record */
 export interface SecretaryConsent {
   id: string;
-  ownerIdentityId: string;    // Human who grants consent
-  botIdentityId: string;      // Bot that receives consent
+  ownerIdentityId: WindyIdentityId;    // Human who grants consent
+  botIdentityId: WindyIdentityId;      // Bot that receives consent
   grantedAt: string;
   revokedAt?: string;
   active: boolean;
@@ -349,7 +424,7 @@ export interface SecretaryConsent {
 
 /** Secretary consent request */
 export interface SecretaryConsentRequest {
-  botIdentityId: string;
+  botIdentityId: WindyIdentityId;
   consent: boolean;
 }
 
@@ -360,7 +435,7 @@ export interface SecretaryConsentRequest {
 /** Structured credential output for newly hatched agents */
 export interface WindyIdentityCredentials {
   version: 1;
-  identityId: string;
+  identityId: WindyIdentityId;
   passportNumber: string;     // ET-XXXXX
   identityType: 'bot';
   apiKey: string;             // wk_xxxxxxxxxxxxxxxx
@@ -376,7 +451,7 @@ export interface WindyIdentityCredentials {
       emailAddress: string;
     };
   };
-  operatorIdentityId: string;
+  operatorIdentityId: WindyIdentityId;
   createdAt: string;
   expiresAt?: string;
 }
