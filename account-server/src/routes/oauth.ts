@@ -14,6 +14,7 @@
  *   - Device codes expire in 15 minutes
  */
 import { Router, Request, Response } from 'express';
+import express from 'express';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -229,8 +230,9 @@ router.get('/authorize', authenticateToken, oauthLimiter, (req: Request, res: Re
  * POST /api/v1/oauth/authorize — Submit consent decision
  *
  * Body: { client_id, redirect_uri, scope, state, code_challenge, approved: boolean }
+ * Accepts both JSON and URL-encoded form data (from the consent page).
  */
-router.post('/authorize', authenticateToken, oauthLimiter, (req: Request, res: Response) => {
+router.post('/authorize', express.urlencoded({ extended: false }), authenticateToken, oauthLimiter, (req: Request, res: Response) => {
   try {
     const {
       client_id, redirect_uri, scope, state,
@@ -249,7 +251,10 @@ router.post('/authorize', authenticateToken, oauthLimiter, (req: Request, res: R
 
     const userId = (req as AuthRequest).user.userId;
 
-    if (!approved) {
+    // Handle both boolean and string "true"/"false" (form data sends strings)
+    const isApproved = approved === true || approved === 'true';
+
+    if (!isApproved) {
       return res.json({
         redirect: `${redirect_uri}?error=access_denied&error_description=User+denied+consent${state ? `&state=${state}` : ''}`,
       });
@@ -751,6 +756,243 @@ router.delete('/consents/:clientId', authenticateToken, (req: Request, res: Resp
 
   res.json({ revoked: result.changes > 0 });
 });
+
+// ═══════════════════════════════════════════
+//  CONSENT SCREEN (Phase 6C)
+// ═══════════════════════════════════════════
+
+/**
+ * GET /api/v1/oauth/consent — Serve HTML consent page for third-party clients.
+ *
+ * Query params: client_id, redirect_uri, scope, state, code_challenge
+ * The page shows the client name, requested scopes, and Allow/Deny buttons.
+ * Posts the decision back to POST /api/v1/oauth/authorize.
+ */
+router.get('/consent', authenticateToken, oauthLimiter, (req: Request, res: Response) => {
+  try {
+    const {
+      client_id, redirect_uri, scope, state, code_challenge,
+    } = req.query as Record<string, string>;
+
+    if (!client_id) {
+      return res.status(400).json({ error: 'client_id is required' });
+    }
+
+    const db = getDb();
+    const client = db.prepare('SELECT * FROM oauth_clients WHERE client_id = ?').get(client_id) as any;
+    if (!client) {
+      return res.status(400).json({ error: 'Unknown client_id' });
+    }
+
+    const requestedScopes = scope ? scope.split(' ').filter(Boolean) : [];
+    const scopeDescriptions = formatScopeDescriptions(requestedScopes);
+
+    const html = renderConsentPage({
+      clientName: client.name,
+      clientId: client.client_id,
+      isFirstParty: !!client.is_first_party,
+      scopes: scopeDescriptions,
+      redirectUri: redirect_uri || '',
+      state: state || '',
+      codeChallenge: code_challenge || '',
+      scope: scope || '',
+      authorizeUrl: '/api/v1/oauth/authorize',
+    });
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(html);
+  } catch (err: any) {
+    console.error('[oauth] Consent page error:', err);
+    res.status(500).json({ error: 'Failed to render consent page' });
+  }
+});
+
+/**
+ * Map scope strings to human-readable descriptions.
+ */
+function formatScopeDescriptions(scopes: string[]): { scope: string; label: string; description: string }[] {
+  const scopeMap: Record<string, { label: string; description: string }> = {
+    'openid': { label: 'OpenID', description: 'Verify your identity' },
+    'profile': { label: 'Profile', description: 'Read your name and avatar' },
+    'email': { label: 'Email', description: 'Read your email address' },
+    'phone': { label: 'Phone', description: 'Read your phone number' },
+    'windy_pro:*': { label: 'Windy Pro', description: 'Full access to your Windy Pro account' },
+    'windy_pro:read': { label: 'Windy Pro (Read)', description: 'Read your Windy Pro data' },
+    'windy_chat:*': { label: 'Windy Chat', description: 'Full access to your Windy Chat' },
+    'windy_chat:read': { label: 'Windy Chat (Read)', description: 'Read your chat messages' },
+    'windy_chat:write': { label: 'Windy Chat (Write)', description: 'Send chat messages on your behalf' },
+    'windy_mail:*': { label: 'Windy Mail', description: 'Full access to your Windy Mail' },
+    'windy_mail:read': { label: 'Windy Mail (Read)', description: 'Read your emails' },
+    'windy_mail:send': { label: 'Windy Mail (Send)', description: 'Send emails on your behalf' },
+    'windy_fly:*': { label: 'Windy Fly', description: 'Full access to Windy Fly agent platform' },
+    'eternitas:verify': { label: 'Eternitas (Verify)', description: 'Verify bot passports' },
+    'eternitas:register': { label: 'Eternitas (Register)', description: 'Register new bot passports' },
+  };
+
+  return scopes.map(s => {
+    const mapped = scopeMap[s];
+    if (mapped) return { scope: s, ...mapped };
+    // Generic: product:permission
+    const [product, permission] = s.split(':');
+    return {
+      scope: s,
+      label: `${product} (${permission})`,
+      description: `Access ${product} — ${permission} permission`,
+    };
+  });
+}
+
+/**
+ * Render a minimal, branded HTML consent page.
+ */
+function renderConsentPage(data: {
+  clientName: string;
+  clientId: string;
+  isFirstParty: boolean;
+  scopes: { scope: string; label: string; description: string }[];
+  redirectUri: string;
+  state: string;
+  codeChallenge: string;
+  scope: string;
+  authorizeUrl: string;
+}): string {
+  const scopeListHtml = data.scopes.map(s => `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f0f0f5;">
+      <div style="width:8px;height:8px;background:#4f46e5;border-radius:50%;flex-shrink:0;"></div>
+      <div>
+        <div style="font-weight:600;font-size:14px;color:#1a1a2e;">${escapeHtml(s.label)}</div>
+        <div style="font-size:13px;color:#666;">${escapeHtml(s.description)}</div>
+      </div>
+    </div>
+  `).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authorize ${escapeHtml(data.clientName)} — Windy</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5fa;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      max-width: 420px;
+      width: 100%;
+      padding: 40px 32px;
+    }
+    .logo {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    .client-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a1a2e;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      font-size: 14px;
+      color: #666;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .scope-list {
+      margin-bottom: 24px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      flex: 1;
+      padding: 14px 24px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-allow {
+      background: #4f46e5;
+      color: white;
+    }
+    .btn-allow:hover { background: #4338ca; }
+    .btn-deny {
+      background: #f0f0f5;
+      color: #666;
+    }
+    .btn-deny:hover { background: #e5e5ea; color: #333; }
+    .footer {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #aaa;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">Windy</div>
+    <div class="client-name">${escapeHtml(data.clientName)}</div>
+    <div class="subtitle">wants access to your Windy account</div>
+
+    <div class="scope-list">
+      ${scopeListHtml || '<div style="color:#888;text-align:center;padding:12px;">No specific permissions requested.</div>'}
+    </div>
+
+    <form method="POST" action="${data.authorizeUrl}" id="consent-form">
+      <input type="hidden" name="client_id" value="${escapeAttr(data.clientId)}">
+      <input type="hidden" name="redirect_uri" value="${escapeAttr(data.redirectUri)}">
+      <input type="hidden" name="scope" value="${escapeAttr(data.scope)}">
+      <input type="hidden" name="state" value="${escapeAttr(data.state)}">
+      <input type="hidden" name="code_challenge" value="${escapeAttr(data.codeChallenge)}">
+      <input type="hidden" name="approved" id="approved-field" value="true">
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-deny" onclick="deny()">Deny</button>
+        <button type="submit" class="btn btn-allow">Allow</button>
+      </div>
+    </form>
+
+    <div class="footer">
+      You can revoke this access at any time in your Windy account settings.
+    </div>
+  </div>
+
+  <script>
+    function deny() {
+      document.getElementById('approved-field').value = 'false';
+      document.getElementById('consent-form').submit();
+    }
+  </script>
+</body>
+</html>`;
+}
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function escapeAttr(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 // ═══════════════════════════════════════════
 //  HELPERS

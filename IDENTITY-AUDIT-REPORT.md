@@ -1,8 +1,75 @@
-# IDENTITY-AUDIT-REPORT.md — Unified Windy Identity Readiness Assessment
+# IDENTITY-AUDIT-REPORT.md — Unified Windy Identity System
 
 _Generated: 28 March 2026_
+_Last updated: 28 March 2026 (Phase 6 Complete)_
 _Auditor: Claude Opus 4.6_
 _Scope: windy-pro account server, chat services, windy-pro-mobile, windy-agent_
+
+---
+
+## Implementation Status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| Phase 0 | Schema Foundation | COMPLETE |
+| Phase 1 | Verification (OTP) | COMPLETE |
+| Phase 2 | Chat Profiles | COMPLETE |
+| Phase 3 | Bot API Keys + Secretary Mode | COMPLETE |
+| Phase 4 | RS256/JWKS Key Management | COMPLETE |
+| Phase 5 | OAuth2 / OIDC | COMPLETE |
+| Phase 6A | JWT Auth in Chat Services | COMPLETE |
+| Phase 6B | First-Party OAuth Clients | COMPLETE |
+| Phase 6C | OAuth Consent Screen | COMPLETE |
+| Phase 6D | Nginx Identity Routes | COMPLETE |
+| Phase 6E | Integration Test Suite | COMPLETE |
+| Phase 6F | Documentation | COMPLETE |
+
+---
+
+## Current Architecture (Phase 6 Final State)
+
+```
+                           ┌─────────────────────────────┐
+                           │     Account Server (8098)    │
+                           │  TypeScript / Express / SQLite│
+                           │                              │
+                           │  Routes:                     │
+                           │   /api/v1/auth/*             │
+                           │   /api/v1/identity/*         │
+                           │   /api/v1/oauth/*            │
+                           │   /.well-known/jwks.json     │
+                           │   /.well-known/openid-config │
+                           └──────────────┬───────────────┘
+                                          │
+                    ┌─────────────────────────────────────────────┐
+                    │               JWT / Bot API Key             │
+                    │  (HS256 + RS256 dual mode, wk_ API keys)   │
+                    └────┬────────┬────────┬────────┬────────────┘
+                         │        │        │        │
+              ┌──────────┴─┐ ┌───┴──────┐ ┌┴───────┴──┐ ┌────────────┐
+              │ Onboarding │ │ Directory│ │Push       │ │  Backup    │
+              │  (8101)    │ │  (8102)  │ │Gateway    │ │  (8104)    │
+              │            │ │          │ │ (8103)    │ │            │
+              │ JWT+legacy │ │JWT+legacy│ │JWT+legacy │ │ JWT+legacy │
+              └────────────┘ └──────────┘ └───────────┘ └────────────┘
+                                            │
+                                  ┌─────────┴──────────┐
+                                  │ Synapse (Matrix)    │
+                                  │ POST /_matrix/push  │
+                                  │ (no JWT - S2S auth) │
+                                  └────────────────────┘
+```
+
+### Key Components
+
+- **Schema**: 17 tables (users + 9 identity cols, product_accounts, identity_scopes, identity_audit_log, eternitas_passports, chat_profiles, bot_api_keys, secretary_consents, oauth_clients, oauth_codes, oauth_consents, oauth_device_codes, token_blacklist)
+- **Auth Middleware**: RS256+HS256 dual verification, bot API key support, token blacklist, scope validation
+- **Identity Service**: Audit logging, product provisioning, scope management, Eternitas webhooks, chat profiles, bot API keys, secretary consent, revocation cascade
+- **OAuth2**: Authorization code + PKCE, client_credentials, refresh_token, device code flow, consent screen, OIDC UserInfo
+- **JWKS**: RS256 key management, key rotation, /.well-known/jwks.json
+- **Shared JWT Module**: CommonJS module for chat services (JWT + bot API key + legacy fallback)
+- **First-Party Clients**: 6 pre-registered OAuth clients for Windy ecosystem products
+- **Nginx**: Rate-limited routing for OAuth token (10/min), authorize (30/min), JWKS/OIDC with CORS
 
 ---
 

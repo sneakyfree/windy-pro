@@ -39,25 +39,20 @@ app.use(cors({
 
 app.use(express.json({ limit: '2mb' }));
 
-// ── Auth middleware — Bearer token validation ──
-// SEC-H9: Fail hard if CHAT_API_TOKEN is not set — don't accept empty string
-const CHAT_API_TOKEN = process.env.CHAT_API_TOKEN;
-if (!CHAT_API_TOKEN || CHAT_API_TOKEN.trim().length === 0) {
-  console.error('❌ CHAT_API_TOKEN is required. Set it in your .env file.');
+// ── Auth middleware — JWT + bot API key + legacy CHAT_API_TOKEN fallback ──
+// Phase 6A: Replaced static CHAT_API_TOKEN with proper JWT validation.
+// CHAT_API_TOKEN still works as fallback for backward compatibility.
+const { createAuthMiddleware } = require('../shared/jwt-verify');
+
+const CHAT_API_TOKEN = process.env.CHAT_API_TOKEN || '';
+if (!CHAT_API_TOKEN && !process.env.JWT_SECRET) {
+  console.error('❌ Either JWT_SECRET or CHAT_API_TOKEN must be set.');
   process.exit(1);
 }
 
-function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
-  }
-  const token = authHeader.slice(7);
-  if (!CHAT_API_TOKEN || token !== CHAT_API_TOKEN) {
-    return res.status(401).json({ error: 'Invalid API token' });
-  }
-  next();
-}
+const authMiddleware = createAuthMiddleware({
+  fallbackToken: CHAT_API_TOKEN || undefined,
+});
 
 // ── Global rate limiter ──
 const globalLimiter = rateLimit({
