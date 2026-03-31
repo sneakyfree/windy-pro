@@ -172,7 +172,8 @@ export type IdentityAuditEvent =
   | 'trust_updated'
   | 'revocation_cascade'
   | 'chat_login'
-  | 'chat_login_failed';
+  | 'chat_login_failed'
+  | 'account_self_deleted';
 
 /** Audit log entry */
 export interface IdentityAuditEntry {

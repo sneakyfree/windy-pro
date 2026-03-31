@@ -527,6 +527,52 @@ router.post('/change-password', authenticateToken, validate(ChangePasswordReques
     }
 });
 
+// ─── DELETE /api/v1/auth/me — GDPR self-deletion ────────────
+
+router.delete('/me', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthRequest).user.userId;
+        const db = getDb();
+
+        // Verify user exists
+        const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(userId) as any;
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        // Cascade delete all user data
+        const tables = [
+            'DELETE FROM recordings WHERE user_id = ?',
+            'DELETE FROM refresh_tokens WHERE user_id = ?',
+            'DELETE FROM devices WHERE user_id = ?',
+            'DELETE FROM product_accounts WHERE identity_id = ?',
+            'DELETE FROM identity_scopes WHERE identity_id = ?',
+            'DELETE FROM translations WHERE user_id = ?',
+            'DELETE FROM favorites WHERE user_id = ?',
+            'DELETE FROM files WHERE user_id = ?',
+            'DELETE FROM transactions WHERE user_id = ?',
+            'DELETE FROM chat_profiles WHERE identity_id = ?',
+            'DELETE FROM bot_api_keys WHERE identity_id = ?',
+            'DELETE FROM identity_audit_log WHERE identity_id = ?',
+            'DELETE FROM eternitas_passports WHERE identity_id = ?',
+        ];
+
+        for (const sql of tables) {
+            try { db.prepare(sql).run(userId); } catch { /* table may not exist */ }
+        }
+
+        // Delete the user record last
+        db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+
+        logAuditEvent('account_self_deleted', userId, { email: user.email }, req.ip, req.get('user-agent'));
+
+        console.log(`🗑️  Account self-deleted: ${user.email} (${userId.slice(0, 8)}...)`);
+
+        res.json({ deleted: true });
+    } catch (err: any) {
+        console.error('Account deletion error:', err);
+        res.status(500).json({ error: 'Account deletion failed' });
+    }
+});
+
 // ─── GET /api/v1/auth/billing ────────────────────────────────
 
 router.get('/billing', authenticateToken, (req: Request, res: Response) => {

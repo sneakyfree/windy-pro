@@ -74,7 +74,25 @@ router.get('/stats', authenticateToken, adminOnly, (req: Request, res: Response)
             dbSize,
             memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
             apiLatency: '<5ms',
-            dailyTranslations: [12, 8, 15, 22, 18, 25, 31], // Stub
+            dailyTranslations: (() => {
+                try {
+                    const rows = db.prepare(
+                        `SELECT DATE(created_at) as day, COUNT(*) as count
+                         FROM translations
+                         WHERE created_at >= datetime('now', '-7 days')
+                         GROUP BY DATE(created_at)
+                         ORDER BY day`
+                    ).all() as { day: string; count: number }[];
+                    // Build a 7-day array (fill missing days with 0)
+                    const dayMap = new Map(rows.map(r => [r.day, r.count]));
+                    const result: number[] = [];
+                    for (let i = 6; i >= 0; i--) {
+                        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+                        result.push(dayMap.get(d) || 0);
+                    }
+                    return result;
+                } catch { return [0, 0, 0, 0, 0, 0, 0]; }
+            })()
         });
     } catch (err: any) {
         res.status(500).json({ error: err.message });

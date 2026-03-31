@@ -128,7 +128,44 @@ export function initializeJWKS(): boolean {
     }
   }
 
-  // No RS256 configuration — HS256 fallback
+  // No RS256 configuration — auto-generate a dev key in development mode
+  if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+    try {
+      const devKeyDir = path.join(__dirname, '..', 'keys');
+      const devKeyPath = path.join(devKeyDir, 'dev-private.pem');
+
+      if (fs.existsSync(devKeyPath)) {
+        // Reuse existing dev key
+        const privateKeyPem = fs.readFileSync(devKeyPath, 'utf-8');
+        const publicKeyPem = derivePublicKey(privateKeyPem);
+        const kid = generateKid(publicKeyPem);
+
+        managedKeys = [{ kid, privateKey: privateKeyPem, publicKey: publicKeyPem, createdAt: new Date().toISOString() }];
+        activeKid = kid;
+        rs256Available = true;
+        console.log(`[jwks] RS256 loaded from auto-generated dev key at keys/dev-private.pem (kid: ${kid.slice(0, 8)}...)`);
+        return true;
+      }
+
+      // Generate new dev key
+      if (!fs.existsSync(devKeyDir)) fs.mkdirSync(devKeyDir, { recursive: true });
+
+      const keyPair = generateKeyPair();
+      fs.writeFileSync(devKeyPath, keyPair.privateKey, { mode: 0o600 });
+      fs.writeFileSync(path.join(devKeyDir, 'dev-public.pem'), keyPair.publicKey, { mode: 0o644 });
+
+      managedKeys = [keyPair];
+      activeKid = keyPair.kid;
+      rs256Available = true;
+
+      console.warn(`⚠️  [jwks] No RS256 key configured. Generated development key at keys/dev-private.pem`);
+      console.log(`[jwks] RS256 initialized with auto-generated dev key (kid: ${keyPair.kid.slice(0, 8)}...)`);
+      return true;
+    } catch (err: any) {
+      console.error('[jwks] Failed to auto-generate dev key:', err.message);
+    }
+  }
+
   console.log('[jwks] No RS256 key configured — using HS256 fallback');
   rs256Available = false;
   return false;

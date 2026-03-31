@@ -98,7 +98,7 @@ stripeRouter.post('/webhook', (req: Request, res: Response) => {
 
         if (!config.STRIPE_WEBHOOK_SECRET) {
             console.warn('[Billing] STRIPE_WEBHOOK_SECRET not set — rejecting webhook');
-            res.status(500).json({ error: 'Webhook secret not configured' });
+            res.status(503).json({ error: 'Stripe webhook not configured', retryable: false });
             return;
         }
 
