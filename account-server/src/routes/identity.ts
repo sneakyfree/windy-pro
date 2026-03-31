@@ -1002,7 +1002,7 @@ router.get('/validate-token', authenticateToken, (req: Request, res: Response) =
       tier: user.tier || 'free',
       canonical_tier: canonicalTier,
       type: user.identity_type || 'human',
-      scopes: scopes.map((s: any) => s.scope),
+      scopes,
       products: products.map((p: any) => ({
         product: p.product,
         status: p.status,
