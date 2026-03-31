@@ -25,6 +25,7 @@ import adminRoutes from './routes/admin';
 import downloadRoutes from './routes/downloads';
 import miscRoutes from './routes/misc';
 import storageRoutes from './routes/storage';
+import cloudRoutes from './routes/cloud';
 import identityRoutes from './routes/identity';
 import verificationRoutes from './routes/verification';
 import oauthRoutes, { seedEcosystemClients } from './routes/oauth';
@@ -162,6 +163,9 @@ app.use('/', miscRoutes);
 
 // File storage (merged from cloud-storage service)
 app.use('/api/v1/files', storageRoutes);
+
+// Cloud infrastructure stubs (phone provisioning, push notifications)
+app.use('/api/v1/cloud', cloudRoutes);
 
 // Billing
 app.use('/api/v1/billing', billingRouter);
