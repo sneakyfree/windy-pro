@@ -256,6 +256,63 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
     }
 });
 
+// ─── POST /api/v1/auth/chat-validate ────────────────────────
+// Called by Synapse's windy_registration.py to authenticate Matrix logins
+// against the Windy identity hub. Requires shared_secret to prevent abuse.
+
+router.post('/chat-validate', authLimiter, async (req: Request, res: Response) => {
+    try {
+        const { username, password, shared_secret } = req.body;
+
+        // Verify shared secret (same secret Synapse uses for registration)
+        const expectedSecret = process.env.SYNAPSE_REGISTRATION_SECRET || '';
+        if (!expectedSecret || shared_secret !== expectedSecret) {
+            return res.status(403).json({ valid: false, error: 'Invalid shared secret' });
+        }
+
+        if (!username || !password) {
+            return res.status(400).json({ valid: false, error: 'Missing username or password' });
+        }
+
+        // username can be an email or a user ID — try email first
+        const db = getDb();
+        const user = stmts().findUserByEmail.get(username.toLowerCase()) as any
+            || db.prepare('SELECT * FROM users WHERE id = ?').get(username) as any;
+
+        if (!user) {
+            logAuditEvent('chat_login_failed', null, {
+                username,
+                reason: 'user_not_found',
+            }, req.ip, req.get('user-agent'));
+            return res.status(401).json({ valid: false, error: 'Invalid credentials' });
+        }
+
+        const passwordValid = await bcrypt.compare(password, user.password_hash);
+        if (!passwordValid) {
+            logAuditEvent('chat_login_failed', user.id, {
+                username,
+                reason: 'invalid_password',
+            }, req.ip, req.get('user-agent'));
+            return res.status(401).json({ valid: false, error: 'Invalid credentials' });
+        }
+
+        logAuditEvent('chat_login', user.id, { username }, req.ip, req.get('user-agent'));
+
+        console.log(`💬 Chat validate: ${user.email} (${user.id.slice(0, 8)}...)`);
+
+        res.json({
+            valid: true,
+            user_id: user.id,
+            windy_user_id: user.windy_identity_id || user.id,
+            display_name: user.display_name || user.name,
+            avatar_url: user.avatar_url || null,
+        });
+    } catch (err: any) {
+        console.error('Chat validate error:', err);
+        res.status(500).json({ valid: false, error: 'Validation failed' });
+    }
+});
+
 // ─── GET /api/v1/auth/me ─────────────────────────────────────
 
 router.get('/me', authenticateToken, (req: Request, res: Response) => {
@@ -492,10 +549,37 @@ router.get('/billing', authenticateToken, (req: Request, res: Response) => {
 });
 
 // ─── POST /api/v1/auth/create-portal-session ─────────────────
+// Legacy path — redirects to the Stripe billing portal via /api/v1/stripe/create-portal-session.
+// Kept for backward compat with the web Settings page.
 
-router.post('/create-portal-session', authenticateToken, (_req: Request, res: Response) => {
-    res.set('X-Stub', 'true');
-    res.json({ url: null, message: 'Stripe portal not configured. Set STRIPE_SECRET_KEY in environment.' });
+router.post('/create-portal-session', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const Stripe = require('stripe');
+        const stripeKey = process.env.STRIPE_SECRET_KEY;
+        if (!stripeKey) {
+            return res.json({ url: null, message: 'Stripe not configured. Set STRIPE_SECRET_KEY in environment.' });
+        }
+
+        const stripe = new Stripe(stripeKey, { apiVersion: '2026-02-25.clover' });
+        const userId = (req as AuthRequest).user.userId;
+        const db = getDb();
+
+        const user = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(userId) as any;
+        if (!user?.stripe_customer_id) {
+            return res.status(400).json({ url: null, error: 'No billing history found' });
+        }
+
+        const returnUrl = process.env.STRIPE_PORTAL_RETURN_URL || 'https://windypro.thewindstorm.uk/dashboard';
+        const session = await stripe.billingPortal.sessions.create({
+            customer: user.stripe_customer_id,
+            return_url: returnUrl,
+        });
+
+        res.json({ url: session.url });
+    } catch (err: any) {
+        console.error('Portal session error:', err);
+        res.json({ url: null, message: 'Failed to create portal session' });
+    }
 });
 
 export default router;

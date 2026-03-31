@@ -34,6 +34,7 @@ import {
   revokeSecretaryConsent,
   hasSecretaryConsent,
 } from '../identity-service';
+import { normalizeProductTier } from '@windy-pro/contracts';
 
 const router = Router();
 
@@ -922,6 +923,48 @@ router.post('/provision-all', authenticateToken, async (req: Request, res: Respo
   } catch (err: any) {
     console.error('[identity] Provision-all error:', err);
     res.status(500).json({ error: 'Failed to provision products' });
+  }
+});
+
+// ─── GET /api/v1/identity/validate-token ────────────────────
+// Cross-product token validation: Mail, Chat, and Agent call this to verify
+// a JWT and get the full identity without rolling their own JWT verification.
+
+router.get('/validate-token', authenticateToken, (req: Request, res: Response) => {
+  try {
+    const userId = (req as AuthRequest).user.userId;
+    const db = getDb();
+
+    const user = db.prepare(
+      'SELECT id, email, name, tier, identity_type, windy_identity_id, display_name, avatar_url FROM users WHERE id = ?',
+    ).get(userId) as any;
+
+    if (!user) {
+      return res.status(404).json({ error: 'Identity not found' });
+    }
+
+    const products = getProductAccounts(userId);
+    const scopes = getScopes(userId);
+    const canonicalTier = normalizeProductTier(user.tier || 'free');
+
+    res.json({
+      valid: true,
+      windy_identity_id: user.windy_identity_id || user.id,
+      email: user.email,
+      name: user.display_name || user.name,
+      tier: user.tier || 'free',
+      canonical_tier: canonicalTier,
+      type: user.identity_type || 'human',
+      scopes: scopes.map((s: any) => s.scope),
+      products: products.map((p: any) => ({
+        product: p.product,
+        status: p.status,
+        external_id: p.external_id,
+      })),
+    });
+  } catch (err: any) {
+    console.error('[identity] validate-token error:', err);
+    res.status(500).json({ error: 'Token validation failed' });
   }
 });
 

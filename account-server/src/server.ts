@@ -166,6 +166,19 @@ app.use('/api/v1/files', storageRoutes);
 // Billing
 app.use('/api/v1/billing', billingRouter);
 
+// Webhooks — inbound notifications from ecosystem services
+// POST /api/v1/webhooks/identity/created — called by Windy Mail on new identity
+app.post('/api/v1/webhooks/identity/created', express.json(), (req, res) => {
+    const { windy_identity_id, email, name, product } = req.body || {};
+    console.log(`📨 Webhook: identity/created for ${email || windy_identity_id} (product: ${product || 'unknown'})`);
+    // Acknowledge receipt — full provisioning handled by /identity/provision-all
+    res.json({
+        received: true,
+        windy_identity_id: windy_identity_id || null,
+        message: 'Identity creation webhook acknowledged. Use POST /api/v1/identity/provision-all to provision products.',
+    });
+});
+
 // ─── JSON 404 for unmatched API routes ──────────────────────
 
 app.use('/api/', (req: express.Request, res: express.Response) => {
@@ -303,7 +316,9 @@ initRedis().catch(err => {
     console.warn('[redis] Init warning:', err.message);
 });
 
-server.listen(config.PORT, () => {
+// Only start listening in non-test mode — tests use supertest(app) directly
+if (process.env.NODE_ENV !== 'test') {
+  server.listen(config.PORT, () => {
     const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;
     const dbType = process.env.DATABASE_URL?.startsWith('postgres') ? 'PostgreSQL' : 'SQLite';
 
@@ -353,7 +368,8 @@ server.listen(config.PORT, () => {
     console.log('   GET  /download/version               — Current version');
     console.log('   GET  /health                         — Health check');
     console.log('');
-});
+  });
+}
 
 // Graceful shutdown
 process.on('SIGINT', () => {

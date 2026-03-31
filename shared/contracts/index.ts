@@ -32,6 +32,7 @@ export { FIELD_MAP, REVERSE_FIELD_MAP } from './session';
 // License types
 export type {
     LicenseTier,
+    CanonicalTier,
     LicenseValidation,
     TierFeatures,
 } from './license';
@@ -39,7 +40,9 @@ export {
     LICENSE_KEY_REGEX,
     KEY_PREFIX_TIER,
     TIER_FEATURES,
+    TIER_MAPPING,
     tierFromKey,
+    normalizeProductTier,
 } from './license';
 
 // API types — Auth

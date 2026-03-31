@@ -170,7 +170,9 @@ export type IdentityAuditEvent =
   | 'secretary_email_sent'
   | 'identity_created'
   | 'trust_updated'
-  | 'revocation_cascade';
+  | 'revocation_cascade'
+  | 'chat_login'
+  | 'chat_login_failed';
 
 /** Audit log entry */
 export interface IdentityAuditEntry {

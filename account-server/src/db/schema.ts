@@ -5,6 +5,7 @@
  * When DATABASE_URL is set and starts with "postgres://", PostgreSQL is used.
  * Otherwise, SQLite at DB_PATH is used — preserving all existing behavior.
  */
+import crypto from 'crypto';
 import { config } from '../config';
 import type { DbAdapter } from './adapter';
 import { SqliteAdapter } from './sqlite-adapter';
@@ -248,11 +249,31 @@ function initSchema(db: DbAdapter): void {
     "ALTER TABLE users ADD COLUMN passport_id TEXT",                         // Eternitas passport (ET-XXXXX) for bots
     "ALTER TABLE users ADD COLUMN preferred_lang TEXT DEFAULT 'en'",         // ISO 639-1 language code
     "ALTER TABLE users ADD COLUMN last_login_at TEXT",                       // Tracks login recency
+    "ALTER TABLE users ADD COLUMN windy_identity_id TEXT",                   // Universal cross-product identity UUID
   ];
 
   for (const sql of migrations) {
     try { db.exec(sql); } catch { /* column already exists */ }
   }
+
+  // ─── Backfill windy_identity_id for existing rows that don't have one ───
+  try {
+    const needsBackfill = db.prepare(
+      "SELECT id FROM users WHERE windy_identity_id IS NULL"
+    ).all() as { id: string }[];
+    if (needsBackfill.length > 0) {
+      const update = db.prepare("UPDATE users SET windy_identity_id = ? WHERE id = ?");
+      for (const row of needsBackfill) {
+        update.run(crypto.randomUUID(), row.id);
+      }
+      console.log(`[schema] Backfilled windy_identity_id for ${needsBackfill.length} existing user(s)`);
+    }
+  } catch { /* windy_identity_id column may not exist yet on first run */ }
+
+  // ─── Unique index on windy_identity_id ───
+  try {
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_windy_identity_id ON users(windy_identity_id)");
+  } catch { /* index may already exist */ }
 
   // ─── Unified Identity: New Tables ───
   // These are additive — CREATE TABLE IF NOT EXISTS is safe.

@@ -52,4 +52,7 @@ export const config = {
     // Phase 7A: PostgreSQL + Redis (optional — omit for SQLite + in-memory defaults)
     DATABASE_URL: process.env.DATABASE_URL || '',   // postgres://... or '' for SQLite
     REDIS_URL: process.env.REDIS_URL || '',          // redis://... or '' for in-memory
+    // Ecosystem product webhook URLs — used by provision-all to notify services
+    WINDY_CHAT_WEBHOOK_URL: process.env.WINDY_CHAT_WEBHOOK_URL || '',   // e.g. http://chat-onboarding:8101/api/v1/chat/provision-hook
+    WINDY_MAIL_WEBHOOK_URL: process.env.WINDY_MAIL_WEBHOOK_URL || '',   // e.g. http://windy-mail:8105/api/v1/mail/provision-hook
 } as const;

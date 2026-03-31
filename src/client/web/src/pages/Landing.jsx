@@ -1,6 +1,40 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import './Landing.css'
+
+const API_BASE = '/api/v1'
+
+function getToken() { return localStorage.getItem('windy_token') }
+
+async function startCheckout(tier, billingType, navigate) {
+    const token = getToken()
+    if (!token) {
+        navigate('/auth')
+        return
+    }
+    try {
+        const res = await fetch(`${API_BASE}/stripe/create-checkout-session`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ tier, billing_type: billingType }),
+        })
+        if (res.status === 401) {
+            navigate('/auth')
+            return
+        }
+        const data = await res.json()
+        if (data?.url) {
+            window.location.href = data.url
+        } else {
+            alert(data?.error || 'Could not start checkout')
+        }
+    } catch {
+        alert('Could not connect to payment server')
+    }
+}
 
 // Tasteful inline SVG US flag icon — small, polished, not emoji
 const USFlag = ({ size = 16 }) => (
@@ -30,9 +64,15 @@ function isLoggedIn() {
 
 export default function Landing() {
     const loggedIn = isLoggedIn()
+    const navigate = useNavigate()
     const [menuOpen, setMenuOpen] = useState(false)
+    const [billingType, setBillingType] = useState('monthly')
     const [latestVersion, setLatestVersion] = useState('v0.6.0')
     const closeMenu = () => setMenuOpen(false)
+
+    const handleUpgrade = (tier) => {
+        startCheckout(tier, billingType, navigate)
+    }
 
     // Fetch latest version from cache-proof download API
     useEffect(() => {
@@ -257,9 +297,12 @@ export default function Landing() {
                     <h2 className="section-title">Simple Pricing</h2>
                     <p className="section-subtitle">Start free in any language. Upgrade when you're ready.</p>
                     <div className="pricing-toggle" style={{ display: 'flex', justifyContent: 'center', gap: '4px', marginBottom: '24px', background: 'rgba(30,30,40,0.8)', borderRadius: '12px', padding: '4px', maxWidth: '360px', margin: '0 auto 24px' }}>
-                        <button className="pricing-toggle-btn active" data-billing="monthly" style={{ flex: 1, padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Monthly</button>
-                        <button className="pricing-toggle-btn" data-billing="annual" style={{ flex: 1, padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Annual <span style={{ fontSize: '10px', fontWeight: 700 }}>Save 17%</span></button>
-                        <button className="pricing-toggle-btn" data-billing="lifetime" style={{ flex: 1, padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Lifetime <span style={{ fontSize: '10px', fontWeight: 700 }}>Own Forever</span></button>
+                        {[['monthly', 'Monthly'], ['yearly', 'Annual'], ['lifetime', 'Lifetime']].map(([key, label]) => (
+                            <button key={key} className={`pricing-toggle-btn${billingType === key ? ' active' : ''}`} onClick={() => setBillingType(key)} style={{ flex: 1, padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                                {label} {key === 'yearly' && <span style={{ fontSize: '10px', fontWeight: 700 }}>Save 17%</span>}
+                                {key === 'lifetime' && <span style={{ fontSize: '10px', fontWeight: 700 }}>Own Forever</span>}
+                            </button>
+                        ))}
                     </div>
                     <div className="pricing-grid pricing-grid-4">
                         <div className="pricing-card">
@@ -290,7 +333,10 @@ export default function Landing() {
                                 <li>✓ Speaker identification</li>
                                 <li>✓ 5 GB WindyCloud storage</li>
                             </ul>
-                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Pro →</Link>
+                            {loggedIn
+                                ? <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleUpgrade('pro')}>Start Pro →</button>
+                                : <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Pro →</Link>
+                            }
                             <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>14-day free trial. Cancel anytime.</p>
                         </div>
                         <div className="pricing-card pricing-card-pro">
@@ -305,7 +351,10 @@ export default function Landing() {
                                 <li>✓ 25 offline translation engines</li>
                                 <li>✓ 10 GB WindyCloud storage</li>
                             </ul>
-                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Ultra →</Link>
+                            {loggedIn
+                                ? <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleUpgrade('translate')}>Start Ultra →</button>
+                                : <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Ultra →</Link>
+                            }
                             <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>14-day free trial. Cancel anytime.</p>
                         </div>
                         <div className="pricing-card">
@@ -322,7 +371,10 @@ export default function Landing() {
                                 <li>✓ 100 offline engines</li>
                                 <li>✓ 25 GB WindyCloud storage</li>
                             </ul>
-                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Max →</Link>
+                            {loggedIn
+                                ? <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleUpgrade('translate_pro')}>Start Max →</button>
+                                : <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Max →</Link>
+                            }
                             <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>14-day free trial. Cancel anytime.</p>
                         </div>
                     </div>
