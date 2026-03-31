@@ -119,14 +119,14 @@ export default function Landing() {
             {/* Hero Section */}
             <header className="hero">
                 <div className="container hero-inner">
-                    <div className="hero-badge">🌪️ v0.6.0 — Cloud Storage, Stripe Payments, Setup Wizard</div>
+                    <div className="hero-badge">🌪️ {latestVersion} — Cloud Storage, Stripe Payments, Setup Wizard</div>
                     <h1 className="hero-title">
-                        Voice to Text,<br />
-                        <span className="hero-gradient">Unlimited.</span>
+                        Stop typing through a straw.<br />
+                        <span className="hero-gradient">Speak your vision into existence.</span>
                     </h1>
                     <p className="hero-subtitle">
-                        Windy Pro transforms your speech into text at the speed of thought.
-                        No time limits, no data leaving your machine. Guided setup gets you recording in 60 seconds.
+                        Windy Pro transforms speech into text at the speed of thought.
+                        Unlimited recording, local-first privacy, 99 languages. Guided setup gets you running in 60 seconds.
                     </p>
                     <div className="hero-actions">
                         <a href="#download" className="btn btn-primary btn-large">
@@ -517,6 +517,20 @@ export default function Landing() {
                             <div className="download-detail">Ubuntu / Debian</div>
                         </a>
                     </div>
+                    {/* Mobile */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', maxWidth: '480px', margin: '24px auto 0' }}>
+                        <a href="https://apps.apple.com/app/windy-pro" target="_blank" rel="noopener noreferrer" className="download-card" style={{ background: 'rgba(30,30,40,0.8)', textAlign: 'center' }}>
+                            <div className="download-icon">📱</div>
+                            <div className="download-platform">iOS</div>
+                            <div className="download-detail">App Store</div>
+                        </a>
+                        <a href="https://play.google.com/store/apps/details?id=pro.windy.app" target="_blank" rel="noopener noreferrer" className="download-card" style={{ background: 'rgba(30,30,40,0.8)', textAlign: 'center' }}>
+                            <div className="download-icon">🤖</div>
+                            <div className="download-platform">Android</div>
+                            <div className="download-detail">Google Play</div>
+                        </a>
+                    </div>
+
                     <div className="download-oneliner">
                         <p className="download-helper">
                             <strong>🐧 Linux one-liner install:</strong>

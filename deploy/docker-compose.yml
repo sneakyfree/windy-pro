@@ -1,4 +1,5 @@
-version: '3.8'
+# Run from repo root: docker compose -f deploy/docker-compose.yml up
+# Requires: deploy/.env (copy from deploy/.env.example)
 
 services:
   # ── Web Frontend (Vite built static files served by Nginx) ──
@@ -30,10 +31,14 @@ services:
       - DATABASE_PATH=/data/accounts.db
       - MEDIA_PATH=/data/media
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
       - NODE_ENV=production
       # Phase 7A: PostgreSQL + Redis (optional — omit or leave blank for SQLite + in-memory)
       - DATABASE_URL=${ACCOUNT_DATABASE_URL:-}
       - REDIS_URL=${ACCOUNT_REDIS_URL:-redis://redis:6379/1}
+      # Synapse integration
+      - SYNAPSE_REGISTRATION_SECRET=${SYNAPSE_REGISTRATION_SECRET:-}
+      - ETERNITAS_WEBHOOK_SECRET=${ETERNITAS_WEBHOOK_SECRET:-}
     volumes:
       - account_data:/data
     depends_on:
@@ -47,6 +52,8 @@ services:
       retries: 3
 
   # ── Transcription API (FastAPI + faster-whisper) ──
+  # NOTE: GPU reservation requires nvidia-docker. Remove deploy.resources
+  #       block if running on CPU-only machines.
   api:
     build: .
     ports:
@@ -69,13 +76,14 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [ gpu ]
+    # Uncomment for GPU acceleration (requires nvidia-docker):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [ gpu ]
 
   # ── Translate API (NLLB-200 CTranslate2) ──
   translate-api:

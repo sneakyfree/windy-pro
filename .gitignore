@@ -54,6 +54,7 @@ src/client/desktop/renderer/wizard.js
 # Secrets / env files
 .env
 deploy/.env
+account-server/keys/
 
 # Web client
 src/client/web/dist/
