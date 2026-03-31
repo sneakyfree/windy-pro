@@ -49,11 +49,22 @@ class VoiceCloneManager {
           </div>
         </div>
 
+        <!-- Coming Soon Banner -->
+        <div class="vc-coming-soon" style="background:rgba(163,230,53,0.08); border:1px solid rgba(163,230,53,0.2); border-radius:12px; padding:16px; margin:16px 0;">
+          <p style="color:#A3E635; font-weight:700; margin:0 0 6px 0;">🧬 Windy Clone — Coming Soon</p>
+          <p style="color:#9CA3AF; font-size:13px; margin:0;">
+            Voice clone training is not yet available in-app. Your recordings are being
+            archived automatically. Export your voice data package anytime using the
+            Clone Data Archive, and use it with ElevenLabs, PlayHT, or any voice
+            cloning service.
+          </p>
+        </div>
+
         <!-- Clone List -->
         <div class="vc-section">
           <h3>Your Voice Clones (${this.clones.length})</h3>
           <div class="vc-clone-list" id="vc-clone-list">
-            ${this.clones.length === 0 ? '<p class="vc-empty">No voice clones yet. Record a sample above to get started!</p>' :
+            ${this.clones.length === 0 ? '<p class="vc-empty">Voice clones will appear here once Windy Clone launches. Your recordings are being saved automatically.</p>' :
                 this.clones.map(clone => `
                 <div class="vc-clone-card ${clone.id === this.activeCloneId ? 'vc-active' : ''}" data-id="${clone.id}">
                   <div class="vc-clone-info">

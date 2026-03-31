@@ -1,8 +1,7 @@
 /**
- * Clone training routes — training data + start training.
+ * Clone routes — training data listing + export-ready response.
  */
 import { Router, Request, Response } from 'express';
-import crypto from 'crypto';
 import { getDb } from '../db/schema';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validation';
@@ -59,14 +58,11 @@ router.post('/start-training', authenticateToken, validate(StartTrainingRequestS
             return res.status(400).json({ error: 'Some bundles are not valid or training-ready' });
         }
 
-        const jobId = crypto.randomUUID();
-        res.set('X-Stub', 'true');
-        res.json({
-            jobId,
-            status: 'queued',
+        res.status(202).json({
+            status: 'export_ready',
             bundleCount: bundle_ids.length,
-            estimatedTime: `${Math.ceil(bundle_ids.length * 15)} minutes`,
-            message: 'Clone training job queued successfully',
+            message: 'Clone training service coming soon. Use the desktop app to export your voice data package for use with ElevenLabs, PlayHT, or other voice cloning services.',
+            exportInstructions: 'In the Windy Word desktop app, go to Clone Data Archive → select your bundles → click Export Clone Package.',
         });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });

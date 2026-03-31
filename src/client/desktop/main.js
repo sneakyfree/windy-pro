@@ -5647,21 +5647,20 @@ ipcMain.handle('export-clone-bundles', async (event, bundleIds) => {
 });
 
 ipcMain.handle('start-clone-training', async (event, bundleIds) => {
-  // Stub: call account server API
-  try {
-    const settings = store.get('server', {});
-    const token = store.get('auth.token', '');
-    const baseUrl = settings.url || 'http://localhost:8098';
-    const res = await require('node-fetch')(`${baseUrl}/api/v1/clone/start-training`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ bundle_ids: bundleIds })
-    });
-    return await res.json();
-  } catch (err) {
-    // Fallback: return stub job ID
-    return { jobId: require('crypto').randomUUID(), status: 'queued', message: 'Training queued (offline mode)' };
+  // Clone training is not yet available — offer export instead
+  const { response } = await dialog.showMessageBox({
+    type: 'info',
+    title: 'Windy Clone — Coming Soon',
+    message: 'Clone training is coming soon!\n\nWould you like to export your selected bundles as a voice data package instead?\n\nYou can use the exported package with ElevenLabs, PlayHT, or any voice cloning service.',
+    buttons: ['Export Package', 'Not Now'],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (response === 0) {
+    // Delegate to the existing export handler
+    return ipcMain.emit('export-clone-bundles-redirect', event, bundleIds);
   }
+  return { status: 'export_ready', message: 'Clone training coming soon. Use Export Clone Package to export your voice data.' };
 });
 
 // ═══ Auto-Sync IPC Handlers ═══
