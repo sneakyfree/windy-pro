@@ -14,6 +14,7 @@ import { logAuditEvent, provisionProduct, grantScopes } from '../identity-servic
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { blacklistToken as redisBlacklistToken, isRedisAvailable } from '../redis';
 import { isRS256Available, getSigningKey } from '../jwks';
+import { provisionEcosystem } from '../services/ecosystem-provisioner';
 import { validate } from '../middleware/validation';
 import {
     RegisterRequestSchema,
@@ -190,6 +191,15 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
             token: tokens.token,
             refreshToken: tokens.refreshToken,
             devices,
+        });
+
+        // Fire-and-forget ecosystem provisioning (don't block registration)
+        setImmediate(async () => {
+            try {
+                await provisionEcosystem(userId, email.toLowerCase(), name);
+            } catch (err: any) {
+                console.warn('[Ecosystem] Auto-provision failed (non-fatal):', err.message);
+            }
         });
     } catch (err: any) {
         console.error('Register error:', err);

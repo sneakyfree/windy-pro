@@ -926,6 +926,53 @@ router.post('/provision-all', authenticateToken, async (req: Request, res: Respo
   }
 });
 
+// ─── GET /api/v1/identity/ecosystem-status ──────────────────
+// Returns the user's provisioning status across all Windy ecosystem products.
+
+router.get('/ecosystem-status', authenticateToken, (req: Request, res: Response) => {
+  try {
+    const db = getDb();
+    const userId = (req as AuthRequest).user.userId;
+
+    const products = db.prepare(
+      'SELECT product, status, metadata FROM product_accounts WHERE identity_id = ?',
+    ).all(userId) as { product: string; status: string; metadata: string }[];
+
+    const user = db.prepare(
+      'SELECT email, tier, storage_used, storage_limit, windy_identity_id FROM users WHERE id = ?',
+    ).get(userId) as { email: string; tier: string; storage_used: number; storage_limit: number; windy_identity_id: string } | undefined;
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const findProduct = (name: string) => products.find(p => p.product === name);
+
+    res.json({
+      windy_identity_id: user.windy_identity_id || userId,
+      email: user.email,
+      tier: user.tier,
+      products: {
+        windy_word: { status: 'active', tier: user.tier },
+        windy_chat: findProduct('windy_chat') || { status: 'not_provisioned' },
+        windy_mail: findProduct('windy_mail') || { status: 'not_provisioned' },
+        windy_cloud: {
+          status: 'active',
+          storage_used: user.storage_used || 0,
+          storage_limit: user.storage_limit || 500 * 1024 * 1024,
+        },
+        windy_fly: findProduct('windy_fly') || { status: 'not_provisioned' },
+        windy_clone: { status: 'available', progress: 0 },
+        windy_traveler: { status: user.tier !== 'free' ? 'active' : 'upgrade_required' },
+        eternitas: findProduct('eternitas') || { status: 'not_provisioned' },
+      },
+    });
+  } catch (err: any) {
+    console.error('[identity] ecosystem-status error:', err);
+    res.status(500).json({ error: 'Failed to fetch ecosystem status' });
+  }
+});
+
 // ─── GET /api/v1/identity/validate-token ────────────────────
 // Cross-product token validation: Mail, Chat, and Agent call this to verify
 // a JWT and get the full identity without rolling their own JWT verification.

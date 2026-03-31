@@ -64,6 +64,7 @@ export default function Dashboard() {
     const [expanded, setExpanded] = useState(null)
     const [expandedData, setExpandedData] = useState(null)
     const [translationStats, setTranslationStats] = useState(null)
+    const [ecosystem, setEcosystem] = useState(null)
     const navigate = useNavigate()
     const user = getUser()
 
@@ -94,6 +95,12 @@ export default function Dashboard() {
                 favorites: data.favoriteCount || 0
             })
         }).catch(err => console.warn('API error:', err.message))
+    }, [])
+
+    useEffect(() => {
+        apiFetch('/identity/ecosystem-status').then(data => {
+            if (data?.products) setEcosystem(data)
+        }).catch(() => {})
     }, [])
 
     const handleExpand = async (id) => {
@@ -196,6 +203,51 @@ export default function Dashboard() {
                             </div>
                         </>
                     )}
+                </div>
+            )}
+
+            {/* Ecosystem */}
+            {ecosystem && (
+                <div className="dash-ecosystem">
+                    <h3 className="dash-ecosystem-title">Windy Ecosystem</h3>
+                    <div className="dash-ecosystem-grid">
+                        {[
+                            { key: 'windy_word', label: 'Windy Word', icon: '🎙️', href: '/transcribe' },
+                            { key: 'windy_chat', label: 'Windy Chat', icon: '💬', href: 'https://windychat.com' },
+                            { key: 'windy_mail', label: 'Windy Mail', icon: '📧', href: 'https://windymail.ai' },
+                            { key: 'windy_cloud', label: 'Windy Cloud', icon: '☁️', href: '/vault' },
+                            { key: 'windy_fly', label: 'Windy Fly', icon: '🤖', href: 'https://windyfly.ai' },
+                            { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: '/soul-file' },
+                            { key: 'windy_traveler', label: 'Windy Traveler', icon: '🌍', href: '/translate' },
+                            { key: 'eternitas', label: 'Eternitas', icon: '🛡️', href: 'https://eternitas.ai' },
+                        ].map(p => {
+                            const product = ecosystem.products?.[p.key] || {}
+                            const status = product.status || 'not_provisioned'
+                            const badgeClass = status === 'active' ? 'eco-active'
+                                : status === 'pending' ? 'eco-pending'
+                                : status === 'upgrade_required' ? 'eco-upgrade'
+                                : status === 'available' ? 'eco-available'
+                                : 'eco-inactive'
+                            const badgeLabel = status === 'active' ? 'Active'
+                                : status === 'pending' ? 'Pending'
+                                : status === 'upgrade_required' ? 'Upgrade'
+                                : status === 'available' ? 'Available'
+                                : 'Not Active'
+                            const isExternal = p.href.startsWith('http')
+                            return (
+                                <a
+                                    key={p.key}
+                                    href={p.href}
+                                    className="dash-eco-card"
+                                    {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                                >
+                                    <span className="dash-eco-icon">{p.icon}</span>
+                                    <span className="dash-eco-label">{p.label}</span>
+                                    <span className={`dash-eco-badge ${badgeClass}`}>{badgeLabel}</span>
+                                </a>
+                            )
+                        })}
+                    </div>
                 </div>
             )}
 
