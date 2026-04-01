@@ -1,0 +1,53 @@
+# Windy Pro Account Server — Production Docker Compose
+#
+# Usage:
+#   cp .env.example .env.production   # fill in real secrets
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#
+# Services:
+#   account-server — Identity hub, OAuth2, billing, file storage
+#   redis          — Token blacklist, OTP storage, JWKS cache
+
+services:
+  account-server:
+    build:
+      context: ..
+      dockerfile: account-server/Dockerfile
+    ports:
+      - "${PORT:-8098}:8098"
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=8098
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - account-data:/app/data
+      - account-keys:/keys
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8098/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  account-data:
+  account-keys:
+  redis-data:
