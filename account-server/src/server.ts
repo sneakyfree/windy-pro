@@ -31,6 +31,7 @@ import verificationRoutes from './routes/verification';
 import oauthRoutes, { seedEcosystemClients } from './routes/oauth';
 import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
+import flyRoutes from './routes/fly';
 import { authenticateToken } from './middleware/auth';
 
 const app = express();
@@ -166,6 +167,9 @@ app.use('/api/v1/files', storageRoutes);
 
 // Cloud infrastructure stubs (phone provisioning, push notifications)
 app.use('/api/v1/cloud', cloudRoutes);
+
+// Fly agent proxy (ecosystem dashboard chat)
+app.use('/api/v1/fly', flyRoutes);
 
 // Billing
 app.use('/api/v1/billing', billingRouter);

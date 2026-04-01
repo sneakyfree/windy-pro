@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom'
 import './analytics' // H8: Privacy-first analytics (auto-initializes)
 import Landing from './pages/Landing'
 import Transcribe from './pages/Transcribe'
 import Dashboard from './pages/Dashboard'
+import EcosystemDashboard from './pages/EcosystemDashboard'
 import SoulFile from './pages/SoulFile'
 import Vault from './pages/Vault'
 import Translate from './pages/Translate'
@@ -88,6 +89,12 @@ export default function App() {
                 } />
                 <Route path="/profile" element={
                     <ProtectedRoute><Profile /></ProtectedRoute>
+                } />
+                <Route path="/app" element={
+                    <ProtectedRoute><Navigate to="/app/fly" replace /></ProtectedRoute>
+                } />
+                <Route path="/app/:panel" element={
+                    <ProtectedRoute><EcosystemDashboard /></ProtectedRoute>
                 } />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/privacy" element={<Privacy />} />
