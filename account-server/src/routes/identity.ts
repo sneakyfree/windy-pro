@@ -442,6 +442,7 @@ router.post('/chat/provision', authenticateToken, async (req: Request, res: Resp
     // Mobile stores: windy_matrix_token, windy_matrix_user, windy_matrix_server, windy_matrix_device
     res.status(201).json({
       success: true,
+      creator_name: displayName,
       matrix: {
         matrixUserId: matrixCredentials.matrixUserId,
         accessToken: matrixCredentials.accessToken,
@@ -939,18 +940,20 @@ router.get('/ecosystem-status', authenticateToken, (req: Request, res: Response)
     ).all(userId) as { product: string; status: string; metadata: string }[];
 
     const user = db.prepare(
-      'SELECT email, tier, storage_used, storage_limit, windy_identity_id FROM users WHERE id = ?',
-    ).get(userId) as { email: string; tier: string; storage_used: number; storage_limit: number; windy_identity_id: string } | undefined;
+      'SELECT email, name, display_name, tier, storage_used, storage_limit, windy_identity_id FROM users WHERE id = ?',
+    ).get(userId) as { email: string; name: string; display_name: string; tier: string; storage_used: number; storage_limit: number; windy_identity_id: string } | undefined;
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     const findProduct = (name: string) => products.find(p => p.product === name);
+    const creatorName = user.display_name || user.name;
 
     res.json({
       windy_identity_id: user.windy_identity_id || userId,
       email: user.email,
+      creator_name: creatorName,
       tier: user.tier,
       products: {
         windy_word: { status: 'active', tier: user.tier },

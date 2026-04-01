@@ -26,7 +26,7 @@ export async function provisionEcosystem(
                     'Content-Type': 'application/json',
                     'X-Service-Token': process.env.WINDYMAIL_SERVICE_TOKEN || '',
                 },
-                body: JSON.stringify({ windy_identity_id: userId, email, display_name: name }),
+                body: JSON.stringify({ windy_identity_id: userId, email, display_name: name, creator_name: name }),
                 signal: AbortSignal.timeout(10000),
             });
             results.mail = resp.ok ? 'ok' : 'failed';
