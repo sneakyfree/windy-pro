@@ -30,6 +30,7 @@ async function getLatestGitHubRelease() {
                 'Accept': 'application/vnd.github.v3+json',
                 'User-Agent': 'WindyPro-Server/2.0',
             },
+            signal: AbortSignal.timeout(10000),
         });
         if (!response.ok) throw new Error(`GitHub API: ${response.status}`);
         _ghReleaseCache = await response.json();

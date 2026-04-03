@@ -377,7 +377,7 @@ router.post('/chat/provision', authenticateToken, async (req: Request, res: Resp
     if (SYNAPSE_REGISTRATION_SECRET) {
       // Production: provision via Synapse admin API
       try {
-        const nonceRes = await fetch(`${SYNAPSE_ADMIN_URL}/v1/register`, { method: 'GET' });
+        const nonceRes = await fetch(`${SYNAPSE_ADMIN_URL}/v1/register`, { method: 'GET', signal: AbortSignal.timeout(10000) });
         if (!nonceRes.ok) throw new Error(`Synapse nonce request failed: ${nonceRes.status}`);
         const { nonce } = await nonceRes.json() as any;
 
@@ -390,6 +390,7 @@ router.post('/chat/provision', authenticateToken, async (req: Request, res: Resp
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nonce, username: localpart, password, displayname: displayName, admin: false, mac }),
+          signal: AbortSignal.timeout(10000),
         });
 
         if (!regRes.ok) throw new Error(`Synapse registration failed: ${regRes.status}`);

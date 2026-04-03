@@ -72,6 +72,7 @@ async function callWhisperAPI(
             ...form.getHeaders(),
         },
         body: form.getBuffer(),
+        signal: AbortSignal.timeout(30000), // 30s — audio files can be large
     });
 
     if (!response.ok) {
@@ -156,7 +157,6 @@ router.post('/', authenticateToken, upload.single('audio'), async (req: Request,
             partial: false,
         }];
 
-        res.set('X-Stub', 'true');
         res.json({
             segments,
             fullText: segments.map(s => s.text).join(' '),

@@ -32,7 +32,7 @@ const RTC_MAX_SESSIONS = 1000;
 const rtcSessions = new Map<string, { offer: string | null; answer: string | null; candidates: any[]; switchCamera?: boolean; createdAt: number }>();
 
 // Periodic cleanup of expired RTC sessions
-setInterval(() => {
+const rtcCleanupTimer = setInterval(() => {
     const now = Date.now();
     for (const [token, session] of rtcSessions) {
         if (now - session.createdAt > RTC_SESSION_TTL_MS) {
@@ -40,6 +40,7 @@ setInterval(() => {
         }
     }
 }, 60 * 1000);
+rtcCleanupTimer.unref();
 
 // ─── GET /health ─────────────────────────────────────────────
 

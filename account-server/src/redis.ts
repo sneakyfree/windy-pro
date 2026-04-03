@@ -113,7 +113,7 @@ let memJwksCache: { keys: any; expiresAt: number } | null = null;
 const memRateLimits = new Map<string, { count: number; windowStart: number }>();
 
 // Periodic cleanup for in-memory stores (every 5 minutes)
-setInterval(() => {
+const memCleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, val] of memOtpStore) {
     if (now > val.expiresAt) memOtpStore.delete(key);
@@ -128,6 +128,7 @@ setInterval(() => {
     if (now - val.windowStart > 3600000) memRateLimits.delete(key); // 1h cleanup
   }
 }, 5 * 60 * 1000);
+memCleanupTimer.unref();
 
 // ═══════════════════════════════════════════
 //  OTP STORAGE

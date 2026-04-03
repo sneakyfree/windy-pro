@@ -122,7 +122,7 @@ const store = new Store({
     },
     window: {
       width: 400,
-      height: 300,
+      height: 500,
       x: null,
       y: null
     },
@@ -547,13 +547,21 @@ function createWindow() {
   const windowConfig = store.get('window');
   const appearance = store.get('appearance');
 
+  // macOS hidden title bar + vibrancy consumes extra vertical space,
+  // so enforce a height floor to prevent bottom controls from clipping.
+  // This also fixes persisted configs migrated from Linux (height: 300).
+  const MIN_HEIGHT = 320;
+  const effectiveHeight = Math.max(windowConfig.height, MIN_HEIGHT);
+
   mainWindow = new BrowserWindow({
     width: windowConfig.width,
-    height: windowConfig.height,
+    height: effectiveHeight,
     x: windowConfig.x,
     y: windowConfig.y,
 
     // Floating window properties
+    // macOS: 'floating' level = panel that does NOT steal keyboard focus (like a utility palette)
+    // Linux/Windows: plain alwaysOnTop works fine (xdotool handles focus restore for Linux)
     alwaysOnTop: appearance.alwaysOnTop,
     frame: false,           // Frameless for custom UI
     transparent: true,      // Allow CSS transparency for strobe effect
@@ -564,7 +572,7 @@ function createWindow() {
 
     // Minimum size
     minWidth: 250,
-    minHeight: 150,
+    minHeight: MIN_HEIGHT,
 
     // Web preferences
     webPreferences: {
@@ -584,6 +592,27 @@ function createWindow() {
     titleBarStyle: 'hidden',
     vibrancy: process.platform === 'darwin' ? 'under-window' : undefined
   });
+
+  // macOS: Override alwaysOnTop to use 'floating' panel level.
+  if (process.platform === 'darwin' && appearance.alwaysOnTop) {
+    mainWindow.setAlwaysOnTop(true, 'floating');
+  }
+
+  // macOS: Intercept focus events during recording.
+  // When getUserMedia/AudioContext activate, Chromium steals focus to our window.
+  // We immediately give it back by blurring + reactivating the target app.
+  // IMPORTANT: we add a 3-second grace period after recording starts to let
+  // getUserMedia complete — blurring too early causes 'Document is not focused' errors.
+  if (process.platform === 'darwin') {
+    mainWindow.on('focus', () => {
+      if (isRecording && global._focusGuardActive && global._lastFocusedApp && global._lastFocusedApp !== 'Electron') {
+        console.info(`[Focus-Guard] Window stole focus during recording — returning to "${global._lastFocusedApp}"`);
+        mainWindow.blur();
+        exec(`osascript -e 'tell application "${global._lastFocusedApp}" to activate'`, { timeout: 2000 });
+      }
+    });
+  }
+  console.info(`[Startup] ★ macOS focus-guard v4 active (floating + delayed focus-intercept)`);
 
   // Load the renderer
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -2347,29 +2376,76 @@ function registerHotkeys() {
 
   // Toggle recording — save & restore focus so cursor stays in target app
   const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
-    // Capture the focused window BEFORE anything happens
+    // Only capture the focused app when STARTING recording (not when stopping).
     let savedWindowId = null;
-    try {
-      if (process.platform === 'linux') {
-        savedWindowId = require('child_process').execSync('xdotool getactivewindow', { timeout: 500 }).toString().trim();
-      }
-    } catch (_) { }
+    if (!isRecording) {
+      try {
+        if (process.platform === 'linux') {
+          savedWindowId = require('child_process').execSync('xdotool getactivewindow', { timeout: 500 }).toString().trim();
+        } else if (process.platform === 'darwin') {
+          // To find the REAL focused app behind our always-on-top window:
+          // 1. Temporarily drop alwaysOnTop
+          // 2. Query the frontmost app (now it's not us)
+          // 3. Restore alwaysOnTop
+          // This is synchronous but only takes ~200ms and fires once per recording.
+          try {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.setAlwaysOnTop(false);
+            }
+            const frontApp = require('child_process').execSync(
+              'osascript -e \'tell application "System Events" to get name of first application process whose frontmost is true\'',
+              { timeout: 1000 }
+            ).toString().trim();
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.setAlwaysOnTop(true, 'floating');
+            }
+            if (frontApp && !frontApp.includes('Electron') && !frontApp.includes('Windy')) {
+              global._lastFocusedApp = frontApp;
+              console.info(`[Focus] Saved target app: "${frontApp}"`);
+            } else {
+              console.warn(`[Focus] Frontmost app is us: "${frontApp}"`);
+            }
+          } catch (e) {
+            // Restore alwaysOnTop even on error
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.setAlwaysOnTop(true, 'floating');
+            }
+          }
+        }
+      } catch (_) { }
+
+      // Disable focus guard during getUserMedia startup (re-enable after 3s)
+      global._focusGuardActive = false;
+    }
 
     toggleRecording();
 
-    // Restore focus to the user's target app after a delay
-    // (getUserMedia/AudioContext/IPC can all steal focus asynchronously)
+    // Restore focus to the user's target app after a delay (only when STARTING)
+    if (!isRecording) return; // isRecording is now true after toggleRecording()
+
     if (savedWindowId && process.platform === 'linux') {
       const restore = () => {
         try {
-          // SEC-L5: Use execFile with array args instead of exec with string interpolation
           require('child_process').execFile('xdotool', ['windowactivate', savedWindowId]);
         } catch (_) { }
       };
-      // Multiple restore attempts to catch all async focus steals
       setTimeout(restore, 200);
       setTimeout(restore, 500);
       setTimeout(restore, 1000);
+    } else if (process.platform === 'darwin') {
+      // Enable focus guard after getUserMedia has had time to complete
+      setTimeout(() => {
+        global._focusGuardActive = true;
+        console.info('[Focus-Guard] Armed (3s grace period elapsed)');
+        // Also do one explicit restore in case focus was stolen during startup
+        if (global._lastFocusedApp && global._lastFocusedApp !== 'Electron' && isRecording) {
+          exec(`osascript -e 'tell application "${global._lastFocusedApp}" to activate'`, { timeout: 2000 },
+            (err) => {
+              if (!err) console.info(`[Focus] Restored focus to "${global._lastFocusedApp}"`);
+            }
+          );
+        }
+      }, 3000);
     }
   });
   console.info(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
@@ -2503,6 +2579,22 @@ function toggleRecording() {
   if (tray) {
     tray.setToolTip(isRecording ? 'Windy Pro - Recording...' : 'Windy Pro');
   }
+
+  // macOS: getUserMedia/AudioContext steal focus to Electron window.
+  // Restore focus to the target app after mic is acquired.
+  // We DON'T hide/show the window — that causes visible flashing.
+  // Instead, just activate the target app which gives it keyboard focus
+  // while our always-on-top window stays visible on screen.
+  if (isRecording && process.platform === 'darwin') {
+    const restoreFocusToTarget = () => {
+      if (global._lastFocusedApp && global._lastFocusedApp !== 'Electron' && isRecording) {
+        exec(`osascript -e 'tell application "${global._lastFocusedApp}" to activate'`, { timeout: 2000 });
+      }
+    };
+    setTimeout(restoreFocusToTarget, 600);
+    setTimeout(restoreFocusToTarget, 1500);
+    setTimeout(restoreFocusToTarget, 3000);
+  }
 }
 
 /**
@@ -2550,7 +2642,12 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
 
 // Check injection permissions
 ipcMain.handle('check-injection-permissions', async () => {
-  return getInjector().checkPermissions();
+  try {
+    return getInjector().checkPermissions();
+  } catch (err) {
+    console.error('[check-injection-permissions] Error:', err.message);
+    return { error: err.message, permitted: false };
+  }
 });
 
 // Update settings — accepts flat keys from renderer and routes to correct store namespace
@@ -2562,7 +2659,7 @@ ipcMain.on('update-settings', (event, settings) => {
   for (const [key, value] of Object.entries(settings)) {
     if (appearanceKeys.includes(key)) {
       store.set(`appearance.${key}`, key === 'opacity' ? value / 100 : value);
-      if (key === 'alwaysOnTop' && mainWindow) mainWindow.setAlwaysOnTop(value);
+      if (key === 'alwaysOnTop' && mainWindow) mainWindow.setAlwaysOnTop(value, process.platform === 'darwin' ? 'floating' : 'normal');
       if (key === 'opacity' && mainWindow) mainWindow.setOpacity(value / 100);
     } else if (serverKeys.includes(key)) {
       store.set(`server.${key}`, value);
@@ -2926,49 +3023,87 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
 
 ipcMain.handle('auto-paste-text', async (event, text) => {
   if (!text || !text.trim()) return false;
+
   try {
     const { clipboard } = require('electron');
     clipboard.writeText(text.trim());
+    console.info(`[AutoPaste] Text on clipboard: ${text.trim().length} chars`);
+    console.info(`[AutoPaste] Target app: "${global._lastFocusedApp || 'NONE'}"`);
 
-    // Remember original state
-    const wasUserHidden = userHiddenWindow;
-    const wasAlwaysOnTop = mainWindow && mainWindow.isAlwaysOnTop();
-    const savedOpacity = mainWindow ? mainWindow.getOpacity() : 1;
+    if (process.platform === 'darwin') {
+      // ── macOS auto-paste ──
+      const targetApp = global._lastFocusedApp;
+      if (!targetApp || targetApp === 'Electron' || targetApp.includes('Windy')) {
+        console.warn(`[AutoPaste] Invalid target "${targetApp}" — text on clipboard, use Cmd+V manually`);
+        return false;
+      }
 
-    // Make window invisible + non-topmost so target app gets the paste
-    // Using opacity instead of hide() to avoid window manager focus changes
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(false);
-      mainWindow.setOpacity(0);
-    }
-    // Wait for the target app to be the active/focused app
-    await new Promise(r => setTimeout(r, 200));
+      // 1. Drop alwaysOnTop so our window doesn't interfere
+      const wasAlwaysOnTop = mainWindow && !mainWindow.isDestroyed() && mainWindow.isAlwaysOnTop();
+      if (mainWindow && !mainWindow.isDestroyed() && wasAlwaysOnTop) {
+        mainWindow.setAlwaysOnTop(false);
+      }
 
-    // P0-1: Simulate Ctrl+V using async exec (non-blocking)
-    if (process.platform === 'linux') {
+      // 2. Activate the target app AND simulate Cmd+V in a single osascript call
+      //    This ensures the keystroke goes to the correct app
+      const appleScript = `
+        tell application "${targetApp}" to activate
+        delay 0.5
+        tell application "System Events"
+          keystroke "v" using command down
+        end tell
+      `;
+      await new Promise((resolve) => exec(
+        `osascript -e '${appleScript.replace(/'/g, "'\\''")}'`,
+        { timeout: 8000 }, (err, stdout, stderr) => {
+          if (err) {
+            console.error(`[AutoPaste] Failed:`, err.message);
+            if (stderr) console.error(`[AutoPaste] stderr:`, stderr);
+          } else {
+            console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars to "${targetApp}"`);
+          }
+          resolve();
+        }
+      ));
+
+      // 3. Restore alwaysOnTop after a beat
+      await new Promise(r => setTimeout(r, 300));
+      if (mainWindow && !mainWindow.isDestroyed() && wasAlwaysOnTop) {
+        mainWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'floating' : 'normal');
+      }
+      return true;
+
+    } else if (process.platform === 'linux') {
+      // ── Linux auto-paste (xdotool — proven working) ──
+      const wasAlwaysOnTop = mainWindow && !mainWindow.isDestroyed() && mainWindow.isAlwaysOnTop();
+      const savedOpacity = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getOpacity() : 1;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(false);
+        mainWindow.setOpacity(0);
+      }
+      await new Promise(r => setTimeout(r, 200));
       await new Promise((resolve) => exec('xdotool key --clearmodifiers ctrl+v', { timeout: 5000 }, resolve));
-    } else if (process.platform === 'darwin') {
-      await new Promise((resolve) => exec('osascript -e \'tell application "System Events" to keystroke "v" using command down\'', { timeout: 5000 }, resolve));
-    } else {
-      await new Promise((resolve) => exec('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"', { timeout: 5000 }, resolve));
-    }
+      await new Promise(r => setTimeout(r, 100));
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setOpacity(savedOpacity || 1);
+        if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'floating' : 'normal');
+      }
+      return true;
 
-    // Restore window visibility
-    await new Promise(r => setTimeout(r, 100));
-    if (mainWindow && !mainWindow.isDestroyed() && !wasUserHidden) {
-      mainWindow.setOpacity(savedOpacity || 1);
-      if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true);
-      console.info(`[AutoPaste] Pasted ${text.trim().length} chars, window restored`);
     } else {
-      console.info(`[AutoPaste] Pasted ${text.trim().length} chars, window stays hidden (user preference)`);
+      // ── Windows auto-paste ──
+      await new Promise((resolve) => exec(
+        'powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"',
+        { timeout: 5000 }, resolve
+      ));
+      return true;
     }
-    return true;
   } catch (err) {
-    // On failure, restore window
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setOpacity(1);
-    }
     console.error('[AutoPaste] Failed:', err.message);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'floating' : 'normal');
+    }
     return false;
   }
 });
@@ -3505,7 +3640,7 @@ ipcMain.handle('export-soul-file', async () => {
     const manifest = {
       version: '1.0',
       exportDate: new Date().toISOString(),
-      appVersion: require('../../package.json').version || '1.6.1',
+      appVersion: require('../../../package.json').version || '1.6.1',
       stats: { totalFiles, audioFiles, videoFiles, transcriptFiles, totalWords, totalChars, days: days.length, dateRange: days.length ? { first: days[0], last: days[days.length - 1] } : null }
     };
     archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
@@ -4989,16 +5124,25 @@ ipcMain.on('recording-failed', () => {
 
 // Save file dialog
 ipcMain.handle('save-file', async (event, { content, defaultName, defaultPath: dp, filters }) => {
-  const result = await dialog.showSaveDialog(mainWindow, {
-    defaultPath: dp || defaultName || 'transcript.txt',
-    filters: filters || [{ name: 'Text', extensions: ['txt'] }]
-  });
-  if (!result.canceled && result.filePath) {
-    fs.writeFileSync(result.filePath, content, 'utf8');
-    return { ok: true, saved: true, path: result.filePath };
+  try {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: dp || defaultName || 'transcript.txt',
+      filters: filters || [{ name: 'Text', extensions: ['txt'] }]
+    });
+    if (!result.canceled && result.filePath) {
+      fs.writeFileSync(result.filePath, content, 'utf8');
+      return { ok: true, saved: true, path: result.filePath };
+    }
+    return { ok: false, saved: false };
+  } catch (err) {
+    console.error('[save-file] Error:', err.message);
+    return { ok: false, saved: false, error: err.message };
   }
-  return { ok: false, saved: false };
 });
+
+// Module-scope updater instance — assigned inside deferred startup setTimeout,
+// read by install-update and check-for-updates handlers.
+let updaterInstance = null;
 
 ipcMain.handle('install-update', async () => {
   if (updaterInstance) {
@@ -5152,7 +5296,8 @@ app.whenReady().then(async () => {
   // ═══ Deferred startup tasks (non-critical — runs 3s after window appears) ═══
   // This keeps the window snappy: archive cleanup, license validation, model
   // migration, heartbeat, and update checks all run after first paint.
-  let updaterInstance = null;
+  // NOTE: updaterInstance is declared at module scope (before this function)
+  // so that ipcMain.handle('install-update') can access it.
   setTimeout(() => {
     // Validate license (non-blocking)
     validateLicense().catch(e => console.error('[License] Validation error:', e.message));
@@ -5537,15 +5682,26 @@ ipcMain.handle('extract-document-text', async (event, base64, ext) => {
 });
 
 ipcMain.handle('browse-document-file', async () => {
-  const result = await dialog.showOpenDialog({
-    title: 'Select Document',
-    filters: [{ name: 'Documents', extensions: ['txt', 'md', 'html', 'pdf', 'docx', 'csv'] }],
-    properties: ['openFile']
-  });
-  if (result.canceled || !result.filePaths[0]) return null;
-  const filePath = result.filePaths[0];
-  const text = fs.readFileSync(filePath, 'utf8');
-  return { text, name: path.basename(filePath) };
+  try {
+    const result = await dialog.showOpenDialog({
+      title: 'Select Document',
+      filters: [{ name: 'Documents', extensions: ['txt', 'md', 'html', 'pdf', 'docx', 'csv'] }],
+      properties: ['openFile']
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const filePath = result.filePaths[0];
+    const ext = path.extname(filePath).toLowerCase();
+    // Binary formats: return base64 so the renderer can decode them properly
+    if (ext === '.pdf' || ext === '.docx') {
+      const buffer = fs.readFileSync(filePath);
+      return { data: buffer.toString('base64'), encoding: 'base64', name: path.basename(filePath), ext };
+    }
+    const text = fs.readFileSync(filePath, 'utf8');
+    return { text, name: path.basename(filePath) };
+  } catch (err) {
+    console.error('[browse-document-file] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // ═══ Clone Data Bundle Management ═══
@@ -5657,8 +5813,29 @@ ipcMain.handle('start-clone-training', async (event, bundleIds) => {
     cancelId: 1,
   });
   if (response === 0) {
-    // Delegate to the existing export handler
-    return ipcMain.emit('export-clone-bundles-redirect', event, bundleIds);
+    // Directly invoke the export-clone-bundles handler logic
+    const data = loadBundlesManifest();
+    const selected = data.bundles.filter(b => bundleIds.includes(b.bundle_id));
+    if (selected.length === 0) return { success: false, error: 'No bundles found' };
+
+    const saveResult = await dialog.showSaveDialog({
+      title: 'Export Clone Bundles',
+      defaultPath: `clone-bundles-${Date.now()}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    });
+    if (saveResult.canceled) return { success: false };
+
+    const exportData = {
+      exported_at: new Date().toISOString(),
+      bundle_count: selected.length,
+      bundles: selected.map(b => ({
+        ...b,
+        file_path: undefined,
+        mediaBase64: fs.existsSync(b.file_path) ? fs.readFileSync(b.file_path).toString('base64') : null
+      }))
+    };
+    fs.writeFileSync(saveResult.filePath, JSON.stringify(exportData, null, 2));
+    return { success: true, exportPath: saveResult.filePath };
   }
   return { status: 'export_ready', message: 'Clone training coming soon. Use Export Clone Package to export your voice data.' };
 });
