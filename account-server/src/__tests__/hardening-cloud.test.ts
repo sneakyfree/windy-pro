@@ -196,45 +196,42 @@ describe('Cloud stub endpoint hardening', () => {
   //  1. POST /api/v1/cloud/phone/provision
   // ─────────────────────────────────────────
 
-  it('POST /api/v1/cloud/phone/provision → 200 with X-Stub header', async () => {
+  it('POST /api/v1/cloud/phone/provision → 501 Not Implemented', async () => {
     const res = await request(app)
       .post('/api/v1/cloud/phone/provision')
       .set('Authorization', `Bearer ${token}`)
       .send({});
 
-    expect(res.status).toBe(200);
-    expect(res.headers['x-stub']).toBe('true');
-    expect(res.body).toHaveProperty('phone_number');
+    expect(res.status).toBe(501);
+    expect(res.body.error).toBe('Not implemented');
   });
 
   // ─────────────────────────────────────────
   //  2. POST /api/v1/cloud/phone/release
   // ─────────────────────────────────────────
 
-  it('POST /api/v1/cloud/phone/release → 200 with X-Stub header', async () => {
+  it('POST /api/v1/cloud/phone/release → 501 Not Implemented', async () => {
     const res = await request(app)
       .post('/api/v1/cloud/phone/release')
       .set('Authorization', `Bearer ${token}`)
       .send({});
 
-    expect(res.status).toBe(200);
-    expect(res.headers['x-stub']).toBe('true');
-    expect(res.body.released).toBe(true);
+    expect(res.status).toBe(501);
+    expect(res.body.error).toBe('Not implemented');
   });
 
   // ─────────────────────────────────────────
   //  3. POST /api/v1/cloud/push/send
   // ─────────────────────────────────────────
 
-  it('POST /api/v1/cloud/push/send → 200 with X-Stub header', async () => {
+  it('POST /api/v1/cloud/push/send → 501 Not Implemented', async () => {
     const res = await request(app)
       .post('/api/v1/cloud/push/send')
       .set('Authorization', `Bearer ${token}`)
       .send({});
 
-    expect(res.status).toBe(200);
-    expect(res.headers['x-stub']).toBe('true');
-    expect(res.body.sent).toBe(true);
+    expect(res.status).toBe(501);
+    expect(res.body.error).toBe('Not implemented');
   });
 
   // ─────────────────────────────────────────

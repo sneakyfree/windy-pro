@@ -266,10 +266,10 @@ describe('POST /api/v1/analytics', () => {
 // ─── Updates Check ────────────────────────────────────────────
 
 describe('GET /api/v1/updates/check', () => {
-  it('returns version info', async () => {
+  it('returns 501 not implemented', async () => {
     const res = await request(app).get('/api/v1/updates/check');
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('version');
+    expect(res.status).toBe(501);
+    expect(res.body.error).toBe('Not implemented');
   });
 });
 

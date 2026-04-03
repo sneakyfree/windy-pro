@@ -379,6 +379,22 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
+// ─── Process-level error handlers ───────────────────────────
+
+process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+    console.error('UNHANDLED REJECTION at:', promise);
+    console.error('Reason:', reason instanceof Error ? reason.stack : reason);
+    // Don't crash — log and continue
+});
+
+process.on('uncaughtException', (err: Error) => {
+    console.error('UNCAUGHT EXCEPTION:', err.stack || err);
+    // Graceful shutdown on uncaught exception — state may be corrupted
+    closeRedis().catch(() => {});
+    closeDb();
+    process.exit(1);
+});
+
 // Graceful shutdown
 process.on('SIGINT', () => {
     closeRedis().catch(() => {});

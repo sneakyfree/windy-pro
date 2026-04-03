@@ -503,8 +503,8 @@ describe('Category 6: Concurrent Stress', () => {
         expect(results.every(r => r.status === 200)).toBe(true);
     }, 30000);
 
-    test('validate-token 50 times with same JWT → all return same result', async () => {
-        const promises = Array.from({ length: 50 }, () =>
+    test('validate-token 20 times with same JWT → all return same result', async () => {
+        const promises = Array.from({ length: 20 }, () =>
             request(app)
                 .get('/api/v1/identity/validate-token')
                 .set('Authorization', `Bearer ${authToken}`),

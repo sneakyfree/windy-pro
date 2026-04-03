@@ -70,12 +70,9 @@ router.post('/api/v1/analytics', analyticsLimiter, validate(AnalyticsRequestSche
 // ─── GET /api/v1/updates/check ───────────────────────────────
 
 router.get('/api/v1/updates/check', (_req: Request, res: Response) => {
-    res.set('X-Stub', 'true');
-    res.json({
-        version: '0.6.0',
-        url: 'https://windypro.thewindstorm.uk/download/latest/linux',
-        releaseNotes: 'Bug fixes and performance improvements',
-        required: false,
+    res.status(501).json({
+        error: 'Not implemented',
+        message: 'Update checking requires a release management backend. Configure UPDATE_SERVER_URL.',
     });
 });
 
@@ -156,12 +153,9 @@ router.post('/api/v1/ocr/translate', optionalAuth, upload.single('image'), (req:
 
         console.log(`📷 OCR translate: target=${targetLanguage}`);
 
-        res.set('X-Stub', 'true');
-        res.json({
-            originalText: '[OCR stub — connect a real OCR engine]',
-            translatedText: `[${targetLanguage}] [OCR stub — connect a real OCR engine]`,
-            language: targetLanguage,
-            confidence: 0.85,
+        res.status(501).json({
+            error: 'Not implemented',
+            message: 'OCR translation requires a vision API backend. Configure OCR_API_KEY or GOOGLE_VISION_API_KEY.',
         });
     } catch (err: any) {
         console.error('OCR translate error:', err);

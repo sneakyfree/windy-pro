@@ -108,6 +108,16 @@ function mockDbPrepare(sql: string) {
         });
         return { count };
       }
+      // Generic COUNT(*) FROM recordings (pagination total)
+      if (sql.includes('COUNT(*)') && sql.includes('FROM recordings')) {
+        const userId = args[0];
+        const since = args[1] || '1970-01-01T00:00:00Z';
+        let count = 0;
+        recordings.forEach(r => {
+          if (r.user_id === userId && r.created_at > since) count++;
+        });
+        return { count };
+      }
       // FROM identity_scopes
       if (sql.includes('FROM identity_scopes')) {
         return identityScopes.get(args[0]) || null;
@@ -119,7 +129,7 @@ function mockDbPrepare(sql: string) {
       return null;
     },
     all: (...args: any[]) => {
-      // SELECT ... FROM recordings WHERE user_id = ? AND created_at > ?
+      // SELECT ... FROM recordings WHERE user_id = ? AND created_at > ? ... LIMIT ? OFFSET ?
       if (sql.includes('FROM recordings') && sql.includes('created_at >')) {
         const userId = args[0];
         const since = args[1] || '1970-01-01T00:00:00Z';
@@ -130,6 +140,14 @@ function mockDbPrepare(sql: string) {
           }
         });
         result.sort((a, b) => b.created_at.localeCompare(a.created_at));
+        // Handle LIMIT/OFFSET if present (pagination)
+        if (sql.includes('LIMIT') && args.length >= 4) {
+          const limit = args[args.length - 2];
+          const offset = args[args.length - 1];
+          if (typeof limit === 'number' && typeof offset === 'number') {
+            return result.slice(offset, offset + limit);
+          }
+        }
         return result;
       }
       // SELECT ... FROM recordings WHERE user_id = ? AND clone_training_ready = 1

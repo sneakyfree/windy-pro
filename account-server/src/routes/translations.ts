@@ -48,31 +48,10 @@ router.post('/speech', authenticateToken, upload.single('audio'), validate(Speec
             return res.status(400).json({ error: 'Audio file is required' });
         }
 
-        // Stub translation
-        const detectedText = `[Detected speech in ${sourceLang}]`;
-        const translatedText = `[Translation to ${targetLang}]`;
-        const confidence = Math.round((0.82 + Math.random() * 0.15) * 100) / 100;
-        const translationId = uuidv4();
-
-        stmts.insertTranslation.run(
-            translationId, (req as AuthRequest).user?.userId || 'anonymous',
-            sourceLang, targetLang,
-            detectedText, translatedText,
-            confidence, 'speech'
-        );
-
-        console.log(`🗣️  Speech translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'anonymous').slice(0, 8)}`);
-
-        res.set('X-Stub', 'true');
-        res.json({
-            id: translationId,
-            sourceText: detectedText,
-            translatedText,
-            sourceLang,
-            targetLang,
-            confidence,
-            type: 'speech',
-            audioData: null,
+        // Speech translation requires a speech-to-text API (Groq Whisper or OpenAI Whisper)
+        return res.status(501).json({
+            error: 'Not implemented',
+            message: 'Speech translation requires a speech-to-text API. Configure GROQ_API_KEY or OPENAI_API_KEY.',
         });
     } catch (err: any) {
         console.error('Speech translation error:', err);
@@ -154,7 +133,6 @@ router.post('/text', authenticateToken, validate(TranslateTextRequestSchema), as
 
         console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'anonymous').slice(0, 8)} (engine: ${engine})`);
 
-        if (engine === 'stub') res.set('X-Stub', 'true');
         res.json({
             id: translationId,
             sourceText: text,

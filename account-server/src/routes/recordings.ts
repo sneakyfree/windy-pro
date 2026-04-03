@@ -51,23 +51,10 @@ setInterval(() => {
     }
 }, 60 * 1000);
 
-// ─── Helper: list recordings query ──────────────────────────
+// ─── Helper: map recording row to camelCase ────────────────
 
-function listRecordings(userId: string, since: string) {
-    const db = getDb();
-    const recordings = db.prepare(
-        `SELECT id, bundle_id, duration_seconds, has_video, video_resolution,
-            camera_source, transcript_text, transcript_segments, file_size,
-            device_platform, device_id, device_name, clone_training_ready,
-            sync_status, created_at
-     FROM recordings
-     WHERE user_id = ? AND created_at > ?
-     ORDER BY created_at DESC
-     LIMIT 100`
-    ).all(userId, since) as any[];
-
-    // Cross-platform field mapping — camelCase for JS consumers
-    return recordings.map(r => ({
+function mapRecording(r: any) {
+    return {
         id: r.id,
         bundleId: r.bundle_id,
         duration: r.duration_seconds,
@@ -86,7 +73,72 @@ function listRecordings(userId: string, since: string) {
         cloneTrainingReady: r.clone_training_ready,
         syncStatus: r.sync_status,
         createdAt: r.created_at,
-    }));
+    };
+}
+
+// ─── Helper: list recordings with pagination ────────────────
+
+interface ListOpts {
+    since?: string;
+    page?: number;
+    limit?: number;
+    search?: string;
+    from?: string;
+    to?: string;
+}
+
+function listRecordings(userId: string, opts: ListOpts = {}) {
+    const db = getDb();
+    const since = opts.since || '1970-01-01T00:00:00Z';
+    const limit = Math.min(Math.max(opts.limit || 50, 1), 100);
+    const page = Math.max(opts.page || 1, 1);
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = ['user_id = ?', 'created_at > ?'];
+    const params: any[] = [userId, since];
+
+    if (opts.search) {
+        conditions.push('transcript_text LIKE ?');
+        params.push(`%${opts.search}%`);
+    }
+    if (opts.from) {
+        conditions.push('created_at >= ?');
+        params.push(opts.from);
+    }
+    if (opts.to) {
+        conditions.push('created_at <= ?');
+        params.push(opts.to);
+    }
+
+    const where = conditions.join(' AND ');
+
+    const totalRow = db.prepare(
+        `SELECT COUNT(*) as count FROM recordings WHERE ${where}`
+    ).get(...params) as any;
+    const total = totalRow?.count || 0;
+
+    const recordings = db.prepare(
+        `SELECT id, bundle_id, duration_seconds, has_video, video_resolution,
+            camera_source, transcript_text, transcript_segments, file_size,
+            device_platform, device_id, device_name, clone_training_ready,
+            sync_status, created_at
+     FROM recordings
+     WHERE ${where}
+     ORDER BY created_at DESC
+     LIMIT ? OFFSET ?`
+    ).all(...params, limit, offset) as any[];
+
+    const mapped = recordings.map(mapRecording);
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+        recordings: mapped,
+        total,
+        page,
+        limit,
+        totalPages,
+        hasMore: page < totalPages,
+    };
 }
 
 // ─── GET /api/v1/recordings ──────────────────────────────────
@@ -94,9 +146,24 @@ function listRecordings(userId: string, since: string) {
 
 router.get('/', authenticateToken, (req: Request, res: Response) => {
     try {
-        const since = (req.query.since as string) || '1970-01-01T00:00:00Z';
-        const mapped = listRecordings((req as AuthRequest).user.userId, since);
-        res.json({ recordings: mapped, bundles: mapped, total: mapped.length, since });
+        const result = listRecordings((req as AuthRequest).user.userId, {
+            since: req.query.since as string,
+            page: req.query.page ? parseInt(req.query.page as string) : undefined,
+            limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
+            search: req.query.search as string,
+            from: req.query.from as string,
+            to: req.query.to as string,
+        });
+        res.json({
+            recordings: result.recordings,
+            bundles: result.recordings, // backward compat
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+            hasMore: result.hasMore,
+            since: req.query.since || '1970-01-01T00:00:00Z',
+        });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });
     }
@@ -106,9 +173,24 @@ router.get('/', authenticateToken, (req: Request, res: Response) => {
 
 router.get('/list', authenticateToken, (req: Request, res: Response) => {
     try {
-        const since = (req.query.since as string) || '1970-01-01T00:00:00Z';
-        const mapped = listRecordings((req as AuthRequest).user.userId, since);
-        res.json({ recordings: mapped, bundles: mapped, total: mapped.length, since });
+        const result = listRecordings((req as AuthRequest).user.userId, {
+            since: req.query.since as string,
+            page: req.query.page ? parseInt(req.query.page as string) : undefined,
+            limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
+            search: req.query.search as string,
+            from: req.query.from as string,
+            to: req.query.to as string,
+        });
+        res.json({
+            recordings: result.recordings,
+            bundles: result.recordings,
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+            hasMore: result.hasMore,
+            since: req.query.since || '1970-01-01T00:00:00Z',
+        });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });
     }
