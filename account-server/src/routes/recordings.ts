@@ -96,7 +96,7 @@ router.get('/', authenticateToken, (req: Request, res: Response) => {
     try {
         const since = (req.query.since as string) || '1970-01-01T00:00:00Z';
         const mapped = listRecordings((req as AuthRequest).user.userId, since);
-        res.json({ bundles: mapped, total: mapped.length, since });
+        res.json({ recordings: mapped, bundles: mapped, total: mapped.length, since });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });
     }
@@ -108,7 +108,7 @@ router.get('/list', authenticateToken, (req: Request, res: Response) => {
     try {
         const since = (req.query.since as string) || '1970-01-01T00:00:00Z';
         const mapped = listRecordings((req as AuthRequest).user.userId, since);
-        res.json({ bundles: mapped, total: mapped.length, since });
+        res.json({ recordings: mapped, bundles: mapped, total: mapped.length, since });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });
     }

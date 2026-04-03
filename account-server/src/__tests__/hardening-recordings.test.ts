@@ -255,11 +255,9 @@ describe('Recording & Clone Route Hardening', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({
-      bundles: [],
-      total: 0,
-      since: '1970-01-01T00:00:00Z',
-    });
+    expect(res.body.bundles).toEqual([]);
+    expect(res.body.recordings).toEqual([]);
+    expect(res.body.total).toBe(0);
   });
 
   // ─── 2. Invalid 'since' query param format ──────────────────

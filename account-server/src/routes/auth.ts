@@ -545,8 +545,16 @@ router.delete('/me', authenticateToken, async (req: Request, res: Response) => {
         const db = getDb();
 
         // Verify user exists
-        const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(userId) as any;
+        const user = db.prepare('SELECT id, email, password_hash FROM users WHERE id = ?').get(userId) as any;
         if (!user) return res.status(404).json({ error: 'User not found' });
+
+        // Require password confirmation if provided (recommended but optional for backward compat)
+        if (req.body?.password) {
+            const passwordValid = await bcrypt.compare(req.body.password, user.password_hash);
+            if (!passwordValid) {
+                return res.status(401).json({ error: 'Password confirmation failed' });
+            }
+        }
 
         // Cascade delete all user data
         const tables = [

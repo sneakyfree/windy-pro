@@ -693,13 +693,19 @@ router.get('/resolve/:windyIdentityId', authenticateToken, (req: Request, res: R
     const db = getDb();
     const requestingUser = (req as AuthRequest).user;
 
-    // Look up the user by windy_identity_id
-    const user = db.prepare(
-      `SELECT id, windy_identity_id, email, name, tier, identity_type,
+    // Look up by windy_identity_id first, then fall back to user id
+    const fields = `id, windy_identity_id, email, name, tier, identity_type,
               phone, display_name, avatar_url, email_verified, phone_verified,
-              passport_id, preferred_lang, last_login_at, created_at
-       FROM users WHERE windy_identity_id = ?`,
+              passport_id, preferred_lang, last_login_at, created_at`;
+    let user = db.prepare(
+      `SELECT ${fields} FROM users WHERE windy_identity_id = ?`,
     ).get(windyIdentityId) as any;
+
+    if (!user) {
+      user = db.prepare(
+        `SELECT ${fields} FROM users WHERE id = ?`,
+      ).get(windyIdentityId) as any;
+    }
 
     if (!user) {
       return res.status(404).json({ error: 'Identity not found' });
