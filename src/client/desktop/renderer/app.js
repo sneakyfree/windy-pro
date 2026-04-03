@@ -2847,6 +2847,11 @@ class WindyApp {
       clearInterval(this._apiChunkInterval);
       this._apiChunkInterval = null;
     }
+    // M5: Stop proxy-based Deepgram stream if active
+    if (this._dgUsingProxy && window.windyAPI?.deepgramStreamStop) {
+      window.windyAPI.deepgramStreamStop();
+      this._dgUsingProxy = false;
+    }
     if (this._deepgramWs) {
       this._deepgramWs.close();
       this._deepgramWs = null;
@@ -2915,12 +2920,98 @@ class WindyApp {
   }
   /**
    * Start Deepgram real-time WebSocket streaming
+   * M5: Uses IPC proxy to keep API key in main process — never exposed to renderer
    */
   async _startDeepgramStreaming(stream, apiKey) {
     const dgLang = localStorage.getItem('windy_language') || 'en';
     const dgDiarize = localStorage.getItem('windy_diarize') === 'true';
+
+    // M5: Use main-process proxy if available (API key stays in main process)
+    const useProxy = !!window.windyAPI?.deepgramStreamStart;
+
+    if (useProxy) {
+      const result = await window.windyAPI.deepgramStreamStart({ language: dgLang, diarize: dgDiarize });
+      if (!result?.ok) {
+        this.showReconnectToast(`⚠️ ${result?.error || 'Failed to start Deepgram stream'}`);
+        return;
+      }
+      // Mark proxy mode so stopApiRecording uses the right cleanup
+      this._dgUsingProxy = true;
+
+      window.windyAPI.onDeepgramProxyOpen(() => {
+        console.debug('[Deepgram] Proxy WebSocket connected');
+        // Stream audio to Deepgram via main process
+        const audioCtx = new AudioContext({ sampleRate: 16000 });
+        const source = audioCtx.createMediaStreamSource(stream);
+        const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+        processor.onaudioprocess = (e) => {
+          const inputData = e.inputBuffer.getChannelData(0);
+          const int16 = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            int16[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+          }
+          window.windyAPI.deepgramStreamSend(int16.buffer);
+        };
+
+        source.connect(processor);
+        processor.connect(audioCtx.destination);
+        this._dgAudioCtx = audioCtx;
+        this._dgProcessor = processor;
+        this._dgSource = source;
+        this._dgStream = stream;
+      });
+
+      window.windyAPI.onDeepgramProxyMessage((dataStr) => {
+        try {
+          const data = JSON.parse(dataStr);
+          if (data.channel?.alternatives?.[0]) {
+            const alt = data.channel.alternatives[0];
+            const text = alt.transcript;
+            if (text) {
+              if (data.is_final) {
+                this._streamingText += (this._streamingText ? ' ' : '') + text;
+                this.transcript.push({ text: text.trim(), partial: false, start: 0, end: 0, confidence: alt.confidence || 1, words: [] });
+                this._interimText = '';
+                this.updateWordCount();
+              } else {
+                this._interimText = text;
+              }
+              this._renderStreamTranscript();
+            }
+          }
+        } catch (err) {
+          console.error('[Deepgram] Parse error:', err);
+        }
+      });
+
+      window.windyAPI.onDeepgramProxyError((msg) => {
+        console.error('[Deepgram] Proxy error:', msg);
+        this.showReconnectToast('⚠️ Stream engine connection error. Check API key.');
+      });
+
+      window.windyAPI.onDeepgramProxyClose(() => {
+        console.debug('[Deepgram] Proxy WebSocket closed');
+        if (this._dgProcessor) this._dgProcessor.disconnect();
+        if (this._dgSource) this._dgSource.disconnect();
+        if (this._dgAudioCtx) this._dgAudioCtx.close();
+        if (this._dgStream) this._dgStream.getTracks().forEach(t => t.stop());
+        if (this.isRecording) {
+          this.isRecording = false;
+          this.setState('idle');
+          this.transcriptContent.contentEditable = 'true';
+          if (this._streamingText.trim() && window.windyAPI?.archiveTranscript) {
+            window.windyAPI.archiveTranscript(this._streamingText.trim(), 'deepgram');
+          }
+        }
+      });
+      return;
+    }
+
+    // Fallback: direct WebSocket (legacy — API key passed as sub-protocol)
     let dgUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&language=${dgLang}&smart_format=true&interim_results=true&punctuate=true`;
     if (dgDiarize) dgUrl += '&diarize=true';
+    this._dgUsingProxy = false;
 
     this._deepgramWs = new WebSocket(dgUrl, ['token', apiKey]);
 

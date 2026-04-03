@@ -37,6 +37,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
+const { validatePath } = require('../shared/safe-path');
 
 // Media storage directory
 const MEDIA_PATH = process.env.MEDIA_PATH || path.join(__dirname, 'media');
@@ -87,6 +88,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS refresh_tokens (
     token TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
+    family TEXT NOT NULL,
+    consumed INTEGER NOT NULL DEFAULT 0,
     expires_at TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -174,6 +177,13 @@ try {
 try {
     db.exec(`ALTER TABLE subscriptions ADD COLUMN first_payment_fail_at TEXT`);
 } catch (_) { /* already exists */ }
+// M7: Refresh token family tracking columns
+try {
+    db.exec(`ALTER TABLE refresh_tokens ADD COLUMN family TEXT NOT NULL DEFAULT ''`);
+} catch (_) { /* already exists */ }
+try {
+    db.exec(`ALTER TABLE refresh_tokens ADD COLUMN consumed INTEGER NOT NULL DEFAULT 0`);
+} catch (_) { /* already exists */ }
 
 // ═══════════════════════════════════════════════
 // JWT Helpers (zero-dependency)
@@ -224,7 +234,12 @@ function verifyJWT(token) {
 // Middleware
 // ═══════════════════════════════════════════════
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+    origin: process.env.CORS_ORIGINS
+        ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+        : ['http://localhost:3000', 'http://localhost:8098'],
+    credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 
 // Rate limit login/register
@@ -269,10 +284,19 @@ function authenticate(req, res, next) {
     next();
 }
 
+// L8: Health check rate limiter (60 req/min per IP)
+const healthLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    message: { error: 'Health check rate limit exceeded. Try again shortly.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 // ═══════════════════════════════════════════════
 // Health Check
 // ═══════════════════════════════════════════════
-app.get('/health', (req, res) => {
+app.get('/health', healthLimiter, (req, res) => {
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
     res.json({ status: 'ok', service: 'account-server', users: userCount, uptime: process.uptime() });
 });
@@ -339,11 +363,12 @@ app.post('/api/v1/auth/login', authLimiter, async (req, res) => {
 
         const token = createJWT({ sub: user.id, email: user.email, name: user.name });
 
-        // Create refresh token
+        // Create refresh token with a new family (M7)
         const refreshToken = crypto.randomBytes(64).toString('hex');
+        const family = crypto.randomBytes(16).toString('hex');
         const refreshExpiry = new Date(Date.now() + REFRESH_EXPIRY_DAYS * 86400000).toISOString();
-        db.prepare('INSERT INTO refresh_tokens (token, user_id, expires_at) VALUES (?, ?, ?)')
-            .run(refreshToken, user.id, refreshExpiry);
+        db.prepare('INSERT INTO refresh_tokens (token, user_id, family, expires_at) VALUES (?, ?, ?, ?)')
+            .run(refreshToken, user.id, family, refreshExpiry);
 
         res.json({
             token,
@@ -369,7 +394,23 @@ app.post('/api/v1/auth/refresh', (req, res) => {
         ).get(refreshToken);
 
         if (!row) {
+            // M7: Check if this is a consumed (reused) token — indicates theft
+            const consumed = db.prepare(
+                "SELECT family, user_id FROM refresh_tokens WHERE token = ? AND consumed = 1"
+            ).get(refreshToken);
+            if (consumed && consumed.family) {
+                // Reuse detected! Invalidate entire token family
+                db.prepare('DELETE FROM refresh_tokens WHERE family = ?').run(consumed.family);
+                console.warn(`[M7] Refresh token reuse detected! Invalidated family=${consumed.family} user=${consumed.user_id}`);
+            }
             return res.status(401).json({ error: 'Invalid or expired refresh token' });
+        }
+
+        // M7: If the token was already consumed, it's being reused — invalidate family
+        if (row.consumed) {
+            db.prepare('DELETE FROM refresh_tokens WHERE family = ?').run(row.family);
+            console.warn(`[M7] Refresh token reuse detected! Invalidated family=${row.family} user=${row.user_id}`);
+            return res.status(401).json({ error: 'Token reuse detected. All sessions invalidated for security.' });
         }
 
         const user = db.prepare('SELECT * FROM users WHERE id = ?').get(row.user_id);
@@ -377,12 +418,14 @@ app.post('/api/v1/auth/refresh', (req, res) => {
             return res.status(401).json({ error: 'User not found' });
         }
 
-        // Rotate: delete old, create new
-        db.prepare('DELETE FROM refresh_tokens WHERE token = ?').run(refreshToken);
+        // M7: Mark old token as consumed (don't delete — keep for reuse detection)
+        db.prepare('UPDATE refresh_tokens SET consumed = 1 WHERE token = ?').run(refreshToken);
+
+        // Create new token in the same family
         const newRefresh = crypto.randomBytes(64).toString('hex');
         const newExpiry = new Date(Date.now() + REFRESH_EXPIRY_DAYS * 86400000).toISOString();
-        db.prepare('INSERT INTO refresh_tokens (token, user_id, expires_at) VALUES (?, ?, ?)')
-            .run(newRefresh, user.id, newExpiry);
+        db.prepare('INSERT INTO refresh_tokens (token, user_id, family, expires_at) VALUES (?, ?, ?, ?)')
+            .run(newRefresh, user.id, row.family, newExpiry);
 
         const token = createJWT({ sub: user.id, email: user.email, name: user.name });
 
@@ -724,6 +767,12 @@ app.get('/api/v1/recordings/:id/audio', authenticate, (req, res) => {
     if (!rec || !rec.audio_path || !fs.existsSync(rec.audio_path)) {
         return res.status(404).json({ error: 'Audio not found' });
     }
+    // L9: Validate path doesn't escape media directory
+    const pathCheck = validatePath(rec.audio_path, MEDIA_PATH);
+    if (!pathCheck.safe) {
+        console.warn(`[L9] Path traversal blocked: ${rec.audio_path}`);
+        return res.status(403).json({ error: 'Access denied' });
+    }
     const stat = fs.statSync(rec.audio_path);
     const ext = path.extname(rec.audio_path).toLowerCase();
     const mimeTypes = { '.webm': 'audio/webm', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.mp3': 'audio/mpeg' };
@@ -754,6 +803,12 @@ app.get('/api/v1/recordings/:id/video', authenticate, (req, res) => {
         .get(req.params.id, req.user.sub);
     if (!rec || !rec.video_path || !fs.existsSync(rec.video_path)) {
         return res.status(404).json({ error: 'Video not found' });
+    }
+    // L9: Validate path doesn't escape media directory
+    const vidPathCheck = validatePath(rec.video_path, MEDIA_PATH);
+    if (!vidPathCheck.safe) {
+        console.warn(`[L9] Path traversal blocked: ${rec.video_path}`);
+        return res.status(403).json({ error: 'Access denied' });
     }
     const stat = fs.statSync(rec.video_path);
     const ext = path.extname(rec.video_path).toLowerCase();
@@ -1012,6 +1067,12 @@ app.get('/api/v1/translate/:id/audio', authenticate, (req, res) => {
     if (!row || !row.audio_path || !fs.existsSync(row.audio_path)) {
         return res.status(404).json({ error: 'Audio not found' });
     }
+    // L9: Validate path doesn't escape media directory
+    const transPathCheck = validatePath(row.audio_path, MEDIA_PATH);
+    if (!transPathCheck.safe) {
+        console.warn(`[L9] Path traversal blocked: ${row.audio_path}`);
+        return res.status(403).json({ error: 'Access denied' });
+    }
     const stat = fs.statSync(row.audio_path);
     res.writeHead(200, { 'Content-Length': stat.size, 'Content-Type': 'audio/webm' });
     fs.createReadStream(row.audio_path).pipe(res);
@@ -1214,6 +1275,27 @@ app.get('/api/v1/updates/check', (req, res) => {
         releaseNotes: 'Translation strand, i18n system, sync hardening, analytics, and bug fixes.',
         downloadUrl: available ? 'https://windypro.thewindstorm.uk/download' : null
     });
+});
+
+// ═══════════════════════════════════════════════
+// Multer Temp File Cleanup (M12)
+// ═══════════════════════════════════════════════
+app.use((err, req, res, next) => {
+    // Clean up multer temp files on error
+    const filesToClean = [];
+    if (req.file && req.file.path) filesToClean.push(req.file.path);
+    if (req.files) {
+        const files = Array.isArray(req.files) ? req.files : Object.values(req.files).flat();
+        files.forEach(f => { if (f && f.path) filesToClean.push(f.path); });
+    }
+    filesToClean.forEach(filePath => {
+        fs.unlink(filePath, (unlinkErr) => {
+            if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+                console.warn('[M12] Failed to clean temp file:', filePath, unlinkErr.message);
+            }
+        });
+    });
+    next(err);
 });
 
 // ═══════════════════════════════════════════════

@@ -7,6 +7,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import archiver from 'archiver';
 import { getDb } from '../db/schema';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validation';
@@ -282,10 +283,10 @@ router.delete('/bulk', authenticateToken, (req: Request, res: Response) => {
     try {
         const db = getDb();
         const userId = (req as AuthRequest).user.userId;
-        const { ids } = req.body;
+        const ids = req.body.recordingIds || req.body.ids;
 
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
-            return res.status(400).json({ error: 'ids array is required' });
+            return res.status(400).json({ error: 'recordingIds array is required' });
         }
 
         if (ids.length > 100) {
@@ -325,20 +326,21 @@ router.post('/export', authenticateToken, async (req: Request, res: Response) =>
     try {
         const db = getDb();
         const userId = (req as AuthRequest).user.userId;
-        const { ids, format } = req.body;
+        const { format } = req.body;
+        const ids = req.body.recordingIds || req.body.ids;
 
         let recordings: any[];
         if (ids && Array.isArray(ids) && ids.length > 0) {
             const placeholders = ids.map(() => '?').join(',');
             recordings = db.prepare(
                 `SELECT id, bundle_id, duration_seconds, transcript_text, transcript_segments,
-                        created_at, device_platform, has_video, file_size
+                        created_at, device_platform, has_video, file_size, file_path
                  FROM recordings WHERE user_id = ? AND id IN (${placeholders})`
             ).all(userId, ...ids) as any[];
         } else {
             recordings = db.prepare(
                 `SELECT id, bundle_id, duration_seconds, transcript_text, transcript_segments,
-                        created_at, device_platform, has_video, file_size
+                        created_at, device_platform, has_video, file_size, file_path
                  FROM recordings WHERE user_id = ? ORDER BY created_at DESC LIMIT 1000`
             ).all(userId) as any[];
         }
@@ -357,6 +359,55 @@ router.post('/export', authenticateToken, async (req: Request, res: Response) =>
             platform: r.device_platform,
             hasVideo: !!r.has_video,
         }));
+
+        // ── ZIP export with audio files + transcript text files ──
+        if (format === 'zip') {
+            res.setHeader('Content-Type', 'application/zip');
+            res.setHeader('Content-Disposition', 'attachment; filename="recordings-export.zip"');
+
+            const archive = archiver('zip', { zlib: { level: 5 } });
+            archive.on('error', (err: Error) => {
+                console.error('Archive error:', err);
+                if (!res.headersSent) {
+                    res.status(500).json({ error: 'ZIP export failed' });
+                }
+            });
+            archive.pipe(res);
+
+            for (const r of recordings) {
+                const safeId = r.bundle_id || r.id;
+
+                // Add transcript text file
+                if (r.transcript_text) {
+                    archive.append(r.transcript_text, { name: `${safeId}/transcript.txt` });
+                }
+
+                // Add transcript segments as JSON
+                if (r.transcript_segments) {
+                    archive.append(r.transcript_segments, { name: `${safeId}/segments.json` });
+                }
+
+                // Add audio file if it exists on disk
+                if (r.file_path && fs.existsSync(r.file_path)) {
+                    const ext = path.extname(r.file_path) || '.webm';
+                    archive.file(r.file_path, { name: `${safeId}/audio${ext}` });
+                }
+
+                // Add metadata JSON
+                archive.append(JSON.stringify({
+                    id: r.id,
+                    bundleId: r.bundle_id,
+                    duration: r.duration_seconds,
+                    createdAt: r.created_at,
+                    platform: r.device_platform,
+                    hasVideo: !!r.has_video,
+                    fileSize: r.file_size,
+                }, null, 2), { name: `${safeId}/metadata.json` });
+            }
+
+            await archive.finalize();
+            return;
+        }
 
         if (format === 'csv') {
             const header = 'id,bundleId,duration,createdAt,platform,hasVideo,transcript\n';

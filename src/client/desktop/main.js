@@ -82,7 +82,8 @@ app.commandLine.appendSwitch('enable-speech-dispatcher');
 app.commandLine.appendSwitch('enable-features', 'WebSpeechAPI');
 const path = require('path');
 const Store = require('electron-store');
-const { spawn, exec, execFile } = require('child_process');
+const { spawn, exec, execFile, execSync, execFileSync } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
 const fsp = fs.promises;
 const os = require('os');
@@ -457,9 +458,11 @@ function startPythonServer() {
   const port = serverConfig.port || 9876;
   try {
     if (process.platform === 'win32') {
-      execSync(`for /f "tokens=5" %a in ('netstat -aon ^| findstr :${port} ^| findstr LISTENING') do taskkill /PID %a /F 2>nul`, { stdio: 'pipe', timeout: 5000 });
+      // SEC-M10: Validate port is a safe integer before interpolation
+      const safePort = parseInt(port, 10);
+      if (!Number.isFinite(safePort) || safePort < 1 || safePort > 65535) throw new Error('Invalid port');
+      execSync(`for /f "tokens=5" %a in ('netstat -aon ^| findstr :${safePort} ^| findstr LISTENING') do taskkill /PID %a /F 2>nul`, { stdio: 'pipe', timeout: 5000 });
     } else {
-      const { execFileSync } = require('child_process');
       // SEC-M10: Use execFileSync with array arguments to avoid shell injection
       const pids = execFileSync('lsof', ['-ti', `:${port}`], { timeout: 5000, stdio: 'pipe' }).toString().trim();
       if (pids) {
@@ -608,7 +611,8 @@ function createWindow() {
       if (isRecording && global._focusGuardActive && global._lastFocusedApp && global._lastFocusedApp !== 'Electron') {
         console.info(`[Focus-Guard] Window stole focus during recording — returning to "${global._lastFocusedApp}"`);
         mainWindow.blur();
-        exec(`osascript -e 'tell application "${global._lastFocusedApp}" to activate'`, { timeout: 2000 });
+        // SEC-M10: Use execFile with array args to avoid shell injection via app name
+        execFile('osascript', ['-e', `tell application "${global._lastFocusedApp}" to activate`], { timeout: 2000 });
       }
     });
   }
@@ -2381,7 +2385,9 @@ function registerHotkeys() {
     if (!isRecording) {
       try {
         if (process.platform === 'linux') {
-          savedWindowId = require('child_process').execSync('xdotool getactivewindow', { timeout: 500 }).toString().trim();
+          // SEC-M10/L5: Use execFileSync and validate window ID is numeric
+          savedWindowId = execFileSync('xdotool', ['getactivewindow'], { timeout: 500 }).toString().trim();
+          if (!/^\d+$/.test(savedWindowId)) savedWindowId = null;
         } else if (process.platform === 'darwin') {
           // To find the REAL focused app behind our always-on-top window:
           // 1. Temporarily drop alwaysOnTop
@@ -2392,10 +2398,8 @@ function registerHotkeys() {
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.setAlwaysOnTop(false);
             }
-            const frontApp = require('child_process').execSync(
-              'osascript -e \'tell application "System Events" to get name of first application process whose frontmost is true\'',
-              { timeout: 1000 }
-            ).toString().trim();
+            // SEC-M10: Use execFileSync with array args
+            const frontApp = execFileSync('osascript', ['-e', 'tell application "System Events" to get name of first application process whose frontmost is true'], { timeout: 1000 }).toString().trim();
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.setAlwaysOnTop(true, 'floating');
             }
@@ -2439,7 +2443,8 @@ function registerHotkeys() {
         console.info('[Focus-Guard] Armed (3s grace period elapsed)');
         // Also do one explicit restore in case focus was stolen during startup
         if (global._lastFocusedApp && global._lastFocusedApp !== 'Electron' && isRecording) {
-          exec(`osascript -e 'tell application "${global._lastFocusedApp}" to activate'`, { timeout: 2000 },
+          // SEC-M10: Use execFile with array args to avoid shell injection via app name
+          execFile('osascript', ['-e', `tell application "${global._lastFocusedApp}" to activate`], { timeout: 2000 },
             (err) => {
               if (!err) console.info(`[Focus] Restored focus to "${global._lastFocusedApp}"`);
             }
@@ -2588,7 +2593,8 @@ function toggleRecording() {
   if (isRecording && process.platform === 'darwin') {
     const restoreFocusToTarget = () => {
       if (global._lastFocusedApp && global._lastFocusedApp !== 'Electron' && isRecording) {
-        exec(`osascript -e 'tell application "${global._lastFocusedApp}" to activate'`, { timeout: 2000 });
+        // SEC-M10: Use execFile with array args to avoid shell injection via app name
+        execFile('osascript', ['-e', `tell application "${global._lastFocusedApp}" to activate`], { timeout: 2000 });
       }
     };
     setTimeout(restoreFocusToTarget, 600);
@@ -2739,6 +2745,71 @@ ipcMain.handle('get-api-key', (event, keyName) => {
   } catch (err) {
     return '';
   }
+});
+
+// M5: Deepgram WebSocket proxy — keeps API key in main process, never sent to renderer
+let _dgProxyWs = null;
+ipcMain.handle('deepgram-stream-start', async (_event, opts) => {
+  try {
+    const apiKey = await (async () => {
+      const encB64 = store.get('engine.deepgramApiKeyEncrypted', '');
+      if (encB64 && safeStorage.isEncryptionAvailable()) {
+        return safeStorage.decryptString(Buffer.from(encB64, 'base64'));
+      }
+      return store.get('engine.deepgramApiKey', '') || process.env.DEEPGRAM_API_KEY || '';
+    })();
+    if (!apiKey) return { ok: false, error: 'No Deepgram API key configured' };
+
+    const WebSocket = require('ws');
+    const lang = opts?.language || 'en';
+    const diarize = opts?.diarize || false;
+    let dgUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&language=${encodeURIComponent(lang)}&smart_format=true&interim_results=true&punctuate=true`;
+    if (diarize) dgUrl += '&diarize=true';
+
+    // Connect with Authorization header (not sub-protocol) — API key stays server-side
+    _dgProxyWs = new WebSocket(dgUrl, { headers: { 'Authorization': `Token ${apiKey}` } });
+
+    _dgProxyWs.on('open', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deepgram-proxy-open');
+      }
+    });
+    _dgProxyWs.on('message', (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deepgram-proxy-message', data.toString());
+      }
+    });
+    _dgProxyWs.on('error', (err) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deepgram-proxy-error', err.message || 'WebSocket error');
+      }
+    });
+    _dgProxyWs.on('close', () => {
+      _dgProxyWs = null;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deepgram-proxy-close');
+      }
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('deepgram-stream-send', (_event, audioBuffer) => {
+  if (_dgProxyWs && _dgProxyWs.readyState === 1) { // WebSocket.OPEN
+    _dgProxyWs.send(Buffer.from(audioBuffer));
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('deepgram-stream-stop', () => {
+  if (_dgProxyWs) {
+    try { _dgProxyWs.close(); } catch (_) {}
+    _dgProxyWs = null;
+  }
+  return true;
 });
 
 ipcMain.handle('choose-archive-folder', async () => {
@@ -2932,9 +3003,10 @@ ipcMain.handle('open-external-url', async (event, url) => {
 
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
   const tmpDir = os.tmpdir();
-  const ts = Date.now();
-  const webmPath = path.join(tmpDir, `windy-batch-${ts}.webm`);
-  const wavPath = path.join(tmpDir, `windy-batch-${ts}.wav`);
+  // SEC-M8: Use crypto.randomBytes for unpredictable temp filenames
+  const tmpId = crypto.randomBytes(16).toString('hex');
+  const webmPath = path.join(tmpDir, `windy-batch-${tmpId}.webm`);
+  const wavPath = path.join(tmpDir, `windy-batch-${tmpId}.wav`);
 
   try {
     // Save base64 audio to temp file
@@ -3046,6 +3118,7 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
 
       // 2. Activate the target app AND simulate Cmd+V in a single osascript call
       //    This ensures the keystroke goes to the correct app
+      // SEC-M10: Use execFile with array args to avoid shell injection via targetApp
       const appleScript = `
         tell application "${targetApp}" to activate
         delay 0.5
@@ -3053,8 +3126,8 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
           keystroke "v" using command down
         end tell
       `;
-      await new Promise((resolve) => exec(
-        `osascript -e '${appleScript.replace(/'/g, "'\\''")}'`,
+      await new Promise((resolve) => execFile(
+        'osascript', ['-e', appleScript],
         { timeout: 8000 }, (err, stdout, stderr) => {
           if (err) {
             console.error(`[AutoPaste] Failed:`, err.message);
@@ -3082,7 +3155,7 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
         mainWindow.setOpacity(0);
       }
       await new Promise(r => setTimeout(r, 200));
-      await new Promise((resolve) => exec('xdotool key --clearmodifiers ctrl+v', { timeout: 5000 }, resolve));
+      await new Promise((resolve) => execFile('xdotool', ['key', '--clearmodifiers', 'ctrl+v'], { timeout: 5000 }, resolve));
       await new Promise(r => setTimeout(r, 100));
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.setOpacity(savedOpacity || 1);
@@ -3640,7 +3713,7 @@ ipcMain.handle('export-soul-file', async () => {
     const manifest = {
       version: '1.0',
       exportDate: new Date().toISOString(),
-      appVersion: require('../../../package.json').version || '1.6.1',
+      appVersion: app.getVersion() || '1.6.1',
       stats: { totalFiles, audioFiles, videoFiles, transcriptFiles, totalWords, totalChars, days: days.length, dateRange: days.length ? { first: days[0], last: days[days.length - 1] } : null }
     };
     archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
@@ -3781,8 +3854,8 @@ ipcMain.handle('detect-hardware', async () => {
     }
   } else {
     try {
-      const { execSync } = require('child_process');
-      const gpuInfo = execSync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits', { timeout: 5000 }).toString().trim();
+      // SEC-M10: Use execFileSync with array args
+      const gpuInfo = execFileSync('nvidia-smi', ['--query-gpu=name,memory.total', '--format=csv,noheader,nounits'], { timeout: 5000 }).toString().trim();
       if (gpuInfo) {
         const [name, vramMB] = gpuInfo.split(', ');
         result.gpu = { name: name.trim(), vramMB: parseInt(vramMB) || 0, type: 'cuda' };
@@ -3794,27 +3867,24 @@ ipcMain.handle('detect-hardware', async () => {
 
   // Check disk space
   try {
-    const { execSync } = require('child_process');
     const homeDir = os.homedir();
     if (process.platform === 'win32') {
       const drive = homeDir.charAt(0);
-      // SEC-M10: Use execFileSync with array args instead of string interpolation
-      const { execFileSync } = require('child_process');
+      // SEC-M10: Validate drive letter is a single alpha char before interpolation
+      if (!/^[a-zA-Z]$/.test(drive)) throw new Error('Invalid drive letter');
       const out = execFileSync('wmic', ['logicaldisk', 'where', `DeviceID='${drive}:'`, 'get', 'FreeSpace', '/value'], { timeout: 3000 }).toString();
       const match = out.match(/FreeSpace=(\d+)/);
       if (match) result.diskFreeGB = Math.round(parseInt(match[1]) / (1024 * 1024 * 1024));
     } else if (process.platform === 'darwin') {
       // macOS: df -g shows in GB (BSD df, no -B flag)
       // SEC-M10: Use execFileSync with array args
-      const { execFileSync } = require('child_process');
       const dfOut = execFileSync('df', ['-g', homeDir], { timeout: 3000 }).toString();
       const out = dfOut.split('\n').slice(-2)[0]?.split(/\s+/)[3] || '';
       result.diskFreeGB = parseInt(out) || null;
     } else {
       // Linux: df -BG shows in GB (GNU df)
       // SEC-M10: Use execFileSync with array args
-      const { execFileSync: execFileSyncLinux } = require('child_process');
-      const dfOut = execFileSyncLinux('df', ['-BG', homeDir], { timeout: 3000 }).toString();
+      const dfOut = execFileSync('df', ['-BG', homeDir], { timeout: 3000 }).toString();
       const out = dfOut.split('\n').slice(-2)[0]?.split(/\s+/)[3] || '';
       result.diskFreeGB = parseInt(out) || null;
     }
@@ -4945,7 +5015,8 @@ function httpGet(url) {
 // Identify a song from a base64 data URL
 ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
   const tmpDir = require('os').tmpdir();
-  const tmpFile = require('path').join(tmpDir, `windy_identify_${Date.now()}.webm`);
+  // SEC-M8: Use crypto.randomBytes for unpredictable temp filenames
+  const tmpFile = require('path').join(tmpDir, `windy_identify_${crypto.randomBytes(16).toString('hex')}.webm`);
 
   try {
     // Write data URL to temp file
@@ -5691,11 +5762,16 @@ ipcMain.handle('browse-document-file', async () => {
     if (result.canceled || !result.filePaths[0]) return null;
     const filePath = result.filePaths[0];
     const ext = path.extname(filePath).toLowerCase();
-    // Binary formats: return base64 so the renderer can decode them properly
-    if (ext === '.pdf' || ext === '.docx') {
+    // Binary formats: return file path for PDFs (renderer uses pdf.js or similar),
+    // base64 for other binary formats like DOCX
+    if (ext === '.pdf') {
+      return { filePath, name: path.basename(filePath), ext, encoding: 'path' };
+    }
+    if (ext === '.docx') {
       const buffer = fs.readFileSync(filePath);
       return { data: buffer.toString('base64'), encoding: 'base64', name: path.basename(filePath), ext };
     }
+    // Text formats (.txt, .md, .csv, .html): read as UTF-8
     const text = fs.readFileSync(filePath, 'utf8');
     return { text, name: path.basename(filePath) };
   } catch (err) {

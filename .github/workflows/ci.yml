@@ -50,8 +50,17 @@ jobs:
           python tests/test_desktop_security.py
           python tests/test_web_portal.py
       - name: Run pytest
+        id: pytest
+        continue-on-error: true
         run: |
-          python -m pytest tests/test_desktop_gaps.py tests/test_desktop_core_features.py -v --tb=short --timeout=30 || true
+          python -m pytest tests/test_desktop_gaps.py tests/test_desktop_core_features.py -v --tb=short --timeout=30
+      - name: Report pytest outcome
+        if: steps.pytest.outcome == 'failure'
+        run: |
+          echo "::warning::Python tests failed (non-blocking). Review test output above."
+          echo "## ⚠️ Python Test Failures" >> $GITHUB_STEP_SUMMARY
+          echo "pytest exited with failures. These are non-blocking until dependencies are fully configured." >> $GITHUB_STEP_SUMMARY
+          echo "See the 'Run pytest' step output for details." >> $GITHUB_STEP_SUMMARY
 
   # ── Web Frontend Build ──
   build-web:
