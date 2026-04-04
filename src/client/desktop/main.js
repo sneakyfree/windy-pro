@@ -603,16 +603,16 @@ function createWindow() {
 
   // macOS: Intercept focus events during recording.
   // When getUserMedia/AudioContext activate, Chromium steals focus to our window.
-  // We immediately give it back by blurring + reactivating the target app.
-  // IMPORTANT: we add a 3-second grace period after recording starts to let
-  // getUserMedia complete — blurring too early causes 'Document is not focused' errors.
+  // We immediately give it back by blurring + reactivating the target app via PID.
+  // PID-based activation is critical — name-based 'tell app X to activate' fails
+  // when multiple Electron apps share the same process name.
   if (process.platform === 'darwin') {
     mainWindow.on('focus', () => {
-      if (isRecording && global._focusGuardActive && global._lastFocusedApp && global._lastFocusedApp !== 'Electron') {
-        console.info(`[Focus-Guard] Window stole focus during recording — returning to "${global._lastFocusedApp}"`);
+      if (isRecording && global._focusGuardActive && global._lastFocusedPid) {
+        console.info(`[Focus-Guard] Window stole focus during recording — returning to "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
         mainWindow.blur();
-        // SEC-M10: Use execFile with array args to avoid shell injection via app name
-        execFile('osascript', ['-e', `tell application "${global._lastFocusedApp}" to activate`], { timeout: 2000 });
+        const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
+        execFile('osascript', ['-e', script], { timeout: 2000 });
       }
     });
   }
@@ -2388,44 +2388,46 @@ function registerHotkeys() {
           // SEC-M10/L5: Use execFileSync and validate window ID is numeric
           savedWindowId = execFileSync('xdotool', ['getactivewindow'], { timeout: 500 }).toString().trim();
           if (!/^\d+$/.test(savedWindowId)) savedWindowId = null;
-        } else if (process.platform === 'darwin') {
-          // To find the REAL focused app behind our always-on-top window:
-          // 1. Temporarily drop alwaysOnTop
-          // 2. Query the frontmost app (now it's not us)
-          // 3. Restore alwaysOnTop
-          // This is synchronous but only takes ~200ms and fires once per recording.
+        }
+        // macOS: Take a FRESH PID snapshot RIGHT NOW at hotkey-press time.
+        // The 1s poller might have stale data if the user just clicked a new app.
+        // This synchronous query guarantees we capture the correct target.
+        if (process.platform === 'darwin') {
           try {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.setAlwaysOnTop(false);
+            const ourPid = process.pid;
+            const result = execFileSync('osascript', ['-e',
+              'tell application "System Events"\n' +
+              '  set fp to first application process whose frontmost is true\n' +
+              '  return (name of fp) & "|" & (unix id of fp)\n' +
+              'end tell'
+            ], { timeout: 1000 }).toString().trim();
+            const sep = result.lastIndexOf('|');
+            if (sep > 0) {
+              const appName = result.substring(0, sep);
+              const appPid = parseInt(result.substring(sep + 1), 10);
+              if (appPid && appPid !== ourPid) {
+                global._lastFocusedApp = appName;
+                global._lastFocusedPid = appPid;
+              }
             }
-            // SEC-M10: Use execFileSync with array args
-            const frontApp = execFileSync('osascript', ['-e', 'tell application "System Events" to get name of first application process whose frontmost is true'], { timeout: 1000 }).toString().trim();
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.setAlwaysOnTop(true, 'floating');
-            }
-            if (frontApp && !frontApp.includes('Electron') && !frontApp.includes('Windy')) {
-              global._lastFocusedApp = frontApp;
-              console.info(`[Focus] Saved target app: "${frontApp}"`);
-            } else {
-              console.warn(`[Focus] Frontmost app is us: "${frontApp}"`);
-            }
-          } catch (e) {
-            // Restore alwaysOnTop even on error
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.setAlwaysOnTop(true, 'floating');
-            }
-          }
+          } catch (_) { /* use last known tracker value */ }
+          console.info(`[Focus] Target app (fresh snapshot): "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
         }
       } catch (_) { }
 
-      // Disable focus guard during getUserMedia startup (re-enable after 3s)
+      // Disable focus guard during getUserMedia startup (re-enable after 1s)
       global._focusGuardActive = false;
     }
 
     toggleRecording();
 
     // Restore focus to the user's target app after a delay (only when STARTING)
-    if (!isRecording) return; // isRecording is now true after toggleRecording()
+    if (!isRecording) {
+      // Just STOPPED recording — clear saved target so tracker captures fresh next time
+      global._lastFocusedPid = null;
+      global._lastFocusedApp = null;
+      return;
+    }
 
     if (savedWindowId && process.platform === 'linux') {
       const restore = () => {
@@ -2437,20 +2439,20 @@ function registerHotkeys() {
       setTimeout(restore, 500);
       setTimeout(restore, 1000);
     } else if (process.platform === 'darwin') {
-      // Enable focus guard after getUserMedia has had time to complete
+      // Enable focus guard after 1s — enough for getUserMedia to complete.
       setTimeout(() => {
         global._focusGuardActive = true;
-        console.info('[Focus-Guard] Armed (3s grace period elapsed)');
-        // Also do one explicit restore in case focus was stolen during startup
-        if (global._lastFocusedApp && global._lastFocusedApp !== 'Electron' && isRecording) {
-          // SEC-M10: Use execFile with array args to avoid shell injection via app name
-          execFile('osascript', ['-e', `tell application "${global._lastFocusedApp}" to activate`], { timeout: 2000 },
+        console.info('[Focus-Guard] Armed (1s grace period elapsed)');
+        // Explicit restore in case focus was stolen during startup
+        if (global._lastFocusedPid && isRecording) {
+          const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
+          execFile('osascript', ['-e', script], { timeout: 2000 },
             (err) => {
-              if (!err) console.info(`[Focus] Restored focus to "${global._lastFocusedApp}"`);
+              if (!err) console.info(`[Focus] Restored focus to "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
             }
           );
         }
-      }, 3000);
+      }, 1000);
     }
   });
   console.info(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
@@ -2586,20 +2588,21 @@ function toggleRecording() {
   }
 
   // macOS: getUserMedia/AudioContext steal focus to Electron window.
-  // Restore focus to the target app after mic is acquired.
-  // We DON'T hide/show the window — that causes visible flashing.
-  // Instead, just activate the target app which gives it keyboard focus
-  // while our always-on-top window stays visible on screen.
+  // Restore focus AGGRESSIVELY so the cursor keeps blinking in the target app.
+  // getUserMedia steals focus once, AudioContext may steal again — we hammer it back.
   if (isRecording && process.platform === 'darwin') {
     const restoreFocusToTarget = () => {
-      if (global._lastFocusedApp && global._lastFocusedApp !== 'Electron' && isRecording) {
-        // SEC-M10: Use execFile with array args to avoid shell injection via app name
-        execFile('osascript', ['-e', `tell application "${global._lastFocusedApp}" to activate`], { timeout: 2000 });
+      if (global._lastFocusedPid && isRecording) {
+        const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
+        execFile('osascript', ['-e', script], { timeout: 2000 });
       }
     };
+    // Rapid-fire restores to keep cursor blinking through getUserMedia + AudioContext
+    setTimeout(restoreFocusToTarget, 200);
+    setTimeout(restoreFocusToTarget, 400);
     setTimeout(restoreFocusToTarget, 600);
+    setTimeout(restoreFocusToTarget, 1000);
     setTimeout(restoreFocusToTarget, 1500);
-    setTimeout(restoreFocusToTarget, 3000);
   }
 }
 
@@ -2618,13 +2621,17 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
     safeSend('state-change', 'injecting');
     updateTrayIcon('injecting');
 
-    // Hide Windy Pro window so focus returns to the previous app
-    if (mainWindow && mainWindow.isVisible()) {
+    // macOS: Activate target app by PID to give it keyboard focus.
+    // DO NOT hide the window — that causes visual disappearance.
+    if (process.platform === 'darwin' && global._lastFocusedPid) {
+      const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
+      execFile('osascript', ['-e', script], { timeout: 2000 });
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } else if (mainWindow && mainWindow.isVisible()) {
+      // Non-macOS fallback: hide briefly
       mainWindow.hide();
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
-
-    // Small delay to let the OS switch focus
-    await new Promise(resolve => setTimeout(resolve, 200));
 
     try {
       await getInjector().inject(transcript);
@@ -2633,11 +2640,10 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
       safeSend('injection-error', error.message);
     }
 
-    // Show window again after paste WITHOUT stealing focus
-    // so the user can proofread and hit Enter in their chat app
+    // Restore UI state (window is already visible on macOS)
     setTimeout(() => {
-      if (mainWindow) {
-        mainWindow.showInactive();  // Show without taking focus
+      if (mainWindow && !mainWindow.isVisible()) {
+        mainWindow.showInactive();  // Show without taking focus (non-macOS)
       }
       const newState = isRecording ? 'listening' : 'idle';
       safeSend('state-change', newState);
@@ -3100,28 +3106,25 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
     const { clipboard } = require('electron');
     clipboard.writeText(text.trim());
     console.info(`[AutoPaste] Text on clipboard: ${text.trim().length} chars`);
-    console.info(`[AutoPaste] Target app: "${global._lastFocusedApp || 'NONE'}"`);
+    console.info(`[AutoPaste] Target: "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
 
     if (process.platform === 'darwin') {
-      // ── macOS auto-paste ──
-      const targetApp = global._lastFocusedApp;
-      if (!targetApp || targetApp === 'Electron' || targetApp.includes('Windy')) {
-        console.warn(`[AutoPaste] Invalid target "${targetApp}" — text on clipboard, use Cmd+V manually`);
+      // ── macOS auto-paste via PID ──
+      const targetPid = global._lastFocusedPid;
+      const targetApp = global._lastFocusedApp || 'unknown';
+      if (!targetPid) {
+        console.warn(`[AutoPaste] No target PID — text on clipboard, use Cmd+V manually`);
         return false;
       }
 
-      // 1. Drop alwaysOnTop so our window doesn't interfere
-      const wasAlwaysOnTop = mainWindow && !mainWindow.isDestroyed() && mainWindow.isAlwaysOnTop();
-      if (mainWindow && !mainWindow.isDestroyed() && wasAlwaysOnTop) {
-        mainWindow.setAlwaysOnTop(false);
-      }
-
-      // 2. Activate the target app AND simulate Cmd+V in a single osascript call
-      //    This ensures the keystroke goes to the correct app
-      // SEC-M10: Use execFile with array args to avoid shell injection via targetApp
+      // Activate the exact target process by PID and send Cmd+V.
+      // PID-based activation works even when multiple apps share the name "Electron".
+      // DO NOT drop alwaysOnTop or hide the window — our floating window stays visible.
       const appleScript = `
-        tell application "${targetApp}" to activate
-        delay 0.5
+        tell application "System Events"
+          set frontmost of (first application process whose unix id is ${targetPid}) to true
+        end tell
+        delay 0.3
         tell application "System Events"
           keystroke "v" using command down
         end tell
@@ -3133,17 +3136,16 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
             console.error(`[AutoPaste] Failed:`, err.message);
             if (stderr) console.error(`[AutoPaste] stderr:`, stderr);
           } else {
-            console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars to "${targetApp}"`);
+            console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars to "${targetApp}" (pid ${targetPid})`);
           }
           resolve();
         }
       ));
 
-      // 3. Restore alwaysOnTop after a beat
-      await new Promise(r => setTimeout(r, 300));
-      if (mainWindow && !mainWindow.isDestroyed() && wasAlwaysOnTop) {
-        mainWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'floating' : 'normal');
-      }
+      // After paste, clear the saved target so the tracker captures
+      // whatever the user clicks NEXT, not the app we just activated.
+      global._lastFocusedPid = null;
+      global._lastFocusedApp = null;
       return true;
 
     } else if (process.platform === 'linux') {
@@ -5339,6 +5341,43 @@ app.whenReady().then(async () => {
   sanitizeHotkeys();  // Reset any accidentally-bound system shortcuts (e.g. Ctrl+V)
   registerHotkeys();
   _perfMark('Window + tray created');
+
+  // ═══ macOS Continuous Focus Tracker (PID-based) ═══
+  // Polls frontmost app every 1s — tracks BOTH name and PID.
+  // Filters by PID (not name) so we only skip our OWN Electron process.
+  // This means other Electron apps (VS Code, Cursor, Antigravity, etc.) are
+  // correctly captured as valid paste targets.
+  // Pauses during recording to freeze the target.
+  if (process.platform === 'darwin') {
+    global._lastFocusedApp = null;
+    global._lastFocusedPid = null;
+    global._focusGuardActive = false;
+    const ourPid = process.pid;
+    global._focusTrackerInterval = setInterval(() => {
+      // Don't update during recording — keep the target frozen
+      if (isRecording) return;
+      try {
+        // Query both name and PID of the frontmost process
+        const result = execFileSync('osascript', ['-e',
+          'tell application "System Events"\n' +
+          '  set fp to first application process whose frontmost is true\n' +
+          '  return (name of fp) & "|" & (unix id of fp)\n' +
+          'end tell'
+        ], { timeout: 1000 }).toString().trim();
+        const sep = result.lastIndexOf('|');
+        if (sep > 0) {
+          const appName = result.substring(0, sep);
+          const appPid = parseInt(result.substring(sep + 1), 10);
+          // Only skip our OWN process — allow all other apps including other Electron apps
+          if (appPid && appPid !== ourPid) {
+            global._lastFocusedApp = appName;
+            global._lastFocusedPid = appPid;
+          }
+        }
+      } catch (_) { /* osascript timeout — skip this tick */ }
+    }, 1000);
+    console.info(`[Focus] macOS PID-based focus tracker started (1s poll, our pid=${ourPid})`);
+  }
 
   // macOS dark mode: forward system theme changes to renderer
   if (process.platform === 'darwin') {

@@ -11,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="chat.css">
   <script src="input-validator.js"></script>
+  <script src="windy-voice-input.js"></script>
 </head>
 <body>
 
@@ -163,7 +164,15 @@
             <input type="text" id="message-input" placeholder="Type a message..." maxlength="4000" dir="auto" aria-label="Message input"
                    onkeydown="if(event.key==='Enter')sendMessage()"
                    oninput="handleTyping()">
+            <button class="chat-mic-btn" onclick="toggleVoiceCapture()" id="mic-btn" aria-label="Voice input" title="Voice input (Windy Word)">🎙️</button>
             <button class="chat-send-btn" onclick="sendMessage()" id="send-btn" aria-label="Send message">➤</button>
+          </div>
+          <!-- Voice recording indicator -->
+          <div class="voice-recording-bar" id="voice-recording-bar" style="display:none;">
+            <div class="voice-pulse"></div>
+            <span id="voice-timer">0:00</span>
+            <span style="flex:1; font-size:12px; color:var(--chat-text-dim);">Recording... speak now</span>
+            <button onclick="cancelVoiceCapture()" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:12px; font-weight:600;">Cancel</button>
           </div>
         </div>
       </div>
@@ -1080,6 +1089,417 @@
       const modal = document.getElementById('new-chat-modal');
       if (modal && modal.style.display !== 'none') { hideNewChat(); return; }
     });
+
+    // ═══════════════════════════════════════════════════════════
+    //  TASK 1 & 2: Voice Input (Windy Word → Chat)
+    // ═══════════════════════════════════════════════════════════
+
+    let _voiceRecorder = null;
+    let _voiceTimerInterval = null;
+    let _voiceStartTime = null;
+
+    async function toggleVoiceCapture() {
+      if (_voiceRecorder && _voiceRecorder.isRecording) {
+        await stopVoiceCapture();
+      } else {
+        await startVoiceCapture();
+      }
+    }
+
+    async function startVoiceCapture() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 }
+        });
+
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType: 'audio/webm;codecs=opus',
+          audioBitsPerSecond: 64000,
+        });
+
+        const chunks = [];
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+
+        mediaRecorder.start(100);
+        _voiceRecorder = { mediaRecorder, stream, chunks, isRecording: true };
+        _voiceStartTime = Date.now();
+
+        // Update UI
+        const micBtn = document.getElementById('mic-btn');
+        micBtn.textContent = '⏹️';
+        micBtn.classList.add('recording');
+        micBtn.title = 'Stop recording';
+        document.getElementById('voice-recording-bar').style.display = 'flex';
+
+        // Timer
+        _voiceTimerInterval = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - _voiceStartTime) / 1000);
+          const m = Math.floor(elapsed / 60);
+          const s = String(elapsed % 60).padStart(2, '0');
+          document.getElementById('voice-timer').textContent = `${m}:${s}`;
+        }, 200);
+
+      } catch (err) {
+        showVoiceToast('Microphone access denied. Check permissions.', true);
+      }
+    }
+
+    async function stopVoiceCapture() {
+      if (!_voiceRecorder) return;
+
+      clearInterval(_voiceTimerInterval);
+
+      return new Promise((resolve) => {
+        _voiceRecorder.mediaRecorder.onstop = async () => {
+          const blob = new Blob(_voiceRecorder.chunks, { type: 'audio/webm;codecs=opus' });
+          _voiceRecorder.stream.getTracks().forEach(t => t.stop());
+          _voiceRecorder = null;
+
+          // Reset UI
+          resetVoiceUI();
+
+          // Show transcribing state
+          const bar = document.getElementById('voice-recording-bar');
+          bar.style.display = 'flex';
+          bar.innerHTML = `<div class="voice-transcribing">Transcribing<div class="dots"><span></span><span></span><span></span></div></div>`;
+
+          try {
+            const text = await transcribeAudioBlob(blob);
+            bar.style.display = 'none';
+
+            if (text && text.trim()) {
+              const input = document.getElementById('message-input');
+              input.value = text.trim();
+              input.focus();
+              // Auto-send
+              sendMessage();
+            } else {
+              showVoiceToast('No speech detected. Try again.', true);
+            }
+          } catch (err) {
+            bar.style.display = 'none';
+            showVoiceToast('Voice capture failed — try typing instead', true);
+          }
+          resolve();
+        };
+
+        _voiceRecorder.mediaRecorder.stop();
+      });
+    }
+
+    function cancelVoiceCapture() {
+      if (_voiceRecorder) {
+        clearInterval(_voiceTimerInterval);
+        _voiceRecorder.stream.getTracks().forEach(t => t.stop());
+        _voiceRecorder.mediaRecorder.stop();
+        _voiceRecorder = null;
+      }
+      resetVoiceUI();
+    }
+
+    function resetVoiceUI() {
+      const micBtn = document.getElementById('mic-btn');
+      micBtn.textContent = '🎙️';
+      micBtn.classList.remove('recording');
+      micBtn.title = 'Voice input (Windy Word)';
+      document.getElementById('voice-recording-bar').style.display = 'none';
+      document.getElementById('voice-recording-bar').innerHTML = `
+        <div class="voice-pulse"></div>
+        <span id="voice-timer">0:00</span>
+        <span style="flex:1; font-size:12px; color:var(--chat-text-dim);">Recording... speak now</span>
+        <button onclick="cancelVoiceCapture()" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:12px; font-weight:600;">Cancel</button>
+      `;
+    }
+
+    async function transcribeAudioBlob(blob) {
+      // Try cloud transcription endpoint first (account-server)
+      try {
+        if (typeof windyChat !== 'undefined' && windyChat.transcribeAudio) {
+          const result = await windyChat.transcribeAudio(blob);
+          if (result && result.text) return result.text;
+        }
+      } catch (_) { /* fall through */ }
+
+      // Try local Windy Word engine via IPC
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        if (window.windyAPI && window.windyAPI.batchTranscribeLocal) {
+          const result = await window.windyAPI.batchTranscribeLocal(base64);
+          if (result && result.text) return result.text;
+          if (result && result.segments && result.segments.length > 0) {
+            return result.segments.map(s => s.text).join(' ');
+          }
+        }
+      } catch (_) { /* fall through */ }
+
+      // Try WebSocket to Python engine (port 9876)
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Transcription timeout')), 15000);
+        try {
+          const ws = new WebSocket('ws://127.0.0.1:9876');
+          ws.onopen = () => {
+            blob.arrayBuffer().then(buf => {
+              ws.send(JSON.stringify({ type: 'transcribe', format: 'webm' }));
+              ws.send(buf);
+            });
+          };
+          ws.onmessage = (e) => {
+            clearTimeout(timeout);
+            try {
+              const data = JSON.parse(e.data);
+              ws.close();
+              resolve(data.text || (data.segments || []).map(s => s.text).join(' '));
+            } catch { resolve(e.data); }
+          };
+          ws.onerror = () => { clearTimeout(timeout); reject(new Error('WebSocket error')); };
+        } catch (err) { clearTimeout(timeout); reject(err); }
+      });
+    }
+
+    function showVoiceToast(message, isError) {
+      const toast = document.createElement('div');
+      toast.style.cssText = `position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+        background:${isError ? '#dc2626' : 'var(--chat-card)'}; color:#fff; padding:8px 16px;
+        border-radius:8px; font-size:12px; font-weight:600; z-index:9999;
+        box-shadow:0 4px 12px rgba(0,0,0,0.3); animation:toast-in 0.3s ease-out;`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ═══ TASK 2: Reusable Voice Input for Any Text Field ═══
+
+    /**
+     * Add a voice input mic icon to any text input element.
+     * Usage: addVoiceInput(document.getElementById('my-input'), { autoSend: false })
+     */
+    function addVoiceInput(inputElement, options = {}) {
+      const { autoSend = false, onTranscribe = null } = options;
+
+      // Wrap input if not already wrapped
+      const wrapper = inputElement.parentElement;
+      if (wrapper) wrapper.style.position = 'relative';
+
+      // Adjust input padding for icon
+      inputElement.style.paddingRight = '32px';
+
+      const micIcon = document.createElement('button');
+      micIcon.className = 'windy-voice-icon';
+      micIcon.textContent = '🎙️';
+      micIcon.title = 'Voice input (Windy Word)';
+      micIcon.type = 'button';
+
+      let recorder = null;
+
+      micIcon.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (recorder && recorder.isRecording) {
+          // Stop
+          clearInterval(recorder.timer);
+          recorder.mediaRecorder.onstop = async () => {
+            const blob = new Blob(recorder.chunks, { type: 'audio/webm;codecs=opus' });
+            recorder.stream.getTracks().forEach(t => t.stop());
+            recorder = null;
+            micIcon.textContent = '🎙️';
+            micIcon.classList.remove('recording');
+
+            try {
+              const text = await transcribeAudioBlob(blob);
+              if (text && text.trim()) {
+                inputElement.value = (inputElement.value ? inputElement.value + ' ' : '') + text.trim();
+                inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+                if (onTranscribe) onTranscribe(text.trim());
+                if (autoSend) inputElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+              }
+            } catch (_) {
+              showVoiceToast('Voice capture failed', true);
+            }
+          };
+          recorder.mediaRecorder.stop();
+        } else {
+          // Start
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: { echoCancellation: true, noiseSuppression: true }
+            });
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+            const chunks = [];
+            mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+            mediaRecorder.start(100);
+
+            recorder = { mediaRecorder, stream, chunks, isRecording: true };
+            micIcon.textContent = '⏹️';
+            micIcon.classList.add('recording');
+
+            // Auto-stop after 30s
+            recorder.timer = setTimeout(() => micIcon.click(), 30000);
+          } catch (_) {
+            showVoiceToast('Microphone access denied', true);
+          }
+        }
+      });
+
+      if (wrapper) {
+        wrapper.appendChild(micIcon);
+      }
+
+      return micIcon;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  TASK 3: Agent Hatch Notification
+    // ═══════════════════════════════════════════════════════════
+
+    // Listen for new room invites/joins that look like agent hatches
+    function setupHatchDetection() {
+      if (typeof windyChat === 'undefined') return;
+
+      // Listen for new rooms appearing (via Matrix sync)
+      if (windyChat.onRoomJoined) {
+        windyChat.onRoomJoined((data) => {
+          checkForAgentHatch(data);
+        });
+      }
+
+      // Also check new messages for agent DM rooms
+      if (windyChat.onMessage) {
+        windyChat.onMessage((msg) => {
+          if (msg.senderId && isAgentUserId(msg.senderId) && !msg.isOwn) {
+            // An agent just sent us a message — could be a newly hatched agent
+            const contact = contacts.find(c => c.userId === msg.senderId);
+            if (contact && !contact._hatchNotified) {
+              contact._hatchNotified = true;
+              showHatchNotification(msg.senderName || msg.senderId, msg.roomId, msg.senderId);
+            }
+          }
+        });
+      }
+    }
+
+    function isAgentUserId(userId) {
+      if (!userId) return false;
+      const localpart = userId.split(':')[0].replace('@', '').toLowerCase();
+      return localpart.startsWith('agent_') || localpart.startsWith('bot_') || localpart.startsWith('windy_agent');
+    }
+
+    function checkForAgentHatch(data) {
+      if (!data || !data.roomId) return;
+      const members = data.members || [];
+      const agentMember = members.find(m => isAgentUserId(m.userId));
+      if (agentMember) {
+        showHatchNotification(agentMember.displayName || agentMember.userId, data.roomId, agentMember.userId);
+      }
+    }
+
+    function showHatchNotification(agentName, roomId, agentUserId) {
+      // Desktop notification (system-level)
+      if (Notification.permission === 'granted') {
+        const notif = new Notification('Agent Hatched!', {
+          body: `${agentName} just hatched! Click to chat`,
+          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🪰</text></svg>',
+        });
+        notif.onclick = () => {
+          window.focus();
+          const displayName = (agentName || '').split(':')[0].replace('@', '');
+          openConversation(roomId, agentUserId, displayName);
+        };
+      }
+
+      // In-app toast
+      const toast = document.createElement('div');
+      toast.className = 'hatch-toast';
+      toast.innerHTML = `🪰 <strong>${escapeHtml(agentName)}</strong> just hatched! Click to chat`;
+      toast.addEventListener('click', () => {
+        const displayName = (agentName || '').split(':')[0].replace('@', '');
+        openConversation(roomId, agentUserId, displayName);
+        toast.remove();
+      });
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 8000);
+
+      // Refresh contact list to show the new agent
+      loadContacts();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  TASK 4: Agent Contacts Styling
+    // ═══════════════════════════════════════════════════════════
+
+    // Override renderContacts to sort agents first and add badges
+    const _originalRenderContacts = renderContacts;
+    renderContacts = function(list) {
+      // Partition: agents first, then humans, both sorted by last activity
+      const agents = list.filter(c => isAgentUserId(c.userId));
+      const humans = list.filter(c => !isAgentUserId(c.userId));
+
+      // Sort each group by last timestamp (most recent first)
+      const byRecent = (a, b) => (b.lastTimestamp || 0) - (a.lastTimestamp || 0);
+      agents.sort(byRecent);
+      humans.sort(byRecent);
+
+      const sorted = [...agents, ...humans];
+
+      const container = document.getElementById('contact-list');
+      if (sorted.length === 0) {
+        container.innerHTML = `
+          <div style="padding:32px 16px; text-align:center; color:var(--chat-text-muted);">
+            <div style="font-size:32px; margin-bottom:8px;">👋</div>
+            <div style="font-size:13px;">No conversations yet</div>
+            <div style="font-size:11px; margin-top:4px;">Click + to start chatting</div>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = sorted.map(c => {
+        const initial = (c.displayName || '?').charAt(0).toUpperCase();
+        const time = c.lastTimestamp ? formatTime(c.lastTimestamp) : '';
+        const isActive = c.roomId === currentRoomId;
+        const isOnline = c.presence === 'online';
+        const isAgent = isAgentUserId(c.userId);
+
+        const agentBadge = isAgent ? '<span class="agent-badge">🪰 AI Agent</span>' : '';
+        const trustScore = isAgent && c.trustScore ? `<span class="trust-score">Trust: ${Math.round(c.trustScore * 100)}%</span>` : '';
+        const agentClass = isAgent ? ' agent-contact' : '';
+        const avatarEmoji = isAgent ? '🪰' : initial;
+
+        return `
+          <div class="contact-item${agentClass} ${isActive ? 'active' : ''}" onclick="openConversation('${escapeAttr(c.roomId)}', '${escapeAttr(c.userId)}', '${escapeAttr(c.displayName)}')">
+            <div class="contact-avatar" ${isAgent ? 'style="background:linear-gradient(135deg, #7c3aed, #a855f7);"' : ''}>
+              ${avatarEmoji}
+              <div class="presence-dot ${isOnline ? 'online' : ''}" id="presence-${c.userId.replace(/[^a-zA-Z0-9]/g, '_')}"></div>
+            </div>
+            <div class="contact-info">
+              <div class="contact-name">${escapeHtml(c.displayName)}${agentBadge}${trustScore}</div>
+              <div class="contact-preview">${escapeHtml(c.lastMessage || 'Start a conversation')}</div>
+            </div>
+            <div class="contact-meta">
+              <div class="contact-time">${time}</div>
+              ${c.unreadCount > 0 ? `<div class="contact-unread">${c.unreadCount}</div>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+    };
+
+    // ═══ Wire up on init ═══
+    const _originalInit = init;
+    init = async function() {
+      await _originalInit();
+      setupHatchDetection();
+
+      // Request notification permission for hatch alerts
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+
+      // Add voice input to search box
+      const searchBox = document.getElementById('contact-search');
+      if (searchBox) addVoiceInput(searchBox);
+    };
 
     // ═══ Start ═══
     document.addEventListener('DOMContentLoaded', init);

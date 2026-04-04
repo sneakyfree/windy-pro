@@ -1086,6 +1086,14 @@
     <div id="tooltip"></div>
 
     <script src="mini-translate.js"></script>
+    <script src="windy-voice-input.js"></script>
+    <script>
+      // Add voice input to translation textarea
+      document.addEventListener('DOMContentLoaded', () => {
+        const textInput = document.getElementById('textInput');
+        if (textInput) addVoiceInput(textInput);
+      });
+    </script>
 </body>
 
 </html>
