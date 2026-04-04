@@ -34,6 +34,47 @@ interface WhisperResponse {
     duration?: number;
 }
 
+/**
+ * Call AWS Cloud STT (Windy Cloud GPU instances) for heavy workloads.
+ * Used when: AWS_STT_ENABLED=true AND (user requests cloud engine OR local fails).
+ */
+async function callAwsSttAPI(
+    audioBuffer: Buffer,
+    originalName: string,
+    language: string,
+): Promise<WhisperResponse> {
+    const endpoint = config.AWS_STT_ENDPOINT;
+    if (!endpoint) throw new Error('AWS_STT_NOT_CONFIGURED');
+
+    const form = new FormData();
+    form.append('file', audioBuffer, {
+        filename: originalName || 'audio.wav',
+        contentType: 'audio/wav',
+    });
+    form.append('language', language || 'en');
+    form.append('response_format', 'verbose_json');
+
+    const response = await fetch(`${endpoint}`, {
+        method: 'POST',
+        headers: {
+            'X-Service-Token': process.env.WINDY_CLOUD_SERVICE_TOKEN || '',
+            ...form.getHeaders(),
+        },
+        body: form.getBuffer(),
+        signal: AbortSignal.timeout(120000), // 2min — GPU processing can take longer for large files
+    });
+
+    if (!response.ok) {
+        const errBody = await response.text();
+        console.error(`[Transcription] AWS STT ${response.status}:`, errBody);
+        throw new Error(`AWS STT error: ${response.status} — ${errBody.slice(0, 200)}`);
+    }
+
+    const result = (await response.json()) as WhisperResponse;
+    console.log(`[Transcription] ✅ AWS Cloud STT: "${result.text?.slice(0, 80)}..." (${result.segments?.length || 0} segments)`);
+    return result;
+}
+
 async function callWhisperAPI(
     audioBuffer: Buffer,
     originalName: string,
@@ -86,6 +127,41 @@ async function callWhisperAPI(
     return result;
 }
 
+/**
+ * Resolve which STT engine to use based on config and user request.
+ * Priority: explicit cloud request → AWS failover on local failure → Groq/OpenAI → stub
+ */
+async function resolveAndTranscribe(
+    audioBuffer: Buffer,
+    originalName: string,
+    language: string,
+    requestedEngine: string,
+): Promise<{ result: WhisperResponse; engine: string }> {
+    // User explicitly requests cloud GPU transcription
+    if (requestedEngine === 'cloud-gpu' && config.AWS_STT_ENABLED) {
+        const result = await callAwsSttAPI(audioBuffer, originalName, language);
+        return { result, engine: 'aws-cloud-stt' };
+    }
+
+    // Try local (Groq/OpenAI) first
+    try {
+        const result = await callWhisperAPI(audioBuffer, originalName, language);
+        return { result, engine: config.GROQ_API_KEY ? 'groq-whisper' : 'openai-whisper' };
+    } catch (localErr: any) {
+        // If local fails and AWS is enabled, failover to cloud GPU
+        if (config.AWS_STT_ENABLED && config.AWS_STT_ENDPOINT && localErr.message !== 'NO_API_KEY') {
+            console.warn(`[Transcription] Local engine failed (${localErr.message}), failing over to AWS Cloud STT`);
+            try {
+                const result = await callAwsSttAPI(audioBuffer, originalName, language);
+                return { result, engine: 'aws-cloud-stt-failover' };
+            } catch (awsErr: any) {
+                console.error(`[Transcription] AWS failover also failed:`, awsErr.message);
+            }
+        }
+        throw localErr;
+    }
+}
+
 // ─── POST /api/v1/transcribe ─────────────────────────────────
 
 router.post('/', authenticateToken, upload.single('audio'), async (req: Request, res: Response) => {
@@ -101,9 +177,9 @@ router.post('/', authenticateToken, upload.single('audio'), async (req: Request,
 
         console.log(`🎤 Transcribe: ${file.originalname} (${(file.size / 1024).toFixed(1)} KB) language=${language} engine=${engine}`);
 
-        // Try real Whisper API
+        // Try real transcription (local → AWS failover → stub)
         try {
-            const result = await callWhisperAPI(file.buffer, file.originalname, language);
+            const { result, engine: resolvedEngine } = await resolveAndTranscribe(file.buffer, file.originalname, language, engine);
 
             // Map Whisper segments to our format
             const segments = (result.segments || []).map((seg, i) => ({
@@ -134,14 +210,14 @@ router.post('/', authenticateToken, upload.single('audio'), async (req: Request,
                 fullText: result.text?.trim() || segments.map(s => s.text).join(' '),
                 language: result.language || language,
                 duration: result.duration || (segments.length > 0 ? segments[segments.length - 1].endTime : 0),
-                engine: config.GROQ_API_KEY ? 'groq-whisper' : 'openai-whisper',
+                engine: resolvedEngine,
             });
             return;
         } catch (whisperErr: any) {
             if (whisperErr.message === 'NO_API_KEY') {
                 console.warn('[Transcription] No API key configured — falling back to stub');
             } else {
-                console.error('[Transcription] Whisper API failed:', whisperErr.message);
+                console.error('[Transcription] All transcription engines failed:', whisperErr.message);
                 // Still fall through to stub so the user gets something
             }
         }
