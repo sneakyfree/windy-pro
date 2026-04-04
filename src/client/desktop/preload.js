@@ -225,4 +225,13 @@ contextBridge.exposeInMainWorld('windyAPI', {
   // SEC-P0: Encrypted API key storage via main process safeStorage
   setApiKey: (keyName, keyValue) => ipcRenderer.invoke('set-api-key', keyName, keyValue),
   getApiKey: (keyName) => ipcRenderer.invoke('get-api-key', keyName),
+
+  // ═══ M5: Deepgram WebSocket Proxy (API key stays in main process) ═══
+  deepgramStreamStart: (opts) => ipcRenderer.invoke('deepgram-stream-start', opts),
+  deepgramStreamSend: (audioBuffer) => ipcRenderer.invoke('deepgram-stream-send', audioBuffer),
+  deepgramStreamStop: () => ipcRenderer.invoke('deepgram-stream-stop'),
+  onDeepgramProxyOpen: (callback) => { ipcRenderer.removeAllListeners('deepgram-proxy-open'); safeOn('deepgram-proxy-open', () => callback()); },
+  onDeepgramProxyMessage: (callback) => { ipcRenderer.removeAllListeners('deepgram-proxy-message'); safeOn('deepgram-proxy-message', (_e, data) => callback(data)); },
+  onDeepgramProxyError: (callback) => { ipcRenderer.removeAllListeners('deepgram-proxy-error'); safeOn('deepgram-proxy-error', (_e, msg) => callback(msg)); },
+  onDeepgramProxyClose: (callback) => { ipcRenderer.removeAllListeners('deepgram-proxy-close'); safeOn('deepgram-proxy-close', () => callback()); },
 });

@@ -127,7 +127,7 @@ router.get('/', (_req: Request, res: Response) => {
     let activeSessions = 0;
     try {
       activeSessions = (db.prepare("SELECT COUNT(*) as c FROM refresh_tokens WHERE expires_at > datetime('now')").get() as any).c;
-    } catch { /* table may not exist */ }
+    } catch (e: any) { console.warn('[Admin] refresh_tokens query failed:', e.message); }
 
     // Registrations
     const regToday = (db.prepare("SELECT COUNT(*) as c FROM users WHERE created_at >= date('now')").get() as any).c;
@@ -138,7 +138,7 @@ router.get('/', (_req: Request, res: Response) => {
     let productDist: any[] = [];
     try {
       productDist = db.prepare("SELECT product, COUNT(*) as c FROM product_accounts GROUP BY product ORDER BY c DESC").all() as any[];
-    } catch { /* table may not exist */ }
+    } catch (e: any) { console.warn('[Admin] product_accounts query failed:', e.message); }
 
     // Tier distribution
     const tierDist = db.prepare("SELECT COALESCE(tier, 'free') as tier, COUNT(*) as c FROM users GROUP BY tier ORDER BY c DESC").all() as any[];
@@ -147,7 +147,7 @@ router.get('/', (_req: Request, res: Response) => {
     let auditEntries: any[] = [];
     try {
       auditEntries = db.prepare("SELECT * FROM identity_audit_log ORDER BY created_at DESC LIMIT 20").all() as any[];
-    } catch { /* table may not exist */ }
+    } catch (e: any) { console.warn('[Admin] audit_log query failed:', e.message); }
 
     const productHtml = productDist.length > 0
       ? productDist.map(p => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #334155;"><span>${escapeHtml(p.product)}</span><span style="font-weight:700;">${p.c}</span></div>`).join('')
@@ -233,14 +233,14 @@ router.get('/users', (req: Request, res: Response) => {
     let productStmt: any;
     try {
       productStmt = db.prepare("SELECT GROUP_CONCAT(product) as products FROM product_accounts WHERE identity_id = ?");
-    } catch { /* table may not exist */ }
+    } catch (e: any) { console.warn('[Admin] product_accounts prepare failed:', e.message); }
 
     const totalPages = Math.ceil(total / limit);
 
     const rowsHtml = users.map(u => {
       let products = '';
       if (productStmt) {
-        try { products = (productStmt.get(u.id) as any)?.products || ''; } catch {}
+        try { products = (productStmt.get(u.id) as any)?.products || ''; } catch (e: any) { console.warn('[Admin] product lookup failed:', e.message); }
       }
       const typeBadge = u.identity_type === 'bot'
         ? '<span class="badge badge-yellow">bot</span>'
@@ -305,23 +305,23 @@ router.get('/users/:id', (req: Request, res: Response) => {
 
     // Product accounts
     let products: any[] = [];
-    try { products = db.prepare("SELECT * FROM product_accounts WHERE identity_id = ?").all(user.id) as any[]; } catch {}
+    try { products = db.prepare("SELECT * FROM product_accounts WHERE identity_id = ?").all(user.id) as any[]; } catch (e: any) { console.warn('[Admin] product_accounts query failed:', e.message); }
 
     // Scopes
     let scopes: any[] = [];
-    try { scopes = db.prepare("SELECT * FROM identity_scopes WHERE identity_id = ?").all(user.id) as any[]; } catch {}
+    try { scopes = db.prepare("SELECT * FROM identity_scopes WHERE identity_id = ?").all(user.id) as any[]; } catch (e: any) { console.warn('[Admin] identity_scopes query failed:', e.message); }
 
     // Devices
     let devices: any[] = [];
-    try { devices = db.prepare("SELECT * FROM devices WHERE user_id = ?").all(user.id) as any[]; } catch {}
+    try { devices = db.prepare("SELECT * FROM devices WHERE user_id = ?").all(user.id) as any[]; } catch (e: any) { console.warn('[Admin] devices query failed:', e.message); }
 
     // Audit log (last 30)
     let audit: any[] = [];
-    try { audit = db.prepare("SELECT * FROM identity_audit_log WHERE identity_id = ? ORDER BY created_at DESC LIMIT 30").all(user.id) as any[]; } catch {}
+    try { audit = db.prepare("SELECT * FROM identity_audit_log WHERE identity_id = ? ORDER BY created_at DESC LIMIT 30").all(user.id) as any[]; } catch (e: any) { console.warn('[Admin] audit_log query failed:', e.message); }
 
     // Eternitas passport
     let passport: any = null;
-    try { passport = db.prepare("SELECT * FROM eternitas_passports WHERE identity_id = ?").get(user.id) as any; } catch {}
+    try { passport = db.prepare("SELECT * FROM eternitas_passports WHERE identity_id = ?").get(user.id) as any; } catch (e: any) { console.warn('[Admin] passport query failed:', e.message); }
 
     const frozenBadge = user.frozen ? '<span class="badge badge-red">FROZEN</span>' : '<span class="badge badge-green">Active</span>';
     const typeBadge = user.identity_type === 'bot' ? '<span class="badge badge-yellow">bot</span>' : '<span class="badge badge-green">human</span>';
@@ -498,7 +498,7 @@ router.get('/oauth-clients', (_req: Request, res: Response) => {
     let clients: any[] = [];
     try {
       clients = db.prepare("SELECT * FROM oauth_clients ORDER BY created_at DESC").all() as any[];
-    } catch { /* table may not exist */ }
+    } catch (e: any) { console.warn('[Admin] oauth_clients query failed:', e.message); }
 
     const rowsHtml = clients.map(c => {
       const redirectUris = JSON.parse(c.redirect_uris || '[]');
@@ -558,13 +558,13 @@ router.get('/audit', (req: Request, res: Response) => {
       total = (db.prepare(`SELECT COUNT(*) as c FROM identity_audit_log ${where}`).get(...params) as any).c;
       entries = db.prepare(`SELECT * FROM identity_audit_log ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
         .all(...params, limit, offset) as any[];
-    } catch { /* table may not exist */ }
+    } catch (e: any) { console.warn('[Admin] audit_log list query failed:', e.message); }
 
     // Get distinct event types for filter dropdown
     let eventTypes: string[] = [];
     try {
       eventTypes = (db.prepare("SELECT DISTINCT event FROM identity_audit_log ORDER BY event").all() as any[]).map(r => r.event);
-    } catch {}
+    } catch (e: any) { console.warn('[Admin] event types query failed:', e.message); }
 
     const totalPages = Math.ceil(total / limit);
 

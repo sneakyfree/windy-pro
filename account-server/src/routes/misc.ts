@@ -32,7 +32,7 @@ const RTC_MAX_SESSIONS = 1000;
 const rtcSessions = new Map<string, { offer: string | null; answer: string | null; candidates: any[]; switchCamera?: boolean; createdAt: number }>();
 
 // Periodic cleanup of expired RTC sessions
-setInterval(() => {
+const rtcCleanupTimer = setInterval(() => {
     const now = Date.now();
     for (const [token, session] of rtcSessions) {
         if (now - session.createdAt > RTC_SESSION_TTL_MS) {
@@ -40,6 +40,7 @@ setInterval(() => {
         }
     }
 }, 60 * 1000);
+rtcCleanupTimer.unref();
 
 // ─── GET /health ─────────────────────────────────────────────
 
@@ -70,12 +71,9 @@ router.post('/api/v1/analytics', analyticsLimiter, validate(AnalyticsRequestSche
 // ─── GET /api/v1/updates/check ───────────────────────────────
 
 router.get('/api/v1/updates/check', (_req: Request, res: Response) => {
-    res.set('X-Stub', 'true');
-    res.json({
-        version: '0.6.0',
-        url: 'https://windypro.thewindstorm.uk/download/latest/linux',
-        releaseNotes: 'Bug fixes and performance improvements',
-        required: false,
+    res.status(501).json({
+        error: 'Not implemented',
+        message: 'Update checking requires a release management backend. Configure UPDATE_SERVER_URL.',
     });
 });
 
@@ -156,12 +154,9 @@ router.post('/api/v1/ocr/translate', optionalAuth, upload.single('image'), (req:
 
         console.log(`📷 OCR translate: target=${targetLanguage}`);
 
-        res.set('X-Stub', 'true');
-        res.json({
-            originalText: '[OCR stub — connect a real OCR engine]',
-            translatedText: `[${targetLanguage}] [OCR stub — connect a real OCR engine]`,
-            language: targetLanguage,
-            confidence: 0.85,
+        res.status(501).json({
+            error: 'Not implemented',
+            message: 'OCR translation requires a vision API backend. Configure OCR_API_KEY or GOOGLE_VISION_API_KEY.',
         });
     } catch (err: any) {
         console.error('OCR translate error:', err);

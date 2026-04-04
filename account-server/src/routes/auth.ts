@@ -344,6 +344,58 @@ router.get('/me', authenticateToken, (req: Request, res: Response) => {
     });
 });
 
+// ─── PATCH /api/v1/auth/me — Update profile ────────────────────
+
+router.patch('/me', authenticateToken, (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthRequest).user.userId;
+        const db = getDb();
+        const { name, avatarUrl, phone, preferredLang } = req.body;
+
+        const updates: string[] = [];
+        const params: any[] = [];
+
+        if (name !== undefined) {
+            updates.push('name = ?');
+            params.push(name);
+        }
+        if (avatarUrl !== undefined) {
+            updates.push('avatar_url = ?');
+            params.push(avatarUrl);
+        }
+        if (phone !== undefined) {
+            updates.push('phone = ?');
+            params.push(phone);
+        }
+        if (preferredLang !== undefined) {
+            updates.push('preferred_lang = ?');
+            params.push(preferredLang);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+
+        updates.push("updated_at = datetime('now')");
+        params.push(userId);
+
+        db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+        // Return updated profile
+        const user = stmts().findUserById.get(userId) as any;
+        res.json({
+            success: true,
+            userId: user.id,
+            name: user.name,
+            email: user.email,
+            tier: user.tier,
+        });
+    } catch (err: any) {
+        console.error('Profile update error:', err);
+        res.status(500).json({ error: 'Failed to update profile' });
+    }
+});
+
 // ─── GET /api/v1/auth/devices ────────────────────────────────
 
 router.get('/devices', authenticateToken, (req: Request, res: Response) => {
@@ -538,15 +590,24 @@ router.post('/change-password', authenticateToken, validate(ChangePasswordReques
 });
 
 // ─── DELETE /api/v1/auth/me — GDPR self-deletion ────────────
+// Also aliased as /delete-account for frontend compat (Profile.jsx)
 
-router.delete('/me', authenticateToken, async (req: Request, res: Response) => {
+const handleAccountDeletion = async (req: Request, res: Response) => {
     try {
         const userId = (req as AuthRequest).user.userId;
         const db = getDb();
 
         // Verify user exists
-        const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(userId) as any;
+        const user = db.prepare('SELECT id, email, password_hash FROM users WHERE id = ?').get(userId) as any;
         if (!user) return res.status(404).json({ error: 'User not found' });
+
+        // Require password confirmation if provided (recommended but optional for backward compat)
+        if (req.body?.password) {
+            const passwordValid = await bcrypt.compare(req.body.password, user.password_hash);
+            if (!passwordValid) {
+                return res.status(401).json({ error: 'Password confirmation failed' });
+            }
+        }
 
         // Cascade delete all user data
         const tables = [
@@ -581,7 +642,10 @@ router.delete('/me', authenticateToken, async (req: Request, res: Response) => {
         console.error('Account deletion error:', err);
         res.status(500).json({ error: 'Account deletion failed' });
     }
-});
+};
+
+router.delete('/me', authenticateToken, handleAccountDeletion);
+router.delete('/delete-account', authenticateToken, handleAccountDeletion);
 
 // ─── GET /api/v1/auth/billing ────────────────────────────────
 

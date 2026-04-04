@@ -29,7 +29,7 @@ export enum EcosystemProduct {
 }
 
 /** Products that support provisioned identity accounts */
-export type WindyProduct = 'windy_pro' | 'windy_chat' | 'windy_mail' | 'windy_fly' | 'windy_word' | 'windy_traveler' | 'windy_clone' | 'windy_cloud';
+export type WindyProduct = 'windy_pro' | 'windy_chat' | 'windy_mail' | 'windy_fly' | 'windy_word' | 'windy_traveler' | 'windy_clone' | 'windy_cloud' | 'eternitas';
 
 /** Account status within a product */
 export type ProductAccountStatus = 'active' | 'suspended' | 'pending' | 'deprovisioned';
@@ -170,6 +170,7 @@ export type IdentityAuditEvent =
   | 'secretary_email_sent'
   | 'identity_created'
   | 'trust_updated'
+  | 'passport_reinstate'
   | 'revocation_cascade'
   | 'chat_login'
   | 'chat_login_failed'

@@ -66,6 +66,15 @@ class SettingsPanel {
           </div>
           <p class="settings-hint" id="recordingModeHint">Records everything, transcribes on stop. Best accuracy. Works with any engine above.</p>
           <p class="settings-hint" style="font-size:11px; margin-top:4px;">💡 <b>Engine</b> = which AI model runs. <b>Mode</b> = when it transcribes (during or after recording).</p>
+          <div class="setting-row">
+            <label for="transcriptionModeSelect">Transcription Route</label>
+            <select id="transcriptionModeSelect">
+              <option value="auto" selected>🔄 Auto — local first, cloud failover</option>
+              <option value="local_only">🏠 Local only — never use cloud</option>
+              <option value="cloud_only">☁️ Cloud only — always use cloud</option>
+            </select>
+          </div>
+          <p class="settings-hint" id="transcriptionModeHint">Auto switches to cloud when local performance drops. Cloud only is best for weak hardware.</p>
           <div class="setting-row" id="maxDurationRow">
             <label for="maxRecordingSelect">Max Recording</label>
             <select id="maxRecordingSelect">
@@ -1070,6 +1079,29 @@ class SettingsPanel {
         if (hint) hint.textContent = hints[e.target.value] || hints.batch;
         // Hide max duration for clone_capture (unlimited) and live (streaming)
         if (maxRow) maxRow.style.display = (e.target.value === 'live' || e.target.value === 'clone_capture') ? 'none' : 'flex';
+      });
+    }
+
+    // Transcription route (auto / local_only / cloud_only)
+    const transcriptionModeSelect = this.panel.querySelector('#transcriptionModeSelect');
+    if (transcriptionModeSelect) {
+      // Restore saved value
+      const saved = localStorage.getItem('windy_transcriptionMode') || 'auto';
+      transcriptionModeSelect.value = saved;
+      const tmHint = this.panel.querySelector('#transcriptionModeHint');
+      const tmHints = {
+        auto: 'Auto switches to cloud when local performance drops (ratio > 2.0). Recommended for most users.',
+        local_only: 'All transcription stays on your machine. Cloud is never used, even if performance is slow.',
+        cloud_only: 'All transcription is sent to cloud. Best for weak hardware or when you want maximum accuracy.'
+      };
+      if (tmHint) tmHint.textContent = tmHints[saved] || tmHints.auto;
+
+      transcriptionModeSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        this.saveSetting('transcriptionMode', val);
+        localStorage.setItem('windy_transcriptionMode', val);
+        if (this.app) this.app.transcriptionMode = val;
+        if (tmHint) tmHint.textContent = tmHints[val] || tmHints.auto;
       });
     }
 
@@ -2873,7 +2905,8 @@ class SettingsPanel {
       window.windyAPI.updateSettings({ [key]: value });
     }
     // Also persist cloud settings to localStorage (fallback for windows without windyAPI)
-    // SEC-C1: cloudPassword excluded from localStorage — encrypted in main process via safeStorage\n    const cloudKeys = ['engine', 'cloudUrl', 'cloudToken', 'cloudEmail', 'cloudUser', 'recordingMode', 'maxRecordingMin', 'language'];
+    // SEC-C1: cloudPassword excluded from localStorage — encrypted in main process via safeStorage
+    const cloudKeys = ['engine', 'cloudUrl', 'cloudToken', 'cloudEmail', 'cloudUser', 'recordingMode', 'maxRecordingMin', 'language', 'transcriptionMode'];
     if (cloudKeys.includes(key)) {
       try { localStorage.setItem(`windy_${key}`, value || ''); } catch (_) { }
     }

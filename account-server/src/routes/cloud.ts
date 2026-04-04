@@ -3,29 +3,28 @@ import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
-// Stub: Provision a phone number for a bot
+// Phone provisioning — requires Twilio integration (not yet implemented)
 router.post('/phone/provision', authenticateToken, (req: Request, res: Response) => {
-    const { agent_name, passport_id } = req.body;
-    res.set('X-Stub', 'true');
-    res.json({
-        phone_number: '+1-555-0100',
-        provider: 'stub',
-        message: 'Twilio integration coming soon. Using placeholder number.',
+    res.status(501).json({
+        error: 'Not implemented',
+        message: 'Phone provisioning requires Twilio integration. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER.',
     });
 });
 
-// Stub: Release a phone number
+// Phone release — requires Twilio integration (not yet implemented)
 router.post('/phone/release', authenticateToken, (req: Request, res: Response) => {
-    res.set('X-Stub', 'true');
-    res.json({ released: true });
+    res.status(501).json({
+        error: 'Not implemented',
+        message: 'Phone release requires Twilio integration.',
+    });
 });
 
-// Stub: Send push notification
+// Push notifications — requires APNs/FCM integration (not yet implemented)
 router.post('/push/send', authenticateToken, (req: Request, res: Response) => {
-    const { user_id, title, body } = req.body;
-    console.log(`[Cloud/Push] Stub notification to ${user_id}: ${title}`);
-    res.set('X-Stub', 'true');
-    res.json({ sent: true, provider: 'stub' });
+    res.status(501).json({
+        error: 'Not implemented',
+        message: 'Push notifications require APNs/FCM integration.',
+    });
 });
 
 export default router;

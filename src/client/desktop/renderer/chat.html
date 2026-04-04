@@ -11,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="chat.css">
   <script src="input-validator.js"></script>
+  <script src="windy-voice-input.js"></script>
 </head>
 <body>
 
@@ -163,7 +164,15 @@
             <input type="text" id="message-input" placeholder="Type a message..." maxlength="4000" dir="auto" aria-label="Message input"
                    onkeydown="if(event.key==='Enter')sendMessage()"
                    oninput="handleTyping()">
+            <button class="chat-mic-btn" onclick="toggleVoiceCapture()" id="mic-btn" aria-label="Voice input" title="Voice input (Windy Word)">🎙️</button>
             <button class="chat-send-btn" onclick="sendMessage()" id="send-btn" aria-label="Send message">➤</button>
+          </div>
+          <!-- Voice recording indicator -->
+          <div class="voice-recording-bar" id="voice-recording-bar" style="display:none;">
+            <div class="voice-pulse"></div>
+            <span id="voice-timer">0:00</span>
+            <span style="flex:1; font-size:12px; color:var(--chat-text-dim);">Recording... speak now</span>
+            <button onclick="cancelVoiceCapture()" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:12px; font-weight:600;">Cancel</button>
           </div>
         </div>
       </div>
@@ -243,6 +252,25 @@
           <option value="ro">Română</option>
           <option value="hu">Magyar</option>
         </select>
+      </div>
+
+      <!-- Voice Input Mode -->
+      <div style="margin-bottom:20px;">
+        <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">🎙️ Voice Input Mode</label>
+        <select id="settings-voice-mode"
+               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px;" aria-label="Voice input mode">
+          <option value="type_to_send">Type to send — review before sending</option>
+          <option value="talk_to_send">Talk to send — auto-send after transcription</option>
+        </select>
+        <div style="font-size:10px; color:var(--chat-text-muted); margin-top:4px;">Quick tap = voice-to-text. Long press = voice note.</div>
+      </div>
+
+      <!-- Silence Timeout -->
+      <div style="margin-bottom:20px;">
+        <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">Silence Timeout (seconds)</label>
+        <input id="settings-silence-timeout" type="number" min="1" max="10" value="3"
+               style="width:80px; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px;" aria-label="Silence timeout">
+        <span style="font-size:10px; color:var(--chat-text-muted); margin-left:8px;">Auto-stop recording after this much silence</span>
       </div>
 
       <!-- User ID (read-only) -->
@@ -581,11 +609,32 @@
 
       const senderHtml = !isOwn && m.senderName ? `<div class="message-sender">${escapeHtml(m.senderName)}</div>` : '';
 
+      // Voice message rendering
+      let bodyHtml;
+      if (m._voiceMessage || (m.msgtype === 'm.audio' && m.info)) {
+        const dur = m._voiceMessage ? m._voiceMessage.duration : (m.info.duration || 0);
+        const durSec = Math.round(dur / 1000);
+        const durStr = `${Math.floor(durSec / 60)}:${String(durSec % 60).padStart(2, '0')}`;
+        const audioId = 'voice-' + (m.eventId || Math.random().toString(36).slice(2));
+        bodyHtml = `
+          <div class="voice-message-player" style="display:flex; align-items:center; gap:8px; padding:4px 0;">
+            <button onclick="playVoiceMessage('${audioId}')" class="voice-play-btn" id="play-${audioId}"
+              style="width:32px; height:32px; border-radius:50%; border:none; background:rgba(255,255,255,0.1); color:var(--chat-text); font-size:14px; cursor:pointer;">▶</button>
+            <div style="flex:1; height:24px; background:rgba(255,255,255,0.05); border-radius:4px; overflow:hidden; position:relative;">
+              <div class="voice-waveform-bars" id="wave-${audioId}" style="display:flex; align-items:center; height:100%; gap:1px; padding:0 4px;"></div>
+              <div class="voice-progress" id="prog-${audioId}" style="position:absolute; top:0; left:0; height:100%; width:0%; background:rgba(34,197,94,0.2); transition:width 0.1s;"></div>
+            </div>
+            <span style="font-size:11px; color:var(--chat-text-muted); font-variant-numeric:tabular-nums;">${durStr}</span>
+          </div>`;
+      } else {
+        bodyHtml = `<div class="message-text" dir="auto">${escapeHtml(m.body)}</div>`;
+      }
+
       return `
         <div class="message-group ${isOwn ? 'own' : ''}">
           <div class="message-bubble ${isOwn ? 'own' : 'other'}${pendingClass}">
             ${senderHtml}
-            <div class="message-text" dir="auto">${escapeHtml(m.body)}</div>
+            ${bodyHtml}
             ${translationHtml}
             <div class="message-time">${time}${m._pending ? ' ⏳' : ''}</div>
           </div>
@@ -751,6 +800,9 @@
       document.getElementById('settings-display-name').value = settings.displayName || '';
       document.getElementById('settings-language').value = settings.language || 'en';
       document.getElementById('settings-user-id').value = settings.userId || '';
+      // Voice settings
+      document.getElementById('settings-voice-mode').value = _voiceMode;
+      document.getElementById('settings-silence-timeout').value = _silenceTimeoutMs / 1000;
       document.getElementById('settings-panel').style.display = 'block';
     }
 
@@ -795,6 +847,14 @@
 
       await windyChat.setChatSettings(settings);
       myLanguage = settings.language;
+
+      // Save voice settings locally
+      _voiceMode = document.getElementById('settings-voice-mode').value;
+      _silenceTimeoutMs = (parseInt(document.getElementById('settings-silence-timeout').value) || 3) * 1000;
+      try {
+        localStorage.setItem('windy_voice_mode', _voiceMode);
+        localStorage.setItem('windy_silence_timeout', String(_silenceTimeoutMs / 1000));
+      } catch (_) {}
 
       status.style.color = '';
       status.textContent = '✅ Settings saved!';
@@ -1080,6 +1140,727 @@
       const modal = document.getElementById('new-chat-modal');
       if (modal && modal.style.display !== 'none') { hideNewChat(); return; }
     });
+
+    // ═══════════════════════════════════════════════════════════
+    //  TASK 1: Voice-to-Text (Windy Word → Chat)
+    //  Enhanced: green strobe, silence detection, voice mode
+    // ═══════════════════════════════════════════════════════════
+
+    let _voiceRecorder = null;
+    let _voiceTimerInterval = null;
+    let _voiceStartTime = null;
+    let _silenceTimeout = null;
+    let _voiceMode = 'type_to_send'; // or 'talk_to_send'
+    let _silenceTimeoutMs = 3000;
+    let _longPressTimer = null;
+    let _isLongPress = false;
+
+    // Load voice settings
+    function loadVoiceSettings() {
+      try {
+        _voiceMode = localStorage.getItem('windy_voice_mode') || 'type_to_send';
+        _silenceTimeoutMs = (parseInt(localStorage.getItem('windy_silence_timeout')) || 3) * 1000;
+      } catch (_) {}
+    }
+
+    // Mic button: click = voice-to-text, long-press = voice note
+    function setupMicButton() {
+      const micBtn = document.getElementById('mic-btn');
+      if (!micBtn) return;
+
+      // Long-press detection for voice notes
+      micBtn.addEventListener('mousedown', (e) => {
+        if (_voiceRecorder && _voiceRecorder.isRecording) return;
+        _isLongPress = false;
+        _longPressTimer = setTimeout(() => {
+          _isLongPress = true;
+          startVoiceNote();
+        }, 500); // 500ms = long press
+      });
+
+      micBtn.addEventListener('mouseup', () => {
+        clearTimeout(_longPressTimer);
+        if (_isLongPress && _voiceRecorder && _voiceRecorder.isVoiceNote) {
+          stopVoiceNote();
+        }
+      });
+
+      micBtn.addEventListener('mouseleave', () => {
+        clearTimeout(_longPressTimer);
+        // If recording a voice note and mouse leaves, cancel
+        if (_isLongPress && _voiceRecorder && _voiceRecorder.isVoiceNote) {
+          cancelVoiceCapture();
+          _isLongPress = false;
+        }
+      });
+
+      // Prevent default click when using long-press
+      micBtn.removeAttribute('onclick');
+      micBtn.addEventListener('click', (e) => {
+        if (_isLongPress) { _isLongPress = false; return; }
+        toggleVoiceCapture();
+      });
+    }
+
+    async function toggleVoiceCapture() {
+      if (_voiceRecorder && _voiceRecorder.isRecording) {
+        await stopVoiceCapture();
+      } else {
+        await startVoiceCapture();
+      }
+    }
+
+    function setMicState(state) {
+      const micBtn = document.getElementById('mic-btn');
+      micBtn.className = 'chat-mic-btn';
+      switch (state) {
+        case 'idle':
+          micBtn.textContent = '🎙️';
+          micBtn.title = 'Voice input (tap) / Voice note (hold)';
+          break;
+        case 'recording':
+          micBtn.textContent = '⏹️';
+          micBtn.classList.add('recording-green');
+          micBtn.title = 'Stop recording';
+          break;
+        case 'processing':
+          micBtn.textContent = '⏳';
+          micBtn.classList.add('processing');
+          micBtn.title = 'Transcribing...';
+          break;
+        case 'error':
+          micBtn.textContent = '🎙️';
+          micBtn.classList.add('error-flash');
+          micBtn.title = 'Voice input failed';
+          setTimeout(() => setMicState('idle'), 1500);
+          break;
+        case 'voice-note':
+          micBtn.textContent = '🔴';
+          micBtn.classList.add('recording-voicenote');
+          micBtn.title = 'Release to send voice note';
+          break;
+      }
+    }
+
+    async function startVoiceCapture() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 }
+        });
+
+        // Set up analyser for silence detection
+        const audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType: 'audio/webm;codecs=opus',
+          audioBitsPerSecond: 64000,
+        });
+
+        const chunks = [];
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+
+        mediaRecorder.start(100);
+        _voiceRecorder = { mediaRecorder, stream, chunks, isRecording: true, audioContext, analyser, isVoiceNote: false };
+        _voiceStartTime = Date.now();
+
+        // UI: green strobe
+        setMicState('recording');
+        document.getElementById('voice-recording-bar').style.display = 'flex';
+
+        // Timer
+        _voiceTimerInterval = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - _voiceStartTime) / 1000);
+          const m = Math.floor(elapsed / 60);
+          const s = String(elapsed % 60).padStart(2, '0');
+          document.getElementById('voice-timer').textContent = `${m}:${s}`;
+        }, 200);
+
+        // Silence detection
+        startSilenceDetection(analyser);
+
+      } catch (err) {
+        setMicState('error');
+        showVoiceToast('Microphone access denied. Check permissions.', true);
+      }
+    }
+
+    function startSilenceDetection(analyser) {
+      let silentSince = null;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      function checkSilence() {
+        if (!_voiceRecorder || !_voiceRecorder.isRecording) return;
+
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
+
+        if (avg < 8) { // Silence threshold
+          if (!silentSince) silentSince = Date.now();
+          const silentMs = Date.now() - silentSince;
+          if (silentMs >= _silenceTimeoutMs && (Date.now() - _voiceStartTime) > 1000) {
+            // At least 1s of audio + silence timeout reached → auto-stop
+            stopVoiceCapture();
+            return;
+          }
+        } else {
+          silentSince = null;
+        }
+
+        _silenceTimeout = requestAnimationFrame(checkSilence);
+      }
+
+      _silenceTimeout = requestAnimationFrame(checkSilence);
+    }
+
+    async function stopVoiceCapture() {
+      if (!_voiceRecorder) return;
+
+      clearInterval(_voiceTimerInterval);
+      if (_silenceTimeout) cancelAnimationFrame(_silenceTimeout);
+
+      return new Promise((resolve) => {
+        _voiceRecorder.mediaRecorder.onstop = async () => {
+          const blob = new Blob(_voiceRecorder.chunks, { type: 'audio/webm;codecs=opus' });
+          _voiceRecorder.stream.getTracks().forEach(t => t.stop());
+          if (_voiceRecorder.audioContext) _voiceRecorder.audioContext.close().catch(() => {});
+          _voiceRecorder = null;
+
+          // Yellow processing state
+          setMicState('processing');
+          const bar = document.getElementById('voice-recording-bar');
+          bar.style.display = 'flex';
+          bar.innerHTML = `<div class="voice-transcribing">Transcribing<div class="dots"><span></span><span></span><span></span></div></div>`;
+
+          try {
+            const text = await transcribeAudioBlob(blob);
+            bar.style.display = 'none';
+            setMicState('idle');
+
+            if (text && text.trim()) {
+              const input = document.getElementById('message-input');
+              input.value = text.trim();
+              input.focus();
+
+              if (_voiceMode === 'talk_to_send') {
+                sendMessage();
+              }
+              // In 'type_to_send' mode, user reviews and hits Enter
+            } else {
+              showVoiceToast('No speech detected. Try again.', true);
+            }
+          } catch (err) {
+            bar.style.display = 'none';
+            setMicState('error');
+            showVoiceToast('Voice capture failed — try typing instead', true);
+          }
+          resolve();
+        };
+
+        _voiceRecorder.mediaRecorder.stop();
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  TASK 2: Voice Notes (Long-Press → Audio Message)
+    // ═══════════════════════════════════════════════════════════
+
+    async function startVoiceNote() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 48000 }
+        });
+
+        // Analyser for waveform visualization
+        const audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType: 'audio/webm;codecs=opus',
+          audioBitsPerSecond: 64000,
+        });
+
+        const chunks = [];
+        mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+        mediaRecorder.start(100);
+
+        _voiceRecorder = { mediaRecorder, stream, chunks, isRecording: true, audioContext, analyser, isVoiceNote: true };
+        _voiceStartTime = Date.now();
+
+        setMicState('voice-note');
+        const bar = document.getElementById('voice-recording-bar');
+        bar.style.display = 'flex';
+        bar.innerHTML = `
+          <div class="voice-pulse" style="background:#ef4444;"></div>
+          <span id="voice-timer">0:00</span>
+          <canvas id="voice-waveform" width="120" height="24" style="flex:1;"></canvas>
+          <span style="font-size:11px; color:var(--chat-text-dim);">Voice note — release to send</span>
+        `;
+
+        // Timer + waveform
+        _voiceTimerInterval = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - _voiceStartTime) / 1000);
+          const m = Math.floor(elapsed / 60);
+          const s = String(elapsed % 60).padStart(2, '0');
+          const timerEl = document.getElementById('voice-timer');
+          if (timerEl) timerEl.textContent = `${m}:${s}`;
+          drawWaveform(analyser);
+        }, 100);
+
+      } catch (err) {
+        setMicState('error');
+        showVoiceToast('Microphone access denied', true);
+      }
+    }
+
+    function drawWaveform(analyser) {
+      const canvas = document.getElementById('voice-waveform');
+      if (!canvas || !analyser) return;
+      const ctx = canvas.getContext('2d');
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const barWidth = 2;
+      const gap = 1;
+      const bars = Math.min(Math.floor(canvas.width / (barWidth + gap)), data.length);
+
+      for (let i = 0; i < bars; i++) {
+        const val = data[i] / 255;
+        const h = Math.max(2, val * canvas.height);
+        const x = i * (barWidth + gap);
+        const y = (canvas.height - h) / 2;
+
+        ctx.fillStyle = `rgba(239, 68, 68, ${0.4 + val * 0.6})`;
+        ctx.fillRect(x, y, barWidth, h);
+      }
+    }
+
+    async function stopVoiceNote() {
+      if (!_voiceRecorder || !_voiceRecorder.isVoiceNote) return;
+
+      clearInterval(_voiceTimerInterval);
+      const duration = Date.now() - _voiceStartTime;
+
+      // If too short (< 500ms), treat as accidental
+      if (duration < 500) {
+        cancelVoiceCapture();
+        return;
+      }
+
+      return new Promise((resolve) => {
+        _voiceRecorder.mediaRecorder.onstop = async () => {
+          const blob = new Blob(_voiceRecorder.chunks, { type: 'audio/ogg; codecs=opus' });
+          _voiceRecorder.stream.getTracks().forEach(t => t.stop());
+          if (_voiceRecorder.audioContext) _voiceRecorder.audioContext.close().catch(() => {});
+          _voiceRecorder = null;
+
+          resetVoiceUI();
+
+          // Send as voice message via Matrix (m.audio)
+          try {
+            if (currentRoomId && typeof windyChat !== 'undefined' && windyChat.sendVoiceMessage) {
+              await windyChat.sendVoiceMessage(currentRoomId, blob, {
+                duration: Math.round(duration),
+                mimetype: 'audio/ogg; codecs=opus',
+                size: blob.size,
+              });
+
+              // Show optimistic voice message in chat
+              appendMessage({
+                senderId: myUserId,
+                body: '🎤 Voice message',
+                timestamp: Date.now(),
+                _pending: true,
+                _voiceMessage: { blob, duration },
+              });
+              scrollToBottom();
+            } else {
+              // Fallback: transcribe and send as text
+              showVoiceToast('Voice notes require chat connection — transcribing to text', false);
+              setMicState('processing');
+              const text = await transcribeAudioBlob(blob);
+              setMicState('idle');
+              if (text && text.trim()) {
+                document.getElementById('message-input').value = text.trim();
+                sendMessage();
+              }
+            }
+          } catch (err) {
+            setMicState('error');
+            showVoiceToast('Failed to send voice note', true);
+          }
+          resolve();
+        };
+
+        _voiceRecorder.mediaRecorder.stop();
+      });
+    }
+
+    function cancelVoiceCapture() {
+      if (_voiceRecorder) {
+        clearInterval(_voiceTimerInterval);
+        if (_silenceTimeout) cancelAnimationFrame(_silenceTimeout);
+        _voiceRecorder.stream.getTracks().forEach(t => t.stop());
+        if (_voiceRecorder.audioContext) _voiceRecorder.audioContext.close().catch(() => {});
+        _voiceRecorder.mediaRecorder.stop();
+        _voiceRecorder = null;
+      }
+      resetVoiceUI();
+    }
+
+    function resetVoiceUI() {
+      setMicState('idle');
+      const bar = document.getElementById('voice-recording-bar');
+      bar.style.display = 'none';
+      bar.innerHTML = `
+        <div class="voice-pulse"></div>
+        <span id="voice-timer">0:00</span>
+        <span style="flex:1; font-size:12px; color:var(--chat-text-dim);">Recording... speak now</span>
+        <button onclick="cancelVoiceCapture()" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:12px; font-weight:600;">Cancel</button>
+      `;
+    }
+
+    async function transcribeAudioBlob(blob) {
+      // Try cloud transcription endpoint first (account-server)
+      try {
+        if (typeof windyChat !== 'undefined' && windyChat.transcribeAudio) {
+          const result = await windyChat.transcribeAudio(blob);
+          if (result && result.text) return result.text;
+        }
+      } catch (_) { /* fall through */ }
+
+      // Try local Windy Word engine via IPC
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        if (window.windyAPI && window.windyAPI.batchTranscribeLocal) {
+          const result = await window.windyAPI.batchTranscribeLocal(base64);
+          if (result && result.text) return result.text;
+          if (result && result.segments && result.segments.length > 0) {
+            return result.segments.map(s => s.text).join(' ');
+          }
+        }
+      } catch (_) { /* fall through */ }
+
+      // Try WebSocket to Python engine (port 9876)
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Transcription timeout')), 15000);
+        try {
+          const ws = new WebSocket('ws://127.0.0.1:9876');
+          ws.onopen = () => {
+            blob.arrayBuffer().then(buf => {
+              ws.send(JSON.stringify({ type: 'transcribe', format: 'webm' }));
+              ws.send(buf);
+            });
+          };
+          ws.onmessage = (e) => {
+            clearTimeout(timeout);
+            try {
+              const data = JSON.parse(e.data);
+              ws.close();
+              resolve(data.text || (data.segments || []).map(s => s.text).join(' '));
+            } catch { resolve(e.data); }
+          };
+          ws.onerror = () => { clearTimeout(timeout); reject(new Error('WebSocket error')); };
+        } catch (err) { clearTimeout(timeout); reject(err); }
+      });
+    }
+
+    // Voice message playback
+    const _voicePlayers = {};
+    function playVoiceMessage(audioId) {
+      const btn = document.getElementById('play-' + audioId);
+      const prog = document.getElementById('prog-' + audioId);
+
+      if (_voicePlayers[audioId]) {
+        // Pause
+        _voicePlayers[audioId].pause();
+        delete _voicePlayers[audioId];
+        if (btn) btn.textContent = '▶';
+        return;
+      }
+
+      // Try to find audio URL from Matrix event
+      // For now, generate waveform bars for visual
+      const waveContainer = document.getElementById('wave-' + audioId);
+      if (waveContainer && !waveContainer.hasChildNodes()) {
+        for (let i = 0; i < 30; i++) {
+          const bar = document.createElement('div');
+          const h = Math.random() * 16 + 4;
+          bar.style.cssText = `width:2px; height:${h}px; background:var(--chat-text-muted); border-radius:1px; flex-shrink:0;`;
+          waveContainer.appendChild(bar);
+        }
+      }
+
+      if (btn) btn.textContent = '⏸';
+      // Simulated playback progress (real audio would use HTMLAudioElement)
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 2;
+        if (prog) prog.style.width = progress + '%';
+        if (progress >= 100) {
+          clearInterval(interval);
+          if (btn) btn.textContent = '▶';
+          if (prog) prog.style.width = '0%';
+          delete _voicePlayers[audioId];
+        }
+      }, 100);
+      _voicePlayers[audioId] = { pause: () => clearInterval(interval) };
+    }
+
+    function showVoiceToast(message, isError) {
+      const toast = document.createElement('div');
+      toast.style.cssText = `position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+        background:${isError ? '#dc2626' : 'var(--chat-card)'}; color:#fff; padding:8px 16px;
+        border-radius:8px; font-size:12px; font-weight:600; z-index:9999;
+        box-shadow:0 4px 12px rgba(0,0,0,0.3); animation:toast-in 0.3s ease-out;`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ═══ TASK 2: Reusable Voice Input for Any Text Field ═══
+
+    /**
+     * Add a voice input mic icon to any text input element.
+     * Usage: addVoiceInput(document.getElementById('my-input'), { autoSend: false })
+     */
+    function addVoiceInput(inputElement, options = {}) {
+      const { autoSend = false, onTranscribe = null } = options;
+
+      // Wrap input if not already wrapped
+      const wrapper = inputElement.parentElement;
+      if (wrapper) wrapper.style.position = 'relative';
+
+      // Adjust input padding for icon
+      inputElement.style.paddingRight = '32px';
+
+      const micIcon = document.createElement('button');
+      micIcon.className = 'windy-voice-icon';
+      micIcon.textContent = '🎙️';
+      micIcon.title = 'Voice input (Windy Word)';
+      micIcon.type = 'button';
+
+      let recorder = null;
+
+      micIcon.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (recorder && recorder.isRecording) {
+          // Stop
+          clearInterval(recorder.timer);
+          recorder.mediaRecorder.onstop = async () => {
+            const blob = new Blob(recorder.chunks, { type: 'audio/webm;codecs=opus' });
+            recorder.stream.getTracks().forEach(t => t.stop());
+            recorder = null;
+            micIcon.textContent = '🎙️';
+            micIcon.classList.remove('recording');
+
+            try {
+              const text = await transcribeAudioBlob(blob);
+              if (text && text.trim()) {
+                inputElement.value = (inputElement.value ? inputElement.value + ' ' : '') + text.trim();
+                inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+                if (onTranscribe) onTranscribe(text.trim());
+                if (autoSend) inputElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+              }
+            } catch (_) {
+              showVoiceToast('Voice capture failed', true);
+            }
+          };
+          recorder.mediaRecorder.stop();
+        } else {
+          // Start
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: { echoCancellation: true, noiseSuppression: true }
+            });
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+            const chunks = [];
+            mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+            mediaRecorder.start(100);
+
+            recorder = { mediaRecorder, stream, chunks, isRecording: true };
+            micIcon.textContent = '⏹️';
+            micIcon.classList.add('recording');
+
+            // Auto-stop after 30s
+            recorder.timer = setTimeout(() => micIcon.click(), 30000);
+          } catch (_) {
+            showVoiceToast('Microphone access denied', true);
+          }
+        }
+      });
+
+      if (wrapper) {
+        wrapper.appendChild(micIcon);
+      }
+
+      return micIcon;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  TASK 3: Agent Hatch Notification
+    // ═══════════════════════════════════════════════════════════
+
+    // Listen for new room invites/joins that look like agent hatches
+    function setupHatchDetection() {
+      if (typeof windyChat === 'undefined') return;
+
+      // Listen for new rooms appearing (via Matrix sync)
+      if (windyChat.onRoomJoined) {
+        windyChat.onRoomJoined((data) => {
+          checkForAgentHatch(data);
+        });
+      }
+
+      // Also check new messages for agent DM rooms
+      if (windyChat.onMessage) {
+        windyChat.onMessage((msg) => {
+          if (msg.senderId && isAgentUserId(msg.senderId) && !msg.isOwn) {
+            // An agent just sent us a message — could be a newly hatched agent
+            const contact = contacts.find(c => c.userId === msg.senderId);
+            if (contact && !contact._hatchNotified) {
+              contact._hatchNotified = true;
+              showHatchNotification(msg.senderName || msg.senderId, msg.roomId, msg.senderId);
+            }
+          }
+        });
+      }
+    }
+
+    function isAgentUserId(userId) {
+      if (!userId) return false;
+      const localpart = userId.split(':')[0].replace('@', '').toLowerCase();
+      return localpart.startsWith('agent_') || localpart.startsWith('bot_') || localpart.startsWith('windy_agent');
+    }
+
+    function checkForAgentHatch(data) {
+      if (!data || !data.roomId) return;
+      const members = data.members || [];
+      const agentMember = members.find(m => isAgentUserId(m.userId));
+      if (agentMember) {
+        showHatchNotification(agentMember.displayName || agentMember.userId, data.roomId, agentMember.userId);
+      }
+    }
+
+    function showHatchNotification(agentName, roomId, agentUserId) {
+      // Desktop notification (system-level)
+      if (Notification.permission === 'granted') {
+        const notif = new Notification('Agent Hatched!', {
+          body: `${agentName} just hatched! Click to chat`,
+          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🪰</text></svg>',
+        });
+        notif.onclick = () => {
+          window.focus();
+          const displayName = (agentName || '').split(':')[0].replace('@', '');
+          openConversation(roomId, agentUserId, displayName);
+        };
+      }
+
+      // In-app toast
+      const toast = document.createElement('div');
+      toast.className = 'hatch-toast';
+      toast.innerHTML = `🪰 <strong>${escapeHtml(agentName)}</strong> just hatched! Click to chat`;
+      toast.addEventListener('click', () => {
+        const displayName = (agentName || '').split(':')[0].replace('@', '');
+        openConversation(roomId, agentUserId, displayName);
+        toast.remove();
+      });
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 8000);
+
+      // Refresh contact list to show the new agent
+      loadContacts();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  TASK 4: Agent Contacts Styling
+    // ═══════════════════════════════════════════════════════════
+
+    // Override renderContacts to sort agents first and add badges
+    const _originalRenderContacts = renderContacts;
+    renderContacts = function(list) {
+      // Partition: agents first, then humans, both sorted by last activity
+      const agents = list.filter(c => isAgentUserId(c.userId));
+      const humans = list.filter(c => !isAgentUserId(c.userId));
+
+      // Sort each group by last timestamp (most recent first)
+      const byRecent = (a, b) => (b.lastTimestamp || 0) - (a.lastTimestamp || 0);
+      agents.sort(byRecent);
+      humans.sort(byRecent);
+
+      const sorted = [...agents, ...humans];
+
+      const container = document.getElementById('contact-list');
+      if (sorted.length === 0) {
+        container.innerHTML = `
+          <div style="padding:32px 16px; text-align:center; color:var(--chat-text-muted);">
+            <div style="font-size:32px; margin-bottom:8px;">👋</div>
+            <div style="font-size:13px;">No conversations yet</div>
+            <div style="font-size:11px; margin-top:4px;">Click + to start chatting</div>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = sorted.map(c => {
+        const initial = (c.displayName || '?').charAt(0).toUpperCase();
+        const time = c.lastTimestamp ? formatTime(c.lastTimestamp) : '';
+        const isActive = c.roomId === currentRoomId;
+        const isOnline = c.presence === 'online';
+        const isAgent = isAgentUserId(c.userId);
+
+        const agentBadge = isAgent ? '<span class="agent-badge">🪰 AI Agent</span>' : '';
+        const trustScore = isAgent && c.trustScore ? `<span class="trust-score">Trust: ${Math.round(c.trustScore * 100)}%</span>` : '';
+        const agentClass = isAgent ? ' agent-contact' : '';
+        const avatarEmoji = isAgent ? '🪰' : initial;
+
+        return `
+          <div class="contact-item${agentClass} ${isActive ? 'active' : ''}" onclick="openConversation('${escapeAttr(c.roomId)}', '${escapeAttr(c.userId)}', '${escapeAttr(c.displayName)}')">
+            <div class="contact-avatar" ${isAgent ? 'style="background:linear-gradient(135deg, #7c3aed, #a855f7);"' : ''}>
+              ${avatarEmoji}
+              <div class="presence-dot ${isOnline ? 'online' : ''}" id="presence-${c.userId.replace(/[^a-zA-Z0-9]/g, '_')}"></div>
+            </div>
+            <div class="contact-info">
+              <div class="contact-name">${escapeHtml(c.displayName)}${agentBadge}${trustScore}</div>
+              <div class="contact-preview">${escapeHtml(c.lastMessage || 'Start a conversation')}</div>
+            </div>
+            <div class="contact-meta">
+              <div class="contact-time">${time}</div>
+              ${c.unreadCount > 0 ? `<div class="contact-unread">${c.unreadCount}</div>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+    };
+
+    // ═══ Wire up on init ═══
+    const _originalInit = init;
+    init = async function() {
+      await _originalInit();
+      loadVoiceSettings();
+      setupMicButton();
+      setupHatchDetection();
+
+      // Request notification permission for hatch alerts
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+
+      // Add voice input to search box
+      const searchBox = document.getElementById('contact-search');
+      if (searchBox) addVoiceInput(searchBox);
+    };
 
     // ═══ Start ═══
     document.addEventListener('DOMContentLoaded', init);

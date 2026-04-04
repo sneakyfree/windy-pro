@@ -8,23 +8,29 @@ on:
     branches: [main]
 
 jobs:
-  # ── Lint & Security ──
-  lint:
+  # ── Account Server: Type Check + Tests ──
+  test-account-server:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: account-server
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - name: Lint account server
-        run: |
-          cd account-server && npm ci
-          npx eslint server.js --no-eslintrc --env node --env es2021 || true
-      - name: Security audit
-        run: |
-          cd account-server && npm audit --production || true
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: account-server/package-lock.json
+      - run: npm ci
+      - name: Type check
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+        env:
+          NODE_ENV: test
+          JWT_SECRET: ci-test-secret-not-real
 
-  # ── Python Tests ──
+  # ── Python Backend Tests ──
   test-backend:
     runs-on: ubuntu-latest
     strategy:
@@ -43,9 +49,18 @@ jobs:
         run: |
           python tests/test_desktop_security.py
           python tests/test_web_portal.py
-      - name: Run pytest (non-hanging tests only)
+      - name: Run pytest
+        id: pytest
+        continue-on-error: true
         run: |
-          python -m pytest tests/test_desktop_gaps.py tests/test_desktop_core_features.py -v --tb=short --timeout=30 || true
+          python -m pytest tests/test_desktop_gaps.py tests/test_desktop_core_features.py -v --tb=short --timeout=30
+      - name: Report pytest outcome
+        if: steps.pytest.outcome == 'failure'
+        run: |
+          echo "::warning::Python tests failed (non-blocking). Review test output above."
+          echo "## ⚠️ Python Test Failures" >> $GITHUB_STEP_SUMMARY
+          echo "pytest exited with failures. These are non-blocking until dependencies are fully configured." >> $GITHUB_STEP_SUMMARY
+          echo "See the 'Run pytest' step output for details." >> $GITHUB_STEP_SUMMARY
 
   # ── Web Frontend Build ──
   build-web:
@@ -54,7 +69,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - name: Install & build
         run: |
           cd src/client/web
@@ -68,7 +83,7 @@ jobs:
 
   # ── Electron Build ──
   build-electron:
-    needs: [test-backend, build-web]
+    needs: [test-account-server, test-backend, build-web]
     if: always()
     runs-on: ${{ matrix.os }}
     strategy:
@@ -78,7 +93,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - name: Install dependencies
         run: npm install
       - name: Build
@@ -108,16 +123,15 @@ jobs:
 
   # ── Docker Build & Deploy ──
   deploy:
-    needs: [test-backend, build-web]
+    needs: [test-account-server, build-web]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker image
-        run: docker build -t windy-pro:${{ github.sha }} .
+        run: docker build -f account-server/Dockerfile -t windy-pro:${{ github.sha }} .
       - name: Tag latest
         run: docker tag windy-pro:${{ github.sha }} windy-pro:latest
-      # Deploy to production server
       - name: Deploy to windypro.thewindstorm.uk
         if: github.ref == 'refs/heads/main'
         env:

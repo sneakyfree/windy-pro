@@ -6,7 +6,7 @@
 #   2. Copy compiled JS + production deps into slim image
 
 # ── Stage 1: Build TypeScript ─────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /build
 
@@ -26,7 +26,7 @@ COPY account-server/src ./src
 RUN npx tsc
 
 # ── Stage 2: Production Image ────────────────────────────────────
-FROM node:20-alpine
+FROM node:22-alpine
 
 # Security: run as non-root
 RUN addgroup -S windy && adduser -S windy -G windy

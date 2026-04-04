@@ -183,10 +183,29 @@ class WindyApp {
       if (settings?.cloudPassword) this.cloudPassword = settings.cloudPassword;
       console.debug(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? 'configured' : 'empty'}`);
 
+      // Load transcription mode (auto / local_only / cloud_only)
+      this.transcriptionMode = settings?.transcriptionMode || localStorage.getItem('windy_transcriptionMode') || 'auto';
+      console.debug(`[Init] Transcription mode: ${this.transcriptionMode}`);
+
+      // Cloud-only mode: connect to cloud WebSocket immediately, skip local backend
+      if (this.transcriptionMode === 'cloud_only' && this.cloudUrl) {
+        this._usingCloud = true;
+        this.connectCloudWS().then(() => {
+          this.updateModelBadge('cloud', false);
+          this.showReconnectToast('☁️ Cloud-only mode active');
+        }).catch((err) => {
+          console.warn('[Init] Cloud-only connect failed:', err.message);
+          this._usingCloud = false;
+          this.showReconnectToast('⚠️ Cloud unavailable. Falling back to local.');
+        });
+      }
+
       // Show current engine/model in status bar badge on startup
       const savedModel = settings?.model || localStorage.getItem('windy_model') || 'small';
       const engineName = this.transcriptionEngine || 'local';
-      if (['groq', 'openai', 'deepgram', 'cloud', 'stream'].includes(engineName)) {
+      if (this.transcriptionMode === 'cloud_only') {
+        this.updateModelBadge('cloud', false);
+      } else if (['groq', 'openai', 'deepgram', 'cloud', 'stream'].includes(engineName)) {
         this.updateModelBadge(engineName, false);
       } else {
         this.updateModelBadge(savedModel, false);
@@ -272,64 +291,16 @@ class WindyApp {
       }
     }
 
-    // ── Mic Pre-Warming ──────────────────────────────────────────
-    // Call getUserMedia() now (during init, when the app window has focus)
-    // and keep the stream alive. When recording starts later via hotkey,
-    // we reuse this stream instead of calling getUserMedia() again.
-    // This prevents focus-stealing on Wayland/GNOME.
-    this._preWarmedMicStream = null;
-    try {
-      const defaultConstraints = {
-        channelCount: 1, sampleRate: 16000,
-        echoCancellation: true, noiseSuppression: true, autoGainControl: true
-      };
-      // Check for custom mic device
-      if (window.windyAPI?.getSettings) {
-        try {
-          const s = await window.windyAPI.getSettings();
-          if (s?.micDeviceId && s.micDeviceId !== 'default') {
-            defaultConstraints.deviceId = { exact: s.micDeviceId };
-          }
-        } catch (_) { }
-      }
-      this._preWarmedMicStream = await navigator.mediaDevices.getUserMedia({ audio: defaultConstraints });
-      // Mute all tracks so the mic isn't actively recording yet
-      this._preWarmedMicStream.getAudioTracks().forEach(t => { t.enabled = false; });
-      console.info('[MicPreWarm] Microphone pre-warmed successfully');
-    } catch (e) {
-      console.warn('[MicPreWarm] Failed (will request on first recording):', e.message);
+    // Ecosystem navigation toolbar
+    if (typeof EcosystemNav !== 'undefined') {
+      this.ecosystemNav = new EcosystemNav(this);
     }
 
-    // ── Video Pre-Warming ─────────────────────────────────────────
-    // Same approach as mic: request camera access now so getUserMedia({ video })
-    // doesn't steal Wayland focus when recording starts via hotkey.
-    this._preWarmedVideoStream = null;
-    try {
-      let videoEnabled = false;
-      if (window.windyAPI?.getSettings) {
-        const s = await window.windyAPI.getSettings();
-        videoEnabled = !!s?.saveVideo;
-      }
-      if (videoEnabled) {
-        this._preWarmedVideoStream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
-        });
-        // Mute video tracks so camera isn't actively streaming yet
-        this._preWarmedVideoStream.getVideoTracks().forEach(t => { t.enabled = false; });
-        console.info('[VideoPreWarm] Camera pre-warmed successfully');
-      }
-    } catch (e) {
-      console.warn('[VideoPreWarm] Failed (will request on first recording):', e.message);
+    // First-run welcome overlay (shows once on first launch)
+    if (typeof FirstRunExperience !== 'undefined') {
+      const firstRun = new FirstRunExperience(this);
+      firstRun.show();
     }
-
-    // Also pre-warm AudioContext (used for blip sounds).
-    // Creating AudioContext for the first time steals focus on Linux.
-    try {
-      this._blipAudioCtx = new AudioContext();
-      // Immediately suspend to save resources
-      if (this._blipAudioCtx.state === 'running') this._blipAudioCtx.suspend();
-      console.info('[MicPreWarm] AudioContext pre-warmed successfully');
-    } catch (_) { }
   }
 
   /**
@@ -1336,6 +1307,9 @@ class WindyApp {
     const badge = document.getElementById('modelBadge');
     if (!badge) return;
 
+    // Determine transcription mode
+    const tMode = this.transcriptionMode || localStorage.getItem('windy_transcriptionMode') || 'auto';
+
     // Skip local performance badge updates when cloud is active
     if (this._usingCloud) {
       badge.textContent = '☁️🔒 cloud ✅';
@@ -1379,8 +1353,37 @@ class WindyApp {
         }
       }
 
-      // Smart mode: auto-switch to cloud if struggling for 2+ chunks
-      if (this.transcriptionEngine === 'smart' && !this._usingCloud && this.cloudUrl) {
+      // Cloud failover logic — respects transcription mode setting
+      if (tMode === 'local_only') {
+        // Local only: never failover to cloud, just show suggestions
+        const suggestions = [];
+        const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
+        if (recordingMode !== 'batch') {
+          suggestions.push('Switch to Batch mode for best accuracy');
+        }
+        const modelSizeMB = { 'large-v3': 2945, 'windy-pro-engine': 2945, 'turbo': 1544, 'windy-turbo': 1544, 'medium': 1444, 'windy-edge': 1444, 'small': 140, 'windy-lite': 140, 'base': 462, 'windy-core': 462, 'tiny': 73, 'windy-nano': 73 };
+        const currentModelSize = modelSizeMB[msg.model] || 0;
+        if (currentModelSize > 500) {
+          suggestions.push('Try Windy Core (462MB, balanced)');
+        } else if (currentModelSize > 150) {
+          suggestions.push('Try Windy Lite (140MB) for faster dictation');
+        }
+        const tip = suggestions.length > 0 ? ` 💡 ${suggestions[0]}` : '';
+        this.showReconnectToast(`⚠️ ${displayName} is struggling.${tip}`);
+      } else if (tMode === 'auto' && msg.ratio > 2.0 && !this._usingCloud && this.cloudUrl) {
+        // Auto mode: failover to cloud when performance_ratio > 2.0
+        this._usingCloud = true;
+        this.showReconnectToast('Switching to cloud for better performance...');
+        this.connectCloudWS().then(() => {
+          badge.textContent = `☁️🔒 cloud ✅`;
+          badge.classList.remove('loading');
+          this.showReconnectToast('☁️ Auto mode: switched to cloud transcription');
+        }).catch(() => {
+          this._usingCloud = false;
+          this.showReconnectToast('⚠️ Cloud unavailable. Continuing local.');
+        });
+      } else if (this.transcriptionEngine === 'smart' && !this._usingCloud && this.cloudUrl) {
+        // Legacy smart mode: auto-switch to cloud if struggling
         this._usingCloud = true;
         this.connectCloudWS().then(() => {
           badge.textContent = `☁️🔒 cloud ✅`;
@@ -1391,7 +1394,7 @@ class WindyApp {
           this.showReconnectToast('⚠️ Cloud unavailable. Continuing local.');
         });
       } else {
-        // Actionable performance suggestions
+        // Actionable performance suggestions (auto mode below threshold, or no cloud configured)
         const suggestions = [];
         const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
         if (recordingMode !== 'batch') {
@@ -1809,7 +1812,7 @@ class WindyApp {
         }
       } catch (e) { console.warn('[TierLimits] Failed to enforce plan limits:', e.message); }
 
-      // 1. Get mic access — reuse pre-warmed stream to avoid focus-stealing
+      // 1. Get mic access
       const audioConstraints = {
         channelCount: 1,
         sampleRate: 16000,
@@ -1823,21 +1826,7 @@ class WindyApp {
           audioConstraints.deviceId = { exact: settings.micDeviceId };
         }
       }
-
-      let stream;
-      if (this._preWarmedMicStream && this._preWarmedMicStream.getAudioTracks().length > 0
-          && this._preWarmedMicStream.getAudioTracks()[0].readyState === 'live') {
-        // Re-enable the pre-warmed stream's tracks
-        this._preWarmedMicStream.getAudioTracks().forEach(t => { t.enabled = true; });
-        stream = this._preWarmedMicStream;
-        console.info('[BatchRec] Using pre-warmed mic stream (no focus steal)');
-      } else {
-        // Fallback: request fresh stream (will steal focus on Wayland)
-        console.warn('[BatchRec] Pre-warmed stream unavailable, requesting fresh getUserMedia');
-        stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-        this._preWarmedMicStream = stream; // Cache for next time
-      }
-      this._batchStream = stream; // Store for stopBatchRecording()
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
       // 2. Use MediaRecorder to capture full audio
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -1880,20 +1869,9 @@ class WindyApp {
             videoQuality = settings?.videoQuality || '720p';
           }
           const vq = qualityMap[videoQuality] || qualityMap['720p'];
-
-          // Use pre-warmed video stream if available (prevents focus steal on Wayland)
-          if (this._preWarmedVideoStream && this._preWarmedVideoStream.getVideoTracks().length > 0
-              && this._preWarmedVideoStream.getVideoTracks()[0].readyState === 'live') {
-            this._preWarmedVideoStream.getVideoTracks().forEach(t => { t.enabled = true; });
-            this._videoStream = this._preWarmedVideoStream;
-            console.info('[BatchRec] Using pre-warmed video stream (no focus steal)');
-          } else {
-            console.warn('[BatchRec] Pre-warmed video unavailable, requesting fresh getUserMedia');
-            this._videoStream = await navigator.mediaDevices.getUserMedia({
-              video: { width: { ideal: vq.width }, height: { ideal: vq.height }, frameRate: { ideal: 30 } }
-            });
-            this._preWarmedVideoStream = this._videoStream;
-          }
+          this._videoStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: vq.width }, height: { ideal: vq.height }, frameRate: { ideal: 30 } }
+          });
 
           // ═══ Camera resolution check: warn if hardware < requested ═══
           const vTrack = this._videoStream.getVideoTracks()[0];
@@ -2103,10 +2081,10 @@ class WindyApp {
 
     return new Promise((resolve) => {
       this._batchRecorder.onstop = async () => {
-        // Mute mic tracks (don't stop() — keep stream alive for reuse to avoid focus-steal)
+        // Stop mic
         if (this._batchStream) {
-          this._batchStream.getAudioTracks().forEach(t => { t.enabled = false; });
-          // Don't null out _batchStream — it may be the pre-warmed stream
+          this._batchStream.getTracks().forEach(t => t.stop());
+          this._batchStream = null;
         }
 
         // Build audio blob
@@ -2931,6 +2909,11 @@ class WindyApp {
       clearInterval(this._apiChunkInterval);
       this._apiChunkInterval = null;
     }
+    // M5: Stop proxy-based Deepgram stream if active
+    if (this._dgUsingProxy && window.windyAPI?.deepgramStreamStop) {
+      window.windyAPI.deepgramStreamStop();
+      this._dgUsingProxy = false;
+    }
     if (this._deepgramWs) {
       this._deepgramWs.close();
       this._deepgramWs = null;
@@ -2999,12 +2982,98 @@ class WindyApp {
   }
   /**
    * Start Deepgram real-time WebSocket streaming
+   * M5: Uses IPC proxy to keep API key in main process — never exposed to renderer
    */
   async _startDeepgramStreaming(stream, apiKey) {
     const dgLang = localStorage.getItem('windy_language') || 'en';
     const dgDiarize = localStorage.getItem('windy_diarize') === 'true';
+
+    // M5: Use main-process proxy if available (API key stays in main process)
+    const useProxy = !!window.windyAPI?.deepgramStreamStart;
+
+    if (useProxy) {
+      const result = await window.windyAPI.deepgramStreamStart({ language: dgLang, diarize: dgDiarize });
+      if (!result?.ok) {
+        this.showReconnectToast(`⚠️ ${result?.error || 'Failed to start Deepgram stream'}`);
+        return;
+      }
+      // Mark proxy mode so stopApiRecording uses the right cleanup
+      this._dgUsingProxy = true;
+
+      window.windyAPI.onDeepgramProxyOpen(() => {
+        console.debug('[Deepgram] Proxy WebSocket connected');
+        // Stream audio to Deepgram via main process
+        const audioCtx = new AudioContext({ sampleRate: 16000 });
+        const source = audioCtx.createMediaStreamSource(stream);
+        const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+        processor.onaudioprocess = (e) => {
+          const inputData = e.inputBuffer.getChannelData(0);
+          const int16 = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            int16[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+          }
+          window.windyAPI.deepgramStreamSend(int16.buffer);
+        };
+
+        source.connect(processor);
+        processor.connect(audioCtx.destination);
+        this._dgAudioCtx = audioCtx;
+        this._dgProcessor = processor;
+        this._dgSource = source;
+        this._dgStream = stream;
+      });
+
+      window.windyAPI.onDeepgramProxyMessage((dataStr) => {
+        try {
+          const data = JSON.parse(dataStr);
+          if (data.channel?.alternatives?.[0]) {
+            const alt = data.channel.alternatives[0];
+            const text = alt.transcript;
+            if (text) {
+              if (data.is_final) {
+                this._streamingText += (this._streamingText ? ' ' : '') + text;
+                this.transcript.push({ text: text.trim(), partial: false, start: 0, end: 0, confidence: alt.confidence || 1, words: [] });
+                this._interimText = '';
+                this.updateWordCount();
+              } else {
+                this._interimText = text;
+              }
+              this._renderStreamTranscript();
+            }
+          }
+        } catch (err) {
+          console.error('[Deepgram] Parse error:', err);
+        }
+      });
+
+      window.windyAPI.onDeepgramProxyError((msg) => {
+        console.error('[Deepgram] Proxy error:', msg);
+        this.showReconnectToast('⚠️ Stream engine connection error. Check API key.');
+      });
+
+      window.windyAPI.onDeepgramProxyClose(() => {
+        console.debug('[Deepgram] Proxy WebSocket closed');
+        if (this._dgProcessor) this._dgProcessor.disconnect();
+        if (this._dgSource) this._dgSource.disconnect();
+        if (this._dgAudioCtx) this._dgAudioCtx.close();
+        if (this._dgStream) this._dgStream.getTracks().forEach(t => t.stop());
+        if (this.isRecording) {
+          this.isRecording = false;
+          this.setState('idle');
+          this.transcriptContent.contentEditable = 'true';
+          if (this._streamingText.trim() && window.windyAPI?.archiveTranscript) {
+            window.windyAPI.archiveTranscript(this._streamingText.trim(), 'deepgram');
+          }
+        }
+      });
+      return;
+    }
+
+    // Fallback: direct WebSocket (legacy — API key passed as sub-protocol)
     let dgUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&language=${dgLang}&smart_format=true&interim_results=true&punctuate=true`;
     if (dgDiarize) dgUrl += '&diarize=true';
+    this._dgUsingProxy = false;
 
     this._deepgramWs = new WebSocket(dgUrl, ['token', apiKey]);
 
@@ -3155,12 +3224,10 @@ class WindyApp {
     const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
 
     if (this.isRecording) {
-      // Sound feedback: skip blip on hotkey triggers (AudioContext steals focus on Linux)
-      if (!this._hotkeyTriggered) {
-        const fxMode = this.effectsEngine?._mode;
-        if (!fxMode || fxMode === 'default' || fxMode === 'silent') {
-          this._playBlip(440, 0.1);
-        }
+      // Sound feedback: use default beeps only if effects engine is in default mode or unavailable
+      const fxMode = this.effectsEngine?._mode;
+      if (!fxMode || fxMode === 'default' || fxMode === 'silent') {
+        this._playBlip(440, 0.1);
       }
       // Strand I: trigger stop effect (pure observer, safe to fail)
       try { if (this.effectsEngine) this.effectsEngine.trigger('stop'); } catch (_) { }
@@ -3176,12 +3243,10 @@ class WindyApp {
         this.stopRecording();
       }
     } else {
-      // Sound feedback: skip blip on hotkey triggers (AudioContext steals focus on Linux)
-      if (!this._hotkeyTriggered) {
-        const fxMode2 = this.effectsEngine?._mode;
-        if (!fxMode2 || fxMode2 === 'default' || fxMode2 === 'silent') {
-          this._playBlip(880, 0.08);
-        }
+      // Sound feedback: use default beeps only if effects engine is in default mode or unavailable
+      const fxMode2 = this.effectsEngine?._mode;
+      if (!fxMode2 || fxMode2 === 'default' || fxMode2 === 'silent') {
+        this._playBlip(880, 0.08);
       }
       // Strand I: random widget rotation on each recording start
       try {

@@ -48,31 +48,10 @@ router.post('/speech', authenticateToken, upload.single('audio'), validate(Speec
             return res.status(400).json({ error: 'Audio file is required' });
         }
 
-        // Stub translation
-        const detectedText = `[Detected speech in ${sourceLang}]`;
-        const translatedText = `[Translation to ${targetLang}]`;
-        const confidence = Math.round((0.82 + Math.random() * 0.15) * 100) / 100;
-        const translationId = uuidv4();
-
-        stmts.insertTranslation.run(
-            translationId, (req as AuthRequest).user?.userId || 'anonymous',
-            sourceLang, targetLang,
-            detectedText, translatedText,
-            confidence, 'speech'
-        );
-
-        console.log(`🗣️  Speech translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'anonymous').slice(0, 8)}`);
-
-        res.set('X-Stub', 'true');
-        res.json({
-            id: translationId,
-            sourceText: detectedText,
-            translatedText,
-            sourceLang,
-            targetLang,
-            confidence,
-            type: 'speech',
-            audioData: null,
+        // Speech translation requires a speech-to-text API (Groq Whisper or OpenAI Whisper)
+        return res.status(501).json({
+            error: 'Not implemented',
+            message: 'Speech translation requires a speech-to-text API. Configure GROQ_API_KEY or OPENAI_API_KEY.',
         });
     } catch (err: any) {
         console.error('Speech translation error:', err);
@@ -122,6 +101,7 @@ router.post('/text', authenticateToken, validate(TranslateTextRequestSchema), as
                         temperature: 0.3,
                         max_tokens: 2048,
                     }),
+                    signal: AbortSignal.timeout(10000),
                 });
 
                 if (apiRes.ok) {
@@ -154,7 +134,6 @@ router.post('/text', authenticateToken, validate(TranslateTextRequestSchema), as
 
         console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'anonymous').slice(0, 8)} (engine: ${engine})`);
 
-        if (engine === 'stub') res.set('X-Stub', 'true');
         res.json({
             id: translationId,
             sourceText: text,
@@ -187,10 +166,25 @@ export function historyHandler(req: Request, res: Response): void {
         const offset = parseInt(req.query.offset as string) || 0;
         const userId = (req as AuthRequest).user.userId;
 
-        const history = stmts.getTranslationHistory.all(userId, limit, offset);
+        const history = stmts.getTranslationHistory.all(userId, limit, offset) as any[];
         const total = (stmts.countTranslations.get(userId) as any).count;
 
+        // Collect unique languages from history entries
+        const langSet = new Set<string>();
+        let favoriteCount = 0;
+        for (const h of history) {
+            if (h.source_lang) langSet.add(h.source_lang);
+            if (h.target_lang) langSet.add(h.target_lang);
+            if (h.is_favorite) favoriteCount++;
+        }
+
         res.json({
+            // Frontend compat fields (Dashboard.jsx, Profile.jsx)
+            translations: history,
+            total,
+            languages: Array.from(langSet),
+            favoriteCount,
+            // Original structured response
             history,
             pagination: { limit, offset, total, hasMore: offset + limit < total },
         });

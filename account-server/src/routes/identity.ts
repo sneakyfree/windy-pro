@@ -35,6 +35,7 @@ import {
   hasSecretaryConsent,
 } from '../identity-service';
 import { normalizeProductTier } from '@windy-pro/contracts';
+import { provisionAgent, cascadeRevocation } from '../services/ecosystem-provisioner';
 
 const router = Router();
 
@@ -156,8 +157,8 @@ router.post('/products/provision', authenticateToken, (req: Request, res: Respon
   try {
     const { product, metadata } = req.body;
 
-    if (!product || !['windy_pro', 'windy_chat', 'windy_mail', 'windy_fly'].includes(product)) {
-      return res.status(400).json({ error: 'Invalid product. Must be one of: windy_pro, windy_chat, windy_mail, windy_fly' });
+    if (!product || !['windy_pro', 'windy_chat', 'windy_mail', 'windy_fly', 'eternitas'].includes(product)) {
+      return res.status(400).json({ error: 'Invalid product. Must be one of: windy_pro, windy_chat, windy_mail, windy_fly, eternitas' });
     }
 
     const result = provisionProduct(
@@ -293,6 +294,13 @@ router.post('/eternitas/webhook', botWebhookLimiter, (req: Request, res: Respons
       return res.json({ received: true });
     }
 
+    // Handle revocation events — cascade suspend across all products
+    if (event === 'passport.revoked' || event === 'passport.suspended') {
+      cascadeRevocation(passportNumber);
+      logAuditEvent('passport_revoke', '', { event, passportNumber });
+      return res.json({ received: true, action: 'cascade_revocation' });
+    }
+
     const result = processEternitasEvent(event, passportNumber, agentName, operatorEmail);
 
     // Phase 3: On registration, also generate API key for the bot
@@ -377,7 +385,7 @@ router.post('/chat/provision', authenticateToken, async (req: Request, res: Resp
     if (SYNAPSE_REGISTRATION_SECRET) {
       // Production: provision via Synapse admin API
       try {
-        const nonceRes = await fetch(`${SYNAPSE_ADMIN_URL}/v1/register`, { method: 'GET' });
+        const nonceRes = await fetch(`${SYNAPSE_ADMIN_URL}/v1/register`, { method: 'GET', signal: AbortSignal.timeout(10000) });
         if (!nonceRes.ok) throw new Error(`Synapse nonce request failed: ${nonceRes.status}`);
         const { nonce } = await nonceRes.json() as any;
 
@@ -390,6 +398,7 @@ router.post('/chat/provision', authenticateToken, async (req: Request, res: Resp
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nonce, username: localpart, password, displayname: displayName, admin: false, mac }),
+          signal: AbortSignal.timeout(10000),
         });
 
         if (!regRes.ok) throw new Error(`Synapse registration failed: ${regRes.status}`);
@@ -460,6 +469,148 @@ router.post('/chat/provision', authenticateToken, async (req: Request, res: Resp
   } catch (err: any) {
     console.error('[identity] Chat provision error:', err);
     res.status(500).json({ error: 'Chat provisioning failed' });
+  }
+});
+
+// ─── POST /api/v1/identity/mail/provision — Provision Windy Mail inbox ──────
+router.post('/mail/provision', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as AuthRequest).user.userId;
+    const db = getDb();
+
+    const user = db.prepare('SELECT email, name, display_name, windy_identity_id FROM users WHERE id = ?').get(userId) as any;
+    if (!user) return res.status(404).json({ error: 'Identity not found' });
+
+    const { display_name: displayName, email_prefix: emailPrefix } = req.body;
+    const finalDisplayName = displayName || user.display_name || user.name;
+    const finalPrefix = emailPrefix || user.email.split('@')[0];
+
+    // Check if already provisioned
+    const existing = db.prepare(
+      "SELECT external_id FROM product_accounts WHERE identity_id = ? AND product = 'windy_mail' AND status = 'active'",
+    ).get(userId) as any;
+
+    if (existing?.external_id) {
+      return res.json({
+        mail_address: existing.external_id,
+        mail_provisioned: true,
+        already_provisioned: true,
+      });
+    }
+
+    // Ensure product account row exists
+    provisionProduct(userId, 'windy_mail', { source: 'mail/provision' });
+
+    const WINDY_MAIL_URL = config.WINDY_MAIL_URL;
+    try {
+      const mailRes = await fetch(`${WINDY_MAIL_URL}/api/v1/provision/human`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Service-Token': process.env.WINDYMAIL_SERVICE_TOKEN || '',
+        },
+        body: JSON.stringify({
+          windy_identity_id: user.windy_identity_id || userId,
+          display_name: finalDisplayName,
+          email_prefix: finalPrefix,
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!mailRes.ok) {
+        const errBody = await mailRes.text().catch(() => '');
+        return res.status(502).json({
+          mail_provisioned: false,
+          error: 'service unavailable',
+          detail: `Mail service returned ${mailRes.status}`,
+        });
+      }
+
+      const mailData = await mailRes.json() as any;
+      const mailAddress = mailData.mail_address || mailData.emailAddress || `${finalPrefix}@windymail.ai`;
+
+      // Update product account
+      db.prepare(
+        "UPDATE product_accounts SET status = 'active', external_id = ? WHERE identity_id = ? AND product = 'windy_mail'",
+      ).run(mailAddress, userId);
+
+      logAuditEvent('product_provision', userId, {
+        product: 'windy_mail',
+        mailAddress,
+      });
+
+      res.status(201).json({
+        mail_address: mailAddress,
+        mail_provisioned: true,
+      });
+    } catch (err: any) {
+      res.status(502).json({
+        mail_provisioned: false,
+        error: 'service unavailable',
+        detail: err.message,
+      });
+    }
+  } catch (err: any) {
+    console.error('[identity] Mail provision error:', err);
+    res.status(500).json({ error: 'Mail provisioning failed' });
+  }
+});
+
+// ─── POST /api/v1/identity/agent/provision — Provision agent via Eternitas ──
+router.post('/agent/provision', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const requestingUser = (req as AuthRequest).user;
+    const db = getDb();
+    const { windy_identity_id, agent_name, owner_email } = req.body;
+
+    if (!agent_name) {
+      return res.status(400).json({ error: 'agent_name is required' });
+    }
+
+    const ownerEmail = owner_email || requestingUser.email;
+
+    // Resolve or create bot identity
+    const identityId = windy_identity_id || `bot-${crypto.randomUUID()}`;
+    let botUser = db.prepare('SELECT id FROM users WHERE windy_identity_id = ?').get(identityId) as any;
+
+    if (!botUser) {
+      const botId = crypto.randomUUID();
+      db.prepare(
+        `INSERT INTO users (id, email, name, display_name, tier, identity_type, windy_identity_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'free', 'bot', ?, datetime('now'), datetime('now'))`,
+      ).run(botId, `${agent_name.toLowerCase().replace(/\s+/g, '-')}@bot.windypro.com`, agent_name, agent_name, identityId);
+      botUser = { id: botId };
+    }
+
+    // Ensure product account rows exist
+    provisionProduct(botUser.id, 'eternitas', { source: 'agent/provision' });
+    provisionProduct(botUser.id, 'windy_chat', { source: 'agent/provision' });
+
+    // Full agent provision: Eternitas passport → Chat Matrix account + DM room
+    const result = await provisionAgent(botUser.id, agent_name, requestingUser.userId, ownerEmail);
+
+    if (result.eternitas === 'failed' && result.chat === 'failed') {
+      return res.status(502).json({
+        error: 'Agent provisioning failed — both Eternitas and Chat unavailable',
+        eternitas: result.eternitas,
+        chat: result.chat,
+      });
+    }
+
+    res.status(201).json({
+      passport_number: result.passport_number,
+      eternitas_provisioned: result.eternitas === 'ok',
+      chat_provisioned: result.chat === 'ok',
+      matrix_user_id: result.matrix_user_id,
+      dm_room_id: result.dm_room_id,
+      identity_id: botUser.id,
+      windy_identity_id: identityId,
+      // If anything is pending, the retry worker will handle it
+      pending: result.eternitas === 'pending' || result.chat === 'pending',
+    });
+  } catch (err: any) {
+    console.error('[identity] Agent provision error:', err);
+    res.status(500).json({ error: 'Agent provisioning failed' });
   }
 });
 
@@ -693,13 +844,19 @@ router.get('/resolve/:windyIdentityId', authenticateToken, (req: Request, res: R
     const db = getDb();
     const requestingUser = (req as AuthRequest).user;
 
-    // Look up the user by windy_identity_id
-    const user = db.prepare(
-      `SELECT id, windy_identity_id, email, name, tier, identity_type,
+    // Look up by windy_identity_id first, then fall back to user id
+    const fields = `id, windy_identity_id, email, name, tier, identity_type,
               phone, display_name, avatar_url, email_verified, phone_verified,
-              passport_id, preferred_lang, last_login_at, created_at
-       FROM users WHERE windy_identity_id = ?`,
+              passport_id, preferred_lang, last_login_at, created_at`;
+    let user = db.prepare(
+      `SELECT ${fields} FROM users WHERE windy_identity_id = ?`,
     ).get(windyIdentityId) as any;
+
+    if (!user) {
+      user = db.prepare(
+        `SELECT ${fields} FROM users WHERE id = ?`,
+      ).get(windyIdentityId) as any;
+    }
 
     if (!user) {
       return res.status(404).json({ error: 'Identity not found' });
@@ -908,6 +1065,21 @@ router.post('/provision-all', authenticateToken, async (req: Request, res: Respo
       results.windy_mail = { status: 'pending', error: 'WINDY_MAIL_WEBHOOK_URL not configured' };
     }
 
+    // Fire webhook/provision to Windy Cloud (storage allocation)
+    provisionProduct(user.id, 'windy_cloud', { source: 'provision-all' });
+    const cloudUrl = config.WINDY_CLOUD_URL;
+    try {
+      // Cloud is internal — just ensure storage allocation exists
+      db.prepare('UPDATE users SET storage_limit = ? WHERE id = ? AND (storage_limit IS NULL OR storage_limit = 0)')
+        .run(500 * 1024 * 1024, user.id);
+      db.prepare(
+        "UPDATE product_accounts SET status = 'active' WHERE identity_id = ? AND product = 'windy_cloud'",
+      ).run(user.id);
+      results.windy_cloud = { status: 'active' };
+    } catch (err: any) {
+      results.windy_cloud = { status: 'provision_error', error: err.message };
+    }
+
     logAuditEvent('product_provision', user.id, {
       action: 'provision-all',
       results,
@@ -927,17 +1099,113 @@ router.post('/provision-all', authenticateToken, async (req: Request, res: Respo
   }
 });
 
+// ─── POST /api/v1/identity/ecosystem/provision-all — One call provisions everything ───
+// Alias that orchestrates chat + mail + cloud in parallel
+router.post('/ecosystem/provision-all', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as AuthRequest).user.userId;
+    const db = getDb();
+
+    const user = db.prepare(
+      'SELECT id, windy_identity_id, name, email, display_name, tier FROM users WHERE id = ?',
+    ).get(userId) as any;
+
+    if (!user) return res.status(404).json({ error: 'Identity not found' });
+
+    const displayName = req.body.display_name || user.display_name || user.name;
+    const email = req.body.email || user.email;
+    const windyIdentityId = req.body.windy_identity_id || user.windy_identity_id || userId;
+
+    // Ensure product account rows exist (idempotent)
+    provisionProduct(userId, 'windy_chat', { source: 'ecosystem/provision-all' });
+    provisionProduct(userId, 'windy_mail', { source: 'ecosystem/provision-all' });
+    provisionProduct(userId, 'windy_cloud', { source: 'ecosystem/provision-all' });
+
+    // Orchestrate all three in parallel
+    const [chatResult, mailResult, cloudResult] = await Promise.allSettled([
+      // Chat provisioning
+      (async () => {
+        const chatUrl = config.WINDY_CHAT_URL;
+        const chatRes = await fetch(`${chatUrl}/api/v1/onboarding/unified-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ windy_identity_id: windyIdentityId, display_name: displayName, email }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!chatRes.ok) throw new Error(`HTTP ${chatRes.status}`);
+        const data = await chatRes.json() as any;
+        const externalId = data.matrix_user_id || data.matrixUserId || data.externalId;
+        db.prepare("UPDATE product_accounts SET status = 'active', external_id = ? WHERE identity_id = ? AND product = 'windy_chat'")
+          .run(externalId, userId);
+        return { provisioned: true, matrix_user_id: externalId };
+      })(),
+
+      // Mail provisioning
+      (async () => {
+        const mailUrl = config.WINDY_MAIL_URL;
+        const prefix = email.split('@')[0];
+        const mailRes = await fetch(`${mailUrl}/api/v1/provision/human`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Service-Token': process.env.WINDYMAIL_SERVICE_TOKEN || '' },
+          body: JSON.stringify({ windy_identity_id: windyIdentityId, display_name: displayName, email_prefix: prefix }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!mailRes.ok) throw new Error(`HTTP ${mailRes.status}`);
+        const data = await mailRes.json() as any;
+        const mailAddr = data.mail_address || data.emailAddress || `${prefix}@windymail.ai`;
+        db.prepare("UPDATE product_accounts SET status = 'active', external_id = ? WHERE identity_id = ? AND product = 'windy_mail'")
+          .run(mailAddr, userId);
+        return { provisioned: true, mail_address: mailAddr };
+      })(),
+
+      // Cloud provisioning (local — storage allocation)
+      (async () => {
+        db.prepare('UPDATE users SET storage_limit = ? WHERE id = ? AND (storage_limit IS NULL OR storage_limit = 0)')
+          .run(500 * 1024 * 1024, userId);
+        db.prepare("UPDATE product_accounts SET status = 'active' WHERE identity_id = ? AND product = 'windy_cloud'")
+          .run(userId);
+        return { provisioned: true, storage_limit: 500 * 1024 * 1024 };
+      })(),
+    ]);
+
+    const buildResult = (settled: PromiseSettledResult<any>) => {
+      if (settled.status === 'fulfilled') return settled.value;
+      return { provisioned: false, error: 'service unavailable', detail: settled.reason?.message };
+    };
+
+    const results = {
+      windy_chat: buildResult(chatResult),
+      windy_mail: buildResult(mailResult),
+      windy_cloud: buildResult(cloudResult),
+    };
+
+    logAuditEvent('product_provision', userId, {
+      action: 'ecosystem/provision-all',
+      results,
+    }, req.ip, req.get('user-agent'));
+
+    res.json({
+      windy_identity_id: windyIdentityId,
+      provisioned: results,
+      products: getProductAccounts(userId),
+    });
+  } catch (err: any) {
+    console.error('[identity] ecosystem/provision-all error:', err);
+    res.status(500).json({ error: 'Failed to provision ecosystem' });
+  }
+});
+
 // ─── GET /api/v1/identity/ecosystem-status ──────────────────
 // Returns the user's provisioning status across all Windy ecosystem products.
 
-router.get('/ecosystem-status', authenticateToken, (req: Request, res: Response) => {
+router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Response) => {
   try {
     const db = getDb();
     const userId = (req as AuthRequest).user.userId;
 
     const products = db.prepare(
-      'SELECT product, status, metadata FROM product_accounts WHERE identity_id = ?',
-    ).all(userId) as { product: string; status: string; metadata: string }[];
+      'SELECT product, status, external_id, metadata FROM product_accounts WHERE identity_id = ?',
+    ).all(userId) as { product: string; status: string; external_id: string; metadata: string }[];
 
     const user = db.prepare(
       'SELECT email, name, display_name, tier, storage_used, storage_limit, windy_identity_id FROM users WHERE id = ?',
@@ -950,6 +1218,34 @@ router.get('/ecosystem-status', authenticateToken, (req: Request, res: Response)
     const findProduct = (name: string) => products.find(p => p.product === name);
     const creatorName = user.display_name || user.name;
 
+    // Check real health of each external service in parallel
+    const checkHealth = async (url: string): Promise<'ok' | 'down'> => {
+      try {
+        const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) });
+        return res.ok ? 'ok' : 'down';
+      } catch {
+        return 'down';
+      }
+    };
+
+    const [chatHealth, mailHealth, eternitasHealth] = await Promise.allSettled([
+      checkHealth(config.WINDY_CHAT_URL),
+      checkHealth(config.WINDY_MAIL_URL),
+      checkHealth(config.ETERNITAS_URL),
+    ]);
+
+    const healthOf = (settled: PromiseSettledResult<'ok' | 'down'>) =>
+      settled.status === 'fulfilled' ? settled.value : 'down';
+
+    const chatProduct = findProduct('windy_chat');
+    const mailProduct = findProduct('windy_mail');
+    const eternitasProduct = findProduct('eternitas');
+
+    // Fetch Eternitas passport if provisioned (include trust_score)
+    const passport = db.prepare(
+      'SELECT passport_number, trust_score FROM eternitas_passports WHERE identity_id = ?',
+    ).get(userId) as { passport_number: string; trust_score: number | null } | undefined;
+
     res.json({
       windy_identity_id: user.windy_identity_id || userId,
       email: user.email,
@@ -957,17 +1253,52 @@ router.get('/ecosystem-status', authenticateToken, (req: Request, res: Response)
       tier: user.tier,
       products: {
         windy_word: { status: 'active', tier: user.tier },
-        windy_chat: findProduct('windy_chat') || { status: 'not_provisioned' },
-        windy_mail: findProduct('windy_mail') || { status: 'not_provisioned' },
+        windy_chat: {
+          provisioned: chatProduct?.status === 'active',
+          health: healthOf(chatHealth),
+          ...(chatProduct?.external_id ? { matrix_user_id: chatProduct.external_id } : {}),
+          ...(chatProduct ? { status: chatProduct.status } : { status: 'not_provisioned' }),
+        },
+        windy_mail: {
+          provisioned: mailProduct?.status === 'active',
+          health: healthOf(mailHealth),
+          ...(mailProduct?.external_id ? { address: mailProduct.external_id } : {}),
+          ...(mailProduct ? { status: mailProduct.status } : { status: 'not_provisioned' }),
+        },
         windy_cloud: {
+          provisioned: true,
+          health: 'ok', // Cloud is local to account-server
           status: 'active',
+          usage: `${Math.round((user.storage_used || 0) / 1024 / 1024)}MB / ${Math.round((user.storage_limit || 500 * 1024 * 1024) / 1024 / 1024)}MB`,
           storage_used: user.storage_used || 0,
           storage_limit: user.storage_limit || 500 * 1024 * 1024,
         },
-        windy_fly: findProduct('windy_fly') || { status: 'not_provisioned' },
-        windy_clone: { status: 'available', progress: 0 },
-        windy_traveler: { status: user.tier !== 'free' ? 'active' : 'upgrade_required' },
-        eternitas: findProduct('eternitas') || { status: 'not_provisioned' },
+        eternitas: {
+          provisioned: eternitasProduct?.status === 'active',
+          health: healthOf(eternitasHealth),
+          ...(passport ? {
+            passport: passport.passport_number,
+            trust_score: passport.trust_score != null ? Math.round(passport.trust_score * 100) : null,
+          } : {}),
+          ...(eternitasProduct ? { status: eternitasProduct.status } : { status: 'not_provisioned' }),
+        },
+        windy_fly: (() => {
+          const flyProduct = findProduct('windy_fly');
+          if (!flyProduct) return { status: 'not_provisioned', provisioned: false };
+          // Parse metadata for agent details (set by provisionAgent)
+          let meta: any = {};
+          try { meta = JSON.parse(flyProduct.metadata || '{}'); } catch {}
+          return {
+            status: flyProduct.status,
+            provisioned: flyProduct.status === 'active',
+            matrix_user_id: flyProduct.external_id || meta.matrix_user_id,
+            agent_name: meta.agent_name,
+            passport_number: meta.passport_number,
+            room_id: meta.dm_room_id,
+          };
+        })(),
+        windy_clone: { status: 'available', provisioned: false, progress: 0 },
+        windy_traveler: { status: user.tier !== 'free' ? 'active' : 'upgrade_required', provisioned: user.tier !== 'free' },
       },
     });
   } catch (err: any) {
@@ -1015,6 +1346,196 @@ router.get('/validate-token', authenticateToken, (req: Request, res: Response) =
   } catch (err: any) {
     console.error('[identity] validate-token error:', err);
     res.status(500).json({ error: 'Token validation failed' });
+  }
+});
+
+// ─── POST /api/v1/identity/webhooks/eternitas — Platform-level webhook receiver ───
+// This receives platform-level events from Eternitas after registration.
+// Different from /eternitas/webhook which handles individual passport events.
+
+router.post('/webhooks/eternitas', (req: Request, res: Response) => {
+  try {
+    const { event, passport_number, timestamp, data } = req.body;
+
+    // Verify HMAC-SHA256 signature
+    const signature = req.headers['x-eternitas-signature'] as string | undefined;
+    const webhookSecret = config.ETERNITAS_WEBHOOK_SECRET;
+
+    if (webhookSecret) {
+      const expectedSig = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(JSON.stringify(req.body))
+        .digest('hex');
+
+      if (signature !== expectedSig) {
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+    } else if (process.env.NODE_ENV === 'production') {
+      return res.status(500).json({ error: 'Webhook secret not configured' });
+    }
+
+    if (!event || !passport_number) {
+      return res.status(400).json({ error: 'event and passport_number are required' });
+    }
+
+    const db = getDb();
+
+    switch (event) {
+      case 'passport.revoked': {
+        // Cascade revocation across all products
+        cascadeRevocation(passport_number);
+        console.log(`[Webhook] passport.revoked: ${passport_number}`);
+        break;
+      }
+
+      case 'passport.suspended': {
+        // Similar to revoked but set status to 'suspended' instead of 'revoked'
+        const passport = db.prepare(
+          'SELECT identity_id FROM eternitas_passports WHERE passport_number = ?',
+        ).get(passport_number) as { identity_id: string } | undefined;
+
+        if (passport) {
+          db.prepare(
+            "UPDATE product_accounts SET status = 'suspended' WHERE identity_id = ?",
+          ).run(passport.identity_id);
+          db.prepare(
+            "UPDATE eternitas_passports SET status = 'suspended' WHERE passport_number = ?",
+          ).run(passport_number);
+          db.prepare(
+            "UPDATE bot_api_keys SET status = 'revoked' WHERE identity_id = ?",
+          ).run(passport.identity_id);
+          logAuditEvent('passport_suspend', passport.identity_id, { event, passport_number });
+        }
+        console.log(`[Webhook] passport.suspended: ${passport_number}`);
+        break;
+      }
+
+      case 'passport.reinstated': {
+        // Restore: reactivate product accounts, passport, and API keys
+        const passport = db.prepare(
+          'SELECT identity_id FROM eternitas_passports WHERE passport_number = ?',
+        ).get(passport_number) as { identity_id: string } | undefined;
+
+        if (passport) {
+          db.prepare(
+            "UPDATE product_accounts SET status = 'active' WHERE identity_id = ?",
+          ).run(passport.identity_id);
+          db.prepare(
+            "UPDATE eternitas_passports SET status = 'active' WHERE passport_number = ?",
+          ).run(passport_number);
+          db.prepare(
+            "UPDATE bot_api_keys SET status = 'active' WHERE identity_id = ?",
+          ).run(passport.identity_id);
+          logAuditEvent('passport_reinstate', passport.identity_id, { event, passport_number });
+        }
+        console.log(`[Webhook] passport.reinstated: ${passport_number}`);
+        break;
+      }
+
+      case 'trust_updated': {
+        const trustScore = data?.trust_score;
+        if (typeof trustScore === 'number' && trustScore >= 0 && trustScore <= 1) {
+          db.prepare(
+            'UPDATE eternitas_passports SET trust_score = ? WHERE passport_number = ?',
+          ).run(trustScore, passport_number);
+
+          const passport = db.prepare(
+            'SELECT identity_id FROM eternitas_passports WHERE passport_number = ?',
+          ).get(passport_number) as { identity_id: string } | undefined;
+
+          if (passport) {
+            logAuditEvent('trust_updated', passport.identity_id, { passport_number, trustScore });
+          }
+        }
+        console.log(`[Webhook] trust_updated: ${passport_number} -> ${data?.trust_score}`);
+        break;
+      }
+
+      default:
+        console.log(`[Webhook] Unknown event: ${event} for ${passport_number}`);
+    }
+
+    res.json({ received: true });
+  } catch (err: any) {
+    console.error('[Webhook] Eternitas platform webhook error:', err);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// ─── GET /api/v1/identity/provisioning-status/:identity_id — Provisioning status ───
+
+router.get('/provisioning-status/:identity_id', authenticateToken, (req: Request, res: Response) => {
+  try {
+    const requestingUser = (req as AuthRequest).user;
+    const { identity_id } = req.params;
+
+    // Only allow viewing own status or admin
+    const isAdmin = requestingUser.role === 'admin' || (requestingUser.scopes || []).some(
+      (s: string) => s === 'admin:*',
+    );
+    if (identity_id !== requestingUser.userId && !isAdmin) {
+      return res.status(403).json({ error: 'You can only view your own provisioning status' });
+    }
+
+    const db = getDb();
+
+    // Get product accounts
+    const productAccounts = db.prepare(
+      'SELECT product, status, external_id, metadata FROM product_accounts WHERE identity_id = ?',
+    ).all(identity_id) as { product: string; status: string; external_id: string | null; metadata: string }[];
+
+    // Get pending provisions
+    const pendingProvisions = db.prepare(
+      'SELECT product, attempts, next_retry_at, payload FROM pending_provisions WHERE identity_id = ?',
+    ).all(identity_id) as { product: string; attempts: number; next_retry_at: string; payload: string }[];
+
+    // Build products map
+    const products: Record<string, any> = {};
+
+    for (const account of productAccounts) {
+      const pending = pendingProvisions.find(p => p.product === account.product);
+      let lastError: string | undefined;
+      if (pending) {
+        try {
+          const payload = JSON.parse(pending.payload);
+          lastError = payload.lastError || undefined;
+        } catch { /* ignore */ }
+      }
+
+      products[account.product] = {
+        status: account.status,
+        ...(account.external_id ? { external_id: account.external_id } : {}),
+        pending_retries: pending?.attempts || 0,
+        ...(pending ? { next_retry: pending.next_retry_at } : {}),
+        ...(lastError ? { last_error: lastError } : {}),
+      };
+    }
+
+    // Include pending provisions for products not yet in product_accounts
+    for (const pending of pendingProvisions) {
+      if (!products[pending.product]) {
+        let lastError: string | undefined;
+        try {
+          const payload = JSON.parse(pending.payload);
+          lastError = payload.lastError || undefined;
+        } catch { /* ignore */ }
+
+        products[pending.product] = {
+          status: 'pending',
+          pending_retries: pending.attempts,
+          next_retry: pending.next_retry_at,
+          ...(lastError ? { last_error: lastError } : {}),
+        };
+      }
+    }
+
+    res.json({
+      identity_id,
+      products,
+    });
+  } catch (err: any) {
+    console.error('[identity] provisioning-status error:', err);
+    res.status(500).json({ error: 'Failed to fetch provisioning status' });
   }
 });
 

@@ -363,14 +363,17 @@ export interface TrainingDataResponse {
 
 export interface StartTrainingRequest {
     bundle_ids: string[];
+    model_name?: string;
+    voice_description?: string;
 }
 
 export interface StartTrainingResponse {
     jobId: string;
-    status: 'queued';
+    status: 'queued' | 'submitted' | 'export_ready';
     bundle_count: number;
-    estimated_time: string;
+    estimated_time?: string;
     message: string;
+    model_name?: string;
 }
 
 // ═══════════════════════════════════════════

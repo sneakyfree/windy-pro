@@ -55,4 +55,20 @@ export const config = {
     // Ecosystem product webhook URLs — used by provision-all to notify services
     WINDY_CHAT_WEBHOOK_URL: process.env.WINDY_CHAT_WEBHOOK_URL || '',   // e.g. http://chat-onboarding:8101/api/v1/chat/provision-hook
     WINDY_MAIL_WEBHOOK_URL: process.env.WINDY_MAIL_WEBHOOK_URL || '',   // e.g. http://windy-mail:8105/api/v1/mail/provision-hook
+    // Ecosystem service URLs — used for direct provisioning and health checks
+    WINDY_CHAT_URL: process.env.WINDY_CHAT_URL || 'http://localhost:8101',
+    WINDY_MAIL_URL: process.env.WINDY_MAIL_URL || 'http://localhost:8200',
+    WINDY_CLOUD_URL: process.env.WINDY_CLOUD_URL || 'http://localhost:8098',
+    ETERNITAS_URL: process.env.ETERNITAS_URL || 'http://localhost:8200',
+    // Eternitas — bot identity & trust registry
+    ETERNITAS_API_KEY: process.env.ETERNITAS_API_KEY || '',           // et_plt_xxx (platform API key)
+    ETERNITAS_WEBHOOK_SECRET: process.env.ETERNITAS_WEBHOOK_SECRET || '', // For verifying inbound webhooks
+    ETERNITAS_SERVICE_TOKEN: process.env.ETERNITAS_SERVICE_TOKEN || '',
+    // Windy Chat — service-to-service auth
+    CHAT_SERVICE_TOKEN: process.env.CHAT_SERVICE_TOKEN || '',
+    // Windy Cloud — service-to-service auth for compute APIs (clone training, etc.)
+    WINDY_CLOUD_SERVICE_TOKEN: process.env.WINDY_CLOUD_SERVICE_TOKEN || '',
+    // AWS cloud STT failover — GPU instances for heavy transcription workloads
+    AWS_STT_ENABLED: process.env.AWS_STT_ENABLED === 'true',
+    AWS_STT_ENDPOINT: process.env.AWS_STT_ENDPOINT || '',  // e.g. https://stt.windycloud.ai/api/v1/compute/stt
 } as const;

@@ -9,7 +9,24 @@ export default function Auth() {
     const [name, setName] = useState('')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
+    const [forgotSent, setForgotSent] = useState(false)
     const navigate = useNavigate()
+
+    const handleForgotPassword = () => {
+        if (!email) {
+            setError('Enter your email address first, then click Forgot password.')
+            return
+        }
+        // Fire-and-forget: attempt reset endpoint, show confirmation regardless
+        // (don't reveal whether the email exists)
+        fetch('/api/v1/auth/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        }).catch(() => {})
+        setForgotSent(true)
+        setError('')
+    }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -126,9 +143,14 @@ export default function Auth() {
                             />
                         </div>
 
-                        {isLogin && (
+                        {isLogin && !forgotSent && (
                             <div style={{ textAlign: 'right', marginTop: '-8px', marginBottom: '8px' }}>
-                                <button type="button" className="auth-switch" style={{ fontSize: '13px', color: '#64748B' }}>Forgot password?</button>
+                                <button type="button" className="auth-switch" style={{ fontSize: '13px', color: '#64748B' }} onClick={handleForgotPassword}>Forgot password?</button>
+                            </div>
+                        )}
+                        {isLogin && forgotSent && (
+                            <div style={{ textAlign: 'right', marginTop: '-8px', marginBottom: '8px', fontSize: '13px', color: '#22C55E' }}>
+                                If that email is registered, a reset link has been sent.
                             </div>
                         )}
 
@@ -170,16 +192,18 @@ export default function Auth() {
                         <div style={{ flex: 1, height: '1px', background: '#334155' }} />
                     </div>
                     <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                        <button type="button" style={{
+                        <button type="button" disabled title="Google OAuth coming soon" style={{
                             flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #334155',
-                            background: '#1E293B', color: '#E2E8F0', cursor: 'pointer', fontSize: '14px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-                        }}>🔵 Google</button>
-                        <button type="button" style={{
+                            background: '#1E293B', color: '#475569', cursor: 'not-allowed', fontSize: '14px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            opacity: 0.5
+                        }}>🔵 Google <span style={{ fontSize: '10px' }}>soon</span></button>
+                        <button type="button" disabled title="GitHub OAuth coming soon" style={{
                             flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #334155',
-                            background: '#1E293B', color: '#E2E8F0', cursor: 'pointer', fontSize: '14px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-                        }}>⚫ GitHub</button>
+                            background: '#1E293B', color: '#475569', cursor: 'not-allowed', fontSize: '14px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            opacity: 0.5
+                        }}>⚫ GitHub <span style={{ fontSize: '10px' }}>soon</span></button>
                     </div>
 
                     <div className="auth-footer">

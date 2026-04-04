@@ -1457,7 +1457,37 @@
             btn.disabled = true; btn.textContent = 'Signing in…'; errEl.textContent = '';
             try {
                 const r = await api('POST', '/auth/login', { email, password: pass });
-                if (r.token) { TOKEN = r.token; localStorage.setItem('wp_token', TOKEN); localStorage.setItem('wp_email', email); ADMIN_EMAIL = email; showApp(); }
+                if (r.token) {
+                    TOKEN = r.token;
+                    // F10: Verify admin role before granting dashboard access
+                    try {
+                        const me = await api('GET', '/auth/me');
+                        const userRole = me?.user?.role;
+                        if (userRole !== 'admin') {
+                            TOKEN = null;
+                            errEl.textContent = 'Access denied. Admin role required.';
+                            return;
+                        }
+                    } catch (roleErr) {
+                        // If role check endpoint fails, also try decoding JWT claims
+                        try {
+                            const payload = JSON.parse(atob(TOKEN.split('.')[1]));
+                            if (payload.role !== 'admin') {
+                                TOKEN = null;
+                                errEl.textContent = 'Access denied. Admin role required.';
+                                return;
+                            }
+                        } catch (_) {
+                            TOKEN = null;
+                            errEl.textContent = 'Unable to verify admin role.';
+                            return;
+                        }
+                    }
+                    localStorage.setItem('wp_token', TOKEN);
+                    localStorage.setItem('wp_email', email);
+                    ADMIN_EMAIL = email;
+                    showApp();
+                }
                 else { errEl.textContent = r.error || 'Login failed'; }
             } catch (e) { errEl.textContent = e.message || 'Connection failed'; }
             finally { btn.disabled = false; btn.textContent = 'Sign In'; }
@@ -2002,8 +2032,30 @@
         }
 
         // ═══════════════════════ INIT ═══════════════════════
-        document.addEventListener('DOMContentLoaded', () => {
-            if (TOKEN) { showApp(); } else { document.getElementById('login-screen').style.display = 'flex'; document.getElementById('app').style.display = 'none'; }
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (TOKEN) {
+                // F10: Verify stored token still belongs to admin before auto-login
+                try {
+                    const me = await api('GET', '/auth/me');
+                    if (me?.user?.role !== 'admin') {
+                        TOKEN = null;
+                        localStorage.removeItem('wp_token');
+                        document.getElementById('login-screen').style.display = 'flex';
+                        document.getElementById('app').style.display = 'none';
+                        return;
+                    }
+                    showApp();
+                } catch (_) {
+                    // Token expired or invalid — show login
+                    TOKEN = null;
+                    localStorage.removeItem('wp_token');
+                    document.getElementById('login-screen').style.display = 'flex';
+                    document.getElementById('app').style.display = 'none';
+                }
+            } else {
+                document.getElementById('login-screen').style.display = 'flex';
+                document.getElementById('app').style.display = 'none';
+            }
             document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
         });
     </script>

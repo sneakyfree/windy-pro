@@ -63,27 +63,12 @@ process.on('unhandledRejection', (reason) => {
 
 const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog, Notification, shell, session, nativeTheme, safeStorage } = require('electron');
 
-// ── Centralized Platform Detection ──────────────────────────────
-// Detects OS, distro, display server, desktop environment, and derives
-// strategies for hotkeys, paste injection, and focus management.
-// See platform-detect.js for full detection logic.
-const PLATFORM = require('./platform-detect');
-
 // SEC-10: --no-sandbox required for Linux AppImage (chrome-sandbox SUID issue).
-if (PLATFORM.isLinux) {
+// Without this, the app won't launch from AppImage on most Linux distros.
+// This is a known Electron limitation: https://github.com/electron/electron/issues/17972
+if (process.platform === 'linux') {
   app.commandLine.appendSwitch('no-sandbox');
-
-  // Wayland: force XWayland mode so Electron's globalShortcut X11 grabs
-  // at least work when the app window is focused (GNOME keybindings handle the rest).
-  // On X11: no switch needed, everything works natively.
-  if (PLATFORM.isWayland) {
-    app.commandLine.appendSwitch('ozone-platform', 'x11');
-  }
 }
-
-// Enable Web Speech API and speech dispatcher on all platforms
-app.commandLine.appendSwitch('enable-features', 'WebSpeechAPI');
-app.commandLine.appendSwitch('enable-speech-dispatcher');
 
 // SEC-06: URL validation helper — only allow safe protocols for shell.openExternal
 function isSafeURL(url) {
@@ -92,9 +77,13 @@ function isSafeURL(url) {
     return ['https:', 'http:', 'mailto:'].includes(parsed.protocol);
   } catch { return false; }
 }
+// Enable Web Speech API support
+app.commandLine.appendSwitch('enable-speech-dispatcher');
+app.commandLine.appendSwitch('enable-features', 'WebSpeechAPI');
 const path = require('path');
 const Store = require('electron-store');
-const { spawn, exec, execFile } = require('child_process');
+const { spawn, exec, execFile, execSync, execFileSync } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
 const fsp = fs.promises;
 const os = require('os');
@@ -134,7 +123,7 @@ const store = new Store({
     },
     window: {
       width: 400,
-      height: 300,
+      height: 500,
       x: null,
       y: null
     },
@@ -181,55 +170,6 @@ let userHiddenWindow = false;  // Tracks if user intentionally hid everything vi
 let pythonProcess = null;
 let pythonRestartCount = 0;
 const MAX_PYTHON_RESTARTS = 3;
-
-// ═══ Wayland/GNOME Focus Preservation ═══
-// On GNOME+Wayland, we save the focused window before toggling recording,
-// so we can restore focus after the toggle (preventing cursor loss) and
-// before auto-pasting (ensuring text goes to the right window).
-// Uses xdotool window IDs which work reliably via XWayland on modern GNOME
-// (org.gnome.Shell.Eval is disabled since GNOME 45+).
-let _savedWaylandFocusTarget = null;
-
-/**
- * Save the currently focused window on Wayland via xdotool (XWayland).
- * Returns the X11 window ID string or null on failure.
- */
-function _saveWaylandFocus() {
-  if (!PLATFORM.isWayland) return null;
-  try {
-    const winId = require('child_process').execSync(
-      'xdotool getactivewindow',
-      { timeout: 1500, encoding: 'utf-8' }
-    ).trim();
-    if (winId && winId !== '0') {
-      console.info(`[WaylandFocus] Saved focus target window: ${winId}`);
-      return winId;
-    }
-  } catch (e) {
-    console.warn('[WaylandFocus] Failed to save focus (xdotool):', e.message);
-  }
-  return null;
-}
-
-/**
- * Restore focus to the saved window on Wayland via xdotool windowactivate.
- */
-function _restoreWaylandFocus() {
-  if (!_savedWaylandFocusTarget || !PLATFORM.isWayland) return;
-  try {
-    require('child_process').execFile('xdotool', [
-      'windowactivate', _savedWaylandFocusTarget
-    ], { timeout: 2000 }, (err) => {
-      if (err) {
-        console.warn('[WaylandFocus] xdotool restore failed:', err.message);
-      } else {
-        console.info(`[WaylandFocus] Restored focus to window: ${_savedWaylandFocusTarget}`);
-      }
-    });
-  } catch (e) {
-    console.warn('[WaylandFocus] Failed to restore focus:', e.message);
-  }
-}
 
 // ═══ Model Download Manifest ═══
 const MODEL_MANIFEST = {
@@ -518,9 +458,11 @@ function startPythonServer() {
   const port = serverConfig.port || 9876;
   try {
     if (process.platform === 'win32') {
-      execSync(`for /f "tokens=5" %a in ('netstat -aon ^| findstr :${port} ^| findstr LISTENING') do taskkill /PID %a /F 2>nul`, { stdio: 'pipe', timeout: 5000 });
+      // SEC-M10: Validate port is a safe integer before interpolation
+      const safePort = parseInt(port, 10);
+      if (!Number.isFinite(safePort) || safePort < 1 || safePort > 65535) throw new Error('Invalid port');
+      execSync(`for /f "tokens=5" %a in ('netstat -aon ^| findstr :${safePort} ^| findstr LISTENING') do taskkill /PID %a /F 2>nul`, { stdio: 'pipe', timeout: 5000 });
     } else {
-      const { execFileSync } = require('child_process');
       // SEC-M10: Use execFileSync with array arguments to avoid shell injection
       const pids = execFileSync('lsof', ['-ti', `:${port}`], { timeout: 5000, stdio: 'pipe' }).toString().trim();
       if (pids) {
@@ -608,13 +550,21 @@ function createWindow() {
   const windowConfig = store.get('window');
   const appearance = store.get('appearance');
 
+  // macOS hidden title bar + vibrancy consumes extra vertical space,
+  // so enforce a height floor to prevent bottom controls from clipping.
+  // This also fixes persisted configs migrated from Linux (height: 300).
+  const MIN_HEIGHT = 320;
+  const effectiveHeight = Math.max(windowConfig.height, MIN_HEIGHT);
+
   mainWindow = new BrowserWindow({
     width: windowConfig.width,
-    height: windowConfig.height,
+    height: effectiveHeight,
     x: windowConfig.x,
     y: windowConfig.y,
 
     // Floating window properties
+    // macOS: 'floating' level = panel that does NOT steal keyboard focus (like a utility palette)
+    // Linux/Windows: plain alwaysOnTop works fine (xdotool handles focus restore for Linux)
     alwaysOnTop: appearance.alwaysOnTop,
     frame: false,           // Frameless for custom UI
     transparent: true,      // Allow CSS transparency for strobe effect
@@ -625,7 +575,7 @@ function createWindow() {
 
     // Minimum size
     minWidth: 250,
-    minHeight: 150,
+    minHeight: MIN_HEIGHT,
 
     // Web preferences
     webPreferences: {
@@ -645,6 +595,28 @@ function createWindow() {
     titleBarStyle: 'hidden',
     vibrancy: process.platform === 'darwin' ? 'under-window' : undefined
   });
+
+  // macOS: Override alwaysOnTop to use 'floating' panel level.
+  if (process.platform === 'darwin' && appearance.alwaysOnTop) {
+    mainWindow.setAlwaysOnTop(true, 'floating');
+  }
+
+  // macOS: Intercept focus events during recording.
+  // When getUserMedia/AudioContext activate, Chromium steals focus to our window.
+  // We immediately give it back by blurring + reactivating the target app via PID.
+  // PID-based activation is critical — name-based 'tell app X to activate' fails
+  // when multiple Electron apps share the same process name.
+  if (process.platform === 'darwin') {
+    mainWindow.on('focus', () => {
+      if (isRecording && global._focusGuardActive && global._lastFocusedPid) {
+        console.info(`[Focus-Guard] Window stole focus during recording — returning to "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
+        mainWindow.blur();
+        const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
+        execFile('osascript', ['-e', script], { timeout: 2000 });
+      }
+    });
+  }
+  console.info(`[Startup] ★ macOS focus-guard v4 active (floating + delayed focus-intercept)`);
 
   // Load the renderer
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -1095,7 +1067,8 @@ function showMiniWidget() {
   }
 
   const tornadoSize = store.get('tornadoSize') || 56;
-  const winSize = tornadoSize + 4;
+  // +100 for 50px glow padding on each side
+  const winSize = tornadoSize + 100;
   const savedX = store.get('tornadoX');
   const savedY = store.get('tornadoY');
 
@@ -1134,7 +1107,7 @@ function showMiniWidget() {
     console.log(`[Mini] ${msg}`);
   });
 
-  // Forward state + size after load
+  // Forward state + size + settings after load
   miniWindow.webContents.on('did-finish-load', () => {
     updateMiniState(isRecording ? 'recording' : 'idle');
     if (miniWindow && !miniWindow.isDestroyed()) {
@@ -1146,8 +1119,11 @@ function showMiniWidget() {
         miniWindow.webContents.send('mini-widget-change', widgetData);
       }
 
-      // Linux: can't do transparent, so round it visually with CSS border-radius
-      // (setShape breaks mouse events). The dark bg is styled in mini-widget.html.
+      // Send saved widget settings (sliders, color, etc.)
+      const widgetSettings = store.get('widgetSettings');
+      if (widgetSettings) {
+        miniWindow.webContents.send('mini-load-settings', widgetSettings);
+      }
     }
   });
 }
@@ -1216,6 +1192,49 @@ ipcMain.on('update-widget', (event, data) => {
   store.set('widgetData', data);
   if (miniWindow && !miniWindow.isDestroyed() && miniWindow.webContents && !miniWindow.webContents.isDestroyed()) {
     miniWindow.webContents.send('mini-widget-change', data);
+  }
+});
+
+// ── Widget settings panel: toggle panel size ──
+ipcMain.on('mini-toggle-panel', (event, open) => {
+  if (!miniWindow || miniWindow.isDestroyed()) return;
+  const widgetSettings = store.get('widgetSettings') || {};
+  // +100 for 50px glow padding on each side
+  const widgetSize = (widgetSettings.size || 56) + 100;
+  if (open) {
+    // Expand window to fit panel (widget + panel below)
+    const panelWidth = 250;
+    const panelHeight = 380;
+    const newWidth = Math.max(widgetSize, panelWidth);
+    const newHeight = widgetSize + panelHeight;
+    miniWindow.setSize(newWidth, newHeight);
+    miniWindow.setResizable(false);
+  } else {
+    // Shrink back to widget size
+    miniWindow.setSize(widgetSize, widgetSize);
+  }
+});
+
+// ── Widget settings panel: save settings ──
+ipcMain.on('mini-save-settings', (event, newSettings) => {
+  store.set('widgetSettings', newSettings);
+  // Also update the tornado size used by showMiniWidget
+  if (newSettings.size) {
+    store.set('tornadoSize', newSettings.size);
+    // +100 for 50px glow padding on each side
+    const winSize = newSettings.size + 100;
+    if (miniWindow && !miniWindow.isDestroyed()) {
+      // Only resize if panel is NOT open
+      const [w, h] = miniWindow.getSize();
+      if (h < 300) { // panel not open
+        miniWindow.setSize(winSize, winSize);
+      } else {
+        // Panel is open — keep panel-open dimensions but update width
+        const panelWidth = 250;
+        const newWidth = Math.max(winSize, panelWidth);
+        miniWindow.setSize(newWidth, h);
+      }
+    }
   }
 });
 
@@ -2408,23 +2427,56 @@ function registerHotkeys() {
 
   // Toggle recording — save & restore focus so cursor stays in target app
   const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
-    // X11: Capture the focused window BEFORE anything happens
+    // Only capture the focused app when STARTING recording (not when stopping).
     let savedWindowId = null;
-    if (PLATFORM.focusStrategy === 'xdotool-focus') {
+    if (!isRecording) {
       try {
-        savedWindowId = require('child_process').execSync('xdotool getactivewindow', { timeout: 500 }).toString().trim();
+        if (process.platform === 'linux') {
+          // SEC-M10/L5: Use execFileSync and validate window ID is numeric
+          savedWindowId = execFileSync('xdotool', ['getactivewindow'], { timeout: 500 }).toString().trim();
+          if (!/^\d+$/.test(savedWindowId)) savedWindowId = null;
+        }
+        // macOS: Take a FRESH PID snapshot RIGHT NOW at hotkey-press time.
+        // The 1s poller might have stale data if the user just clicked a new app.
+        // This synchronous query guarantees we capture the correct target.
+        if (process.platform === 'darwin') {
+          try {
+            const ourPid = process.pid;
+            const result = execFileSync('osascript', ['-e',
+              'tell application "System Events"\n' +
+              '  set fp to first application process whose frontmost is true\n' +
+              '  return (name of fp) & "|" & (unix id of fp)\n' +
+              'end tell'
+            ], { timeout: 1000 }).toString().trim();
+            const sep = result.lastIndexOf('|');
+            if (sep > 0) {
+              const appName = result.substring(0, sep);
+              const appPid = parseInt(result.substring(sep + 1), 10);
+              if (appPid && appPid !== ourPid) {
+                global._lastFocusedApp = appName;
+                global._lastFocusedPid = appPid;
+              }
+            }
+          } catch (_) { /* use last known tracker value */ }
+          console.info(`[Focus] Target app (fresh snapshot): "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
+        }
       } catch (_) { }
-    }
 
-    // Wayland/GNOME: Save focused window BEFORE toggle
-    if (PLATFORM.isWayland && PLATFORM.isGnome && !isRecording) {
-      _savedWaylandFocusTarget = _saveWaylandFocus();
+      // Disable focus guard during getUserMedia startup (re-enable after 1s)
+      global._focusGuardActive = false;
     }
 
     toggleRecording();
 
-    // X11: restore focus to the user's target app
-    if (PLATFORM.focusStrategy === 'xdotool-focus' && savedWindowId) {
+    // Restore focus to the user's target app after a delay (only when STARTING)
+    if (!isRecording) {
+      // Just STOPPED recording — clear saved target so tracker captures fresh next time
+      global._lastFocusedPid = null;
+      global._lastFocusedApp = null;
+      return;
+    }
+
+    if (savedWindowId && process.platform === 'linux') {
       const restore = () => {
         try {
           require('child_process').execFile('xdotool', ['windowactivate', savedWindowId]);
@@ -2433,6 +2485,21 @@ function registerHotkeys() {
       setTimeout(restore, 200);
       setTimeout(restore, 500);
       setTimeout(restore, 1000);
+    } else if (process.platform === 'darwin') {
+      // Enable focus guard after 1s — enough for getUserMedia to complete.
+      setTimeout(() => {
+        global._focusGuardActive = true;
+        console.info('[Focus-Guard] Armed (1s grace period elapsed)');
+        // Explicit restore in case focus was stolen during startup
+        if (global._lastFocusedPid && isRecording) {
+          const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
+          execFile('osascript', ['-e', script], { timeout: 2000 },
+            (err) => {
+              if (!err) console.info(`[Focus] Restored focus to "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
+            }
+          );
+        }
+      }, 1000);
     }
   });
   console.info(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
@@ -2446,19 +2513,16 @@ function registerHotkeys() {
   // Paste clipboard (screenshots, copied text, etc.) via simulated Ctrl+V
   const pasteClipAccel = hotkeys.pasteClipboard || 'CommandOrControl+Shift+B';
   const regClipboard = globalShortcut.register(pasteClipAccel, () => {
+    // Small delay to let modifier keys release, then simulate Ctrl+V
     const { exec } = require('child_process');
-    // Use platform-detected paste strategy
-    if (PLATFORM.pasteStrategy === 'ydotool') {
-      exec('sleep 0.1 && ydotool key 29:1 47:1 47:0 29:0', (err) => {
-        if (err) console.error('[Hotkey] Paste clipboard failed (ydotool):', err.message);
-      });
-    } else if (PLATFORM.pasteStrategy === 'xdotool' || PLATFORM.pasteStrategy === 'xdotool-fallback') {
+    if (process.platform === 'linux') {
+      // --clearmodifiers ensures held keys (Ctrl+Shift from hotkey) don't interfere
       exec('sleep 0.1 && xdotool key --clearmodifiers ctrl+v', (err) => {
-        if (err) console.error('[Hotkey] Paste clipboard failed (xdotool):', err.message);
+        if (err) console.error('[Hotkey] Paste clipboard failed:', err.message);
       });
-    } else if (PLATFORM.pasteStrategy === 'osascript') {
+    } else if (process.platform === 'darwin') {
       exec('sleep 0.1 && osascript -e \'tell application "System Events" to keystroke "v" using command down\'');
-    } else if (PLATFORM.pasteStrategy === 'powershell') {
+    } else {
       exec('powershell -command "Start-Sleep -Milliseconds 100; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"');
     }
   });
@@ -2492,224 +2556,6 @@ function registerHotkeys() {
     showMiniTranslateWindow();
   });
   console.info(`[Hotkey] Quick Translate (${qtAccel}): ${regTranslate ? 'OK' : 'FAILED'}`);
-}
-
-// ═══ Wayland Global Hotkeys via GNOME Custom Keybindings ═══
-// On Wayland, Electron's globalShortcut X11 grabs don't capture keys when
-// the app isn't focused. We work around this with:
-// 1. A tiny HTTP server on 127.0.0.1:18765 that accepts action commands
-// 2. GNOME custom keybindings that curl to this server
-
-const WAYLAND_CONTROL_PORT = 18765;
-let _waylandControlServer = null;
-let _ydotoolSocket = null;
-let _ydotooldProc = null;
-
-/**
- * Start a user-level ydotoold if /dev/uinput is accessible.
- * ydotool is the only reliable way to send keystrokes to Wayland-native apps.
- */
-function startUserYdotoold() {
-  if (!PLATFORM.isWayland) return;
-  const socketPath = path.join(os.tmpdir(), `ydotool-${process.getuid()}.socket`);
-  try {
-    // Check if /dev/uinput is accessible
-    fs.accessSync('/dev/uinput', fs.constants.W_OK);
-  } catch {
-    console.warn('[ydotool] /dev/uinput not writable — ydotool paste to Wayland-native apps unavailable.');
-    console.warn('[ydotool] Fix: sudo chmod 0666 /dev/uinput (temporary) or add udev rule (permanent)');
-    // Try using the root ydotoold socket as fallback
-    if (fs.existsSync('/tmp/.ydotool_socket')) {
-      try { fs.accessSync('/tmp/.ydotool_socket', fs.constants.W_OK); _ydotoolSocket = '/tmp/.ydotool_socket'; } catch { }
-    }
-    return;
-  }
-  // Clean up stale socket
-  try { fs.unlinkSync(socketPath); } catch { }
-  _ydotooldProc = spawn('ydotoold', ['--socket-path', socketPath], {
-    stdio: 'ignore', detached: true
-  });
-  _ydotooldProc.unref();
-  _ydotoolSocket = socketPath;
-  // Wait for socket to appear
-  let waited = 0;
-  const interval = setInterval(() => {
-    if (fs.existsSync(socketPath) || waited > 2000) {
-      clearInterval(interval);
-      if (fs.existsSync(socketPath)) {
-        console.info(`[ydotool] User ydotoold started, socket: ${socketPath}`);
-      } else {
-        console.warn('[ydotool] ydotoold socket did not appear in time');
-        _ydotoolSocket = null;
-      }
-    }
-    waited += 100;
-  }, 100);
-}
-
-function startWaylandControlServer() {
-  const http = require('http');
-  const actionHandlers = {
-    'toggle-recording': () => {
-      // Focus target is saved from the ?focuswin= query param (captured at keypress time)
-      toggleRecording();
-    },
-    'paste-transcript': () => pasteTranscript(),
-    'show-hide': () => {
-      const mainVisible = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible();
-      const miniVisible = miniWindow && !miniWindow.isDestroyed() && miniWindow.isVisible();
-      if (mainVisible) { mainWindow.hide(); showMiniWidget(); }
-      else if (miniVisible) { miniWindow.hide(); userHiddenWindow = true; }
-      else { userHiddenWindow = false; mainWindow.show(); mainWindow.focus(); }
-    },
-    'quick-translate': () => showMiniTranslateWindow(),
-  };
-
-  _waylandControlServer = http.createServer((req, res) => {
-    // Security: only accept from localhost
-    const remote = req.socket.remoteAddress;
-    if (remote !== '127.0.0.1' && remote !== '::1' && remote !== '::ffff:127.0.0.1') {
-      res.writeHead(403); res.end('Forbidden');
-      return;
-    }
-
-    const urlObj = new URL(req.url, 'http://localhost');
-    const action = urlObj.pathname.replace(/^\//, '');
-
-    // Accept focuswin query param from GNOME keybinding (captured at keypress time)
-    const focusWin = urlObj.searchParams.get('focuswin');
-    if (focusWin && focusWin !== '0' && focusWin !== '') {
-      _savedWaylandFocusTarget = focusWin;
-      console.info(`[WaylandFocus] Saved focus target window: ${focusWin} (from keybinding)`);
-    }
-
-    if (actionHandlers[action]) {
-      actionHandlers[action]();
-      res.writeHead(200); res.end('OK');
-      console.info(`[WaylandCtrl] Executed: ${action}`);
-    } else {
-      res.writeHead(404); res.end('Unknown action');
-    }
-  });
-
-  _waylandControlServer.listen(WAYLAND_CONTROL_PORT, '127.0.0.1', () => {
-    console.info(`[WaylandCtrl] Control server listening on 127.0.0.1:${WAYLAND_CONTROL_PORT}`);
-  });
-
-  _waylandControlServer.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.warn(`[WaylandCtrl] Port ${WAYLAND_CONTROL_PORT} in use — another instance may be running`);
-    } else {
-      console.error('[WaylandCtrl] Server error:', err.message);
-    }
-  });
-}
-
-function registerGnomeKeybindings() {
-  const hotkeys = store.get('hotkeys');
-
-  // Map Electron accelerators to GNOME keybinding format
-  function toGnomeBinding(accel) {
-    return accel
-      .replace('CommandOrControl+', '<Ctrl>')
-      .replace('Control+', '<Ctrl>')
-      .replace('Shift+', '<Shift>')
-      .replace('Alt+', '<Alt>')
-      .replace('Space', 'space');
-  }
-
-  const bindings = [
-    { name: 'Windy Pro: Toggle Recording', binding: toGnomeBinding(hotkeys.toggleRecording), action: 'toggle-recording' },
-    { name: 'Windy Pro: Paste Transcript', binding: toGnomeBinding(hotkeys.pasteTranscript), action: 'paste-transcript' },
-    { name: 'Windy Pro: Show/Hide', binding: toGnomeBinding(hotkeys.showHide), action: 'show-hide' },
-  ];
-
-  const basePath = '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings';
-
-  try {
-    // Read existing custom keybindings
-    const existingRaw = require('child_process').execSync(
-      `gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings`,
-      { timeout: 3000 }
-    ).toString().trim();
-
-    // Parse existing array (format: ['path1', 'path2'] or @as [])
-    let existing = [];
-    if (existingRaw && existingRaw !== '@as []') {
-      const match = existingRaw.match(/\[([^\]]*)\]/);
-      if (match) {
-        existing = match[1].split(',')
-          .map(s => s.trim().replace(/'/g, ''))
-          .filter(s => s.length > 0);
-      }
-    }
-
-    // Remove any old Windy Pro bindings
-    const windyPaths = [];
-    for (const p of existing) {
-      try {
-        const name = require('child_process').execSync(
-          `gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${p} name`,
-          { timeout: 2000 }
-        ).toString().trim().replace(/'/g, '');
-        if (name.startsWith('Windy Pro:')) {
-          windyPaths.push(p);
-        }
-      } catch (_) { }
-    }
-    existing = existing.filter(p => !windyPaths.includes(p));
-
-    // Find next available slot numbers
-    const usedSlots = existing.map(p => {
-      const m = p.match(/custom(\d+)/);
-      return m ? parseInt(m[1]) : -1;
-    }).filter(n => n >= 0);
-    let nextSlot = 0;
-    const getNextSlot = () => {
-      while (usedSlots.includes(nextSlot)) nextSlot++;
-      usedSlots.push(nextSlot);
-      return nextSlot;
-    };
-
-    // Register each binding
-    for (const b of bindings) {
-      const slot = getNextSlot();
-      const kbPath = `${basePath}/custom${slot}/`;
-
-      require('child_process').execSync(
-        `gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${kbPath} name '${b.name}'`,
-        { timeout: 2000 }
-      );
-      // For toggle-recording: capture the focused window ID at keypress time and pass it
-      // to the control server, so focus can be restored after recording starts/stops.
-      // Other actions use a simple curl.
-      const focusCmd = b.action === 'toggle-recording'
-        ? `bash -c 'W=$(xdotool getactivewindow 2>/dev/null); curl -s "http://127.0.0.1:${WAYLAND_CONTROL_PORT}/${b.action}?focuswin=$W"'`
-        : `curl -s http://127.0.0.1:${WAYLAND_CONTROL_PORT}/${b.action}`;
-      require('child_process').execSync(
-        `gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${kbPath} command '${focusCmd.replace(/'/g, "'\\''")}' `,
-        { timeout: 2000 }
-      );
-      require('child_process').execSync(
-        `gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${kbPath} binding '${b.binding}'`,
-        { timeout: 2000 }
-      );
-      existing.push(kbPath);
-      console.info(`[WaylandCtrl] GNOME keybinding: ${b.binding} → ${b.action}`);
-    }
-
-    // Update the master list
-    const pathList = existing.map(p => `'${p}'`).join(', ');
-    require('child_process').execSync(
-      `gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "[${pathList}]"`,
-      { timeout: 2000 }
-    );
-
-    console.info('[WaylandCtrl] ✅ GNOME keybindings registered successfully');
-  } catch (err) {
-    console.error('[WaylandCtrl] Failed to register GNOME keybindings:', err.message);
-    console.info('[WaylandCtrl] Manual setup: Settings → Keyboard → Custom Shortcuts');
-  }
 }
 
 /**
@@ -2776,26 +2622,6 @@ ipcMain.handle('rebind-hotkey', (event, key, accelerator) => {
  */
 function toggleRecording() {
   isRecording = !isRecording;
-
-  // Wayland: Make ALL Electron windows non-focusable BEFORE sending IPC.
-  // The renderer will start/stop MediaRecorder, resume AudioContext, update DOM,
-  // process transcription results — all of which cause XWayland focus requests.
-  // By setting focusable=false, Mutter ignores those requests and the user's
-  // Wayland-native app keeps focus throughout the entire record→transcribe→paste flow.
-  if (PLATFORM.isWayland) {
-    const allWindows = [mainWindow, miniWindow, typeof videoWindow !== 'undefined' ? videoWindow : null]
-      .filter(w => w && !w.isDestroyed());
-    allWindows.forEach(w => w.setFocusable(false));
-
-    // Re-enable focusable after everything settles.
-    // For start: 3s covers AudioContext + MediaRecorder + getUserMedia.
-    // For stop: 10s covers transcription + auto-paste (Python processing takes time).
-    const delay = isRecording ? 3000 : 10000;
-    setTimeout(() => {
-      allWindows.forEach(w => { if (!w.isDestroyed()) w.setFocusable(true); });
-    }, delay);
-  }
-
   safeSend('toggle-recording', isRecording);
   updateTrayMenu();
   updateTrayIcon(isRecording ? 'listening' : 'idle');
@@ -2806,6 +2632,24 @@ function toggleRecording() {
   // Update tray icon color based on state
   if (tray) {
     tray.setToolTip(isRecording ? 'Windy Pro - Recording...' : 'Windy Pro');
+  }
+
+  // macOS: getUserMedia/AudioContext steal focus to Electron window.
+  // Restore focus AGGRESSIVELY so the cursor keeps blinking in the target app.
+  // getUserMedia steals focus once, AudioContext may steal again — we hammer it back.
+  if (isRecording && process.platform === 'darwin') {
+    const restoreFocusToTarget = () => {
+      if (global._lastFocusedPid && isRecording) {
+        const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
+        execFile('osascript', ['-e', script], { timeout: 2000 });
+      }
+    };
+    // Rapid-fire restores to keep cursor blinking through getUserMedia + AudioContext
+    setTimeout(restoreFocusToTarget, 200);
+    setTimeout(restoreFocusToTarget, 400);
+    setTimeout(restoreFocusToTarget, 600);
+    setTimeout(restoreFocusToTarget, 1000);
+    setTimeout(restoreFocusToTarget, 1500);
   }
 }
 
@@ -2824,13 +2668,17 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
     safeSend('state-change', 'injecting');
     updateTrayIcon('injecting');
 
-    // Hide Windy Pro window so focus returns to the previous app
-    if (mainWindow && mainWindow.isVisible()) {
+    // macOS: Activate target app by PID to give it keyboard focus.
+    // DO NOT hide the window — that causes visual disappearance.
+    if (process.platform === 'darwin' && global._lastFocusedPid) {
+      const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
+      execFile('osascript', ['-e', script], { timeout: 2000 });
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } else if (mainWindow && mainWindow.isVisible()) {
+      // Non-macOS fallback: hide briefly
       mainWindow.hide();
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
-
-    // Small delay to let the OS switch focus
-    await new Promise(resolve => setTimeout(resolve, 200));
 
     try {
       await getInjector().inject(transcript);
@@ -2839,11 +2687,10 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
       safeSend('injection-error', error.message);
     }
 
-    // Show window again after paste WITHOUT stealing focus
-    // so the user can proofread and hit Enter in their chat app
+    // Restore UI state (window is already visible on macOS)
     setTimeout(() => {
-      if (mainWindow) {
-        mainWindow.showInactive();  // Show without taking focus
+      if (mainWindow && !mainWindow.isVisible()) {
+        mainWindow.showInactive();  // Show without taking focus (non-macOS)
       }
       const newState = isRecording ? 'listening' : 'idle';
       safeSend('state-change', newState);
@@ -2854,7 +2701,12 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
 
 // Check injection permissions
 ipcMain.handle('check-injection-permissions', async () => {
-  return getInjector().checkPermissions();
+  try {
+    return getInjector().checkPermissions();
+  } catch (err) {
+    console.error('[check-injection-permissions] Error:', err.message);
+    return { error: err.message, permitted: false };
+  }
 });
 
 // Update settings — accepts flat keys from renderer and routes to correct store namespace
@@ -2866,7 +2718,7 @@ ipcMain.on('update-settings', (event, settings) => {
   for (const [key, value] of Object.entries(settings)) {
     if (appearanceKeys.includes(key)) {
       store.set(`appearance.${key}`, key === 'opacity' ? value / 100 : value);
-      if (key === 'alwaysOnTop' && mainWindow) mainWindow.setAlwaysOnTop(value);
+      if (key === 'alwaysOnTop' && mainWindow) mainWindow.setAlwaysOnTop(value, process.platform === 'darwin' ? 'floating' : 'normal');
       if (key === 'opacity' && mainWindow) mainWindow.setOpacity(value / 100);
     } else if (serverKeys.includes(key)) {
       store.set(`server.${key}`, value);
@@ -2946,6 +2798,71 @@ ipcMain.handle('get-api-key', (event, keyName) => {
   } catch (err) {
     return '';
   }
+});
+
+// M5: Deepgram WebSocket proxy — keeps API key in main process, never sent to renderer
+let _dgProxyWs = null;
+ipcMain.handle('deepgram-stream-start', async (_event, opts) => {
+  try {
+    const apiKey = await (async () => {
+      const encB64 = store.get('engine.deepgramApiKeyEncrypted', '');
+      if (encB64 && safeStorage.isEncryptionAvailable()) {
+        return safeStorage.decryptString(Buffer.from(encB64, 'base64'));
+      }
+      return store.get('engine.deepgramApiKey', '') || process.env.DEEPGRAM_API_KEY || '';
+    })();
+    if (!apiKey) return { ok: false, error: 'No Deepgram API key configured' };
+
+    const WebSocket = require('ws');
+    const lang = opts?.language || 'en';
+    const diarize = opts?.diarize || false;
+    let dgUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&language=${encodeURIComponent(lang)}&smart_format=true&interim_results=true&punctuate=true`;
+    if (diarize) dgUrl += '&diarize=true';
+
+    // Connect with Authorization header (not sub-protocol) — API key stays server-side
+    _dgProxyWs = new WebSocket(dgUrl, { headers: { 'Authorization': `Token ${apiKey}` } });
+
+    _dgProxyWs.on('open', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deepgram-proxy-open');
+      }
+    });
+    _dgProxyWs.on('message', (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deepgram-proxy-message', data.toString());
+      }
+    });
+    _dgProxyWs.on('error', (err) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deepgram-proxy-error', err.message || 'WebSocket error');
+      }
+    });
+    _dgProxyWs.on('close', () => {
+      _dgProxyWs = null;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deepgram-proxy-close');
+      }
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('deepgram-stream-send', (_event, audioBuffer) => {
+  if (_dgProxyWs && _dgProxyWs.readyState === 1) { // WebSocket.OPEN
+    _dgProxyWs.send(Buffer.from(audioBuffer));
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('deepgram-stream-stop', () => {
+  if (_dgProxyWs) {
+    try { _dgProxyWs.close(); } catch (_) {}
+    _dgProxyWs = null;
+  }
+  return true;
 });
 
 ipcMain.handle('choose-archive-folder', async () => {
@@ -3139,9 +3056,10 @@ ipcMain.handle('open-external-url', async (event, url) => {
 
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
   const tmpDir = os.tmpdir();
-  const ts = Date.now();
-  const webmPath = path.join(tmpDir, `windy-batch-${ts}.webm`);
-  const wavPath = path.join(tmpDir, `windy-batch-${ts}.wav`);
+  // SEC-M8: Use crypto.randomBytes for unpredictable temp filenames
+  const tmpId = crypto.randomBytes(16).toString('hex');
+  const webmPath = path.join(tmpDir, `windy-batch-${tmpId}.webm`);
+  const wavPath = path.join(tmpDir, `windy-batch-${tmpId}.wav`);
 
   try {
     // Save base64 audio to temp file
@@ -3199,7 +3117,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     } else if (bundledModelDir && fs.existsSync(path.join(bundledModelDir, 'model.bin'))) {
       modelRef = `"${bundledModelDir.replace(/\\/g, '/')}"`;
     }
-    const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${ts}.py`);
+    const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${tmpId}.py`);
     const scriptContent = [
       'from faster_whisper import WhisperModel',
       `model = WhisperModel(${modelRef}, device="cpu", compute_type="int8")`,
@@ -3230,126 +3148,84 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
 
 ipcMain.handle('auto-paste-text', async (event, text) => {
   if (!text || !text.trim()) return false;
+
   try {
     const { clipboard } = require('electron');
-    const trimmed = text.trim();
-    clipboard.writeText(trimmed);
+    clipboard.writeText(text.trim());
+    console.info(`[AutoPaste] Text on clipboard: ${text.trim().length} chars`);
+    console.info(`[AutoPaste] Target: "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
 
-    // Wayland: Also write to the Wayland clipboard via wl-copy.
-    // Electron's clipboard.writeText() only writes to the X11 clipboard (via XWayland).
-    // Wayland-native apps (terminals, GNOME apps) read from the Wayland clipboard,
-    // which won't have the text unless we write it explicitly with wl-copy.
-    if (PLATFORM.isWayland) {
-      try {
-        const wlProc = require('child_process').spawn('wl-copy', [], {
-          env: { ...process.env, WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY || 'wayland-0', XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}` },
-          stdio: ['pipe', 'ignore', 'ignore'],
-          timeout: 3000
-        });
-        wlProc.stdin.write(trimmed);
-        wlProc.stdin.end();
-        // Wait for wl-copy to finish before pasting
-        await new Promise((resolve) => {
-          wlProc.on('close', resolve);
-          setTimeout(resolve, 1000); // Safety timeout
-        });
-        console.info('[AutoPaste] Wayland clipboard set via wl-copy');
-      } catch (e) {
-        console.warn('[AutoPaste] wl-copy failed:', e.message);
+    if (process.platform === 'darwin') {
+      // ── macOS auto-paste via PID ──
+      const targetPid = global._lastFocusedPid;
+      const targetApp = global._lastFocusedApp || 'unknown';
+      if (!targetPid) {
+        console.warn(`[AutoPaste] No target PID — text on clipboard, use Cmd+V manually`);
+        return false;
       }
-    }
 
-    // Remember original state
-    const wasUserHidden = userHiddenWindow;
-    const wasAlwaysOnTop = mainWindow && mainWindow.isAlwaysOnTop();
-    const savedOpacity = mainWindow ? mainWindow.getOpacity() : 1;
+      // Activate the exact target process by PID and send Cmd+V.
+      // PID-based activation works even when multiple apps share the name "Electron".
+      // DO NOT drop alwaysOnTop or hide the window — our floating window stays visible.
+      const appleScript = `
+        tell application "System Events"
+          set frontmost of (first application process whose unix id is ${targetPid}) to true
+        end tell
+        delay 0.3
+        tell application "System Events"
+          keystroke "v" using command down
+        end tell
+      `;
+      await new Promise((resolve) => execFile(
+        'osascript', ['-e', appleScript],
+        { timeout: 8000 }, (err, stdout, stderr) => {
+          if (err) {
+            console.error(`[AutoPaste] Failed:`, err.message);
+            if (stderr) console.error(`[AutoPaste] stderr:`, stderr);
+          } else {
+            console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars to "${targetApp}" (pid ${targetPid})`);
+          }
+          resolve();
+        }
+      ));
 
-    // Wayland: Do NOT hide the window or manage focus. The user's Wayland-native
-    // app retains focus throughout recording. ydotool sends keystrokes to the
-    // Wayland-focused window directly via /dev/uinput, bypassing X11 entirely.
-    if (!PLATFORM.isWayland) {
-      // Non-Wayland (X11): use opacity approach to avoid focus shifts
+      // After paste, clear the saved target so the tracker captures
+      // whatever the user clicks NEXT, not the app we just activated.
+      global._lastFocusedPid = null;
+      global._lastFocusedApp = null;
+      return true;
+
+    } else if (process.platform === 'linux') {
+      // ── Linux auto-paste (xdotool — proven working) ──
+      const wasAlwaysOnTop = mainWindow && !mainWindow.isDestroyed() && mainWindow.isAlwaysOnTop();
+      const savedOpacity = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getOpacity() : 1;
       if (mainWindow && !mainWindow.isDestroyed()) {
         if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(false);
         mainWindow.setOpacity(0);
       }
       await new Promise(r => setTimeout(r, 200));
-    }
-
-    // P0-1: Simulate paste using the platform-detected paste strategy.
-    // On Wayland/Linux: send Ctrl+Shift+V (works in terminals AND most GUI apps
-    // including Electron, GTK, Qt). Then also send Ctrl+V as fallback for apps
-    // that only support Ctrl+V (rare on Linux).
-    if (PLATFORM.pasteStrategy === 'ydotool') {
-      const pasteSuccess = await new Promise((resolve) => {
-        // Ctrl+Shift+V: keycode 29=Ctrl, 42=Shift, 47=V
-        exec('ydotool key 29:1 42:1 47:1 47:0 42:0 29:0', { timeout: 3000 }, (err) => {
-          if (err) {
-            console.warn('[AutoPaste] ydotool Ctrl+Shift+V failed:', err.message);
-            // Fallback to Ctrl+V
-            exec('ydotool key 29:1 47:1 47:0 29:0', { timeout: 3000 }, (err2) => {
-              if (err2) console.error('[AutoPaste] ydotool Ctrl+V also failed:', err2.message);
-              resolve(!err2);
-            });
-          } else {
-            resolve(true);
-          }
-        });
-      });
-      if (!pasteSuccess) {
-        console.warn('[AutoPaste] Paste injection failed — text remains on clipboard');
-      }
-    } else if (PLATFORM.isWayland && (PLATFORM.pasteStrategy === 'xdotool' || PLATFORM.pasteStrategy === 'xdotool-fallback')) {
-      // Wayland: xdotool only reaches XWayland apps, not Wayland-native ones.
-      // Use ydotool (kernel-level /dev/uinput) which sends to the Wayland-focused window.
-      // Ctrl+Shift+V (29=Ctrl, 42=Shift, 47=V) works in terminals AND GUI apps.
-      const ydoSocket = _ydotoolSocket || '';
-      const ydoEnv = ydoSocket ? `YDOTOOL_SOCKET=${ydoSocket} ` : '';
-      const pasteSuccess = await new Promise((resolve) => {
-        exec(`${ydoEnv}ydotool key 29:1 42:1 47:1 47:0 42:0 29:0`, { timeout: 3000 }, (err) => {
-          if (err) {
-            console.warn('[AutoPaste] ydotool Ctrl+Shift+V failed, trying xdotool fallback:', err.message);
-            exec('xdotool key --clearmodifiers ctrl+v', { timeout: 3000 }, (err2) => {
-              if (err2) console.warn('[AutoPaste] xdotool also failed:', err2.message);
-              resolve(!err2);
-            });
-          } else {
-            resolve(true);
-          }
-        });
-      });
-      if (!pasteSuccess) {
-        console.warn('[AutoPaste] Paste injection failed — text remains on clipboard');
-      }
-    } else if (PLATFORM.pasteStrategy === 'xdotool' || PLATFORM.pasteStrategy === 'xdotool-fallback') {
-      // X11: xdotool works for all windows
-      await new Promise((resolve) => exec('xdotool key --clearmodifiers ctrl+v', { timeout: 5000 }, resolve));
-    } else if (PLATFORM.pasteStrategy === 'osascript') {
-      await new Promise((resolve) => exec('osascript -e \'tell application "System Events" to keystroke "v" using command down\'', { timeout: 5000 }, resolve));
-    } else if (PLATFORM.pasteStrategy === 'powershell') {
-      await new Promise((resolve) => exec('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"', { timeout: 5000 }, resolve));
-    }
-
-    // Restore window visibility (only needed on non-Wayland where we hid it)
-    if (!PLATFORM.isWayland) {
+      await new Promise((resolve) => execFile('xdotool', ['key', '--clearmodifiers', 'ctrl+v'], { timeout: 5000 }, resolve));
       await new Promise(r => setTimeout(r, 100));
-      if (mainWindow && !mainWindow.isDestroyed() && !wasUserHidden) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.setOpacity(savedOpacity || 1);
-        if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true);
+        if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'floating' : 'normal');
       }
+      return true;
+
+    } else {
+      // ── Windows auto-paste ──
+      await new Promise((resolve) => exec(
+        'powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"',
+        { timeout: 5000 }, resolve
+      ));
+      return true;
     }
-    console.info(`[AutoPaste] Pasted ${text.trim().length} chars`);
-    return true;
   } catch (err) {
-    // On failure, restore window
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (PLATFORM.isWayland) {
-        mainWindow.showInactive();
-      } else {
-        mainWindow.setOpacity(1);
-      }
-    }
     console.error('[AutoPaste] Failed:', err.message);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'floating' : 'normal');
+    }
     return false;
   }
 });
@@ -3886,7 +3762,7 @@ ipcMain.handle('export-soul-file', async () => {
     const manifest = {
       version: '1.0',
       exportDate: new Date().toISOString(),
-      appVersion: require('../../package.json').version || '1.6.1',
+      appVersion: app.getVersion() || '1.6.1',
       stats: { totalFiles, audioFiles, videoFiles, transcriptFiles, totalWords, totalChars, days: days.length, dateRange: days.length ? { first: days[0], last: days[days.length - 1] } : null }
     };
     archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
@@ -4027,8 +3903,8 @@ ipcMain.handle('detect-hardware', async () => {
     }
   } else {
     try {
-      const { execSync } = require('child_process');
-      const gpuInfo = execSync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits', { timeout: 5000 }).toString().trim();
+      // SEC-M10: Use execFileSync with array args
+      const gpuInfo = execFileSync('nvidia-smi', ['--query-gpu=name,memory.total', '--format=csv,noheader,nounits'], { timeout: 5000 }).toString().trim();
       if (gpuInfo) {
         const [name, vramMB] = gpuInfo.split(', ');
         result.gpu = { name: name.trim(), vramMB: parseInt(vramMB) || 0, type: 'cuda' };
@@ -4040,27 +3916,24 @@ ipcMain.handle('detect-hardware', async () => {
 
   // Check disk space
   try {
-    const { execSync } = require('child_process');
     const homeDir = os.homedir();
     if (process.platform === 'win32') {
       const drive = homeDir.charAt(0);
-      // SEC-M10: Use execFileSync with array args instead of string interpolation
-      const { execFileSync } = require('child_process');
+      // SEC-M10: Validate drive letter is a single alpha char before interpolation
+      if (!/^[a-zA-Z]$/.test(drive)) throw new Error('Invalid drive letter');
       const out = execFileSync('wmic', ['logicaldisk', 'where', `DeviceID='${drive}:'`, 'get', 'FreeSpace', '/value'], { timeout: 3000 }).toString();
       const match = out.match(/FreeSpace=(\d+)/);
       if (match) result.diskFreeGB = Math.round(parseInt(match[1]) / (1024 * 1024 * 1024));
     } else if (process.platform === 'darwin') {
       // macOS: df -g shows in GB (BSD df, no -B flag)
       // SEC-M10: Use execFileSync with array args
-      const { execFileSync } = require('child_process');
       const dfOut = execFileSync('df', ['-g', homeDir], { timeout: 3000 }).toString();
       const out = dfOut.split('\n').slice(-2)[0]?.split(/\s+/)[3] || '';
       result.diskFreeGB = parseInt(out) || null;
     } else {
       // Linux: df -BG shows in GB (GNU df)
       // SEC-M10: Use execFileSync with array args
-      const { execFileSync: execFileSyncLinux } = require('child_process');
-      const dfOut = execFileSyncLinux('df', ['-BG', homeDir], { timeout: 3000 }).toString();
+      const dfOut = execFileSync('df', ['-BG', homeDir], { timeout: 3000 }).toString();
       const out = dfOut.split('\n').slice(-2)[0]?.split(/\s+/)[3] || '';
       result.diskFreeGB = parseInt(out) || null;
     }
@@ -5191,7 +5064,8 @@ function httpGet(url) {
 // Identify a song from a base64 data URL
 ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
   const tmpDir = require('os').tmpdir();
-  const tmpFile = require('path').join(tmpDir, `windy_identify_${Date.now()}.webm`);
+  // SEC-M8: Use crypto.randomBytes for unpredictable temp filenames
+  const tmpFile = require('path').join(tmpDir, `windy_identify_${crypto.randomBytes(16).toString('hex')}.webm`);
 
   try {
     // Write data URL to temp file
@@ -5370,16 +5244,25 @@ ipcMain.on('recording-failed', () => {
 
 // Save file dialog
 ipcMain.handle('save-file', async (event, { content, defaultName, defaultPath: dp, filters }) => {
-  const result = await dialog.showSaveDialog(mainWindow, {
-    defaultPath: dp || defaultName || 'transcript.txt',
-    filters: filters || [{ name: 'Text', extensions: ['txt'] }]
-  });
-  if (!result.canceled && result.filePath) {
-    fs.writeFileSync(result.filePath, content, 'utf8');
-    return { ok: true, saved: true, path: result.filePath };
+  try {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: dp || defaultName || 'transcript.txt',
+      filters: filters || [{ name: 'Text', extensions: ['txt'] }]
+    });
+    if (!result.canceled && result.filePath) {
+      fs.writeFileSync(result.filePath, content, 'utf8');
+      return { ok: true, saved: true, path: result.filePath };
+    }
+    return { ok: false, saved: false };
+  } catch (err) {
+    console.error('[save-file] Error:', err.message);
+    return { ok: false, saved: false, error: err.message };
   }
-  return { ok: false, saved: false };
 });
+
+// Module-scope updater instance — assigned inside deferred startup setTimeout,
+// read by install-update and check-for-updates handlers.
+let updaterInstance = null;
 
 ipcMain.handle('install-update', async () => {
   if (updaterInstance) {
@@ -5504,18 +5387,44 @@ app.whenReady().then(async () => {
   createMacOSMenu();  // macOS application menu bar (Cmd+Q, Cmd+H, Cmd+M, Edit menu)
   sanitizeHotkeys();  // Reset any accidentally-bound system shortcuts (e.g. Ctrl+V)
   registerHotkeys();
-
-  // Wayland: Start local control server + register GNOME keybindings
-  // (Electron's globalShortcut X11 grabs don't work across the Wayland desktop)
-  if (PLATFORM.needsWaylandWorkaround) {
-    startWaylandControlServer();
-    startUserYdotoold();
-    if (PLATFORM.isGnome && PLATFORM.hasGsettings) {
-      registerGnomeKeybindings();
-    }
-  }
-
   _perfMark('Window + tray created');
+
+  // ═══ macOS Continuous Focus Tracker (PID-based) ═══
+  // Polls frontmost app every 1s — tracks BOTH name and PID.
+  // Filters by PID (not name) so we only skip our OWN Electron process.
+  // This means other Electron apps (VS Code, Cursor, Antigravity, etc.) are
+  // correctly captured as valid paste targets.
+  // Pauses during recording to freeze the target.
+  if (process.platform === 'darwin') {
+    global._lastFocusedApp = null;
+    global._lastFocusedPid = null;
+    global._focusGuardActive = false;
+    const ourPid = process.pid;
+    global._focusTrackerInterval = setInterval(() => {
+      // Don't update during recording — keep the target frozen
+      if (isRecording) return;
+      try {
+        // Query both name and PID of the frontmost process
+        const result = execFileSync('osascript', ['-e',
+          'tell application "System Events"\n' +
+          '  set fp to first application process whose frontmost is true\n' +
+          '  return (name of fp) & "|" & (unix id of fp)\n' +
+          'end tell'
+        ], { timeout: 1000 }).toString().trim();
+        const sep = result.lastIndexOf('|');
+        if (sep > 0) {
+          const appName = result.substring(0, sep);
+          const appPid = parseInt(result.substring(sep + 1), 10);
+          // Only skip our OWN process — allow all other apps including other Electron apps
+          if (appPid && appPid !== ourPid) {
+            global._lastFocusedApp = appName;
+            global._lastFocusedPid = appPid;
+          }
+        }
+      } catch (_) { /* osascript timeout — skip this tick */ }
+    }, 1000);
+    console.info(`[Focus] macOS PID-based focus tracker started (1s poll, our pid=${ourPid})`);
+  }
 
   // macOS dark mode: forward system theme changes to renderer
   if (process.platform === 'darwin') {
@@ -5544,7 +5453,8 @@ app.whenReady().then(async () => {
   // ═══ Deferred startup tasks (non-critical — runs 3s after window appears) ═══
   // This keeps the window snappy: archive cleanup, license validation, model
   // migration, heartbeat, and update checks all run after first paint.
-  let updaterInstance = null;
+  // NOTE: updaterInstance is declared at module scope (before this function)
+  // so that ipcMain.handle('install-update') can access it.
   setTimeout(() => {
     // Validate license (non-blocking)
     validateLicense().catch(e => console.error('[License] Validation error:', e.message));
@@ -5929,15 +5839,31 @@ ipcMain.handle('extract-document-text', async (event, base64, ext) => {
 });
 
 ipcMain.handle('browse-document-file', async () => {
-  const result = await dialog.showOpenDialog({
-    title: 'Select Document',
-    filters: [{ name: 'Documents', extensions: ['txt', 'md', 'html', 'pdf', 'docx', 'csv'] }],
-    properties: ['openFile']
-  });
-  if (result.canceled || !result.filePaths[0]) return null;
-  const filePath = result.filePaths[0];
-  const text = fs.readFileSync(filePath, 'utf8');
-  return { text, name: path.basename(filePath) };
+  try {
+    const result = await dialog.showOpenDialog({
+      title: 'Select Document',
+      filters: [{ name: 'Documents', extensions: ['txt', 'md', 'html', 'pdf', 'docx', 'csv'] }],
+      properties: ['openFile']
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const filePath = result.filePaths[0];
+    const ext = path.extname(filePath).toLowerCase();
+    // Binary formats: return file path for PDFs (renderer uses pdf.js or similar),
+    // base64 for other binary formats like DOCX
+    if (ext === '.pdf') {
+      return { filePath, name: path.basename(filePath), ext, encoding: 'path' };
+    }
+    if (ext === '.docx') {
+      const buffer = fs.readFileSync(filePath);
+      return { data: buffer.toString('base64'), encoding: 'base64', name: path.basename(filePath), ext };
+    }
+    // Text formats (.txt, .md, .csv, .html): read as UTF-8
+    const text = fs.readFileSync(filePath, 'utf8');
+    return { text, name: path.basename(filePath) };
+  } catch (err) {
+    console.error('[browse-document-file] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // ═══ Clone Data Bundle Management ═══
@@ -6049,8 +5975,29 @@ ipcMain.handle('start-clone-training', async (event, bundleIds) => {
     cancelId: 1,
   });
   if (response === 0) {
-    // Delegate to the existing export handler
-    return ipcMain.emit('export-clone-bundles-redirect', event, bundleIds);
+    // Directly invoke the export-clone-bundles handler logic
+    const data = loadBundlesManifest();
+    const selected = data.bundles.filter(b => bundleIds.includes(b.bundle_id));
+    if (selected.length === 0) return { success: false, error: 'No bundles found' };
+
+    const saveResult = await dialog.showSaveDialog({
+      title: 'Export Clone Bundles',
+      defaultPath: `clone-bundles-${Date.now()}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    });
+    if (saveResult.canceled) return { success: false };
+
+    const exportData = {
+      exported_at: new Date().toISOString(),
+      bundle_count: selected.length,
+      bundles: selected.map(b => ({
+        ...b,
+        file_path: undefined,
+        mediaBase64: fs.existsSync(b.file_path) ? fs.readFileSync(b.file_path).toString('base64') : null
+      }))
+    };
+    fs.writeFileSync(saveResult.filePath, JSON.stringify(exportData, null, 2));
+    return { success: true, exportPath: saveResult.filePath };
   }
   return { status: 'export_ready', message: 'Clone training coming soon. Use Export Clone Package to export your voice data.' };
 });
