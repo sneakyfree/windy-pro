@@ -183,10 +183,29 @@ class WindyApp {
       if (settings?.cloudPassword) this.cloudPassword = settings.cloudPassword;
       console.debug(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? 'configured' : 'empty'}`);
 
+      // Load transcription mode (auto / local_only / cloud_only)
+      this.transcriptionMode = settings?.transcriptionMode || localStorage.getItem('windy_transcriptionMode') || 'auto';
+      console.debug(`[Init] Transcription mode: ${this.transcriptionMode}`);
+
+      // Cloud-only mode: connect to cloud WebSocket immediately, skip local backend
+      if (this.transcriptionMode === 'cloud_only' && this.cloudUrl) {
+        this._usingCloud = true;
+        this.connectCloudWS().then(() => {
+          this.updateModelBadge('cloud', false);
+          this.showReconnectToast('☁️ Cloud-only mode active');
+        }).catch((err) => {
+          console.warn('[Init] Cloud-only connect failed:', err.message);
+          this._usingCloud = false;
+          this.showReconnectToast('⚠️ Cloud unavailable. Falling back to local.');
+        });
+      }
+
       // Show current engine/model in status bar badge on startup
       const savedModel = settings?.model || localStorage.getItem('windy_model') || 'small';
       const engineName = this.transcriptionEngine || 'local';
-      if (['groq', 'openai', 'deepgram', 'cloud', 'stream'].includes(engineName)) {
+      if (this.transcriptionMode === 'cloud_only') {
+        this.updateModelBadge('cloud', false);
+      } else if (['groq', 'openai', 'deepgram', 'cloud', 'stream'].includes(engineName)) {
         this.updateModelBadge(engineName, false);
       } else {
         this.updateModelBadge(savedModel, false);
@@ -270,6 +289,17 @@ class WindyApp {
       if (recovery.found) {
         this.showRecoveryBanner(recovery.content);
       }
+    }
+
+    // Ecosystem navigation toolbar
+    if (typeof EcosystemNav !== 'undefined') {
+      this.ecosystemNav = new EcosystemNav(this);
+    }
+
+    // First-run welcome overlay (shows once on first launch)
+    if (typeof FirstRunExperience !== 'undefined') {
+      const firstRun = new FirstRunExperience(this);
+      firstRun.show();
     }
   }
 
@@ -1277,6 +1307,9 @@ class WindyApp {
     const badge = document.getElementById('modelBadge');
     if (!badge) return;
 
+    // Determine transcription mode
+    const tMode = this.transcriptionMode || localStorage.getItem('windy_transcriptionMode') || 'auto';
+
     // Skip local performance badge updates when cloud is active
     if (this._usingCloud) {
       badge.textContent = '☁️🔒 cloud ✅';
@@ -1320,8 +1353,37 @@ class WindyApp {
         }
       }
 
-      // Smart mode: auto-switch to cloud if struggling for 2+ chunks
-      if (this.transcriptionEngine === 'smart' && !this._usingCloud && this.cloudUrl) {
+      // Cloud failover logic — respects transcription mode setting
+      if (tMode === 'local_only') {
+        // Local only: never failover to cloud, just show suggestions
+        const suggestions = [];
+        const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
+        if (recordingMode !== 'batch') {
+          suggestions.push('Switch to Batch mode for best accuracy');
+        }
+        const modelSizeMB = { 'large-v3': 2945, 'windy-pro-engine': 2945, 'turbo': 1544, 'windy-turbo': 1544, 'medium': 1444, 'windy-edge': 1444, 'small': 140, 'windy-lite': 140, 'base': 462, 'windy-core': 462, 'tiny': 73, 'windy-nano': 73 };
+        const currentModelSize = modelSizeMB[msg.model] || 0;
+        if (currentModelSize > 500) {
+          suggestions.push('Try Windy Core (462MB, balanced)');
+        } else if (currentModelSize > 150) {
+          suggestions.push('Try Windy Lite (140MB) for faster dictation');
+        }
+        const tip = suggestions.length > 0 ? ` 💡 ${suggestions[0]}` : '';
+        this.showReconnectToast(`⚠️ ${displayName} is struggling.${tip}`);
+      } else if (tMode === 'auto' && msg.ratio > 2.0 && !this._usingCloud && this.cloudUrl) {
+        // Auto mode: failover to cloud when performance_ratio > 2.0
+        this._usingCloud = true;
+        this.showReconnectToast('Switching to cloud for better performance...');
+        this.connectCloudWS().then(() => {
+          badge.textContent = `☁️🔒 cloud ✅`;
+          badge.classList.remove('loading');
+          this.showReconnectToast('☁️ Auto mode: switched to cloud transcription');
+        }).catch(() => {
+          this._usingCloud = false;
+          this.showReconnectToast('⚠️ Cloud unavailable. Continuing local.');
+        });
+      } else if (this.transcriptionEngine === 'smart' && !this._usingCloud && this.cloudUrl) {
+        // Legacy smart mode: auto-switch to cloud if struggling
         this._usingCloud = true;
         this.connectCloudWS().then(() => {
           badge.textContent = `☁️🔒 cloud ✅`;
@@ -1332,7 +1394,7 @@ class WindyApp {
           this.showReconnectToast('⚠️ Cloud unavailable. Continuing local.');
         });
       } else {
-        // Actionable performance suggestions
+        // Actionable performance suggestions (auto mode below threshold, or no cloud configured)
         const suggestions = [];
         const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
         if (recordingMode !== 'batch') {

@@ -63,9 +63,32 @@
       100% { transform: scale(1); }
     }
 
-    /* Recording baseline glow (JS handles the rest) */
+    /* Recording: green strobe — THE GREEN STROBE NEVER LIES */
+    .widget.recording {
+      animation: recording-bg-pulse 1.2s ease-in-out infinite;
+    }
     .widget.recording .tornado {
-      filter: drop-shadow(0 0 4px rgba(0,255,136,0.3));
+      animation: green-jitter 0.15s linear infinite;
+      filter: drop-shadow(0 0 6px rgba(0,255,136,0.5));
+    }
+    .widget.recording .glow-ring {
+      animation: green-glow 1.2s ease-in-out infinite;
+    }
+
+    @keyframes recording-bg-pulse {
+      0%, 100% { background: radial-gradient(circle, rgba(0,255,136,0.15) 0%, transparent 70%); }
+      50% { background: radial-gradient(circle, rgba(0,255,136,0.35) 0%, transparent 70%); }
+    }
+    @keyframes green-jitter {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-0.5px, 0.5px); }
+      50% { transform: translate(0.5px, -0.5px); }
+      75% { transform: translate(-0.5px, -0.5px); }
+      100% { transform: translate(0, 0); }
+    }
+    @keyframes green-glow {
+      0%, 100% { box-shadow: 0 0 8px 2px rgba(0,255,136,0.2); }
+      50% { box-shadow: 0 0 18px 8px rgba(0,255,136,0.55); }
     }
   </style>
 </head>

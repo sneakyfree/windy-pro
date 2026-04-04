@@ -84,6 +84,7 @@ if (window.windyMini) {
 }
 
 // ═══ Voice-reactive animation loop ═══
+// THE GREEN STROBE NEVER LIES — visible for ALL widget types
 function startVoiceAnimation() {
 
   smoothLevel = 0;
@@ -92,13 +93,20 @@ function startVoiceAnimation() {
   function frame() {
     if (currentState !== 'recording') return;
 
-    // If no voice level data in last 1 second, gentle breathing
+    // Always keep glow ring visible during recording
+    const baseRingGlow = '0 0 8px 2px rgba(0,255,136,0.25)';
+
+    // If no voice level data in last 1 second, gentle breathing + green glow
     if (!voiceLevelReceived || (Date.now() - lastVoiceLevelTime > 1000)) {
       breathPhase += 0.03;
-      const breathScale = 1.0 + Math.sin(breathPhase) * 0.015;
+      const breathScale = 1.0 + Math.sin(breathPhase) * 0.02;
+      const breathGlow = 0.3 + Math.sin(breathPhase) * 0.15;
       tornado.style.transform = `scale(${breathScale})`;
-      tornado.style.filter = 'drop-shadow(0 0 4px rgba(0,255,136,0.3))';
-      glowRing.style.boxShadow = 'none';
+      tornado.style.filter = `drop-shadow(0 0 6px rgba(0,255,136,${breathGlow}))`;
+      glowRing.style.boxShadow = baseRingGlow;
+      // Green background pulse on widget — visible even for custom images
+      const bgAlpha = 0.15 + Math.sin(breathPhase) * 0.1;
+      widget.style.background = `radial-gradient(circle, rgba(0,255,136,${bgAlpha}) 0%, transparent 70%)`;
       animFrame = requestAnimationFrame(frame);
       return;
     }
@@ -107,28 +115,33 @@ function startVoiceAnimation() {
 
     if (lv < 0.05) {
       breathPhase += 0.03;
-      const breathScale = 1.0 + Math.sin(breathPhase) * 0.01;
+      const breathScale = 1.0 + Math.sin(breathPhase) * 0.015;
       tornado.style.transform = `scale(${breathScale})`;
-      tornado.style.filter = 'drop-shadow(0 0 2px rgba(0,255,136,0.15))';
-      glowRing.style.boxShadow = 'none';
+      tornado.style.filter = 'drop-shadow(0 0 4px rgba(0,255,136,0.25))';
+      glowRing.style.boxShadow = baseRingGlow;
+      widget.style.background = 'radial-gradient(circle, rgba(0,255,136,0.12) 0%, transparent 70%)';
     } else {
-      // Voice active: vibrate + scale + glow
+      // Voice active: vibrate + scale + strong green glow
       breathPhase = 0;
       const intensity = Math.min(lv * 2, 1.0);
       const jx = (Math.random() - 0.5) * intensity * 6;
       const jy = (Math.random() - 0.5) * intensity * 6;
-      const sc = 1.0 + intensity * 0.1;
+      const sc = 1.0 + intensity * 0.12;
 
       tornado.style.transform = `translate(${jx}px, ${jy}px) scale(${sc})`;
 
-      const glowBlur = 4 + intensity * 14;
-      const glowOpacity = 0.2 + intensity * 0.8;
+      const glowBlur = 6 + intensity * 16;
+      const glowOpacity = 0.3 + intensity * 0.7;
       tornado.style.filter = `drop-shadow(0 0 ${glowBlur}px rgba(0,255,136,${glowOpacity}))`;
 
-      const ringBlur = 4 + intensity * 16;
-      const ringSpread = intensity * 6;
-      const ringOpacity = 0.15 + intensity * 0.6;
+      const ringBlur = 6 + intensity * 18;
+      const ringSpread = 2 + intensity * 8;
+      const ringOpacity = 0.25 + intensity * 0.65;
       glowRing.style.boxShadow = `0 0 ${ringBlur}px ${ringSpread}px rgba(0,255,136,${ringOpacity})`;
+
+      // Green background intensity scales with voice
+      const bgAlpha = 0.15 + intensity * 0.3;
+      widget.style.background = `radial-gradient(circle, rgba(0,255,136,${bgAlpha}) 0%, transparent 70%)`;
     }
 
     animFrame = requestAnimationFrame(frame);
@@ -143,6 +156,8 @@ function stopAnimation() {
   }
   smoothLevel = 0;
   breathPhase = 0;
+  // Clear recording green background
+  widget.style.background = 'transparent';
 }
 
 // ═══ Manual drag ═══

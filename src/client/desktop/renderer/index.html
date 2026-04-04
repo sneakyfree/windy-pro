@@ -55,6 +55,36 @@
       </div>
     </div>
 
+    <!-- Ecosystem Navigation Bar -->
+    <div class="ecosystem-bar" id="ecosystemBar">
+      <button class="eco-btn active" id="ecoWord" title="Windy Word" data-product="word">
+        <span class="eco-icon">🎤</span>
+        <span class="eco-label">Word</span>
+      </button>
+      <button class="eco-btn" id="ecoChat" title="Windy Chat" data-product="chat">
+        <span class="eco-icon">💬</span>
+        <span class="eco-label">Chat</span>
+        <span class="eco-badge" id="chatBadge" style="display:none;">0</span>
+      </button>
+      <button class="eco-btn" id="ecoMail" title="Windy Mail" data-product="mail">
+        <span class="eco-icon">✉️</span>
+        <span class="eco-label">Mail</span>
+        <span class="eco-badge" id="mailBadge" style="display:none;">0</span>
+      </button>
+      <button class="eco-btn" id="ecoCloud" title="Windy Cloud" data-product="cloud">
+        <span class="eco-icon">☁️</span>
+        <span class="eco-label">Cloud</span>
+      </button>
+      <button class="eco-btn" id="ecoAgent" title="Windy Fly" data-product="agent">
+        <span class="eco-icon">🪰</span>
+        <span class="eco-label">Agent</span>
+      </button>
+      <button class="eco-btn" id="ecoCode" title="Windy Code" data-product="code">
+        <span class="eco-icon">💻</span>
+        <span class="eco-label">Code</span>
+      </button>
+    </div>
+
     <!-- State Indicator (The Green Strobe) -->
     <div class="state-indicator" id="stateIndicator" role="status" aria-label="Recording state">
       <div class="state-glow" id="stateGlow" aria-hidden="true"></div>
@@ -267,6 +297,8 @@
   <script src="widget-engine.js" defer></script>
   <script src="marketplace.js" defer></script>
   <div id="effectsOverlay" class="effects-overlay"></div>
+  <script src="ecosystem-nav.js"></script>
+  <script src="first-run.js"></script>
   <script src="app.js"></script>
 </body>
 
