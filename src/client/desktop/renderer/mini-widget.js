@@ -236,9 +236,10 @@ function stopAnimation() {
   tornado.style.filter = '';
 }
 
-// ═══ Preview mode — simulates voice levels when panel is open ═══
+// ═══ Preview mode — steady-state when panel is open ═══
+// No cycling. Shows constant medium voice level so every slider
+// instantly shows its effect. User can talk to test voice sliders.
 let previewActive = false;
-let previewPhase = 0;
 let previewPrevState = 'idle';
 
 function startPreview() {
@@ -251,42 +252,17 @@ function startPreview() {
   widget.style.opacity = '1';
   voiceLevelReceived = true;
   lastVoiceLevelTime = Date.now();
-  smoothLevel = 0;
+  // Constant medium voice level — all sliders show their effect immediately
+  smoothLevel = 0.3;
   startVoiceAnimation();
-  // Drive fake voice levels with a pattern that showcases all slider effects:
-  //   0-3s:   silence (shows rest drift)
-  //   3-5s:   ramp up voice (shows voice shake + sensitivity threshold)
-  //   5-7s:   loud voice (shows glow at max)
-  //   7-9s:   ramp down (shows sensitivity cutoff)
-  //   9-11s:  silence again (shows rest drift + idle glow)
-  //   11s:    repeat
-  previewPhase = 0;
-  function previewTick() {
+  // Keep the voice level alive (just refresh the timestamp so the loop doesn't
+  // fall back to "no data" mode)
+  function keepAlive() {
     if (!previewActive) return;
-    previewPhase += 1/60; // ~1 second per 60 frames
-    const cyclePos = previewPhase % 11; // 11 second cycle
-    let targetLevel;
-    if (cyclePos < 3) {
-      // Silence — rest drift visible
-      targetLevel = 0;
-    } else if (cyclePos < 5) {
-      // Ramp up — sensitivity threshold crossing
-      targetLevel = (cyclePos - 3) / 2 * 0.6; // 0 → 0.6
-    } else if (cyclePos < 7) {
-      // Full voice — voice shake + glow at max
-      targetLevel = 0.5 + Math.sin(cyclePos * 8) * 0.15; // ~0.35-0.65, varying
-    } else if (cyclePos < 9) {
-      // Ramp down — sensitivity cutoff visible
-      targetLevel = Math.max(0, (9 - cyclePos) / 2 * 0.6); // 0.6 → 0
-    } else {
-      // Silence tail
-      targetLevel = 0;
-    }
-    smoothLevel += (targetLevel - smoothLevel) * 0.2;
     lastVoiceLevelTime = Date.now();
-    requestAnimationFrame(previewTick);
+    requestAnimationFrame(keepAlive);
   }
-  requestAnimationFrame(previewTick);
+  requestAnimationFrame(keepAlive);
 }
 
 function stopPreview() {
