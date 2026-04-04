@@ -380,6 +380,10 @@ if (process.env.NODE_ENV !== 'test') {
     // Start ecosystem provisioning retry worker
     const { startRetryWorker } = require('./services/ecosystem-provisioner');
     startRetryWorker();
+
+    // Register with Eternitas as a platform (idempotent — skips if already registered)
+    const { registerWithEternitas } = require('./services/eternitas-register');
+    registerWithEternitas().catch((err: any) => console.warn('[Startup] Eternitas registration deferred:', err.message));
   });
 }
 

@@ -66,6 +66,8 @@ export const config = {
     ETERNITAS_SERVICE_TOKEN: process.env.ETERNITAS_SERVICE_TOKEN || '',
     // Windy Chat — service-to-service auth
     CHAT_SERVICE_TOKEN: process.env.CHAT_SERVICE_TOKEN || '',
+    // Windy Cloud — service-to-service auth for compute APIs (clone training, etc.)
+    WINDY_CLOUD_SERVICE_TOKEN: process.env.WINDY_CLOUD_SERVICE_TOKEN || '',
     // AWS cloud STT failover — GPU instances for heavy transcription workloads
     AWS_STT_ENABLED: process.env.AWS_STT_ENABLED === 'true',
     AWS_STT_ENDPOINT: process.env.AWS_STT_ENDPOINT || '',  // e.g. https://stt.windycloud.ai/api/v1/compute/stt

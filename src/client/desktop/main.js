@@ -1067,7 +1067,8 @@ function showMiniWidget() {
   }
 
   const tornadoSize = store.get('tornadoSize') || 56;
-  const winSize = tornadoSize + 4;
+  // +100 for 50px glow padding on each side
+  const winSize = tornadoSize + 100;
   const savedX = store.get('tornadoX');
   const savedY = store.get('tornadoY');
 
@@ -1106,7 +1107,7 @@ function showMiniWidget() {
     console.log(`[Mini] ${msg}`);
   });
 
-  // Forward state + size after load
+  // Forward state + size + settings after load
   miniWindow.webContents.on('did-finish-load', () => {
     updateMiniState(isRecording ? 'recording' : 'idle');
     if (miniWindow && !miniWindow.isDestroyed()) {
@@ -1118,8 +1119,11 @@ function showMiniWidget() {
         miniWindow.webContents.send('mini-widget-change', widgetData);
       }
 
-      // Linux: can't do transparent, so round it visually with CSS border-radius
-      // (setShape breaks mouse events). The dark bg is styled in mini-widget.html.
+      // Send saved widget settings (sliders, color, etc.)
+      const widgetSettings = store.get('widgetSettings');
+      if (widgetSettings) {
+        miniWindow.webContents.send('mini-load-settings', widgetSettings);
+      }
     }
   });
 }
@@ -1188,6 +1192,49 @@ ipcMain.on('update-widget', (event, data) => {
   store.set('widgetData', data);
   if (miniWindow && !miniWindow.isDestroyed() && miniWindow.webContents && !miniWindow.webContents.isDestroyed()) {
     miniWindow.webContents.send('mini-widget-change', data);
+  }
+});
+
+// ── Widget settings panel: toggle panel size ──
+ipcMain.on('mini-toggle-panel', (event, open) => {
+  if (!miniWindow || miniWindow.isDestroyed()) return;
+  const widgetSettings = store.get('widgetSettings') || {};
+  // +100 for 50px glow padding on each side
+  const widgetSize = (widgetSettings.size || 56) + 100;
+  if (open) {
+    // Expand window to fit panel (widget + panel below)
+    const panelWidth = 250;
+    const panelHeight = 380;
+    const newWidth = Math.max(widgetSize, panelWidth);
+    const newHeight = widgetSize + panelHeight;
+    miniWindow.setSize(newWidth, newHeight);
+    miniWindow.setResizable(false);
+  } else {
+    // Shrink back to widget size
+    miniWindow.setSize(widgetSize, widgetSize);
+  }
+});
+
+// ── Widget settings panel: save settings ──
+ipcMain.on('mini-save-settings', (event, newSettings) => {
+  store.set('widgetSettings', newSettings);
+  // Also update the tornado size used by showMiniWidget
+  if (newSettings.size) {
+    store.set('tornadoSize', newSettings.size);
+    // +100 for 50px glow padding on each side
+    const winSize = newSettings.size + 100;
+    if (miniWindow && !miniWindow.isDestroyed()) {
+      // Only resize if panel is NOT open
+      const [w, h] = miniWindow.getSize();
+      if (h < 300) { // panel not open
+        miniWindow.setSize(winSize, winSize);
+      } else {
+        // Panel is open — keep panel-open dimensions but update width
+        const panelWidth = 250;
+        const newWidth = Math.max(winSize, panelWidth);
+        miniWindow.setSize(newWidth, h);
+      }
+    }
   }
 });
 

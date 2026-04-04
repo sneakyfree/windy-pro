@@ -170,6 +170,7 @@ export type IdentityAuditEvent =
   | 'secretary_email_sent'
   | 'identity_created'
   | 'trust_updated'
+  | 'passport_reinstate'
   | 'revocation_cascade'
   | 'chat_login'
   | 'chat_login_failed'

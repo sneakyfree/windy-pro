@@ -1349,4 +1349,194 @@ router.get('/validate-token', authenticateToken, (req: Request, res: Response) =
   }
 });
 
+// ─── POST /api/v1/identity/webhooks/eternitas — Platform-level webhook receiver ───
+// This receives platform-level events from Eternitas after registration.
+// Different from /eternitas/webhook which handles individual passport events.
+
+router.post('/webhooks/eternitas', (req: Request, res: Response) => {
+  try {
+    const { event, passport_number, timestamp, data } = req.body;
+
+    // Verify HMAC-SHA256 signature
+    const signature = req.headers['x-eternitas-signature'] as string | undefined;
+    const webhookSecret = config.ETERNITAS_WEBHOOK_SECRET;
+
+    if (webhookSecret) {
+      const expectedSig = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(JSON.stringify(req.body))
+        .digest('hex');
+
+      if (signature !== expectedSig) {
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+    } else if (process.env.NODE_ENV === 'production') {
+      return res.status(500).json({ error: 'Webhook secret not configured' });
+    }
+
+    if (!event || !passport_number) {
+      return res.status(400).json({ error: 'event and passport_number are required' });
+    }
+
+    const db = getDb();
+
+    switch (event) {
+      case 'passport.revoked': {
+        // Cascade revocation across all products
+        cascadeRevocation(passport_number);
+        console.log(`[Webhook] passport.revoked: ${passport_number}`);
+        break;
+      }
+
+      case 'passport.suspended': {
+        // Similar to revoked but set status to 'suspended' instead of 'revoked'
+        const passport = db.prepare(
+          'SELECT identity_id FROM eternitas_passports WHERE passport_number = ?',
+        ).get(passport_number) as { identity_id: string } | undefined;
+
+        if (passport) {
+          db.prepare(
+            "UPDATE product_accounts SET status = 'suspended' WHERE identity_id = ?",
+          ).run(passport.identity_id);
+          db.prepare(
+            "UPDATE eternitas_passports SET status = 'suspended' WHERE passport_number = ?",
+          ).run(passport_number);
+          db.prepare(
+            "UPDATE bot_api_keys SET status = 'revoked' WHERE identity_id = ?",
+          ).run(passport.identity_id);
+          logAuditEvent('passport_suspend', passport.identity_id, { event, passport_number });
+        }
+        console.log(`[Webhook] passport.suspended: ${passport_number}`);
+        break;
+      }
+
+      case 'passport.reinstated': {
+        // Restore: reactivate product accounts, passport, and API keys
+        const passport = db.prepare(
+          'SELECT identity_id FROM eternitas_passports WHERE passport_number = ?',
+        ).get(passport_number) as { identity_id: string } | undefined;
+
+        if (passport) {
+          db.prepare(
+            "UPDATE product_accounts SET status = 'active' WHERE identity_id = ?",
+          ).run(passport.identity_id);
+          db.prepare(
+            "UPDATE eternitas_passports SET status = 'active' WHERE passport_number = ?",
+          ).run(passport_number);
+          db.prepare(
+            "UPDATE bot_api_keys SET status = 'active' WHERE identity_id = ?",
+          ).run(passport.identity_id);
+          logAuditEvent('passport_reinstate', passport.identity_id, { event, passport_number });
+        }
+        console.log(`[Webhook] passport.reinstated: ${passport_number}`);
+        break;
+      }
+
+      case 'trust_updated': {
+        const trustScore = data?.trust_score;
+        if (typeof trustScore === 'number' && trustScore >= 0 && trustScore <= 1) {
+          db.prepare(
+            'UPDATE eternitas_passports SET trust_score = ? WHERE passport_number = ?',
+          ).run(trustScore, passport_number);
+
+          const passport = db.prepare(
+            'SELECT identity_id FROM eternitas_passports WHERE passport_number = ?',
+          ).get(passport_number) as { identity_id: string } | undefined;
+
+          if (passport) {
+            logAuditEvent('trust_updated', passport.identity_id, { passport_number, trustScore });
+          }
+        }
+        console.log(`[Webhook] trust_updated: ${passport_number} -> ${data?.trust_score}`);
+        break;
+      }
+
+      default:
+        console.log(`[Webhook] Unknown event: ${event} for ${passport_number}`);
+    }
+
+    res.json({ received: true });
+  } catch (err: any) {
+    console.error('[Webhook] Eternitas platform webhook error:', err);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// ─── GET /api/v1/identity/provisioning-status/:identity_id — Provisioning status ───
+
+router.get('/provisioning-status/:identity_id', authenticateToken, (req: Request, res: Response) => {
+  try {
+    const requestingUser = (req as AuthRequest).user;
+    const { identity_id } = req.params;
+
+    // Only allow viewing own status or admin
+    const isAdmin = requestingUser.role === 'admin' || (requestingUser.scopes || []).some(
+      (s: string) => s === 'admin:*',
+    );
+    if (identity_id !== requestingUser.userId && !isAdmin) {
+      return res.status(403).json({ error: 'You can only view your own provisioning status' });
+    }
+
+    const db = getDb();
+
+    // Get product accounts
+    const productAccounts = db.prepare(
+      'SELECT product, status, external_id, metadata FROM product_accounts WHERE identity_id = ?',
+    ).all(identity_id) as { product: string; status: string; external_id: string | null; metadata: string }[];
+
+    // Get pending provisions
+    const pendingProvisions = db.prepare(
+      'SELECT product, attempts, next_retry_at, payload FROM pending_provisions WHERE identity_id = ?',
+    ).all(identity_id) as { product: string; attempts: number; next_retry_at: string; payload: string }[];
+
+    // Build products map
+    const products: Record<string, any> = {};
+
+    for (const account of productAccounts) {
+      const pending = pendingProvisions.find(p => p.product === account.product);
+      let lastError: string | undefined;
+      if (pending) {
+        try {
+          const payload = JSON.parse(pending.payload);
+          lastError = payload.lastError || undefined;
+        } catch { /* ignore */ }
+      }
+
+      products[account.product] = {
+        status: account.status,
+        ...(account.external_id ? { external_id: account.external_id } : {}),
+        pending_retries: pending?.attempts || 0,
+        ...(pending ? { next_retry: pending.next_retry_at } : {}),
+        ...(lastError ? { last_error: lastError } : {}),
+      };
+    }
+
+    // Include pending provisions for products not yet in product_accounts
+    for (const pending of pendingProvisions) {
+      if (!products[pending.product]) {
+        let lastError: string | undefined;
+        try {
+          const payload = JSON.parse(pending.payload);
+          lastError = payload.lastError || undefined;
+        } catch { /* ignore */ }
+
+        products[pending.product] = {
+          status: 'pending',
+          pending_retries: pending.attempts,
+          next_retry: pending.next_retry_at,
+          ...(lastError ? { last_error: lastError } : {}),
+        };
+      }
+    }
+
+    res.json({
+      identity_id,
+      products,
+    });
+  } catch (err: any) {
+    console.error('[identity] provisioning-status error:', err);
+    res.status(500).json({ error: 'Failed to fetch provisioning status' });
+  }
+});
+
 export default router;

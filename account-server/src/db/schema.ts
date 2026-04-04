@@ -453,6 +453,28 @@ function initSchema(db: DbAdapter): void {
       FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    -- App-level settings: key-value store for registration tokens, flags, etc.
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- Clone training jobs: tracks voice clone training submissions to Windy Cloud
+    CREATE TABLE IF NOT EXISTS clone_training_jobs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      model_name TEXT NOT NULL,
+      status TEXT DEFAULT 'submitted',
+      bundle_ids TEXT NOT NULL,
+      cloud_job_id TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_clone_jobs_user ON clone_training_jobs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_clone_jobs_status ON clone_training_jobs(status);
+
     -- Pending provisions queue: stores failed provisioning attempts for retry
     CREATE TABLE IF NOT EXISTS pending_provisions (
       id TEXT PRIMARY KEY,

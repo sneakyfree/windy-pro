@@ -126,6 +126,8 @@ export const RecordingCheckQuerySchema = z.object({
 
 export const StartTrainingRequestSchema = z.object({
     bundle_ids: z.array(z.string()).min(3, 'At least 3 training-ready bundles required'),
+    model_name: z.string().min(1).max(100).optional(),
+    voice_description: z.string().max(500).optional(),
 });
 
 // ─── License Schemas ─────────────────────────────────────────
