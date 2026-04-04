@@ -3064,7 +3064,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     } else if (bundledModelDir && fs.existsSync(path.join(bundledModelDir, 'model.bin'))) {
       modelRef = `"${bundledModelDir.replace(/\\/g, '/')}"`;
     }
-    const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${ts}.py`);
+    const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${tmpId}.py`);
     const scriptContent = [
       'from faster_whisper import WhisperModel',
       `model = WhisperModel(${modelRef}, device="cpu", compute_type="int8")`,

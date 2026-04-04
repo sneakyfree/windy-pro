@@ -2873,7 +2873,8 @@ class SettingsPanel {
       window.windyAPI.updateSettings({ [key]: value });
     }
     // Also persist cloud settings to localStorage (fallback for windows without windyAPI)
-    // SEC-C1: cloudPassword excluded from localStorage — encrypted in main process via safeStorage\n    const cloudKeys = ['engine', 'cloudUrl', 'cloudToken', 'cloudEmail', 'cloudUser', 'recordingMode', 'maxRecordingMin', 'language'];
+    // SEC-C1: cloudPassword excluded from localStorage — encrypted in main process via safeStorage
+    const cloudKeys = ['engine', 'cloudUrl', 'cloudToken', 'cloudEmail', 'cloudUser', 'recordingMode', 'maxRecordingMin', 'language'];
     if (cloudKeys.includes(key)) {
       try { localStorage.setItem(`windy_${key}`, value || ''); } catch (_) { }
     }
