@@ -28,7 +28,8 @@ const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'cache.db');
 const MODEL_PATH = process.env.MODEL_PATH || path.join(__dirname, 'models', 'nllb-200-600M');
 const PYTHON_BIN = process.env.PYTHON_BIN || 'python3';
 const ALLOWED_ORIGINS = [
-    'https://windypro.thewindstorm.uk',
+    'https://windyword.ai',
+    'https://windypro.thewindstorm.uk', // legacy — remove after full migration
     'http://localhost:3000',
     'http://localhost:5173',
     'file://'   // Electron wizard

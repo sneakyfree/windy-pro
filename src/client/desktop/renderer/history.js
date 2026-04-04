@@ -582,7 +582,7 @@ class HistoryPanel {
             portalBtn.addEventListener('mouseenter', () => { portalBtn.style.background = 'var(--color-primary, #7C3AED)'; portalBtn.style.color = '#fff'; });
             portalBtn.addEventListener('mouseleave', () => { portalBtn.style.background = 'none'; portalBtn.style.color = 'var(--color-primary, #7C3AED)'; });
             portalBtn.addEventListener('click', () => {
-                window.windyAPI.openExternalUrl((window.API_CONFIG || {}).dashboard || 'https://windypro.thewindstorm.uk/dashboard');
+                window.windyAPI.openExternalUrl((window.API_CONFIG || {}).dashboard || 'https://windyword.ai/dashboard');
             });
         }
 

@@ -159,8 +159,8 @@ module.exports = function createRouter({ db, authenticate }) {
             payment_method_types: ['card'],
             line_items: [{ price: product.priceId, quantity: 1 }],
             mode: product.recurring ? 'subscription' : 'payment',
-            success_url: `${req.headers.origin || 'https://windypro.thewindstorm.uk'}/dashboard?payment=success&tier=${product.tier}`,
-            cancel_url: `${req.headers.origin || 'https://windypro.thewindstorm.uk'}/dashboard?payment=cancelled`,
+            success_url: `${req.headers.origin || 'https://windyword.ai'}/dashboard?payment=success&tier=${product.tier}`,
+            cancel_url: `${req.headers.origin || 'https://windyword.ai'}/dashboard?payment=cancelled`,
             customer_email: email || undefined,
             metadata: {
                 userId: userId || '',
@@ -231,7 +231,7 @@ module.exports = function createRouter({ db, authenticate }) {
 
             const portalSession = await stripeClient.billingPortal.sessions.create({
                 customer: sub.stripe_customer_id,
-                return_url: `${req.headers.origin || 'https://windypro.thewindstorm.uk'}/dashboard`
+                return_url: `${req.headers.origin || 'https://windyword.ai'}/dashboard`
             });
 
             res.json({ ok: true, url: portalSession.url });

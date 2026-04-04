@@ -105,7 +105,7 @@ module.exports = {
     publish: [
         {
             provider: 'generic',
-            url: 'https://windypro.thewindstorm.uk/releases',
+            url: 'https://windyword.ai/releases',
             useMultipleRangeRequest: false
         }
     ],

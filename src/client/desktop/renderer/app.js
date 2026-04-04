@@ -47,7 +47,7 @@ class WindyApp {
     // API-based engine state
     this._apiMediaRecorder = null;
     this._apiAudioChunks = [];
-    this.cloudUrl = (window.API_CONFIG || {}).wsUrl || 'wss://windypro.thewindstorm.uk';
+    this.cloudUrl = (window.API_CONFIG || {}).wsUrl || 'wss://windyword.ai';
     this.cloudWs = null;
     this.cloudToken = null;
     this._usingCloud = false;  // When smart mode, tracks if currently using cloud
@@ -2353,7 +2353,7 @@ class WindyApp {
 
   async _batchTranscribeCloud(audioBlob) {
     const token = this.cloudToken || localStorage.getItem('windy_cloudToken');
-    const cloudUrl = (this.cloudUrl || localStorage.getItem('windy_cloudUrl') || (window.API_CONFIG || {}).baseUrl || 'https://windypro.thewindstorm.uk')
+    const cloudUrl = (this.cloudUrl || localStorage.getItem('windy_cloudUrl') || (window.API_CONFIG || {}).baseUrl || 'https://windyword.ai')
       .replace('wss://', 'https://');
 
     if (!token) {
@@ -2564,7 +2564,7 @@ class WindyApp {
         durationSec: this._sessionSeconds || 0,
         ts: new Date().toISOString()
       };
-      fetch((window.API_CONFIG || {}).analytics || 'https://windypro.thewindstorm.uk/api/v1/analytics', {
+      fetch((window.API_CONFIG || {}).analytics || 'https://windyword.ai/api/v1/analytics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -3322,7 +3322,7 @@ class WindyApp {
       // If cloud mode, attempt cloud WS connection first
       // Use default URL if not explicitly set
       if (this.transcriptionEngine === 'cloud' && !this.cloudUrl) {
-        this.cloudUrl = (window.API_CONFIG || {}).wsUrl || 'wss://windypro.thewindstorm.uk';
+        this.cloudUrl = (window.API_CONFIG || {}).wsUrl || 'wss://windyword.ai';
       }
       console.warn(`[Record] engine=${this.transcriptionEngine}, cloudUrl="${this.cloudUrl}", cloudToken=${this.cloudToken ? 'exists' : 'MISSING'}`);
       if (this.transcriptionEngine === 'cloud' && this.cloudUrl && this.cloudUrl.startsWith('wss://')) {

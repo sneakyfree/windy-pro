@@ -5,7 +5,7 @@
 # ═══════════════════════════════════════════════════════
 set -euo pipefail
 
-DOMAIN="windypro.thewindstorm.uk"
+DOMAIN="windyword.ai"
 DEPLOY_DIR="/opt/windy-pro"
 GREEN='\033[0;32m'
 RED='\033[0;31m'

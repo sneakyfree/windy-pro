@@ -14,19 +14,27 @@ function getUser() {
 
 async function apiFetch(path, options = {}) {
     const token = getToken()
-    const res = await fetch(`${API_BASE}${path}`, {
-        ...options,
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            ...options.headers
-        }
-    })
+    let res
+    try {
+        res = await fetch(`${API_BASE}${path}`, {
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                ...options.headers
+            }
+        })
+    } catch {
+        return { _error: 'network' }
+    }
     if (res.status === 401) {
         localStorage.removeItem('windy_token')
         localStorage.removeItem('windy_user')
         window.location.href = '/auth'
         return null
+    }
+    if (res.status >= 500) {
+        return { _error: 'server' }
     }
     return res.json()
 }
@@ -61,6 +69,7 @@ export default function Dashboard() {
     const [page, setPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(null)
     const [expanded, setExpanded] = useState(null)
     const [expandedData, setExpandedData] = useState(null)
     const [translationStats, setTranslationStats] = useState(null)
@@ -70,9 +79,15 @@ export default function Dashboard() {
 
     const loadRecordings = useCallback(async () => {
         setLoading(true)
+        setError(null)
         const params = new URLSearchParams({ page })
         if (search) params.set('search', search)
         const data = await apiFetch(`/recordings?${params}`)
+        if (data?._error) {
+            setError(data._error)
+            setLoading(false)
+            return
+        }
         if (data) {
             setRecordings(data.recordings || [])
             setTotalPages(data.pagination?.totalPages || 1)
@@ -267,11 +282,22 @@ export default function Dashboard() {
             <main className="dash-main">
                 {loading ? (
                     <div className="dash-loading">Loading recordings...</div>
+                ) : error ? (
+                    <div className="dash-empty">
+                        <div className="dash-empty-icon">{error === 'network' ? '📡' : '⚠️'}</div>
+                        <h3>{error === 'network' ? "Can't reach server. Check your connection." : 'Something went wrong. Try refreshing.'}</h3>
+                        <button className="dash-btn" onClick={() => loadRecordings()} style={{ marginTop: '16px', cursor: 'pointer' }}>Retry</button>
+                    </div>
                 ) : recordings.length === 0 ? (
                     <div className="dash-empty">
                         <div className="dash-empty-icon">🎙️</div>
                         <h3>No recordings yet</h3>
-                        <p>Start recording with Windy Pro desktop app and your transcripts will appear here.</p>
+                        <p>Welcome to Windy Word! Here's how to get started:</p>
+                        <div style={{ textAlign: 'left', margin: '16px auto', maxWidth: '360px', lineHeight: '2' }}>
+                            <div>1. <Link to="/transcribe" style={{ color: '#3B82F6' }}>Try cloud transcription</Link> — speak and see text in real-time</div>
+                            <div>2. <a href="#download" style={{ color: '#3B82F6' }}>Download the desktop app</a> — for local, private transcription</div>
+                            <div>3. Get the mobile app — <a href="https://apps.apple.com/app/windy-pro" target="_blank" rel="noopener noreferrer" style={{ color: '#3B82F6' }}>iOS</a> / <a href="https://play.google.com/store/apps/details?id=pro.windy.app" target="_blank" rel="noopener noreferrer" style={{ color: '#3B82F6' }}>Android</a></div>
+                        </div>
                     </div>
                 ) : (
                     Object.entries(groups).map(([date, recs]) => (

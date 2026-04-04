@@ -249,7 +249,7 @@ stripeRouter.post('/create-checkout-session', authenticateToken, async (req: Req
         }
 
         // Build checkout session
-        const returnUrl = process.env.STRIPE_PORTAL_RETURN_URL || 'https://windypro.thewindstorm.uk/dashboard';
+        const returnUrl = process.env.STRIPE_PORTAL_RETURN_URL || 'https://windyword.ai/dashboard';
         const isSubscription = billing_type === 'monthly' || billing_type === 'yearly';
 
         const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -292,7 +292,7 @@ stripeRouter.post('/create-portal-session', authenticateToken, async (req: Reque
             return res.status(400).json({ error: 'No billing history found. Make a purchase first to access billing management.' });
         }
 
-        const returnUrl = process.env.STRIPE_PORTAL_RETURN_URL || 'https://windypro.thewindstorm.uk/dashboard';
+        const returnUrl = process.env.STRIPE_PORTAL_RETURN_URL || 'https://windyword.ai/dashboard';
 
         const session = await stripe.billingPortal.sessions.create({
             customer: user.stripe_customer_id,

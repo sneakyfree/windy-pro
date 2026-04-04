@@ -437,7 +437,7 @@ class InstallWizard {
 
         // If user chose a paid tier, attempt to create Stripe checkout
         if (tier !== 'deferred' && tier !== 'free') {
-          const API_BASE = process.env.ACCOUNT_API || 'https://windypro.thewindstorm.uk';
+          const API_BASE = process.env.ACCOUNT_API || 'https://windyword.ai';
           const token = this.accountManager.getToken();
 
           // Map wizard tier keys to price IDs

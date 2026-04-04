@@ -38,7 +38,7 @@ die()  {
   echo "[Windy Pro] ❌ $*" | tee -a "$LOG"
   if [ "$HAS_ZENITY" = "1" ]; then
     zenity --error --title="Windy Pro Installer" \
-      --text="$*\n\nFull log: $LOG\nSupport: dev@thewindstorm.uk" --width=450 2>/dev/null || true
+      --text="$*\n\nFull log: $LOG\nSupport: dev@windyword.ai" --width=450 2>/dev/null || true
   fi
   exit 1
 }

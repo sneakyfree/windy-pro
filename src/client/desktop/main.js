@@ -635,7 +635,7 @@ function createWindow() {
           "script-src 'self'; " +
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
           "font-src 'self' https://fonts.gstatic.com; " +
-          "connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.groq.com https://api.openai.com https://api.deepgram.com wss://api.deepgram.com; " +
+          "connect-src 'self' ws://127.0.0.1:* wss://*.windyword.ai https://*.windyword.ai wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.groq.com https://api.openai.com https://api.deepgram.com wss://api.deepgram.com; " +
           "img-src 'self' data:; " +
           "media-src 'self' blob: data:; " +
           "base-src 'self'; " +
@@ -841,8 +841,8 @@ function showAboutWindow() {
   <div class="built">Built by WindyPro Labs</div>
   <div class="tech">Electron ${electronVersion} · Node ${nodeVersion} · ${process.arch}</div>
   <div class="links">
-    <a onclick="window.postMessage({type:'open-url',url:'https://thewindstorm.uk'})">Website</a>
-    <a onclick="window.postMessage({type:'open-url',url:'mailto:dev@thewindstorm.uk'})">Support</a>
+    <a onclick="window.postMessage({type:'open-url',url:'https://windyword.ai'})">Website</a>
+    <a onclick="window.postMessage({type:'open-url',url:'mailto:dev@windyword.ai'})">Support</a>
     <a onclick="window.postMessage({type:'open-url',url:'https://github.com/sneakyfree/windy-pro'})">GitHub</a>
   </div>
   <button class="close-btn" onclick="window.close()">Close</button>
@@ -992,7 +992,7 @@ function createMacOSMenu() {
         { type: 'separator' },
         {
           label: 'Windy Pro Website',
-          click: () => shell.openExternal('https://thewindstorm.uk')
+          click: () => shell.openExternal('https://windyword.ai')
         },
         {
           label: 'Report a Bug',
@@ -1519,7 +1519,7 @@ ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang
     const postData = JSON.stringify({ text, sourceLang, targetLang });
 
     return await new Promise((resolve, reject) => {
-      const req = https.request('https://windypro.thewindstorm.uk/api/v1/translate/text', {
+      const req = https.request('https://windyword.ai/api/v1/translate/text', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -3421,7 +3421,7 @@ ipcMain.handle('delete-archive-entry', async (event, filePath) => {
 });
 
 // ── Windy Pro Cloud Storage helpers ──────────────────────────────
-const CLOUD_STORAGE_DEFAULT_URL = 'https://windypro.thewindstorm.uk/api/storage';
+const CLOUD_STORAGE_DEFAULT_URL = 'https://windyword.ai/api/storage';
 
 async function getCloudStorageToken() {
   const engine = store.get('engine', {});
@@ -3966,7 +3966,7 @@ ipcMain.handle('register-wizard-account', async (event, { email, password, name 
     const data = JSON.stringify({ email, password, name });
     return new Promise((resolve) => {
       const req = https.request({
-        hostname: 'windypro.thewindstorm.uk',
+        hostname: 'windyword.ai',
         port: 443,
         path: '/api/v1/auth/register',
         method: 'POST',
@@ -4051,8 +4051,8 @@ ipcMain.handle('create-checkout-session', async (event, priceId, email) => {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: priceConfig.mode,
-      success_url: process.env.STRIPE_SUCCESS_URL || 'https://windypro.thewindstorm.uk/payment-success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: process.env.STRIPE_CANCEL_URL || 'https://windypro.thewindstorm.uk/payment-cancel',
+      success_url: process.env.STRIPE_SUCCESS_URL || 'https://windyword.ai/payment-success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: process.env.STRIPE_CANCEL_URL || 'https://windyword.ai/payment-cancel',
       allow_promotion_codes: true,
       metadata: { deviceId: machineId, tier: priceConfig.tier }
     };
@@ -4477,7 +4477,7 @@ ipcMain.handle('open-billing-portal', async () => {
     if (!license.stripeCustomerId) throw new Error('No Stripe customer found. Purchase a plan first.');
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: license.stripeCustomerId,
-      return_url: process.env.STRIPE_RETURN_URL || 'https://windypro.thewindstorm.uk/dashboard'
+      return_url: process.env.STRIPE_RETURN_URL || 'https://windyword.ai/dashboard'
     });
     // SEC-06: Validate Stripe portal URL before opening
     if (isSafeURL(portalSession.url)) shell.openExternal(portalSession.url);

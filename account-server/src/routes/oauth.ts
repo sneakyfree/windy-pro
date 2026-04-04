@@ -670,7 +670,7 @@ router.post('/device', oauthLimiter, (req: Request, res: Response) => {
       VALUES (?, ?, ?, ?, ?)
     `).run(deviceCode, userCode, client_id, scope || '', expiresAt);
 
-    const issuer = process.env.OIDC_ISSUER || 'https://windypro.thewindstorm.uk';
+    const issuer = process.env.OIDC_ISSUER || 'https://windyword.ai';
     const verificationUri = `${issuer}/device`;
 
     res.json({

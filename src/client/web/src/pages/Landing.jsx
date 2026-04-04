@@ -130,10 +130,10 @@ export default function Landing() {
                     </p>
                     <div className="hero-actions">
                         <a href="#download" className="btn btn-primary btn-large">
-                            ⬇ Download Free
+                            ⬇ Download Desktop App
                         </a>
                         <Link to="/transcribe" className="btn btn-secondary btn-large">
-                            ☁ Try Cloud Version
+                            ☁ Try in Browser
                         </Link>
                     </div>
                     <div className="hero-trust-badge">
@@ -536,7 +536,7 @@ export default function Landing() {
                             <strong>🐧 Linux one-liner install:</strong>
                         </p>
                         <code className="download-command">
-                            curl -fsSL https://windypro.thewindstorm.uk/download/latest/linux-install.sh | bash
+                            curl -fsSL https://windyword.ai/download/latest/linux-install.sh | bash
                         </code>
                         <p className="download-helper-sub">
                             Or download the .deb, then: <code>sudo dpkg -i windy-pro_*.deb</code>

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Windy Pro API Gateway Proxy
- * Routes windypro.thewindstorm.uk traffic to the correct backend service.
+ * Routes windyword.ai traffic to the correct backend service.
  * 
  * /api/storage/*  → localhost:8099 (cloud-storage service)
  * /api/auth/*     → localhost:8098 (account server)  
@@ -14,7 +14,8 @@ const PORT = process.env.GATEWAY_PORT || 8100;
 
 // SEC-C5: Explicit CORS origin whitelist — no wildcards
 const ALLOWED_ORIGINS = new Set([
-  'https://windypro.thewindstorm.uk',
+  'https://windyword.ai',
+  'https://windypro.thewindstorm.uk', // legacy — remove after full migration
   'http://localhost:8098',
   'http://localhost:8099',
   'http://localhost:8100',

@@ -132,11 +132,11 @@ jobs:
         run: docker build -f account-server/Dockerfile -t windy-pro:${{ github.sha }} .
       - name: Tag latest
         run: docker tag windy-pro:${{ github.sha }} windy-pro:latest
-      - name: Deploy to windypro.thewindstorm.uk
+      - name: Deploy to windyword.ai
         if: github.ref == 'refs/heads/main'
         env:
           DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || 'windypro.thewindstorm.uk' }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || 'windyword.ai' }}
         run: |
           if [ -n "$DEPLOY_KEY" ]; then
             mkdir -p ~/.ssh

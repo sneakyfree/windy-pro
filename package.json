@@ -5,7 +5,7 @@
   "main": "src/client/desktop/main.js",
   "author": {
     "name": "Windy Pro",
-    "email": "dev@thewindstorm.uk"
+    "email": "dev@windyword.ai"
   },
   "license": "MIT",
   "scripts": {
@@ -129,7 +129,7 @@
       ],
       "icon": "assets/icon.png",
       "category": "Utility",
-      "maintainer": "Windy Pro <dev@thewindstorm.uk>",
+      "maintainer": "Windy Pro <dev@windyword.ai>",
       "executableName": "windy-pro",
       "desktop": {
         "Name": "Windy Pro",

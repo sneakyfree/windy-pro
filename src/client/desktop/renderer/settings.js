@@ -217,7 +217,7 @@ class SettingsPanel {
           <div id="cloudSettings" style="display:none;">
             <div class="setting-row">
               <label for="cloudUrl">Cloud URL</label>
-              <input type="text" id="cloudUrl" placeholder="wss://windypro.thewindstorm.uk" style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
+              <input type="text" id="cloudUrl" placeholder="wss://windyword.ai" style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
             </div>
             <div id="cloudAccountStatus" style="margin:8px 0;padding:6px 10px;border-radius:6px;font-size:12px;background:#1a2e1a;color:#22C55E;display:none;">✅ Signed in</div>
             <div id="cloudLoginForm">
@@ -743,7 +743,7 @@ class SettingsPanel {
 
     if (cloudSignInBtn) {
       cloudSignInBtn.addEventListener('click', async () => {
-        const cloudUrl = this.panel.querySelector('#cloudUrl').value || (window.API_CONFIG || {}).baseUrl || 'https://windypro.thewindstorm.uk';
+        const cloudUrl = this.panel.querySelector('#cloudUrl').value || (window.API_CONFIG || {}).baseUrl || 'https://windyword.ai';
         const email = this.panel.querySelector('#cloudEmail').value;
         const password = this.panel.querySelector('#cloudPassword').value;
         const name = this.panel.querySelector('#cloudName').value;

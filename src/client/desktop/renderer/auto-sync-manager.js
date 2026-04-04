@@ -345,7 +345,7 @@ class AutoSyncManager {
         const upgradeBtn = document.getElementById('sync-upgrade-btn');
         if (upgradeBtn) {
             upgradeBtn.addEventListener('click', () => {
-                window.windyAPI.openExternalUrl((window.API_CONFIG || {}).upgrade || 'https://windypro.thewindstorm.uk/upgrade');
+                window.windyAPI.openExternalUrl((window.API_CONFIG || {}).upgrade || 'https://windyword.ai/upgrade');
             });
         }
 

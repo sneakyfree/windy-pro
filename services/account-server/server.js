@@ -1273,7 +1273,7 @@ app.get('/api/v1/updates/check', (req, res) => {
         available,
         version: latestVersion,
         releaseNotes: 'Translation strand, i18n system, sync hardening, analytics, and bug fixes.',
-        downloadUrl: available ? 'https://windypro.thewindstorm.uk/download' : null
+        downloadUrl: available ? 'https://windyword.ai/download' : null
     });
 });
 

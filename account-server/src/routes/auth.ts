@@ -689,7 +689,7 @@ router.post('/create-portal-session', authenticateToken, async (req: Request, re
             return res.status(400).json({ url: null, error: 'No billing history found' });
         }
 
-        const returnUrl = process.env.STRIPE_PORTAL_RETURN_URL || 'https://windypro.thewindstorm.uk/dashboard';
+        const returnUrl = process.env.STRIPE_PORTAL_RETURN_URL || 'https://windyword.ai/dashboard';
         const session = await stripe.billingPortal.sessions.create({
             customer: user.stripe_customer_id,
             return_url: returnUrl,

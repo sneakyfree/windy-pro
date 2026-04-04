@@ -8,7 +8,7 @@
 const API_CONFIG = {
   // Base URLs (can be overridden via settings or localStorage)
   get baseUrl() {
-    return localStorage.getItem('windy_cloud_api_url') || 'https://windypro.thewindstorm.uk';
+    return localStorage.getItem('windy_cloud_api_url') || 'https://windyword.ai';
   },
   get wsUrl() {
     const base = this.baseUrl;
