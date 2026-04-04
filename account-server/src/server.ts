@@ -376,6 +376,10 @@ if (process.env.NODE_ENV !== 'test') {
     console.log('   GET  /download/version               — Current version');
     console.log('   GET  /health                         — Health check');
     console.log('');
+
+    // Start ecosystem provisioning retry worker
+    const { startRetryWorker } = require('./services/ecosystem-provisioner');
+    startRetryWorker();
   });
 }
 

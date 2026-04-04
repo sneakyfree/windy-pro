@@ -364,11 +364,18 @@ describe('POST /api/v1/identity/mail/provision', () => {
 // ═══════════════════════════════════════════
 
 describe('POST /api/v1/identity/agent/provision', () => {
-  test('provisions agent when Eternitas responds OK', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ passport_number: 'ET-BOT-001' }),
-    } as globalThis.Response);
+  test('provisions agent when Eternitas and Chat respond OK', async () => {
+    // Mock both Eternitas auto-hatch and Chat agent onboarding calls
+    const fetchSpy = jest.spyOn(global, 'fetch');
+    fetchSpy
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ passport: 'ET-BOT-001' }),
+      } as globalThis.Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ matrix_user_id: '@agent_ET-BOT-001:chat.windypro.com', dm_room_id: '!room:chat.windypro.com', access_token: 'tok' }),
+      } as globalThis.Response);
 
     const res = await request(app)
       .post('/api/v1/identity/agent/provision')
@@ -378,6 +385,9 @@ describe('POST /api/v1/identity/agent/provision', () => {
     expect(res.status).toBe(201);
     expect(res.body.eternitas_provisioned).toBe(true);
     expect(res.body.passport_number).toBe('ET-BOT-001');
+    expect(res.body.chat_provisioned).toBe(true);
+    expect(res.body.matrix_user_id).toBe('@agent_ET-BOT-001:chat.windypro.com');
+    expect(res.body.dm_room_id).toBe('!room:chat.windypro.com');
   });
 
   test('returns 400 without agent_name', async () => {
@@ -390,18 +400,18 @@ describe('POST /api/v1/identity/agent/provision', () => {
     expect(res.body.error).toBe('agent_name is required');
   });
 
-  test('returns 502 when Eternitas is down', async () => {
-    jest.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('ECONNREFUSED'));
+  test('returns 201 with pending when Eternitas is down (queued for retry)', async () => {
+    jest.spyOn(global, 'fetch').mockRejectedValue(new Error('ECONNREFUSED'));
 
     const res = await request(app)
       .post('/api/v1/identity/agent/provision')
       .set('Authorization', `Bearer ${generateToken()}`)
       .send({ agent_name: 'TestBot' });
 
-    expect(res.status).toBe(502);
-    expect(res.body.eternitas_provisioned).toBe(false);
-    expect(res.body.error).toBe('service unavailable');
-  });
+    // Agent provision now queues for retry instead of failing hard
+    expect(res.status).toBe(201);
+    expect(res.body.pending).toBe(true);
+  }, 60000); // Increased timeout — retry logic adds delays
 
   test('returns 401 without auth', async () => {
     const res = await request(app)

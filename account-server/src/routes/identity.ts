@@ -35,6 +35,7 @@ import {
   hasSecretaryConsent,
 } from '../identity-service';
 import { normalizeProductTier } from '@windy-pro/contracts';
+import { provisionAgent, cascadeRevocation } from '../services/ecosystem-provisioner';
 
 const router = Router();
 
@@ -291,6 +292,13 @@ router.post('/eternitas/webhook', botWebhookLimiter, (req: Request, res: Respons
         }
       }
       return res.json({ received: true });
+    }
+
+    // Handle revocation events — cascade suspend across all products
+    if (event === 'passport.revoked' || event === 'passport.suspended') {
+      cascadeRevocation(passportNumber);
+      logAuditEvent('passport_revoke', '', { event, passportNumber });
+      return res.json({ received: true, action: 'cascade_revocation' });
     }
 
     const result = processEternitasEvent(event, passportNumber, agentName, operatorEmail);
@@ -566,7 +574,6 @@ router.post('/agent/provision', authenticateToken, async (req: Request, res: Res
     let botUser = db.prepare('SELECT id FROM users WHERE windy_identity_id = ?').get(identityId) as any;
 
     if (!botUser) {
-      // Create a bot identity
       const botId = crypto.randomUUID();
       db.prepare(
         `INSERT INTO users (id, email, name, display_name, tier, identity_type, windy_identity_id, created_at, updated_at)
@@ -575,67 +582,32 @@ router.post('/agent/provision', authenticateToken, async (req: Request, res: Res
       botUser = { id: botId };
     }
 
-    // Ensure product account row exists
+    // Ensure product account rows exist
     provisionProduct(botUser.id, 'eternitas', { source: 'agent/provision' });
+    provisionProduct(botUser.id, 'windy_chat', { source: 'agent/provision' });
 
-    const ETERNITAS_URL = config.ETERNITAS_URL;
-    try {
-      const eternitasRes = await fetch(`${ETERNITAS_URL}/api/v1/bots/auto-hatch`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Service-Token': process.env.ETERNITAS_SERVICE_TOKEN || '',
-        },
-        body: JSON.stringify({
-          windy_identity_id: identityId,
-          agent_name,
-          owner_email: ownerEmail,
-          operator_identity_id: requestingUser.userId,
-        }),
-        signal: AbortSignal.timeout(10000),
-      });
+    // Full agent provision: Eternitas passport → Chat Matrix account + DM room
+    const result = await provisionAgent(botUser.id, agent_name, requestingUser.userId, ownerEmail);
 
-      if (!eternitasRes.ok) {
-        return res.status(502).json({
-          eternitas_provisioned: false,
-          error: 'service unavailable',
-          detail: `Eternitas returned ${eternitasRes.status}`,
-        });
-      }
-
-      const eternitasData = await eternitasRes.json() as any;
-      const passportNumber = eternitasData.passport_number || eternitasData.passportNumber;
-
-      // Update product account
-      db.prepare(
-        "UPDATE product_accounts SET status = 'active', external_id = ? WHERE identity_id = ? AND product = 'eternitas'",
-      ).run(passportNumber, botUser.id);
-
-      // Store passport
-      db.prepare(
-        `INSERT OR REPLACE INTO eternitas_passports (identity_id, passport_number, status, operator_identity_id, registered_at)
-         VALUES (?, ?, 'active', ?, datetime('now'))`,
-      ).run(botUser.id, passportNumber, requestingUser.userId);
-
-      logAuditEvent('product_provision', botUser.id, {
-        product: 'eternitas',
-        passportNumber,
-        operatorId: requestingUser.userId,
-      });
-
-      res.status(201).json({
-        passport_number: passportNumber,
-        eternitas_provisioned: true,
-        identity_id: botUser.id,
-        windy_identity_id: identityId,
-      });
-    } catch (err: any) {
-      res.status(502).json({
-        eternitas_provisioned: false,
-        error: 'service unavailable',
-        detail: err.message,
+    if (result.eternitas === 'failed' && result.chat === 'failed') {
+      return res.status(502).json({
+        error: 'Agent provisioning failed — both Eternitas and Chat unavailable',
+        eternitas: result.eternitas,
+        chat: result.chat,
       });
     }
+
+    res.status(201).json({
+      passport_number: result.passport_number,
+      eternitas_provisioned: result.eternitas === 'ok',
+      chat_provisioned: result.chat === 'ok',
+      matrix_user_id: result.matrix_user_id,
+      dm_room_id: result.dm_room_id,
+      identity_id: botUser.id,
+      windy_identity_id: identityId,
+      // If anything is pending, the retry worker will handle it
+      pending: result.eternitas === 'pending' || result.chat === 'pending',
+    });
   } catch (err: any) {
     console.error('[identity] Agent provision error:', err);
     res.status(500).json({ error: 'Agent provisioning failed' });
@@ -1310,7 +1282,21 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
           } : {}),
           ...(eternitasProduct ? { status: eternitasProduct.status } : { status: 'not_provisioned' }),
         },
-        windy_fly: findProduct('windy_fly') || { status: 'not_provisioned', provisioned: false },
+        windy_fly: (() => {
+          const flyProduct = findProduct('windy_fly');
+          if (!flyProduct) return { status: 'not_provisioned', provisioned: false };
+          // Parse metadata for agent details (set by provisionAgent)
+          let meta: any = {};
+          try { meta = JSON.parse(flyProduct.metadata || '{}'); } catch {}
+          return {
+            status: flyProduct.status,
+            provisioned: flyProduct.status === 'active',
+            matrix_user_id: flyProduct.external_id || meta.matrix_user_id,
+            agent_name: meta.agent_name,
+            passport_number: meta.passport_number,
+            room_id: meta.dm_room_id,
+          };
+        })(),
         windy_clone: { status: 'available', provisioned: false, progress: 0 },
         windy_traveler: { status: user.tier !== 'free' ? 'active' : 'upgrade_required', provisioned: user.tier !== 'free' },
       },

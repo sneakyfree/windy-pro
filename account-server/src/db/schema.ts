@@ -452,5 +452,19 @@ function initSchema(db: DbAdapter): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    -- Pending provisions queue: stores failed provisioning attempts for retry
+    CREATE TABLE IF NOT EXISTS pending_provisions (
+      id TEXT PRIMARY KEY,
+      identity_id TEXT NOT NULL,
+      product TEXT NOT NULL,
+      action TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      next_retry_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_pending_provisions_retry ON pending_provisions(next_retry_at);
   `);
 }

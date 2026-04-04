@@ -60,6 +60,12 @@ export const config = {
     WINDY_MAIL_URL: process.env.WINDY_MAIL_URL || 'http://localhost:8200',
     WINDY_CLOUD_URL: process.env.WINDY_CLOUD_URL || 'http://localhost:8098',
     ETERNITAS_URL: process.env.ETERNITAS_URL || 'http://localhost:8200',
+    // Eternitas — bot identity & trust registry
+    ETERNITAS_API_KEY: process.env.ETERNITAS_API_KEY || '',           // et_plt_xxx (platform API key)
+    ETERNITAS_WEBHOOK_SECRET: process.env.ETERNITAS_WEBHOOK_SECRET || '', // For verifying inbound webhooks
+    ETERNITAS_SERVICE_TOKEN: process.env.ETERNITAS_SERVICE_TOKEN || '',
+    // Windy Chat — service-to-service auth
+    CHAT_SERVICE_TOKEN: process.env.CHAT_SERVICE_TOKEN || '',
     // AWS cloud STT failover — GPU instances for heavy transcription workloads
     AWS_STT_ENABLED: process.env.AWS_STT_ENABLED === 'true',
     AWS_STT_ENDPOINT: process.env.AWS_STT_ENDPOINT || '',  // e.g. https://stt.windycloud.ai/api/v1/compute/stt
