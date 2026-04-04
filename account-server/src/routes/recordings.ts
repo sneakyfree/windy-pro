@@ -182,6 +182,14 @@ router.get('/', authenticateToken, (req: Request, res: Response) => {
             totalPages: result.totalPages,
             hasMore: result.hasMore,
             since: req.query.since || '1970-01-01T00:00:00Z',
+            // Web dashboard expects nested pagination object
+            pagination: {
+                page: result.page,
+                limit: result.limit,
+                total: result.total,
+                totalPages: result.totalPages,
+                hasMore: result.hasMore,
+            },
         });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });

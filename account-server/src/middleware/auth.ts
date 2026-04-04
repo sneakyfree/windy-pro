@@ -82,7 +82,13 @@ function verifyToken(token: string): AuthUser {
  */
 export function authenticateToken(req: Request, res: Response, next: NextFunction): void {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    let token = authHeader && authHeader.split(' ')[1];
+
+    // Fallback: accept token from query param (needed for <audio>/<video> src URLs
+    // that can't set Authorization headers)
+    if (!token && req.query.token && typeof req.query.token === 'string') {
+        token = req.query.token;
+    }
 
     if (!token) {
         res.status(401).json({ error: 'Authentication required' });

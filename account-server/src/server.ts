@@ -193,6 +193,24 @@ app.use('/api/', (req: express.Request, res: express.Response) => {
     res.status(404).json({ error: 'Not found', path: req.path });
 });
 
+// ─── SPA Catch-All (React Router client-side routing) ───────
+// Any non-API, non-static request gets index.html so React Router handles routing.
+// This must come AFTER all API routes and static file serving.
+
+import fs from 'fs';
+const spaIndexPath = path.join(webDistDir, 'index.html');
+app.get('*', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // Skip if the request looks like a file (has extension)
+    if (req.path.includes('.')) return next();
+    // Serve index.html for SPA routes
+    if (fs.existsSync(spaIndexPath)) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.sendFile(spaIndexPath);
+    } else {
+        next();
+    }
+});
+
 // ─── Error Handler ───────────────────────────────────────────
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
