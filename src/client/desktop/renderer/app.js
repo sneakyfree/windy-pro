@@ -271,6 +271,65 @@ class WindyApp {
         this.showRecoveryBanner(recovery.content);
       }
     }
+
+    // ── Mic Pre-Warming ──────────────────────────────────────────
+    // Call getUserMedia() now (during init, when the app window has focus)
+    // and keep the stream alive. When recording starts later via hotkey,
+    // we reuse this stream instead of calling getUserMedia() again.
+    // This prevents focus-stealing on Wayland/GNOME.
+    this._preWarmedMicStream = null;
+    try {
+      const defaultConstraints = {
+        channelCount: 1, sampleRate: 16000,
+        echoCancellation: true, noiseSuppression: true, autoGainControl: true
+      };
+      // Check for custom mic device
+      if (window.windyAPI?.getSettings) {
+        try {
+          const s = await window.windyAPI.getSettings();
+          if (s?.micDeviceId && s.micDeviceId !== 'default') {
+            defaultConstraints.deviceId = { exact: s.micDeviceId };
+          }
+        } catch (_) { }
+      }
+      this._preWarmedMicStream = await navigator.mediaDevices.getUserMedia({ audio: defaultConstraints });
+      // Mute all tracks so the mic isn't actively recording yet
+      this._preWarmedMicStream.getAudioTracks().forEach(t => { t.enabled = false; });
+      console.info('[MicPreWarm] Microphone pre-warmed successfully');
+    } catch (e) {
+      console.warn('[MicPreWarm] Failed (will request on first recording):', e.message);
+    }
+
+    // ── Video Pre-Warming ─────────────────────────────────────────
+    // Same approach as mic: request camera access now so getUserMedia({ video })
+    // doesn't steal Wayland focus when recording starts via hotkey.
+    this._preWarmedVideoStream = null;
+    try {
+      let videoEnabled = false;
+      if (window.windyAPI?.getSettings) {
+        const s = await window.windyAPI.getSettings();
+        videoEnabled = !!s?.saveVideo;
+      }
+      if (videoEnabled) {
+        this._preWarmedVideoStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
+        });
+        // Mute video tracks so camera isn't actively streaming yet
+        this._preWarmedVideoStream.getVideoTracks().forEach(t => { t.enabled = false; });
+        console.info('[VideoPreWarm] Camera pre-warmed successfully');
+      }
+    } catch (e) {
+      console.warn('[VideoPreWarm] Failed (will request on first recording):', e.message);
+    }
+
+    // Also pre-warm AudioContext (used for blip sounds).
+    // Creating AudioContext for the first time steals focus on Linux.
+    try {
+      this._blipAudioCtx = new AudioContext();
+      // Immediately suspend to save resources
+      if (this._blipAudioCtx.state === 'running') this._blipAudioCtx.suspend();
+      console.info('[MicPreWarm] AudioContext pre-warmed successfully');
+    } catch (_) { }
   }
 
   /**
@@ -1750,7 +1809,7 @@ class WindyApp {
         }
       } catch (e) { console.warn('[TierLimits] Failed to enforce plan limits:', e.message); }
 
-      // 1. Get mic access
+      // 1. Get mic access — reuse pre-warmed stream to avoid focus-stealing
       const audioConstraints = {
         channelCount: 1,
         sampleRate: 16000,
@@ -1764,7 +1823,21 @@ class WindyApp {
           audioConstraints.deviceId = { exact: settings.micDeviceId };
         }
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+
+      let stream;
+      if (this._preWarmedMicStream && this._preWarmedMicStream.getAudioTracks().length > 0
+          && this._preWarmedMicStream.getAudioTracks()[0].readyState === 'live') {
+        // Re-enable the pre-warmed stream's tracks
+        this._preWarmedMicStream.getAudioTracks().forEach(t => { t.enabled = true; });
+        stream = this._preWarmedMicStream;
+        console.info('[BatchRec] Using pre-warmed mic stream (no focus steal)');
+      } else {
+        // Fallback: request fresh stream (will steal focus on Wayland)
+        console.warn('[BatchRec] Pre-warmed stream unavailable, requesting fresh getUserMedia');
+        stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        this._preWarmedMicStream = stream; // Cache for next time
+      }
+      this._batchStream = stream; // Store for stopBatchRecording()
 
       // 2. Use MediaRecorder to capture full audio
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -1807,9 +1880,20 @@ class WindyApp {
             videoQuality = settings?.videoQuality || '720p';
           }
           const vq = qualityMap[videoQuality] || qualityMap['720p'];
-          this._videoStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: vq.width }, height: { ideal: vq.height }, frameRate: { ideal: 30 } }
-          });
+
+          // Use pre-warmed video stream if available (prevents focus steal on Wayland)
+          if (this._preWarmedVideoStream && this._preWarmedVideoStream.getVideoTracks().length > 0
+              && this._preWarmedVideoStream.getVideoTracks()[0].readyState === 'live') {
+            this._preWarmedVideoStream.getVideoTracks().forEach(t => { t.enabled = true; });
+            this._videoStream = this._preWarmedVideoStream;
+            console.info('[BatchRec] Using pre-warmed video stream (no focus steal)');
+          } else {
+            console.warn('[BatchRec] Pre-warmed video unavailable, requesting fresh getUserMedia');
+            this._videoStream = await navigator.mediaDevices.getUserMedia({
+              video: { width: { ideal: vq.width }, height: { ideal: vq.height }, frameRate: { ideal: 30 } }
+            });
+            this._preWarmedVideoStream = this._videoStream;
+          }
 
           // ═══ Camera resolution check: warn if hardware < requested ═══
           const vTrack = this._videoStream.getVideoTracks()[0];
@@ -2019,10 +2103,10 @@ class WindyApp {
 
     return new Promise((resolve) => {
       this._batchRecorder.onstop = async () => {
-        // Stop mic
+        // Mute mic tracks (don't stop() — keep stream alive for reuse to avoid focus-steal)
         if (this._batchStream) {
-          this._batchStream.getTracks().forEach(t => t.stop());
-          this._batchStream = null;
+          this._batchStream.getAudioTracks().forEach(t => { t.enabled = false; });
+          // Don't null out _batchStream — it may be the pre-warmed stream
         }
 
         // Build audio blob
@@ -3071,10 +3155,12 @@ class WindyApp {
     const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
 
     if (this.isRecording) {
-      // Sound feedback: use default beeps only if effects engine is in default mode or unavailable
-      const fxMode = this.effectsEngine?._mode;
-      if (!fxMode || fxMode === 'default' || fxMode === 'silent') {
-        this._playBlip(440, 0.1);
+      // Sound feedback: skip blip on hotkey triggers (AudioContext steals focus on Linux)
+      if (!this._hotkeyTriggered) {
+        const fxMode = this.effectsEngine?._mode;
+        if (!fxMode || fxMode === 'default' || fxMode === 'silent') {
+          this._playBlip(440, 0.1);
+        }
       }
       // Strand I: trigger stop effect (pure observer, safe to fail)
       try { if (this.effectsEngine) this.effectsEngine.trigger('stop'); } catch (_) { }
@@ -3090,10 +3176,12 @@ class WindyApp {
         this.stopRecording();
       }
     } else {
-      // Sound feedback: use default beeps only if effects engine is in default mode or unavailable
-      const fxMode2 = this.effectsEngine?._mode;
-      if (!fxMode2 || fxMode2 === 'default' || fxMode2 === 'silent') {
-        this._playBlip(880, 0.08);
+      // Sound feedback: skip blip on hotkey triggers (AudioContext steals focus on Linux)
+      if (!this._hotkeyTriggered) {
+        const fxMode2 = this.effectsEngine?._mode;
+        if (!fxMode2 || fxMode2 === 'default' || fxMode2 === 'silent') {
+          this._playBlip(880, 0.08);
+        }
       }
       // Strand I: random widget rotation on each recording start
       try {

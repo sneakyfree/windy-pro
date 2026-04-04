@@ -63,12 +63,27 @@ process.on('unhandledRejection', (reason) => {
 
 const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, dialog, Notification, shell, session, nativeTheme, safeStorage } = require('electron');
 
+// ── Centralized Platform Detection ──────────────────────────────
+// Detects OS, distro, display server, desktop environment, and derives
+// strategies for hotkeys, paste injection, and focus management.
+// See platform-detect.js for full detection logic.
+const PLATFORM = require('./platform-detect');
+
 // SEC-10: --no-sandbox required for Linux AppImage (chrome-sandbox SUID issue).
-// Without this, the app won't launch from AppImage on most Linux distros.
-// This is a known Electron limitation: https://github.com/electron/electron/issues/17972
-if (process.platform === 'linux') {
+if (PLATFORM.isLinux) {
   app.commandLine.appendSwitch('no-sandbox');
+
+  // Wayland: force XWayland mode so Electron's globalShortcut X11 grabs
+  // at least work when the app window is focused (GNOME keybindings handle the rest).
+  // On X11: no switch needed, everything works natively.
+  if (PLATFORM.isWayland) {
+    app.commandLine.appendSwitch('ozone-platform', 'x11');
+  }
 }
+
+// Enable Web Speech API and speech dispatcher on all platforms
+app.commandLine.appendSwitch('enable-features', 'WebSpeechAPI');
+app.commandLine.appendSwitch('enable-speech-dispatcher');
 
 // SEC-06: URL validation helper — only allow safe protocols for shell.openExternal
 function isSafeURL(url) {
@@ -77,9 +92,6 @@ function isSafeURL(url) {
     return ['https:', 'http:', 'mailto:'].includes(parsed.protocol);
   } catch { return false; }
 }
-// Enable Web Speech API support
-app.commandLine.appendSwitch('enable-speech-dispatcher');
-app.commandLine.appendSwitch('enable-features', 'WebSpeechAPI');
 const path = require('path');
 const Store = require('electron-store');
 const { spawn, exec, execFile } = require('child_process');
@@ -169,6 +181,55 @@ let userHiddenWindow = false;  // Tracks if user intentionally hid everything vi
 let pythonProcess = null;
 let pythonRestartCount = 0;
 const MAX_PYTHON_RESTARTS = 3;
+
+// ═══ Wayland/GNOME Focus Preservation ═══
+// On GNOME+Wayland, we save the focused window before toggling recording,
+// so we can restore focus after the toggle (preventing cursor loss) and
+// before auto-pasting (ensuring text goes to the right window).
+// Uses xdotool window IDs which work reliably via XWayland on modern GNOME
+// (org.gnome.Shell.Eval is disabled since GNOME 45+).
+let _savedWaylandFocusTarget = null;
+
+/**
+ * Save the currently focused window on Wayland via xdotool (XWayland).
+ * Returns the X11 window ID string or null on failure.
+ */
+function _saveWaylandFocus() {
+  if (!PLATFORM.isWayland) return null;
+  try {
+    const winId = require('child_process').execSync(
+      'xdotool getactivewindow',
+      { timeout: 1500, encoding: 'utf-8' }
+    ).trim();
+    if (winId && winId !== '0') {
+      console.info(`[WaylandFocus] Saved focus target window: ${winId}`);
+      return winId;
+    }
+  } catch (e) {
+    console.warn('[WaylandFocus] Failed to save focus (xdotool):', e.message);
+  }
+  return null;
+}
+
+/**
+ * Restore focus to the saved window on Wayland via xdotool windowactivate.
+ */
+function _restoreWaylandFocus() {
+  if (!_savedWaylandFocusTarget || !PLATFORM.isWayland) return;
+  try {
+    require('child_process').execFile('xdotool', [
+      'windowactivate', _savedWaylandFocusTarget
+    ], { timeout: 2000 }, (err) => {
+      if (err) {
+        console.warn('[WaylandFocus] xdotool restore failed:', err.message);
+      } else {
+        console.info(`[WaylandFocus] Restored focus to window: ${_savedWaylandFocusTarget}`);
+      }
+    });
+  } catch (e) {
+    console.warn('[WaylandFocus] Failed to restore focus:', e.message);
+  }
+}
 
 // ═══ Model Download Manifest ═══
 const MODEL_MANIFEST = {
@@ -2347,26 +2408,28 @@ function registerHotkeys() {
 
   // Toggle recording — save & restore focus so cursor stays in target app
   const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
-    // Capture the focused window BEFORE anything happens
+    // X11: Capture the focused window BEFORE anything happens
     let savedWindowId = null;
-    try {
-      if (process.platform === 'linux') {
+    if (PLATFORM.focusStrategy === 'xdotool-focus') {
+      try {
         savedWindowId = require('child_process').execSync('xdotool getactivewindow', { timeout: 500 }).toString().trim();
-      }
-    } catch (_) { }
+      } catch (_) { }
+    }
+
+    // Wayland/GNOME: Save focused window BEFORE toggle
+    if (PLATFORM.isWayland && PLATFORM.isGnome && !isRecording) {
+      _savedWaylandFocusTarget = _saveWaylandFocus();
+    }
 
     toggleRecording();
 
-    // Restore focus to the user's target app after a delay
-    // (getUserMedia/AudioContext/IPC can all steal focus asynchronously)
-    if (savedWindowId && process.platform === 'linux') {
+    // X11: restore focus to the user's target app
+    if (PLATFORM.focusStrategy === 'xdotool-focus' && savedWindowId) {
       const restore = () => {
         try {
-          // SEC-L5: Use execFile with array args instead of exec with string interpolation
           require('child_process').execFile('xdotool', ['windowactivate', savedWindowId]);
         } catch (_) { }
       };
-      // Multiple restore attempts to catch all async focus steals
       setTimeout(restore, 200);
       setTimeout(restore, 500);
       setTimeout(restore, 1000);
@@ -2383,16 +2446,19 @@ function registerHotkeys() {
   // Paste clipboard (screenshots, copied text, etc.) via simulated Ctrl+V
   const pasteClipAccel = hotkeys.pasteClipboard || 'CommandOrControl+Shift+B';
   const regClipboard = globalShortcut.register(pasteClipAccel, () => {
-    // Small delay to let modifier keys release, then simulate Ctrl+V
     const { exec } = require('child_process');
-    if (process.platform === 'linux') {
-      // --clearmodifiers ensures held keys (Ctrl+Shift from hotkey) don't interfere
-      exec('sleep 0.1 && xdotool key --clearmodifiers ctrl+v', (err) => {
-        if (err) console.error('[Hotkey] Paste clipboard failed:', err.message);
+    // Use platform-detected paste strategy
+    if (PLATFORM.pasteStrategy === 'ydotool') {
+      exec('sleep 0.1 && ydotool key 29:1 47:1 47:0 29:0', (err) => {
+        if (err) console.error('[Hotkey] Paste clipboard failed (ydotool):', err.message);
       });
-    } else if (process.platform === 'darwin') {
+    } else if (PLATFORM.pasteStrategy === 'xdotool' || PLATFORM.pasteStrategy === 'xdotool-fallback') {
+      exec('sleep 0.1 && xdotool key --clearmodifiers ctrl+v', (err) => {
+        if (err) console.error('[Hotkey] Paste clipboard failed (xdotool):', err.message);
+      });
+    } else if (PLATFORM.pasteStrategy === 'osascript') {
       exec('sleep 0.1 && osascript -e \'tell application "System Events" to keystroke "v" using command down\'');
-    } else {
+    } else if (PLATFORM.pasteStrategy === 'powershell') {
       exec('powershell -command "Start-Sleep -Milliseconds 100; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"');
     }
   });
@@ -2426,6 +2492,224 @@ function registerHotkeys() {
     showMiniTranslateWindow();
   });
   console.info(`[Hotkey] Quick Translate (${qtAccel}): ${regTranslate ? 'OK' : 'FAILED'}`);
+}
+
+// ═══ Wayland Global Hotkeys via GNOME Custom Keybindings ═══
+// On Wayland, Electron's globalShortcut X11 grabs don't capture keys when
+// the app isn't focused. We work around this with:
+// 1. A tiny HTTP server on 127.0.0.1:18765 that accepts action commands
+// 2. GNOME custom keybindings that curl to this server
+
+const WAYLAND_CONTROL_PORT = 18765;
+let _waylandControlServer = null;
+let _ydotoolSocket = null;
+let _ydotooldProc = null;
+
+/**
+ * Start a user-level ydotoold if /dev/uinput is accessible.
+ * ydotool is the only reliable way to send keystrokes to Wayland-native apps.
+ */
+function startUserYdotoold() {
+  if (!PLATFORM.isWayland) return;
+  const socketPath = path.join(os.tmpdir(), `ydotool-${process.getuid()}.socket`);
+  try {
+    // Check if /dev/uinput is accessible
+    fs.accessSync('/dev/uinput', fs.constants.W_OK);
+  } catch {
+    console.warn('[ydotool] /dev/uinput not writable — ydotool paste to Wayland-native apps unavailable.');
+    console.warn('[ydotool] Fix: sudo chmod 0666 /dev/uinput (temporary) or add udev rule (permanent)');
+    // Try using the root ydotoold socket as fallback
+    if (fs.existsSync('/tmp/.ydotool_socket')) {
+      try { fs.accessSync('/tmp/.ydotool_socket', fs.constants.W_OK); _ydotoolSocket = '/tmp/.ydotool_socket'; } catch { }
+    }
+    return;
+  }
+  // Clean up stale socket
+  try { fs.unlinkSync(socketPath); } catch { }
+  _ydotooldProc = spawn('ydotoold', ['--socket-path', socketPath], {
+    stdio: 'ignore', detached: true
+  });
+  _ydotooldProc.unref();
+  _ydotoolSocket = socketPath;
+  // Wait for socket to appear
+  let waited = 0;
+  const interval = setInterval(() => {
+    if (fs.existsSync(socketPath) || waited > 2000) {
+      clearInterval(interval);
+      if (fs.existsSync(socketPath)) {
+        console.info(`[ydotool] User ydotoold started, socket: ${socketPath}`);
+      } else {
+        console.warn('[ydotool] ydotoold socket did not appear in time');
+        _ydotoolSocket = null;
+      }
+    }
+    waited += 100;
+  }, 100);
+}
+
+function startWaylandControlServer() {
+  const http = require('http');
+  const actionHandlers = {
+    'toggle-recording': () => {
+      // Focus target is saved from the ?focuswin= query param (captured at keypress time)
+      toggleRecording();
+    },
+    'paste-transcript': () => pasteTranscript(),
+    'show-hide': () => {
+      const mainVisible = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible();
+      const miniVisible = miniWindow && !miniWindow.isDestroyed() && miniWindow.isVisible();
+      if (mainVisible) { mainWindow.hide(); showMiniWidget(); }
+      else if (miniVisible) { miniWindow.hide(); userHiddenWindow = true; }
+      else { userHiddenWindow = false; mainWindow.show(); mainWindow.focus(); }
+    },
+    'quick-translate': () => showMiniTranslateWindow(),
+  };
+
+  _waylandControlServer = http.createServer((req, res) => {
+    // Security: only accept from localhost
+    const remote = req.socket.remoteAddress;
+    if (remote !== '127.0.0.1' && remote !== '::1' && remote !== '::ffff:127.0.0.1') {
+      res.writeHead(403); res.end('Forbidden');
+      return;
+    }
+
+    const urlObj = new URL(req.url, 'http://localhost');
+    const action = urlObj.pathname.replace(/^\//, '');
+
+    // Accept focuswin query param from GNOME keybinding (captured at keypress time)
+    const focusWin = urlObj.searchParams.get('focuswin');
+    if (focusWin && focusWin !== '0' && focusWin !== '') {
+      _savedWaylandFocusTarget = focusWin;
+      console.info(`[WaylandFocus] Saved focus target window: ${focusWin} (from keybinding)`);
+    }
+
+    if (actionHandlers[action]) {
+      actionHandlers[action]();
+      res.writeHead(200); res.end('OK');
+      console.info(`[WaylandCtrl] Executed: ${action}`);
+    } else {
+      res.writeHead(404); res.end('Unknown action');
+    }
+  });
+
+  _waylandControlServer.listen(WAYLAND_CONTROL_PORT, '127.0.0.1', () => {
+    console.info(`[WaylandCtrl] Control server listening on 127.0.0.1:${WAYLAND_CONTROL_PORT}`);
+  });
+
+  _waylandControlServer.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[WaylandCtrl] Port ${WAYLAND_CONTROL_PORT} in use — another instance may be running`);
+    } else {
+      console.error('[WaylandCtrl] Server error:', err.message);
+    }
+  });
+}
+
+function registerGnomeKeybindings() {
+  const hotkeys = store.get('hotkeys');
+
+  // Map Electron accelerators to GNOME keybinding format
+  function toGnomeBinding(accel) {
+    return accel
+      .replace('CommandOrControl+', '<Ctrl>')
+      .replace('Control+', '<Ctrl>')
+      .replace('Shift+', '<Shift>')
+      .replace('Alt+', '<Alt>')
+      .replace('Space', 'space');
+  }
+
+  const bindings = [
+    { name: 'Windy Pro: Toggle Recording', binding: toGnomeBinding(hotkeys.toggleRecording), action: 'toggle-recording' },
+    { name: 'Windy Pro: Paste Transcript', binding: toGnomeBinding(hotkeys.pasteTranscript), action: 'paste-transcript' },
+    { name: 'Windy Pro: Show/Hide', binding: toGnomeBinding(hotkeys.showHide), action: 'show-hide' },
+  ];
+
+  const basePath = '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings';
+
+  try {
+    // Read existing custom keybindings
+    const existingRaw = require('child_process').execSync(
+      `gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings`,
+      { timeout: 3000 }
+    ).toString().trim();
+
+    // Parse existing array (format: ['path1', 'path2'] or @as [])
+    let existing = [];
+    if (existingRaw && existingRaw !== '@as []') {
+      const match = existingRaw.match(/\[([^\]]*)\]/);
+      if (match) {
+        existing = match[1].split(',')
+          .map(s => s.trim().replace(/'/g, ''))
+          .filter(s => s.length > 0);
+      }
+    }
+
+    // Remove any old Windy Pro bindings
+    const windyPaths = [];
+    for (const p of existing) {
+      try {
+        const name = require('child_process').execSync(
+          `gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${p} name`,
+          { timeout: 2000 }
+        ).toString().trim().replace(/'/g, '');
+        if (name.startsWith('Windy Pro:')) {
+          windyPaths.push(p);
+        }
+      } catch (_) { }
+    }
+    existing = existing.filter(p => !windyPaths.includes(p));
+
+    // Find next available slot numbers
+    const usedSlots = existing.map(p => {
+      const m = p.match(/custom(\d+)/);
+      return m ? parseInt(m[1]) : -1;
+    }).filter(n => n >= 0);
+    let nextSlot = 0;
+    const getNextSlot = () => {
+      while (usedSlots.includes(nextSlot)) nextSlot++;
+      usedSlots.push(nextSlot);
+      return nextSlot;
+    };
+
+    // Register each binding
+    for (const b of bindings) {
+      const slot = getNextSlot();
+      const kbPath = `${basePath}/custom${slot}/`;
+
+      require('child_process').execSync(
+        `gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${kbPath} name '${b.name}'`,
+        { timeout: 2000 }
+      );
+      // For toggle-recording: capture the focused window ID at keypress time and pass it
+      // to the control server, so focus can be restored after recording starts/stops.
+      // Other actions use a simple curl.
+      const focusCmd = b.action === 'toggle-recording'
+        ? `bash -c 'W=$(xdotool getactivewindow 2>/dev/null); curl -s "http://127.0.0.1:${WAYLAND_CONTROL_PORT}/${b.action}?focuswin=$W"'`
+        : `curl -s http://127.0.0.1:${WAYLAND_CONTROL_PORT}/${b.action}`;
+      require('child_process').execSync(
+        `gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${kbPath} command '${focusCmd.replace(/'/g, "'\\''")}' `,
+        { timeout: 2000 }
+      );
+      require('child_process').execSync(
+        `gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${kbPath} binding '${b.binding}'`,
+        { timeout: 2000 }
+      );
+      existing.push(kbPath);
+      console.info(`[WaylandCtrl] GNOME keybinding: ${b.binding} → ${b.action}`);
+    }
+
+    // Update the master list
+    const pathList = existing.map(p => `'${p}'`).join(', ');
+    require('child_process').execSync(
+      `gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "[${pathList}]"`,
+      { timeout: 2000 }
+    );
+
+    console.info('[WaylandCtrl] ✅ GNOME keybindings registered successfully');
+  } catch (err) {
+    console.error('[WaylandCtrl] Failed to register GNOME keybindings:', err.message);
+    console.info('[WaylandCtrl] Manual setup: Settings → Keyboard → Custom Shortcuts');
+  }
 }
 
 /**
@@ -2492,6 +2776,26 @@ ipcMain.handle('rebind-hotkey', (event, key, accelerator) => {
  */
 function toggleRecording() {
   isRecording = !isRecording;
+
+  // Wayland: Make ALL Electron windows non-focusable BEFORE sending IPC.
+  // The renderer will start/stop MediaRecorder, resume AudioContext, update DOM,
+  // process transcription results — all of which cause XWayland focus requests.
+  // By setting focusable=false, Mutter ignores those requests and the user's
+  // Wayland-native app keeps focus throughout the entire record→transcribe→paste flow.
+  if (PLATFORM.isWayland) {
+    const allWindows = [mainWindow, miniWindow, typeof videoWindow !== 'undefined' ? videoWindow : null]
+      .filter(w => w && !w.isDestroyed());
+    allWindows.forEach(w => w.setFocusable(false));
+
+    // Re-enable focusable after everything settles.
+    // For start: 3s covers AudioContext + MediaRecorder + getUserMedia.
+    // For stop: 10s covers transcription + auto-paste (Python processing takes time).
+    const delay = isRecording ? 3000 : 10000;
+    setTimeout(() => {
+      allWindows.forEach(w => { if (!w.isDestroyed()) w.setFocusable(true); });
+    }, delay);
+  }
+
   safeSend('toggle-recording', isRecording);
   updateTrayMenu();
   updateTrayIcon(isRecording ? 'listening' : 'idle');
@@ -2928,45 +3232,122 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
   if (!text || !text.trim()) return false;
   try {
     const { clipboard } = require('electron');
-    clipboard.writeText(text.trim());
+    const trimmed = text.trim();
+    clipboard.writeText(trimmed);
+
+    // Wayland: Also write to the Wayland clipboard via wl-copy.
+    // Electron's clipboard.writeText() only writes to the X11 clipboard (via XWayland).
+    // Wayland-native apps (terminals, GNOME apps) read from the Wayland clipboard,
+    // which won't have the text unless we write it explicitly with wl-copy.
+    if (PLATFORM.isWayland) {
+      try {
+        const wlProc = require('child_process').spawn('wl-copy', [], {
+          env: { ...process.env, WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY || 'wayland-0', XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}` },
+          stdio: ['pipe', 'ignore', 'ignore'],
+          timeout: 3000
+        });
+        wlProc.stdin.write(trimmed);
+        wlProc.stdin.end();
+        // Wait for wl-copy to finish before pasting
+        await new Promise((resolve) => {
+          wlProc.on('close', resolve);
+          setTimeout(resolve, 1000); // Safety timeout
+        });
+        console.info('[AutoPaste] Wayland clipboard set via wl-copy');
+      } catch (e) {
+        console.warn('[AutoPaste] wl-copy failed:', e.message);
+      }
+    }
 
     // Remember original state
     const wasUserHidden = userHiddenWindow;
     const wasAlwaysOnTop = mainWindow && mainWindow.isAlwaysOnTop();
     const savedOpacity = mainWindow ? mainWindow.getOpacity() : 1;
 
-    // Make window invisible + non-topmost so target app gets the paste
-    // Using opacity instead of hide() to avoid window manager focus changes
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(false);
-      mainWindow.setOpacity(0);
+    // Wayland: Do NOT hide the window or manage focus. The user's Wayland-native
+    // app retains focus throughout recording. ydotool sends keystrokes to the
+    // Wayland-focused window directly via /dev/uinput, bypassing X11 entirely.
+    if (!PLATFORM.isWayland) {
+      // Non-Wayland (X11): use opacity approach to avoid focus shifts
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(false);
+        mainWindow.setOpacity(0);
+      }
+      await new Promise(r => setTimeout(r, 200));
     }
-    // Wait for the target app to be the active/focused app
-    await new Promise(r => setTimeout(r, 200));
 
-    // P0-1: Simulate Ctrl+V using async exec (non-blocking)
-    if (process.platform === 'linux') {
+    // P0-1: Simulate paste using the platform-detected paste strategy.
+    // On Wayland/Linux: send Ctrl+Shift+V (works in terminals AND most GUI apps
+    // including Electron, GTK, Qt). Then also send Ctrl+V as fallback for apps
+    // that only support Ctrl+V (rare on Linux).
+    if (PLATFORM.pasteStrategy === 'ydotool') {
+      const pasteSuccess = await new Promise((resolve) => {
+        // Ctrl+Shift+V: keycode 29=Ctrl, 42=Shift, 47=V
+        exec('ydotool key 29:1 42:1 47:1 47:0 42:0 29:0', { timeout: 3000 }, (err) => {
+          if (err) {
+            console.warn('[AutoPaste] ydotool Ctrl+Shift+V failed:', err.message);
+            // Fallback to Ctrl+V
+            exec('ydotool key 29:1 47:1 47:0 29:0', { timeout: 3000 }, (err2) => {
+              if (err2) console.error('[AutoPaste] ydotool Ctrl+V also failed:', err2.message);
+              resolve(!err2);
+            });
+          } else {
+            resolve(true);
+          }
+        });
+      });
+      if (!pasteSuccess) {
+        console.warn('[AutoPaste] Paste injection failed — text remains on clipboard');
+      }
+    } else if (PLATFORM.isWayland && (PLATFORM.pasteStrategy === 'xdotool' || PLATFORM.pasteStrategy === 'xdotool-fallback')) {
+      // Wayland: xdotool only reaches XWayland apps, not Wayland-native ones.
+      // Use ydotool (kernel-level /dev/uinput) which sends to the Wayland-focused window.
+      // Ctrl+Shift+V (29=Ctrl, 42=Shift, 47=V) works in terminals AND GUI apps.
+      const ydoSocket = _ydotoolSocket || '';
+      const ydoEnv = ydoSocket ? `YDOTOOL_SOCKET=${ydoSocket} ` : '';
+      const pasteSuccess = await new Promise((resolve) => {
+        exec(`${ydoEnv}ydotool key 29:1 42:1 47:1 47:0 42:0 29:0`, { timeout: 3000 }, (err) => {
+          if (err) {
+            console.warn('[AutoPaste] ydotool Ctrl+Shift+V failed, trying xdotool fallback:', err.message);
+            exec('xdotool key --clearmodifiers ctrl+v', { timeout: 3000 }, (err2) => {
+              if (err2) console.warn('[AutoPaste] xdotool also failed:', err2.message);
+              resolve(!err2);
+            });
+          } else {
+            resolve(true);
+          }
+        });
+      });
+      if (!pasteSuccess) {
+        console.warn('[AutoPaste] Paste injection failed — text remains on clipboard');
+      }
+    } else if (PLATFORM.pasteStrategy === 'xdotool' || PLATFORM.pasteStrategy === 'xdotool-fallback') {
+      // X11: xdotool works for all windows
       await new Promise((resolve) => exec('xdotool key --clearmodifiers ctrl+v', { timeout: 5000 }, resolve));
-    } else if (process.platform === 'darwin') {
+    } else if (PLATFORM.pasteStrategy === 'osascript') {
       await new Promise((resolve) => exec('osascript -e \'tell application "System Events" to keystroke "v" using command down\'', { timeout: 5000 }, resolve));
-    } else {
+    } else if (PLATFORM.pasteStrategy === 'powershell') {
       await new Promise((resolve) => exec('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"', { timeout: 5000 }, resolve));
     }
 
-    // Restore window visibility
-    await new Promise(r => setTimeout(r, 100));
-    if (mainWindow && !mainWindow.isDestroyed() && !wasUserHidden) {
-      mainWindow.setOpacity(savedOpacity || 1);
-      if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true);
-      console.info(`[AutoPaste] Pasted ${text.trim().length} chars, window restored`);
-    } else {
-      console.info(`[AutoPaste] Pasted ${text.trim().length} chars, window stays hidden (user preference)`);
+    // Restore window visibility (only needed on non-Wayland where we hid it)
+    if (!PLATFORM.isWayland) {
+      await new Promise(r => setTimeout(r, 100));
+      if (mainWindow && !mainWindow.isDestroyed() && !wasUserHidden) {
+        mainWindow.setOpacity(savedOpacity || 1);
+        if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true);
+      }
     }
+    console.info(`[AutoPaste] Pasted ${text.trim().length} chars`);
     return true;
   } catch (err) {
     // On failure, restore window
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setOpacity(1);
+      if (PLATFORM.isWayland) {
+        mainWindow.showInactive();
+      } else {
+        mainWindow.setOpacity(1);
+      }
     }
     console.error('[AutoPaste] Failed:', err.message);
     return false;
@@ -5123,6 +5504,17 @@ app.whenReady().then(async () => {
   createMacOSMenu();  // macOS application menu bar (Cmd+Q, Cmd+H, Cmd+M, Edit menu)
   sanitizeHotkeys();  // Reset any accidentally-bound system shortcuts (e.g. Ctrl+V)
   registerHotkeys();
+
+  // Wayland: Start local control server + register GNOME keybindings
+  // (Electron's globalShortcut X11 grabs don't work across the Wayland desktop)
+  if (PLATFORM.needsWaylandWorkaround) {
+    startWaylandControlServer();
+    startUserYdotoold();
+    if (PLATFORM.isGnome && PLATFORM.hasGsettings) {
+      registerGnomeKeybindings();
+    }
+  }
+
   _perfMark('Window + tray created');
 
   // macOS dark mode: forward system theme changes to renderer

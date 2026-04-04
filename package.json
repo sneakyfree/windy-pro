@@ -32,7 +32,8 @@
     "matrix-js-sdk": "^41.1.0",
     "node-fetch": "^2.7.0",
     "stripe": "^20.4.0",
-    "ws": "^8.19.0"
+    "ws": "^8.19.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "electron": "^28.0.0",
