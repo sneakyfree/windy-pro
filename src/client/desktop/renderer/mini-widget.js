@@ -252,13 +252,12 @@ function startPreview() {
   widget.style.opacity = '1';
   voiceLevelReceived = true;
   lastVoiceLevelTime = Date.now();
-  // Constant medium voice level — all sliders show their effect immediately
-  smoothLevel = 0.3;
   startVoiceAnimation();
-  // Keep the voice level alive (just refresh the timestamp so the loop doesn't
-  // fall back to "no data" mode)
+  // Continuously feed a medium voice level so all sliders show their effect.
+  // Must be in the loop because startVoiceAnimation() resets smoothLevel to 0.
   function keepAlive() {
     if (!previewActive) return;
+    smoothLevel = 0.3; // constant medium level — shows glow, jitter, etc.
     lastVoiceLevelTime = Date.now();
     requestAnimationFrame(keepAlive);
   }
