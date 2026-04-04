@@ -459,6 +459,208 @@ The app should detect at startup if ydotool/wl-copy are available and `/dev/uinp
 
 ---
 
+## Dead Ends — Approaches That Do NOT Work
+
+These are things we tried during the debugging session that failed. Future developers
+will be tempted to try them again. Don't.
+
+### Dead End 1: Using `org.gnome.Shell.Eval` for Focus Detection
+**What we tried:** `gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Eval "global.display.focus_window.get_wm_class()"`
+**Why it fails:** GNOME disabled Shell.Eval for security starting around GNOME 45. Returns `(false, '')` on GNOME 45+. There is no replacement API. Do not attempt to use it or find workarounds — the entire focus-save/restore approach is unnecessary once you use `setFocusable(false)`.
+**Time wasted:** ~1 hour trying to get this working before discovering it was disabled.
+
+### Dead End 2: Using `xdotool getactivewindow` to Save the Focused Window
+**What we tried:** Capture the X11 window ID before recording starts, then `xdotool windowactivate` to restore focus after.
+**Why it fails:** On Wayland, XWayland only sees X11 windows. Wayland-native apps (terminals, GNOME apps) don't appear in the X11 window stack at all. `xdotool getactivewindow` returns the Windy Pro window itself (or another XWayland window), never the user's Wayland-native app.
+**Verification:** Run `xprop -root _NET_CLIENT_LIST_STACKING` — you'll only see XWayland windows. Wayland-native windows are invisible.
+**Time wasted:** ~45 minutes.
+
+### Dead End 3: Using `mainWindow.blur()` to Release Focus
+**What we tried:** After recording starts, call `mainWindow.blur()` to tell X11 to release keyboard focus.
+**Why it fails:** `blur()` generates X11 focus events that Mutter processes, which can actually CAUSE focus changes rather than prevent them. The blur event propagates through XWayland to Mutter, which may respond by focusing the next window in the stack — which might not be the user's target app.
+**Better approach:** `setFocusable(false)` prevents focus acquisition entirely, without generating any focus events.
+
+### Dead End 4: Using `mainWindow.hide()` During Paste to Transfer Focus
+**What we tried:** Hide the Electron window before pasting so Mutter would naturally focus the next window (the user's app), then show it again after paste.
+**Why it fails:** `hide()` removes the window from the screen entirely. When we call `showInactive()` to bring it back, Mutter may or may not re-stack it correctly. The window "disappears for 2 seconds then comes back" — terrible UX. Also, hiding an XWayland window triggers Mutter to run its focus-change logic, which may not focus the correct window.
+**Time wasted:** ~30 minutes.
+
+### Dead End 5: Using `mainWindow.setAlwaysOnTop(false)` to Avoid Focus Steal
+**What we tried:** Drop `alwaysOnTop` when recording starts so Mutter doesn't prefer this window.
+**Why it fails:** Changing `alwaysOnTop` at runtime generates X11 property change events. Mutter processes these and may re-evaluate the focus stack, potentially changing focus. It's the same problem as `blur()` — any window manipulation generates events that Mutter reacts to unpredictably.
+
+### Dead End 6: Trying to Use `ydotool` Without Proper `/dev/uinput` Access
+**What we tried:** The app's platform-detect.js found `ydotool` installed (via `which ydotool`) and reported `ydotool=true`. But the paste strategy was set to `xdotool` anyway, and when we did try ydotool, it silently failed.
+**Why it fails:** `ydotool` requires a running `ydotoold` daemon with write access to `/dev/uinput`. On Fedora, ydotoold runs as root with a root-only socket. The user-level process gets "Permission denied" or "No such file" but the error may not propagate clearly through `child_process.exec()`.
+**Diagnostic commands:**
+```bash
+ls -la /dev/uinput              # Should be crw-rw---- or crw-rw-rw-
+ls -la /tmp/.ydotool_socket     # Root socket — user can't use it
+groups                           # Should include 'input'
+YDOTOOL_SOCKET=/tmp/ydotool-$(id -u).socket ydotool key 28:1 28:0  # Test keystroke
+```
+**Time wasted:** ~1 hour because ydotool "looked installed" but was non-functional.
+
+### Dead End 7: Relying on `PLATFORM.pasteStrategy` Without Checking What It Actually Is
+**What we tried:** Modified the `ydotool` branch of the paste code, but the app was actually using the `xdotool` branch because `platform-detect.js` returns `pasteStrategy: 'xdotool'` on Wayland (by design — xdotool avoids the GNOME "Allow Remote Interaction" dialog).
+**Lesson:** Always check what `PLATFORM.pasteStrategy` actually returns on the target system. Don't assume. Log it: `console.info('[Platform] Strategies:', PLATFORM.pasteStrategy)`.
+**Time wasted:** ~30 minutes editing the wrong code branch.
+
+### Dead End 8: Pre-Warming Only Audio But Not Video
+**What we tried:** The mic stream was pre-warmed at startup (existing code), but the video stream was requested fresh via `getUserMedia({ video })` when batch recording started.
+**Why it fails:** The fresh video `getUserMedia` triggers a camera permission/access request that causes XWayland to request focus. The cursor disappeared even though the mic stream was pre-warmed.
+**Lesson:** Pre-warm ALL media streams (audio AND video) at startup. Any `getUserMedia` call can steal focus.
+
+---
+
+## Diagnostic Commands Reference
+
+These are the exact commands used during debugging. Copy-paste ready.
+
+### Check Display Server
+```bash
+echo $XDG_SESSION_TYPE              # 'wayland' or 'x11'
+echo $WAYLAND_DISPLAY               # 'wayland-0' if Wayland
+loginctl show-session $(loginctl list-sessions --no-legend | awk '{print $1}' | head -1) -p Type --value
+```
+
+### Check What XWayland Can See
+```bash
+# List ALL X11 windows (XWayland only sees these, NOT Wayland-native apps)
+xprop -root _NET_CLIENT_LIST_STACKING | grep -oP '0x[0-9a-f]+' | while read wid; do
+  cls=$(xprop -id "$wid" WM_CLASS 2>/dev/null | grep -oP '"[^"]*"' | head -1 | tr -d '"')
+  echo "$wid: $cls"
+done
+```
+
+### Check GNOME Keybindings
+```bash
+# List all custom keybindings
+gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings
+
+# Check a specific binding (replace custom0 with custom1, custom2, etc.)
+KBPATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
+gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${KBPATH} name
+gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${KBPATH} command
+gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${KBPATH} binding
+
+# Check GNOME keybinding daemon logs for parse errors
+journalctl --user -u org.gnome.SettingsDaemon.MediaKeys --since "5 minutes ago" 2>/dev/null
+```
+
+### Check ydotool
+```bash
+# Is ydotoold running?
+pgrep -a ydotoold
+
+# What sockets exist?
+ls -la /tmp/.ydotool_socket /tmp/ydotool-*.socket 2>/dev/null
+
+# Is /dev/uinput accessible?
+ls -la /dev/uinput
+# Must be crw-rw---- with group 'input', or crw-rw-rw-
+
+# Is user in input group?
+groups | grep input
+
+# Test sending a keystroke (Enter key)
+YDOTOOL_SOCKET=/tmp/ydotool-$(id -u).socket ydotool key 28:1 28:0
+echo "Exit: $?"
+```
+
+### Check Clipboard
+```bash
+# Write to Wayland clipboard and read back
+echo "test" | wl-copy && wl-paste
+# Should print: test
+
+# Check if Electron's X11 clipboard and Wayland clipboard are in sync
+xclip -selection clipboard -o 2>/dev/null    # X11 clipboard
+wl-paste 2>/dev/null                          # Wayland clipboard
+# These may differ if XWayland surface doesn't have compositor focus
+```
+
+### Check Windy Pro Control Server
+```bash
+# Is the control server running?
+ss -tlnp | grep 18765
+
+# Test toggle recording
+curl -s http://127.0.0.1:18765/toggle-recording
+# Should print: OK
+
+# Test with focus window param
+curl -s "http://127.0.0.1:18765/toggle-recording?focuswin=12345"
+```
+
+### Check Running Electron Processes
+```bash
+# All Electron windows
+ps aux | grep "electron/dist/electron" | grep -v grep | grep -v antigravity
+
+# Kill stale instances (Electron uses a singleton lock)
+rm -f ~/.config/windy-pro/Singleton*
+kill -9 $(pgrep -f "electron/dist/electron" | tr '\n' ' ') 2>/dev/null
+```
+
+### Check Electron App Logs
+```bash
+# If launched with redirect:
+tail -50 /tmp/windy-electron.log
+
+# Key log entries to look for:
+grep -E "WaylandCtrl|WaylandFocus|ydotool|AutoPaste|Hotkey|Platform" /tmp/windy-electron.log
+```
+
+---
+
+## Chronological Debugging Narrative
+
+This is the order in which issues were discovered and fixed during the
+2026-04-04 debugging session. Reading this gives the full "how we got here" context.
+
+1. **App launched but keyboard shortcuts did nothing.** The GNOME keybinding for
+   toggle-recording used a complex `bash -c` command with `Shell.Eval` that GNOME
+   couldn't parse. Fixed by simplifying to `curl`.
+
+2. **Hotkey now fires, but cursor disappears from target app.** The `_saveWaylandFocus()`
+   function used `Shell.Eval` which is disabled on GNOME 45+. Focus was never saved,
+   never restored. Tried replacing with `xdotool getactivewindow` — failed because
+   XWayland can't see Wayland-native windows.
+
+3. **Realized focus-save/restore was the wrong approach entirely.** Instead of trying to
+   restore focus after the fact, prevent focus stealing in the first place. Added
+   `setFocusable(false)` to `toggleRecording()`.
+
+4. **Cursor still disappeared.** `setFocusable(false)` was only set during recording START,
+   not STOP. When recording stopped, the renderer did heavy work (transcription, DOM updates)
+   and stole focus. Fixed by also setting non-focusable during stop, with 10s timeout.
+
+5. **Cursor still disappeared.** `getUserMedia({ video })` was called fresh during batch
+   recording start, stealing focus. Added video stream pre-warming at init.
+
+6. **Focus now preserved! But text doesn't paste to Wayland-native terminal.**
+   Investigated paste strategy — discovered `PLATFORM.pasteStrategy === 'xdotool'`, not
+   `'ydotool'`. xdotool can't reach Wayland-native windows.
+
+7. **Tried ydotool — "permission denied."** The system ydotoold runs as root. User can't
+   access `/dev/uinput`. Fixed with `pkexec chmod 0666 /dev/uinput` + udev rule + adding
+   user to `input` group. App now starts its own user-level ydotoold.
+
+8. **ydotool working, but paste still doesn't appear in terminal.** Discovered clipboard
+   isolation — Electron's `clipboard.writeText()` only writes to X11 clipboard. Added
+   `wl-copy` to also write to Wayland clipboard.
+
+9. **Clipboard set, ydotool fires, but terminal doesn't paste.** Terminals use
+   `Ctrl+Shift+V`, not `Ctrl+V`. Changed ydotool key sequence from `29:1 47:1 47:0 29:0`
+   to `29:1 42:1 47:1 47:0 42:0 29:0` (added Shift key).
+
+10. **Everything works.** Tested in AntiGravity (XWayland), Cloud Code terminal
+    (Wayland-native ptyxis), Google Chrome search box. Cursor blinks throughout, text
+    pastes to cursor in all cases.
+
+---
+
 ## Key Takeaways
 
 1. **Wayland is not X11 with a new coat of paint.** It has fundamentally different security guarantees. Every assumption about focus, clipboard, and input injection from X11 is wrong on Wayland.
