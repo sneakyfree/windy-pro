@@ -254,6 +254,25 @@
         </select>
       </div>
 
+      <!-- Voice Input Mode -->
+      <div style="margin-bottom:20px;">
+        <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">🎙️ Voice Input Mode</label>
+        <select id="settings-voice-mode"
+               style="width:100%; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px;" aria-label="Voice input mode">
+          <option value="type_to_send">Type to send — review before sending</option>
+          <option value="talk_to_send">Talk to send — auto-send after transcription</option>
+        </select>
+        <div style="font-size:10px; color:var(--chat-text-muted); margin-top:4px;">Quick tap = voice-to-text. Long press = voice note.</div>
+      </div>
+
+      <!-- Silence Timeout -->
+      <div style="margin-bottom:20px;">
+        <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">Silence Timeout (seconds)</label>
+        <input id="settings-silence-timeout" type="number" min="1" max="10" value="3"
+               style="width:80px; padding:10px 12px; background:var(--chat-bg); border:1px solid var(--chat-border); border-radius:8px; color:var(--chat-text); font-size:13px;" aria-label="Silence timeout">
+        <span style="font-size:10px; color:var(--chat-text-muted); margin-left:8px;">Auto-stop recording after this much silence</span>
+      </div>
+
       <!-- User ID (read-only) -->
       <div style="margin-bottom:20px;">
         <label style="font-size:12px; font-weight:600; display:block; margin-bottom:6px; color:var(--chat-text-dim);">Your User ID</label>
@@ -590,11 +609,32 @@
 
       const senderHtml = !isOwn && m.senderName ? `<div class="message-sender">${escapeHtml(m.senderName)}</div>` : '';
 
+      // Voice message rendering
+      let bodyHtml;
+      if (m._voiceMessage || (m.msgtype === 'm.audio' && m.info)) {
+        const dur = m._voiceMessage ? m._voiceMessage.duration : (m.info.duration || 0);
+        const durSec = Math.round(dur / 1000);
+        const durStr = `${Math.floor(durSec / 60)}:${String(durSec % 60).padStart(2, '0')}`;
+        const audioId = 'voice-' + (m.eventId || Math.random().toString(36).slice(2));
+        bodyHtml = `
+          <div class="voice-message-player" style="display:flex; align-items:center; gap:8px; padding:4px 0;">
+            <button onclick="playVoiceMessage('${audioId}')" class="voice-play-btn" id="play-${audioId}"
+              style="width:32px; height:32px; border-radius:50%; border:none; background:rgba(255,255,255,0.1); color:var(--chat-text); font-size:14px; cursor:pointer;">▶</button>
+            <div style="flex:1; height:24px; background:rgba(255,255,255,0.05); border-radius:4px; overflow:hidden; position:relative;">
+              <div class="voice-waveform-bars" id="wave-${audioId}" style="display:flex; align-items:center; height:100%; gap:1px; padding:0 4px;"></div>
+              <div class="voice-progress" id="prog-${audioId}" style="position:absolute; top:0; left:0; height:100%; width:0%; background:rgba(34,197,94,0.2); transition:width 0.1s;"></div>
+            </div>
+            <span style="font-size:11px; color:var(--chat-text-muted); font-variant-numeric:tabular-nums;">${durStr}</span>
+          </div>`;
+      } else {
+        bodyHtml = `<div class="message-text" dir="auto">${escapeHtml(m.body)}</div>`;
+      }
+
       return `
         <div class="message-group ${isOwn ? 'own' : ''}">
           <div class="message-bubble ${isOwn ? 'own' : 'other'}${pendingClass}">
             ${senderHtml}
-            <div class="message-text" dir="auto">${escapeHtml(m.body)}</div>
+            ${bodyHtml}
             ${translationHtml}
             <div class="message-time">${time}${m._pending ? ' ⏳' : ''}</div>
           </div>
@@ -760,6 +800,9 @@
       document.getElementById('settings-display-name').value = settings.displayName || '';
       document.getElementById('settings-language').value = settings.language || 'en';
       document.getElementById('settings-user-id').value = settings.userId || '';
+      // Voice settings
+      document.getElementById('settings-voice-mode').value = _voiceMode;
+      document.getElementById('settings-silence-timeout').value = _silenceTimeoutMs / 1000;
       document.getElementById('settings-panel').style.display = 'block';
     }
 
@@ -804,6 +847,14 @@
 
       await windyChat.setChatSettings(settings);
       myLanguage = settings.language;
+
+      // Save voice settings locally
+      _voiceMode = document.getElementById('settings-voice-mode').value;
+      _silenceTimeoutMs = (parseInt(document.getElementById('settings-silence-timeout').value) || 3) * 1000;
+      try {
+        localStorage.setItem('windy_voice_mode', _voiceMode);
+        localStorage.setItem('windy_silence_timeout', String(_silenceTimeoutMs / 1000));
+      } catch (_) {}
 
       status.style.color = '';
       status.textContent = '✅ Settings saved!';
@@ -1091,12 +1142,65 @@
     });
 
     // ═══════════════════════════════════════════════════════════
-    //  TASK 1 & 2: Voice Input (Windy Word → Chat)
+    //  TASK 1: Voice-to-Text (Windy Word → Chat)
+    //  Enhanced: green strobe, silence detection, voice mode
     // ═══════════════════════════════════════════════════════════
 
     let _voiceRecorder = null;
     let _voiceTimerInterval = null;
     let _voiceStartTime = null;
+    let _silenceTimeout = null;
+    let _voiceMode = 'type_to_send'; // or 'talk_to_send'
+    let _silenceTimeoutMs = 3000;
+    let _longPressTimer = null;
+    let _isLongPress = false;
+
+    // Load voice settings
+    function loadVoiceSettings() {
+      try {
+        _voiceMode = localStorage.getItem('windy_voice_mode') || 'type_to_send';
+        _silenceTimeoutMs = (parseInt(localStorage.getItem('windy_silence_timeout')) || 3) * 1000;
+      } catch (_) {}
+    }
+
+    // Mic button: click = voice-to-text, long-press = voice note
+    function setupMicButton() {
+      const micBtn = document.getElementById('mic-btn');
+      if (!micBtn) return;
+
+      // Long-press detection for voice notes
+      micBtn.addEventListener('mousedown', (e) => {
+        if (_voiceRecorder && _voiceRecorder.isRecording) return;
+        _isLongPress = false;
+        _longPressTimer = setTimeout(() => {
+          _isLongPress = true;
+          startVoiceNote();
+        }, 500); // 500ms = long press
+      });
+
+      micBtn.addEventListener('mouseup', () => {
+        clearTimeout(_longPressTimer);
+        if (_isLongPress && _voiceRecorder && _voiceRecorder.isVoiceNote) {
+          stopVoiceNote();
+        }
+      });
+
+      micBtn.addEventListener('mouseleave', () => {
+        clearTimeout(_longPressTimer);
+        // If recording a voice note and mouse leaves, cancel
+        if (_isLongPress && _voiceRecorder && _voiceRecorder.isVoiceNote) {
+          cancelVoiceCapture();
+          _isLongPress = false;
+        }
+      });
+
+      // Prevent default click when using long-press
+      micBtn.removeAttribute('onclick');
+      micBtn.addEventListener('click', (e) => {
+        if (_isLongPress) { _isLongPress = false; return; }
+        toggleVoiceCapture();
+      });
+    }
 
     async function toggleVoiceCapture() {
       if (_voiceRecorder && _voiceRecorder.isRecording) {
@@ -1106,11 +1210,50 @@
       }
     }
 
+    function setMicState(state) {
+      const micBtn = document.getElementById('mic-btn');
+      micBtn.className = 'chat-mic-btn';
+      switch (state) {
+        case 'idle':
+          micBtn.textContent = '🎙️';
+          micBtn.title = 'Voice input (tap) / Voice note (hold)';
+          break;
+        case 'recording':
+          micBtn.textContent = '⏹️';
+          micBtn.classList.add('recording-green');
+          micBtn.title = 'Stop recording';
+          break;
+        case 'processing':
+          micBtn.textContent = '⏳';
+          micBtn.classList.add('processing');
+          micBtn.title = 'Transcribing...';
+          break;
+        case 'error':
+          micBtn.textContent = '🎙️';
+          micBtn.classList.add('error-flash');
+          micBtn.title = 'Voice input failed';
+          setTimeout(() => setMicState('idle'), 1500);
+          break;
+        case 'voice-note':
+          micBtn.textContent = '🔴';
+          micBtn.classList.add('recording-voicenote');
+          micBtn.title = 'Release to send voice note';
+          break;
+      }
+    }
+
     async function startVoiceCapture() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 }
         });
+
+        // Set up analyser for silence detection
+        const audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
 
         const mediaRecorder = new MediaRecorder(stream, {
           mimeType: 'audio/webm;codecs=opus',
@@ -1123,14 +1266,11 @@
         };
 
         mediaRecorder.start(100);
-        _voiceRecorder = { mediaRecorder, stream, chunks, isRecording: true };
+        _voiceRecorder = { mediaRecorder, stream, chunks, isRecording: true, audioContext, analyser, isVoiceNote: false };
         _voiceStartTime = Date.now();
 
-        // Update UI
-        const micBtn = document.getElementById('mic-btn');
-        micBtn.textContent = '⏹️';
-        micBtn.classList.add('recording');
-        micBtn.title = 'Stop recording';
+        // UI: green strobe
+        setMicState('recording');
         document.getElementById('voice-recording-bar').style.display = 'flex';
 
         // Timer
@@ -1141,26 +1281,59 @@
           document.getElementById('voice-timer').textContent = `${m}:${s}`;
         }, 200);
 
+        // Silence detection
+        startSilenceDetection(analyser);
+
       } catch (err) {
+        setMicState('error');
         showVoiceToast('Microphone access denied. Check permissions.', true);
       }
+    }
+
+    function startSilenceDetection(analyser) {
+      let silentSince = null;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      function checkSilence() {
+        if (!_voiceRecorder || !_voiceRecorder.isRecording) return;
+
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
+
+        if (avg < 8) { // Silence threshold
+          if (!silentSince) silentSince = Date.now();
+          const silentMs = Date.now() - silentSince;
+          if (silentMs >= _silenceTimeoutMs && (Date.now() - _voiceStartTime) > 1000) {
+            // At least 1s of audio + silence timeout reached → auto-stop
+            stopVoiceCapture();
+            return;
+          }
+        } else {
+          silentSince = null;
+        }
+
+        _silenceTimeout = requestAnimationFrame(checkSilence);
+      }
+
+      _silenceTimeout = requestAnimationFrame(checkSilence);
     }
 
     async function stopVoiceCapture() {
       if (!_voiceRecorder) return;
 
       clearInterval(_voiceTimerInterval);
+      if (_silenceTimeout) cancelAnimationFrame(_silenceTimeout);
 
       return new Promise((resolve) => {
         _voiceRecorder.mediaRecorder.onstop = async () => {
           const blob = new Blob(_voiceRecorder.chunks, { type: 'audio/webm;codecs=opus' });
           _voiceRecorder.stream.getTracks().forEach(t => t.stop());
+          if (_voiceRecorder.audioContext) _voiceRecorder.audioContext.close().catch(() => {});
           _voiceRecorder = null;
 
-          // Reset UI
-          resetVoiceUI();
-
-          // Show transcribing state
+          // Yellow processing state
+          setMicState('processing');
           const bar = document.getElementById('voice-recording-bar');
           bar.style.display = 'flex';
           bar.innerHTML = `<div class="voice-transcribing">Transcribing<div class="dots"><span></span><span></span><span></span></div></div>`;
@@ -1168,19 +1341,163 @@
           try {
             const text = await transcribeAudioBlob(blob);
             bar.style.display = 'none';
+            setMicState('idle');
 
             if (text && text.trim()) {
               const input = document.getElementById('message-input');
               input.value = text.trim();
               input.focus();
-              // Auto-send
-              sendMessage();
+
+              if (_voiceMode === 'talk_to_send') {
+                sendMessage();
+              }
+              // In 'type_to_send' mode, user reviews and hits Enter
             } else {
               showVoiceToast('No speech detected. Try again.', true);
             }
           } catch (err) {
             bar.style.display = 'none';
+            setMicState('error');
             showVoiceToast('Voice capture failed — try typing instead', true);
+          }
+          resolve();
+        };
+
+        _voiceRecorder.mediaRecorder.stop();
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  TASK 2: Voice Notes (Long-Press → Audio Message)
+    // ═══════════════════════════════════════════════════════════
+
+    async function startVoiceNote() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 48000 }
+        });
+
+        // Analyser for waveform visualization
+        const audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType: 'audio/webm;codecs=opus',
+          audioBitsPerSecond: 64000,
+        });
+
+        const chunks = [];
+        mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+        mediaRecorder.start(100);
+
+        _voiceRecorder = { mediaRecorder, stream, chunks, isRecording: true, audioContext, analyser, isVoiceNote: true };
+        _voiceStartTime = Date.now();
+
+        setMicState('voice-note');
+        const bar = document.getElementById('voice-recording-bar');
+        bar.style.display = 'flex';
+        bar.innerHTML = `
+          <div class="voice-pulse" style="background:#ef4444;"></div>
+          <span id="voice-timer">0:00</span>
+          <canvas id="voice-waveform" width="120" height="24" style="flex:1;"></canvas>
+          <span style="font-size:11px; color:var(--chat-text-dim);">Voice note — release to send</span>
+        `;
+
+        // Timer + waveform
+        _voiceTimerInterval = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - _voiceStartTime) / 1000);
+          const m = Math.floor(elapsed / 60);
+          const s = String(elapsed % 60).padStart(2, '0');
+          const timerEl = document.getElementById('voice-timer');
+          if (timerEl) timerEl.textContent = `${m}:${s}`;
+          drawWaveform(analyser);
+        }, 100);
+
+      } catch (err) {
+        setMicState('error');
+        showVoiceToast('Microphone access denied', true);
+      }
+    }
+
+    function drawWaveform(analyser) {
+      const canvas = document.getElementById('voice-waveform');
+      if (!canvas || !analyser) return;
+      const ctx = canvas.getContext('2d');
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const barWidth = 2;
+      const gap = 1;
+      const bars = Math.min(Math.floor(canvas.width / (barWidth + gap)), data.length);
+
+      for (let i = 0; i < bars; i++) {
+        const val = data[i] / 255;
+        const h = Math.max(2, val * canvas.height);
+        const x = i * (barWidth + gap);
+        const y = (canvas.height - h) / 2;
+
+        ctx.fillStyle = `rgba(239, 68, 68, ${0.4 + val * 0.6})`;
+        ctx.fillRect(x, y, barWidth, h);
+      }
+    }
+
+    async function stopVoiceNote() {
+      if (!_voiceRecorder || !_voiceRecorder.isVoiceNote) return;
+
+      clearInterval(_voiceTimerInterval);
+      const duration = Date.now() - _voiceStartTime;
+
+      // If too short (< 500ms), treat as accidental
+      if (duration < 500) {
+        cancelVoiceCapture();
+        return;
+      }
+
+      return new Promise((resolve) => {
+        _voiceRecorder.mediaRecorder.onstop = async () => {
+          const blob = new Blob(_voiceRecorder.chunks, { type: 'audio/ogg; codecs=opus' });
+          _voiceRecorder.stream.getTracks().forEach(t => t.stop());
+          if (_voiceRecorder.audioContext) _voiceRecorder.audioContext.close().catch(() => {});
+          _voiceRecorder = null;
+
+          resetVoiceUI();
+
+          // Send as voice message via Matrix (m.audio)
+          try {
+            if (currentRoomId && typeof windyChat !== 'undefined' && windyChat.sendVoiceMessage) {
+              await windyChat.sendVoiceMessage(currentRoomId, blob, {
+                duration: Math.round(duration),
+                mimetype: 'audio/ogg; codecs=opus',
+                size: blob.size,
+              });
+
+              // Show optimistic voice message in chat
+              appendMessage({
+                senderId: myUserId,
+                body: '🎤 Voice message',
+                timestamp: Date.now(),
+                _pending: true,
+                _voiceMessage: { blob, duration },
+              });
+              scrollToBottom();
+            } else {
+              // Fallback: transcribe and send as text
+              showVoiceToast('Voice notes require chat connection — transcribing to text', false);
+              setMicState('processing');
+              const text = await transcribeAudioBlob(blob);
+              setMicState('idle');
+              if (text && text.trim()) {
+                document.getElementById('message-input').value = text.trim();
+                sendMessage();
+              }
+            }
+          } catch (err) {
+            setMicState('error');
+            showVoiceToast('Failed to send voice note', true);
           }
           resolve();
         };
@@ -1192,7 +1509,9 @@
     function cancelVoiceCapture() {
       if (_voiceRecorder) {
         clearInterval(_voiceTimerInterval);
+        if (_silenceTimeout) cancelAnimationFrame(_silenceTimeout);
         _voiceRecorder.stream.getTracks().forEach(t => t.stop());
+        if (_voiceRecorder.audioContext) _voiceRecorder.audioContext.close().catch(() => {});
         _voiceRecorder.mediaRecorder.stop();
         _voiceRecorder = null;
       }
@@ -1200,12 +1519,10 @@
     }
 
     function resetVoiceUI() {
-      const micBtn = document.getElementById('mic-btn');
-      micBtn.textContent = '🎙️';
-      micBtn.classList.remove('recording');
-      micBtn.title = 'Voice input (Windy Word)';
-      document.getElementById('voice-recording-bar').style.display = 'none';
-      document.getElementById('voice-recording-bar').innerHTML = `
+      setMicState('idle');
+      const bar = document.getElementById('voice-recording-bar');
+      bar.style.display = 'none';
+      bar.innerHTML = `
         <div class="voice-pulse"></div>
         <span id="voice-timer">0:00</span>
         <span style="flex:1; font-size:12px; color:var(--chat-text-dim);">Recording... speak now</span>
@@ -1257,6 +1574,48 @@
           ws.onerror = () => { clearTimeout(timeout); reject(new Error('WebSocket error')); };
         } catch (err) { clearTimeout(timeout); reject(err); }
       });
+    }
+
+    // Voice message playback
+    const _voicePlayers = {};
+    function playVoiceMessage(audioId) {
+      const btn = document.getElementById('play-' + audioId);
+      const prog = document.getElementById('prog-' + audioId);
+
+      if (_voicePlayers[audioId]) {
+        // Pause
+        _voicePlayers[audioId].pause();
+        delete _voicePlayers[audioId];
+        if (btn) btn.textContent = '▶';
+        return;
+      }
+
+      // Try to find audio URL from Matrix event
+      // For now, generate waveform bars for visual
+      const waveContainer = document.getElementById('wave-' + audioId);
+      if (waveContainer && !waveContainer.hasChildNodes()) {
+        for (let i = 0; i < 30; i++) {
+          const bar = document.createElement('div');
+          const h = Math.random() * 16 + 4;
+          bar.style.cssText = `width:2px; height:${h}px; background:var(--chat-text-muted); border-radius:1px; flex-shrink:0;`;
+          waveContainer.appendChild(bar);
+        }
+      }
+
+      if (btn) btn.textContent = '⏸';
+      // Simulated playback progress (real audio would use HTMLAudioElement)
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 2;
+        if (prog) prog.style.width = progress + '%';
+        if (progress >= 100) {
+          clearInterval(interval);
+          if (btn) btn.textContent = '▶';
+          if (prog) prog.style.width = '0%';
+          delete _voicePlayers[audioId];
+        }
+      }, 100);
+      _voicePlayers[audioId] = { pause: () => clearInterval(interval) };
     }
 
     function showVoiceToast(message, isError) {
@@ -1489,6 +1848,8 @@
     const _originalInit = init;
     init = async function() {
       await _originalInit();
+      loadVoiceSettings();
+      setupMicButton();
       setupHatchDetection();
 
       // Request notification permission for hatch alerts

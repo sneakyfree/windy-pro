@@ -752,8 +752,49 @@ select:focus-visible,
   background: rgba(255, 255, 255, 0.08);
   transform: scale(1.1);
 }
+/* Green strobe — recording voice-to-text */
+.chat-mic-btn.recording-green {
+  animation: mic-green-strobe 0.8s ease-in-out infinite;
+  background: rgba(34, 197, 94, 0.15);
+}
+@keyframes mic-green-strobe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); opacity: 1; }
+  50% { box-shadow: 0 0 8px 4px rgba(34, 197, 94, 0.3); opacity: 0.8; }
+}
+
+/* Yellow pulse — processing/transcribing */
+.chat-mic-btn.processing {
+  animation: mic-yellow-pulse 1s ease-in-out infinite;
+  background: rgba(234, 179, 8, 0.15);
+}
+@keyframes mic-yellow-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.4); }
+  50% { opacity: 0.6; box-shadow: 0 0 6px 3px rgba(234, 179, 8, 0.2); }
+}
+
+/* Red flash — error */
+.chat-mic-btn.error-flash {
+  animation: mic-red-flash 0.3s ease-in-out 3;
+  background: rgba(239, 68, 68, 0.15);
+}
+@keyframes mic-red-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; background: rgba(239, 68, 68, 0.3); }
+}
+
+/* Red record — voice note */
+.chat-mic-btn.recording-voicenote {
+  animation: mic-voicenote-pulse 1s ease-in-out infinite;
+  background: rgba(239, 68, 68, 0.15);
+}
+@keyframes mic-voicenote-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+  50% { box-shadow: 0 0 10px 5px rgba(239, 68, 68, 0.3); }
+}
+
+/* Legacy fallback */
 .chat-mic-btn.recording {
-  animation: mic-pulse 1s ease-in-out infinite;
+  animation: mic-green-strobe 0.8s ease-in-out infinite;
 }
 @keyframes mic-pulse {
   0%, 100% { opacity: 1; }
