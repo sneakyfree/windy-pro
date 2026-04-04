@@ -1269,10 +1269,10 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
     const mailProduct = findProduct('windy_mail');
     const eternitasProduct = findProduct('eternitas');
 
-    // Fetch Eternitas passport if provisioned
+    // Fetch Eternitas passport if provisioned (include trust_score)
     const passport = db.prepare(
-      'SELECT passport_number FROM eternitas_passports WHERE identity_id = ?',
-    ).get(userId) as { passport_number: string } | undefined;
+      'SELECT passport_number, trust_score FROM eternitas_passports WHERE identity_id = ?',
+    ).get(userId) as { passport_number: string; trust_score: number | null } | undefined;
 
     res.json({
       windy_identity_id: user.windy_identity_id || userId,
@@ -1304,7 +1304,10 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
         eternitas: {
           provisioned: eternitasProduct?.status === 'active',
           health: healthOf(eternitasHealth),
-          ...(passport ? { passport: passport.passport_number } : {}),
+          ...(passport ? {
+            passport: passport.passport_number,
+            trust_score: passport.trust_score != null ? Math.round(passport.trust_score * 100) : null,
+          } : {}),
           ...(eternitasProduct ? { status: eternitasProduct.status } : { status: 'not_provisioned' }),
         },
         windy_fly: findProduct('windy_fly') || { status: 'not_provisioned', provisioned: false },
