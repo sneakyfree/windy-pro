@@ -1202,12 +1202,8 @@ ipcMain.on('mini-toggle-panel', (event, open) => {
   // +100 for 50px glow padding on each side
   const widgetSize = (widgetSettings.size || 56) + 100;
   if (open) {
-    // Expand window to fit panel (widget + panel below)
-    const panelWidth = 250;
-    const panelHeight = 380;
-    const newWidth = Math.max(widgetSize, panelWidth);
-    const newHeight = widgetSize + panelHeight;
-    miniWindow.setSize(newWidth, newHeight);
+    // Fixed size: panel is at 200px top, ~380px tall + save button + margin
+    miniWindow.setSize(250, 620);
     miniWindow.setResizable(false);
   } else {
     // Shrink back to widget size
@@ -1224,16 +1220,12 @@ ipcMain.on('mini-save-settings', (event, newSettings) => {
     // +100 for 50px glow padding on each side
     const winSize = newSettings.size + 100;
     if (miniWindow && !miniWindow.isDestroyed()) {
-      // Only resize if panel is NOT open
+      // Only resize if panel is NOT open (panel-open is fixed at 250x620)
       const [w, h] = miniWindow.getSize();
-      if (h < 300) { // panel not open
+      if (h < 300) {
         miniWindow.setSize(winSize, winSize);
-      } else {
-        // Panel is open — keep panel-open dimensions but update width
-        const panelWidth = 250;
-        const newWidth = Math.max(winSize, panelWidth);
-        miniWindow.setSize(newWidth, h);
       }
+      // When panel is open, DON'T resize — panel is fixed at 250x620
     }
   }
 });

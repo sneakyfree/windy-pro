@@ -389,6 +389,12 @@ document.getElementById('panel').addEventListener('mousedown', (e) => {
   e.stopPropagation();
 });
 
+// Save & Close button
+document.getElementById('saveBtn').addEventListener('click', () => {
+  saveAndApply();
+  togglePanel(); // closes panel + stops preview
+});
+
 // ═══ Manual drag ═══
 let isDragging = false;
 let dragStartX = 0, dragStartY = 0;
