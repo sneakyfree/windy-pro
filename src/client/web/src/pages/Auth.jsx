@@ -9,7 +9,25 @@ export default function Auth() {
     const [name, setName] = useState('')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
+    const [forgotSent, setForgotSent] = useState(false)
+    const [agreedToTerms, setAgreedToTerms] = useState(false)
     const navigate = useNavigate()
+
+    const handleForgotPassword = () => {
+        if (!email) {
+            setError('Enter your email address first, then click Forgot password.')
+            return
+        }
+        // Fire-and-forget: attempt reset endpoint, show confirmation regardless
+        // (don't reveal whether the email exists)
+        fetch('/api/v1/auth/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        }).catch(() => {})
+        setForgotSent(true)
+        setError('')
+    }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -74,13 +92,13 @@ export default function Auth() {
                     <div className="auth-tabs">
                         <button
                             className={`auth-tab ${isLogin ? 'active' : ''}`}
-                            onClick={() => { setIsLogin(true); setError(''); }}
+                            onClick={() => { setIsLogin(true); setError(''); setAgreedToTerms(false); }}
                         >
                             Sign In
                         </button>
                         <button
                             className={`auth-tab ${!isLogin ? 'active' : ''}`}
-                            onClick={() => { setIsLogin(false); setError(''); }}
+                            onClick={() => { setIsLogin(false); setError(''); setAgreedToTerms(false); }}
                         >
                             Sign Up
                         </button>
@@ -126,9 +144,14 @@ export default function Auth() {
                             />
                         </div>
 
-                        {isLogin && (
+                        {isLogin && !forgotSent && (
                             <div style={{ textAlign: 'right', marginTop: '-8px', marginBottom: '8px' }}>
-                                <button type="button" className="auth-switch" style={{ fontSize: '13px', color: '#64748B' }}>Forgot password?</button>
+                                <button type="button" className="auth-switch" style={{ fontSize: '13px', color: '#64748B' }} onClick={handleForgotPassword}>Forgot password?</button>
+                            </div>
+                        )}
+                        {isLogin && forgotSent && (
+                            <div style={{ textAlign: 'right', marginTop: '-8px', marginBottom: '8px', fontSize: '13px', color: '#22C55E' }}>
+                                If that email is registered, a reset link has been sent.
                             </div>
                         )}
 
@@ -148,12 +171,27 @@ export default function Auth() {
                             </div>
                         )}
 
+                        {!isLogin && (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '12px' }}>
+                                <input
+                                    id="agree-terms"
+                                    type="checkbox"
+                                    checked={agreedToTerms}
+                                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                                    style={{ marginTop: '3px', accentColor: '#22C55E', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="agree-terms" style={{ fontSize: '13px', color: '#94A3B8', cursor: 'pointer', lineHeight: '1.4' }}>
+                                    I agree to the <Link to="/terms" style={{ color: '#22C55E', textDecoration: 'underline' }}>Terms of Service</Link> and <Link to="/privacy" style={{ color: '#22C55E', textDecoration: 'underline' }}>Privacy Policy</Link>
+                                </label>
+                            </div>
+                        )}
+
                         {error && <div className="auth-error">{error}</div>}
 
                         <button
                             type="submit"
                             className="btn btn-primary auth-submit"
-                            disabled={loading}
+                            disabled={loading || (!isLogin && !agreedToTerms)}
                         >
                             {loading ? (
                                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
@@ -170,16 +208,18 @@ export default function Auth() {
                         <div style={{ flex: 1, height: '1px', background: '#334155' }} />
                     </div>
                     <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                        <button type="button" style={{
+                        <button type="button" disabled title="Google OAuth coming soon" style={{
                             flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #334155',
-                            background: '#1E293B', color: '#E2E8F0', cursor: 'pointer', fontSize: '14px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-                        }}>🔵 Google</button>
-                        <button type="button" style={{
+                            background: '#1E293B', color: '#475569', cursor: 'not-allowed', fontSize: '14px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            opacity: 0.5
+                        }}>🔵 Google <span style={{ fontSize: '10px' }}>soon</span></button>
+                        <button type="button" disabled title="GitHub OAuth coming soon" style={{
                             flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #334155',
-                            background: '#1E293B', color: '#E2E8F0', cursor: 'pointer', fontSize: '14px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-                        }}>⚫ GitHub</button>
+                            background: '#1E293B', color: '#475569', cursor: 'not-allowed', fontSize: '14px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            opacity: 0.5
+                        }}>⚫ GitHub <span style={{ fontSize: '10px' }}>soon</span></button>
                     </div>
 
                     <div className="auth-footer">

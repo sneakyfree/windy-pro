@@ -66,6 +66,15 @@ class SettingsPanel {
           </div>
           <p class="settings-hint" id="recordingModeHint">Records everything, transcribes on stop. Best accuracy. Works with any engine above.</p>
           <p class="settings-hint" style="font-size:11px; margin-top:4px;">💡 <b>Engine</b> = which AI model runs. <b>Mode</b> = when it transcribes (during or after recording).</p>
+          <div class="setting-row">
+            <label for="transcriptionModeSelect">Transcription Route</label>
+            <select id="transcriptionModeSelect">
+              <option value="auto" selected>🔄 Auto — local first, cloud failover</option>
+              <option value="local_only">🏠 Local only — never use cloud</option>
+              <option value="cloud_only">☁️ Cloud only — always use cloud</option>
+            </select>
+          </div>
+          <p class="settings-hint" id="transcriptionModeHint">Auto switches to cloud when local performance drops. Cloud only is best for weak hardware.</p>
           <div class="setting-row" id="maxDurationRow">
             <label for="maxRecordingSelect">Max Recording</label>
             <select id="maxRecordingSelect">
@@ -208,7 +217,7 @@ class SettingsPanel {
           <div id="cloudSettings" style="display:none;">
             <div class="setting-row">
               <label for="cloudUrl">Cloud URL</label>
-              <input type="text" id="cloudUrl" placeholder="wss://windypro.thewindstorm.uk" style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
+              <input type="text" id="cloudUrl" placeholder="wss://windyword.ai" style="width:180px;background:#1a1a2e;color:#f0f0f0;border:1px solid #333;border-radius:4px;padding:4px 6px;">
             </div>
             <div id="cloudAccountStatus" style="margin:8px 0;padding:6px 10px;border-radius:6px;font-size:12px;background:#1a2e1a;color:#22C55E;display:none;">✅ Signed in</div>
             <div id="cloudLoginForm">
@@ -378,6 +387,91 @@ class SettingsPanel {
               <option value="light">☀️ Light</option>
             </select>
           </div>
+          <div class="setting-row">
+            <label for="timezoneSelect">Timezone</label>
+            <select id="timezoneSelect">
+              <option value="auto">🌐 Auto-detect</option>
+              <optgroup label="Americas">
+                <option value="America/New_York">Eastern (New York)</option>
+                <option value="America/Chicago">Central (Chicago)</option>
+                <option value="America/Denver">Mountain (Denver)</option>
+                <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
+                <option value="America/Anchorage">Alaska (Anchorage)</option>
+                <option value="Pacific/Honolulu">Hawaii (Honolulu)</option>
+                <option value="America/Phoenix">Arizona (Phoenix, no DST)</option>
+                <option value="America/Toronto">Eastern (Toronto)</option>
+                <option value="America/Vancouver">Pacific (Vancouver)</option>
+                <option value="America/Mexico_City">Mexico City</option>
+                <option value="America/Sao_Paulo">São Paulo</option>
+                <option value="America/Argentina/Buenos_Aires">Buenos Aires</option>
+                <option value="America/Bogota">Bogotá</option>
+              </optgroup>
+              <optgroup label="Europe">
+                <option value="Europe/London">London (GMT/BST)</option>
+                <option value="Europe/Paris">Paris (CET/CEST)</option>
+                <option value="Europe/Berlin">Berlin</option>
+                <option value="Europe/Madrid">Madrid</option>
+                <option value="Europe/Rome">Rome</option>
+                <option value="Europe/Amsterdam">Amsterdam</option>
+                <option value="Europe/Moscow">Moscow</option>
+                <option value="Europe/Istanbul">Istanbul</option>
+                <option value="Europe/Athens">Athens</option>
+                <option value="Europe/Warsaw">Warsaw</option>
+              </optgroup>
+              <optgroup label="Asia & Pacific">
+                <option value="Asia/Tokyo">Tokyo (JST)</option>
+                <option value="Asia/Shanghai">Shanghai (CST)</option>
+                <option value="Asia/Hong_Kong">Hong Kong</option>
+                <option value="Asia/Singapore">Singapore</option>
+                <option value="Asia/Seoul">Seoul (KST)</option>
+                <option value="Asia/Kolkata">India (IST)</option>
+                <option value="Asia/Dubai">Dubai (GST)</option>
+                <option value="Asia/Bangkok">Bangkok (ICT)</option>
+                <option value="Asia/Jakarta">Jakarta (WIB)</option>
+                <option value="Asia/Taipei">Taipei</option>
+                <option value="Australia/Sydney">Sydney (AEST)</option>
+                <option value="Australia/Melbourne">Melbourne</option>
+                <option value="Australia/Perth">Perth (AWST)</option>
+                <option value="Pacific/Auckland">Auckland (NZST)</option>
+              </optgroup>
+              <optgroup label="Africa & Middle East">
+                <option value="Africa/Cairo">Cairo (EET)</option>
+                <option value="Africa/Lagos">Lagos (WAT)</option>
+                <option value="Africa/Johannesburg">Johannesburg (SAST)</option>
+                <option value="Africa/Nairobi">Nairobi (EAT)</option>
+                <option value="Asia/Riyadh">Riyadh (AST)</option>
+                <option value="Asia/Tehran">Tehran (IRST)</option>
+              </optgroup>
+              <optgroup label="UTC Offsets">
+                <option value="Etc/GMT+12">UTC−12</option>
+                <option value="Etc/GMT+11">UTC−11</option>
+                <option value="Etc/GMT+10">UTC−10</option>
+                <option value="Etc/GMT+9">UTC−9</option>
+                <option value="Etc/GMT+8">UTC−8</option>
+                <option value="Etc/GMT+7">UTC−7</option>
+                <option value="Etc/GMT+6">UTC−6</option>
+                <option value="Etc/GMT+5">UTC−5</option>
+                <option value="Etc/GMT+4">UTC−4</option>
+                <option value="Etc/GMT+3">UTC−3</option>
+                <option value="Etc/GMT+2">UTC−2</option>
+                <option value="Etc/GMT+1">UTC−1</option>
+                <option value="Etc/GMT">UTC±0</option>
+                <option value="Etc/GMT-1">UTC+1</option>
+                <option value="Etc/GMT-2">UTC+2</option>
+                <option value="Etc/GMT-3">UTC+3</option>
+                <option value="Etc/GMT-4">UTC+4</option>
+                <option value="Etc/GMT-5">UTC+5</option>
+                <option value="Etc/GMT-6">UTC+6</option>
+                <option value="Etc/GMT-7">UTC+7</option>
+                <option value="Etc/GMT-8">UTC+8</option>
+                <option value="Etc/GMT-9">UTC+9</option>
+                <option value="Etc/GMT-10">UTC+10</option>
+                <option value="Etc/GMT-11">UTC+11</option>
+                <option value="Etc/GMT-12">UTC+12</option>
+              </optgroup>
+            </select>
+          </div>
+          <p class="settings-hint" id="timezoneHint">Detected: ${(() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch(_) { return 'Unknown'; } })()}</p>
         </div>
 
         <div class="settings-section">
@@ -649,7 +743,7 @@ class SettingsPanel {
 
     if (cloudSignInBtn) {
       cloudSignInBtn.addEventListener('click', async () => {
-        const cloudUrl = this.panel.querySelector('#cloudUrl').value || (window.API_CONFIG || {}).baseUrl || 'https://windypro.thewindstorm.uk';
+        const cloudUrl = this.panel.querySelector('#cloudUrl').value || (window.API_CONFIG || {}).baseUrl || 'https://windyword.ai';
         const email = this.panel.querySelector('#cloudEmail').value;
         const password = this.panel.querySelector('#cloudPassword').value;
         const name = this.panel.querySelector('#cloudName').value;
@@ -985,6 +1079,29 @@ class SettingsPanel {
         if (hint) hint.textContent = hints[e.target.value] || hints.batch;
         // Hide max duration for clone_capture (unlimited) and live (streaming)
         if (maxRow) maxRow.style.display = (e.target.value === 'live' || e.target.value === 'clone_capture') ? 'none' : 'flex';
+      });
+    }
+
+    // Transcription route (auto / local_only / cloud_only)
+    const transcriptionModeSelect = this.panel.querySelector('#transcriptionModeSelect');
+    if (transcriptionModeSelect) {
+      // Restore saved value
+      const saved = localStorage.getItem('windy_transcriptionMode') || 'auto';
+      transcriptionModeSelect.value = saved;
+      const tmHint = this.panel.querySelector('#transcriptionModeHint');
+      const tmHints = {
+        auto: 'Auto switches to cloud when local performance drops (ratio > 2.0). Recommended for most users.',
+        local_only: 'All transcription stays on your machine. Cloud is never used, even if performance is slow.',
+        cloud_only: 'All transcription is sent to cloud. Best for weak hardware or when you want maximum accuracy.'
+      };
+      if (tmHint) tmHint.textContent = tmHints[saved] || tmHints.auto;
+
+      transcriptionModeSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        this.saveSetting('transcriptionMode', val);
+        localStorage.setItem('windy_transcriptionMode', val);
+        if (this.app) this.app.transcriptionMode = val;
+        if (tmHint) tmHint.textContent = tmHints[val] || tmHints.auto;
       });
     }
 
@@ -2324,6 +2441,31 @@ class SettingsPanel {
         document.body.classList.toggle('light-theme', theme === 'light');
       });
     }
+
+    // Timezone selector
+    const timezoneSelect = this.panel.querySelector('#timezoneSelect');
+    const timezoneHint = this.panel.querySelector('#timezoneHint');
+    if (timezoneSelect) {
+      const savedTz = localStorage.getItem('windy_timezone') || 'auto';
+      timezoneSelect.value = savedTz;
+      // Update hint to show effective timezone
+      if (timezoneHint) {
+        const effective = savedTz === 'auto'
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone
+          : savedTz;
+        timezoneHint.textContent = `Detected: ${Intl.DateTimeFormat().resolvedOptions().timeZone}` +
+          (savedTz !== 'auto' ? ` · Using: ${savedTz}` : '');
+      }
+      timezoneSelect.addEventListener('change', (e) => {
+        const tz = e.target.value;
+        localStorage.setItem('windy_timezone', tz);
+        if (timezoneHint) {
+          const systemTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          timezoneHint.textContent = `Detected: ${systemTz}` +
+            (tz !== 'auto' ? ` · Using: ${tz}` : '');
+        }
+      });
+    }
   }
 
   async loadSettings() {
@@ -2763,7 +2905,8 @@ class SettingsPanel {
       window.windyAPI.updateSettings({ [key]: value });
     }
     // Also persist cloud settings to localStorage (fallback for windows without windyAPI)
-    const cloudKeys = ['engine', 'cloudUrl', 'cloudToken', 'cloudEmail', 'cloudPassword', 'cloudUser', 'recordingMode', 'maxRecordingMin', 'language'];
+    // SEC-C1: cloudPassword excluded from localStorage — encrypted in main process via safeStorage
+    const cloudKeys = ['engine', 'cloudUrl', 'cloudToken', 'cloudEmail', 'cloudUser', 'recordingMode', 'maxRecordingMin', 'language', 'transcriptionMode'];
     if (cloudKeys.includes(key)) {
       try { localStorage.setItem(`windy_${key}`, value || ''); } catch (_) { }
     }

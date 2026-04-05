@@ -105,3 +105,35 @@ export function tierFromKey(key: string): LicenseTier {
     }
     return 'pro';
 }
+
+// ─── Cross-Product Tier Mapping ─────────────────────────────
+// Canonical tier enum used by the identity hub to normalize tier names
+// across all Windy products. Each product may use its own naming, but
+// validate-token and the identity API always return a CanonicalTier.
+
+/** Canonical tiers recognized by the Windy identity hub */
+export type CanonicalTier = 'free' | 'pro' | 'translate' | 'translate_pro' | 'enterprise';
+
+/** Maps product-specific tier strings to the canonical tier enum */
+export const TIER_MAPPING: Record<string, CanonicalTier> = {
+    // Windy Pro (desktop/server canonical names)
+    'free': 'free',
+    'pro': 'pro',
+    'translate': 'translate',
+    'translate_pro': 'translate_pro',
+    // Mobile variants (hyphenated)
+    'translate-pro': 'translate_pro',
+    // Legacy aliases
+    'ultra': 'translate',
+    'max': 'translate_pro',
+    // Windy Mail tier
+    'enterprise': 'enterprise',
+};
+
+/**
+ * Normalize any product-specific tier string to a canonical tier.
+ * Returns 'free' for unrecognized values.
+ */
+export function normalizeProductTier(tier: string): CanonicalTier {
+    return TIER_MAPPING[tier.toLowerCase()] ?? 'free';
+}

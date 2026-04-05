@@ -65,6 +65,14 @@ class MarketplacePanel {
       this.bundles = Array.isArray(bundles) ? bundles : [];
       this.downloadedPairs = Array.isArray(downloaded) ? downloaded : [];
       this.storageInfo = storage || { usedBytes: 0, availableBytes: 0, pairs: [] };
+
+      // Cache user tier for rendering decisions
+      try {
+        const tierResult = await (window.windyAPI?.getCurrentTier?.()) || {};
+        this._cachedUserTier = tierResult.tier || 'free';
+      } catch (_) {
+        this._cachedUserTier = 'free';
+      }
     } catch (err) {
       console.warn('[Marketplace] Init failed:', err.message);
       this._showErrorBanner('Failed to load marketplace data. Please try again.', () => {
@@ -632,7 +640,12 @@ class MarketplacePanel {
   _renderPairCard(pair) {
     const isDownloaded = this.downloadedPairs.includes(pair.id);
     const isDownloading = this.activeDownloads.has(pair.id);
-    const isIncluded = pair.includedInTier === 'free'; // TODO: check user tier
+    // Check if the pair is included in the user's current tier
+    const userTier = this._cachedUserTier || 'free';
+    const tierHierarchy = { free: 0, pro: 1, ultra: 2, max: 3 };
+    const userTierLevel = tierHierarchy[userTier] ?? 0;
+    const pairTierLevel = tierHierarchy[pair.includedInTier] ?? 999;
+    const isIncluded = userTierLevel >= pairTierLevel;
     const stars = this._stars(pair.quality || 3);
 
     let actionHtml;

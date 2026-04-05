@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* wss://api.deepgram.com wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.deepgram.com https://api.groq.com https://api.openai.com; media-src 'self' mediastream: blob: data:; img-src 'self' data:;">
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* wss://api.deepgram.com wss://*.windyword.ai https://*.windyword.ai wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.deepgram.com https://api.groq.com https://api.openai.com; media-src 'self' mediastream: blob: data:; img-src 'self' data:;">
     <title>Quick Translate</title>
     <style>
         * {
@@ -1086,6 +1086,14 @@
     <div id="tooltip"></div>
 
     <script src="mini-translate.js"></script>
+    <script src="windy-voice-input.js"></script>
+    <script>
+      // Add voice input to translation textarea
+      document.addEventListener('DOMContentLoaded', () => {
+        const textInput = document.getElementById('textInput');
+        if (textInput) addVoiceInput(textInput);
+      });
+    </script>
 </body>
 
 </html>

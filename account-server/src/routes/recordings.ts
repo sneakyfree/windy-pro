@@ -7,6 +7,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import archiver from 'archiver';
 import { getDb } from '../db/schema';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validation';
@@ -16,6 +17,8 @@ import {
     RecordingCheckQuerySchema,
     RecordingsListQuerySchema,
 } from '@windy-pro/contracts';
+import { validateFileMagicBytes } from '../middleware/file-validation';
+import { trackEvent } from '../services/analytics';
 
 const router = Router();
 
@@ -35,31 +38,127 @@ const videoUpload = multer({
     limits: { fileSize: 500 * 1024 * 1024 },
 });
 
-// In-memory chunk store
-const chunkStore = new Map<string, { chunks: Map<number, string>; total: number; file_type: string }>();
+// In-memory chunk store with limits
+const MAX_CHUNK_BUNDLES = 50;
+const MAX_CHUNK_DATA_BYTES = 10 * 1024 * 1024; // 10 MB per chunk
+const chunkStore = new Map<string, { chunks: Map<number, string>; total: number; file_type: string; createdAt: number }>();
 
-// ─── Helper: list recordings query ──────────────────────────
+// Periodic cleanup of stale chunk uploads (older than 10 minutes)
+const chunkCleanupTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [id, entry] of chunkStore) {
+        if (now - entry.createdAt > 10 * 60 * 1000) {
+            chunkStore.delete(id);
+        }
+    }
+}, 60 * 1000);
+chunkCleanupTimer.unref();
 
-function listRecordings(userId: string, since: string) {
+// ─── Helper: map recording row to camelCase ────────────────
+
+function mapRecording(r: any) {
+    return {
+        id: r.id,
+        bundleId: r.bundle_id,
+        bundle_id: r.bundle_id,
+        duration: r.duration_seconds,
+        durationSeconds: r.duration_seconds,
+        duration_seconds: r.duration_seconds,
+        hasVideo: !!r.has_video,
+        has_video: !!r.has_video,
+        hasAudio: true,
+        has_audio: true,
+        videoResolution: r.video_resolution,
+        video_resolution: r.video_resolution,
+        cameraSource: r.camera_source,
+        camera_source: r.camera_source,
+        transcript: r.transcript_text,
+        transcriptText: r.transcript_text,
+        transcript_text: r.transcript_text,
+        transcriptSegments: r.transcript_segments,
+        segmentsJson: r.transcript_segments,
+        fileSize: r.file_size,
+        file_size: r.file_size,
+        devicePlatform: r.device_platform,
+        device_platform: r.device_platform,
+        deviceId: r.device_id,
+        device_id: r.device_id,
+        deviceName: r.device_name,
+        device_name: r.device_name,
+        cloneTrainingReady: r.clone_training_ready,
+        clone_training_ready: r.clone_training_ready,
+        syncStatus: r.sync_status,
+        sync_status: r.sync_status,
+        createdAt: r.created_at,
+        created_at: r.created_at,
+        recorded_at: r.created_at,
+        word_count: r.transcript_text ? r.transcript_text.split(/\s+/).filter(Boolean).length : 0,
+    };
+}
+
+// ─── Helper: list recordings with pagination ────────────────
+
+interface ListOpts {
+    since?: string;
+    page?: number;
+    limit?: number;
+    search?: string;
+    from?: string;
+    to?: string;
+}
+
+function listRecordings(userId: string, opts: ListOpts = {}) {
     const db = getDb();
+    const since = opts.since || '1970-01-01T00:00:00Z';
+    const limit = Math.min(Math.max(opts.limit || 50, 1), 100);
+    const page = Math.max(opts.page || 1, 1);
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = ['user_id = ?', 'created_at > ?'];
+    const params: any[] = [userId, since];
+
+    if (opts.search) {
+        conditions.push('transcript_text LIKE ?');
+        params.push(`%${opts.search}%`);
+    }
+    if (opts.from) {
+        conditions.push('created_at >= ?');
+        params.push(opts.from);
+    }
+    if (opts.to) {
+        conditions.push('created_at <= ?');
+        params.push(opts.to);
+    }
+
+    const where = conditions.join(' AND ');
+
+    const totalRow = db.prepare(
+        `SELECT COUNT(*) as count FROM recordings WHERE ${where}`
+    ).get(...params) as any;
+    const total = totalRow?.count || 0;
+
     const recordings = db.prepare(
         `SELECT id, bundle_id, duration_seconds, has_video, video_resolution,
             camera_source, transcript_text, transcript_segments, file_size,
             device_platform, device_id, device_name, clone_training_ready,
             sync_status, created_at
      FROM recordings
-     WHERE user_id = ? AND created_at > ?
+     WHERE ${where}
      ORDER BY created_at DESC
-     LIMIT 100`
-    ).all(userId, since) as any[];
+     LIMIT ? OFFSET ?`
+    ).all(...params, limit, offset) as any[];
 
-    // Cross-platform field mapping
-    return recordings.map(r => ({
-        ...r,
-        transcript: r.transcript_text,
-        segments_json: r.transcript_segments,
-        duration: r.duration_seconds,
-    }));
+    const mapped = recordings.map(mapRecording);
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+        recordings: mapped,
+        total,
+        page,
+        limit,
+        totalPages,
+        hasMore: page < totalPages,
+    };
 }
 
 // ─── GET /api/v1/recordings ──────────────────────────────────
@@ -67,11 +166,34 @@ function listRecordings(userId: string, since: string) {
 
 router.get('/', authenticateToken, (req: Request, res: Response) => {
     try {
-        const since = (req.query.since as string) || '1970-01-01T00:00:00Z';
-        const mapped = listRecordings((req as AuthRequest).user.userId, since);
-        res.json({ bundles: mapped, total: mapped.length, since });
+        const result = listRecordings((req as AuthRequest).user.userId, {
+            since: req.query.since as string,
+            page: req.query.page ? parseInt(req.query.page as string) : undefined,
+            limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
+            search: req.query.search as string,
+            from: req.query.from as string,
+            to: req.query.to as string,
+        });
+        res.json({
+            recordings: result.recordings,
+            bundles: result.recordings, // backward compat
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+            hasMore: result.hasMore,
+            since: req.query.since || '1970-01-01T00:00:00Z',
+            // Web dashboard expects nested pagination object
+            pagination: {
+                page: result.page,
+                limit: result.limit,
+                total: result.total,
+                totalPages: result.totalPages,
+                hasMore: result.hasMore,
+            },
+        });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -79,11 +201,26 @@ router.get('/', authenticateToken, (req: Request, res: Response) => {
 
 router.get('/list', authenticateToken, (req: Request, res: Response) => {
     try {
-        const since = (req.query.since as string) || '1970-01-01T00:00:00Z';
-        const mapped = listRecordings((req as AuthRequest).user.userId, since);
-        res.json({ bundles: mapped, total: mapped.length, since });
+        const result = listRecordings((req as AuthRequest).user.userId, {
+            since: req.query.since as string,
+            page: req.query.page ? parseInt(req.query.page as string) : undefined,
+            limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
+            search: req.query.search as string,
+            from: req.query.from as string,
+            to: req.query.to as string,
+        });
+        res.json({
+            recordings: result.recordings,
+            bundles: result.recordings,
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+            hasMore: result.hasMore,
+            since: req.query.since || '1970-01-01T00:00:00Z',
+        });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -97,9 +234,9 @@ router.get('/check', authenticateToken, (req: Request, res: Response) => {
         const db = getDb();
         const row = db.prepare('SELECT id FROM recordings WHERE bundle_id = ? AND user_id = ?')
             .get(bundle_id, (req as AuthRequest).user.userId);
-        res.json({ exists: !!row, bundle_id });
+        res.json({ exists: !!row, bundleId: bundle_id });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -123,9 +260,19 @@ router.get('/stats', authenticateToken, (req: Request, res: Response) => {
             FROM recordings WHERE user_id = ?
         `).get(userId) as any;
 
+        // Compute totalWords from all transcript texts
+        const allTranscripts = db.prepare(
+            'SELECT transcript_text FROM recordings WHERE user_id = ? AND transcript_text IS NOT NULL'
+        ).all(userId) as any[];
+        const totalWords = allTranscripts.reduce((sum: number, r: any) =>
+            sum + (r.transcript_text ? r.transcript_text.split(/\s+/).filter(Boolean).length : 0), 0);
+        const totalHours = Math.round((stats.totalDuration / 3600) * 100) / 100;
+
         res.json({
             totalRecordings: stats.totalRecordings,
             totalDuration: Math.round(stats.totalDuration),
+            totalHours,
+            totalWords,
             totalSize: stats.totalSize,
             avgQuality: Math.round(stats.avgQuality),
             videoRecordings: stats.videoRecordings,
@@ -134,7 +281,162 @@ router.get('/stats', authenticateToken, (req: Request, res: Response) => {
             lastRecording: stats.lastRecording,
         });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ─── DELETE /api/v1/recordings/bulk ──────────────────────────
+// MUST be before /:id to avoid route shadowing
+
+router.delete('/bulk', authenticateToken, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const userId = (req as AuthRequest).user.userId;
+        const ids = req.body.recordingIds || req.body.ids;
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: 'recordingIds array is required' });
+        }
+
+        if (ids.length > 100) {
+            return res.status(400).json({ error: 'Maximum 100 recordings per bulk delete' });
+        }
+
+        let deleted = 0;
+        const errors: string[] = [];
+
+        for (const id of ids) {
+            try {
+                const recording = db.prepare('SELECT id, file_path FROM recordings WHERE id = ? AND user_id = ?')
+                    .get(id, userId) as any;
+                if (!recording) { errors.push(`${id}: not found`); continue; }
+
+                if (recording.file_path && fs.existsSync(recording.file_path)) {
+                    try { fs.unlinkSync(recording.file_path); } catch { /* best effort */ }
+                }
+                db.prepare('DELETE FROM recordings WHERE id = ? AND user_id = ?').run(id, userId);
+                deleted++;
+            } catch (e: any) {
+                errors.push(`${id}: ${e.message}`);
+            }
+        }
+
+        console.log(`🗑️  Bulk delete: ${deleted}/${ids.length} recordings`);
+        res.json({ deleted, errors });
+    } catch (err: any) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ─── POST /api/v1/recordings/export ─────────────────────────
+// MUST be before /:id to avoid route shadowing
+
+router.post('/export', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const userId = (req as AuthRequest).user.userId;
+        const { format } = req.body;
+        const ids = req.body.recordingIds || req.body.ids;
+
+        let recordings: any[];
+        if (ids && Array.isArray(ids) && ids.length > 0) {
+            const placeholders = ids.map(() => '?').join(',');
+            recordings = db.prepare(
+                `SELECT id, bundle_id, duration_seconds, transcript_text, transcript_segments,
+                        created_at, device_platform, has_video, file_size, file_path
+                 FROM recordings WHERE user_id = ? AND id IN (${placeholders})`
+            ).all(userId, ...ids) as any[];
+        } else {
+            recordings = db.prepare(
+                `SELECT id, bundle_id, duration_seconds, transcript_text, transcript_segments,
+                        created_at, device_platform, has_video, file_size, file_path
+                 FROM recordings WHERE user_id = ? ORDER BY created_at DESC LIMIT 1000`
+            ).all(userId) as any[];
+        }
+
+        if (recordings.length === 0) {
+            return res.status(404).json({ error: 'No recordings found to export' });
+        }
+
+        const exportData = recordings.map(r => ({
+            id: r.id,
+            bundleId: r.bundle_id,
+            duration: r.duration_seconds,
+            transcript: r.transcript_text || '',
+            segments: r.transcript_segments ? JSON.parse(r.transcript_segments) : [],
+            createdAt: r.created_at,
+            platform: r.device_platform,
+            hasVideo: !!r.has_video,
+        }));
+
+        // ── ZIP export with audio files + transcript text files ──
+        if (format === 'zip') {
+            res.setHeader('Content-Type', 'application/zip');
+            res.setHeader('Content-Disposition', 'attachment; filename="recordings-export.zip"');
+
+            const archive = archiver('zip', { zlib: { level: 5 } });
+            archive.on('error', (err: Error) => {
+                console.error('Archive error:', err);
+                if (!res.headersSent) {
+                    res.status(500).json({ error: 'ZIP export failed' });
+                }
+            });
+            archive.pipe(res);
+
+            for (const r of recordings) {
+                const safeId = r.bundle_id || r.id;
+
+                // Add transcript text file
+                if (r.transcript_text) {
+                    archive.append(r.transcript_text, { name: `${safeId}/transcript.txt` });
+                }
+
+                // Add transcript segments as JSON
+                if (r.transcript_segments) {
+                    archive.append(r.transcript_segments, { name: `${safeId}/segments.json` });
+                }
+
+                // Add audio file if it exists on disk
+                if (r.file_path && fs.existsSync(r.file_path)) {
+                    const ext = path.extname(r.file_path) || '.webm';
+                    archive.file(r.file_path, { name: `${safeId}/audio${ext}` });
+                }
+
+                // Add metadata JSON
+                archive.append(JSON.stringify({
+                    id: r.id,
+                    bundleId: r.bundle_id,
+                    duration: r.duration_seconds,
+                    createdAt: r.created_at,
+                    platform: r.device_platform,
+                    hasVideo: !!r.has_video,
+                    fileSize: r.file_size,
+                }, null, 2), { name: `${safeId}/metadata.json` });
+            }
+
+            await archive.finalize();
+            return;
+        }
+
+        if (format === 'csv') {
+            const header = 'id,bundleId,duration,createdAt,platform,hasVideo,transcript\n';
+            const rows = exportData.map(r =>
+                `${r.id},${r.bundleId},${r.duration},${r.createdAt},${r.platform},${r.hasVideo},"${(r.transcript || '').replace(/"/g, '""')}"`
+            ).join('\n');
+            res.setHeader('Content-Type', 'text/csv');
+            res.setHeader('Content-Disposition', 'attachment; filename="recordings-export.csv"');
+            return res.send(header + rows);
+        }
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', 'attachment; filename="recordings-export.json"');
+        res.json({
+            exportedAt: new Date().toISOString(),
+            count: exportData.length,
+            recordings: exportData,
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: 'Export failed' });
     }
 });
 
@@ -152,9 +454,85 @@ router.get('/:id', authenticateToken, (req: Request, res: Response) => {
         if (!recording) {
             return res.status(404).json({ error: 'Recording not found' });
         }
-        res.json(recording);
+        const r = recording as any;
+        const mapped = {
+            id: r.id,
+            bundleId: r.bundle_id,
+            bundle_id: r.bundle_id,
+            createdAt: r.created_at,
+            created_at: r.created_at,
+            recorded_at: r.created_at,
+            durationSeconds: r.duration_seconds,
+            duration_seconds: r.duration_seconds,
+            transcript: r.transcript_text,
+            source: r.source,
+            devicePlatform: r.device_platform,
+            device_platform: r.device_platform,
+            appVersion: r.app_version,
+            hasVideo: !!r.has_video,
+            has_video: !!r.has_video,
+            hasAudio: true, // All recordings have audio
+            has_audio: true,
+        };
+        // Wrap in `recording` key for frontend compat + flat fields for backward compat
+        res.json({ recording: mapped, ...mapped });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ─── PATCH /api/v1/recordings/:id ────────────────────────────
+
+router.patch('/:id', authenticateToken, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const userId = (req as AuthRequest).user.userId;
+        const recording = db.prepare('SELECT id FROM recordings WHERE id = ? AND user_id = ?')
+            .get(req.params.id, userId);
+
+        if (!recording) {
+            return res.status(404).json({ error: 'Recording not found' });
+        }
+
+        const updates: string[] = [];
+        const values: any[] = [];
+
+        if (req.body.transcript_text !== undefined || req.body.transcript !== undefined) {
+            updates.push('transcript_text = ?');
+            values.push(req.body.transcript_text ?? req.body.transcript);
+        }
+        if (req.body.transcript_segments !== undefined || req.body.segments_json !== undefined) {
+            updates.push('transcript_segments = ?');
+            values.push(req.body.transcript_segments ?? req.body.segments_json);
+        }
+        if (req.body.clone_training_ready !== undefined) {
+            updates.push('clone_training_ready = ?');
+            values.push(req.body.clone_training_ready ? 1 : 0);
+        }
+        if (req.body.tags_json !== undefined) {
+            updates.push('tags_json = ?');
+            values.push(req.body.tags_json);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No updatable fields provided' });
+        }
+
+        db.prepare(`UPDATE recordings SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`)
+            .run(...values, req.params.id, userId);
+
+        const updated = db.prepare(
+            `SELECT id, bundle_id, duration_seconds, has_video, video_resolution,
+                camera_source, transcript_text, transcript_segments, file_size,
+                device_platform, device_id, device_name, clone_training_ready,
+                sync_status, created_at
+             FROM recordings WHERE id = ? AND user_id = ?`
+        ).get(req.params.id, userId) as any;
+
+        const mapped = mapRecording(updated);
+        res.json({ recording: mapped, ...mapped });
+    } catch (err: any) {
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -181,13 +559,13 @@ router.delete('/:id', authenticateToken, (req: Request, res: Response) => {
         console.log(`🗑️  Recording deleted: ${req.params.id.slice(0, 8)}`);
         res.json({ deleted: true, id: req.params.id });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 // ─── POST /api/v1/recordings/upload ──────────────────────────
 
-router.post('/upload', authenticateToken, videoUpload.single('media'), (req: Request, res: Response) => {
+router.post('/upload', authenticateToken, videoUpload.single('media'), validateFileMagicBytes(['audio', 'video']), (req: Request, res: Response) => {
     try {
         const db = getDb();
         const { duration_seconds, has_video, video_resolution, camera_source,
@@ -214,9 +592,10 @@ router.post('/upload', authenticateToken, videoUpload.single('media'), (req: Req
             clone_training_ready === 'true' || clone_training_ready === true ? 1 : 0
         );
 
-        res.status(201).json({ id, bundle_id: bundleId, file_size: fileSize });
+        trackEvent('recording_created', (req as AuthRequest).user.userId, { duration: parseInt(duration_seconds) || 0 });
+        res.status(201).json({ id, bundleId, fileSize });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -231,11 +610,18 @@ router.post('/upload/chunk', authenticateToken, (req: Request, res: Response) =>
         }
 
         if (!chunkStore.has(bundle_id)) {
-            chunkStore.set(bundle_id, { chunks: new Map(), total: total_chunks, file_type: file_type || 'audio/webm' });
+            if (chunkStore.size >= MAX_CHUNK_BUNDLES) {
+                return res.status(503).json({ error: 'Too many concurrent chunk uploads' });
+            }
+            chunkStore.set(bundle_id, { chunks: new Map(), total: total_chunks, file_type: file_type || 'audio/webm', createdAt: Date.now() });
         }
 
         const entry = chunkStore.get(bundle_id)!;
-        entry.chunks.set(chunk_index, data || '');
+        const chunkData = data || '';
+        if (typeof chunkData === 'string' && chunkData.length > MAX_CHUNK_DATA_BYTES) {
+            return res.status(413).json({ error: 'Chunk data too large' });
+        }
+        entry.chunks.set(chunk_index, chunkData);
 
         console.log(`📦 Chunk ${chunk_index + 1}/${total_chunks} for bundle ${bundle_id.slice(0, 8)}`);
 
@@ -243,9 +629,9 @@ router.post('/upload/chunk', authenticateToken, (req: Request, res: Response) =>
             setTimeout(() => chunkStore.delete(bundle_id), 5 * 60 * 1000);
         }
 
-        res.json({ received: true, chunk_index, bundle_id });
+        res.json({ received: true, chunkIndex: chunk_index, bundleId: bundle_id });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -294,7 +680,7 @@ router.post('/upload/batch', authenticateToken, (req: Request, res: Response) =>
         console.log(`📦 Batch upload: ${uploaded} recordings, ${errors.length} errors`);
         res.json({ uploaded, errors });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -354,7 +740,55 @@ router.post('/sync', authenticateToken, (req: Request, res: Response) => {
         }
         res.json({ synced, skipped, errors });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ─── GET /api/v1/recordings/:id/audio ────────────────────────
+
+router.get('/:id/audio', authenticateToken, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const recording = db.prepare('SELECT file_path, file_size FROM recordings WHERE id = ? AND user_id = ?')
+            .get(req.params.id, (req as AuthRequest).user.userId) as any;
+
+        if (!recording || !recording.file_path || !fs.existsSync(recording.file_path)) {
+            return res.status(404).json({ error: 'Recording not found' });
+        }
+
+        const stat = fs.statSync(recording.file_path);
+        const fileSize = stat.size;
+        const ext = path.extname(recording.file_path).toLowerCase();
+        const contentType = ext === '.wav' ? 'audio/wav'
+            : ext === '.ogg' ? 'audio/ogg'
+            : ext === '.mp3' ? 'audio/mpeg'
+            : 'audio/webm';
+
+        const range = req.headers.range;
+
+        if (range) {
+            const parts = range.replace(/bytes=/, '').split('-');
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunkSize = end - start + 1;
+
+            res.writeHead(206, {
+                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunkSize,
+                'Content-Type': contentType,
+            });
+            fs.createReadStream(recording.file_path, { start, end }).pipe(res);
+        } else {
+            res.writeHead(200, {
+                'Content-Length': fileSize,
+                'Content-Type': contentType,
+                'Accept-Ranges': 'bytes',
+            });
+            fs.createReadStream(recording.file_path).pipe(res);
+        }
+    } catch (err: any) {
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -372,6 +806,11 @@ router.get('/:id/video', authenticateToken, (req: Request, res: Response) => {
 
         const stat = fs.statSync(recording.file_path);
         const fileSize = stat.size;
+        const ext = path.extname(recording.file_path).toLowerCase();
+        const contentType = ext === '.mp4' ? 'video/mp4'
+            : ext === '.ogg' ? 'video/ogg'
+            : ext === '.mkv' ? 'video/x-matroska'
+            : 'video/webm';
         const range = req.headers.range;
 
         if (range) {
@@ -384,18 +823,18 @@ router.get('/:id/video', authenticateToken, (req: Request, res: Response) => {
                 'Content-Range': `bytes ${start}-${end}/${fileSize}`,
                 'Accept-Ranges': 'bytes',
                 'Content-Length': chunkSize,
-                'Content-Type': 'video/webm',
+                'Content-Type': contentType,
             });
             fs.createReadStream(recording.file_path, { start, end }).pipe(res);
         } else {
             res.writeHead(200, {
                 'Content-Length': fileSize,
-                'Content-Type': 'video/webm',
+                'Content-Type': contentType,
             });
             fs.createReadStream(recording.file_path).pipe(res);
         }
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

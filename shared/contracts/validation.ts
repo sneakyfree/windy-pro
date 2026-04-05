@@ -9,10 +9,25 @@ import { z } from 'zod';
 
 // ─── Auth Schemas ────────────────────────────────────────────
 
+/**
+ * Password must match the mobile app's enforced standard:
+ *   - At least 8 characters
+ *   - At least one uppercase letter
+ *   - At least one lowercase letter
+ *   - At least one digit
+ *
+ * Unified server + mobile validation — SEC-P1.
+ */
+export const PasswordSchema = z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one digit');
+
 export const RegisterRequestSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     email: z.string().email('Invalid email address'),
-    password: z.string().min(6, 'Password must be at least 6 characters'),
+    password: PasswordSchema,
     deviceId: z.string().optional(),
     deviceName: z.string().optional(),
     platform: z.string().optional(),
@@ -43,7 +58,7 @@ export const RemoveDeviceRequestSchema = z.object({
 
 export const ChangePasswordRequestSchema = z.object({
     currentPassword: z.string().min(1, 'Current password is required'),
-    newPassword: z.string().min(6, 'Password must be at least 6 characters'),
+    newPassword: PasswordSchema,
 });
 
 // ─── Translation Schemas ─────────────────────────────────────
@@ -111,6 +126,8 @@ export const RecordingCheckQuerySchema = z.object({
 
 export const StartTrainingRequestSchema = z.object({
     bundle_ids: z.array(z.string()).min(3, 'At least 3 training-ready bundles required'),
+    model_name: z.string().min(1).max(100).optional(),
+    voice_description: z.string().max(500).optional(),
 });
 
 // ─── License Schemas ─────────────────────────────────────────
@@ -175,6 +192,11 @@ export const HistoryQuerySchema = z.object({
 
 export const RecordingsListQuerySchema = z.object({
     since: z.string().optional().default('1970-01-01T00:00:00Z'),
+    page: z.coerce.number().int().min(1).optional().default(1),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+    search: z.string().optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
 });
 
 // ─── File Storage Schemas (merged from cloud-storage) ────────
@@ -218,4 +240,119 @@ export const AdminCouponCreateSchema = z.object({
     discountPercent: z.number().int().min(1).max(100),
     maxUses: z.number().int().optional().default(999),
     expiresAt: z.string().optional(),
+});
+
+// ─── Identity Schemas (Phase 10.0) ───────────────────────────
+
+export const IdentityUpdateSchema = z.object({
+    displayName: z.string().min(2).max(64).optional(),
+    preferredLang: z.string().min(2).max(10).optional(),
+    avatarUrl: z.string().url().optional(),
+    phone: z.string().regex(/^\+[1-9]\d{1,14}$/, 'Phone must be E.164 format').optional(),
+});
+
+export const IdentityProvisionSchema = z.object({
+    product: z.enum(['windy_pro', 'windy_chat', 'windy_mail', 'windy_fly', 'windy_word', 'windy_traveler', 'windy_clone', 'windy_cloud']),
+    metadata: z.record(z.unknown()).optional(),
+});
+
+export const IdentityScopeGrantSchema = z.object({
+    identityId: z.string().uuid('identityId must be a valid UUID'),
+    scopes: z.array(z.string().regex(/^[a-z_]+:[a-z_*]+$/, 'Scope format: product:permission')).min(1),
+});
+
+export const IdentityAuditQuerySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+    offset: z.coerce.number().int().min(0).optional().default(0),
+    event: z.string().optional(),
+    identityId: z.string().optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+});
+
+export const EternitasWebhookSchema = z.object({
+    event: z.enum(['passport.registered', 'passport.revoked', 'passport.suspended', 'passport.verified', 'identity.created', 'trust_updated']),
+    passportNumber: z.string().regex(/^ET-[A-Z0-9]{5}$/, 'Passport format: ET-XXXXX'),
+    agentName: z.string().min(1).optional(),
+    operatorEmail: z.string().email().optional(),
+    timestamp: z.string(),
+    signature: z.string().min(1, 'Webhook signature required'),
+    payload: z.record(z.unknown()).optional(),
+    trustScore: z.number().min(0).max(1).optional(),
+});
+
+// ─── Verification Schemas (Phase 1 — Promoted from chat-onboarding) ──
+
+export const VerificationSendSchema = z.object({
+    type: z.enum(['phone', 'email']),
+    identifier: z.string().min(1).max(255),
+    countryCode: z.string().max(5).optional(),
+});
+
+export const VerificationCheckSchema = z.object({
+    type: z.enum(['phone', 'email']).optional(),
+    identifier: z.string().min(1).max(255),
+    code: z.string().min(1).max(10),
+    countryCode: z.string().max(5).optional(),
+});
+
+// ─── Bot API Key Schemas (Phase 3) ──
+
+export const BotApiKeyCreateSchema = z.object({
+    identityId: z.string().uuid('identityId must be a valid UUID'),
+    scopes: z.array(z.string().regex(/^[a-z_]+:[a-z_*]+$/, 'Scope format: product:permission')).min(1),
+    label: z.string().min(1).max(100).optional(),
+    expiresInDays: z.number().int().min(1).max(3650).optional(),
+});
+
+export const SecretaryConsentSchema = z.object({
+    botIdentityId: z.string().uuid('botIdentityId must be a valid UUID'),
+    consent: z.boolean(),
+});
+
+// ─── OAuth2 Schemas (Phase 5 — "Sign in with Windy") ──
+
+export const OAuthClientCreateSchema = z.object({
+    name: z.string().min(1).max(100),
+    redirectUris: z.array(z.string().url()).min(1),
+    allowedScopes: z.array(z.string()).optional(),
+    isFirstParty: z.boolean().optional(),
+    isPublic: z.boolean().optional(),
+});
+
+export const OAuthAuthorizeSchema = z.object({
+    client_id: z.string().min(1),
+    redirect_uri: z.string().url(),
+    response_type: z.literal('code'),
+    scope: z.string().optional(),
+    state: z.string().optional(),
+    code_challenge: z.string().min(43).max(128).optional(), // S256 produces 43 base64url chars
+    code_challenge_method: z.literal('S256').optional(),
+});
+
+export const OAuthTokenSchema = z.object({
+    grant_type: z.enum([
+        'authorization_code',
+        'client_credentials',
+        'refresh_token',
+        'urn:ietf:params:oauth:grant-type:device_code',
+    ]),
+    code: z.string().optional(),
+    redirect_uri: z.string().optional(),
+    client_id: z.string().optional(),
+    client_secret: z.string().optional(),
+    code_verifier: z.string().min(43).max(128).optional(),
+    refresh_token: z.string().optional(),
+    device_code: z.string().optional(),
+    scope: z.string().optional(),
+});
+
+export const DeviceCodeRequestSchema = z.object({
+    client_id: z.string().min(1),
+    scope: z.string().optional(),
+});
+
+export const DeviceCodeApproveSchema = z.object({
+    user_code: z.string().min(1),
+    approved: z.boolean(),
 });

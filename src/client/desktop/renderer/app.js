@@ -47,7 +47,7 @@ class WindyApp {
     // API-based engine state
     this._apiMediaRecorder = null;
     this._apiAudioChunks = [];
-    this.cloudUrl = (window.API_CONFIG || {}).wsUrl || 'wss://windypro.thewindstorm.uk';
+    this.cloudUrl = (window.API_CONFIG || {}).wsUrl || 'wss://windyword.ai';
     this.cloudWs = null;
     this.cloudToken = null;
     this._usingCloud = false;  // When smart mode, tracks if currently using cloud
@@ -181,12 +181,31 @@ class WindyApp {
       if (settings?.cloudToken) this.cloudToken = settings.cloudToken;
       if (settings?.cloudEmail) this.cloudEmail = settings.cloudEmail;
       if (settings?.cloudPassword) this.cloudPassword = settings.cloudPassword;
-      console.debug(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
+      console.debug(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? 'configured' : 'empty'}`);
+
+      // Load transcription mode (auto / local_only / cloud_only)
+      this.transcriptionMode = settings?.transcriptionMode || localStorage.getItem('windy_transcriptionMode') || 'auto';
+      console.debug(`[Init] Transcription mode: ${this.transcriptionMode}`);
+
+      // Cloud-only mode: connect to cloud WebSocket immediately, skip local backend
+      if (this.transcriptionMode === 'cloud_only' && this.cloudUrl) {
+        this._usingCloud = true;
+        this.connectCloudWS().then(() => {
+          this.updateModelBadge('cloud', false);
+          this.showReconnectToast('☁️ Cloud-only mode active');
+        }).catch((err) => {
+          console.warn('[Init] Cloud-only connect failed:', err.message);
+          this._usingCloud = false;
+          this.showReconnectToast('⚠️ Cloud unavailable. Falling back to local.');
+        });
+      }
 
       // Show current engine/model in status bar badge on startup
       const savedModel = settings?.model || localStorage.getItem('windy_model') || 'small';
       const engineName = this.transcriptionEngine || 'local';
-      if (['groq', 'openai', 'deepgram', 'cloud', 'stream'].includes(engineName)) {
+      if (this.transcriptionMode === 'cloud_only') {
+        this.updateModelBadge('cloud', false);
+      } else if (['groq', 'openai', 'deepgram', 'cloud', 'stream'].includes(engineName)) {
         this.updateModelBadge(engineName, false);
       } else {
         this.updateModelBadge(savedModel, false);
@@ -261,7 +280,7 @@ class WindyApp {
       if (lsCloudUrl) this.cloudUrl = lsCloudUrl;
       if (lsCloudToken) this.cloudToken = lsCloudToken;
       if (lsCloudEmail) this.cloudEmail = lsCloudEmail;
-      console.debug(`[Init] Final: Engine=${this.transcriptionEngine}, CloudToken=${this.cloudToken ? '✅' : '❌'}, CloudURL=${this.cloudUrl ? '✅' : '❌ empty'}`);
+      console.debug(`[Init] Final: Engine=${this.transcriptionEngine}, CloudToken=${this.cloudToken ? 'present' : 'missing'}, CloudURL=${this.cloudUrl ? 'configured' : 'empty'}`);
     } catch (e) { console.warn('[Init] Settings load error:', e.message); }
 
     // Check for crash recovery via Electron IPC
@@ -270,6 +289,17 @@ class WindyApp {
       if (recovery.found) {
         this.showRecoveryBanner(recovery.content);
       }
+    }
+
+    // Ecosystem navigation toolbar
+    if (typeof EcosystemNav !== 'undefined') {
+      this.ecosystemNav = new EcosystemNav(this);
+    }
+
+    // First-run welcome overlay (shows once on first launch)
+    if (typeof FirstRunExperience !== 'undefined') {
+      const firstRun = new FirstRunExperience(this);
+      firstRun.show();
     }
   }
 
@@ -1277,6 +1307,9 @@ class WindyApp {
     const badge = document.getElementById('modelBadge');
     if (!badge) return;
 
+    // Determine transcription mode
+    const tMode = this.transcriptionMode || localStorage.getItem('windy_transcriptionMode') || 'auto';
+
     // Skip local performance badge updates when cloud is active
     if (this._usingCloud) {
       badge.textContent = '☁️🔒 cloud ✅';
@@ -1320,8 +1353,37 @@ class WindyApp {
         }
       }
 
-      // Smart mode: auto-switch to cloud if struggling for 2+ chunks
-      if (this.transcriptionEngine === 'smart' && !this._usingCloud && this.cloudUrl) {
+      // Cloud failover logic — respects transcription mode setting
+      if (tMode === 'local_only') {
+        // Local only: never failover to cloud, just show suggestions
+        const suggestions = [];
+        const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
+        if (recordingMode !== 'batch') {
+          suggestions.push('Switch to Batch mode for best accuracy');
+        }
+        const modelSizeMB = { 'large-v3': 2945, 'windy-pro-engine': 2945, 'turbo': 1544, 'windy-turbo': 1544, 'medium': 1444, 'windy-edge': 1444, 'small': 140, 'windy-lite': 140, 'base': 462, 'windy-core': 462, 'tiny': 73, 'windy-nano': 73 };
+        const currentModelSize = modelSizeMB[msg.model] || 0;
+        if (currentModelSize > 500) {
+          suggestions.push('Try Windy Core (462MB, balanced)');
+        } else if (currentModelSize > 150) {
+          suggestions.push('Try Windy Lite (140MB) for faster dictation');
+        }
+        const tip = suggestions.length > 0 ? ` 💡 ${suggestions[0]}` : '';
+        this.showReconnectToast(`⚠️ ${displayName} is struggling.${tip}`);
+      } else if (tMode === 'auto' && msg.ratio > 2.0 && !this._usingCloud && this.cloudUrl) {
+        // Auto mode: failover to cloud when performance_ratio > 2.0
+        this._usingCloud = true;
+        this.showReconnectToast('Switching to cloud for better performance...');
+        this.connectCloudWS().then(() => {
+          badge.textContent = `☁️🔒 cloud ✅`;
+          badge.classList.remove('loading');
+          this.showReconnectToast('☁️ Auto mode: switched to cloud transcription');
+        }).catch(() => {
+          this._usingCloud = false;
+          this.showReconnectToast('⚠️ Cloud unavailable. Continuing local.');
+        });
+      } else if (this.transcriptionEngine === 'smart' && !this._usingCloud && this.cloudUrl) {
+        // Legacy smart mode: auto-switch to cloud if struggling
         this._usingCloud = true;
         this.connectCloudWS().then(() => {
           badge.textContent = `☁️🔒 cloud ✅`;
@@ -1332,7 +1394,7 @@ class WindyApp {
           this.showReconnectToast('⚠️ Cloud unavailable. Continuing local.');
         });
       } else {
-        // Actionable performance suggestions
+        // Actionable performance suggestions (auto mode below threshold, or no cloud configured)
         const suggestions = [];
         const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
         if (recordingMode !== 'batch') {
@@ -1395,7 +1457,7 @@ class WindyApp {
       if (res.ok) {
         const data = await res.json();
         this.cloudToken = data.token;
-        console.debug('[Cloud] Token refreshed ✅');
+        console.debug('[Cloud] Token refreshed');
         return;
       }
     } catch (e) {
@@ -1421,7 +1483,7 @@ class WindyApp {
         if (res.ok) {
           const data = await res.json();
           this.cloudToken = data.token;
-          console.debug('[Cloud] Got fresh token via REST login');
+          console.debug('[Cloud] Authenticated via REST login');
           if (window.windyAPI) {
             window.windyAPI.updateSettings({ cloudToken: data.token });
           }
@@ -1435,24 +1497,25 @@ class WindyApp {
       throw new Error('No cloud token available. Please sign in first.');
     }
 
-    // Step 2: Connect WS with token as query param (Veron 1 protocol)
+    // Step 2: Connect WS and authenticate via first-message pattern (H2 fix: no token in query params)
     return new Promise((resolve, reject) => {
       const baseUrl = this.cloudUrl.replace(/\/$/, '') + '/ws/transcribe';
-      const url = baseUrl + '?token=' + encodeURIComponent(this.cloudToken);
-      console.debug(`[Cloud] Connecting to ${baseUrl} (with token query param)`);
-      this.cloudWs = new WebSocket(url);
+      console.debug('[Cloud] Connecting (token present)');
+      this.cloudWs = new WebSocket(baseUrl);
       this.cloudWs.binaryType = 'arraybuffer';
       let startSent = false;
       let resolved = false;
 
       this.cloudWs.onopen = () => {
-        console.debug('[Cloud] WebSocket opened');
+        console.debug('[Cloud] WebSocket opened, sending auth message');
+        // Send token as first message instead of query parameter
+        this.cloudWs.send(JSON.stringify({ action: 'auth', token: this.cloudToken }));
       };
 
       this.cloudWs.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          console.debug('[Cloud] ← ' + msg.type + ':', JSON.stringify(msg).substring(0, 200));
+          console.debug('[Cloud] <- ' + msg.type);
 
           if (msg.type === 'transcript') {
             // Cloud uses 'is_partial', local uses 'partial' — normalize
@@ -2290,7 +2353,7 @@ class WindyApp {
 
   async _batchTranscribeCloud(audioBlob) {
     const token = this.cloudToken || localStorage.getItem('windy_cloudToken');
-    const cloudUrl = (this.cloudUrl || localStorage.getItem('windy_cloudUrl') || (window.API_CONFIG || {}).baseUrl || 'https://windypro.thewindstorm.uk')
+    const cloudUrl = (this.cloudUrl || localStorage.getItem('windy_cloudUrl') || (window.API_CONFIG || {}).baseUrl || 'https://windyword.ai')
       .replace('wss://', 'https://');
 
     if (!token) {
@@ -2501,7 +2564,7 @@ class WindyApp {
         durationSec: this._sessionSeconds || 0,
         ts: new Date().toISOString()
       };
-      fetch((window.API_CONFIG || {}).analytics || 'https://windypro.thewindstorm.uk/api/v1/analytics', {
+      fetch((window.API_CONFIG || {}).analytics || 'https://windyword.ai/api/v1/analytics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -2666,7 +2729,7 @@ class WindyApp {
       filters = [{ name: 'Text', extensions: ['txt'] }];
     } else if (format === 'md') {
       const paragraphs = text.split(/\n+/).filter(p => p.trim());
-      content = `# Transcript — ${new Date().toLocaleString()}\n\n${paragraphs.map(p => p.trim()).join('\n\n')}\n`;
+      content = `# Transcript — ${window.WindyDateUtils ? WindyDateUtils.formatFull(new Date()) : new Date().toLocaleString()}\n\n${paragraphs.map(p => p.trim()).join('\n\n')}\n`;
       defaultName = `transcript-${timestamp}.md`;
       filters = [{ name: 'Markdown', extensions: ['md'] }];
     } else if (format === 'srt') {
@@ -2846,6 +2909,11 @@ class WindyApp {
       clearInterval(this._apiChunkInterval);
       this._apiChunkInterval = null;
     }
+    // M5: Stop proxy-based Deepgram stream if active
+    if (this._dgUsingProxy && window.windyAPI?.deepgramStreamStop) {
+      window.windyAPI.deepgramStreamStop();
+      this._dgUsingProxy = false;
+    }
     if (this._deepgramWs) {
       this._deepgramWs.close();
       this._deepgramWs = null;
@@ -2914,12 +2982,98 @@ class WindyApp {
   }
   /**
    * Start Deepgram real-time WebSocket streaming
+   * M5: Uses IPC proxy to keep API key in main process — never exposed to renderer
    */
   async _startDeepgramStreaming(stream, apiKey) {
     const dgLang = localStorage.getItem('windy_language') || 'en';
     const dgDiarize = localStorage.getItem('windy_diarize') === 'true';
+
+    // M5: Use main-process proxy if available (API key stays in main process)
+    const useProxy = !!window.windyAPI?.deepgramStreamStart;
+
+    if (useProxy) {
+      const result = await window.windyAPI.deepgramStreamStart({ language: dgLang, diarize: dgDiarize });
+      if (!result?.ok) {
+        this.showReconnectToast(`⚠️ ${result?.error || 'Failed to start Deepgram stream'}`);
+        return;
+      }
+      // Mark proxy mode so stopApiRecording uses the right cleanup
+      this._dgUsingProxy = true;
+
+      window.windyAPI.onDeepgramProxyOpen(() => {
+        console.debug('[Deepgram] Proxy WebSocket connected');
+        // Stream audio to Deepgram via main process
+        const audioCtx = new AudioContext({ sampleRate: 16000 });
+        const source = audioCtx.createMediaStreamSource(stream);
+        const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+        processor.onaudioprocess = (e) => {
+          const inputData = e.inputBuffer.getChannelData(0);
+          const int16 = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            int16[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+          }
+          window.windyAPI.deepgramStreamSend(int16.buffer);
+        };
+
+        source.connect(processor);
+        processor.connect(audioCtx.destination);
+        this._dgAudioCtx = audioCtx;
+        this._dgProcessor = processor;
+        this._dgSource = source;
+        this._dgStream = stream;
+      });
+
+      window.windyAPI.onDeepgramProxyMessage((dataStr) => {
+        try {
+          const data = JSON.parse(dataStr);
+          if (data.channel?.alternatives?.[0]) {
+            const alt = data.channel.alternatives[0];
+            const text = alt.transcript;
+            if (text) {
+              if (data.is_final) {
+                this._streamingText += (this._streamingText ? ' ' : '') + text;
+                this.transcript.push({ text: text.trim(), partial: false, start: 0, end: 0, confidence: alt.confidence || 1, words: [] });
+                this._interimText = '';
+                this.updateWordCount();
+              } else {
+                this._interimText = text;
+              }
+              this._renderStreamTranscript();
+            }
+          }
+        } catch (err) {
+          console.error('[Deepgram] Parse error:', err);
+        }
+      });
+
+      window.windyAPI.onDeepgramProxyError((msg) => {
+        console.error('[Deepgram] Proxy error:', msg);
+        this.showReconnectToast('⚠️ Stream engine connection error. Check API key.');
+      });
+
+      window.windyAPI.onDeepgramProxyClose(() => {
+        console.debug('[Deepgram] Proxy WebSocket closed');
+        if (this._dgProcessor) this._dgProcessor.disconnect();
+        if (this._dgSource) this._dgSource.disconnect();
+        if (this._dgAudioCtx) this._dgAudioCtx.close();
+        if (this._dgStream) this._dgStream.getTracks().forEach(t => t.stop());
+        if (this.isRecording) {
+          this.isRecording = false;
+          this.setState('idle');
+          this.transcriptContent.contentEditable = 'true';
+          if (this._streamingText.trim() && window.windyAPI?.archiveTranscript) {
+            window.windyAPI.archiveTranscript(this._streamingText.trim(), 'deepgram');
+          }
+        }
+      });
+      return;
+    }
+
+    // Fallback: direct WebSocket (legacy — API key passed as sub-protocol)
     let dgUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&language=${dgLang}&smart_format=true&interim_results=true&punctuate=true`;
     if (dgDiarize) dgUrl += '&diarize=true';
+    this._dgUsingProxy = false;
 
     this._deepgramWs = new WebSocket(dgUrl, ['token', apiKey]);
 
@@ -3168,7 +3322,7 @@ class WindyApp {
       // If cloud mode, attempt cloud WS connection first
       // Use default URL if not explicitly set
       if (this.transcriptionEngine === 'cloud' && !this.cloudUrl) {
-        this.cloudUrl = (window.API_CONFIG || {}).wsUrl || 'wss://windypro.thewindstorm.uk';
+        this.cloudUrl = (window.API_CONFIG || {}).wsUrl || 'wss://windyword.ai';
       }
       console.warn(`[Record] engine=${this.transcriptionEngine}, cloudUrl="${this.cloudUrl}", cloudToken=${this.cloudToken ? 'exists' : 'MISSING'}`);
       if (this.transcriptionEngine === 'cloud' && this.cloudUrl && this.cloudUrl.startsWith('wss://')) {

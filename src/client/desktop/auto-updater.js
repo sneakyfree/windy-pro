@@ -17,7 +17,7 @@ const log = require('./logger')('AutoUpdater');
 class AutoUpdater {
     constructor(options = {}) {
         this.currentVersion = options.version || app?.getVersion?.() || '1.0.0';
-        this.updateUrl = options.updateUrl || 'https://windypro.thewindstorm.uk/api/v1/updates/check';
+        this.updateUrl = options.updateUrl || 'https://windyword.ai/api/v1/updates/check';
         this.checkInterval = options.checkInterval || 4 * 3600 * 1000; // 4 hours
         this.autoDownload = options.autoDownload !== false;
         this._timer = null;

@@ -8,7 +8,9 @@ export default defineConfig({
         port: 5173,
         allowedHosts: [
             'windypro.thewindstorm.uk',
-            '.thewindstorm.uk'
+            '.thewindstorm.uk',
+            'windyword.ai',
+            '.windyword.ai'
         ],
         proxy: {
             '/api/v1': 'http://localhost:8098',

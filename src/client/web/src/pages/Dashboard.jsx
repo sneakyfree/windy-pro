@@ -14,19 +14,27 @@ function getUser() {
 
 async function apiFetch(path, options = {}) {
     const token = getToken()
-    const res = await fetch(`${API_BASE}${path}`, {
-        ...options,
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            ...options.headers
-        }
-    })
+    let res
+    try {
+        res = await fetch(`${API_BASE}${path}`, {
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                ...options.headers
+            }
+        })
+    } catch {
+        return { _error: 'network' }
+    }
     if (res.status === 401) {
         localStorage.removeItem('windy_token')
         localStorage.removeItem('windy_user')
         window.location.href = '/auth'
         return null
+    }
+    if (res.status >= 500) {
+        return { _error: 'server' }
     }
     return res.json()
 }
@@ -61,17 +69,25 @@ export default function Dashboard() {
     const [page, setPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(null)
     const [expanded, setExpanded] = useState(null)
     const [expandedData, setExpandedData] = useState(null)
     const [translationStats, setTranslationStats] = useState(null)
+    const [ecosystem, setEcosystem] = useState(null)
     const navigate = useNavigate()
     const user = getUser()
 
     const loadRecordings = useCallback(async () => {
         setLoading(true)
+        setError(null)
         const params = new URLSearchParams({ page })
         if (search) params.set('search', search)
         const data = await apiFetch(`/recordings?${params}`)
+        if (data?._error) {
+            setError(data._error)
+            setLoading(false)
+            return
+        }
         if (data) {
             setRecordings(data.recordings || [])
             setTotalPages(data.pagination?.totalPages || 1)
@@ -81,7 +97,7 @@ export default function Dashboard() {
 
     const loadStats = useCallback(async () => {
         const data = await apiFetch('/recordings/stats')
-        if (data) setStats(data.stats)
+        if (data) setStats(data)
     }, [])
 
     useEffect(() => { loadRecordings() }, [loadRecordings])
@@ -93,7 +109,13 @@ export default function Dashboard() {
                 languages: data.languages || [],
                 favorites: data.favoriteCount || 0
             })
-        }).catch(() => { })
+        }).catch(err => console.warn('API error:', err.message))
+    }, [])
+
+    useEffect(() => {
+        apiFetch('/identity/ecosystem-status').then(data => {
+            if (data?.products) setEcosystem(data)
+        }).catch(() => {})
     }, [])
 
     const handleExpand = async (id) => {
@@ -117,7 +139,7 @@ export default function Dashboard() {
     }
 
     const handleLogout = () => {
-        apiFetch('/auth/logout', { method: 'POST' }).catch(() => { })
+        apiFetch('/auth/logout', { method: 'POST' }).catch(err => console.warn('Logout error:', err.message))
         localStorage.removeItem('windy_token')
         localStorage.removeItem('windy_user')
         navigate('/auth')
@@ -132,7 +154,7 @@ export default function Dashboard() {
     // Group recordings by date
     const groups = {}
     recordings.forEach(r => {
-        const key = formatDate(r.recorded_at)
+        const key = formatDate(r.createdAt)
         if (!groups[key]) groups[key] = []
         groups[key].push(r)
     })
@@ -165,23 +187,23 @@ export default function Dashboard() {
             {stats && (
                 <div className="dash-stats">
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{stats.totalRecordings}</span>
+                        <span className="dash-stat-value">{stats?.totalRecordings?.toLocaleString() || '0'}</span>
                         <span className="dash-stat-label">Recordings</span>
                     </div>
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{stats.totalWords.toLocaleString()}</span>
-                        <span className="dash-stat-label">Words</span>
+                        <span className="dash-stat-value">{stats?.totalSize ? Math.round(stats.totalSize / 1024).toLocaleString() + ' KB' : '0'}</span>
+                        <span className="dash-stat-label">Size</span>
                     </div>
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{stats.totalHours}h</span>
+                        <span className="dash-stat-value">{Math.round((stats?.totalDuration || 0) / 3600)}h</span>
                         <span className="dash-stat-label">Hours</span>
                     </div>
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{stats.audioCount}</span>
-                        <span className="dash-stat-label">🎤 Audio</span>
+                        <span className="dash-stat-value">{stats?.cloneReady?.toLocaleString() || '0'}</span>
+                        <span className="dash-stat-label">Clone Ready</span>
                     </div>
                     <div className="dash-stat">
-                        <span className="dash-stat-value">{stats.videoCount}</span>
+                        <span className="dash-stat-value">{stats?.videoRecordings?.toLocaleString() || '0'}</span>
                         <span className="dash-stat-label">🎬 Video</span>
                     </div>
                     {translationStats && (
@@ -196,6 +218,51 @@ export default function Dashboard() {
                             </div>
                         </>
                     )}
+                </div>
+            )}
+
+            {/* Ecosystem */}
+            {ecosystem && (
+                <div className="dash-ecosystem">
+                    <h3 className="dash-ecosystem-title">Windy Ecosystem</h3>
+                    <div className="dash-ecosystem-grid">
+                        {[
+                            { key: 'windy_word', label: 'Windy Word', icon: '🎙️', href: '/transcribe' },
+                            { key: 'windy_chat', label: 'Windy Chat', icon: '💬', href: 'https://windychat.com' },
+                            { key: 'windy_mail', label: 'Windy Mail', icon: '📧', href: 'https://windymail.ai' },
+                            { key: 'windy_cloud', label: 'Windy Cloud', icon: '☁️', href: '/vault' },
+                            { key: 'windy_fly', label: 'Windy Fly', icon: '🤖', href: 'https://windyfly.ai' },
+                            { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: '/soul-file' },
+                            { key: 'windy_traveler', label: 'Windy Traveler', icon: '🌍', href: '/translate' },
+                            { key: 'eternitas', label: 'Eternitas', icon: '🛡️', href: 'https://eternitas.ai' },
+                        ].map(p => {
+                            const product = ecosystem.products?.[p.key] || {}
+                            const status = product.status || 'not_provisioned'
+                            const badgeClass = status === 'active' ? 'eco-active'
+                                : status === 'pending' ? 'eco-pending'
+                                : status === 'upgrade_required' ? 'eco-upgrade'
+                                : status === 'available' ? 'eco-available'
+                                : 'eco-inactive'
+                            const badgeLabel = status === 'active' ? 'Active'
+                                : status === 'pending' ? 'Pending'
+                                : status === 'upgrade_required' ? 'Upgrade'
+                                : status === 'available' ? 'Available'
+                                : 'Not Active'
+                            const isExternal = p.href.startsWith('http')
+                            return (
+                                <a
+                                    key={p.key}
+                                    href={p.href}
+                                    className="dash-eco-card"
+                                    {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                                >
+                                    <span className="dash-eco-icon">{p.icon}</span>
+                                    <span className="dash-eco-label">{p.label}</span>
+                                    <span className={`dash-eco-badge ${badgeClass}`}>{badgeLabel}</span>
+                                </a>
+                            )
+                        })}
+                    </div>
                 </div>
             )}
 
@@ -215,11 +282,22 @@ export default function Dashboard() {
             <main className="dash-main">
                 {loading ? (
                     <div className="dash-loading">Loading recordings...</div>
+                ) : error ? (
+                    <div className="dash-empty">
+                        <div className="dash-empty-icon">{error === 'network' ? '📡' : '⚠️'}</div>
+                        <h3>{error === 'network' ? "Can't reach server. Check your connection." : 'Something went wrong. Try refreshing.'}</h3>
+                        <button className="dash-btn" onClick={() => loadRecordings()} style={{ marginTop: '16px', cursor: 'pointer' }}>Retry</button>
+                    </div>
                 ) : recordings.length === 0 ? (
                     <div className="dash-empty">
                         <div className="dash-empty-icon">🎙️</div>
                         <h3>No recordings yet</h3>
-                        <p>Start recording with Windy Pro desktop app and your transcripts will appear here.</p>
+                        <p>Welcome to Windy Word! Here's how to get started:</p>
+                        <div style={{ textAlign: 'left', margin: '16px auto', maxWidth: '360px', lineHeight: '2' }}>
+                            <div>1. <Link to="/transcribe" style={{ color: '#3B82F6' }}>Try cloud transcription</Link> — speak and see text in real-time</div>
+                            <div>2. <a href="#download" style={{ color: '#3B82F6' }}>Download the desktop app</a> — for local, private transcription</div>
+                            <div>3. Get the mobile app — <a href="https://apps.apple.com/app/windy-pro" target="_blank" rel="noopener noreferrer" style={{ color: '#3B82F6' }}>iOS</a> / <a href="https://play.google.com/store/apps/details?id=pro.windy.app" target="_blank" rel="noopener noreferrer" style={{ color: '#3B82F6' }}>Android</a></div>
+                        </div>
                     </div>
                 ) : (
                     Object.entries(groups).map(([date, recs]) => (
@@ -228,14 +306,14 @@ export default function Dashboard() {
                             {recs.map(r => (
                                 <div key={r.id} className={`dash-entry ${expanded === r.id ? 'expanded' : ''}`}>
                                     <div className="dash-entry-header" onClick={() => handleExpand(r.id)}>
-                                        <div className="dash-entry-time">{formatTime(r.recorded_at)}</div>
+                                        <div className="dash-entry-time">{formatTime(r.createdAt)}</div>
                                         <div className="dash-entry-preview">{r.preview || '(no text)'}</div>
                                         <div className="dash-entry-meta">
-                                            {r.has_audio ? <span className="dash-badge audio">🎤</span> : null}
-                                            {r.has_video ? <span className="dash-badge video">🎬</span> : null}
+                                            {r.hasAudio ? <span className="dash-badge audio">🎤</span> : null}
+                                            {r.hasVideo ? <span className="dash-badge video">🎬</span> : null}
                                             {r.mode === 'clone_capture' ? <span className="dash-badge clone">🧬</span> : null}
-                                            <span className="dash-entry-words">{r.word_count} words</span>
-                                            <span className="dash-entry-duration">{formatDuration(r.duration_seconds)}</span>
+                                            <span className="dash-entry-words">{r.wordCount} words</span>
+                                            <span className="dash-entry-duration">{formatDuration(r.durationSeconds)}</span>
                                             <span className="dash-entry-engine">{r.engine}</span>
                                         </div>
                                         <span className="dash-entry-chevron">{expanded === r.id ? '▼' : '▶'}</span>
@@ -244,14 +322,14 @@ export default function Dashboard() {
                                     {expanded === r.id && expandedData && (
                                         <div className="dash-entry-body">
                                             {/* Media Players */}
-                                            {expandedData.has_audio ? (
+                                            {expandedData.hasAudio ? (
                                                 <div className="dash-player">
                                                     <audio controls preload="metadata"
                                                         src={`${API_BASE}/recordings/${r.id}/audio?token=${getToken()}`}>
                                                     </audio>
                                                 </div>
                                             ) : null}
-                                            {expandedData.has_video ? (
+                                            {expandedData.hasVideo ? (
                                                 <div className="dash-player video-player">
                                                     <video controls preload="metadata"
                                                         src={`${API_BASE}/recordings/${r.id}/video?token=${getToken()}`}>

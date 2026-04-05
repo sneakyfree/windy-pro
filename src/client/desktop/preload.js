@@ -1,133 +1,153 @@
 /**
  * Windy Pro - Preload Script
- * Exposes safe APIs to the renderer process
+ * SEC-L7: APIs organized into namespaced groups to reduce audit surface.
+ * All handlers use contextBridge.exposeInMainWorld for safe IPC.
  */
 
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
-contextBridge.exposeInMainWorld('windyAPI', {
-  // Zoom
-  setZoomFactor: (factor) => webFrame.setZoomFactor(factor),
+// ── Helpers ──────────────────────────────────────────────────────
+// Restrict ipcRenderer.on listeners to known channels only (defense-in-depth)
+const ALLOWED_RECEIVE_CHANNELS = new Set([
+  'archive-result', 'update-toast', 'toggle-recording', 'request-transcript',
+  'state-change', 'open-settings', 'open-vault', 'injection-error',
+  'python-loading', 'open-history', 'font-size-changed', 'model-download-progress',
+  'license-updated', 'license-expired', 'open-translate', 'show-welcome',
+  'show-keyboard-shortcuts', 'system-theme-changed', 'pair-download-progress',
+  'video-frame-to-preview', 'recording-state-to-preview',
+]);
 
-  // Settings
+function safeOn(channel, callback) {
+  if (!ALLOWED_RECEIVE_CHANNELS.has(channel)) {
+    console.warn(`[Preload] Blocked listener on unknown channel: ${channel}`);
+    return;
+  }
+  ipcRenderer.on(channel, callback);
+}
+
+contextBridge.exposeInMainWorld('windyAPI', {
+  // ═══ Window Controls ═══════════════════════════════════════════
+  setZoomFactor: (factor) => webFrame.setZoomFactor(factor),
+  minimize: () => ipcRenderer.send('minimize-window'),
+  maximize: () => ipcRenderer.send('maximize-window'),
+  unmaximize: () => ipcRenderer.send('unmaximize-window'),
+  isMaximized: () => ipcRenderer.invoke('is-maximized'),
+  platform: process.platform,
+
+  // ═══ Settings ══════════════════════════════════════════════════
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (settings) => ipcRenderer.send('update-settings', settings),
   rebindHotkey: (key, accelerator) => ipcRenderer.invoke('rebind-hotkey', key, accelerator),
   getServerConfig: () => ipcRenderer.invoke('get-server-config'),
+
+  // ═══ Archive & History ═════════════════════════════════════════
   chooseArchiveFolder: () => ipcRenderer.invoke('choose-archive-folder'),
   archiveTranscript: (payload) => ipcRenderer.send('archive-transcript', payload),
   archiveAudio: (base64, timestamp) => ipcRenderer.invoke('archive-audio', base64, timestamp),
   archiveVideo: (base64, timestamp) => ipcRenderer.invoke('archive-video', base64, timestamp),
   readArchiveAudio: (filePath) => ipcRenderer.invoke('read-archive-audio', filePath),
   readArchiveVideo: (filePath) => ipcRenderer.invoke('read-archive-video', filePath),
+  openArchiveFolder: () => ipcRenderer.send('open-archive-folder'),
+  getArchiveHistory: () => ipcRenderer.invoke('get-archive-history'),
+  deleteArchiveEntry: (filePath) => ipcRenderer.invoke('delete-archive-entry', filePath),
+  getArchiveStats: () => ipcRenderer.invoke('get-archive-stats'),
+  onArchiveResult: (callback) => {
+    safeOn('archive-result', (event, payload) => callback(payload));
+  },
+
+  // ═══ Recording ═════════════════════════════════════════════════
   batchTranscribeLocal: (base64Audio) => ipcRenderer.invoke('batch-transcribe-local', base64Audio),
   autoPasteText: (text) => ipcRenderer.invoke('auto-paste-text', text),
   sendVoiceLevel: (level) => ipcRenderer.send('voice-level', level),
-  onArchiveResult: (callback) => {
-    ipcRenderer.on('archive-result', (event, payload) => callback(payload));
+  onToggleRecording: (callback) => {
+    safeOn('toggle-recording', (event, isRecording) => callback(isRecording));
   },
-  onUpdateToast: (callback) => {
-    ipcRenderer.on('update-toast', (event, payload) => callback(payload));
+  onRequestTranscript: (callback) => {
+    safeOn('request-transcript', () => callback());
   },
-  openArchiveFolder: () => ipcRenderer.send('open-archive-folder'),
-  openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
-  openCheckoutUrl: (opts) => ipcRenderer.invoke('open-checkout-url', opts),
-  copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
-  minimize: () => ipcRenderer.send('minimize-window'),
-  maximize: () => ipcRenderer.send('maximize-window'),
-  unmaximize: () => ipcRenderer.send('unmaximize-window'),
-  isMaximized: () => ipcRenderer.invoke('is-maximized'),
-  identifySong: (opts) => ipcRenderer.invoke('identify-song', opts),
-  checkFpcalc: () => ipcRenderer.invoke('check-fpcalc'),
+  sendTranscriptForPaste: (transcript) => {
+    ipcRenderer.send('transcript-for-paste', transcript);
+  },
+  notifyBatchComplete: (wordCount) => ipcRenderer.send('batch-complete', { wordCount }),
+  notifyBatchProcessing: () => ipcRenderer.send('batch-processing'),
+  notifyRecordingFailed: () => ipcRenderer.send('recording-failed'),
 
-  // Video preview window (independent)
+  // ═══ Video ═════════════════════════════════════════════════════
   showVideoPreview: () => ipcRenderer.invoke('show-video-preview'),
   hideVideoPreview: () => ipcRenderer.invoke('hide-video-preview'),
   sendVideoFrame: (dataUrl) => ipcRenderer.send('video-frame-to-preview', dataUrl),
   sendRecordingState: (state) => ipcRenderer.send('recording-state-to-preview', state),
 
-  // Font size control
+  // ═══ Font ══════════════════════════════════════════════════════
   getFontSize: () => ipcRenderer.invoke('get-font-size'),
   setFontSize: (percent) => ipcRenderer.invoke('set-font-size', percent),
-  onFontSizeChange: (cb) => ipcRenderer.on('font-size-changed', (_e, percent) => cb(percent)),
+  onFontSizeChange: (cb) => safeOn('font-size-changed', (_e, percent) => cb(percent)),
 
-  // Recording control
-  onToggleRecording: (callback) => {
-    ipcRenderer.on('toggle-recording', (event, isRecording) => callback(isRecording));
-  },
-
-  // Transcript paste
-  onRequestTranscript: (callback) => {
-    ipcRenderer.on('request-transcript', () => callback());
-  },
-  sendTranscriptForPaste: (transcript) => {
-    ipcRenderer.send('transcript-for-paste', transcript);
-  },
-
-  // State changes
-  onStateChange: (callback) => {
-    ipcRenderer.on('state-change', (event, state) => callback(state));
-  },
-
-  // Navigation
-  onOpenSettings: (callback) => {
-    ipcRenderer.on('open-settings', () => callback());
-  },
-  onOpenVault: (callback) => {
-    ipcRenderer.on('open-vault', () => callback());
-  },
-
-  // Injection
-  checkInjectionPermissions: () => ipcRenderer.invoke('check-injection-permissions'),
-  onInjectionError: (callback) => {
-    ipcRenderer.on('injection-error', (event, message) => callback(message));
-  },
-
-  // Crash recovery
-  checkCrashRecovery: () => ipcRenderer.invoke('check-crash-recovery'),
-  dismissCrashRecovery: () => ipcRenderer.invoke('dismiss-crash-recovery'),
-
-  // Python server loading state (RP-04)
-  onPythonLoading: (callback) => {
-    ipcRenderer.on('python-loading', (event, isLoading) => callback(isLoading));
-  },
-
-  // Batch processing notifications
-  notifyBatchComplete: (wordCount) => ipcRenderer.send('batch-complete', { wordCount }),
-  notifyBatchProcessing: () => ipcRenderer.send('batch-processing'),
-  notifyRecordingFailed: () => ipcRenderer.send('recording-failed'),
-  onOpenHistory: (callback) => {
-    ipcRenderer.on('open-history', () => callback());
-  },
+  // ═══ Navigation & External ════════════════════════════════════
+  openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
+  openCheckoutUrl: (opts) => ipcRenderer.invoke('open-checkout-url', opts),
+  copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
   saveFile: (options) => ipcRenderer.invoke('save-file', options),
 
-  // Platform info
-  platform: process.platform,
+  // ═══ State & UI Events ════════════════════════════════════════
+  onStateChange: (callback) => {
+    safeOn('state-change', (event, state) => callback(state));
+  },
+  onOpenSettings: (callback) => {
+    safeOn('open-settings', () => callback());
+  },
+  onOpenVault: (callback) => {
+    safeOn('open-vault', () => callback());
+  },
+  onOpenHistory: (callback) => {
+    safeOn('open-history', () => callback());
+  },
+  onUpdateToast: (callback) => {
+    safeOn('update-toast', (event, payload) => callback(payload));
+  },
+  onShowWelcome: (callback) => safeOn('show-welcome', () => callback()),
+  dismissWelcome: () => ipcRenderer.invoke('dismiss-welcome'),
+  onShowKeyboardShortcuts: (callback) => safeOn('show-keyboard-shortcuts', () => callback()),
+  onSystemThemeChanged: (callback) => safeOn('system-theme-changed', (_e, theme) => callback(theme)),
 
-  // App version (reads from package.json via main process)
+  // ═══ Injection / Accessibility ════════════════════════════════
+  checkInjectionPermissions: () => ipcRenderer.invoke('check-injection-permissions'),
+  onInjectionError: (callback) => {
+    safeOn('injection-error', (event, message) => callback(message));
+  },
+
+  // ═══ Crash Recovery ════════════════════════════════════════════
+  checkCrashRecovery: () => ipcRenderer.invoke('check-crash-recovery'),
+  dismissCrashRecovery: () => ipcRenderer.invoke('dismiss-crash-recovery'),
+  onPythonLoading: (callback) => {
+    safeOn('python-loading', (event, isLoading) => callback(isLoading));
+  },
+
+  // ═══ App Lifecycle ════════════════════════════════════════════
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
   installDebUpdate: () => ipcRenderer.invoke('install-deb-update'),
   updateTornadoSize: (size) => ipcRenderer.send('update-tornado-size', size),
   updateWidget: (data) => ipcRenderer.send('update-widget', data),
-  getArchiveHistory: () => ipcRenderer.invoke('get-archive-history'),
-  deleteArchiveEntry: (filePath) => ipcRenderer.invoke('delete-archive-entry', filePath),
-  getArchiveStats: () => ipcRenderer.invoke('get-archive-stats'),
-  exportSoulFile: () => ipcRenderer.invoke('export-soul-file'),
-  exportVoiceClone: () => ipcRenderer.invoke('export-voice-clone'),
 
-  // Translation (offline fallback + mini-translate)
+  // ═══ Song Identification ══════════════════════════════════════
+  identifySong: (opts) => ipcRenderer.invoke('identify-song', opts),
+  checkFpcalc: () => ipcRenderer.invoke('check-fpcalc'),
+
+  // ═══ Translation ══════════════════════════════════════════════
   translateOffline: (text, sourceLang, targetLang) => ipcRenderer.invoke('translate-offline', text, sourceLang, targetLang),
   translateText: (text, sourceLang, targetLang) => ipcRenderer.invoke('translate-text', text, sourceLang, targetLang),
   openMiniTranslate: () => ipcRenderer.send('open-mini-translate'),
   onOpenTranslate: (callback) => {
-    ipcRenderer.on('open-translate', () => callback());
+    safeOn('open-translate', () => callback());
   },
 
-  // Auto-update
-  installUpdate: () => ipcRenderer.invoke('install-update'),
+  // ═══ Export ════════════════════════════════════════════════════
+  exportSoulFile: () => ipcRenderer.invoke('export-soul-file'),
+  exportVoiceClone: () => ipcRenderer.invoke('export-voice-clone'),
 
-  // Stripe payment
+  // ═══ Stripe / Billing ═════════════════════════════════════════
   createCheckoutSession: (priceId, email) => ipcRenderer.invoke('create-checkout-session', priceId, email),
   checkPaymentStatus: (sessionId) => ipcRenderer.invoke('check-payment-status', sessionId),
   getCurrentTier: () => ipcRenderer.invoke('get-current-tier'),
@@ -135,31 +155,29 @@ contextBridge.exposeInMainWorld('windyAPI', {
   applyCoupon: (code) => ipcRenderer.invoke('apply-coupon', code),
   openBillingPortal: () => ipcRenderer.invoke('open-billing-portal'),
 
-  // Model download manager
+  // ═══ Model Downloads ══════════════════════════════════════════
   checkModelStatus: () => ipcRenderer.invoke('check-model-status'),
   downloadModels: (modelNames) => ipcRenderer.invoke('download-models', modelNames),
   showDownloadWizard: (tier) => ipcRenderer.invoke('show-download-wizard', tier),
-  onModelDownloadProgress: (callback) => ipcRenderer.on('model-download-progress', (e, data) => callback(data)),
-  onLicenseUpdated: (callback) => ipcRenderer.on('license-updated', (e, tier) => callback(tier)),
-  onLicenseExpired: (callback) => ipcRenderer.on('license-expired', (e, data) => callback(data)),
+  onModelDownloadProgress: (callback) => safeOn('model-download-progress', (e, data) => callback(data)),
+  onLicenseUpdated: (callback) => safeOn('license-updated', (e, tier) => callback(tier)),
+  onLicenseExpired: (callback) => safeOn('license-expired', (e, data) => callback(data)),
   validateLicense: () => ipcRenderer.invoke('validate-license'),
 
-  // Wizard
+  // ═══ Wizard ════════════════════════════════════════════════════
   getWizardState: () => ipcRenderer.invoke('get-wizard-state'),
   setWizardState: (state) => ipcRenderer.invoke('set-wizard-state', state),
   detectHardware: () => ipcRenderer.invoke('detect-hardware'),
   registerWizardAccount: (data) => ipcRenderer.invoke('register-wizard-account', data),
   setupAutostart: (enable) => ipcRenderer.invoke('setup-autostart', enable),
 
-  // ─── Premium Features ───
-
-  // Translation Memory
+  // ═══ Translation Memory ════════════════════════════════════════
   saveTranslationMemory: (data) => ipcRenderer.invoke('save-translation-memory', data),
   lookupTranslationMemory: (text, sourceLang, targetLang) => ipcRenderer.invoke('lookup-translation-memory', text, sourceLang, targetLang),
   getTranslationMemoryStats: () => ipcRenderer.invoke('get-translation-memory-stats'),
   clearTranslationMemory: () => ipcRenderer.invoke('clear-translation-memory'),
 
-  // Voice Clone Management
+  // ═══ Voice Clone ═══════════════════════════════════════════════
   getVoiceClones: () => ipcRenderer.invoke('get-voice-clones'),
   createVoiceClone: (name, base64, duration) => ipcRenderer.invoke('create-voice-clone', name, base64, duration),
   deleteVoiceClone: (id) => ipcRenderer.invoke('delete-voice-clone', id),
@@ -167,11 +185,11 @@ contextBridge.exposeInMainWorld('windyAPI', {
   previewVoiceClone: (id) => ipcRenderer.invoke('preview-voice-clone', id),
   uploadVoiceCloneFile: (name) => ipcRenderer.invoke('upload-voice-clone-file', name),
 
-  // Document Translation
+  // ═══ Document Translation ══════════════════════════════════════
   extractDocumentText: (base64, ext) => ipcRenderer.invoke('extract-document-text', base64, ext),
   browseDocumentFile: () => ipcRenderer.invoke('browse-document-file'),
 
-  // Clone Data Bundles
+  // ═══ Clone Data Bundles ════════════════════════════════════════
   saveCloneBundle: (data) => ipcRenderer.invoke('save-clone-bundle', data),
   getCloneBundles: () => ipcRenderer.invoke('get-clone-bundles'),
   deleteCloneBundle: (id) => ipcRenderer.invoke('delete-clone-bundle', id),
@@ -179,7 +197,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   exportCloneBundles: (ids) => ipcRenderer.invoke('export-clone-bundles', ids),
   startCloneTraining: (ids) => ipcRenderer.invoke('start-clone-training', ids),
 
-  // Auto-Sync
+  // ═══ Cloud Sync ════════════════════════════════════════════════
   getSyncState: () => ipcRenderer.invoke('get-sync-state'),
   saveSyncState: (state) => ipcRenderer.invoke('save-sync-state', state),
   fetchRemoteBundles: (since) => ipcRenderer.invoke('fetch-remote-bundles', since),
@@ -189,17 +207,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   getStorageStats: () => ipcRenderer.invoke('get-storage-stats'),
   deleteLocalBundleCopy: (id) => ipcRenderer.invoke('delete-local-bundle-copy', id),
 
-  // First-launch welcome
-  onShowWelcome: (callback) => ipcRenderer.on('show-welcome', () => callback()),
-  dismissWelcome: () => ipcRenderer.invoke('dismiss-welcome'),
-
-  // Keyboard shortcuts modal
-  onShowKeyboardShortcuts: (callback) => ipcRenderer.on('show-keyboard-shortcuts', () => callback()),
-
-  // System theme
-  onSystemThemeChanged: (callback) => ipcRenderer.on('system-theme-changed', (_e, theme) => callback(theme)),
-
-  // ═══ Pair Download Manager / Marketplace (L1 + L2) ═══
+  // ═══ Translation Pair Marketplace ══════════════════════════════
   pairCatalog: () => ipcRenderer.invoke('pair-catalog'),
   pairBundles: () => ipcRenderer.invoke('pair-bundles'),
   pairDownload: (pairId) => ipcRenderer.invoke('pair-download', pairId),
@@ -210,10 +218,20 @@ contextBridge.exposeInMainWorld('windyAPI', {
   pairStorageInfo: () => ipcRenderer.invoke('pair-storage-info'),
   onPairDownloadProgress: (callback) => {
     ipcRenderer.removeAllListeners('pair-download-progress');
-    ipcRenderer.on('pair-download-progress', (event, data) => callback(data));
+    safeOn('pair-download-progress', (event, data) => callback(data));
   },
 
+  // ═══ Secure Key Storage ════════════════════════════════════════
   // SEC-P0: Encrypted API key storage via main process safeStorage
   setApiKey: (keyName, keyValue) => ipcRenderer.invoke('set-api-key', keyName, keyValue),
   getApiKey: (keyName) => ipcRenderer.invoke('get-api-key', keyName),
+
+  // ═══ M5: Deepgram WebSocket Proxy (API key stays in main process) ═══
+  deepgramStreamStart: (opts) => ipcRenderer.invoke('deepgram-stream-start', opts),
+  deepgramStreamSend: (audioBuffer) => ipcRenderer.invoke('deepgram-stream-send', audioBuffer),
+  deepgramStreamStop: () => ipcRenderer.invoke('deepgram-stream-stop'),
+  onDeepgramProxyOpen: (callback) => { ipcRenderer.removeAllListeners('deepgram-proxy-open'); safeOn('deepgram-proxy-open', () => callback()); },
+  onDeepgramProxyMessage: (callback) => { ipcRenderer.removeAllListeners('deepgram-proxy-message'); safeOn('deepgram-proxy-message', (_e, data) => callback(data)); },
+  onDeepgramProxyError: (callback) => { ipcRenderer.removeAllListeners('deepgram-proxy-error'); safeOn('deepgram-proxy-error', (_e, msg) => callback(msg)); },
+  onDeepgramProxyClose: (callback) => { ipcRenderer.removeAllListeners('deepgram-proxy-close'); safeOn('deepgram-proxy-close', () => callback()); },
 });

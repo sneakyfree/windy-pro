@@ -1,9 +1,9 @@
 # 🧬 WINDY PRO — DNA STRAND MASTER PLAN
 
-**Version:** 2.0.0
+**Version:** 2.2.0
 **Created:** 2026-02-04
-**Last Updated:** 2026-03-12
-**Authors:** Kit 0 + Kit-0C1Veron + Antigravity + Kit 0C3 Charlie + Grant Whitmer
+**Last Updated:** 2026-03-31
+**Authors:** Kit 0 + Kit-0C1Veron + Antigravity + Kit 0C3 Charlie + Grant Whitmer + Claude Opus 4.6
 **Philosophy:** Begin with the end in mind. — Stephen R. Covey
 
 ---
@@ -68,6 +68,22 @@ maps perfectly without requiring any AI/ML knowledge. Decision by Grant, 27 Feb 
 
 ### The Vision in One Sentence
 **Windy Pro is a push-button, TurboTax-simple voice platform that provides unlimited real-time transcription AND real-time offline translation — local-first for power users, cloud-backed for everyone else. Your voice, your languages, your device, your privacy.**
+
+### Ecosystem Context
+
+Windy Pro is one product in a family of nine (see `BRAND-ARCHITECTURE.md` for the full picture). This DNA plan covers the Windy Pro desktop/mobile app and its directly integrated components. The broader ecosystem includes:
+
+- **Windy Word** (windyword.com) — the consumer-facing brand for Windy Pro's voice-to-text capability
+- **Windy Traveler** (windytraveler.com) — translation pair marketplace, monetized through Windy Pro
+- **Windy Chat** (windychat.com) — messaging + social platform (Strand K in this plan, separate mobile repo)
+- **Windy Mail** (windymail.ai) — agent-friendly email for humans and bots (separate repo: `sneakyfree/windy-mail`)
+- **Windy Fly** (windyfly.ai) — AI agent born into the ecosystem (repo: `sneakyfree/windy-agent`)
+- **HiFly** (hifly.ai) — open-source agent framework (will fork from windy-agent)
+- **Windy Clone** (windyclone.com) — digital likeness / voice clone
+- **Windy Cloud** (windycloud.com) — storage, sync, infrastructure backbone (Strand D in this plan)
+- **Eternitas** (eternitas.ai) — independent bot registry, separate entity (separate repo: `sneakyfree/eternitas`)
+
+Infrastructure decisions in this repo (especially Strands D and K) should account for future integration with Windy Mail, Eternitas, and the Windy Fly agent hatch experience. The brand architecture document is the canonical source of truth for how all products relate to each other.
 
 ### The User Experience (End State)
 
@@ -786,6 +802,43 @@ PRIORITY: MEDIUM (before launch)
 [Unchanged from v1.0]
 ```
 
+#### D3: Ecosystem Infrastructure (Windy Cloud Forward Planning)
+```
+STATUS: 🔲 PLANNING — No code yet. Documenting future requirements.
+PRIORITY: LOW (post-Windy Chat launch)
+ADDED: 2026-03-28
+
+Windy Cloud (windycloud.com) will eventually serve as the backbone for:
+
+1. WINDY MAIL INFRASTRUCTURE
+   ├── Mail server hosting (Postfix/Dovecot or managed Mailcow)
+   ├── Domain setup: windymail.ai (MX, SPF, DKIM, DMARC)
+   ├── Account provisioning API (called during Windy Fly hatch)
+   ├── Rate limiting engine (per-tier daily caps + velocity controls)
+   ├── Reputation scoring system (spam reports degrade sending score)
+   ├── IMAP/SMTP access per account
+   └── Eternitas kill switch integration (passport revoked → inbox dies)
+
+2. TWILIO PHONE NUMBER POOL
+   ├── Managed pool of Twilio numbers assigned to bots on hatch
+   ├── Number provisioning API (called during Windy Fly hatch)
+   ├── Number recycling (revoked passport → number returns to pool)
+   ├── Rate limits: SMS/day and calls/day per tier
+   └── Cost model: ~$1.15/month per number, absorbed into registration/subscription
+
+3. ETERNITAS CASCADE
+   ├── When an Eternitas passport is revoked, Windy Cloud must:
+   │   ├── Kill Windy Mail inbox
+   │   ├── Return Twilio number to pool
+   │   ├── Suspend Windy Chat access
+   │   └── Notify owner
+   └── Revocation webhook endpoint for Eternitas → Windy Cloud
+
+NOTE: Windy Mail and Eternitas have their own repos (sneakyfree/windy-mail,
+sneakyfree/eternitas). This codon tracks only the Windy Cloud infrastructure
+that supports them. See BRAND-ARCHITECTURE.md for the full ecosystem picture.
+```
+
 ---
 
 ## 📅 REVISED PHASE TIMELINE
@@ -847,9 +900,19 @@ CURRENT: MVP HARDENING + STRESS TESTING
 
 ---
 
-## 🔬 GAP ANALYSIS — 2026-02-20
+## 🔬 GAP ANALYSIS — 2026-03-31 (Updated)
 
-Performed by Antigravity after full repo audit. Previous audit by Kit-0C1Veron (2026-02-05).
+**Latest audit:** 2026-03-31 by Claude Opus 4.6. Full endpoint crawl (102 endpoints), web portal audit, desktop IPC audit, and DNA-to-code gap analysis. Results in `account-server/GAP_ANALYSIS.md`, `ENDPOINT_AUDIT.md`, `WEB_PORTAL_AUDIT.md`, `DESKTOP_AUDIT.md`.
+
+**Fixes applied in this revision:**
+- Stripe webhook 500 → 503 (billing.ts)
+- JWKS auto-generates dev key so /.well-known/jwks.json is never empty
+- Added GDPR self-deletion: DELETE /api/v1/auth/me
+- Admin dailyTranslations replaced with real query (was hardcoded array)
+- Strand H completely rewritten to match actual codebase (OAuth2, OIDC, billing, identity service, etc.)
+- IdentityAuditEvent type updated to include 'account_self_deleted'
+
+**Previous audit:** 2026-02-20 by Antigravity. Previous audit by Kit-0C1Veron (2026-02-05).
 
 ### Strand A (Engine)
 | Codon | Status | Gap | Action Required |
@@ -1874,303 +1937,408 @@ CODONS:
 
 ---
 
-### STRAND H: WEB PORTAL & USER DASHBOARD
+### STRAND H: ACCOUNT SERVER & IDENTITY HUB
 
 **Added:** 2026-03-01 by Antigravity + Grant Whitmer
-**Priority:** HIGH — Users need to access their recordings from any browser. This is the bridge between desktop power and cloud convenience.
-**Vision:** A user records themselves all day on their desktop. That evening, they open windypro.thewindstorm.uk on their phone, log in, and review every recording, transcript, and Soul File entry — searchable, playable, exportable.
+**Revised:** 2026-03-31 (full rewrite to match actual codebase after quality audit)
+**Priority:** HIGH — This is the identity hub, payment processor, and file storage for the entire Windy ecosystem.
+**Reality:** The account-server has evolved far beyond the original "web portal" scope into a full OAuth2/OIDC identity platform with Stripe billing, R2 storage, and ecosystem-wide provisioning.
 
-#### H1: Account Server
+#### H1: Account Server (Auth + Identity)
 ```
-FILE: services/account-server/server.js
-STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity)
-PRIORITY: HIGH (everything in this strand depends on accounts)
+FILE: account-server/src/routes/auth.ts (~620 lines)
+      account-server/src/routes/identity.ts (~970 lines)
+      account-server/src/identity-service.ts (~550 lines)
+STATUS: ✅ IMPLEMENTED (TypeScript, Express, comprehensive test suite)
+PRIORITY: HIGH (everything in the ecosystem depends on this)
 
 CODONS:
 ├── H1.1 User Registration ✅
 │   ├── POST /api/v1/auth/register
-│   ├── Fields: name, email, password
-│   ├── Password hashing: bcrypt (12 rounds)
-│   ├── Email uniqueness enforcement
-│   └── Returns: JWT + user object
+│   ├── Zod validation (name, email, password — min 8 chars, uppercase, lowercase, digit)
+│   ├── Password hashing: bcrypt (12 rounds) — SEC-L2
+│   ├── Email uniqueness enforcement (409 on duplicate)
+│   ├── Auto-provisions windy_pro product account + default scopes
+│   ├── Auto-creates pending windy_chat product account
+│   ├── Assigns windy_identity_id (cross-product UUID)
+│   └── Returns: JWT (RS256 or HS256) + refreshToken + user object
 │
 ├── H1.2 User Login ✅
 │   ├── POST /api/v1/auth/login
-│   ├── Fields: email, password
-│   ├── JWT token (HS256, 7-day expiry)
-│   ├── Refresh token support (30-day expiry)
-│   └── Rate limiting: 5 attempts per 15 min
+│   ├── Zod validation (email, password)
+│   ├── Timing-safe: wrong password and non-existent user return identical 401
+│   ├── JWT (RS256 preferred, HS256 fallback) — 15-minute expiry (SEC-M6)
+│   ├── Refresh token (30-day expiry, UUID-based)
+│   ├── Rate limiting: 5 attempts per minute (disabled in test)
+│   ├── Updates last_login_at on successful login
+│   └── Audit logging: login_failed events for security monitoring
 │
 ├── H1.3 Device Management ✅
-│   ├── POST /api/v1/auth/devices — register device
+│   ├── POST /api/v1/auth/devices/register — register device
 │   ├── GET /api/v1/auth/devices — list user's devices
-│   ├── DELETE /api/v1/auth/devices/:id — revoke device
-│   ├── 5-device limit per account (configurable)
-│   └── Device fingerprinting (hardware hash)
+│   ├── POST /api/v1/auth/devices/remove — revoke device
+│   ├── 5-device limit per account (configurable via MAX_DEVICES)
+│   └── Auto-registration on login if deviceId provided
 │
 ├── H1.4 User Profile ✅
-│   ├── GET /api/v1/auth/me — get profile
-│   ├── PATCH /api/v1/auth/me — update profile
-│   ├── PUT /api/v1/auth/password — change password
-│   └── DELETE /api/v1/auth/me — account deletion (GDPR)
+│   ├── GET /api/v1/auth/me — get profile (tier, email, devices)
+│   ├── POST /api/v1/auth/change-password — change password (validates current)
+│   ├── DELETE /api/v1/auth/me — GDPR self-deletion (cascade deletes all user data)
+│   ├── GET /api/v1/identity/me — extended identity info (products, scopes, passport)
+│   └── PATCH /api/v1/auth/me — 🔲 NOT IMPLEMENTED (use identity routes instead)
 │
 ├── H1.5 Token Management ✅
 │   ├── POST /api/v1/auth/refresh — refresh expired JWT
 │   ├── POST /api/v1/auth/logout — invalidate token
-│   └── Token blacklist (Redis or in-memory Set)
+│   ├── Token blacklist: Redis (if available) or SQLite token_blacklist table
+│   └── SEC-H5: Algorithm whitelist prevents alg:none confusion attacks
 │
-└── H1.6 Storage Backend ✅ (SQLite w/ WAL mode)
-    ├── SQLite for local dev/testing
-    ├── PostgreSQL for production (DATABASE_URL env)
-    └── Migration script: SQLite → PostgreSQL
+├── H1.6 Chat Validation Bridge ✅
+│   ├── POST /api/v1/auth/chat-validate — Synapse Matrix login bridge
+│   ├── Requires SYNAPSE_REGISTRATION_SECRET shared secret
+│   ├── Validates username (email or user ID) + password against identity hub
+│   └── Returns: user_id, windy_user_id, display_name, avatar_url
+│
+├── H1.7 Unified Identity Service ✅
+│   ├── Scope management: grant, revoke, list (product:permission format)
+│   ├── Product provisioning: windy_pro, windy_chat, windy_mail, windy_fly, etc.
+│   ├── Audit logging: all security events with IP + user-agent
+│   ├── Chat profile management (Matrix display_name, avatar)
+│   ├── Bot API keys: create, list, revoke (wk_ prefix, SHA-256 hashed)
+│   ├── Eternitas webhook handler (passport events)
+│   ├── Secretary consent management
+│   └── POST /api/v1/identity/provision-all — provision across ecosystem
+│
+└── H1.8 Storage Backend ✅
+    ├── SQLite with WAL mode for local dev (better-sqlite3)
+    ├── PostgreSQL adapter for production (DATABASE_URL env)
+    ├── DbAdapter interface: pluggable prepare/exec/pragma
+    ├── 21 tables: users, devices, refresh_tokens, recordings, translations,
+    │   favorites, oauth_clients, oauth_codes, refresh_tokens_oauth,
+    │   oauth_device_codes, product_accounts, identity_scopes,
+    │   identity_audit_log, chat_profiles, eternitas_passports,
+    │   bot_api_keys, files, transactions, coupons, token_blacklist, sync_queue
+    └── WAL checkpoint maintenance (periodic, prevents unbounded growth)
 
 DEPENDENCIES: None (this is the foundation)
 ```
 
-#### H2: Recording & Transcript API
+#### H2: OAuth2 / OIDC Provider ("Sign in with Windy")
 ```
-FILE: services/account-server/server.js (integrated into H1 server)
-STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity)
-PRIORITY: HIGH (the recordings dashboard needs data)
+FILE: account-server/src/routes/oauth.ts (~1000 lines)
+      account-server/src/jwks.ts (~380 lines)
+STATUS: ✅ IMPLEMENTED
+PRIORITY: HIGH (ecosystem SSO depends on this)
 
 CODONS:
-├── H2.1 Recording CRUD ✅
-│   ├── GET /api/v1/recordings — list all (paginated, 50/page)
-│   │   ├── Query params: ?page=1&search=keyword&from=2026-01-01&to=2026-03-01
-│   │   └── Returns: id, date, duration, wordCount, engine, hasAudio, hasVideo
-│   │
+├── H2.1 Authorization Code Grant ✅
+│   ├── GET /api/v1/oauth/authorize — authorization endpoint
+│   ├── PKCE support (S256 code_challenge)
+│   ├── State parameter for CSRF protection
+│   ├── Scope filtering against client's allowed_scopes
+│   ├── Consent tracking (oauth_consents table)
+│   └── 10-minute authorization code expiry, single-use enforcement
+│
+├── H2.2 Token Endpoint ✅
+│   ├── POST /api/v1/oauth/token
+│   ├── Grant types: authorization_code, client_credentials, refresh_token, device_code
+│   ├── RS256 JWT signing with JWKS key rotation
+│   ├── Client authentication: client_secret_basic, client_secret_post
+│   └── Rate limiting: 20 req/min on token endpoint
+│
+├── H2.3 Device Code Flow ✅
+│   ├── POST /api/v1/oauth/device — initiate device code flow
+│   ├── Returns: device_code, user_code, verification_uri
+│   ├── Poll via POST /api/v1/oauth/token with grant_type=device_code
+│   └── 10-minute code expiry
+│
+├── H2.4 OIDC Discovery ✅
+│   ├── GET /.well-known/openid-configuration — full OIDC metadata
+│   ├── Lists all supported grant types, scopes, algorithms
+│   └── Configurable issuer via OIDC_ISSUER env var
+│
+├── H2.5 JWKS Endpoint ✅
+│   ├── GET /.well-known/jwks.json — public keys for token verification
+│   ├── Cache-Control: public, max-age=3600
+│   ├── RS256 RSA-2048 keys with kid-based lookup
+│   ├── Key rotation support (grace period for outstanding tokens)
+│   ├── Auto-generates dev key if none configured (dev mode only)
+│   └── Pruning of expired rotated keys
+│
+├── H2.6 OAuth Client Management ✅
+│   ├── POST /api/v1/oauth/clients — register client (admin only)
+│   ├── GET /api/v1/oauth/clients — list clients
+│   ├── Auto-seeded ecosystem clients: windy_chat, windy_mail, eternitas, windy_fly
+│   └── Public vs confidential client support
+│
+├── H2.7 UserInfo Endpoint ✅
+│   ├── GET /api/v1/oauth/userinfo — OIDC UserInfo
+│   └── Returns: identity, email, products, scopes
+│
+└── H2.8 Token Validation (Cross-Product) ✅
+    ├── GET /api/v1/identity/validate-token — verifies JWT, returns full identity
+    ├── Used by Mail, Chat, and Agent to validate tokens without local JWT logic
+    └── Returns: windy_identity_id, scopes, products, tier, type
+
+DEPENDENCIES: H1 (account server)
+```
+
+#### H3: Recording & Transcript API
+```
+FILE: account-server/src/routes/recordings.ts (~450 lines)
+      account-server/src/routes/clone.ts (~73 lines)
+STATUS: 🟡 MOSTLY IMPLEMENTED (core CRUD works, some endpoints missing)
+PRIORITY: HIGH
+
+CODONS:
+├── H3.1 Recording CRUD ✅
+│   ├── GET /api/v1/recordings — list recordings (?since= filter, LIMIT 100)
 │   ├── GET /api/v1/recordings/:id — single recording detail
-│   │   └── Returns: full transcript text + metadata + media URLs
-│   │
-│   ├── DELETE /api/v1/recordings/:id — delete recording + associated files
-│   └── PATCH /api/v1/recordings/:id — update transcript text (user edits)
+│   ├── DELETE /api/v1/recordings/:id — delete recording + file cleanup
+│   ├── GET /api/v1/recordings/stats — total count, duration, size, quality
+│   ├── GET /api/v1/recordings/check?bundle_id= — check if bundle exists
+│   └── Cross-platform field mapping: camelCase for JS, snake_case for DB
 │
-├── H2.2 Media Streaming ✅
-│   ├── GET /api/v1/recordings/:id/audio — stream audio (Range headers)
-│   ├── GET /api/v1/recordings/:id/video — stream video (Range headers)
-│   └── Content-Type negotiation (webm, mp4, ogg, wav)
+├── H3.2 Upload Pipeline ✅
+│   ├── POST /api/v1/recordings/upload — single file upload (multer, magic bytes)
+│   ├── POST /api/v1/recordings/upload/chunk — chunked upload (10MB/chunk, 50 bundle limit)
+│   ├── POST /api/v1/recordings/upload/batch — batch upload (array of recordings)
+│   └── POST /api/v1/recordings/sync — sync recordings from desktop
 │
-├── H2.3 Bulk Operations ✅
-│   ├── POST /api/v1/recordings/export — export all as ZIP (text + media)
-│   ├── DELETE /api/v1/recordings/bulk — delete multiple by IDs
-│   └── GET /api/v1/recordings/stats — total words, total hours, total count
+├── H3.3 Media Streaming 🟡
+│   ├── GET /api/v1/recordings/:id/video — video streaming (Range headers) ✅
+│   ├── Content-Type: hardcoded video/webm (no content negotiation)
+│   ├── GET /api/v1/recordings/:id/audio — 🔲 NOT IMPLEMENTED
+│   └── Content-Type negotiation (webm, mp4, ogg, wav) — 🔲 NOT IMPLEMENTED
 │
-└── H2.4 Authentication Middleware ✅
-    ├── Bearer token validation on all /api/v1/recordings/* routes
+├── H3.4 Bulk Operations 🔲
+│   ├── POST /api/v1/recordings/export — 🔲 NOT IMPLEMENTED (ZIP export)
+│   ├── DELETE /api/v1/recordings/bulk — 🔲 NOT IMPLEMENTED
+│   └── PATCH /api/v1/recordings/:id — 🔲 NOT IMPLEMENTED (edit transcript)
+│
+├── H3.5 Clone Training Data ✅
+│   ├── GET /api/v1/clone/training-data — list clone-ready bundles
+│   └── POST /api/v1/clone/start-training — 🟡 STUB (returns "coming soon",
+│       directs users to export via desktop app for ElevenLabs/PlayHT)
+│
+└── H3.6 Authentication Middleware ✅
+    ├── Bearer token validation on all routes
     ├── User-scoped queries (user can ONLY see their own data)
+    ├── Bot API key support (wk_ prefix)
     └── Admin bypass for support scenarios
 
-DEPENDENCIES: H1 (account server for JWT validation)
+DEPENDENCIES: H1 (auth)
 ```
 
-#### H3: Recordings Dashboard (Web Frontend)
+#### H4: Stripe Billing Integration
 ```
-FILE: src/client/web/src/pages/Dashboard.jsx [NEW]
-STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity)
-PRIORITY: HIGH (the whole point of this strand)
+FILE: account-server/src/routes/billing.ts (~375 lines)
+STATUS: ✅ IMPLEMENTED
+PRIORITY: HIGH (revenue)
 
 CODONS:
-├── H3.1 Dashboard Layout ✅
-│   ├── Full-height responsive layout
-│   ├── Header: user avatar, name, logout
-│   ├── Stats bar: total recordings, total words, total hours
-│   ├── Search bar with date range picker
-│   └── Mobile-first responsive (works on phone browser)
+├── H4.1 Checkout Sessions ✅
+│   ├── POST /api/v1/stripe/create-checkout-session
+│   ├── Tier validation: pro, translate, translate_pro
+│   ├── Billing type: lifetime, monthly, yearly
+│   ├── Price ID resolution from env vars (STRIPE_*_PRICE_ID)
+│   ├── Auto-creates Stripe customer if needed
+│   └── Returns checkout session URL
 │
-├── H3.2 Recording List ✅
-│   ├── Grouped by date (TODAY, YESTERDAY, This Week, Older)
-│   ├── Each entry: timestamp, preview snippet, word count, duration
-│   ├── Media badges: 🎤 audio, 🎬 video, 🧬 clone capture
-│   ├── Click to expand → full transcript + media player
-│   ├── Infinite scroll / lazy loading (50 per page)
-│   └── Search highlighting
+├── H4.2 Billing Portal ✅
+│   ├── POST /api/v1/stripe/create-portal-session
+│   ├── Requires existing stripe_customer_id (400 if none)
+│   └── Returns portal session URL
 │
-├── H3.3 Inline Media Player ✅
-│   ├── Audio player: waveform visualization, play/pause, skip
-│   ├── Video player: responsive aspect ratio, fullscreen
-│   ├── Synced A/V playback (audio comes from audio player, video muted)
-│   └── Playback speed: 0.5x, 1x, 1.25x, 1.5x, 2x
+├── H4.3 Webhook Handler ✅
+│   ├── POST /api/v1/stripe/webhook (raw body, signature verification)
+│   ├── HMAC-SHA256 signature verification (timing-safe)
+│   ├── payment_intent.succeeded → upgrade tier, record transaction
+│   ├── invoice.paid → subscription payment recorded
+│   ├── customer.subscription.deleted → revert to free tier
+│   ├── charge.refunded → revert to free tier, mark tx as refunded
+│   ├── invoice.payment_failed → record failed transaction
+│   └── Unhandled events → 200 acknowledge (no action)
 │
-├── H3.4 Transcript Viewer ✅
-│   ├── Full transcript display with timestamps
-│   ├── Copy to clipboard button
-│   ├── Edit-in-place (contentEditable, auto-saves)
-│   ├── Export: TXT, MD, PDF
-│   └── Word count + estimated reading time
+├── H4.4 Transaction History ✅
+│   ├── GET /api/v1/billing/transactions — user's transaction history
+│   └── GET /api/v1/billing/summary — total spent, active subscriptions, tier info
 │
-├── H3.5 Management Actions ✅
-│   ├── Delete single recording (with confirmation modal)
-│   ├── Bulk select + delete
-│   ├── Export All as ZIP
-│   └── Download individual audio/video files
-│
-└── H3.6 Dashboard Routing ✅
-    ├── Route: /dashboard (protected)
-    ├── Add to App.jsx Routes
-    ├── Add "Dashboard" link to landing page nav (for logged-in users)
-    └── Redirect /transcribe → /dashboard after recording completes
+└── H4.5 Tier → Storage Mapping ✅
+    ├── free: 500 MB
+    ├── pro: 5 GB
+    ├── translate: 10 GB
+    └── translate-pro: 50 GB
 
-DEPENDENCIES: H2 (recording APIs), H1 (auth)
+DEPENDENCIES: H1 (auth), Stripe account
 ```
 
-#### H4: Desktop → Cloud Sync
+#### H5: File Storage (R2 + Local)
 ```
-FILE: src/client/desktop/renderer/sync.js [NEW]
-STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity)
-PRIORITY: MEDIUM (can use local-only initially)
+FILE: account-server/src/routes/storage.ts (~270 lines)
+      account-server/src/services/r2-adapter.ts (~200 lines)
+      account-server/src/middleware/file-validation.ts (~170 lines)
+STATUS: ✅ IMPLEMENTED
+PRIORITY: MEDIUM
 
 CODONS:
-├── H4.1 Upload Pipeline ✅
-│   ├── After archiveRecording() → queue upload to cloud
-│   ├── Upload: transcript JSON + audio blob + video blob
-│   ├── Retry logic: 3 attempts with exponential backoff
-│   ├── Resume interrupted uploads (chunked upload)
-│   └── Bandwidth-aware: pause if user is on metered connection
+├── H5.1 File Upload ✅
+│   ├── POST /api/v1/files/upload — multipart upload
+│   ├── Magic byte validation (PNG, JPEG, MP3, PDF, WebM, MP4, etc.)
+│   ├── Storage quota enforcement (413 when exceeded)
+│   ├── Backend: Cloudflare R2 (if configured) or local disk
+│   └── Max file size: 500 MB
 │
-├── H4.2 Sync Status UI ✅
-│   ├── Status badge in desktop app: ☁️ Synced / ⏳ Syncing / ❌ Offline
-│   ├── Per-recording sync indicator in History panel
-│   └── Settings toggle: "Auto-sync to cloud" (default: ON if logged in)
+├── H5.2 File Management ✅
+│   ├── GET /api/v1/files — list user's files (paginated)
+│   ├── GET /api/v1/files/:fileId — download file (ownership check)
+│   ├── DELETE /api/v1/files/:fileId — delete file (ownership check)
+│   └── Admin bypass for all operations
 │
-├── H4.3 Conflict Resolution 🟡 (basic last-write-wins)
-│   ├── Desktop edit wins (desktop is primary)
-│   ├── Deleted on web → mark as deleted on desktop (soft delete)
-│   └── Timestamp-based last-write-wins for transcript edits
-│
-├── H4.4 Offline Queue ✅
-│   ├── SQLite queue table: pending uploads
-│   ├── Process queue when internet reconnects
-│   └── Max queue size: 500 recordings (warn user)
-│
-└── H4.5 Login from Desktop ✅
-    ├── Settings → "Connect to Windy Cloud" button
-    ├── Opens in-app OAuth/login flow
-    ├── Stores JWT in electron-store (not localStorage)
-    └── Syncs user profile + device registration (H1.3)
+└── H5.3 R2 Backend ✅
+    ├── Cloudflare R2 adapter (S3-compatible)
+    ├── Automatic fallback to local disk if R2 not configured
+    └── Upload, download, delete, list operations
 
-DEPENDENCIES: H1 (accounts), H2 (recording APIs)
-NOTE: This is the most complex codon — can be deferred to Phase 2.
-      Dashboard works without sync if user uses Windy Cloud for transcription.
+DEPENDENCIES: H1 (auth)
 ```
 
-#### H5: Soul File Browser
+#### H6: OTP Verification
 ```
-FILE: src/client/web/src/pages/SoulFile.jsx [NEW]
-STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity)
-PRIORITY: MEDIUM (differentiator for Clone Capture users)
+FILE: account-server/src/routes/verification.ts
+STATUS: ✅ IMPLEMENTED
+PRIORITY: MEDIUM
 
 CODONS:
-├── H5.1 Soul File Overview Page ✅
-│   ├── Route: /soul-file (protected)
-│   ├── Total data stats: hours recorded, words transcribed, files archived
-│   ├── Timeline visualization: recording sessions per day (heatmap calendar)
-│   ├── Voice quality metrics: avg recording quality, silence ratio
-│   └── "Data completeness" progress indicator
+├── H6.1 SMS Verification ✅
+│   ├── POST /api/v1/identity/verify/send — send OTP via Twilio
+│   ├── POST /api/v1/identity/verify/check — validate OTP
+│   ├── GET /api/v1/identity/verify/status — check verification status
+│   └── Rate limiting: 5/min, 10/hr per identifier
 │
-├── H5.2 Clone Capture Archive Viewer ✅
-│   ├── Filter by: Clone Capture sessions only
-│   ├── Batch processing status: ⏳ Pending / ✅ Transcribed / ❌ Failed
-│   ├── Queue for overnight batch processing (future)
-│   └── Re-process button (re-run transcription with different engine)
-│
-└── H5.3 Export for Digital Twin 🟡 (future)
-    ├── Export all transcripts as single combined file
-    ├── Export voice samples (audio clips for voice cloning)
-    ├── Export metadata JSON (timestamps, durations, word counts)
-    └── Format: ZIP with README explaining structure
+└── H6.2 Email Verification ✅
+    ├── OTP via SendGrid (with console fallback)
+    └── Same API surface as SMS
 
-DEPENDENCIES: H3 (dashboard), H2 (recording APIs)
+DEPENDENCIES: H1, Twilio/SendGrid credentials
 ```
 
-#### H6: Landing Page Auth Integration
+#### H7: Admin Console
 ```
-FILE: src/client/web/src/pages/Landing.jsx (modify existing)
-STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity)
-PRIORITY: HIGH (users need to find the login)
+FILE: account-server/src/routes/admin.ts (~250 lines)
+      account-server/src/routes/admin-console.ts (server-rendered HTML)
+STATUS: ✅ IMPLEMENTED
+PRIORITY: MEDIUM
 
 CODONS:
-├── H6.1 Add Auth Buttons to Nav ✅
-│   ├── "Sign In" button in header (top-right)
-│   ├── "Get Started" CTA → /auth (register tab)
-│   ├── If logged in: show "Dashboard" button instead of "Sign In"
-│   └── User avatar + dropdown menu when logged in
+├── H7.1 Admin API ✅
+│   ├── GET /api/v1/admin/users — list users (paginated, searchable)
+│   ├── GET /api/v1/admin/stats — server stats (real daily translations query)
+│   ├── GET /api/v1/admin/revenue — revenue breakdown by tier
+│   ├── GET /api/v1/admin/users/:userId — user detail
+│   ├── POST /api/v1/admin/users/:userId/freeze — freeze/unfreeze account
+│   ├── POST /api/v1/admin/users/:userId/tier — update tier
+│   ├── DELETE /api/v1/admin/users/:userId — cascade delete user
+│   └── All routes require authenticateToken + adminOnly middleware
 │
-├── H6.2 Deploy Auth + Dashboard to Production 🟡
-│   ├── Vite build → static files
-│   ├── Nginx serves React app with client-side routing
-│   ├── API proxy: /api/* → account-server + cloud-storage
-│   └── SSL: Let's Encrypt via certbot
-│
-└── H6.3 Responsive Nav ✅
-    ├── Mobile hamburger menu
-    ├── "Sign In" accessible on all screen sizes
-    └── Touch-friendly dropdown menus
+└── H7.2 Admin Console (HTML) ✅
+    ├── GET /admin/overview — server-rendered dashboard
+    └── GET /admin/billing — billing transaction management
 
-DEPENDENCIES: H1 (account server running in prod)
+DEPENDENCIES: H1 (auth + admin role)
 ```
 
-#### H7: Web Portal Deployment
+#### H8: Web Portal Frontend
 ```
-FILES: deploy/docker-compose.yml, deploy/nginx.conf (modify existing)
-STATUS: ✅ IMPLEMENTED (2026-03-01, Antigravity — nginx config + Vite proxy)
-PRIORITY: HIGH (nothing works without deployment)
+FILE: src/client/web/src/pages/*.jsx (12 pages)
+STATUS: 🟡 PARTIALLY IMPLEMENTED (UI exists but has API shape mismatches)
+PRIORITY: HIGH
 
 CODONS:
-├── H7.1 Docker Services ✅
-│   ├── account-server container (Node.js + SQLite/PostgreSQL)
-│   ├── cloud-storage container (Node.js — recording APIs)
-│   ├── web-client container (Nginx → Vite static build)
-│   └── PostgreSQL container (shared DB for both services)
+├── H8.1 Page Components ✅ (UI exists)
+│   ├── Landing, Auth (login/register), Dashboard, Vault, Profile
+│   ├── SoulFile, Translate, Admin, Settings, Pricing, TranscribePage
+│   └── React 19 + Vite 6 SPA with React Router
 │
-├── H7.2 Nginx Configuration ✅
-│   ├── / → React app (SPA fallback to index.html)
-│   ├── /api/v1/auth/* → account-server:8098
-│   ├── /api/v1/recordings/* → cloud-storage:8099
-│   ├── /ws/* → cloud-api:8000 (WebSocket proxy)
-│   └── Security headers: CORS, CSP, HSTS
+├── H8.2 Known Frontend-Backend Mismatches 🟡
+│   ├── Dashboard reads data.recordings but backend returns { bundles }
+│   ├── GET /api/v1/recordings/:id/audio does not exist (audio playback broken)
+│   ├── DELETE /api/v1/auth/delete-account does not exist (now DELETE /api/v1/auth/me)
+│   ├── Pagination params (page, limit, search) not supported by recordings backend
+│   └── SoulFile uses snake_case but backend returns camelCase
 │
-├── H7.3 CI/CD Pipeline 🔲
-│   ├── GitHub Actions: build + test + deploy on push to main
-│   ├── Docker image build + push to registry
-│   └── SSH deploy to Hostinger VPS
-│
-└── H7.4 Monitoring 🔲
-    ├── Health check endpoints on all services
-    ├── Uptime monitoring (UptimeRobot or similar)
-    └── Error alerting (email or Slack webhook)
+└── H8.3 Deployment ✅
+    ├── Vite build → static files
+    ├── Nginx config for SPA routing
+    ├── API proxy: /api/* → account-server:8098
+    └── Docker services defined
 
-DEPENDENCIES: H1, H2, H3, H6
+DEPENDENCIES: H1, H3, H4
 ```
 
-#### H8: Web Portal Analytics
+#### H9: Desktop → Cloud Sync
 ```
-FILE: services/analytics/tracker.js [NEW]
-STATUS: 🟡 PARTIAL (basic analytics hooks via existing _sendAnalytics())
-PRIORITY: LOW (nice-to-have for v1)
+FILE: src/client/desktop/renderer/ (main.js IPC handlers)
+STATUS: ✅ IMPLEMENTED (119 IPC handlers)
+PRIORITY: MEDIUM
 
 CODONS:
-├── H8.1 Usage Metrics 🟡 (basic hooks only)
-│   ├── Daily/weekly/monthly active users
-│   ├── Recordings per user per day
-│   ├── Average session duration
-│   ├── Most-used engines
-│   └── Clone Capture adoption rate
+├── H9.1 Recording Upload Pipeline ✅
+│   ├── Single + chunked + batch upload via IPC → account-server
+│   ├── Sync queue with offline support
+│   └── Auto-sync on login
 │
-├── H8.2 Dashboard Analytics 🔲
-│   ├── Page views, bounce rate
-│   ├── Feature usage heatmap
-│   ├── Conversion: visitor → signup → first recording
-│   └── Retention: D1, D7, D30
+├── H9.2 Sync Status 🟡
+│   └── Basic synced/unsynced tracking, no real-time status badges
 │
-└── H8.3 Privacy-First 🔲
-    ├── NO transcript content ever logged
-    ├── NO audio/video content ever analyzed
-    ├── Aggregated counts only
-    └── User opt-out toggle in settings
+└── H9.3 Known Desktop Issues (from audit)
+    ├── Auto-updater broken: updaterInstance scoped inside setTimeout closure
+    ├── start-clone-training uses ipcMain.emit to non-existent listener
+    └── browse-document-file reads binary PDFs as UTF-8
 
-DEPENDENCIES: H7 (deployed portal)
-NOTE: Zero-knowledge analytics. We track behavior, never content.
-      "We know HOW MUCH you talk, never WHAT you say."
+DEPENDENCIES: H1 (auth), H3 (recordings)
+```
+
+#### H10: Infrastructure & Stubs
+```
+STATUS: MIXED
+
+CODONS:
+├── H10.1 Cloud Stubs 🟡 (all return X-Stub: true)
+│   ├── POST /api/v1/cloud/phone/provision — hardcoded +1-555-0100
+│   ├── POST /api/v1/cloud/phone/release — always returns released: true
+│   └── POST /api/v1/cloud/push/send — logs to console only
+│
+├── H10.2 Stubs in Other Routes 🟡
+│   ├── POST /api/v1/translate/speech — returns hardcoded brackets, no STT
+│   ├── POST /api/v1/ocr/translate — returns stub message
+│   ├── GET /updates/check — returns hardcoded version 0.6.0
+│   └── /ws/transcribe — WebSocket returns fake transcript chunks
+│
+├── H10.3 CI/CD Pipeline 🔲
+│   └── No GitHub Actions, no automated deployment
+│
+├── H10.4 Monitoring 🟡
+│   ├── GET /health endpoint exists (returns basic stats)
+│   └── No UptimeRobot, no error alerting, no structured health checks
+│
+├── H10.5 Redis Integration ✅
+│   ├── Token blacklisting, OTP storage, JWKS cache
+│   └── Falls back to in-memory Maps if Redis unavailable
+│
+├── H10.6 Misc Endpoints ✅
+│   ├── POST /api/v1/rtc/signal — WebRTC signaling for phone-camera-bridge
+│   ├── POST /api/v1/license/activate — offline license key activation
+│   ├── POST /api/v1/analytics — basic event logging (console only)
+│   └── GET /download/latest — GitHub release proxy with platform detection
+│
+└── H10.7 Test Suite ✅
+    ├── 236 tests across 15 suites (all passing)
+    ├── 103 hardening tests covering security edge cases
+    ├── Jest + ts-jest + supertest with in-memory mocks
+    └── Coverage: auth, OAuth, billing, storage, recordings, JWKS, cloud, provision
+
+DEPENDENCIES: Various
 ```
 
 ---
@@ -2842,9 +3010,14 @@ on Veron (GPU server) for production translation.
 ## 🧬 STRAND K: WINDY CHAT PLATFORM (The Chat Chromosome)
 
 **Added:** 2026-03-12 by Kit 0C3 Charlie + Grant Whitmer
-**Priority:** CRITICAL — This is the biggest addition since the original DNA plan. Windy Chat transforms Windy Pro from a transcription tool into a full communication platform.
+**Updated:** 2026-03-28 — Social layer + Eternitas bot integration added
+**Priority:** CRITICAL — This is the biggest addition since the original DNA plan. Windy Chat transforms Windy Pro from a transcription tool into a full communication and social platform.
 **Status:** 🔲 NOT STARTED (foundation code exists — see K0)
 **Vision:** A WhatsApp-level cross-platform encrypted messaging, media sharing, and video calling system — built on the Matrix protocol, powered by Windy Translate's offline translation engine. Every message, every call, every voice note — translated in real-time, on-device, private by default.
+
+**Social Layer (added 2026-03-28):** Windy Chat is not just private messaging — it evolves into the social platform for the entire Windy ecosystem. Rather than building a separate social media product, the public social layer (feeds, posts, follows, discovery) lives inside Windy Chat. This concentrates the network effect in one place. Eternitas-verified bots participate as first-class citizens alongside humans — they can post, reply, follow, and be followed. The feed is multilingual by default via Windy Traveler. Every Windy Fly agent hatched gets a Windy Chat social presence automatically.
+
+**Bot Integration (added 2026-03-28):** Any bot registered with Eternitas (eternitas.ai) can participate in Windy Chat as a verified citizen. Bot accounts are visually distinguishable (Eternitas badge) but not segregated — they appear in the same feeds, conversations, and discovery as humans. Bot identity verification is handled by Eternitas, not by Windy Chat. Windy Chat trusts the Eternitas passport. If a passport is revoked, Windy Chat access is suspended via the Windy Cloud cascade (see Strand D3).
 
 ### K0: Foundation — Existing Chat Codebase
 
@@ -4141,6 +4314,10 @@ EXISTING CODE REUSE:
 | 2026-03-12 | Kit 0C3 Charlie | K7: E2E Encryption — Olm/Megolm production, device verification, key backup (SSSS), cross-signing |
 | 2026-03-12 | Kit 0C3 Charlie | K8: Chat Cloud Backup — encrypted R2 backup, restore on new device, Soul File integration |
 | 2026-03-12 | Kit 0C3 Charlie | K9: Translation Integration — auto-translate, voice message translation, video call subtitles, group multi-language |
+| 2026-03-28 | Grant Whitmer + Claude Opus 4.6 | **v2.1.0**: Ecosystem context added to vision statement |
+| 2026-03-28 | Grant Whitmer + Claude Opus 4.6 | Strand D3: Windy Cloud forward planning — Windy Mail infra, Twilio pool, Eternitas cascade |
+| 2026-03-28 | Grant Whitmer + Claude Opus 4.6 | Strand K: Social layer + Eternitas bot integration added to vision |
+| 2026-03-28 | Grant Whitmer + Claude Opus 4.6 | New repos planned: sneakyfree/windy-mail, sneakyfree/eternitas |
 | 2026-03-12 | Grant Whitmer | K9.6: Group multi-language — the Holy Grail: 5 people, 5 languages, everyone reads their own language |
 | 2026-03-12 | Grant Whitmer | K9.7: Critical invariant — chat translation LOCAL by default, never fall back to cloud without consent |
 | 2026-03-12 | Kit 0C3 Charlie | K-DEP: 4-phase build plan (16 engineer-weeks), 40% code reuse from existing foundation |

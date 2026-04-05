@@ -195,7 +195,7 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-ALLOWED_ORIGINS = os.getenv("WINDY_CORS_ORIGINS", "*").split(",")
+ALLOWED_ORIGINS = os.getenv("WINDY_CORS_ORIGINS", "https://windyword.ai,http://localhost:3000").split(",")
 
 app.add_middleware(
     CORSMiddleware,
@@ -691,8 +691,9 @@ async def websocket_transcribe(websocket: WebSocket, token: str = Query(None)):
     connection_id = str(uuid.uuid4())
     user = None
 
-    # ─── Query-param authentication (preferred) ───
+    # ─── Query-param authentication (deprecated, kept for backward compat) ───
     if token:
+        logger.warning("WS auth via query param is deprecated — use first-message auth instead")
         try:
             user = decode_token(token)
             logger.info(f"WS auth via query param for user {user.get('email', '?')}")
@@ -702,7 +703,7 @@ async def websocket_transcribe(websocket: WebSocket, token: str = Query(None)):
             await websocket.close(code=4001, reason="Invalid or expired token")
             return
 
-    # ─── First-message authentication (fallback) ───
+    # ─── First-message authentication (preferred) ───
     if not user:
         try:
             first_msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
@@ -771,6 +772,7 @@ async def websocket_transcribe(websocket: WebSocket, token: str = Query(None)):
 
     # Audio accumulation buffer
     audio_buffer = bytearray()
+    MAX_AUDIO_BUFFER_SIZE = 50 * 1024 * 1024  # 50MB max buffer size (M6)
     segment_start_time = 0.0
     total_audio_seconds = 0.0
     is_recording = False
@@ -785,8 +787,15 @@ async def websocket_transcribe(websocket: WebSocket, token: str = Query(None)):
         })
 
         logger.info(f"[WS {connection_id}] Entering main loop")
+        WS_RECEIVE_TIMEOUT = 300  # 5 minutes (M7)
         while True:
-            message = await websocket.receive()
+            try:
+                message = await asyncio.wait_for(websocket.receive(), timeout=WS_RECEIVE_TIMEOUT)
+            except asyncio.TimeoutError:
+                logger.warning(f"[WS {connection_id}] No message received for {WS_RECEIVE_TIMEOUT}s — closing idle connection")
+                await websocket.send_json({"type": "error", "message": "Connection timed out due to inactivity"})
+                await websocket.close(code=1000, reason="Idle timeout")
+                return
 
             # Starlette may deliver an explicit disconnect event; exit loop cleanly.
             if message.get("type") == "websocket.disconnect":
@@ -797,6 +806,13 @@ async def websocket_transcribe(websocket: WebSocket, token: str = Query(None)):
                     continue
                 audio_data = message["bytes"]
                 audio_buffer.extend(audio_data)
+
+                # M6: Enforce maximum buffer size to prevent unbounded memory growth
+                if len(audio_buffer) > MAX_AUDIO_BUFFER_SIZE:
+                    logger.warning(f"[WS {connection_id}] Audio buffer exceeded {MAX_AUDIO_BUFFER_SIZE // (1024*1024)}MB limit — closing connection")
+                    await websocket.send_json({"type": "error", "message": "Audio buffer exceeded maximum size"})
+                    await websocket.close(code=1009, reason="Audio buffer too large")
+                    return
 
                 # When we have enough audio, transcribe
                 if len(audio_buffer) >= CLOUD_AUDIO_CHUNK_THRESHOLD:

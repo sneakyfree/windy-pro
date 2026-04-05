@@ -191,7 +191,7 @@ var Validators = (function () {
         return fail('Cloud URL must use https:// or wss:// protocol.');
       }
     } catch (_) {
-      return fail('Invalid URL format. Example: wss://windypro.thewindstorm.uk');
+      return fail('Invalid URL format. Example: wss://windyword.ai');
     }
     return ok();
   }

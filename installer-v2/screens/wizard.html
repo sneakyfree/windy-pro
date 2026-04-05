@@ -3985,7 +3985,7 @@
         'pro_lifetime': 'price_pro_lifetime', 'translate_lifetime': 'price_translate_lifetime', 'translate_pro_lifetime': 'price_translate_pro_lifetime'
       };
       const priceId = priceMap[tier + '_' + billing];
-      fetch('https://api.windypro.thewindstorm.uk/create-checkout-session', {
+      fetch('https://api.windyword.ai/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priceId, tier, billing })
@@ -5447,7 +5447,7 @@
         'translate_pro-annual':  'price_max_annual',
         'translate_pro-lifetime':'price_max_lifetime',
       };
-      const STRIPE_CHECKOUT_URL = 'https://api.windypro.thewindstorm.uk/create-checkout-session';
+      const STRIPE_CHECKOUT_URL = 'https://api.windyword.ai/create-checkout-session';
 
       const plan = selectedTranslatePlan || 'translate';
       const billing = translateBillingMode || 'annual';

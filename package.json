@@ -5,7 +5,7 @@
   "main": "src/client/desktop/main.js",
   "author": {
     "name": "Windy Pro",
-    "email": "dev@thewindstorm.uk"
+    "email": "dev@windyword.ai"
   },
   "license": "MIT",
   "scripts": {
@@ -15,8 +15,11 @@
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux",
+    "install:web": "cd src/client/web && npm install",
+    "build:web": "cd src/client/web && npm install && npm run build",
     "server": "python -m src.engine.server",
     "test": "python3 -m pytest tests/ -v --ignore=tests/test_cloud_api.py",
+    "test:api": "cd account-server && npx jest tests/api.test.ts --forceExit",
     "dist:all": "npm run build:linux && npm run build:win && npm run build:mac",
     "postinstall": "electron-builder install-app-deps"
   },
@@ -29,7 +32,8 @@
     "matrix-js-sdk": "^41.1.0",
     "node-fetch": "^2.7.0",
     "stripe": "^20.4.0",
-    "ws": "^8.19.0"
+    "ws": "^8.19.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "electron": "^28.0.0",
@@ -125,7 +129,7 @@
       ],
       "icon": "assets/icon.png",
       "category": "Utility",
-      "maintainer": "Windy Pro <dev@thewindstorm.uk>",
+      "maintainer": "Windy Pro <dev@windyword.ai>",
       "executableName": "windy-pro",
       "desktop": {
         "Name": "Windy Pro",

@@ -51,9 +51,18 @@ upload_log*.txt
 # DO NOT recreate this file. It caused session after session of editing the wrong wizard.
 src/client/desktop/renderer/wizard.js
 
+# SQLite databases (runtime data, not source)
+*.db
+*.db-shm
+*.db-wal
+*.db-shm.bak
+*.db-wal.bak
+*.db.bak
+
 # Secrets / env files
 .env
 deploy/.env
+account-server/keys/
 
 # Web client
 src/client/web/dist/

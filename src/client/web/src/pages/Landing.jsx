@@ -1,6 +1,40 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import './Landing.css'
+
+const API_BASE = '/api/v1'
+
+function getToken() { return localStorage.getItem('windy_token') }
+
+async function startCheckout(tier, billingType, navigate) {
+    const token = getToken()
+    if (!token) {
+        navigate('/auth')
+        return
+    }
+    try {
+        const res = await fetch(`${API_BASE}/stripe/create-checkout-session`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ tier, billing_type: billingType }),
+        })
+        if (res.status === 401) {
+            navigate('/auth')
+            return
+        }
+        const data = await res.json()
+        if (data?.url) {
+            window.location.href = data.url
+        } else {
+            alert(data?.error || 'Could not start checkout')
+        }
+    } catch {
+        alert('Could not connect to payment server')
+    }
+}
 
 // Tasteful inline SVG US flag icon — small, polished, not emoji
 const USFlag = ({ size = 16 }) => (
@@ -30,9 +64,23 @@ function isLoggedIn() {
 
 export default function Landing() {
     const loggedIn = isLoggedIn()
+    const navigate = useNavigate()
     const [menuOpen, setMenuOpen] = useState(false)
+    const [billingType, setBillingType] = useState('monthly')
     const [latestVersion, setLatestVersion] = useState('v0.6.0')
     const closeMenu = () => setMenuOpen(false)
+
+    const handleUpgrade = (tier) => {
+        startCheckout(tier, billingType, navigate)
+    }
+
+    // Price/period data per tier and billing type
+    const priceData = {
+        pro:           { monthly: '$4.99',  yearly: '$49',  lifetime: '$99' },
+        translate:     { monthly: '$8.99',  yearly: '$79',  lifetime: '$199' },
+        translate_pro: { monthly: '$14.99', yearly: '$149', lifetime: '$299' },
+    }
+    const periodLabels = { monthly: '/month', yearly: '/year', lifetime: 'one-time' }
 
     // Fetch latest version from cache-proof download API
     useEffect(() => {
@@ -79,21 +127,21 @@ export default function Landing() {
             {/* Hero Section */}
             <header className="hero">
                 <div className="container hero-inner">
-                    <div className="hero-badge">🌪️ v0.6.0 — Cloud Storage, Stripe Payments, Setup Wizard</div>
+                    <div className="hero-badge">🌪️ {latestVersion} — Cloud Storage, Stripe Payments, Setup Wizard</div>
                     <h1 className="hero-title">
-                        Voice to Text,<br />
-                        <span className="hero-gradient">Unlimited.</span>
+                        Stop typing through a straw.<br />
+                        <span className="hero-gradient">Speak your vision into existence.</span>
                     </h1>
                     <p className="hero-subtitle">
-                        Windy Pro transforms your speech into text at the speed of thought.
-                        No time limits, no data leaving your machine. Guided setup gets you recording in 60 seconds.
+                        Windy Pro transforms speech into text at the speed of thought.
+                        Unlimited recording, local-first privacy, 99 languages. Guided setup gets you running in 60 seconds.
                     </p>
                     <div className="hero-actions">
                         <a href="#download" className="btn btn-primary btn-large">
-                            ⬇ Download Free
+                            ⬇ Download Desktop App
                         </a>
                         <Link to="/transcribe" className="btn btn-secondary btn-large">
-                            ☁ Try Cloud Version
+                            ☁ Try in Browser
                         </Link>
                     </div>
                     <div className="hero-trust-badge">
@@ -257,9 +305,12 @@ export default function Landing() {
                     <h2 className="section-title">Simple Pricing</h2>
                     <p className="section-subtitle">Start free in any language. Upgrade when you're ready.</p>
                     <div className="pricing-toggle" style={{ display: 'flex', justifyContent: 'center', gap: '4px', marginBottom: '24px', background: 'rgba(30,30,40,0.8)', borderRadius: '12px', padding: '4px', maxWidth: '360px', margin: '0 auto 24px' }}>
-                        <button className="pricing-toggle-btn active" data-billing="monthly" style={{ flex: 1, padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Monthly</button>
-                        <button className="pricing-toggle-btn" data-billing="annual" style={{ flex: 1, padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Annual <span style={{ fontSize: '10px', fontWeight: 700 }}>Save 17%</span></button>
-                        <button className="pricing-toggle-btn" data-billing="lifetime" style={{ flex: 1, padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Lifetime <span style={{ fontSize: '10px', fontWeight: 700 }}>Own Forever</span></button>
+                        {[['monthly', 'Monthly'], ['yearly', 'Annual'], ['lifetime', 'Lifetime']].map(([key, label]) => (
+                            <button key={key} className={`pricing-toggle-btn${billingType === key ? ' active' : ''}`} onClick={() => setBillingType(key)} style={{ flex: 1, padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                                {label} {key === 'yearly' && <span style={{ fontSize: '10px', fontWeight: 700 }}>Save 17%</span>}
+                                {key === 'lifetime' && <span style={{ fontSize: '10px', fontWeight: 700 }}>Own Forever</span>}
+                            </button>
+                        ))}
                     </div>
                     <div className="pricing-grid pricing-grid-4">
                         <div className="pricing-card">
@@ -279,8 +330,8 @@ export default function Landing() {
                         </div>
                         <div className="pricing-card">
                             <div className="pricing-badge pro">⚡ WINDY PRO</div>
-                            <div className="pricing-price" data-monthly="$4.99" data-annual="$49" data-lifetime="$99">$4.99</div>
-                            <div className="pricing-period" data-monthly="/month" data-annual="/year" data-lifetime="one-time">/month</div>
+                            <div className="pricing-price">{priceData.pro[billingType]}</div>
+                            <div className="pricing-period">{periodLabels[billingType]}</div>
                             <ul className="pricing-features">
                                 <li>✓ All 15 engines</li>
                                 <li>✓ 99 languages</li>
@@ -290,14 +341,17 @@ export default function Landing() {
                                 <li>✓ Speaker identification</li>
                                 <li>✓ 5 GB WindyCloud storage</li>
                             </ul>
-                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Pro →</Link>
+                            {loggedIn
+                                ? <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleUpgrade('pro')}>Start Pro →</button>
+                                : <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Pro →</Link>
+                            }
                             <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>14-day free trial. Cancel anytime.</p>
                         </div>
                         <div className="pricing-card pricing-card-pro">
                             <div className="pricing-recommended">RECOMMENDED</div>
                             <div className="pricing-badge pro">🚀 WINDY ULTRA</div>
-                            <div className="pricing-price" data-monthly="$8.99" data-annual="$79" data-lifetime="$199">$8.99</div>
-                            <div className="pricing-period" data-monthly="/month" data-annual="/year" data-lifetime="one-time">/month</div>
+                            <div className="pricing-price">{priceData.translate[billingType]}</div>
+                            <div className="pricing-period">{periodLabels[billingType]}</div>
                             <ul className="pricing-features">
                                 <li>✓ Everything in Pro</li>
                                 <li>✓ Live translation (5 pairs)</li>
@@ -305,13 +359,16 @@ export default function Landing() {
                                 <li>✓ 25 offline translation engines</li>
                                 <li>✓ 10 GB WindyCloud storage</li>
                             </ul>
-                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Ultra →</Link>
+                            {loggedIn
+                                ? <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleUpgrade('translate')}>Start Ultra →</button>
+                                : <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Ultra →</Link>
+                            }
                             <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>14-day free trial. Cancel anytime.</p>
                         </div>
                         <div className="pricing-card">
                             <div className="pricing-badge pro">👑 WINDY MAX</div>
-                            <div className="pricing-price" data-monthly="$14.99" data-annual="$149" data-lifetime="$299">$14.99</div>
-                            <div className="pricing-period" data-monthly="/month" data-annual="/year" data-lifetime="one-time">/month</div>
+                            <div className="pricing-price">{priceData.translate_pro[billingType]}</div>
+                            <div className="pricing-period">{periodLabels[billingType]}</div>
                             <ul className="pricing-features">
                                 <li>✓ Everything in Ultra</li>
                                 <li>✓ 60-minute recordings</li>
@@ -322,7 +379,10 @@ export default function Landing() {
                                 <li>✓ 100 offline engines</li>
                                 <li>✓ 25 GB WindyCloud storage</li>
                             </ul>
-                            <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Max →</Link>
+                            {loggedIn
+                                ? <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleUpgrade('translate_pro')}>Start Max →</button>
+                                : <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Max →</Link>
+                            }
                             <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>14-day free trial. Cancel anytime.</p>
                         </div>
                     </div>
@@ -465,12 +525,26 @@ export default function Landing() {
                             <div className="download-detail">Ubuntu / Debian</div>
                         </a>
                     </div>
+                    {/* Mobile */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', maxWidth: '480px', margin: '24px auto 0' }}>
+                        <a href="https://apps.apple.com/app/windy-pro" target="_blank" rel="noopener noreferrer" className="download-card" style={{ background: 'rgba(30,30,40,0.8)', textAlign: 'center' }}>
+                            <div className="download-icon">📱</div>
+                            <div className="download-platform">iOS</div>
+                            <div className="download-detail">App Store</div>
+                        </a>
+                        <a href="https://play.google.com/store/apps/details?id=pro.windy.app" target="_blank" rel="noopener noreferrer" className="download-card" style={{ background: 'rgba(30,30,40,0.8)', textAlign: 'center' }}>
+                            <div className="download-icon">🤖</div>
+                            <div className="download-platform">Android</div>
+                            <div className="download-detail">Google Play</div>
+                        </a>
+                    </div>
+
                     <div className="download-oneliner">
                         <p className="download-helper">
                             <strong>🐧 Linux one-liner install:</strong>
                         </p>
                         <code className="download-command">
-                            curl -fsSL https://windypro.thewindstorm.uk/download/latest/linux-install.sh | bash
+                            curl -fsSL https://windyword.ai/download/latest/linux-install.sh | bash
                         </code>
                         <p className="download-helper-sub">
                             Or download the .deb, then: <code>sudo dpkg -i windy-pro_*.deb</code>

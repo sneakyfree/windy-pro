@@ -3,7 +3,7 @@
  * Handles user authentication, device registration (5-device limit),
  * license verification, and tier detection.
  * 
- * API endpoint: https://api.windypro.thewindstorm.uk/v1
+ * API endpoint: https://api.windyword.ai/v1
  */
 
 const https = require('https');
@@ -13,7 +13,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 
-// Production: const API_BASE = 'https://api.windypro.thewindstorm.uk/v1';
+// Production: const API_BASE = 'https://api.windyword.ai/v1';
 const API_BASE = process.env.ACCOUNT_API || 'http://localhost:8098/v1';
 const MAX_DEVICES = 5;
 

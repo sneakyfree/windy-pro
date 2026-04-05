@@ -30,6 +30,7 @@ async function getLatestGitHubRelease() {
                 'Accept': 'application/vnd.github.v3+json',
                 'User-Agent': 'WindyPro-Server/2.0',
             },
+            signal: AbortSignal.timeout(10000),
         });
         if (!response.ok) throw new Error(`GitHub API: ${response.status}`);
         _ghReleaseCache = await response.json();
@@ -76,7 +77,7 @@ router.get('/latest/:platform', async (req: Request, res: Response) => {
         console.log(`[Download] ${platform} → ${asset.name} (${release.tag_name})`);
         return res.redirect(302, downloadUrl);
     } catch (err: any) {
-        res.status(502).json({ error: 'Failed to fetch latest release', details: err.message });
+        res.status(502).json({ error: 'Failed to fetch latest release' });
     }
 });
 
@@ -112,7 +113,7 @@ router.get('/verify', async (_req: Request, res: Response) => {
             cache_age_seconds: Math.round((Date.now() - _ghReleaseCacheTime) / 1000),
         });
     } catch (err: any) {
-        res.status(502).json({ error: 'Failed to fetch release info', details: err.message });
+        res.status(502).json({ error: 'Failed to fetch release info' });
     }
 });
 

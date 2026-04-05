@@ -82,7 +82,8 @@ app.commandLine.appendSwitch('enable-speech-dispatcher');
 app.commandLine.appendSwitch('enable-features', 'WebSpeechAPI');
 const path = require('path');
 const Store = require('electron-store');
-const { spawn, exec, execFile } = require('child_process');
+const { spawn, exec, execFile, execSync, execFileSync } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
 const fsp = fs.promises;
 const os = require('os');
@@ -122,7 +123,7 @@ const store = new Store({
     },
     window: {
       width: 400,
-      height: 300,
+      height: 500,
       x: null,
       y: null
     },
@@ -272,8 +273,8 @@ function getStripe() {
 
 function getTierLimits(tier) {
   const tiers = {
-    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 2, storageMb: 500, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
-    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 15, storageMb: 5120, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
+    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, storageMb: 500, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
+    pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, storageMb: 5120, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
     translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 60, storageMb: 10240, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
     translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: Infinity, storageMb: 25600, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
   };
@@ -339,51 +340,99 @@ function autoCleanupArchive() {
 }
 
 function ensureDir(dir) {
-  fs.mkdirSync(dir, { recursive: true });
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (err) {
+    console.error('[ensureDir] Failed to create directory:', dir, err.message);
+    throw err; // Re-throw so callers (inside try/catch) can handle it
+  }
 }
 
-function appendArchiveEntry({ text, startedAt, endedAt }) {
+// ═══ Archive Retry Queue ═══
+// When archive writes fail (disk full, folder unavailable), queue for retry instead of losing data
+const _archiveRetryQueue = [];
+const MAX_ARCHIVE_RETRIES = 3;
+const ARCHIVE_RETRY_INTERVAL_MS = 30000; // 30 seconds
+
+let _archiveRetryTimer = null;
+function _startArchiveRetryTimer() {
+  if (_archiveRetryTimer) return;
+  _archiveRetryTimer = setInterval(() => {
+    if (_archiveRetryQueue.length === 0) {
+      clearInterval(_archiveRetryTimer);
+      _archiveRetryTimer = null;
+      return;
+    }
+    const pending = [..._archiveRetryQueue];
+    _archiveRetryQueue.length = 0;
+    for (const item of pending) {
+      const result = appendArchiveEntry(item.entry, true);
+      if (!result.archived && item.retries < MAX_ARCHIVE_RETRIES) {
+        _archiveRetryQueue.push({ entry: item.entry, retries: item.retries + 1 });
+        console.warn(`[Archive] Retry ${item.retries + 1}/${MAX_ARCHIVE_RETRIES} queued for entry at ${item.entry.startedAt}`);
+      } else if (!result.archived) {
+        console.error(`[Archive] Permanently failed after ${MAX_ARCHIVE_RETRIES} retries:`, item.entry.startedAt);
+      }
+    }
+  }, ARCHIVE_RETRY_INTERVAL_MS);
+}
+
+function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
   const engine = store.get('engine', {});
   if (!engine.autoArchive || !engine.archiveLocalEnabled || !text || !text.trim()) return { archived: false };
 
-  const archiveRoot = getArchiveFolder();
-  ensureDir(archiveRoot);
+  try {
+    const archiveRoot = getArchiveFolder();
+    ensureDir(archiveRoot);
 
-  const start = startedAt ? new Date(startedAt) : new Date();
-  const end = endedAt ? new Date(endedAt) : new Date();
-  const yyyy = String(start.getFullYear());
-  const mm = String(start.getMonth() + 1).padStart(2, '0');
-  const dd = String(start.getDate()).padStart(2, '0');
-  const HH = String(start.getHours()).padStart(2, '0');
-  const MM = String(start.getMinutes()).padStart(2, '0');
-  const SS = String(start.getSeconds()).padStart(2, '0');
-  const dateKey = `${yyyy}-${mm}-${dd}`;
-  const timeKey = `${HH}${MM}${SS}`;
+    const start = startedAt ? new Date(startedAt) : new Date();
+    const end = endedAt ? new Date(endedAt) : new Date();
+    const yyyy = String(start.getFullYear());
+    const mm = String(start.getMonth() + 1).padStart(2, '0');
+    const dd = String(start.getDate()).padStart(2, '0');
+    const HH = String(start.getHours()).padStart(2, '0');
+    const MM = String(start.getMinutes()).padStart(2, '0');
+    const SS = String(start.getSeconds()).padStart(2, '0');
+    const dateKey = `${yyyy}-${mm}-${dd}`;
+    const timeKey = `${HH}${MM}${SS}`;
 
-  const dayDir = path.join(archiveRoot, dateKey);
-  ensureDir(dayDir);
+    const dayDir = path.join(archiveRoot, dateKey);
+    ensureDir(dayDir);
 
-  const safeText = text.trim();
-  const mode = engine.archiveMode || 'both';
-  const meta = `Start: ${start.toISOString()}\nEnd: ${end.toISOString()}\nWords: ${safeText.split(/\s+/).filter(Boolean).length}`;
+    const safeText = text.trim();
+    const mode = engine.archiveMode || 'both';
+    const meta = `Start: ${start.toISOString()}\nEnd: ${end.toISOString()}\nWords: ${safeText.split(/\s+/).filter(Boolean).length}`;
 
-  const wrote = [];
+    const wrote = [];
 
-  if (mode === 'chunk' || mode === 'both') {
-    const chunkPath = path.join(dayDir, `${timeKey}.md`);
-    const chunk = `# Windy Pro Dictation\n\n${meta}\n\n---\n\n${safeText}\n`;
-    fs.writeFileSync(chunkPath, chunk, 'utf-8');
-    wrote.push(chunkPath);
+    if (mode === 'chunk' || mode === 'both') {
+      const chunkPath = path.join(dayDir, `${timeKey}.md`);
+      const chunk = `# Windy Pro Dictation\n\n${meta}\n\n---\n\n${safeText}\n`;
+      fs.writeFileSync(chunkPath, chunk, 'utf-8');
+      wrote.push(chunkPath);
+    }
+
+    if (mode === 'daily' || mode === 'both') {
+      const dailyPath = path.join(dayDir, `${dateKey}.md`);
+      const block = `\n## ${HH}:${MM}:${SS}\n\n${meta.replace(/\n/g, ' | ')}\n\n${safeText}\n`;
+      fs.appendFileSync(dailyPath, block, 'utf-8');
+      wrote.push(dailyPath);
+    }
+
+    return { archived: true, files: wrote };
+  } catch (err) {
+    console.error('[appendArchiveEntry] Archive I/O error:', err.message);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      safeSend('archive-error', { error: err.message, queued: !isRetry });
+    }
+    // Queue for retry if this is the first attempt
+    if (!isRetry) {
+      _archiveRetryQueue.push({ entry: { text, startedAt, endedAt }, retries: 0 });
+      _startArchiveRetryTimer();
+      console.warn('[Archive] Entry queued for retry. Queue size:', _archiveRetryQueue.length);
+    }
+    return { archived: false, error: err.message };
   }
-
-  if (mode === 'daily' || mode === 'both') {
-    const dailyPath = path.join(dayDir, `${dateKey}.md`);
-    const block = `\n## ${HH}:${MM}:${SS}\n\n${meta.replace(/\n/g, ' | ')}\n\n${safeText}\n`;
-    fs.appendFileSync(dailyPath, block, 'utf-8');
-    wrote.push(dailyPath);
-  }
-
-  return { archived: true, files: wrote };
 }
 
 /**
@@ -409,9 +458,13 @@ function startPythonServer() {
   const port = serverConfig.port || 9876;
   try {
     if (process.platform === 'win32') {
-      execSync(`for /f "tokens=5" %a in ('netstat -aon ^| findstr :${port} ^| findstr LISTENING') do taskkill /PID %a /F 2>nul`, { stdio: 'pipe', timeout: 5000 });
+      // SEC-M10: Validate port is a safe integer before interpolation
+      const safePort = parseInt(port, 10);
+      if (!Number.isFinite(safePort) || safePort < 1 || safePort > 65535) throw new Error('Invalid port');
+      execSync(`for /f "tokens=5" %a in ('netstat -aon ^| findstr :${safePort} ^| findstr LISTENING') do taskkill /PID %a /F 2>nul`, { stdio: 'pipe', timeout: 5000 });
     } else {
-      const pids = execSync(`lsof -ti :${port} 2>/dev/null || true`, { timeout: 5000 }).toString().trim();
+      // SEC-M10: Use execFileSync with array arguments to avoid shell injection
+      const pids = execFileSync('lsof', ['-ti', `:${port}`], { timeout: 5000, stdio: 'pipe' }).toString().trim();
       if (pids) {
         for (const pid of pids.split('\n')) {
           if (pid.trim()) {
@@ -497,13 +550,21 @@ function createWindow() {
   const windowConfig = store.get('window');
   const appearance = store.get('appearance');
 
+  // macOS hidden title bar + vibrancy consumes extra vertical space,
+  // so enforce a height floor to prevent bottom controls from clipping.
+  // This also fixes persisted configs migrated from Linux (height: 300).
+  const MIN_HEIGHT = 320;
+  const effectiveHeight = Math.max(windowConfig.height, MIN_HEIGHT);
+
   mainWindow = new BrowserWindow({
     width: windowConfig.width,
-    height: windowConfig.height,
+    height: effectiveHeight,
     x: windowConfig.x,
     y: windowConfig.y,
 
     // Floating window properties
+    // macOS: 'floating' level = panel that does NOT steal keyboard focus (like a utility palette)
+    // Linux/Windows: plain alwaysOnTop works fine (xdotool handles focus restore for Linux)
     alwaysOnTop: appearance.alwaysOnTop,
     frame: false,           // Frameless for custom UI
     transparent: true,      // Allow CSS transparency for strobe effect
@@ -514,7 +575,7 @@ function createWindow() {
 
     // Minimum size
     minWidth: 250,
-    minHeight: 150,
+    minHeight: MIN_HEIGHT,
 
     // Web preferences
     webPreferences: {
@@ -535,10 +596,36 @@ function createWindow() {
     vibrancy: process.platform === 'darwin' ? 'under-window' : undefined
   });
 
+  // macOS: Override alwaysOnTop to use 'floating' panel level.
+  if (process.platform === 'darwin' && appearance.alwaysOnTop) {
+    mainWindow.setAlwaysOnTop(true, 'floating');
+  }
+
+  // macOS: Intercept focus events during recording.
+  // When getUserMedia/AudioContext activate, Chromium steals focus to our window.
+  // We immediately give it back by blurring + reactivating the target app via PID.
+  // PID-based activation is critical — name-based 'tell app X to activate' fails
+  // when multiple Electron apps share the same process name.
+  if (process.platform === 'darwin') {
+    mainWindow.on('focus', () => {
+      if (isRecording && global._focusGuardActive && global._lastFocusedPid) {
+        console.info(`[Focus-Guard] Window stole focus during recording — returning to "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
+        mainWindow.blur();
+        const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
+        execFile('osascript', ['-e', script], { timeout: 2000 });
+      }
+    });
+  }
+  console.info(`[Startup] ★ macOS focus-guard v4 active (floating + delayed focus-intercept)`);
+
   // Load the renderer
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   // CSP Headers
+  // SEC-L1: 'unsafe-inline' for style-src is an accepted risk in Electron desktop.
+  // Rationale: 300+ inline style= usages across renderer JS files make nonce-based
+  // CSS impractical. script-src does NOT allow unsafe-inline — that's what matters.
+  // contextIsolation + sandbox + no nodeIntegration = no XSS escalation path.
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -548,9 +635,11 @@ function createWindow() {
           "script-src 'self'; " +
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
           "font-src 'self' https://fonts.gstatic.com; " +
-          "connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk; " +
+          "connect-src 'self' ws://127.0.0.1:* wss://*.windyword.ai https://*.windyword.ai wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.groq.com https://api.openai.com https://api.deepgram.com wss://api.deepgram.com; " +
           "img-src 'self' data:; " +
-          "media-src 'self' blob: data:;"
+          "media-src 'self' blob: data:; " +
+          "base-src 'self'; " +
+          "object-src 'none';"
         ]
       }
     });
@@ -752,8 +841,8 @@ function showAboutWindow() {
   <div class="built">Built by WindyPro Labs</div>
   <div class="tech">Electron ${electronVersion} · Node ${nodeVersion} · ${process.arch}</div>
   <div class="links">
-    <a onclick="window.postMessage({type:'open-url',url:'https://thewindstorm.uk'})">Website</a>
-    <a onclick="window.postMessage({type:'open-url',url:'mailto:dev@thewindstorm.uk'})">Support</a>
+    <a onclick="window.postMessage({type:'open-url',url:'https://windyword.ai'})">Website</a>
+    <a onclick="window.postMessage({type:'open-url',url:'mailto:dev@windyword.ai'})">Support</a>
     <a onclick="window.postMessage({type:'open-url',url:'https://github.com/sneakyfree/windy-pro'})">GitHub</a>
   </div>
   <button class="close-btn" onclick="window.close()">Close</button>
@@ -765,8 +854,9 @@ function showAboutWindow() {
   aboutWin.center();
 
   // Handle window.open calls from the about window to open in system browser
+  // SEC-H3: Validate URL before opening externally
   aboutWin.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (isSafeURL(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
 }
@@ -902,7 +992,7 @@ function createMacOSMenu() {
         { type: 'separator' },
         {
           label: 'Windy Pro Website',
-          click: () => shell.openExternal('https://thewindstorm.uk')
+          click: () => shell.openExternal('https://windyword.ai')
         },
         {
           label: 'Report a Bug',
@@ -977,7 +1067,8 @@ function showMiniWidget() {
   }
 
   const tornadoSize = store.get('tornadoSize') || 56;
-  const winSize = tornadoSize + 4;
+  // +100 for 50px glow padding on each side
+  const winSize = tornadoSize + 100;
   const savedX = store.get('tornadoX');
   const savedY = store.get('tornadoY');
 
@@ -1016,7 +1107,7 @@ function showMiniWidget() {
     console.log(`[Mini] ${msg}`);
   });
 
-  // Forward state + size after load
+  // Forward state + size + settings after load
   miniWindow.webContents.on('did-finish-load', () => {
     updateMiniState(isRecording ? 'recording' : 'idle');
     if (miniWindow && !miniWindow.isDestroyed()) {
@@ -1028,8 +1119,11 @@ function showMiniWidget() {
         miniWindow.webContents.send('mini-widget-change', widgetData);
       }
 
-      // Linux: can't do transparent, so round it visually with CSS border-radius
-      // (setShape breaks mouse events). The dark bg is styled in mini-widget.html.
+      // Send saved widget settings (sliders, color, etc.)
+      const widgetSettings = store.get('widgetSettings');
+      if (widgetSettings) {
+        miniWindow.webContents.send('mini-load-settings', widgetSettings);
+      }
     }
   });
 }
@@ -1101,11 +1195,47 @@ ipcMain.on('update-widget', (event, data) => {
   }
 });
 
+// ── Widget settings panel: toggle panel size ──
+ipcMain.on('mini-toggle-panel', (event, open) => {
+  if (!miniWindow || miniWindow.isDestroyed()) return;
+  const widgetSettings = store.get('widgetSettings') || {};
+  // +100 for 50px glow padding on each side
+  const widgetSize = (widgetSettings.size || 56) + 100;
+  if (open) {
+    // Fixed size: panel is at 200px top, ~380px tall + save button + margin
+    miniWindow.setSize(250, 620);
+    miniWindow.setResizable(false);
+  } else {
+    // Shrink back to widget size
+    miniWindow.setSize(widgetSize, widgetSize);
+  }
+});
+
+// ── Widget settings panel: save settings ──
+ipcMain.on('mini-save-settings', (event, newSettings) => {
+  store.set('widgetSettings', newSettings);
+  // Also update the tornado size used by showMiniWidget
+  if (newSettings.size) {
+    store.set('tornadoSize', newSettings.size);
+    // +100 for 50px glow padding on each side
+    const winSize = newSettings.size + 100;
+    if (miniWindow && !miniWindow.isDestroyed()) {
+      // Only resize if panel is NOT open (panel-open is fixed at 250x620)
+      const [w, h] = miniWindow.getSize();
+      if (h < 300) {
+        miniWindow.setSize(winSize, winSize);
+      }
+      // When panel is open, DON'T resize — panel is fixed at 250x620
+    }
+  }
+});
+
 // ═══════════════════════════════════════════
 //  VIDEO PREVIEW WINDOW (independent, draggable)
 // ═══════════════════════════════════════════
 
 let videoWindow = null;
+let videoDismissed = false; // User closed preview — don't auto-show until app restart
 
 function createVideoWindow() {
   if (videoWindow && !videoWindow.isDestroyed()) {
@@ -1177,6 +1307,7 @@ function createVideoWindow() {
 
 // Show video preview
 ipcMain.handle('show-video-preview', async () => {
+  if (videoDismissed) return { ok: false, dismissed: true };
   const win = createVideoWindow();
   win.show();
   return { ok: true };
@@ -1283,12 +1414,29 @@ ipcMain.on('stop-resize-video', () => {
   if (resizeInterval) { clearInterval(resizeInterval); resizeInterval = null; }
 });
 
-// Close video preview
 ipcMain.on('close-video-preview', () => {
+  videoDismissed = true; // Don't auto-show again until app restart
   if (videoWindow && !videoWindow.isDestroyed()) {
     videoWindow.webContents.send('stop-camera');
     videoWindow.hide();
   }
+});
+
+// Minimize video preview
+ipcMain.on('minimize-video-preview', () => {
+  if (videoWindow && !videoWindow.isDestroyed()) {
+    videoWindow.minimize();
+  }
+});
+
+// Toggle always-on-top for video preview (send to back / bring to front)
+ipcMain.handle('toggle-video-always-on-top', async () => {
+  if (videoWindow && !videoWindow.isDestroyed()) {
+    const isOnTop = videoWindow.isAlwaysOnTop();
+    videoWindow.setAlwaysOnTop(!isOnTop);
+    return !isOnTop;
+  }
+  return false;
 });
 
 // ═══════════════════════════════════════════
@@ -1357,33 +1505,38 @@ ipcMain.on('open-mini-translate', () => {
 
 // Mini-translate IPC text translation
 ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang) => {
-  const https = require('https');
-  const token = store.get('license.cloudToken') || '';
-  const postData = JSON.stringify({ text, sourceLang, targetLang });
+  try {
+    const https = require('https');
+    const token = store.get('license.cloudToken') || '';
+    const postData = JSON.stringify({ text, sourceLang, targetLang });
 
-  return new Promise((resolve, reject) => {
-    const req = https.request('https://windypro.thewindstorm.uk/api/v1/translate/text', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData),
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-      }
-    }, (res) => {
-      let body = '';
-      res.on('data', (chunk) => body += chunk);
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch (e) {
-          reject(new Error('Invalid response'));
+    return await new Promise((resolve, reject) => {
+      const req = https.request('https://windyword.ai/api/v1/translate/text', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         }
+      }, (res) => {
+        let body = '';
+        res.on('data', (chunk) => body += chunk);
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            resolve({ error: 'Invalid response from translation server' });
+          }
+        });
       });
+      req.on('error', (e) => resolve({ error: e.message }));
+      req.write(postData);
+      req.end();
     });
-    req.on('error', reject);
-    req.write(postData);
-    req.end();
-  });
+  } catch (err) {
+    console.error('[mini-translate-text] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // ═══════════════════════════════════════════════════
@@ -1486,132 +1639,236 @@ ipcMain.on('open-windy-chat', () => showChatWindow());
 
 // Chat IPC — Authentication
 ipcMain.handle('chat-login', async (event, userId, password) => {
-  const client = getChatClient();
-  const result = await client.login(userId, password);
-  if (result.success) _setupChatForwarding(client);
-  return result;
+  try {
+    const client = getChatClient();
+    const result = await client.login(userId, password);
+    if (result.success) _setupChatForwarding(client);
+    return result;
+  } catch (err) {
+    console.error('[chat-login] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-register', async (event, username, password, displayName) => {
-  const client = getChatClient();
-  const result = await client.register(username, password, displayName);
-  if (result.success) _setupChatForwarding(client);
-  return result;
+  try {
+    const client = getChatClient();
+    const result = await client.register(username, password, displayName);
+    if (result.success) _setupChatForwarding(client);
+    return result;
+  } catch (err) {
+    console.error('[chat-register] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-logout', async () => {
-  if (chatClient) return chatClient.logout();
-  return { success: true };
+  try {
+    if (chatClient) return await chatClient.logout();
+    return { success: true };
+  } catch (err) {
+    console.error('[chat-logout] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-get-session', async () => {
-  const client = getChatClient();
-  const result = await client.resumeSession();
-  if (result.success) _setupChatForwarding(client);
-  return result;
+  try {
+    const client = getChatClient();
+    const result = await client.resumeSession();
+    if (result.success) _setupChatForwarding(client);
+    return result;
+  } catch (err) {
+    console.error('[chat-get-session] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Chat IPC — Messaging (client handles translation metadata internally)
 ipcMain.handle('chat-send-message', async (event, roomId, text) => {
-  // Validate inputs
-  if (typeof roomId !== 'string' || roomId.length > 500) return { error: 'Invalid room ID' };
-  if (typeof text !== 'string' || text.length === 0 || text.length > 65535) return { error: 'Message too long or empty' };
-  return getChatClient().sendMessage(roomId, text);
+  try {
+    // Validate inputs
+    if (typeof roomId !== 'string' || roomId.length > 500) return { error: 'Invalid room ID' };
+    if (typeof text !== 'string' || text.length === 0 || text.length > 65535) return { error: 'Message too long or empty' };
+    return await getChatClient().sendMessage(roomId, text);
+  } catch (err) {
+    console.error('[chat-send-message] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-get-messages', async (event, roomId, limit) => {
-  return getChatClient().getMessages(roomId, limit || 50);
+  try {
+    return await getChatClient().getMessages(roomId, limit || 50);
+  } catch (err) {
+    console.error('[chat-get-messages] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-send-typing', async (event, roomId, isTyping) => {
-  try { return getChatClient().sendTyping(roomId, isTyping); }
-  catch (e) { console.debug('[Chat IPC] sendTyping error:', e.message); }
+  try {
+    return await getChatClient().sendTyping(roomId, isTyping);
+  } catch (err) {
+    console.error('[chat-send-typing] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Chat IPC — Cached messages (offline access)
 ipcMain.handle('chat-get-cached-messages', async (event, roomId) => {
-  return getChatClient().getCachedMessages(roomId);
+  try {
+    return await getChatClient().getCachedMessages(roomId);
+  } catch (err) {
+    console.error('[chat-get-cached-messages] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Chat IPC — Contacts & Rooms
 ipcMain.handle('chat-get-contacts', async () => {
-  return getChatClient().getContacts();
+  try {
+    return await getChatClient().getContacts();
+  } catch (err) {
+    console.error('[chat-get-contacts] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-create-dm', async (event, userId) => {
-  return getChatClient().createDM(userId);
+  try {
+    return await getChatClient().createDM(userId);
+  } catch (err) {
+    console.error('[chat-create-dm] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-accept-invite', async (event, roomId) => {
-  return getChatClient().acceptInvite(roomId);
+  try {
+    return await getChatClient().acceptInvite(roomId);
+  } catch (err) {
+    console.error('[chat-accept-invite] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-decline-invite', async (event, roomId) => {
-  return getChatClient().declineInvite(roomId);
+  try {
+    return await getChatClient().declineInvite(roomId);
+  } catch (err) {
+    console.error('[chat-decline-invite] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Chat IPC — Encryption
 ipcMain.handle('chat-get-crypto-status', async () => {
-  return chatClient ? chatClient.getCryptoStatus() : { enabled: false, deviceId: null, syncState: null };
+  try {
+    return chatClient ? await chatClient.getCryptoStatus() : { enabled: false, deviceId: null, syncState: null };
+  } catch (err) {
+    console.error('[chat-get-crypto-status] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Chat IPC — Profile & Presence
 ipcMain.handle('chat-set-display-name', async (event, displayName) => {
-  return getChatClient().setDisplayName(displayName);
+  try {
+    return await getChatClient().setDisplayName(displayName);
+  } catch (err) {
+    console.error('[chat-set-display-name] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-set-presence', async (event, status) => {
-  return getChatClient().setPresence(status);
+  try {
+    return await getChatClient().setPresence(status);
+  } catch (err) {
+    console.error('[chat-set-presence] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-get-user-profile', async (event, userId) => {
-  return getChatClient().getUserProfile(userId);
+  try {
+    return await getChatClient().getUserProfile(userId);
+  } catch (err) {
+    console.error('[chat-get-user-profile] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-get-total-unread', async () => {
-  return getChatClient().getTotalUnread();
+  try {
+    return await getChatClient().getTotalUnread();
+  } catch (err) {
+    console.error('[chat-get-total-unread] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Chat IPC — Settings
 ipcMain.handle('chat-get-settings', async () => {
-  return {
-    homeserver: store.get('chat.homeserver', 'https://matrix.org'),
-    displayName: store.get('chat.displayName', ''),
-    language: store.get('chat.language', 'en'),
-    userId: store.get('chat.userId', '')
-  };
+  try {
+    return {
+      homeserver: store.get('chat.homeserver', 'https://matrix.org'),
+      displayName: store.get('chat.displayName', ''),
+      language: store.get('chat.language', 'en'),
+      userId: store.get('chat.userId', '')
+    };
+  } catch (err) {
+    console.error('[chat-get-settings] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-set-settings', async (event, settings) => {
-  if (settings.homeserver) {
-    // Validate homeserver URL before saving
-    try {
-      const parsed = new URL(settings.homeserver);
-      const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
-      if (parsed.protocol !== 'https:' && !isLocalhost) {
-        return { ok: false, error: 'Homeserver must use HTTPS (except localhost for development)' };
+  try {
+    if (settings.homeserver) {
+      // Validate homeserver URL before saving
+      try {
+        const parsed = new URL(settings.homeserver);
+        const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+        if (parsed.protocol !== 'https:' && !isLocalhost) {
+          return { ok: false, error: 'Homeserver must use HTTPS (except localhost for development)' };
+        }
+      } catch (e) {
+        return { ok: false, error: 'Invalid homeserver URL' };
       }
-    } catch (e) {
-      return { ok: false, error: 'Invalid homeserver URL' };
+      store.set('chat.homeserver', settings.homeserver);
     }
-    store.set('chat.homeserver', settings.homeserver);
+    if (settings.displayName) {
+      store.set('chat.displayName', settings.displayName);
+      try { getChatClient().setDisplayName(settings.displayName); } catch (e) { console.debug('[Chat] setDisplayName failed:', e.message); }
+    }
+    if (settings.language) store.set('chat.language', settings.language);
+    return { ok: true };
+  } catch (err) {
+    console.error('[chat-set-settings] Error:', err.message);
+    return { error: err.message };
   }
-  if (settings.displayName) {
-    store.set('chat.displayName', settings.displayName);
-    try { getChatClient().setDisplayName(settings.displayName); } catch (e) { console.debug('[Chat] setDisplayName failed:', e.message); }
-  }
-  if (settings.language) store.set('chat.language', settings.language);
-  return { ok: true };
 });
 
 // Chat IPC — Translation utilities
 ipcMain.handle('chat-get-user-language', async () => {
-  return chatTranslator ? chatTranslator.getUserLanguage() : store.get('chat.language', 'en');
+  try {
+    return chatTranslator ? chatTranslator.getUserLanguage() : store.get('chat.language', 'en');
+  } catch (err) {
+    console.error('[chat-get-user-language] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 ipcMain.handle('chat-translate-text', async (event, text, srcLang, tgtLang) => {
-  if (!chatTranslator) chatTranslator = new ChatTranslator(store);
-  return chatTranslator.translate(text, srcLang, tgtLang);
+  try {
+    if (!chatTranslator) chatTranslator = new ChatTranslator(store);
+    return await chatTranslator.translate(text, srcLang, tgtLang);
+  } catch (err) {
+    console.error('[chat-translate-text] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // Forward events from Matrix client → chat BrowserWindow
@@ -2162,28 +2419,79 @@ function registerHotkeys() {
 
   // Toggle recording — save & restore focus so cursor stays in target app
   const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
-    // Capture the focused window BEFORE anything happens
+    // Only capture the focused app when STARTING recording (not when stopping).
     let savedWindowId = null;
-    try {
-      if (process.platform === 'linux') {
-        savedWindowId = require('child_process').execSync('xdotool getactivewindow', { timeout: 500 }).toString().trim();
-      }
-    } catch (_) { }
+    if (!isRecording) {
+      try {
+        if (process.platform === 'linux') {
+          // SEC-M10/L5: Use execFileSync and validate window ID is numeric
+          savedWindowId = execFileSync('xdotool', ['getactivewindow'], { timeout: 500 }).toString().trim();
+          if (!/^\d+$/.test(savedWindowId)) savedWindowId = null;
+        }
+        // macOS: Take a FRESH PID snapshot RIGHT NOW at hotkey-press time.
+        // The 1s poller might have stale data if the user just clicked a new app.
+        // This synchronous query guarantees we capture the correct target.
+        if (process.platform === 'darwin') {
+          try {
+            const ourPid = process.pid;
+            const result = execFileSync('osascript', ['-e',
+              'tell application "System Events"\n' +
+              '  set fp to first application process whose frontmost is true\n' +
+              '  return (name of fp) & "|" & (unix id of fp)\n' +
+              'end tell'
+            ], { timeout: 1000 }).toString().trim();
+            const sep = result.lastIndexOf('|');
+            if (sep > 0) {
+              const appName = result.substring(0, sep);
+              const appPid = parseInt(result.substring(sep + 1), 10);
+              if (appPid && appPid !== ourPid) {
+                global._lastFocusedApp = appName;
+                global._lastFocusedPid = appPid;
+              }
+            }
+          } catch (_) { /* use last known tracker value */ }
+          console.info(`[Focus] Target app (fresh snapshot): "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
+        }
+      } catch (_) { }
+
+      // Disable focus guard during getUserMedia startup (re-enable after 1s)
+      global._focusGuardActive = false;
+    }
 
     toggleRecording();
 
-    // Restore focus to the user's target app after a delay
-    // (getUserMedia/AudioContext/IPC can all steal focus asynchronously)
+    // Restore focus to the user's target app after a delay (only when STARTING)
+    if (!isRecording) {
+      // Just STOPPED recording — clear saved target so tracker captures fresh next time
+      global._lastFocusedPid = null;
+      global._lastFocusedApp = null;
+      return;
+    }
+
     if (savedWindowId && process.platform === 'linux') {
       const restore = () => {
         try {
-          require('child_process').exec(`xdotool windowactivate ${savedWindowId}`);
+          require('child_process').execFile('xdotool', ['windowactivate', savedWindowId]);
         } catch (_) { }
       };
-      // Multiple restore attempts to catch all async focus steals
       setTimeout(restore, 200);
       setTimeout(restore, 500);
       setTimeout(restore, 1000);
+    } else if (process.platform === 'darwin') {
+      // Enable focus guard after 1s — enough for getUserMedia to complete.
+      setTimeout(() => {
+        global._focusGuardActive = true;
+        console.info('[Focus-Guard] Armed (1s grace period elapsed)');
+        // Explicit restore in case focus was stolen during startup
+        if (global._lastFocusedPid && isRecording) {
+          const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
+          execFile('osascript', ['-e', script], { timeout: 2000 },
+            (err) => {
+              if (!err) console.info(`[Focus] Restored focus to "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
+            }
+          );
+        }
+      }, 1000);
     }
   });
   console.info(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
@@ -2317,6 +2625,24 @@ function toggleRecording() {
   if (tray) {
     tray.setToolTip(isRecording ? 'Windy Pro - Recording...' : 'Windy Pro');
   }
+
+  // macOS: getUserMedia/AudioContext steal focus to Electron window.
+  // Restore focus AGGRESSIVELY so the cursor keeps blinking in the target app.
+  // getUserMedia steals focus once, AudioContext may steal again — we hammer it back.
+  if (isRecording && process.platform === 'darwin') {
+    const restoreFocusToTarget = () => {
+      if (global._lastFocusedPid && isRecording) {
+        const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
+        execFile('osascript', ['-e', script], { timeout: 2000 });
+      }
+    };
+    // Rapid-fire restores to keep cursor blinking through getUserMedia + AudioContext
+    setTimeout(restoreFocusToTarget, 200);
+    setTimeout(restoreFocusToTarget, 400);
+    setTimeout(restoreFocusToTarget, 600);
+    setTimeout(restoreFocusToTarget, 1000);
+    setTimeout(restoreFocusToTarget, 1500);
+  }
 }
 
 /**
@@ -2334,13 +2660,17 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
     safeSend('state-change', 'injecting');
     updateTrayIcon('injecting');
 
-    // Hide Windy Pro window so focus returns to the previous app
-    if (mainWindow && mainWindow.isVisible()) {
+    // macOS: Activate target app by PID to give it keyboard focus.
+    // DO NOT hide the window — that causes visual disappearance.
+    if (process.platform === 'darwin' && global._lastFocusedPid) {
+      const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
+      execFile('osascript', ['-e', script], { timeout: 2000 });
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } else if (mainWindow && mainWindow.isVisible()) {
+      // Non-macOS fallback: hide briefly
       mainWindow.hide();
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
-
-    // Small delay to let the OS switch focus
-    await new Promise(resolve => setTimeout(resolve, 200));
 
     try {
       await getInjector().inject(transcript);
@@ -2349,11 +2679,10 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
       safeSend('injection-error', error.message);
     }
 
-    // Show window again after paste WITHOUT stealing focus
-    // so the user can proofread and hit Enter in their chat app
+    // Restore UI state (window is already visible on macOS)
     setTimeout(() => {
-      if (mainWindow) {
-        mainWindow.showInactive();  // Show without taking focus
+      if (mainWindow && !mainWindow.isVisible()) {
+        mainWindow.showInactive();  // Show without taking focus (non-macOS)
       }
       const newState = isRecording ? 'listening' : 'idle';
       safeSend('state-change', newState);
@@ -2364,7 +2693,12 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
 
 // Check injection permissions
 ipcMain.handle('check-injection-permissions', async () => {
-  return getInjector().checkPermissions();
+  try {
+    return getInjector().checkPermissions();
+  } catch (err) {
+    console.error('[check-injection-permissions] Error:', err.message);
+    return { error: err.message, permitted: false };
+  }
 });
 
 // Update settings — accepts flat keys from renderer and routes to correct store namespace
@@ -2376,7 +2710,7 @@ ipcMain.on('update-settings', (event, settings) => {
   for (const [key, value] of Object.entries(settings)) {
     if (appearanceKeys.includes(key)) {
       store.set(`appearance.${key}`, key === 'opacity' ? value / 100 : value);
-      if (key === 'alwaysOnTop' && mainWindow) mainWindow.setAlwaysOnTop(value);
+      if (key === 'alwaysOnTop' && mainWindow) mainWindow.setAlwaysOnTop(value, process.platform === 'darwin' ? 'floating' : 'normal');
       if (key === 'opacity' && mainWindow) mainWindow.setOpacity(value / 100);
     } else if (serverKeys.includes(key)) {
       store.set(`server.${key}`, value);
@@ -2386,6 +2720,16 @@ ipcMain.on('update-settings', (event, settings) => {
         globalShortcut.unregisterAll();
         registerHotkeys();
       }
+    } else if (key === 'cloudPassword') {
+      // SEC-C1: Encrypt cloud password via safeStorage — never store plaintext
+      if (value && safeStorage.isEncryptionAvailable()) {
+        const encrypted = safeStorage.encryptString(String(value));
+        store.set('engine.cloudPasswordEncrypted', encrypted.toString('base64'));
+      } else if (value) {
+        // Fallback: electron-store (still better than renderer localStorage)
+        store.set('engine.cloudPassword', value);
+      }
+      store.delete('engine.cloudPassword'); // Remove any old plaintext
     } else {
       // Engine settings (model, device, language, vibeEnabled, micDeviceId)
       store.set(`engine.${key}`, value);
@@ -2446,6 +2790,71 @@ ipcMain.handle('get-api-key', (event, keyName) => {
   } catch (err) {
     return '';
   }
+});
+
+// M5: Deepgram WebSocket proxy — keeps API key in main process, never sent to renderer
+let _dgProxyWs = null;
+ipcMain.handle('deepgram-stream-start', async (_event, opts) => {
+  try {
+    const apiKey = await (async () => {
+      const encB64 = store.get('engine.deepgramApiKeyEncrypted', '');
+      if (encB64 && safeStorage.isEncryptionAvailable()) {
+        return safeStorage.decryptString(Buffer.from(encB64, 'base64'));
+      }
+      return store.get('engine.deepgramApiKey', '') || process.env.DEEPGRAM_API_KEY || '';
+    })();
+    if (!apiKey) return { ok: false, error: 'No Deepgram API key configured' };
+
+    const WebSocket = require('ws');
+    const lang = opts?.language || 'en';
+    const diarize = opts?.diarize || false;
+    let dgUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&language=${encodeURIComponent(lang)}&smart_format=true&interim_results=true&punctuate=true`;
+    if (diarize) dgUrl += '&diarize=true';
+
+    // Connect with Authorization header (not sub-protocol) — API key stays server-side
+    _dgProxyWs = new WebSocket(dgUrl, { headers: { 'Authorization': `Token ${apiKey}` } });
+
+    _dgProxyWs.on('open', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deepgram-proxy-open');
+      }
+    });
+    _dgProxyWs.on('message', (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deepgram-proxy-message', data.toString());
+      }
+    });
+    _dgProxyWs.on('error', (err) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deepgram-proxy-error', err.message || 'WebSocket error');
+      }
+    });
+    _dgProxyWs.on('close', () => {
+      _dgProxyWs = null;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deepgram-proxy-close');
+      }
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('deepgram-stream-send', (_event, audioBuffer) => {
+  if (_dgProxyWs && _dgProxyWs.readyState === 1) { // WebSocket.OPEN
+    _dgProxyWs.send(Buffer.from(audioBuffer));
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('deepgram-stream-stop', () => {
+  if (_dgProxyWs) {
+    try { _dgProxyWs.close(); } catch (_) {}
+    _dgProxyWs = null;
+  }
+  return true;
 });
 
 ipcMain.handle('choose-archive-folder', async () => {
@@ -2579,17 +2988,21 @@ ipcMain.handle('open-external-url', async (event, url) => {
         popupWin.loadURL(popupUrl);
         popupWin.focus();
         // Allow popups inside popups (OAuth redirect chains)
+        // SEC-H4: Only allow https:// URLs to prevent protocol injection
         popupWin.webContents.setWindowOpenHandler(({ url: nestedUrl }) => {
-          popupWin.loadURL(nestedUrl);
+          if (nestedUrl.startsWith('https://') || nestedUrl.startsWith('http://')) {
+            popupWin.loadURL(nestedUrl);
+          }
           return { action: 'deny' };
         });
         return { action: 'deny' }; // deny default, we handled it manually
       });
 
-      // Allow cross-domain navigation (OAuth redirects)
+      // SEC-H8: Only allow http(s) navigation — block file://, javascript://, etc.
       extWin.webContents.on('will-navigate', (event, navUrl) => {
-
-        // Allow all navigation — needed for OAuth flows
+        if (!navUrl.startsWith('https://') && !navUrl.startsWith('http://')) {
+          event.preventDefault();
+        }
       });
 
       extWin.loadURL(url);
@@ -2635,9 +3048,10 @@ ipcMain.handle('open-external-url', async (event, url) => {
 
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
   const tmpDir = os.tmpdir();
-  const ts = Date.now();
-  const webmPath = path.join(tmpDir, `windy-batch-${ts}.webm`);
-  const wavPath = path.join(tmpDir, `windy-batch-${ts}.wav`);
+  // SEC-M8: Use crypto.randomBytes for unpredictable temp filenames
+  const tmpId = crypto.randomBytes(16).toString('hex');
+  const webmPath = path.join(tmpDir, `windy-batch-${tmpId}.webm`);
+  const wavPath = path.join(tmpDir, `windy-batch-${tmpId}.wav`);
 
   try {
     // Save base64 audio to temp file
@@ -2695,7 +3109,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     } else if (bundledModelDir && fs.existsSync(path.join(bundledModelDir, 'model.bin'))) {
       modelRef = `"${bundledModelDir.replace(/\\/g, '/')}"`;
     }
-    const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${ts}.py`);
+    const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${tmpId}.py`);
     const scriptContent = [
       'from faster_whisper import WhisperModel',
       `model = WhisperModel(${modelRef}, device="cpu", compute_type="int8")`,
@@ -2726,49 +3140,84 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
 
 ipcMain.handle('auto-paste-text', async (event, text) => {
   if (!text || !text.trim()) return false;
+
   try {
     const { clipboard } = require('electron');
     clipboard.writeText(text.trim());
+    console.info(`[AutoPaste] Text on clipboard: ${text.trim().length} chars`);
+    console.info(`[AutoPaste] Target: "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
 
-    // Remember original state
-    const wasUserHidden = userHiddenWindow;
-    const wasAlwaysOnTop = mainWindow && mainWindow.isAlwaysOnTop();
-    const savedOpacity = mainWindow ? mainWindow.getOpacity() : 1;
+    if (process.platform === 'darwin') {
+      // ── macOS auto-paste via PID ──
+      const targetPid = global._lastFocusedPid;
+      const targetApp = global._lastFocusedApp || 'unknown';
+      if (!targetPid) {
+        console.warn(`[AutoPaste] No target PID — text on clipboard, use Cmd+V manually`);
+        return false;
+      }
 
-    // Make window invisible + non-topmost so target app gets the paste
-    // Using opacity instead of hide() to avoid window manager focus changes
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(false);
-      mainWindow.setOpacity(0);
-    }
-    // Wait for the target app to be the active/focused app
-    await new Promise(r => setTimeout(r, 200));
+      // Activate the exact target process by PID and send Cmd+V.
+      // PID-based activation works even when multiple apps share the name "Electron".
+      // DO NOT drop alwaysOnTop or hide the window — our floating window stays visible.
+      const appleScript = `
+        tell application "System Events"
+          set frontmost of (first application process whose unix id is ${targetPid}) to true
+        end tell
+        delay 0.3
+        tell application "System Events"
+          keystroke "v" using command down
+        end tell
+      `;
+      await new Promise((resolve) => execFile(
+        'osascript', ['-e', appleScript],
+        { timeout: 8000 }, (err, stdout, stderr) => {
+          if (err) {
+            console.error(`[AutoPaste] Failed:`, err.message);
+            if (stderr) console.error(`[AutoPaste] stderr:`, stderr);
+          } else {
+            console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars to "${targetApp}" (pid ${targetPid})`);
+          }
+          resolve();
+        }
+      ));
 
-    // P0-1: Simulate Ctrl+V using async exec (non-blocking)
-    if (process.platform === 'linux') {
-      await new Promise((resolve) => exec('xdotool key --clearmodifiers ctrl+v', { timeout: 5000 }, resolve));
-    } else if (process.platform === 'darwin') {
-      await new Promise((resolve) => exec('osascript -e \'tell application "System Events" to keystroke "v" using command down\'', { timeout: 5000 }, resolve));
+      // After paste, clear the saved target so the tracker captures
+      // whatever the user clicks NEXT, not the app we just activated.
+      global._lastFocusedPid = null;
+      global._lastFocusedApp = null;
+      return true;
+
+    } else if (process.platform === 'linux') {
+      // ── Linux auto-paste (xdotool — proven working) ──
+      const wasAlwaysOnTop = mainWindow && !mainWindow.isDestroyed() && mainWindow.isAlwaysOnTop();
+      const savedOpacity = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getOpacity() : 1;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(false);
+        mainWindow.setOpacity(0);
+      }
+      await new Promise(r => setTimeout(r, 200));
+      await new Promise((resolve) => execFile('xdotool', ['key', '--clearmodifiers', 'ctrl+v'], { timeout: 5000 }, resolve));
+      await new Promise(r => setTimeout(r, 100));
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setOpacity(savedOpacity || 1);
+        if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'floating' : 'normal');
+      }
+      return true;
+
     } else {
-      await new Promise((resolve) => exec('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"', { timeout: 5000 }, resolve));
+      // ── Windows auto-paste ──
+      await new Promise((resolve) => exec(
+        'powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"',
+        { timeout: 5000 }, resolve
+      ));
+      return true;
     }
-
-    // Restore window visibility
-    await new Promise(r => setTimeout(r, 100));
-    if (mainWindow && !mainWindow.isDestroyed() && !wasUserHidden) {
-      mainWindow.setOpacity(savedOpacity || 1);
-      if (wasAlwaysOnTop) mainWindow.setAlwaysOnTop(true);
-      console.info(`[AutoPaste] Pasted ${text.trim().length} chars, window restored`);
-    } else {
-      console.info(`[AutoPaste] Pasted ${text.trim().length} chars, window stays hidden (user preference)`);
-    }
-    return true;
   } catch (err) {
-    // On failure, restore window
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setOpacity(1);
-    }
     console.error('[AutoPaste] Failed:', err.message);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'floating' : 'normal');
+    }
     return false;
   }
 });
@@ -2963,8 +3412,13 @@ ipcMain.handle('delete-archive-entry', async (event, filePath) => {
   }
 });
 
+<<<<<<< HEAD
 // ── WindyCloud Storage helpers ──────────────────────────────
 const CLOUD_STORAGE_DEFAULT_URL = 'https://windypro.thewindstorm.uk/api/storage';
+=======
+// ── Windy Pro Cloud Storage helpers ──────────────────────────────
+const CLOUD_STORAGE_DEFAULT_URL = 'https://windyword.ai/api/storage';
+>>>>>>> 677e1414521bd8746ee9ef10412308bbf67fad52
 
 async function getCloudStorageToken() {
   const engine = store.get('engine', {});
@@ -2972,7 +3426,15 @@ async function getCloudStorageToken() {
 
   // Auto-register/login with storage API using existing cloud credentials
   const email = engine.cloudEmail;
-  const password = engine.cloudPassword;
+  // SEC-C1: Decrypt cloud password from safeStorage
+  let password = null;
+  try {
+    const encB64 = store.get('engine.cloudPasswordEncrypted', '');
+    if (encB64 && safeStorage.isEncryptionAvailable()) {
+      password = safeStorage.decryptString(Buffer.from(encB64, 'base64'));
+    }
+  } catch (_) { }
+  if (!password) password = engine.cloudPassword || null; // Legacy plaintext fallback
   if (!email || !password) return null;
 
   const baseUrl = engine.cloudStorageUrl || CLOUD_STORAGE_DEFAULT_URL;
@@ -3297,7 +3759,7 @@ ipcMain.handle('export-soul-file', async () => {
     const manifest = {
       version: '1.0',
       exportDate: new Date().toISOString(),
-      appVersion: require('../../package.json').version || '1.6.1',
+      appVersion: app.getVersion() || '1.6.1',
       stats: { totalFiles, audioFiles, videoFiles, transcriptFiles, totalWords, totalChars, days: days.length, dateRange: days.length ? { first: days[0], last: days[days.length - 1] } : null }
     };
     archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
@@ -3438,8 +3900,8 @@ ipcMain.handle('detect-hardware', async () => {
     }
   } else {
     try {
-      const { execSync } = require('child_process');
-      const gpuInfo = execSync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits', { timeout: 5000 }).toString().trim();
+      // SEC-M10: Use execFileSync with array args
+      const gpuInfo = execFileSync('nvidia-smi', ['--query-gpu=name,memory.total', '--format=csv,noheader,nounits'], { timeout: 5000 }).toString().trim();
       if (gpuInfo) {
         const [name, vramMB] = gpuInfo.split(', ');
         result.gpu = { name: name.trim(), vramMB: parseInt(vramMB) || 0, type: 'cuda' };
@@ -3451,20 +3913,25 @@ ipcMain.handle('detect-hardware', async () => {
 
   // Check disk space
   try {
-    const { execSync } = require('child_process');
     const homeDir = os.homedir();
     if (process.platform === 'win32') {
       const drive = homeDir.charAt(0);
-      const out = execSync(`wmic logicaldisk where "DeviceID='${drive}:'" get FreeSpace /value`, { timeout: 3000 }).toString();
+      // SEC-M10: Validate drive letter is a single alpha char before interpolation
+      if (!/^[a-zA-Z]$/.test(drive)) throw new Error('Invalid drive letter');
+      const out = execFileSync('wmic', ['logicaldisk', 'where', `DeviceID='${drive}:'`, 'get', 'FreeSpace', '/value'], { timeout: 3000 }).toString();
       const match = out.match(/FreeSpace=(\d+)/);
       if (match) result.diskFreeGB = Math.round(parseInt(match[1]) / (1024 * 1024 * 1024));
     } else if (process.platform === 'darwin') {
       // macOS: df -g shows in GB (BSD df, no -B flag)
-      const out = execSync(`df -g "${homeDir}" | tail -1 | awk '{print $4}'`, { timeout: 3000 }).toString().trim();
+      // SEC-M10: Use execFileSync with array args
+      const dfOut = execFileSync('df', ['-g', homeDir], { timeout: 3000 }).toString();
+      const out = dfOut.split('\n').slice(-2)[0]?.split(/\s+/)[3] || '';
       result.diskFreeGB = parseInt(out) || null;
     } else {
       // Linux: df -BG shows in GB (GNU df)
-      const out = execSync(`df -BG "${homeDir}" | tail -1 | awk '{print $4}'`, { timeout: 3000 }).toString().trim();
+      // SEC-M10: Use execFileSync with array args
+      const dfOut = execFileSync('df', ['-BG', homeDir], { timeout: 3000 }).toString();
+      const out = dfOut.split('\n').slice(-2)[0]?.split(/\s+/)[3] || '';
       result.diskFreeGB = parseInt(out) || null;
     }
   } catch (_) { }
@@ -3496,7 +3963,7 @@ ipcMain.handle('register-wizard-account', async (event, { email, password, name 
     const data = JSON.stringify({ email, password, name });
     return new Promise((resolve) => {
       const req = https.request({
-        hostname: 'windypro.thewindstorm.uk',
+        hostname: 'windyword.ai',
         port: 443,
         path: '/api/v1/auth/register',
         method: 'POST',
@@ -3512,7 +3979,12 @@ ipcMain.handle('register-wizard-account', async (event, { email, password, name 
               // Store credentials
               store.set('engine.cloudStorageToken', result.token || '');
               store.set('engine.cloudEmail', email);
-              store.set('engine.cloudPassword', password);
+              // SEC-C1: Encrypt cloud password via safeStorage
+              if (safeStorage.isEncryptionAvailable()) {
+                const encrypted = safeStorage.encryptString(password);
+                store.set('engine.cloudPasswordEncrypted', encrypted.toString('base64'));
+              }
+              store.delete('engine.cloudPassword'); // Remove any plaintext
               resolve({ ok: true, token: result.token, user: result.user });
             } else {
               resolve({ ok: false, error: result.detail || result.message || 'Registration failed' });
@@ -3576,8 +4048,8 @@ ipcMain.handle('create-checkout-session', async (event, priceId, email) => {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: priceConfig.mode,
-      success_url: process.env.STRIPE_SUCCESS_URL || 'https://windypro.thewindstorm.uk/payment-success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: process.env.STRIPE_CANCEL_URL || 'https://windypro.thewindstorm.uk/payment-cancel',
+      success_url: process.env.STRIPE_SUCCESS_URL || 'https://windyword.ai/payment-success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: process.env.STRIPE_CANCEL_URL || 'https://windyword.ai/payment-cancel',
       allow_promotion_codes: true,
       metadata: { deviceId: machineId, tier: priceConfig.tier }
     };
@@ -3643,7 +4115,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
   const featureDefs = [
     { key: 'maxEngines', label: 'AI Engines', tip: 'Number of transcription engines. More = better accuracy across accents and noise.' },
     { key: 'maxLanguages', label: 'Languages', tip: 'Free: 1, Paid: all 99 languages including rare dialects.' },
-    { key: 'maxMinutes', label: 'Recording Length', tip: 'Maximum length of a single recording session. Free: 2 min. Pro: 15 min. Ultra: 60 min. Max: unlimited!' },
+    { key: 'maxMinutes', label: 'Recording Length', tip: 'Maximum length of a single recording session. Free: 5 min. Pro: 30 min. Ultra: 60 min. Max: unlimited!' },
     { key: 'batchMode', label: 'Batch Mode', tip: 'Drag-drop a folder of recordings and transcribe them all at once.' },
     { key: 'llmPolish', label: 'LLM Polish', tip: 'AI fixes grammar, removes filler words, adds punctuation automatically.' },
     { key: 'translation', label: 'Real-time Translation', tip: 'Live speech translation across 99 language pairs.' },
@@ -3652,7 +4124,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
   ];
 
   const tiers = {
-    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 2, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
+    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
     pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 15, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
     translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 60, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
     translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 'Unlimited', batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
@@ -3841,10 +4313,12 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
       width: 1140, height: 780, x: 100, y: 60,
       title: 'Choose Your Plan — Windy Pro',
       autoHideMenuBar: true,
-      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, javascript: true, partition: 'persist:checkout', devTools: true }
+      // SEC-M11: Disable DevTools in packaged builds
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, javascript: true, partition: 'persist:checkout', devTools: !app.isPackaged }
     });
     // Write HTML to temp file to avoid data: URL encoding issues with emojis
-    const tmpCheckoutPath = path.join(os.tmpdir(), 'windy-checkout-' + Date.now() + '.html');
+    // SEC-M8: Use crypto random for unpredictable temp filename
+    const tmpCheckoutPath = path.join(os.tmpdir(), 'windy-checkout-' + require('crypto').randomBytes(8).toString('hex') + '.html');
     require('fs').writeFileSync(tmpCheckoutPath, html, 'utf8');
     checkoutWin.loadFile(tmpCheckoutPath);
     checkoutWin.on('closed', () => { try { require('fs').unlinkSync(tmpCheckoutPath); } catch (_) { } });
@@ -4000,7 +4474,7 @@ ipcMain.handle('open-billing-portal', async () => {
     if (!license.stripeCustomerId) throw new Error('No Stripe customer found. Purchase a plan first.');
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: license.stripeCustomerId,
-      return_url: process.env.STRIPE_RETURN_URL || 'https://windypro.thewindstorm.uk/dashboard'
+      return_url: process.env.STRIPE_RETURN_URL || 'https://windyword.ai/dashboard'
     });
     // SEC-06: Validate Stripe portal URL before opening
     if (isSafeURL(portalSession.url)) shell.openExternal(portalSession.url);
@@ -4587,7 +5061,8 @@ function httpGet(url) {
 // Identify a song from a base64 data URL
 ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
   const tmpDir = require('os').tmpdir();
-  const tmpFile = require('path').join(tmpDir, `windy_identify_${Date.now()}.webm`);
+  // SEC-M8: Use crypto.randomBytes for unpredictable temp filenames
+  const tmpFile = require('path').join(tmpDir, `windy_identify_${crypto.randomBytes(16).toString('hex')}.webm`);
 
   try {
     // Write data URL to temp file
@@ -4766,16 +5241,25 @@ ipcMain.on('recording-failed', () => {
 
 // Save file dialog
 ipcMain.handle('save-file', async (event, { content, defaultName, defaultPath: dp, filters }) => {
-  const result = await dialog.showSaveDialog(mainWindow, {
-    defaultPath: dp || defaultName || 'transcript.txt',
-    filters: filters || [{ name: 'Text', extensions: ['txt'] }]
-  });
-  if (!result.canceled && result.filePath) {
-    fs.writeFileSync(result.filePath, content, 'utf8');
-    return { ok: true, saved: true, path: result.filePath };
+  try {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: dp || defaultName || 'transcript.txt',
+      filters: filters || [{ name: 'Text', extensions: ['txt'] }]
+    });
+    if (!result.canceled && result.filePath) {
+      fs.writeFileSync(result.filePath, content, 'utf8');
+      return { ok: true, saved: true, path: result.filePath };
+    }
+    return { ok: false, saved: false };
+  } catch (err) {
+    console.error('[save-file] Error:', err.message);
+    return { ok: false, saved: false, error: err.message };
   }
-  return { ok: false, saved: false };
 });
+
+// Module-scope updater instance — assigned inside deferred startup setTimeout,
+// read by install-update and check-for-updates handlers.
+let updaterInstance = null;
 
 ipcMain.handle('install-update', async () => {
   if (updaterInstance) {
@@ -4855,6 +5339,10 @@ app.on('ready', () => {
 
 app.whenReady().then(async () => {
   _perfMark('app.whenReady()');
+  // Clear file cache in dev mode to ensure fresh JS files
+  if (process.argv.includes('--dev')) {
+    try { await session.defaultSession.clearCache(); } catch (_) {}
+  }
   // ═══════════════════════════════════════════════════════════════════
   // INSTALLATION WIZARD v2.0 — TurboTax-style 9-screen setup
   // Source: installer-v2/ (the ONLY wizard — there is no other)
@@ -4898,6 +5386,43 @@ app.whenReady().then(async () => {
   registerHotkeys();
   _perfMark('Window + tray created');
 
+  // ═══ macOS Continuous Focus Tracker (PID-based) ═══
+  // Polls frontmost app every 1s — tracks BOTH name and PID.
+  // Filters by PID (not name) so we only skip our OWN Electron process.
+  // This means other Electron apps (VS Code, Cursor, Antigravity, etc.) are
+  // correctly captured as valid paste targets.
+  // Pauses during recording to freeze the target.
+  if (process.platform === 'darwin') {
+    global._lastFocusedApp = null;
+    global._lastFocusedPid = null;
+    global._focusGuardActive = false;
+    const ourPid = process.pid;
+    global._focusTrackerInterval = setInterval(() => {
+      // Don't update during recording — keep the target frozen
+      if (isRecording) return;
+      try {
+        // Query both name and PID of the frontmost process
+        const result = execFileSync('osascript', ['-e',
+          'tell application "System Events"\n' +
+          '  set fp to first application process whose frontmost is true\n' +
+          '  return (name of fp) & "|" & (unix id of fp)\n' +
+          'end tell'
+        ], { timeout: 1000 }).toString().trim();
+        const sep = result.lastIndexOf('|');
+        if (sep > 0) {
+          const appName = result.substring(0, sep);
+          const appPid = parseInt(result.substring(sep + 1), 10);
+          // Only skip our OWN process — allow all other apps including other Electron apps
+          if (appPid && appPid !== ourPid) {
+            global._lastFocusedApp = appName;
+            global._lastFocusedPid = appPid;
+          }
+        }
+      } catch (_) { /* osascript timeout — skip this tick */ }
+    }, 1000);
+    console.info(`[Focus] macOS PID-based focus tracker started (1s poll, our pid=${ourPid})`);
+  }
+
   // macOS dark mode: forward system theme changes to renderer
   if (process.platform === 'darwin') {
     const sendTheme = () => {
@@ -4925,7 +5450,8 @@ app.whenReady().then(async () => {
   // ═══ Deferred startup tasks (non-critical — runs 3s after window appears) ═══
   // This keeps the window snappy: archive cleanup, license validation, model
   // migration, heartbeat, and update checks all run after first paint.
-  let updaterInstance = null;
+  // NOTE: updaterInstance is declared at module scope (before this function)
+  // so that ipcMain.handle('install-update') can access it.
   setTimeout(() => {
     // Validate license (non-blocking)
     validateLicense().catch(e => console.error('[License] Validation error:', e.message));
@@ -5043,8 +5569,9 @@ app.whenReady().then(async () => {
       safeSend('update-toast', { message: '🔐 Installing update (admin password required)…', canRestart: false });
 
       // Install with pkexec (graphical sudo prompt)
-      const { execSync } = require('child_process');
-      execSync(`pkexec dpkg -i "${debPath}"`, { timeout: 60000 });
+      // SEC-M10: Use execFileSync with array args for dpkg install
+      const { execFileSync: execFileSyncDeb } = require('child_process');
+      execFileSyncDeb('pkexec', ['dpkg', '-i', debPath], { timeout: 60000 });
 
       // Clean up and restart
       fs.unlinkSync(debPath);
@@ -5309,15 +5836,31 @@ ipcMain.handle('extract-document-text', async (event, base64, ext) => {
 });
 
 ipcMain.handle('browse-document-file', async () => {
-  const result = await dialog.showOpenDialog({
-    title: 'Select Document',
-    filters: [{ name: 'Documents', extensions: ['txt', 'md', 'html', 'pdf', 'docx', 'csv'] }],
-    properties: ['openFile']
-  });
-  if (result.canceled || !result.filePaths[0]) return null;
-  const filePath = result.filePaths[0];
-  const text = fs.readFileSync(filePath, 'utf8');
-  return { text, name: path.basename(filePath) };
+  try {
+    const result = await dialog.showOpenDialog({
+      title: 'Select Document',
+      filters: [{ name: 'Documents', extensions: ['txt', 'md', 'html', 'pdf', 'docx', 'csv'] }],
+      properties: ['openFile']
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const filePath = result.filePaths[0];
+    const ext = path.extname(filePath).toLowerCase();
+    // Binary formats: return file path for PDFs (renderer uses pdf.js or similar),
+    // base64 for other binary formats like DOCX
+    if (ext === '.pdf') {
+      return { filePath, name: path.basename(filePath), ext, encoding: 'path' };
+    }
+    if (ext === '.docx') {
+      const buffer = fs.readFileSync(filePath);
+      return { data: buffer.toString('base64'), encoding: 'base64', name: path.basename(filePath), ext };
+    }
+    // Text formats (.txt, .md, .csv, .html): read as UTF-8
+    const text = fs.readFileSync(filePath, 'utf8');
+    return { text, name: path.basename(filePath) };
+  } catch (err) {
+    console.error('[browse-document-file] Error:', err.message);
+    return { error: err.message };
+  }
 });
 
 // ═══ Clone Data Bundle Management ═══
@@ -5419,21 +5962,41 @@ ipcMain.handle('export-clone-bundles', async (event, bundleIds) => {
 });
 
 ipcMain.handle('start-clone-training', async (event, bundleIds) => {
-  // Stub: call account server API
-  try {
-    const settings = store.get('server', {});
-    const token = store.get('auth.token', '');
-    const baseUrl = settings.url || 'http://localhost:8098';
-    const res = await require('node-fetch')(`${baseUrl}/api/v1/clone/start-training`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ bundle_ids: bundleIds })
+  // Clone training is not yet available — offer export instead
+  const { response } = await dialog.showMessageBox({
+    type: 'info',
+    title: 'Windy Clone — Coming Soon',
+    message: 'Clone training is coming soon!\n\nWould you like to export your selected bundles as a voice data package instead?\n\nYou can use the exported package with ElevenLabs, PlayHT, or any voice cloning service.',
+    buttons: ['Export Package', 'Not Now'],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (response === 0) {
+    // Directly invoke the export-clone-bundles handler logic
+    const data = loadBundlesManifest();
+    const selected = data.bundles.filter(b => bundleIds.includes(b.bundle_id));
+    if (selected.length === 0) return { success: false, error: 'No bundles found' };
+
+    const saveResult = await dialog.showSaveDialog({
+      title: 'Export Clone Bundles',
+      defaultPath: `clone-bundles-${Date.now()}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }]
     });
-    return await res.json();
-  } catch (err) {
-    // Fallback: return stub job ID
-    return { jobId: require('crypto').randomUUID(), status: 'queued', message: 'Training queued (offline mode)' };
+    if (saveResult.canceled) return { success: false };
+
+    const exportData = {
+      exported_at: new Date().toISOString(),
+      bundle_count: selected.length,
+      bundles: selected.map(b => ({
+        ...b,
+        file_path: undefined,
+        mediaBase64: fs.existsSync(b.file_path) ? fs.readFileSync(b.file_path).toString('base64') : null
+      }))
+    };
+    fs.writeFileSync(saveResult.filePath, JSON.stringify(exportData, null, 2));
+    return { success: true, exportPath: saveResult.filePath };
   }
+  return { status: 'export_ready', message: 'Clone training coming soon. Use Export Clone Package to export your voice data.' };
 });
 
 // ═══ Auto-Sync IPC Handlers ═══

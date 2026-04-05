@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* wss://*.thewindstorm.uk https://*.thewindstorm.uk; media-src 'self' mediastream: blob: data:; img-src 'self' data:;">
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* wss://*.windyword.ai https://*.windyword.ai wss://*.thewindstorm.uk https://*.thewindstorm.uk; media-src 'self' mediastream: blob: data:; img-src 'self' data:;">
   <title>Windy Pro</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="premium-features.css">
@@ -53,6 +53,36 @@
         <button class="title-btn" id="maximizeBtn" title="Maximize / Restore" aria-label="Toggle maximize">□</button>
         <button class="title-btn close" id="closeBtn" title="Close" aria-label="Close window">×</button>
       </div>
+    </div>
+
+    <!-- Ecosystem Navigation Bar -->
+    <div class="ecosystem-bar" id="ecosystemBar">
+      <button class="eco-btn active" id="ecoWord" title="Windy Word" data-product="word">
+        <span class="eco-icon">🎤</span>
+        <span class="eco-label">Word</span>
+      </button>
+      <button class="eco-btn" id="ecoChat" title="Windy Chat" data-product="chat">
+        <span class="eco-icon">💬</span>
+        <span class="eco-label">Chat</span>
+        <span class="eco-badge" id="chatBadge" style="display:none;">0</span>
+      </button>
+      <button class="eco-btn" id="ecoMail" title="Windy Mail" data-product="mail">
+        <span class="eco-icon">✉️</span>
+        <span class="eco-label">Mail</span>
+        <span class="eco-badge" id="mailBadge" style="display:none;">0</span>
+      </button>
+      <button class="eco-btn" id="ecoCloud" title="Windy Cloud" data-product="cloud">
+        <span class="eco-icon">☁️</span>
+        <span class="eco-label">Cloud</span>
+      </button>
+      <button class="eco-btn" id="ecoAgent" title="Windy Fly" data-product="agent">
+        <span class="eco-icon">🪰</span>
+        <span class="eco-label">Agent</span>
+      </button>
+      <button class="eco-btn" id="ecoCode" title="Windy Code" data-product="code">
+        <span class="eco-icon">💻</span>
+        <span class="eco-label">Code</span>
+      </button>
     </div>
 
     <!-- State Indicator (The Green Strobe) -->
@@ -240,6 +270,7 @@
 
   <!-- SEC-08: Global HTML escaping helper for innerHTML sanitization -->
   <!-- Critical scripts: needed for initial UI render -->
+  <script src="date-utils.js"></script>
   <script src="input-validator.js"></script>
   <script src="renderer-logger.js"></script>
   <script src="security-helpers.js"></script>
@@ -266,6 +297,8 @@
   <script src="widget-engine.js" defer></script>
   <script src="marketplace.js" defer></script>
   <div id="effectsOverlay" class="effects-overlay"></div>
+  <script src="ecosystem-nav.js"></script>
+  <script src="first-run.js"></script>
   <script src="app.js"></script>
 </body>
 

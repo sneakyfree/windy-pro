@@ -1,7 +1,6 @@
 /**
  * Windy Pro — Clone Data Archive
- * Browse recording bundles, filter, bulk export, storage stats,
- * start clone training
+ * Browse recording bundles, filter, bulk export, storage stats
  */
 
 class CloneDataArchive {
@@ -24,7 +23,7 @@ class CloneDataArchive {
       <div class="cda-archive" id="clone-data-archive">
         <div class="cda-header">
           <h2>🧬 Clone Data Archive</h2>
-          <p class="cda-subtitle">Recording bundles for digital clone training</p>
+          <p class="cda-subtitle">Recording bundles for voice data export</p>
           <button class="conv-close-btn" id="cda-close">✕</button>
         </div>
 
@@ -80,10 +79,19 @@ class CloneDataArchive {
             }
         </div>
 
+        <!-- Coming Soon Banner -->
+        <div class="cda-coming-soon" style="background:rgba(163,230,53,0.08); border:1px solid rgba(163,230,53,0.2); border-radius:12px; padding:16px; margin:0 0 16px 0;">
+          <p style="color:#A3E635; font-weight:700; margin:0 0 6px 0;">Windy Clone — Coming Soon</p>
+          <p style="color:#9CA3AF; font-size:13px; margin:0;">
+            Your voice data is being archived and quality-scored automatically.
+            When Windy Clone launches, your data will be ready for instant clone training.
+            In the meantime, export your package for use with any voice cloning service.
+          </p>
+        </div>
+
         <!-- Actions -->
         <div class="cda-actions">
-          <button class="doc-action-btn" id="cda-export-selected">📦 Export Selected (ZIP)</button>
-          <button class="doc-action-btn cda-training-btn" id="cda-start-training">🧠 Start Clone Training</button>
+          <button class="doc-action-btn" id="cda-export-selected">📦 Export Clone Package</button>
           <span class="cda-selected-count" id="cda-selected-count">${this.selectedBundles.size} selected</span>
         </div>
       </div>
@@ -95,7 +103,7 @@ class CloneDataArchive {
     renderBundleCard(bundle) {
         const hasVideo = !!bundle.video;
         const duration = this.formatDuration(bundle.duration_seconds || 0);
-        const date = new Date(bundle.created_at || Date.now()).toLocaleDateString();
+        const date = window.WindyDateUtils ? WindyDateUtils.formatDateOnly(new Date(bundle.created_at || Date.now())) : new Date(bundle.created_at || Date.now()).toLocaleDateString();
         const size = bundle.file_size ? `${(bundle.file_size / 1048576).toFixed(1)} MB` : '?';
         const segments = bundle.transcript?.segments?.length || 0;
         const selected = this.selectedBundles.has(bundle.bundle_id);
@@ -184,20 +192,6 @@ class CloneDataArchive {
             } catch (err) { console.error('[CDA] Export error:', err); }
         });
 
-        // Start training
-        document.getElementById('cda-start-training').addEventListener('click', async () => {
-            const readyBundles = this.bundles.filter(b => b.clone_training_ready);
-            if (readyBundles.length < 3) {
-                alert(`Need at least 3 training-ready bundles. You have ${readyBundles.length}.`);
-                return;
-            }
-            try {
-                const result = await window.windyAPI.startCloneTraining(readyBundles.map(b => b.bundle_id));
-                if (result?.jobId) {
-                    alert(`Training started! Job ID: ${result.jobId}`);
-                }
-            } catch (err) { console.error('[CDA] Training error:', err); }
-        });
     }
 
     applyFilters() {

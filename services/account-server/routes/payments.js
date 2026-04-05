@@ -12,6 +12,7 @@
  */
 
 const stripe = require('stripe');
+const crypto = require('crypto');
 const express = require('express');
 
 // Storage limits per tier (in MB)
@@ -26,7 +27,11 @@ module.exports = function createRouter({ db, authenticate }) {
     const router = express.Router();
 
     // Initialize Stripe (key comes from environment)
-    const stripeClient = stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+    // SEC-H6: Fail hard if Stripe key is missing — no silent placeholder
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error('STRIPE_SECRET_KEY environment variable is required. Set it in .env or system environment.');
+    }
+    const stripeClient = stripe(process.env.STRIPE_SECRET_KEY);
     const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 
     // Product catalog — all 4 tiers with multiple billing options
@@ -154,8 +159,8 @@ module.exports = function createRouter({ db, authenticate }) {
             payment_method_types: ['card'],
             line_items: [{ price: product.priceId, quantity: 1 }],
             mode: product.recurring ? 'subscription' : 'payment',
-            success_url: `${req.headers.origin || 'https://windypro.thewindstorm.uk'}/dashboard?payment=success&tier=${product.tier}`,
-            cancel_url: `${req.headers.origin || 'https://windypro.thewindstorm.uk'}/dashboard?payment=cancelled`,
+            success_url: `${req.headers.origin || 'https://windyword.ai'}/dashboard?payment=success&tier=${product.tier}`,
+            cancel_url: `${req.headers.origin || 'https://windyword.ai'}/dashboard?payment=cancelled`,
             customer_email: email || undefined,
             metadata: {
                 userId: userId || '',
@@ -226,7 +231,7 @@ module.exports = function createRouter({ db, authenticate }) {
 
             const portalSession = await stripeClient.billingPortal.sessions.create({
                 customer: sub.stripe_customer_id,
-                return_url: `${req.headers.origin || 'https://windypro.thewindstorm.uk'}/dashboard`
+                return_url: `${req.headers.origin || 'https://windyword.ai'}/dashboard`
             });
 
             res.json({ ok: true, url: portalSession.url });
@@ -445,7 +450,8 @@ module.exports = function createRouter({ db, authenticate }) {
 };
 
 /**
- * Generate a license key for a tier
+ * Generate a license key for a tier.
+ * SEC-C3: Uses crypto.randomInt() instead of Math.random() for each character.
  */
 function generateLicenseKey(tier) {
     const prefixes = {
@@ -455,6 +461,6 @@ function generateLicenseKey(tier) {
     };
     const prefix = prefixes[tier] || 'WP-P';
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const segment = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    const segment = () => Array.from({ length: 4 }, () => chars[crypto.randomInt(chars.length)]).join('');
     return `${prefix}${segment().slice(1)}-${segment()}-${segment()}`;
 }

@@ -37,7 +37,8 @@ const SUPPORTED_LANGUAGES: Language[] = [
 
 // ─── POST /api/v1/translate/speech ───────────────────────────
 
-router.post('/speech', optionalAuth, upload.single('audio'), validate(SpeechTranslateBodySchema), (req: Request, res: Response) => {
+// SEC-H2: authenticateToken instead of optionalAuth — resource-intensive endpoints require auth
+router.post('/speech', authenticateToken, upload.single('audio'), validate(SpeechTranslateBodySchema), (req: Request, res: Response) => {
     try {
         // Normalize: mobile sends source/target, desktop sends sourceLang/targetLang
         const sourceLang = req.body.sourceLang || req.body.source;
@@ -47,41 +48,22 @@ router.post('/speech', optionalAuth, upload.single('audio'), validate(SpeechTran
             return res.status(400).json({ error: 'Audio file is required' });
         }
 
-        // Stub translation
-        const detectedText = `[Detected speech in ${sourceLang}]`;
-        const translatedText = `[Translation to ${targetLang}]`;
-        const confidence = Math.round((0.82 + Math.random() * 0.15) * 100) / 100;
-        const translationId = uuidv4();
-
-        stmts.insertTranslation.run(
-            translationId, (req as AuthRequest).user?.userId || 'guest',
-            sourceLang, targetLang,
-            detectedText, translatedText,
-            confidence, 'speech'
-        );
-
-        console.log(`🗣️  Speech translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'guest').slice(0, 8)}`);
-
-        res.set('X-Stub', 'true');
-        res.json({
-            id: translationId,
-            sourceText: detectedText,
-            translatedText,
-            sourceLang,
-            targetLang,
-            confidence,
-            type: 'speech',
-            audioData: null,
+        // Speech translation requires a speech-to-text API (Groq Whisper or OpenAI Whisper)
+        return res.status(501).json({
+            error: 'Not implemented',
+            message: 'Speech translation requires a speech-to-text API. Configure GROQ_API_KEY or OPENAI_API_KEY.',
         });
     } catch (err: any) {
         console.error('Speech translation error:', err);
-        res.status(500).json({ error: 'Speech translation failed: ' + err.message });
+        // SEC-H7: Don't expose internal error details
+        res.status(500).json({ error: 'Speech translation failed' });
     }
 });
 
 // ─── POST /api/v1/translate/text ─────────────────────────────
 
-router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (req: Request, res: Response) => {
+// SEC-H2: authenticateToken instead of optionalAuth — resource-intensive endpoints require auth
+router.post('/text', authenticateToken, validate(TranslateTextRequestSchema), async (req: Request, res: Response) => {
     try {
         const text = req.body.text;
         // Normalize: mobile sends source/target, desktop sends sourceLang/targetLang
@@ -119,6 +101,7 @@ router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (
                         temperature: 0.3,
                         max_tokens: 2048,
                     }),
+                    signal: AbortSignal.timeout(10000),
                 });
 
                 if (apiRes.ok) {
@@ -143,15 +126,14 @@ router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (
         const translationId = uuidv4();
 
         stmts.insertTranslation.run(
-            translationId, (req as AuthRequest).user?.userId || 'guest',
+            translationId, (req as AuthRequest).user?.userId || 'anonymous',
             sourceLang, targetLang,
             text, translatedText,
             confidence, 'text'
         );
 
-        console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'guest').slice(0, 8)} (engine: ${engine})`);
+        console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'anonymous').slice(0, 8)} (engine: ${engine})`);
 
-        if (engine === 'stub') res.set('X-Stub', 'true');
         res.json({
             id: translationId,
             sourceText: text,
@@ -164,7 +146,8 @@ router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (
         });
     } catch (err: any) {
         console.error('Text translation error:', err);
-        res.status(500).json({ error: 'Text translation failed: ' + err.message });
+        // SEC-H7: Don't expose internal error details
+        res.status(500).json({ error: 'Text translation failed' });
     }
 });
 
@@ -183,16 +166,32 @@ export function historyHandler(req: Request, res: Response): void {
         const offset = parseInt(req.query.offset as string) || 0;
         const userId = (req as AuthRequest).user.userId;
 
-        const history = stmts.getTranslationHistory.all(userId, limit, offset);
+        const history = stmts.getTranslationHistory.all(userId, limit, offset) as any[];
         const total = (stmts.countTranslations.get(userId) as any).count;
 
+        // Collect unique languages from history entries
+        const langSet = new Set<string>();
+        let favoriteCount = 0;
+        for (const h of history) {
+            if (h.source_lang) langSet.add(h.source_lang);
+            if (h.target_lang) langSet.add(h.target_lang);
+            if (h.is_favorite) favoriteCount++;
+        }
+
         res.json({
+            // Frontend compat fields (Dashboard.jsx, Profile.jsx)
+            translations: history,
+            total,
+            languages: Array.from(langSet),
+            favoriteCount,
+            // Original structured response
             history,
             pagination: { limit, offset, total, hasMore: offset + limit < total },
         });
     } catch (err: any) {
         console.error('History error:', err);
-        res.status(500).json({ error: 'Failed to fetch history: ' + err.message });
+        // SEC-H7: Don't expose internal error details
+        res.status(500).json({ error: 'Failed to fetch history' });
     }
 }
 
@@ -228,7 +227,8 @@ export function favoritesHandler(req: Request, res: Response): void {
         res.json({ favorited: true, translationId, favoriteId });
     } catch (err: any) {
         console.error('Favorite error:', err);
-        res.status(500).json({ error: 'Failed to save favorite: ' + err.message });
+        // SEC-H7: Don't expose internal error details
+        res.status(500).json({ error: 'Failed to save favorite' });
     }
 }
 

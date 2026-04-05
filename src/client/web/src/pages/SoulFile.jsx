@@ -59,7 +59,7 @@ export default function SoulFile() {
             const cloneRecs = (recData.recordings || []).filter(r => r.mode === 'clone_capture')
             setRecordings(cloneRecs)
         }
-        if (statData) setStats(statData.stats)
+        if (statData) setStats(statData)
         setLoading(false)
     }, [])
 
@@ -95,12 +95,12 @@ export default function SoulFile() {
                 {stats && (
                     <>
                         <div className="dash-stat">
-                            <span className="dash-stat-value">{stats.totalHours}h</span>
+                            <span className="dash-stat-value">{Math.round((stats.totalDuration || 0) / 3600)}h</span>
                             <span className="dash-stat-label">Total Audio</span>
                         </div>
                         <div className="dash-stat">
-                            <span className="dash-stat-value">{stats.totalWords.toLocaleString()}</span>
-                            <span className="dash-stat-label">Total Words</span>
+                            <span className="dash-stat-value">{(stats.totalRecordings || 0).toLocaleString()}</span>
+                            <span className="dash-stat-label">Recordings</span>
                         </div>
                     </>
                 )}

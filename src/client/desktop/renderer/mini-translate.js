@@ -498,7 +498,7 @@ function appendChunk(text, type = 'normal', meta = null) {
     const div = document.createElement('div');
     div.className = 'chunk';
 
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const time = window.WindyDateUtils ? WindyDateUtils.formatTime(new Date()) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const timeDiv = document.createElement('div');
     timeDiv.className = 'chunk-time';
     timeDiv.textContent = time;

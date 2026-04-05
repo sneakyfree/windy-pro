@@ -211,7 +211,7 @@ class ConversationMode {
             // Show original text
             pendingEl.className = 'conv-entry conv-original';
             pendingEl.textContent = text;
-            const timestamp = new Date().toLocaleTimeString();
+            const timestamp = window.WindyDateUtils ? WindyDateUtils.formatTime(new Date()) : new Date().toLocaleTimeString();
             (side === 'a' ? this.transcriptA : this.transcriptB).push({ text, lang: sourceLang, time: timestamp });
 
             // Translate to other language

@@ -74,7 +74,25 @@ router.get('/stats', authenticateToken, adminOnly, (req: Request, res: Response)
             dbSize,
             memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
             apiLatency: '<5ms',
-            dailyTranslations: [12, 8, 15, 22, 18, 25, 31], // Stub
+            dailyTranslations: (() => {
+                try {
+                    const rows = db.prepare(
+                        `SELECT DATE(created_at) as day, COUNT(*) as count
+                         FROM translations
+                         WHERE created_at >= datetime('now', '-7 days')
+                         GROUP BY DATE(created_at)
+                         ORDER BY day`
+                    ).all() as { day: string; count: number }[];
+                    // Build a 7-day array (fill missing days with 0)
+                    const dayMap = new Map(rows.map(r => [r.day, r.count]));
+                    const result: number[] = [];
+                    for (let i = 6; i >= 0; i--) {
+                        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+                        result.push(dayMap.get(d) || 0);
+                    }
+                    return result;
+                } catch { return [0, 0, 0, 0, 0, 0, 0]; }
+            })()
         });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -308,6 +326,86 @@ router.post('/billing/refund', authenticateToken, adminOnly, (req: Request, res:
         }
 
         res.json({ ok: true, transaction: tx });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/v1/admin/analytics ────────────────────────────
+
+router.get('/analytics', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const period = (req.query.period as string) || 'week';
+
+        // Determine the date cutoff for the period
+        let periodDays: number;
+        switch (period) {
+            case 'day': periodDays = 1; break;
+            case 'month': periodDays = 30; break;
+            case 'week':
+            default: periodDays = 7; break;
+        }
+
+        const cutoff = `datetime('now', '-${periodDays} days')`;
+
+        // Count events by type for the period
+        const eventRows = db.prepare(
+            `SELECT event, COUNT(*) as count FROM analytics_events
+             WHERE created_at >= ${cutoff}
+             GROUP BY event`
+        ).all() as { event: string; count: number }[];
+        const events: Record<string, number> = {};
+        for (const row of eventRows) {
+            events[row.event] = row.count;
+        }
+
+        // Total users
+        const totalUsers = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;
+
+        // DAU — distinct user_ids in last 24h
+        const dau = (db.prepare(
+            `SELECT COUNT(DISTINCT user_id) as count FROM analytics_events
+             WHERE user_id IS NOT NULL AND created_at >= datetime('now', '-1 days')`
+        ).get() as any).count;
+
+        // WAU — distinct user_ids in last 7 days
+        const wau = (db.prepare(
+            `SELECT COUNT(DISTINCT user_id) as count FROM analytics_events
+             WHERE user_id IS NOT NULL AND created_at >= datetime('now', '-7 days')`
+        ).get() as any).count;
+
+        // MAU — distinct user_ids in last 30 days
+        const mau = (db.prepare(
+            `SELECT COUNT(DISTINCT user_id) as count FROM analytics_events
+             WHERE user_id IS NOT NULL AND created_at >= datetime('now', '-30 days')`
+        ).get() as any).count;
+
+        // Active subscriptions from users table WHERE tier != 'free'
+        const subRows = db.prepare(
+            `SELECT tier, COUNT(*) as count FROM users
+             WHERE tier IS NOT NULL AND tier != 'free' AND tier != ''
+             GROUP BY tier`
+        ).all() as { tier: string; count: number }[];
+        const activeSubscriptions: Record<string, number> = {};
+        for (const row of subRows) {
+            activeSubscriptions[row.tier] = row.count;
+        }
+
+        res.json({
+            period,
+            events,
+            users: {
+                total: totalUsers,
+                dau,
+                wau,
+                mau,
+            },
+            revenue: {
+                active_subscriptions: activeSubscriptions,
+                mrr_cents: 0, // placeholder — real Stripe data via billing route
+            },
+        });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }

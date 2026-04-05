@@ -17,7 +17,12 @@ async function apiFetch(path, options = {}) {
             ...options.headers
         }
     })
-    if (res.status === 401) { window.location.href = '/auth'; return null }
+    if (res.status === 401) {
+        localStorage.removeItem('windy_user')
+        localStorage.removeItem('windy_token')
+        window.location.href = '/auth'
+        return null
+    }
     return res.json()
 }
 
@@ -66,6 +71,8 @@ export default function Admin() {
     const [totalUsers, setTotalUsers] = useState(0)
     const [stats, setStats] = useState(null)
     const [revenue, setRevenue] = useState(null)
+    const [analytics, setAnalytics] = useState(null)
+    const [analyticsPeriod, setAnalyticsPeriod] = useState('week')
     const [loading, setLoading] = useState(true)
     const navigate = useNavigate()
     const user = getUser()
@@ -80,17 +87,23 @@ export default function Admin() {
         }
     }, [userPage, userSearch])
 
+    const loadAnalytics = useCallback(async (period) => {
+        const data = await apiFetch(`/admin/analytics?period=${period || analyticsPeriod}`)
+        if (data) setAnalytics(data)
+    }, [analyticsPeriod])
+
     useEffect(() => {
         Promise.all([
             apiFetch('/admin/stats'),
             apiFetch('/admin/revenue'),
-            loadUsers()
+            loadUsers(),
+            loadAnalytics()
         ]).then(([statsData, revData]) => {
             if (statsData) setStats(statsData)
             if (revData) setRevenue(revData)
             setLoading(false)
         }).catch(() => setLoading(false))
-    }, [loadUsers])
+    }, [loadUsers, loadAnalytics])
 
     const handleLogout = () => {
         localStorage.removeItem('windy_token')
@@ -104,7 +117,7 @@ export default function Admin() {
         const d = new Date()
         d.setDate(d.getDate() - i)
         const key = d.toLocaleDateString('en-US', { weekday: 'short' })
-        chartData.push({ label: key, value: stats?.dailyTranslations?.[i] || Math.floor(Math.random() * 50) })
+        chartData.push({ label: key, value: stats?.dailyTranslations?.[i] || 0 })
     }
 
     return (
@@ -142,6 +155,67 @@ export default function Admin() {
                             <StatCard icon="📈" label="MRR" value={`$${((revenue?.mrr || 0) / 100).toFixed(0)}`} color="#EC4899" />
                             <StatCard icon="🟢" label="Server" value={stats?.serverStatus || 'OK'} />
                         </div>
+
+                        {/* Analytics Section */}
+                        {analytics && (
+                            <div style={{ background: '#111827', border: '1px solid #1E293B', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#CBD5E1' }}>Analytics</div>
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                        {['day', 'week', 'month'].map(p => (
+                                            <button key={p} onClick={() => { setAnalyticsPeriod(p); loadAnalytics(p) }}
+                                                style={{
+                                                    background: analyticsPeriod === p ? '#22C55E' : '#1E293B',
+                                                    color: analyticsPeriod === p ? '#000' : '#94A3B8',
+                                                    border: 'none', padding: '4px 12px', borderRadius: '6px',
+                                                    fontSize: '12px', fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize'
+                                                }}>{p}</button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Key Metrics Cards */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                                    <StatCard icon="" label="Total Users" value={analytics.users?.total || 0} />
+                                    <StatCard icon="" label="DAU" value={analytics.users?.dau || 0} color="#3B82F6" />
+                                    <StatCard icon="" label="WAU" value={analytics.users?.wau || 0} color="#8B5CF6" />
+                                    <StatCard icon="" label="MAU" value={analytics.users?.mau || 0} color="#EC4899" />
+                                    <StatCard icon="" label="Recordings" value={analytics.events?.recording_created || 0} color="#F59E0B" />
+                                    <StatCard icon="" label="Active Subs" value={Object.values(analytics.revenue?.active_subscriptions || {}).reduce((a, b) => a + b, 0)} color="#10B981" />
+                                </div>
+
+                                {/* Event Counts List */}
+                                <div style={{ fontSize: '13px', fontWeight: 600, color: '#94A3B8', marginBottom: '8px' }}>
+                                    Event Breakdown ({analytics.period})
+                                </div>
+                                {Object.keys(analytics.events || {}).length === 0 ? (
+                                    <div style={{ color: '#475569', fontSize: '13px', padding: '8px 0' }}>No events recorded yet</div>
+                                ) : (
+                                    Object.entries(analytics.events || {})
+                                        .sort(([, a], [, b]) => b - a)
+                                        .map(([event, count]) => {
+                                            const maxCount = Math.max(...Object.values(analytics.events || {}), 1)
+                                            return (
+                                                <div key={event} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                                                    <span style={{ width: '180px', fontSize: '12px', color: '#94A3B8', fontFamily: 'monospace' }}>
+                                                        {event}
+                                                    </span>
+                                                    <div style={{ flex: 1, height: '6px', background: '#1E293B', borderRadius: '3px', overflow: 'hidden' }}>
+                                                        <div style={{
+                                                            width: `${Math.max((count / maxCount) * 100, 2)}%`,
+                                                            height: '100%', background: '#22C55E', borderRadius: '3px',
+                                                            transition: 'width 0.3s'
+                                                        }} />
+                                                    </div>
+                                                    <span style={{ fontSize: '12px', color: '#E2E8F0', fontWeight: 600, minWidth: '40px', textAlign: 'right' }}>
+                                                        {count}
+                                                    </span>
+                                                </div>
+                                            )
+                                        })
+                                )}
+                            </div>
+                        )}
 
                         {/* Charts Row */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
