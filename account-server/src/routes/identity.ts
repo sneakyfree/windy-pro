@@ -36,6 +36,7 @@ import {
 } from '../identity-service';
 import { normalizeProductTier } from '@windy-pro/contracts';
 import { provisionAgent, cascadeRevocation } from '../services/ecosystem-provisioner';
+import { trackEvent } from '../services/analytics';
 
 const router = Router();
 
@@ -597,6 +598,8 @@ router.post('/agent/provision', authenticateToken, async (req: Request, res: Res
       });
     }
 
+    trackEvent('agent_hatched', botUser.id, { agentName: agent_name });
+
     res.status(201).json({
       passport_number: result.passport_number,
       eternitas_provisioned: result.eternitas === 'ok',
@@ -1115,6 +1118,8 @@ router.post('/ecosystem/provision-all', authenticateToken, async (req: Request, 
     const displayName = req.body.display_name || user.display_name || user.name;
     const email = req.body.email || user.email;
     const windyIdentityId = req.body.windy_identity_id || user.windy_identity_id || userId;
+
+    trackEvent('ecosystem_provisioned', userId);
 
     // Ensure product account rows exist (idempotent)
     provisionProduct(userId, 'windy_chat', { source: 'ecosystem/provision-all' });

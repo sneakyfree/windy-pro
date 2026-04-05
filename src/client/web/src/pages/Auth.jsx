@@ -10,6 +10,7 @@ export default function Auth() {
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
     const [forgotSent, setForgotSent] = useState(false)
+    const [agreedToTerms, setAgreedToTerms] = useState(false)
     const navigate = useNavigate()
 
     const handleForgotPassword = () => {
@@ -91,13 +92,13 @@ export default function Auth() {
                     <div className="auth-tabs">
                         <button
                             className={`auth-tab ${isLogin ? 'active' : ''}`}
-                            onClick={() => { setIsLogin(true); setError(''); }}
+                            onClick={() => { setIsLogin(true); setError(''); setAgreedToTerms(false); }}
                         >
                             Sign In
                         </button>
                         <button
                             className={`auth-tab ${!isLogin ? 'active' : ''}`}
-                            onClick={() => { setIsLogin(false); setError(''); }}
+                            onClick={() => { setIsLogin(false); setError(''); setAgreedToTerms(false); }}
                         >
                             Sign Up
                         </button>
@@ -170,12 +171,27 @@ export default function Auth() {
                             </div>
                         )}
 
+                        {!isLogin && (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '12px' }}>
+                                <input
+                                    id="agree-terms"
+                                    type="checkbox"
+                                    checked={agreedToTerms}
+                                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                                    style={{ marginTop: '3px', accentColor: '#22C55E', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="agree-terms" style={{ fontSize: '13px', color: '#94A3B8', cursor: 'pointer', lineHeight: '1.4' }}>
+                                    I agree to the <Link to="/terms" style={{ color: '#22C55E', textDecoration: 'underline' }}>Terms of Service</Link> and <Link to="/privacy" style={{ color: '#22C55E', textDecoration: 'underline' }}>Privacy Policy</Link>
+                                </label>
+                            </div>
+                        )}
+
                         {error && <div className="auth-error">{error}</div>}
 
                         <button
                             type="submit"
                             className="btn btn-primary auth-submit"
-                            disabled={loading}
+                            disabled={loading || (!isLogin && !agreedToTerms)}
                         >
                             {loading ? (
                                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>

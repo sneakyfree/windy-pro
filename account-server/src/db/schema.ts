@@ -475,6 +475,18 @@ function initSchema(db: DbAdapter): void {
     CREATE INDEX IF NOT EXISTS idx_clone_jobs_user ON clone_training_jobs(user_id);
     CREATE INDEX IF NOT EXISTS idx_clone_jobs_status ON clone_training_jobs(status);
 
+    -- Analytics events: lightweight event tracking (no third-party service)
+    CREATE TABLE IF NOT EXISTS analytics_events (
+      id TEXT PRIMARY KEY,
+      event TEXT NOT NULL,
+      user_id TEXT,
+      properties TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_analytics_event ON analytics_events(event);
+    CREATE INDEX IF NOT EXISTS idx_analytics_created ON analytics_events(created_at);
+    CREATE INDEX IF NOT EXISTS idx_analytics_user ON analytics_events(user_id);
+
     -- Pending provisions queue: stores failed provisioning attempts for retry
     CREATE TABLE IF NOT EXISTS pending_provisions (
       id TEXT PRIMARY KEY,

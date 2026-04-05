@@ -33,6 +33,10 @@ import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
 import flyRoutes from './routes/fly';
 import { authenticateToken } from './middleware/auth';
+import { initErrorReporting, reportError } from './services/error-reporter';
+
+// Initialize Sentry error reporting (fire-and-forget if no DSN configured)
+initErrorReporting();
 
 const app = express();
 
@@ -410,11 +414,13 @@ if (process.env.NODE_ENV !== 'test') {
 process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
     console.error('UNHANDLED REJECTION at:', promise);
     console.error('Reason:', reason instanceof Error ? reason.stack : reason);
+    reportError(reason instanceof Error ? reason : new Error(String(reason)), { handler: 'unhandledRejection' });
     // Don't crash — log and continue
 });
 
 process.on('uncaughtException', (err: Error) => {
     console.error('UNCAUGHT EXCEPTION:', err.stack || err);
+    reportError(err, { handler: 'uncaughtException' });
     // Graceful shutdown on uncaught exception — state may be corrupted
     closeRedis().catch(() => {});
     closeDb();

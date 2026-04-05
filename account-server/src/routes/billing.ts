@@ -15,6 +15,7 @@ import Stripe from 'stripe';
 import { config } from '../config';
 import { getDb } from '../db/schema';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { trackEvent } from '../services/analytics';
 import { BillingTransactionsQuerySchema } from '@windy-pro/contracts';
 
 // ─── Stripe client (lazy — only initialized if STRIPE_SECRET_KEY is set) ────
@@ -170,9 +171,65 @@ stripeRouter.post('/webhook', (req: Request, res: Response) => {
                     }
                 }
             }
+        } else if (type === 'checkout.session.completed') {
+            // Primary handler for Stripe Checkout completions — uses metadata set during session creation
+            const userId = data.metadata?.windy_user_id;
+            const tier = data.metadata?.tier;
+            if (userId && tier) {
+                trackEvent('subscription_started', userId, { tier });
+                const newLimit = TIER_LIMITS[tier] || TIER_LIMITS[tier.replace('_', '-')] || TIER_LIMITS.free;
+                db.prepare('UPDATE users SET tier = ?, storage_limit = ? WHERE id = ?')
+                    .run(tier, newLimit, userId);
+
+                // Save stripe_customer_id if present
+                const stripeCustomerId = data.customer;
+                const user = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(userId) as any;
+                if (user && stripeCustomerId && !user.stripe_customer_id) {
+                    db.prepare('UPDATE users SET stripe_customer_id = ? WHERE id = ?')
+                        .run(stripeCustomerId, userId);
+                }
+
+                // Record the transaction
+                const txId = uuidv4();
+                db.prepare(
+                    'INSERT INTO transactions (id, user_id, email, amount, currency, type, status, stripe_payment_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                ).run(
+                    txId,
+                    userId,
+                    data.customer_email || '',
+                    data.amount_total || 0,
+                    data.currency || 'usd',
+                    data.mode === 'subscription' ? 'subscription' : 'one_time',
+                    'paid',
+                    data.payment_intent || data.subscription || data.id || '',
+                );
+            }
+        } else if (type === 'customer.subscription.updated') {
+            // Handles plan changes (upgrades/downgrades) mid-subscription
+            const email = data.customer_email || '';
+            const user = email
+                ? db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any
+                : null;
+
+            if (user && data.items?.data?.[0]?.price?.unit_amount) {
+                const amount = data.items.data[0].price.unit_amount;
+                const newTier = TIER_BY_AMOUNT[amount];
+                if (newTier) {
+                    db.prepare('UPDATE users SET tier = ?, storage_limit = ? WHERE id = ?')
+                        .run(newTier, TIER_LIMITS[newTier] || TIER_LIMITS.free, user.id);
+                }
+            }
+
+            // If subscription status is past_due or unpaid, downgrade
+            if (user && (data.status === 'past_due' || data.status === 'unpaid')) {
+                db.prepare("UPDATE users SET tier = 'free', storage_limit = ? WHERE id = ?")
+                    .run(TIER_LIMITS.free, user.id);
+            }
         } else if (type === 'customer.subscription.deleted') {
             const email = data.customer_email || '';
             if (email) {
+                const deletedUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as any;
+                if (deletedUser) trackEvent('subscription_cancelled', deletedUser.id);
                 db.prepare("UPDATE users SET tier = 'free', storage_limit = ? WHERE email = ?")
                     .run(TIER_LIMITS.free, email);
             }

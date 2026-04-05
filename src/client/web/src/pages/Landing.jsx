@@ -74,6 +74,14 @@ export default function Landing() {
         startCheckout(tier, billingType, navigate)
     }
 
+    // Price/period data per tier and billing type
+    const priceData = {
+        pro:           { monthly: '$4.99',  yearly: '$49',  lifetime: '$99' },
+        translate:     { monthly: '$8.99',  yearly: '$79',  lifetime: '$199' },
+        translate_pro: { monthly: '$14.99', yearly: '$149', lifetime: '$299' },
+    }
+    const periodLabels = { monthly: '/month', yearly: '/year', lifetime: 'one-time' }
+
     // Fetch latest version from cache-proof download API
     useEffect(() => {
         fetch('/download/version')
@@ -322,8 +330,8 @@ export default function Landing() {
                         </div>
                         <div className="pricing-card">
                             <div className="pricing-badge pro">⚡ WINDY PRO</div>
-                            <div className="pricing-price" data-monthly="$4.99" data-annual="$49" data-lifetime="$99">$4.99</div>
-                            <div className="pricing-period" data-monthly="/month" data-annual="/year" data-lifetime="one-time">/month</div>
+                            <div className="pricing-price">{priceData.pro[billingType]}</div>
+                            <div className="pricing-period">{periodLabels[billingType]}</div>
                             <ul className="pricing-features">
                                 <li>✓ All 15 engines</li>
                                 <li>✓ 99 languages</li>
@@ -342,8 +350,8 @@ export default function Landing() {
                         <div className="pricing-card pricing-card-pro">
                             <div className="pricing-recommended">RECOMMENDED</div>
                             <div className="pricing-badge pro">🚀 WINDY ULTRA</div>
-                            <div className="pricing-price" data-monthly="$8.99" data-annual="$79" data-lifetime="$199">$8.99</div>
-                            <div className="pricing-period" data-monthly="/month" data-annual="/year" data-lifetime="one-time">/month</div>
+                            <div className="pricing-price">{priceData.translate[billingType]}</div>
+                            <div className="pricing-period">{periodLabels[billingType]}</div>
                             <ul className="pricing-features">
                                 <li>✓ Everything in Pro</li>
                                 <li>✓ Live translation (5 pairs)</li>
@@ -359,8 +367,8 @@ export default function Landing() {
                         </div>
                         <div className="pricing-card">
                             <div className="pricing-badge pro">👑 WINDY MAX</div>
-                            <div className="pricing-price" data-monthly="$14.99" data-annual="$149" data-lifetime="$299">$14.99</div>
-                            <div className="pricing-period" data-monthly="/month" data-annual="/year" data-lifetime="one-time">/month</div>
+                            <div className="pricing-price">{priceData.translate_pro[billingType]}</div>
+                            <div className="pricing-period">{periodLabels[billingType]}</div>
                             <ul className="pricing-features">
                                 <li>✓ Everything in Ultra</li>
                                 <li>✓ 60-minute recordings</li>

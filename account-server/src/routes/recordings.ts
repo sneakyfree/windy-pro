@@ -18,6 +18,7 @@ import {
     RecordingsListQuerySchema,
 } from '@windy-pro/contracts';
 import { validateFileMagicBytes } from '../middleware/file-validation';
+import { trackEvent } from '../services/analytics';
 
 const router = Router();
 
@@ -591,6 +592,7 @@ router.post('/upload', authenticateToken, videoUpload.single('media'), validateF
             clone_training_ready === 'true' || clone_training_ready === true ? 1 : 0
         );
 
+        trackEvent('recording_created', (req as AuthRequest).user.userId, { duration: parseInt(duration_seconds) || 0 });
         res.status(201).json({ id, bundleId, fileSize });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });

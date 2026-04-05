@@ -15,6 +15,7 @@ import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { blacklistToken as redisBlacklistToken, isRedisAvailable } from '../redis';
 import { isRS256Available, getSigningKey } from '../jwks';
 import { provisionEcosystem } from '../services/ecosystem-provisioner';
+import { trackEvent } from '../services/analytics';
 import { validate } from '../middleware/validation';
 import {
     RegisterRequestSchema,
@@ -180,6 +181,7 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
             platform: platform || 'unknown',
         }, req.ip, req.get('user-agent'));
 
+        trackEvent('user_registered', userId);
         console.log(`✅ Registered: ${email} (${userId.slice(0, 8)}...)`);
 
         res.status(201).json({
@@ -248,6 +250,7 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
             platform: platform || 'unknown',
         }, req.ip, req.get('user-agent'));
 
+        trackEvent('user_logged_in', user.id);
         console.log(`🔓 Login: ${email} (${user.id.slice(0, 8)}...)`);
 
         res.json({

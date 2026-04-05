@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom'
+import { Component } from 'react'
 import './analytics' // H8: Privacy-first analytics (auto-initializes)
 import Landing from './pages/Landing'
 import Transcribe from './pages/Transcribe'
@@ -61,9 +62,101 @@ function NotFound() {
     )
 }
 
+class ErrorBoundary extends Component {
+    constructor(props) {
+        super(props)
+        this.state = { hasError: false, error: null }
+    }
+
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error }
+    }
+
+    componentDidCatch(error, errorInfo) {
+        console.error('ErrorBoundary caught:', error, errorInfo)
+        const dsn = import.meta.env.VITE_SENTRY_DSN
+        if (dsn) {
+            try {
+                const url = new URL(dsn)
+                const publicKey = url.username
+                const host = url.host
+                const projectId = url.pathname.replace('/', '')
+                const eventId = crypto.randomUUID().replace(/-/g, '')
+                const timestamp = new Date().toISOString()
+                const header = JSON.stringify({ event_id: eventId, dsn, sent_at: timestamp })
+                const itemHeader = JSON.stringify({ type: 'event', content_type: 'application/json' })
+                const event = JSON.stringify({
+                    event_id: eventId,
+                    timestamp,
+                    platform: 'javascript',
+                    environment: import.meta.env.MODE || 'production',
+                    exception: {
+                        values: [{
+                            type: error.name || 'Error',
+                            value: error.message,
+                            stacktrace: error.stack ? {
+                                frames: error.stack.split('\n').slice(1).reverse().map(line => {
+                                    const match = line.match(/at\s+(.+?)\s+\((.+):(\d+):(\d+)\)/)
+                                    if (match) return { function: match[1], filename: match[2], lineno: parseInt(match[3]), colno: parseInt(match[4]) }
+                                    return { filename: line.trim() }
+                                })
+                            } : undefined,
+                        }],
+                    },
+                    extra: { componentStack: errorInfo?.componentStack || '' },
+                })
+                fetch(`https://${host}/api/${projectId}/envelope/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-sentry-envelope',
+                        'X-Sentry-Auth': `Sentry sentry_version=7, sentry_key=${publicKey}, sentry_client=windy-word-web/1.0`,
+                    },
+                    body: `${header}\n${itemHeader}\n${event}`,
+                }).catch(() => {})
+            } catch {
+                // Silently ignore — error reporting should never itself cause errors
+            }
+        }
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    height: '100vh', color: '#CBD5E1', background: '#0B0F1A',
+                    fontFamily: "'Inter', -apple-system, sans-serif", padding: '24px', textAlign: 'center'
+                }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>:(</div>
+                    <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '8px', color: '#E2E8F0' }}>
+                        Something went wrong
+                    </h1>
+                    <p style={{ fontSize: '15px', color: '#94A3B8', marginBottom: '24px', maxWidth: '400px' }}>
+                        An unexpected error occurred. Please reload the page to continue.
+                    </p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        style={{
+                            padding: '12px 32px', borderRadius: '10px', border: 'none',
+                            background: '#22C55E', color: '#000', fontSize: '15px',
+                            fontWeight: '700', cursor: 'pointer',
+                            boxShadow: '0 4px 12px rgba(34,197,94,0.3)',
+                            transition: 'transform 0.2s ease'
+                        }}
+                    >
+                        Reload Page
+                    </button>
+                </div>
+            )
+        }
+        return this.props.children
+    }
+}
+
 export default function App() {
     return (
         <BrowserRouter>
+            <ErrorBoundary>
             <Routes>
                 <Route path="/" element={<Landing />} />
                 <Route path="/transcribe" element={
@@ -101,6 +194,7 @@ export default function App() {
                 <Route path="/terms" element={<Terms />} />
                 <Route path="*" element={<NotFound />} />
             </Routes>
+            </ErrorBoundary>
         </BrowserRouter>
     )
 }

@@ -331,4 +331,84 @@ router.post('/billing/refund', authenticateToken, adminOnly, (req: Request, res:
     }
 });
 
+// ─── GET /api/v1/admin/analytics ────────────────────────────
+
+router.get('/analytics', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const period = (req.query.period as string) || 'week';
+
+        // Determine the date cutoff for the period
+        let periodDays: number;
+        switch (period) {
+            case 'day': periodDays = 1; break;
+            case 'month': periodDays = 30; break;
+            case 'week':
+            default: periodDays = 7; break;
+        }
+
+        const cutoff = `datetime('now', '-${periodDays} days')`;
+
+        // Count events by type for the period
+        const eventRows = db.prepare(
+            `SELECT event, COUNT(*) as count FROM analytics_events
+             WHERE created_at >= ${cutoff}
+             GROUP BY event`
+        ).all() as { event: string; count: number }[];
+        const events: Record<string, number> = {};
+        for (const row of eventRows) {
+            events[row.event] = row.count;
+        }
+
+        // Total users
+        const totalUsers = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;
+
+        // DAU — distinct user_ids in last 24h
+        const dau = (db.prepare(
+            `SELECT COUNT(DISTINCT user_id) as count FROM analytics_events
+             WHERE user_id IS NOT NULL AND created_at >= datetime('now', '-1 days')`
+        ).get() as any).count;
+
+        // WAU — distinct user_ids in last 7 days
+        const wau = (db.prepare(
+            `SELECT COUNT(DISTINCT user_id) as count FROM analytics_events
+             WHERE user_id IS NOT NULL AND created_at >= datetime('now', '-7 days')`
+        ).get() as any).count;
+
+        // MAU — distinct user_ids in last 30 days
+        const mau = (db.prepare(
+            `SELECT COUNT(DISTINCT user_id) as count FROM analytics_events
+             WHERE user_id IS NOT NULL AND created_at >= datetime('now', '-30 days')`
+        ).get() as any).count;
+
+        // Active subscriptions from users table WHERE tier != 'free'
+        const subRows = db.prepare(
+            `SELECT tier, COUNT(*) as count FROM users
+             WHERE tier IS NOT NULL AND tier != 'free' AND tier != ''
+             GROUP BY tier`
+        ).all() as { tier: string; count: number }[];
+        const activeSubscriptions: Record<string, number> = {};
+        for (const row of subRows) {
+            activeSubscriptions[row.tier] = row.count;
+        }
+
+        res.json({
+            period,
+            events,
+            users: {
+                total: totalUsers,
+                dau,
+                wau,
+                mau,
+            },
+            revenue: {
+                active_subscriptions: activeSubscriptions,
+                mrr_cents: 0, // placeholder — real Stripe data via billing route
+            },
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;
