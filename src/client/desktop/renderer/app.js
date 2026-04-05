@@ -1097,7 +1097,7 @@ class WindyApp {
     if (route === 'off') {
       this.setArchiveStatus('Archive off (today)', 'warn');
     } else if (route === 'cloud') {
-      this.setArchiveStatus('Route: Windy Pro Cloud', 'ok');
+      this.setArchiveStatus('Route: WindyCloud', 'ok');
     } else if (route === 'local_cloud') {
       this.setArchiveStatus('Route: Local + Cloud', 'ok');
     } else {
@@ -1949,7 +1949,7 @@ class WindyApp {
           '<span style="font-size:24px;">🧬</span><br>' +
           '<span style="color:#22C55E;font-weight:700;">Clone Capture Active</span><br>' +
           '<span style="color:#888;font-size:12px;">Recording audio + video for digital twin archive<br>' +
-          'No transcription model loaded — near-zero CPU<br>Unlimited recording</span></p>';
+          'No transcription model loaded — near-zero CPU<br>Unlimited local recording</span></p>';
         this.updateModelBadge('🧬 clone capture', false);
       } else {
         this.transcriptContent.innerHTML = '<p class="batch-recording-hint" style="color:#888;text-align:center;padding:20px;">🎙️ Recording... text will appear when you stop</p>';

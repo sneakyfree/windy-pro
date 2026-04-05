@@ -184,7 +184,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Windy Pro Cloud API",
+    title="WindyCloud API",
     description="Cloud-hosted voice-to-text transcription service",
     version="0.4.0",
     lifespan=lifespan,

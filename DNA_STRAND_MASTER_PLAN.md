@@ -28,7 +28,7 @@ maps perfectly without requiring any AI/ML knowledge. Decision by Grant, 27 Feb 
 | Decision | Details | By |
 |----------|---------|----|
 | "Engines" not "models" | All user-facing text uses "engine" exclusively | Grant |
-| $8.99/mo monthly option | Windy Translate: $79 one-time **OR** $8.99/mo monthly alongside one-time | Grant + Kit 0C3 |
+| $8.99/mo monthly option | Windy Ultra: $8.99/mo one-time **OR** $8.99/mo monthly alongside one-time | Grant + Kit 0C3 |
 | Two-tier translation | Hand-translate Top 10 languages, dynamic-translate remaining 89 via Veron | Grant + Kit 0C3 |
 | Top 10 = 82% market | Top 10 languages capture ~82% of global addressable market | Kit 0C3 |
 

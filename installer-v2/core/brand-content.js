@@ -46,8 +46,8 @@ const FEATURE_CARDS = [
     category: 'translate'
   },
   {
-    title: '☁️ Windy Pro Cloud — YOUR Storage',
-    body: 'Your privacy is paramount! We never use your data — or data about your data — for anything. Period. Switch to Windy Pro Cloud for all your storage. Cancel Dropbox. Cancel Google. Cancel iCloud. Your files belong to YOU.',
+    title: '☁️ WindyCloud — YOUR Storage',
+    body: 'Your privacy is paramount! We never use your data — or data about your data — for anything. Period. Switch to WindyCloud for all your storage. Cancel legacy cloud storage. Your files belong to YOU.',
     category: 'cloud'
   },
   {

@@ -180,9 +180,9 @@ function updateCockpitFromSelects() {
     const tSel = translateModelSelect.options[translateModelSelect.selectedIndex];
     const isCloudL = listenModelSelect.value === 'cloud';
     const isCloudT = translateModelSelect.value === 'cloud';
-    listeningValue.textContent = isCloudL ? '☁️ Windy Cloud' : `🏠 ${lSel.text}`;
+    listeningValue.textContent = isCloudL ? '☁️ WindyCloud' : `🏠 ${lSel.text}`;
     listeningValue.className = isCloudL ? 'cockpit-value cloud' : 'cockpit-value local';
-    translatingValue.textContent = isCloudT ? '☁️ Windy Cloud' : `🏠 ${tSel.text}`;
+    translatingValue.textContent = isCloudT ? '☁️ WindyCloud' : `🏠 ${tSel.text}`;
     translatingValue.className = isCloudT ? 'cockpit-value cloud' : 'cockpit-value local';
 }
 
@@ -426,17 +426,17 @@ async function processChunk(audioBlob) {
             // Listening engine — from backend result
             if (result.engine) {
                 const isCloudListen = result.engine === 'groq' || result.engine === 'openai';
-                meta.listening = isCloudListen ? '☁️ Windy Cloud' : ('🏠 ' + (result.modelInfo?.model || 'Local'));
+                meta.listening = isCloudListen ? '☁️ WindyCloud' : ('🏠 ' + (result.modelInfo?.model || 'Local'));
             }
             // Translating engine — from the user's dropdown selection (Manual)
             // or from back-end result (WindyTune)
             if (isWindyTune) {
                 const isCloudTranslate = result.engine === 'groq' || result.engine === 'openai';
-                meta.translating = isCloudTranslate ? '☁️ Windy Cloud' : ('🏠 ' + (result.modelInfo?.model || 'Local'));
+                meta.translating = isCloudTranslate ? '☁️ WindyCloud' : ('🏠 ' + (result.modelInfo?.model || 'Local'));
             } else {
                 const tVal = translateModelSelect.value;
                 if (tVal === 'cloud') {
-                    meta.translating = '☁️ Windy Cloud';
+                    meta.translating = '☁️ WindyCloud';
                 } else {
                     const tSel = translateModelSelect.options[translateModelSelect.selectedIndex];
                     meta.translating = '🏠 ' + tSel.text;
@@ -458,7 +458,7 @@ async function processChunk(audioBlob) {
                 if (result.engine) {
                     const isCloud = result.engine === 'groq' || result.engine === 'openai';
                     if (isCloud) {
-                        listeningValue.textContent = '☁️ Windy Cloud';
+                        listeningValue.textContent = '☁️ WindyCloud';
                         listeningValue.className = 'cockpit-value cloud';
                     } else {
                         const localLabel = result.modelInfo?.model || 'Local';
@@ -473,7 +473,7 @@ async function processChunk(audioBlob) {
                     const mi = result.modelInfo;
                     const isCloud = result.engine === 'groq' || result.engine === 'openai';
                     if (isCloud) {
-                        translatingValue.textContent = '☁️ Windy Cloud';
+                        translatingValue.textContent = '☁️ WindyCloud';
                         translatingValue.className = 'cockpit-value cloud';
                     } else {
                         const sizeStr = mi.size ? ` · ${mi.size}` : '';

@@ -124,11 +124,11 @@ export default function Settings() {
                     )}
                     <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
                         {billing?.tier === 'free' && (
-                            <Link to="/#pricing" className="settings-upgrade-btn">⚡ Upgrade to Pro — $49</Link>
+                            <Link to="/#pricing" className="settings-upgrade-btn">⚡ Upgrade to Pro — $4.99/mo</Link>
                         )}
                         {billing?.tier === 'pro' && (
                             <Link to="/#pricing" className="settings-upgrade-btn" style={{ borderColor: '#3B82F6', color: '#3B82F6' }}>
-                                🌍 Upgrade to Translate — $79
+                                🌍 Upgrade to Ultra — $8.99/mo
                             </Link>
                         )}
                         <button className="dash-btn" onClick={handlePortal}>💳 Manage Billing</button>

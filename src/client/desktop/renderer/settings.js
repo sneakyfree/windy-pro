@@ -123,11 +123,11 @@ class SettingsPanel {
             <label for="storageLocation">Storage</label>
             <select id="storageLocation">
               <option value="local" selected>💾 Local only — stays on this device</option>
-              <option value="windy-cloud">☁️ Windy Cloud — encrypted, syncs when on Wi-Fi</option>
-              <option value="both">🔄 Both — local + Windy Cloud backup</option>
+              <option value="windy-cloud">☁️ WindyCloud — encrypted, syncs when on Wi-Fi</option>
+              <option value="both">🔄 Both — local + WindyCloud backup</option>
             </select>
           </div>
-          <p class="settings-hint" id="storageHint">Local storage selected — your data stays on this machine. Change to Windy Cloud or Both to enable syncing.</p>
+          <p class="settings-hint" id="storageHint">Local storage selected — your data stays on this machine. Change to WindyCloud or Both to enable syncing.</p>
           <div class="setting-row" title="Where to save files on this device.">
             <label for="archiveFolder">Local folder</label>
             <div class="setting-inline">
@@ -901,8 +901,8 @@ class SettingsPanel {
         const hint = this.panel.querySelector('#storageHint');
         const hints = {
           local: 'Your data stays on this machine. Nothing uploaded anywhere. Maximum privacy.',
-          'windy-cloud': 'Files sync to Windy Cloud when connected to Wi-Fi. End-to-end encrypted — we can\'t read your data.',
-          both: 'Saved locally first, then backed up to Windy Cloud over Wi-Fi. Best of both worlds.'
+          'windy-cloud': 'Files sync to WindyCloud when connected to Wi-Fi. End-to-end encrypted — we can\'t read your data.',
+          both: 'Saved locally first, then backed up to WindyCloud over Wi-Fi. Best of both worlds.'
         };
         if (hint) hint.textContent = hints[e.target.value] || hints.local;
       });
@@ -2425,7 +2425,7 @@ class SettingsPanel {
         if (audioQualityEl2 && settings.audioQuality) audioQualityEl2.value = settings.audioQuality;
         const storageEl2 = this.panel.querySelector('#storageLocation');
         if (storageEl2 && settings.storageLocation) storageEl2.value = settings.storageLocation;
-        /* Dropbox/Google restore removed — Windy Storage only */
+        /* Legacy cloud restore removed — Windy Storage only */
         // Update Soul File stats from archive data
         this.updateSoulFileStats();
 

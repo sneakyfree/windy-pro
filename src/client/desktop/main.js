@@ -2963,7 +2963,7 @@ ipcMain.handle('delete-archive-entry', async (event, filePath) => {
   }
 });
 
-// ── Windy Pro Cloud Storage helpers ──────────────────────────────
+// ── WindyCloud Storage helpers ──────────────────────────────
 const CLOUD_STORAGE_DEFAULT_URL = 'https://windypro.thewindstorm.uk/api/storage';
 
 async function getCloudStorageToken() {
@@ -3031,7 +3031,7 @@ ipcMain.on('archive-transcript', async (event, payload) => {
       }
     }
 
-    // Windy Pro Cloud upload
+    // WindyCloud upload
     if (route === 'cloud' || route === 'local_cloud') {
       cloud.attempted = true;
       const engine = store.get('engine', {});
@@ -3039,7 +3039,7 @@ ipcMain.on('archive-transcript', async (event, payload) => {
       const cloudUrl = engine.cloudStorageUrl || CLOUD_STORAGE_DEFAULT_URL;
 
       if (!cloudToken) {
-        cloud.error = 'Not logged in to Windy Pro Cloud (set email/password in Settings)';
+        cloud.error = 'Not logged in to WindyCloud (set email/password in Settings)';
       } else {
         try {
           const filesToUpload = res.files && res.files.length > 0 ? res.files : [];
@@ -3636,7 +3636,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
       key: 'translate_pro', name: 'Windy Max', icon: '👑',
       monthlyLabel: '$14.99', annualLabel: '$149', lifetimeLabel: '$299',
       period: 'annual', color: '#A855F7',
-      desc: 'The ultimate: unlimited recording, text-to-speech, medical/legal glossaries, and every feature unlocked.'
+      desc: 'The ultimate: 60-min cloud recording, text-to-speech, medical/legal glossaries, and every feature unlocked.'
     }
   ];
 

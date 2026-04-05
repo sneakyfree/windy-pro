@@ -2030,7 +2030,7 @@
 
       <div class="device-limit-notice">
         <span class="notice-icon">📱</span>
-        <span class="notice-text">Free tier: <strong>1 device</strong>. Upgrade to Windy Pro for 3 devices, Windy Ultra for 5, or Windy Max for <strong>unlimited</strong> devices.</span>
+        <span class="notice-text">Free tier: <strong>1 device</strong>. Upgrade to Windy Pro for 3 devices, Windy Ultra for 5, or Windy Max for <strong>10</strong> devices.</span>
       </div>
 
       <div class="btn-row">
@@ -2695,7 +2695,7 @@
             </div>
             <div class="whats-next-item">
               <span class="nxt-icon">☁️</span>
-              <span class="nxt-text">Try Windy Pro Cloud — your private storage fortress</span>
+              <span class="nxt-text">Try WindyCloud — your private storage fortress</span>
             </div>
           </div>
         </div>
@@ -2813,7 +2813,7 @@
       { title: '🌪️ WindyTune — Your Personal AI DJ', body: 'WindyTune monitors your hardware every 30 seconds — CPU temp, available RAM, GPU load, battery level. If your laptop throttles, it switches to a lighter engine seamlessly. Plug into power? Automatic upgrade. You never notice.' },
       { title: '🧬 Soul File — Your Digital Legacy', body: "Every time you use Windy Pro, you're building a dataset of your voice — pitch, timbre, rhythm, accent, emotional range. After 50 hours: studio-grade voice clone ready. After 200 hours: full digital twin. A thousand years from now, your descendants hear YOUR voice." },
       { title: '🌍 Windy Translate — The Love Story', body: "Paris. Evening. A café. He's American. She's French. He holds up his phone and speaks English. She reads French. She speaks French. He reads English. No internet. No cloud. Just two people connecting in any language." },
-      { title: '☁️ Windy Pro Cloud — Your Privacy, Your Storage', body: "Your privacy is paramount! We never use your data for anything. Period. Free: 5 GB. Starter: 50 GB for $2/mo. Builder: 500 GB for $8/mo. Unlimited: $15/mo. Store everything — documents, photos, files. Replace Dropbox with something that respects you." },
+      { title: '☁️ WindyCloud — Your Privacy, Your Storage', body: "Your privacy is paramount! We never use your data for anything. Period. Free: 5 GB. Starter: 50 GB for $9/mo. Pro: 250 GB for $19/mo. Business: 1 TB for $49/mo. Store everything — documents, photos, files. Replace legacy cloud with something that respects you." },
       { title: '🎙️ Voice Fingerprinting', body: "After 5 minutes, Windy Pro creates a mathematical fingerprint of your voice. After 2 hours, it can pick YOUR words out of a crowded party with music blaring. Your voice. In any crowd. Crystal clear." },
       { title: '📹 Build Your AI Avatar', body: "Turn on video archiving and your camera captures your face, expressions, mannerisms. Combined with your voice data, this becomes the foundation for a digital avatar twin. 5 hours: basic profile. 50 hours: studio-grade. ♾️: Your legacy, preserved forever." },
       { title: '🔒 Truly Private', body: "Every competitor sends your voice to the cloud. They 'promise' it's private. We don't promise — we engineered it. Your words never leave your device. Zero telemetry. Zero data collection. Even our cloud mode is end-to-end encrypted." },
@@ -3707,12 +3707,12 @@
         },
         translate: {
           badge: '🚀 Windy Ultra',
-          desc: '🎉 Your plan includes: 5 devices · Everything in Pro · 60-min recordings · Real-time translation · 99 language pairs',
+          desc: '🎉 Your plan includes: 5 devices · Everything in Pro · 30-min cloud recordings · Real-time translation · 99 language pairs',
           showUpgrade: true
         },
         translate_pro: {
           badge: '👑 Windy Max — You have EVERYTHING',
-          desc: '🎉 Congratulations! Unlimited devices · Everything in Ultra · Unlimited recordings · Text-to-speech · Medical/legal glossaries · Priority support',
+          desc: '🎉 Congratulations! 10 devices · Everything in Ultra · 60-min cloud recordings · Text-to-speech · Medical/legal glossaries · Priority support',
           showUpgrade: false
         }
       };
@@ -3887,14 +3887,14 @@
           tier: 'translate', icon: '🚀', name: 'Windy Ultra', color: '#3B82F6',
           monthly: '$8.99/mo', annual: '$79/yr', lifetime: '$199',
           desc: '5 devices · Everything in Pro · Real-time translation',
-          engines: ['📱 5 devices', 'Everything in Pro', '60-min recordings', 'Real-time translation', 'Specialist pair engines'],
+          engines: ['📱 5 devices', 'Everything in Pro', '30-min cloud recordings', 'Real-time translation', 'Specialist pair engines'],
           highlight: true
         },
         {
           tier: 'translate_pro', icon: '👑', name: 'Windy Max', color: '#8B5CF6',
           monthly: '$14.99/mo', annual: '$149/yr', lifetime: '$299',
-          desc: 'Unlimited devices · Everything in Ultra · TTS + glossaries',
-          engines: ['📱 Unlimited devices', 'Everything in Ultra', 'Unlimited recordings', 'Text-to-speech', 'Medical/legal glossaries'],
+          desc: '10 devices · Everything in Ultra · TTS + glossaries',
+          engines: ['📱 10 devices', 'Everything in Ultra', '60-min cloud recordings', 'Text-to-speech', 'Medical/legal glossaries'],
           highlight: false
         }
       ];
@@ -5228,7 +5228,7 @@
                 ✅ Everything in Pro<br>
                 ✅ <strong style="color:#3B82F6;">Real-time translation</strong><br>
                 ✅ <strong style="color:#3B82F6;">Specialist pair engines</strong><br>
-                ✅ 60-min recordings<br>
+                ✅ 30-min cloud recordings<br>
                 ✅ 99 language pairs
               </div>
               <div id="trans-plan-translate-check" style="display:none; position:absolute; top:6px; right:8px; font-size:16px;">✅</div>
@@ -5241,9 +5241,9 @@
               <div class="trans-price" style="font-size:22px; font-weight:900; color:var(--text); margin:8px 0 2px;">$149<span style="font-size:12px; font-weight:400; color:var(--text-muted);">/yr</span></div>
               <div class="trans-price-label" style="font-size:11px; color:var(--text-muted); margin-bottom:10px;">per year</div>
               <div style="text-align:left; font-size:12px; color:var(--text-dim); line-height:1.7; padding:8px; background:rgba(255,255,255,0.03); border-radius:8px;">
-                ✅ 📱 <strong style="color:#8B5CF6;">Unlimited devices</strong><br>
+                ✅ 📱 <strong style="color:#8B5CF6;">10 devices</strong><br>
                 ✅ Everything in Ultra<br>
-                ✅ Unlimited recordings<br>
+                ✅ 60-min cloud recordings<br>
                 ✅ <strong style="color:#8B5CF6;">Text-to-speech</strong><br>
                 ✅ <strong style="color:#8B5CF6;">Medical/legal glossaries</strong><br>
                 ✅ Priority support

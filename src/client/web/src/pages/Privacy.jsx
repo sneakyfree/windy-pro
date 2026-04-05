@@ -42,7 +42,7 @@ export default function Privacy() {
                 </ul>
 
                 <h2 id="cloud-mode">Cloud Mode (Web App)</h2>
-                <p>When you use Windy Pro Cloud, the following data is processed:</p>
+                <p>When you use WindyCloud, the following data is processed:</p>
                 <ul>
                     <li><strong>Audio data</strong> is streamed to our servers for transcription and immediately discarded after processing. We do not store raw audio.</li>
                     <li><strong>Transcriptions</strong> are stored in your account's Prompt Vault so you can access them across devices.</li>

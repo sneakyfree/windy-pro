@@ -59,40 +59,40 @@ export const TIER_FEATURES: Record<LicenseTier, TierFeatures> = {
         priceCents: 0,
     },
     pro: {
-        maxRecordingMinutes: 30,
-        maxDevices: 5,
+        maxRecordingMinutes: 15,   // Bible v2: 15 min cloud recording
+        maxDevices: 3,             // Bible v2: 3 devices
         cloudSync: true,
         translation: false,
         speechTranslation: false,
-        voiceClone: true,
-        videoRecording: true,
-        offlinePacks: true,
-        prioritySupport: true,
-        priceCents: 4900,
+        voiceClone: false,         // Bible v2: No voice clone at Pro
+        videoRecording: true,      // Bible v2: Video recording ✅
+        offlinePacks: true,        // Bible v2: 5 offline engines
+        prioritySupport: false,    // Bible v2: Priority support = Max only
+        priceCents: 499,           // Bible v2: $4.99/mo
     },
     translate: {
-        maxRecordingMinutes: 30,
-        maxDevices: 5,
+        maxRecordingMinutes: 30,   // Bible v2: 30 min cloud recording
+        maxDevices: 5,             // Bible v2: 5 devices
         cloudSync: true,
         translation: true,
         speechTranslation: true,
-        voiceClone: false,
-        videoRecording: false,
-        offlinePacks: true,
-        prioritySupport: false,
-        priceCents: 7900,
+        voiceClone: false,         // Bible v2: No voice clone at Ultra
+        videoRecording: true,      // Bible v2: Video recording ✅
+        offlinePacks: true,        // Bible v2: 25 offline engines
+        prioritySupport: false,    // Bible v2: Priority support = Max only
+        priceCents: 899,           // Bible v2: $8.99/mo
     },
     translate_pro: {
-        maxRecordingMinutes: 60,
-        maxDevices: 5,
+        maxRecordingMinutes: 60,   // Bible v2: 60 min cloud recording
+        maxDevices: 10,            // Bible v2: 10 devices
         cloudSync: true,
         translation: true,
         speechTranslation: true,
-        voiceClone: true,
-        videoRecording: true,
-        offlinePacks: true,
-        prioritySupport: true,
-        priceCents: 14900,
+        voiceClone: true,          // Bible v2: Voice clone ✅
+        videoRecording: true,      // Bible v2: Video recording ✅
+        offlinePacks: true,        // Bible v2: 100 offline engines
+        prioritySupport: true,     // Bible v2: Priority support ✅
+        priceCents: 1499,          // Bible v2: $14.99/mo
     },
 };
 

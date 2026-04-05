@@ -271,9 +271,9 @@ class MarketplacePanel {
       { id: 'pack_grand_tour', icon: '🇪🇺', label: 'Europe · $129', cta: 'Browse' },
       { id: 'pack_safari', icon: '🌍', label: 'Africa · $79', cta: 'Browse' },
       { id: 'pack_silk_road', icon: '🌏', label: 'Middle East & S. Asia · $59', cta: 'Browse' },
-      { id: 'pack_dragon', icon: '🐉', label: 'East Asia · $49', cta: 'Browse' },
+      { id: 'pack_dragon', icon: '🐉', label: 'East Asia · $59', cta: 'Browse' },
       { id: 'pack_archipelago', icon: '🌺', label: 'SE Asia & Pacific · $69', cta: 'Browse' },
-      { id: 'pack_explorer', icon: '🌎', label: 'Americas · $49', cta: 'Browse' },
+      { id: 'pack_explorer', icon: '🌎', label: 'Americas · $59', cta: 'Browse' },
       { id: 'pack_marco_polo', icon: '🧭', label: 'ALL regions · $399', cta: 'Own Everything' }
     ];
 

@@ -429,7 +429,7 @@ class InstallWizard {
         // Store selection locally regardless of API result
         const configPath = path.join(APP_DIR, 'translate-config.json');
         fs.writeFileSync(configPath, JSON.stringify({
-          tier, // 'translate' ($79) or 'translate_pro' ($149) or 'deferred'
+          tier, // 'translate' (Ultra) or 'translate_pro' (Max) or 'deferred'
           purchasedAt: tier === 'deferred' ? null : new Date().toISOString(),
           deferredAt: tier === 'deferred' ? new Date().toISOString() : null
         }, null, 2));

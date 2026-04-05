@@ -422,7 +422,7 @@ Storage location:
   ○ Dropbox
   ○ iCloud
   ○ OneDrive
-  ○ Windy Cloud
+  ○ WindyCloud
   ○ Multiple simultaneously (select all that apply)
 
 Quality:
@@ -439,7 +439,7 @@ Quality:
 | + Video (720p) | ~700 MB | ~42 GB | ~500 GB |
 | + Video (1080p) | ~1.5 GB | ~90 GB | ~1 TB |
 
-Heavy archivers will need storage space. That's a potential Windy Cloud revenue stream (storage subscriptions for users who want off-device backup of their legacy data).
+Heavy archivers will need storage space. That's a potential WindyCloud revenue stream (storage subscriptions for users who want off-device backup of their legacy data).
 
 **Clone-Ready Export:**
 Windy Pro provides one-click export tools:
@@ -500,19 +500,19 @@ Unlike competitors who force cloud storage (and monetize your data), Windy Pro d
 | **Dropbox** | Sync to your Dropbox | High |
 | **iCloud** | Sync to your Apple account | High |
 | **OneDrive** | Sync to your Microsoft account | High |
-| **Windy Cloud** | Our encrypted cloud storage | High — encrypted, we can't read it |
+| **WindyCloud** | Our encrypted cloud storage | High — encrypted, we can't read it |
 | **Multiple** | Any combination simultaneously | Varies |
 
-Users can sync to multiple destinations simultaneously. Transcribe a meeting → transcript saves locally AND to Google Drive AND to Windy Cloud. Redundancy and convenience without sacrificing control.
+Users can sync to multiple destinations simultaneously. Transcribe a meeting → transcript saves locally AND to Google Drive AND to WindyCloud. Redundancy and convenience without sacrificing control.
 
-### Windy Cloud (Revenue Opportunity)
+### WindyCloud (Revenue Opportunity)
 
 - Free tier: 5 GB (enough for ~100 hours of audio-only archive)
 - Breeze: 100 GB — $9/month or $84/year
 - Gale: 250 GB — $19/month or $180/year
 - Tempest: 1 TB — $49/month or $468/year
 
-This is recurring revenue that complements the one-time license fee. Users who are building voice clone datasets over years will need storage. Windy Cloud is the natural choice — optimized for our data formats, integrated into the app, one-click setup.
+This is recurring revenue that complements the one-time license fee. Users who are building voice clone datasets over years will need storage. WindyCloud is the natural choice — optimized for our data formats, integrated into the app, one-click setup.
 
 ---
 
@@ -535,9 +535,9 @@ $99 for everything is great value but it's a barrier for:
 | **Windy Starter** | $9 | 1 model (auto-selected for your hardware, or you pick) | Basic transcription, local storage only |
 | **Windy Plus** | $29 | 3 models (Lite + Core + Standard) | WindySense adaptive switching, audio archive, cloud storage sync |
 | **Windy Pro** | $59 | All 7 models | WindySense, voice fingerprinting, audio/video archive, cloud sync, voice clone export |
-| **Windy Pro Max** | $99 | All 7 models + everything | Everything in Pro + Windy Cloud 50 GB + avatar data export + priority model updates + all future features included |
+| **Windy Pro Max** | $99 | All 7 models + everything | Everything in Pro + WindyCloud 50 GB + avatar data export + priority model updates + all future features included |
 
-**All one-time payments. Lifetime. No subscriptions ever (except optional Windy Cloud storage).**
+**All one-time payments. Lifetime. No subscriptions ever (except optional WindyCloud storage).**
 
 ### Regional Pricing (Purchasing Power Parity)
 
@@ -573,7 +573,7 @@ Upgrades are seamless:
 
 Compared to $99-flat where ~50-60% of potential buyers bounce: ~$99,000 per 10K visitors (assuming 10% conversion). Tiered pricing approximately doubles revenue by capturing the long tail.
 
-Plus recurring Windy Cloud storage revenue on top.
+Plus recurring WindyCloud storage revenue on top.
 
 ---
 
@@ -1327,7 +1327,7 @@ The only cost is your time and GPU electricity.
 | Moderate | 10,000 | $23.40 | $234,000 |
 | Optimistic | 100,000 | $23.40 | $2,340,000 |
 
-### Recurring Windy Cloud Storage
+### Recurring WindyCloud Storage
 
 Assuming 10% of users subscribe to cloud storage at average $5/month:
 
@@ -1375,7 +1375,7 @@ We never name competitors. We're above that. But here's how we position against 
 2. **Windy Seven naming** — working title, finalize after OC1 selects the model
 3. **Apple code signing** — macOS builds need Apple Developer cert ($99/year) for Gatekeeper
 4. **Mobile version** — when? iOS and Android would dramatically expand the market
-5. **Windy Cloud infrastructure** — hosting, encryption, pricing tiers need detailed planning
+5. **WindyCloud infrastructure** — hosting, encryption, pricing tiers need detailed planning
 6. **Voice clone partnerships** — do we integrate directly with ElevenLabs/Coqui, or build our own?
 
 ### Future Roadmap (Post v2.0)

@@ -29,7 +29,7 @@ class UpgradePanel {
             {
                 key: 'pro',
                 name: 'Windy Pro',
-                price: '$49',
+                price: '$4.99/mo',
                 period: 'annual',
                 monthlyPriceId: 'price_1T60GeBXIOBasDQi4aitcq8O',
                 annualPriceId: 'price_1T5oYzBXIOBasDQibSlnIsPg',
@@ -41,7 +41,7 @@ class UpgradePanel {
             {
                 key: 'translate',
                 name: 'Windy Ultra',
-                price: '$79',
+                price: '$8.99/mo',
                 period: 'annual',
                 monthlyPriceId: 'price_1T5oZJBXIOBasDQijBW23Gow',
                 annualPriceId: 'price_1T5oZJBXIOBasDQiHO0MtYS7',
@@ -54,7 +54,7 @@ class UpgradePanel {
             {
                 key: 'translate_pro',
                 name: 'Windy Max',
-                price: '$149',
+                price: '$14.99/mo',
                 period: 'annual',
                 monthlyPriceId: 'price_1T60H8BXIOBasDQiy5eorTWR',
                 annualPriceId: 'price_1T5oZ1BXIOBasDQinrz3VdvG',

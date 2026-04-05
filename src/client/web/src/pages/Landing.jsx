@@ -141,7 +141,7 @@ export default function Landing() {
                         <div className="whats-new-item">
                             <span className="whats-new-icon">☁️</span>
                             <div>
-                                <strong>Windy Pro Cloud Storage</strong>
+                                <strong>WindyCloud Storage</strong>
                                 <p>Archive recordings to our distributed cloud — no third-party accounts needed.</p>
                             </div>
                         </div>
@@ -198,7 +198,7 @@ export default function Landing() {
                         </div>
                         <div className="feature-card">
                             <div className="feature-icon">☁️</div>
-                            <h3>Windy Pro Cloud</h3>
+                            <h3>WindyCloud</h3>
                             <p>Archive recordings to Windy Pro's distributed cloud. Sync across devices, access from anywhere.</p>
                         </div>
                         <div className="feature-card">
@@ -401,7 +401,7 @@ export default function Landing() {
                     <div className="testimonial-grid">
                         {[
                             { name: 'James M.', role: 'Podcast Creator', text: 'Windy Pro replaced three different tools for me. The local transcription is incredibly fast and I never worry about my content leaking.', avatar: '🎙️' },
-                            { name: 'Dr. Sarah K.', role: 'Medical Researcher', text: 'The medical glossary support in Translate Pro is a game-changer. Accurate transcription of clinical terms that other tools butcher.', avatar: '🩺' },
+                            { name: 'Dr. Sarah K.', role: 'Medical Researcher', text: 'The medical glossary support in Windy Max is a game-changer. Accurate transcription of clinical terms that other tools butcher.', avatar: '🩺' },
                             { name: 'Carlos R.', role: 'Freelance Translator', text: 'Conversation mode lets me conduct bilingual interviews effortlessly. The real-time translation is surprisingly accurate.', avatar: '🌍' },
                             { name: 'Priya D.', role: 'Software Engineer', text: 'I use the cursor injection feature daily for voice-coding comments and documentation. Saves me hours every week.', avatar: '💻' }
                         ].map((t, i) => (
