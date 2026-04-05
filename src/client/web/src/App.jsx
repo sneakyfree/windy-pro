@@ -91,7 +91,7 @@ export default function App() {
                     <ProtectedRoute><Profile /></ProtectedRoute>
                 } />
                 <Route path="/app" element={
-                    <ProtectedRoute><Navigate to="/app/fly" replace /></ProtectedRoute>
+                    <ProtectedRoute><Navigate to="/app/hub" replace /></ProtectedRoute>
                 } />
                 <Route path="/app/:panel" element={
                     <ProtectedRoute><EcosystemDashboard /></ProtectedRoute>

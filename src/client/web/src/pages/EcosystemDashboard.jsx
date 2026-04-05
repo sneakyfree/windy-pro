@@ -2,6 +2,7 @@ import { Suspense, lazy, useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import './EcosystemDashboard.css'
 
+const HubPanel = lazy(() => import('./panels/HubPanel'))
 const WordPanel = lazy(() => import('./panels/WordPanel'))
 const ChatPanel = lazy(() => import('./panels/ChatPanel'))
 const MailPanel = lazy(() => import('./panels/MailPanel'))
@@ -12,6 +13,7 @@ const PassportPanel = lazy(() => import('./panels/PassportPanel'))
 const SettingsPanel = lazy(() => import('./panels/SettingsPanel'))
 
 const PANELS = [
+    { id: 'hub', emoji: '\ud83c\udf2a\ufe0f', label: 'Hub', component: HubPanel },
     { id: 'fly', emoji: '\ud83e\udeb0', label: 'Fly', component: FlyPanel },
     { id: 'word', emoji: '\ud83c\udf99\ufe0f', label: 'Word', component: WordPanel },
     { id: 'chat', emoji: '\ud83d\udcac', label: 'Chat', component: ChatPanel },

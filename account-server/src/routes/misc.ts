@@ -54,6 +54,7 @@ const startTime = Date.now();
 
 interface HealthResult {
     status: string;
+    service: string;
     version: string;
     uptime_seconds: number;
     database: string;
