@@ -4,8 +4,10 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
+import http from 'http';
 import { getDb } from '../db/schema';
 import { config } from '../config';
+import { isRS256Available } from '../jwks';
 import { authenticateToken, optionalAuth, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validation';
 import {
@@ -14,6 +16,10 @@ import {
     RtcSignalRequestSchema,
 } from '@windy-pro/contracts';
 import { tierFromKey } from '@windy-pro/contracts';
+
+// Read version from package.json
+import packageJson from '../../package.json';
+const SERVER_VERSION: string = packageJson.version;
 
 const analyticsLimiter = rateLimit({
     windowMs: 60 * 1000,
@@ -42,22 +48,113 @@ const rtcCleanupTimer = setInterval(() => {
 }, 60 * 1000);
 rtcCleanupTimer.unref();
 
+// ─── Comprehensive Health Check (cached 30s) ────────────────
+
+const startTime = Date.now();
+
+interface HealthResult {
+    status: string;
+    version: string;
+    uptime_seconds: number;
+    database: string;
+    jwks: string;
+    services: Record<string, string>;
+    timestamp: string;
+}
+
+let cachedHealth: HealthResult | null = null;
+let cacheExpiry = 0;
+
+/**
+ * Probe a service's /health endpoint with a 3-second timeout.
+ * Returns "ok" on any 2xx response, "unreachable" otherwise.
+ */
+function checkService(baseUrl: string): Promise<string> {
+    if (!baseUrl) return Promise.resolve('unreachable');
+    const url = baseUrl.replace(/\/+$/, '') + '/health';
+    return new Promise((resolve) => {
+        try {
+            const req = http.get(url, { timeout: 3000 }, (res) => {
+                // Consume the response body to free resources
+                res.resume();
+                resolve(res.statusCode && res.statusCode >= 200 && res.statusCode < 300 ? 'ok' : 'error');
+            });
+            req.on('error', () => resolve('unreachable'));
+            req.on('timeout', () => { req.destroy(); resolve('unreachable'); });
+        } catch {
+            resolve('unreachable');
+        }
+    });
+}
+
+async function buildHealthResult(): Promise<HealthResult> {
+    // 1. Database check
+    let dbStatus = 'ok';
+    try {
+        const db = getDb();
+        db.prepare('SELECT 1').get();
+    } catch {
+        dbStatus = 'error';
+    }
+
+    // 2. JWKS check
+    const jwksStatus = isRS256Available() ? 'ok' : 'error';
+
+    // 3. Ecosystem service checks (parallel, 3s timeout each)
+    const [windyChat, windyMail, windyCloud, eternitas] = await Promise.all([
+        checkService(config.WINDY_CHAT_URL),
+        checkService(config.WINDY_MAIL_URL),
+        checkService(config.WINDY_CLOUD_URL),
+        checkService(config.ETERNITAS_URL),
+    ]);
+
+    const uptimeSeconds = Math.floor((Date.now() - startTime) / 1000);
+
+    return {
+        status: dbStatus === 'ok' ? 'ok' : 'degraded',
+        service: 'windy-pro-account-server',
+        version: SERVER_VERSION,
+        uptime_seconds: uptimeSeconds,
+        database: dbStatus,
+        jwks: jwksStatus,
+        services: {
+            windy_chat: windyChat,
+            windy_mail: windyMail,
+            windy_cloud: windyCloud,
+            eternitas,
+        },
+        timestamp: new Date().toISOString(),
+    };
+}
+
 // ─── GET /health ─────────────────────────────────────────────
 
-router.get('/health', (_req: Request, res: Response) => {
-    const db = getDb();
-    const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;
-    const deviceCount = (db.prepare('SELECT COUNT(*) as count FROM devices').get() as any).count;
-
-    res.json({
-        status: 'ok',
-        service: 'windy-pro-account-server',
-        version: '2.0.0',
-        users: userCount,
-        devices: deviceCount,
-        maxDevicesPerAccount: config.MAX_DEVICES,
-        timestamp: new Date().toISOString(),
-    });
+router.get('/health', async (_req: Request, res: Response) => {
+    try {
+        const now = Date.now();
+        if (!cachedHealth || now > cacheExpiry) {
+            cachedHealth = await buildHealthResult();
+            cacheExpiry = now + 30_000; // cache for 30 seconds
+        }
+        // Update timestamp and uptime on every response even when cached
+        const result = {
+            ...cachedHealth,
+            uptime_seconds: Math.floor((Date.now() - startTime) / 1000),
+            timestamp: new Date().toISOString(),
+        };
+        const statusCode = result.database === 'ok' ? 200 : 503;
+        res.status(statusCode).json(result);
+    } catch (err) {
+        res.status(503).json({
+            status: 'error',
+            version: SERVER_VERSION,
+            uptime_seconds: Math.floor((Date.now() - startTime) / 1000),
+            database: 'error',
+            jwks: 'error',
+            services: {},
+            timestamp: new Date().toISOString(),
+        });
+    }
 });
 
 // ─── POST /api/v1/analytics ──────────────────────────────────

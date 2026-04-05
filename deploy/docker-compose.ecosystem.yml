@@ -1,0 +1,79 @@
+# Unified Ecosystem Docker Compose — for LOCAL integration testing.
+# NOT for production. Starts the core account-server and expects other
+# services (Eternitas, Chat, Mail, Cloud) to be running separately.
+#
+# Usage:
+#   cd deploy && docker compose -f docker-compose.ecosystem.yml up -d
+#   ../scripts/test-ecosystem.sh http://localhost:8098
+#
+# See deploy/README.md for full ecosystem startup instructions.
+
+services:
+  # ── Account Server (Identity Authority) ──
+  account-server:
+    build: ../account-server
+    ports:
+      - "8098:8098"
+    environment:
+      - NODE_ENV=development
+      - PORT=8098
+      - JWT_SECRET=dev-secret-minimum-32-characters-long-for-testing
+      - DATABASE_PATH=/data/accounts.db
+      - MEDIA_PATH=/data/media
+      # Ecosystem service URLs — point to other docker services or external hosts
+      - WINDY_CHAT_URL=${WINDY_CHAT_URL:-http://host.docker.internal:8101}
+      - WINDY_MAIL_URL=${WINDY_MAIL_URL:-http://host.docker.internal:8200}
+      - ETERNITAS_URL=${ETERNITAS_URL:-http://host.docker.internal:8200}
+      - WINDY_CLOUD_URL=${WINDY_CLOUD_URL:-http://host.docker.internal:8098}
+      # Service tokens (for cross-service auth)
+      - CHAT_SERVICE_TOKEN=${CHAT_SERVICE_TOKEN:-dev-chat-token}
+      - ETERNITAS_API_KEY=${ETERNITAS_API_KEY:-}
+      - ETERNITAS_WEBHOOK_SECRET=${ETERNITAS_WEBHOOK_SECRET:-}
+      - WINDYMAIL_SERVICE_TOKEN=${WINDYMAIL_SERVICE_TOKEN:-dev-mail-token}
+    volumes:
+      - account-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8098/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Redis (optional — for token blacklisting, rate limiting) ──
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Web Portal (Nginx serving the React SPA) ──
+  web:
+    image: nginx:1.25-alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ../src/client/web/dist:/usr/share/nginx/html:ro
+      - ./nginx-spa.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      account-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+# ────────────────────────────────────────────────────
+# External Services (run from their own repos):
+#
+#   Eternitas:    cd ../eternitas && docker compose up -d
+#   Windy Chat:   cd ../windy-chat && docker compose up -d
+#   Windy Mail:   cd ../windy-mail && docker compose up -d
+#   Windy Cloud:  cd ../windy-cloud && docker compose up -d
+#
+# Or override URLs above to point to remote staging servers.
+# ────────────────────────────────────────────────────
+
+volumes:
+  account-data:
