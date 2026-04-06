@@ -84,6 +84,8 @@ contextBridge.exposeInMainWorld('windyAPI', {
   onFontSizeChange: (cb) => safeOn('font-size-changed', (_e, percent) => cb(percent)),
 
   // ═══ Navigation & External ════════════════════════════════════
+  openChat: () => ipcRenderer.send('open-windy-chat'),
+  openExternal: (url) => ipcRenderer.invoke('open-external-url', url),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
   openCheckoutUrl: (opts) => ipcRenderer.invoke('open-checkout-url', opts),
   copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
