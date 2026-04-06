@@ -87,6 +87,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   openChat: () => ipcRenderer.send('open-windy-chat'),
   openExternal: (url) => ipcRenderer.invoke('open-external-url', url),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
+  launchWindyCode: () => ipcRenderer.invoke('launch-windy-code'),
   openCheckoutUrl: (opts) => ipcRenderer.invoke('open-checkout-url', opts),
   copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
   saveFile: (options) => ipcRenderer.invoke('save-file', options),

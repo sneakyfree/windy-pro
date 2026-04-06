@@ -5,8 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* wss://*.windyword.ai https://*.windyword.ai wss://*.thewindstorm.uk https://*.thewindstorm.uk; media-src 'self' mediastream: blob: data:; img-src 'self' data:;">
-  <title>Windy Pro</title>
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* wss://*.windyword.ai https://*.windyword.ai wss://*.thewindstorm.uk https://*.thewindstorm.uk; media-src 'self' mediastream: blob: data:; img-src 'self' data:; frame-src 'self' https://*.windyword.ai https://*.windymail.ai https://*.windycode.ai https://*.windyfly.ai https://windyword.ai https://windymail.ai https://windycode.ai https://windyfly.ai https://cloud.windyfly.ai https://chat.windyword.ai https://windyclone.com https://*.windyclone.com;">
+  <title>Windy Word</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="premium-features.css">
   <link rel="stylesheet" href="video-clone-features.css">
@@ -20,7 +20,7 @@
     <div class="title-bar" id="titleBar">
       <div class="title-bar-left">
         <span class="logo">🌪️</span>
-        <span class="title">Windy Pro</span>
+        <span class="title">Windy Word</span>
       </div>
       <div class="title-bar-right">
         <div class="translate-menu-wrap" id="translateMenuWrap">
@@ -75,6 +75,11 @@
         <span class="eco-icon">☁️</span>
         <span class="eco-label">Cloud</span>
       </button>
+      <button class="eco-btn" id="ecoClone" title="Windy Clone" data-product="clone">
+        <span class="eco-icon">🧬</span>
+        <span class="eco-label">Clone</span>
+        <span class="eco-badge" id="cloneBadge" style="display:none;"></span>
+      </button>
       <button class="eco-btn" id="ecoAgent" title="Windy Fly" data-product="agent">
         <span class="eco-icon">🪰</span>
         <span class="eco-label">Agent</span>
@@ -83,6 +88,11 @@
         <span class="eco-icon">💻</span>
         <span class="eco-label">Code</span>
       </button>
+    </div>
+
+    <!-- Embedded Ecosystem Webviews (lazy-loaded on first tab click) -->
+    <div class="eco-webview-container" id="ecoWebviewContainer" style="display:none;">
+      <!-- Webviews are injected dynamically by ecosystem-nav.js -->
     </div>
 
     <!-- State Indicator (The Green Strobe) -->

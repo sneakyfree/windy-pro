@@ -582,6 +582,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      webviewTag: true,
       preload: path.join(__dirname, 'preload.js'),
       autoplayPolicy: 'no-user-gesture-required'
     },
@@ -704,7 +705,7 @@ function createTray() {
   const icon = createTrayIcon('idle', iconSize);
 
   tray = new Tray(icon);
-  tray.setToolTip('Windy Pro - Click to show');
+  tray.setToolTip('Windy Word - Click to show');
 
   updateTrayMenu();
 
@@ -776,7 +777,7 @@ function updateTrayMenu() {
     },
     { type: 'separator' },
     {
-      label: 'Quit Windy Pro',
+      label: 'Quit Windy Word',
       click: () => {
         app.isQuitting = true;
         app.quit();
@@ -836,7 +837,7 @@ function showAboutWindow() {
   .copyright { color: #475569; font-size: 11px; margin-top: 12px; }
 </style></head><body>
   <div class="logo">🌪️</div>
-  <h1>Windy Pro</h1>
+  <h1>Windy Word</h1>
   <div class="version">Version ${version}</div>
   <div class="built">Built by WindyPro Labs</div>
   <div class="tech">Electron ${electronVersion} · Node ${nodeVersion} · ${process.arch}</div>
@@ -873,7 +874,7 @@ function createMacOSMenu() {
       label: app.name,
       submenu: [
         {
-          label: 'About Windy Pro',
+          label: 'About Windy Word',
           click: () => showAboutWindow()
         },
         { type: 'separator' },
@@ -900,7 +901,7 @@ function createMacOSMenu() {
         { role: 'unhide' },
         { type: 'separator' },
         {
-          label: 'Quit Windy Pro',
+          label: 'Quit Windy Word',
           accelerator: 'Cmd+Q',
           click: () => {
             app.isQuitting = true;
@@ -991,7 +992,7 @@ function createMacOSMenu() {
         },
         { type: 'separator' },
         {
-          label: 'Windy Pro Website',
+          label: 'Windy Word Website',
           click: () => shell.openExternal('https://windyword.ai')
         },
         {
@@ -1000,7 +1001,7 @@ function createMacOSMenu() {
         },
         { type: 'separator' },
         {
-          label: 'About Windy Pro',
+          label: 'About Windy Word',
           click: () => showAboutWindow()
         }
       ]
@@ -1637,6 +1638,25 @@ function showChatWindow() {
 // Chat IPC — open from renderer
 ipcMain.on('open-windy-chat', () => showChatWindow());
 
+// Launch Windy Code desktop app
+ipcMain.handle('launch-windy-code', async () => {
+  const { shell } = require('electron');
+  const fs = require('fs');
+  // Known install locations
+  const paths = [
+    path.join(require('os').homedir(), 'VSCode-darwin-x64', 'Windy Code.app'),
+    '/Applications/Windy Code.app',
+    path.join(require('os').homedir(), 'Applications', 'Windy Code.app')
+  ];
+  for (const appPath of paths) {
+    if (fs.existsSync(appPath)) {
+      await shell.openPath(appPath);
+      return { launched: true, path: appPath };
+    }
+  }
+  return { launched: false };
+});
+
 // Chat IPC — Authentication
 ipcMain.handle('chat-login', async (event, userId, password) => {
   try {
@@ -1899,7 +1919,7 @@ function _setupChatForwarding(client) {
 function _updateTrayUnread(count) {
   try {
     if (tray && !tray.isDestroyed()) {
-      tray.setToolTip(count > 0 ? `Windy Pro (${count} unread)` : 'Windy Pro');
+      tray.setToolTip(count > 0 ? `Windy Word (${count} unread)` : 'Windy Word');
     }
     // Set dock badge (macOS) or taskbar overlay (Windows)
     if (app.dock && typeof app.dock.setBadge === 'function') {
@@ -2623,7 +2643,7 @@ function toggleRecording() {
 
   // Update tray icon color based on state
   if (tray) {
-    tray.setToolTip(isRecording ? 'Windy Pro - Recording...' : 'Windy Pro');
+    tray.setToolTip(isRecording ? 'Windy Word - Recording...' : 'Windy Word');
   }
 
   // macOS: getUserMedia/AudioContext steal focus to Electron window.
@@ -2956,7 +2976,7 @@ ipcMain.handle('open-external-url', async (event, url) => {
       const extWin = new BrowserWindow({
         width: 1100,
         height: 750,
-        title: 'Windy Pro — Browser',
+        title: 'Windy Word — Browser',
         autoHideMenuBar: true,
         webPreferences: {
           nodeIntegration: false,
@@ -3412,13 +3432,8 @@ ipcMain.handle('delete-archive-entry', async (event, filePath) => {
   }
 });
 
-<<<<<<< HEAD
-// ── WindyCloud Storage helpers ──────────────────────────────
-const CLOUD_STORAGE_DEFAULT_URL = 'https://windypro.thewindstorm.uk/api/storage';
-=======
 // ── Windy Pro Cloud Storage helpers ──────────────────────────────
 const CLOUD_STORAGE_DEFAULT_URL = 'https://windyword.ai/api/storage';
->>>>>>> 677e1414521bd8746ee9ef10412308bbf67fad52
 
 async function getCloudStorageToken() {
   const engine = store.get('engine', {});
