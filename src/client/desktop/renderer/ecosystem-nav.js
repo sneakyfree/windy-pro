@@ -21,7 +21,7 @@ class EcosystemNav {
         name: 'Windy Chat',
         icon: '💬',
         url: 'https://chat.windyword.ai',
-        localUrl: null,
+        localUrl: 'http://localhost:3001',
         description: 'End-to-end encrypted messaging with auto-translation in 99 languages.',
         tagline: 'Talk to anyone, in any language — instantly.',
         preview: 'Send messages that auto-translate in real time. Military-grade encryption. Works offline. Your agent lives here too.',
@@ -31,7 +31,7 @@ class EcosystemNav {
         name: 'Windy Mail',
         icon: '✉️',
         url: 'https://windymail.ai',
-        localUrl: null,
+        localUrl: 'http://localhost:5173',
         description: 'Voice-first email — dictate, send, and manage mail without touching a keyboard.',
         tagline: 'Email that works for you, not against you.',
         preview: 'Dictate emails with your voice. Your AI agent gets its own inbox on day one. No more fighting OAuth tokens.',
@@ -166,9 +166,15 @@ class EcosystemNav {
       return;
     }
 
-    // Try production URL first, then local dev, then aspirational placeholder
+    // Try localhost FIRST (instant, no DNS), then production, then placeholder.
     // For localhost URLs, skip the fetch check (CSP blocks it in sandboxed renderer)
     // and load the webview directly — the webview's did-fail-load handles errors.
+    if (config.localUrl) {
+      this.createWebview(product, config.localUrl, true);
+      this.webviews[product].wrapper.style.display = '';
+      return;
+    }
+
     if (config.url) {
       const prodLive = await this.checkUrl(config.url);
       if (prodLive) {
@@ -176,13 +182,6 @@ class EcosystemNav {
         this.webviews[product].wrapper.style.display = '';
         return;
       }
-    }
-
-    if (config.localUrl) {
-      // Try loading directly — webview error handler shows placeholder on failure
-      this.createWebview(product, config.localUrl, true);
-      this.webviews[product].wrapper.style.display = '';
-      return;
     }
 
     // #3: Aspirational placeholder (not dev-focused)
