@@ -3102,14 +3102,37 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     console.info('[Batch Local] Using ffmpeg:', ffmpegBin);
 
     // P0-1: Convert to WAV using async execFile (non-blocking)
-    // Flags: -f webm (explicit format hint), -fflags (lenient parsing), -hide_banner (clean output)
-    await execFileAsync(ffmpegBin, [
-      '-hide_banner', '-y',
-      '-fflags', '+genpts+discardcorrupt',
-      '-err_detect', 'ignore_err',
-      '-f', 'webm', '-i', webmPath,
-      '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', wavPath
-    ], { timeout: 30000 });
+    // Lenient flags handle chunked webm from MediaRecorder timeslice
+    try {
+      await execFileAsync(ffmpegBin, [
+        '-hide_banner', '-y',
+        '-fflags', '+genpts+discardcorrupt',
+        '-err_detect', 'ignore_err',
+        '-f', 'webm', '-i', webmPath,
+        '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', wavPath
+      ], { timeout: 30000 });
+    } catch (ffmpegErr) {
+      // If ffmpeg fails with file input, try stdin pipe as fallback
+      console.warn('[Batch Local] FFmpeg file input failed, trying stdin pipe:', ffmpegErr.message?.slice(0, 100));
+      await new Promise((resolve, reject) => {
+        const { spawn } = require('child_process');
+        const proc = spawn(ffmpegBin, [
+          '-hide_banner', '-y',
+          '-fflags', '+genpts+discardcorrupt',
+          '-f', 'webm', '-i', 'pipe:0',
+          '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', wavPath
+        ]);
+        let err = '';
+        proc.stderr.on('data', (d) => { err += d.toString().slice(-300); });
+        proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg stdin exit ${code}: ${err.slice(-150)}`)));
+        proc.on('error', reject);
+        // Kill after 25s if still running
+        const killTimer = setTimeout(() => { try { proc.kill(); } catch(_){} reject(new Error('ffmpeg stdin timeout')); }, 25000);
+        proc.on('close', () => clearTimeout(killTimer));
+        proc.stdin.write(buffer);
+        proc.stdin.end();
+      });
+    }
     console.info('[Batch Local] FFmpeg conversion done, wav:', wavPath);
 
     // Find the Python venv — check multiple locations
@@ -5235,10 +5258,13 @@ ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
 
 // Batch transcription complete notification
 ipcMain.on('batch-complete', (event, { wordCount }) => {
+  // Sync main process state back to idle
+  isRecording = false;
   // Update tray icon back to idle
   updateTrayIcon('idle');
   updateMiniState('idle');
   updateTrayMenu();
+  if (tray) tray.setToolTip('Windy Word');
 
   // Show OS notification
   if (Notification.isSupported()) {
@@ -5259,6 +5285,7 @@ ipcMain.on('batch-complete', (event, { wordCount }) => {
 
 // Batch processing started — update tray to red
 ipcMain.on('batch-processing', () => {
+  isRecording = false; // Recording stopped, now processing
   updateTrayIcon('error'); // red = processing
   updateMiniState('processing');
   if (tray) tray.setToolTip('Windy Pro — Processing transcription...');

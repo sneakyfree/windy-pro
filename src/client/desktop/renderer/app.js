@@ -523,11 +523,21 @@ class WindyApp {
    */
   bindIPCEvents() {
     // Toggle recording from hotkey
-    window.windyAPI.onToggleRecording((isRecording) => {
-      // Mark as hotkey-triggered so toggleRecording skips the blip
-      // (AudioContext creation steals window focus on Linux)
+    window.windyAPI.onToggleRecording((shouldRecord) => {
+      // Use the main process isRecording as the command (source of truth)
+      // This prevents state desync between main and renderer
       this._hotkeyTriggered = true;
-      this.toggleRecording();
+      if (shouldRecord && !this.isRecording) {
+        // Main says START and renderer is idle → start
+        this.toggleRecording();
+      } else if (!shouldRecord && this.isRecording) {
+        // Main says STOP and renderer is recording → stop
+        this.toggleRecording();
+      } else {
+        // Already in sync — force resync main process if needed
+        console.debug('[Toggle] Already in sync, isRecording:', this.isRecording);
+      }
+      this._hotkeyTriggered = false;
     });
 
     // Request transcript for paste (global hotkey path)
@@ -1837,9 +1847,9 @@ class WindyApp {
         if (e.data.size > 0) this._batchChunks.push(e.data);
       };
 
-      // 3. Record continuously — no timeslice ensures a single clean webm file
-      //    (timeslice creates chunked blobs with broken EBML headers that ffmpeg can't parse)
-      this._batchRecorder.start();
+      // 3. Record continuously (timeslice = 1000ms for reliable data capture)
+      //    Without timeslice, Electron's MediaRecorder produces near-empty blobs
+      this._batchRecorder.start(1000);
       this._batchStartTime = Date.now();
 
       // 3b. Video capture (if enabled in settings)
@@ -2214,11 +2224,11 @@ class WindyApp {
             result = await this._batchTranscribeLocal(audioBlob);
           }
 
-          // ═══ WindyTune: Auto-downgrade if batch took > 10s ═══
+          // ═══ WindyTune: Auto-downgrade if batch took > 30s ═══
           const batchDuration = (Date.now() - batchStartMs) / 1000;
           console.debug(`[Batch] Transcription completed in ${batchDuration.toFixed(1)}s`);
 
-          if (engine === 'windytune' && batchDuration > 10) {
+          if (engine === 'windytune' && batchDuration > 30) {
             const modelOrder = ['large-v3', 'turbo', 'medium.en', 'medium', 'small', 'base', 'tiny'];
             const currentModel = this._engineModelMap?.[engine] || localStorage.getItem('windy_model') || 'small';
             const idx = modelOrder.indexOf(currentModel);
