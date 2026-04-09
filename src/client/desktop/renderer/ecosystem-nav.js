@@ -21,7 +21,7 @@ class EcosystemNav {
         name: 'Windy Chat',
         icon: '💬',
         url: 'https://chat.windyword.ai',
-        localUrl: 'http://localhost:3000',
+        localUrl: null,
         description: 'End-to-end encrypted messaging with auto-translation in 99 languages.',
         tagline: 'Talk to anyone, in any language — instantly.',
         preview: 'Send messages that auto-translate in real time. Military-grade encryption. Works offline. Your agent lives here too.',
@@ -41,7 +41,7 @@ class EcosystemNav {
         name: 'Windy Cloud',
         icon: '☁️',
         url: 'https://cloud.windyfly.ai',
-        localUrl: 'http://localhost:3000',
+        localUrl: null,
         description: 'Your personal cloud — files, compute, servers, and billing in one dashboard.',
         tagline: 'Your data, your cloud, your rules.',
         preview: 'All your Windy data in one place. Cloud GPU for speech-to-text. VPS servers on demand. Like iCloud, but for everything.',
@@ -51,7 +51,7 @@ class EcosystemNav {
         name: 'Windy Clone',
         icon: '🧬',
         url: 'https://windyclone.com',
-        localUrl: 'http://localhost:5173',
+        localUrl: null,
         description: 'Turn your voice recordings into a digital twin that lives forever.',
         tagline: 'Your voice lives forever.',
         preview: 'Every recording you\'ve made is building something extraordinary. Windy Clone turns it into a voice twin, digital avatar, and soul file — through the best providers in the world.',
@@ -167,6 +167,8 @@ class EcosystemNav {
     }
 
     // Try production URL first, then local dev, then aspirational placeholder
+    // For localhost URLs, skip the fetch check (CSP blocks it in sandboxed renderer)
+    // and load the webview directly — the webview's did-fail-load handles errors.
     if (config.url) {
       const prodLive = await this.checkUrl(config.url);
       if (prodLive) {
@@ -177,12 +179,10 @@ class EcosystemNav {
     }
 
     if (config.localUrl) {
-      const localLive = await this.checkUrl(config.localUrl);
-      if (localLive) {
-        this.createWebview(product, config.localUrl);
-        this.webviews[product].wrapper.style.display = '';
-        return;
-      }
+      // Try loading directly — webview error handler shows placeholder on failure
+      this.createWebview(product, config.localUrl, true);
+      this.webviews[product].wrapper.style.display = '';
+      return;
     }
 
     // #3: Aspirational placeholder (not dev-focused)
@@ -275,7 +275,7 @@ class EcosystemNav {
     });
   }
 
-  createWebview(product, url) {
+  createWebview(product, url, fallbackToPlaceholder = false) {
     const config = this.products[product];
     const wrapper = document.createElement('div');
     wrapper.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;';
@@ -335,6 +335,14 @@ class EcosystemNav {
 
     webview.addEventListener('did-fail-load', (e) => {
       if (e.errorCode === -3) return;
+      // If this was a speculative localhost load, replace with aspirational placeholder
+      if (fallbackToPlaceholder) {
+        wrapper.remove();
+        delete this.webviews[product];
+        this.createAspirationPlaceholder(product);
+        this.webviews[product].wrapper.style.display = '';
+        return;
+      }
       loading.innerHTML = `
         <span style="font-size:24px;">⚠️</span>
         <span style="color:var(--text-secondary);font-size:13px;">${config.name} isn't reachable</span>

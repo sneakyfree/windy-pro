@@ -273,7 +273,7 @@ function getStripe() {
 
 function getTierLimits(tier) {
   const tiers = {
-    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, storageMb: 500, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
+    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, storageMb: 500, batchMode: true, llmPolish: false, translation: false, tts: false, glossaries: false },
     pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, storageMb: 5120, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
     translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 60, storageMb: 10240, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
     translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: Infinity, storageMb: 25600, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
@@ -660,8 +660,11 @@ function createWindow() {
 
   // Forward renderer console messages to terminal for debugging
   mainWindow.webContents.on('console-message', (event, level, message) => {
-    // Only forward errors, not debug spam — prevents EPIPE on stdout
-    if (level >= 2) {  // 2 = warning, 3 = error
+    // In dev mode, forward all logs; otherwise only warnings/errors
+    // Filter out repetitive CSP noise regardless
+    if (message.includes('Content-Security-Policy')) return;
+    const minLevel = process.argv.includes('--dev') ? 0 : 2;
+    if (level >= minLevel) {
       try { console.log(`[Renderer] ${message}`); } catch (_) { }
     }
   });
@@ -3067,6 +3070,7 @@ ipcMain.handle('open-external-url', async (event, url) => {
 });
 
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
+  console.info('[Batch Local] Starting transcription, audio size:', base64Audio?.length || 0, 'chars');
   const tmpDir = os.tmpdir();
   // SEC-M8: Use crypto.randomBytes for unpredictable temp filenames
   const tmpId = crypto.randomBytes(16).toString('hex');
@@ -3077,6 +3081,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     // Save base64 audio to temp file
     const buffer = Buffer.from(base64Audio, 'base64');
     await fsp.writeFile(webmPath, buffer);
+    console.info('[Batch Local] Saved webm:', webmPath, '— size:', buffer.length, 'bytes');
 
     // Find ffmpeg — check bundled location (.windy-pro), userData, then PATH
     const appDataDir = app.getPath('userData');
@@ -3094,9 +3099,18 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
         break;
       }
     }
+    console.info('[Batch Local] Using ffmpeg:', ffmpegBin);
 
     // P0-1: Convert to WAV using async execFile (non-blocking)
-    await execFileAsync(ffmpegBin, ['-y', '-i', webmPath, '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', wavPath], { timeout: 30000 });
+    // Flags: -f webm (explicit format hint), -fflags (lenient parsing), -hide_banner (clean output)
+    await execFileAsync(ffmpegBin, [
+      '-hide_banner', '-y',
+      '-fflags', '+genpts+discardcorrupt',
+      '-err_detect', 'ignore_err',
+      '-f', 'webm', '-i', webmPath,
+      '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', wavPath
+    ], { timeout: 30000 });
+    console.info('[Batch Local] FFmpeg conversion done, wav:', wavPath);
 
     // Find the Python venv — check multiple locations
     const appRoot = path.resolve(__dirname, '..', '..', '..');
@@ -3114,6 +3128,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
         '/usr/bin/python3'
       ];
     const pythonPath = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
+    console.info('[Batch Local] Using python:', pythonPath);
 
 
     // Run faster-whisper transcription via temp script
@@ -3129,21 +3144,25 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     } else if (bundledModelDir && fs.existsSync(path.join(bundledModelDir, 'model.bin'))) {
       modelRef = `"${bundledModelDir.replace(/\\/g, '/')}"`;
     }
+    console.info('[Batch Local] Model ref:', modelRef, '(configured model:', modelName, ')');
     const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${tmpId}.py`);
     const scriptContent = [
       'from faster_whisper import WhisperModel',
       `model = WhisperModel(${modelRef}, device="cpu", compute_type="int8")`,
-      `segments, info = model.transcribe("${wavPath.replace(/\\/g, '/')}", language="en", beam_size=5, condition_on_previous_text=True, vad_filter=True, no_speech_threshold=0.6)`,
+      `segments, info = model.transcribe("${wavPath.replace(/\\/g, '/')}", language="en", beam_size=5, condition_on_previous_text=True, vad_filter=False, no_speech_threshold=0.3)`,
       'text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())',
       'print(text)'
     ].join('\n');
     await fsp.writeFile(scriptPath, scriptContent);
+    console.info('[Batch Local] Running Python transcription script...');
 
     // P0-1: Use async execFile for Python transcription (non-blocking)
-    const { stdout } = await execFileAsync(pythonPath, [scriptPath], {
+    const { stdout, stderr } = await execFileAsync(pythonPath, [scriptPath], {
       timeout: 120000,
       maxBuffer: 10 * 1024 * 1024
     });
+    if (stderr) console.warn('[Batch Local] Python stderr:', stderr.substring(0, 500));
+    console.info('[Batch Local] Transcription complete, output length:', stdout.trim().length, 'chars');
 
     try { await fsp.unlink(scriptPath); } catch (_) { }
 

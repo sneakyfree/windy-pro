@@ -1798,8 +1798,7 @@ class WindyApp {
           const tierInfo = await window.windyAPI.getCurrentTier();
           tierLimits = tierInfo?.limits;
           if (tierLimits && !tierLimits.batchMode) {
-            this.showReconnectToast('⚡ Batch mode requires Pro. Upgrade in Settings → Your Plan.');
-            // Fall through anyway — allow basic recording but with shorter limit
+            // Batch mode is now available on all tiers — no gate needed
           }
           // Override max recording with tier limit
           if (tierLimits?.maxMinutes) {
@@ -1838,8 +1837,9 @@ class WindyApp {
         if (e.data.size > 0) this._batchChunks.push(e.data);
       };
 
-      // 3. Record continuously (timeslice = 1000ms for smooth data flow)
-      this._batchRecorder.start(1000);
+      // 3. Record continuously — no timeslice ensures a single clean webm file
+      //    (timeslice creates chunked blobs with broken EBML headers that ffmpeg can't parse)
+      this._batchRecorder.start();
       this._batchStartTime = Date.now();
 
       // 3b. Video capture (if enabled in settings)
@@ -2238,8 +2238,13 @@ class WindyApp {
         } catch (err) {
           console.error('[Batch] Transcription failed:', err);
           this.showReconnectToast(`⚠️ Processing failed: ${err.message}`);
+          // Clear the processing spinner from transcript area
+          this.transcriptContent.innerHTML = `<p style="color:#EF4444;text-align:center;padding:20px;">⚠️ Transcription failed<br><span style="font-size:12px;color:#888;">${err.message}</span></p>`;
           this.setState('error');
           setTimeout(() => this.setState('idle'), 3000);
+        } finally {
+          // Always clean up the processing effect interval
+          clearInterval(this._processEffectInterval);
         }
 
         resolve();
