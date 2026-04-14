@@ -24,7 +24,7 @@
       </div>
       <div class="title-bar-right">
         <div class="translate-menu-wrap" id="translateMenuWrap">
-          <button class="title-btn" id="translateBtn" title="Translation Tools" aria-label="Open translation tools"
+          <button class="title-btn" id="translateBtn" title="Translation Tools" data-tooltip="Translation Tools" aria-label="Open translation tools"
             style="font-size:14px;">🌐</button>
           <div class="translate-menu" id="translateMenu" role="menu" style="display:none;">
             <button class="translate-menu-option" id="openStudio" role="menuitem">
@@ -44,50 +44,52 @@
             </button>
           </div>
         </div>
-        <button class="title-btn marketplace-tab-btn" id="marketplaceBtn" title="Marketplace" aria-label="Open marketplace"
+        <button class="title-btn marketplace-tab-btn" id="marketplaceBtn" title="Marketplace" data-tooltip="Marketplace" aria-label="Open marketplace"
           style="font-size:14px;">🏪</button>
-        <button class="title-btn" id="themeQuickToggle" title="Toggle light/dark mode" aria-label="Toggle theme"
+        <button class="title-btn" id="themeQuickToggle" title="Toggle light/dark mode" data-tooltip="Toggle Theme" aria-label="Toggle theme"
           style="font-size:14px;">🌙</button>
-        <button class="title-btn" id="settingsBtn" title="Settings" aria-label="Open settings">⚙️</button>
-        <button class="title-btn" id="minimizeBtn" title="Minimize" aria-label="Minimize window">─</button>
-        <button class="title-btn" id="maximizeBtn" title="Maximize / Restore" aria-label="Toggle maximize">□</button>
-        <button class="title-btn close" id="closeBtn" title="Close" aria-label="Close window">×</button>
+        <button class="title-btn" id="settingsBtn" title="Settings" data-tooltip="Settings" aria-label="Open settings">⚙️</button>
+        <button class="title-btn" id="minimizeBtn" title="Minimize" data-tooltip="Minimize" aria-label="Minimize window">─</button>
+        <button class="title-btn" id="maximizeBtn" title="Maximize / Restore" data-tooltip="Maximize" aria-label="Toggle maximize">□</button>
+        <button class="title-btn close" id="closeBtn" title="Close" data-tooltip="Close" aria-label="Close window">×</button>
       </div>
     </div>
 
-    <!-- Ecosystem Navigation Bar -->
-    <div class="ecosystem-bar" id="ecosystemBar">
-      <button class="eco-btn active" id="ecoWord" title="Windy Word" data-product="word">
-        <span class="eco-icon">🎤</span>
-        <span class="eco-label">Word</span>
-      </button>
-      <button class="eco-btn" id="ecoChat" title="Windy Chat" data-product="chat">
-        <span class="eco-icon">💬</span>
-        <span class="eco-label">Chat</span>
-        <span class="eco-badge" id="chatBadge" style="display:none;">0</span>
-      </button>
-      <button class="eco-btn" id="ecoMail" title="Windy Mail" data-product="mail">
-        <span class="eco-icon">✉️</span>
-        <span class="eco-label">Mail</span>
-        <span class="eco-badge" id="mailBadge" style="display:none;">0</span>
-      </button>
-      <button class="eco-btn" id="ecoCloud" title="Windy Cloud" data-product="cloud">
-        <span class="eco-icon">☁️</span>
-        <span class="eco-label">Cloud</span>
-      </button>
-      <button class="eco-btn" id="ecoClone" title="Windy Clone" data-product="clone">
-        <span class="eco-icon">🧬</span>
-        <span class="eco-label">Clone</span>
-        <span class="eco-badge" id="cloneBadge" style="display:none;"></span>
-      </button>
-      <button class="eco-btn" id="ecoAgent" title="Windy Fly" data-product="agent">
-        <span class="eco-icon">🪰</span>
-        <span class="eco-label">Agent</span>
-      </button>
-      <button class="eco-btn" id="ecoCode" title="Windy Code" data-product="code">
-        <span class="eco-icon">💻</span>
-        <span class="eco-label">Code</span>
-      </button>
+    <!-- Ecosystem Navigation Bar (auto-hides, hover near title bar to reveal) -->
+    <div class="ecosystem-wrapper" id="ecosystemWrapper">
+      <div class="ecosystem-bar" id="ecosystemBar">
+        <button class="eco-btn active" id="ecoWord" title="Windy Word" data-tooltip="Windy Word — Voice-to-text transcription" data-product="word">
+          <span class="eco-icon">🎤</span>
+          <span class="eco-label">Word</span>
+        </button>
+        <button class="eco-btn" id="ecoChat" title="Windy Chat" data-tooltip="Windy Chat — AI-powered chat assistant" data-product="chat">
+          <span class="eco-icon">💬</span>
+          <span class="eco-label">Chat</span>
+          <span class="eco-badge" id="chatBadge" style="display:none;">0</span>
+        </button>
+        <button class="eco-btn" id="ecoMail" title="Windy Mail" data-tooltip="Windy Mail — Voice-to-email composer" data-product="mail">
+          <span class="eco-icon">✉️</span>
+          <span class="eco-label">Mail</span>
+          <span class="eco-badge" id="mailBadge" style="display:none;">0</span>
+        </button>
+        <button class="eco-btn" id="ecoCloud" title="Windy Cloud" data-tooltip="Windy Cloud — Sync & backup transcripts" data-product="cloud">
+          <span class="eco-icon">☁️</span>
+          <span class="eco-label">Cloud</span>
+        </button>
+        <button class="eco-btn" id="ecoClone" title="Windy Clone" data-tooltip="Windy Clone — Digital voice twin creator" data-product="clone">
+          <span class="eco-icon">🧬</span>
+          <span class="eco-label">Clone</span>
+          <span class="eco-badge" id="cloneBadge" style="display:none;"></span>
+        </button>
+        <button class="eco-btn" id="ecoAgent" title="Windy Fly" data-tooltip="Windy Fly — Multi-platform agent hub" data-product="agent">
+          <span class="eco-icon">🪰</span>
+          <span class="eco-label">Agent</span>
+        </button>
+        <button class="eco-btn" id="ecoCode" title="Windy Code" data-tooltip="Windy Code — AI code assistant" data-product="code">
+          <span class="eco-icon">💻</span>
+          <span class="eco-label">Code</span>
+        </button>
+      </div>
     </div>
 
     <!-- Embedded Ecosystem Webviews (lazy-loaded on first tab click) -->
@@ -140,53 +142,67 @@
       </div>
     </div>
 
-    <!-- Collapsible control bar (wrapped by status bar chevron) -->
-    <div class="controls-collapsible" id="controlsCollapsible">
-      <!-- Control Bar -->
-      <div class="control-bar" role="toolbar" aria-label="Recording controls">
-        <button class="control-btn primary" id="recordBtn" title="Start/Stop Recording" aria-label="Toggle recording">
-          <span class="icon">🎤</span>
-          <span class="label">Record</span>
-        </button>
-        <button class="control-btn" id="clearBtn" title="Clear Transcript" aria-label="Clear transcript">
-          <span class="icon">🗑️</span>
-        </button>
-        <button class="control-btn" id="copyBtn" title="Copy All" aria-label="Copy transcript to clipboard">
-          <span class="icon">📋</span>
-        </button>
-        <button class="control-btn" id="historyBtn" title="History" aria-label="Toggle history panel">
-          <span class="icon">📜</span>
-        </button>
-        <button class="control-btn" id="pasteBtn" title="Paste to Cursor" aria-label="Paste transcript at cursor">
-          <span class="icon">📝</span>
-        </button>
-        <div class="archive-route-group" id="archiveRouteGroup">
-          <select class="archive-route" id="archiveRouteSelect" title="Today route: where dictations archive today"
-            aria-label="Archive route">
-            <option value="local">📁 Local</option>
-            <option value="cloud">☁️ WindyCloud</option>
-            <option value="local_cloud">📁+☁️ Local + Cloud</option>
-            <option value="off">🚫 Off</option>
-          </select>
-          <button class="archive-path-btn" id="archiveOpenBtn" title="Open archive folder" aria-label="Open archive folder">📂</button>
-          <button class="archive-path-btn" id="archiveChangeBtn" title="Change archive folder" aria-label="Change archive folder">⚙️</button>
-          <span class="archive-path-label" id="archivePathLabel" title="Click to open"></span>
+    <!-- ═══ BOTTOM PANEL: Hover-reveal layers + always-visible status bar ═══ -->
+
+    <!-- Expandable section: hidden by default, hover near status bar to reveal -->
+    <div class="bottom-expandable" id="bottomExpandable">
+      <!-- Layer 1: Playback Bar (injected dynamically after recording) -->
+      <div id="playbackSlot"></div>
+
+      <!-- Layer 2: Export Bar -->
+      <div class="export-bar" id="exportBar">
+        <div class="export-buttons" id="exportButtons">
+          <button class="export-btn" data-format="txt" data-tooltip="Save as Plain Text (.txt)">📄 .txt</button>
+          <button class="export-btn" data-format="md" data-tooltip="Save as Markdown (.md)">📝 .md</button>
+          <button class="export-btn" data-format="srt" data-tooltip="Save as Subtitles (.srt)">📊 .srt</button>
         </div>
+      </div>
+
+      <!-- Layer 3: Control Bar -->
+      <div class="control-bar" role="toolbar" aria-label="Recording controls">
+          <button class="control-btn primary" id="recordBtn" title="Start or stop voice recording (Cmd+Shift+Space)" data-tooltip="Record (Cmd+Shift+Space)" aria-label="Toggle recording">
+            <span class="icon">🎤</span>
+            <span class="label">Record</span>
+          </button>
+          <button class="control-btn" id="clearBtn" title="Clear the transcript area" data-tooltip="Clear Transcript" aria-label="Clear transcript">
+            <span class="icon">🗑️</span>
+          </button>
+          <button class="control-btn" id="copyBtn" title="Copy entire transcript to clipboard" data-tooltip="Copy Transcript" aria-label="Copy transcript to clipboard">
+            <span class="icon">📋</span>
+          </button>
+          <button class="control-btn" id="historyBtn" title="Browse past transcription sessions" data-tooltip="Session History" aria-label="Toggle history panel">
+            <span class="icon">📜</span>
+          </button>
+          <button class="control-btn" id="pasteBtn" title="Paste transcript to wherever your cursor is blinking" data-tooltip="Paste to Cursor" aria-label="Paste transcript at cursor">
+            <span class="icon">📝</span>
+          </button>
+          <div class="archive-route-group" id="archiveRouteGroup">
+            <select class="archive-route" id="archiveRouteSelect" title="Today route: where dictations archive today" data-tooltip="Archive Destination"
+              aria-label="Archive route">
+              <option value="local">📁 Local</option>
+              <option value="cloud">☁️ WindyCloud</option>
+              <option value="local_cloud">📁+☁️ Local + Cloud</option>
+              <option value="off">🚫 Off</option>
+            </select>
+            <button class="archive-path-btn" id="archiveOpenBtn" title="Open archive folder" data-tooltip="Open Archive Folder" aria-label="Open archive folder">📂</button>
+            <button class="archive-path-btn" id="archiveChangeBtn" title="Change archive folder" data-tooltip="Change Archive Folder" aria-label="Change archive folder">⚙️</button>
+            <span class="archive-path-label" id="archivePathLabel" title="Click to open" data-tooltip="Open Archive Location"></span>
+          </div>
       </div>
     </div>
 
-    <!-- Connection Status (always visible — chevron here collapses controls above) -->
+    <!-- Status Bar (ALWAYS visible — hover here to reveal controls above) -->
     <div class="status-bar" id="statusBar" role="status" aria-live="polite">
-      <span class="controls-chevron" id="controlsChevron" title="Show/hide controls" role="button" tabindex="0" aria-label="Toggle control bar" aria-expanded="true">▾</span>
-      <button class="mini-record-btn" id="miniRecordBtn" style="display:none;" title="Start/Stop Recording" aria-label="Toggle recording">🎤</button>
-      <span class="status-dot" id="connectionDot"></span>
-      <span class="status-text" id="connectionText">Connecting...</span>
-      <span class="word-count" id="wordCount"></span>
-      <span class="model-badge" id="modelBadge" title="Current transcription model">🏠 base</span>
-      <span class="sfx-volume-wrap" id="sfxVolumeWrap" title="Sound effects volume">
+      <span class="controls-chevron" id="controlsChevron" title="Pin controls" data-tooltip="Pin Controls" role="button" tabindex="0" aria-label="Toggle control bar" aria-expanded="true">▾</span>
+      <button class="mini-record-btn" id="miniRecordBtn" style="display:none;" title="Start/Stop Recording" data-tooltip="Record" aria-label="Toggle recording">🎤</button>
+      <span class="status-dot" id="connectionDot" data-tooltip="Connection Status"></span>
+      <span class="status-text" id="connectionText" data-tooltip="Engine Connection">Connecting...</span>
+      <span class="word-count" id="wordCount" data-tooltip="Word Count"></span>
+      <span class="model-badge" id="modelBadge" title="Current transcription model" data-tooltip="Transcription Model">⚡ windytune (0.5GB)</span>
+      <span class="sfx-volume-wrap" id="sfxVolumeWrap" title="Sound effects volume" data-tooltip="Sound Effects Volume">
         <span class="sfx-volume-icon" id="sfxVolumeIcon">🔊</span>
       </span>
-      <span class="archive-badge" id="archiveStatus">Archive: idle</span>
+      <span class="archive-badge" id="archiveStatus" data-tooltip="Archive Status">Archive: idle</span>
     </div>
   </div>
 
@@ -307,6 +323,7 @@
   <script src="widget-engine.js" defer></script>
   <script src="marketplace.js" defer></script>
   <div id="effectsOverlay" class="effects-overlay"></div>
+  <script src="tooltip.js"></script>
   <script src="ecosystem-nav.js"></script>
   <script src="first-run.js"></script>
   <script src="app.js"></script>
