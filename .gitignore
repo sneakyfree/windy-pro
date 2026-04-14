@@ -83,5 +83,7 @@ htmlcov/
 
 # Bundled dependencies (too large for git)
 bundled/
+bundled-portable/
+.bundle-cache/
 extraResources/
 services/*/node_modules

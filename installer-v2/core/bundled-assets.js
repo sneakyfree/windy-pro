@@ -88,22 +88,47 @@ class BundledAssets {
   }
 
   /**
-   * Get the path to the bundled Python directory (extracted)
+   * Get the path to the bundled Python directory.
+   *
+   * Modern flat layout (produced by scripts/build-portable-bundle.js):
+   *   bundled/python/{bin,lib,...}                 — single platform per build
+   *
+   * Legacy platform-segmented layout (older prepare-bundle.js):
+   *   bundled/python/{macos,linux,win64}/python/   — all platforms in one dir
+   *
+   * We check the modern layout first, then fall back to legacy.
    */
   _getPythonExtractedDir() {
+    // Modern flat layout: bundled/python/bin/python3 (Unix) or python.exe (Win)
+    const flatProbe = this.platform === 'win32'
+      ? path.join(this.bundleDir, 'python', 'python.exe')
+      : path.join(this.bundleDir, 'python', 'bin', 'python3');
+    if (fs.existsSync(flatProbe)) {
+      return path.join(this.bundleDir, 'python');
+    }
+    // Legacy platform-segmented layout
     if (this.platform === 'win32') {
       return path.join(this.bundleDir, 'python', 'win64');
     } else if (this.platform === 'darwin') {
-      return path.join(this.bundleDir, 'python', 'macos');
+      return path.join(this.bundleDir, 'python', 'macos', 'python');
     } else {
-      return path.join(this.bundleDir, 'python', 'linux');
+      return path.join(this.bundleDir, 'python', 'linux', 'python');
     }
   }
 
   /**
-   * Get the path to the bundled ffmpeg directory (extracted)
+   * Get the path to the bundled ffmpeg directory.
+   *
+   * Modern flat layout: bundled/ffmpeg/ffmpeg(.exe)
+   * Legacy layout:      bundled/ffmpeg/extracted-{mac,linux,win}/...
    */
   _getFfmpegExtractedDir() {
+    const flatProbe = this.platform === 'win32'
+      ? path.join(this.bundleDir, 'ffmpeg', 'ffmpeg.exe')
+      : path.join(this.bundleDir, 'ffmpeg', 'ffmpeg');
+    if (fs.existsSync(flatProbe)) {
+      return path.join(this.bundleDir, 'ffmpeg');
+    }
     if (this.platform === 'win32') {
       return path.join(this.bundleDir, 'ffmpeg', 'extracted-win');
     } else if (this.platform === 'darwin') {
@@ -111,6 +136,98 @@ class BundledAssets {
     } else {
       return path.join(this.bundleDir, 'ffmpeg', 'extracted-linux');
     }
+  }
+
+  /**
+   * Get path to the bundled wheels directory.
+   * Returns null if no wheels are bundled (legacy bundle without wheels).
+   */
+  _getWheelsDir() {
+    const dir = path.join(this.bundleDir, 'wheels');
+    return fs.existsSync(dir) ? dir : null;
+  }
+
+  /**
+   * Check if bundled wheels are available for offline pip install.
+   */
+  hasBundledWheels() {
+    const dir = this._getWheelsDir();
+    if (!dir) return false;
+    try {
+      return fs.readdirSync(dir).some(f => f.endsWith('.whl'));
+    } catch { return false; }
+  }
+
+  /**
+   * Create a fresh venv using bundled Python and install dependencies
+   * from bundled wheels. Fully offline, no system Python required.
+   *
+   * Returns the venv's python executable path on success, null on failure.
+   *
+   * @param {string} appDir - User app dir, typically ~/.windy-pro/
+   * @param {string} requirementsPath - Path to requirements file
+   * @param {Function} onLog - Optional logger
+   */
+  async installVenvFromWheels(appDir, requirementsPath, onLog) {
+    const log = onLog || console.log;
+    const wheelsDir = this._getWheelsDir();
+    if (!wheelsDir) {
+      log('[BundledAssets] No bundled wheels — cannot do offline venv install');
+      return null;
+    }
+    if (!fs.existsSync(requirementsPath)) {
+      log(`[BundledAssets] Requirements file not found: ${requirementsPath}`);
+      return null;
+    }
+
+    // Get bundled Python
+    const bundledPyDir = this._getPythonExtractedDir();
+    const bundledPyExe = this._findPythonExe(bundledPyDir);
+    if (!bundledPyExe || !this._isPythonWorking(bundledPyExe)) {
+      log('[BundledAssets] Bundled Python not available or not working');
+      return null;
+    }
+
+    // Create fresh venv on user's machine — no path portability issues possible
+    const venvDir = path.join(appDir, 'venv');
+    const venvPyExe = this.platform === 'win32'
+      ? path.join(venvDir, 'Scripts', 'python.exe')
+      : path.join(venvDir, 'bin', 'python');
+    const venvPipExe = this.platform === 'win32'
+      ? path.join(venvDir, 'Scripts', 'pip.exe')
+      : path.join(venvDir, 'bin', 'pip');
+
+    if (fs.existsSync(venvPyExe) && this._isPythonWorking(venvPyExe)) {
+      log('[BundledAssets] Venv already exists and works');
+      return venvPyExe;
+    }
+
+    log(`[BundledAssets] Creating venv at ${venvDir}`);
+    fs.mkdirSync(appDir, { recursive: true });
+    try {
+      execSync(`"${bundledPyExe}" -m venv "${venvDir}"`, { stdio: 'pipe', timeout: 60000 });
+    } catch (e) {
+      log(`[BundledAssets] venv creation failed: ${e.message}`);
+      return null;
+    }
+
+    log(`[BundledAssets] Installing wheels from ${wheelsDir}`);
+    try {
+      execSync(
+        `"${venvPipExe}" install --no-index --find-links "${wheelsDir}" -r "${requirementsPath}"`,
+        { stdio: 'pipe', timeout: 180000 }
+      );
+    } catch (e) {
+      log(`[BundledAssets] pip install failed: ${e.message}`);
+      return null;
+    }
+
+    if (this._isPythonWorking(venvPyExe)) {
+      log('[BundledAssets] Venv ready');
+      return venvPyExe;
+    }
+    log('[BundledAssets] Venv created but not working');
+    return null;
   }
 
   /**

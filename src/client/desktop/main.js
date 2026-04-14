@@ -450,11 +450,33 @@ function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
 function startPythonServer() {
   const serverConfig = store.get('server');
   const appDataDir = path.join(os.homedir(), '.windy-pro');
-  const venvPython = process.platform === 'win32'
+
+  // Resolution order (matches the bundle-don't-install architecture):
+  //   1. User-data venv (~/.windy-pro/venv) — created at first-run by wizard
+  //      from bundled wheels. Preferred because it's writable for future deps.
+  //   2. Packaged bundled Python (process.resourcesPath/bundled/python) —
+  //      safety net: if wizard didn't run yet (or failed), the engine can still
+  //      boot using bundled Python directly, no system Python needed.
+  //   3. System python3 — last-resort fallback for dev environments.
+  const userVenvPython = process.platform === 'win32'
     ? path.join(appDataDir, 'venv', 'Scripts', 'python.exe')
     : path.join(appDataDir, 'venv', 'bin', 'python');
+  const bundledPython = process.resourcesPath
+    ? (process.platform === 'win32'
+        ? path.join(process.resourcesPath, 'bundled', 'python', 'python.exe')
+        : path.join(process.resourcesPath, 'bundled', 'python', 'bin', 'python3'))
+    : null;
 
-  const pythonPath = fs.existsSync(venvPython) ? venvPython : 'python3';
+  let pythonPath;
+  if (fs.existsSync(userVenvPython)) {
+    pythonPath = userVenvPython;
+  } else if (bundledPython && fs.existsSync(bundledPython)) {
+    pythonPath = bundledPython;
+    console.info('[Python] Using bundled Python (wizard venv not yet created)');
+  } else {
+    pythonPath = 'python3';
+    console.warn('[Python] Falling back to system python3 — bundled assets not detected');
+  }
   const projectRoot = app.isPackaged
     ? process.resourcesPath
     : path.join(__dirname, '..', '..', '..');

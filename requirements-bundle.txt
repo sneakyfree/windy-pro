@@ -1,0 +1,20 @@
+# Windy Pro — production runtime requirements (for installer bundle)
+#
+# This is the minimal set of packages the engine actually imports.
+# Top-level packages only; pip resolves transitive deps automatically.
+# Used by scripts/build-portable-bundle.js to pre-download wheels for
+# offline installation on user machines.
+#
+# To regenerate the wheel bundle:
+#   node scripts/build-portable-bundle.js --target <platform>
+#
+# Why this file is separate from requirements.txt:
+#   requirements.txt is dev/CI-wide and contains build-time / test-only
+#   deps (fastapi, uvicorn, pytest, etc.) that the production engine
+#   never imports. Shipping them in the installer bundle would bloat
+#   the .app/.exe by ~50MB for no user benefit.
+
+faster-whisper
+websockets
+sounddevice
+numpy
