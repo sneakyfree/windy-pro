@@ -499,6 +499,77 @@ class WindyServer:
                     "error": "No model loaded"
                 }))
         
+        elif action == "transcribe_blob":
+            # One-shot batch transcription: process audio file without starting a streaming session.
+            # Client sends raw audio (webm/wav) as the next binary message.
+            # Uses the in-memory model — no cold load, much faster than spawning a new Python process.
+            language = cmd.get("language", "en")
+            if self.transcriber and self.transcriber.model:
+                try:
+                    audio_data = await websocket.recv()
+                    if isinstance(audio_data, bytes) and len(audio_data) > 100:
+                        import tempfile
+                        # Determine suffix from hint or default to .wav
+                        fmt = cmd.get("format", "wav")
+                        suffix = f".{fmt}" if fmt else ".wav"
+                        tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+                        tmp.write(audio_data)
+                        tmp.close()
+                        
+                        try:
+                            t0 = time.monotonic()
+                            lang = language if language not in ('auto', '') else None
+                            segments, info = self.transcriber.model.transcribe(
+                                tmp.name,
+                                language=lang,
+                                task="transcribe",
+                                beam_size=self.transcriber.config.beam_size,
+                                vad_filter=True,
+                                condition_on_previous_text=True,
+                                no_speech_threshold=0.3,
+                                log_prob_threshold=-1.0
+                            )
+                            
+                            text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())
+                            elapsed = round(time.monotonic() - t0, 2)
+                            audio_duration = getattr(info, 'duration', 0) or 0
+                            ratio = round(elapsed / max(audio_duration, 0.01), 2)
+                            
+                            await websocket.send(json.dumps({
+                                "type": "transcribe_result",
+                                "text": text,
+                                "elapsed_s": elapsed,
+                                "audio_duration_s": round(audio_duration, 1),
+                                "ratio": ratio,
+                                "model": self.transcriber.config.model_size,
+                                "engine": "local-whisper-ws"
+                            }))
+                            print(f"🎤 Batch transcribe: {len(text)} chars in {elapsed}s (ratio {ratio}, model {self.transcriber.config.model_size})")
+                        finally:
+                            try:
+                                os.unlink(tmp.name)
+                            except Exception:
+                                pass
+                    else:
+                        await websocket.send(json.dumps({
+                            "type": "transcribe_result",
+                            "text": "",
+                            "error": "No audio data received"
+                        }))
+                except Exception as e:
+                    print(f"Transcribe blob error: {e}", file=sys.stderr)
+                    await websocket.send(json.dumps({
+                        "type": "transcribe_result",
+                        "text": "",
+                        "error": str(e)
+                    }))
+            else:
+                await websocket.send(json.dumps({
+                    "type": "transcribe_result",
+                    "text": "",
+                    "error": "No model loaded"
+                }))
+        
         else:
             await websocket.send(json.dumps({
                 "type": "error",
@@ -550,7 +621,8 @@ class WindyServer:
                     self._handle_client,
                     self.host,
                     self.port,
-                    reuse_address=True
+                    reuse_address=True,
+                    max_size=50 * 1024 * 1024  # 50MB — supports up to ~26 min recordings at 16kHz mono
                 )
                 break  # Success
             except OSError as e:

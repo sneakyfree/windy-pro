@@ -15,6 +15,7 @@ const ALLOWED_RECEIVE_CHANNELS = new Set([
   'license-updated', 'license-expired', 'open-translate', 'show-welcome',
   'show-keyboard-shortcuts', 'system-theme-changed', 'pair-download-progress',
   'video-frame-to-preview', 'recording-state-to-preview',
+  'windytune-model-switched', 'windytune-suggest-upgrade',
 ]);
 
 function safeOn(channel, callback) {
@@ -71,6 +72,24 @@ contextBridge.exposeInMainWorld('windyAPI', {
   notifyBatchComplete: (wordCount) => ipcRenderer.send('batch-complete', { wordCount }),
   notifyBatchProcessing: () => ipcRenderer.send('batch-processing'),
   notifyRecordingFailed: () => ipcRenderer.send('recording-failed'),
+  notifyRecordingStopped: () => ipcRenderer.send('recording-stopped'),
+
+  // ═══ WindyTune Adaptive ═══
+  windytuneAcceptUpgrade: (model) => ipcRenderer.invoke('windytune-accept-upgrade', model),
+  windytuneUndoSwitch: (oldModel) => ipcRenderer.invoke('windytune-undo-switch', oldModel),
+  onWindyTuneModelSwitched: (callback) => {
+    safeOn('windytune-model-switched', (event, data) => callback(data));
+  },
+  onWindyTuneSuggestUpgrade: (callback) => {
+    safeOn('windytune-suggest-upgrade', (event, data) => callback(data));
+  },
+
+  // ═══ Focus Management ═══
+  // Temporarily make window focusable when user needs keyboard input
+  requestFocus: () => ipcRenderer.send('request-focus'),
+  releaseFocus: () => ipcRenderer.send('release-focus'),
+  // Restore focus to target app after getUserMedia steals it
+  restoreFocus: () => ipcRenderer.send('mic-access-granted'),
 
   // ═══ Video ═════════════════════════════════════════════════════
   showVideoPreview: () => ipcRenderer.invoke('show-video-preview'),

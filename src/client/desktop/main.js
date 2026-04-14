@@ -34,6 +34,13 @@ function writeCrashLog(type, err) {
 process.on('uncaughtException', (err) => {
   writeCrashLog('UncaughtException', err);
   console.error('[CRASH]', err.message);
+
+  // EPIPE / ECONNRESET from dead child processes (Python server) — handle gracefully
+  if (['EPIPE', 'ECONNRESET', 'ECONNREFUSED'].includes(err.code)) {
+    console.warn('[CRASH] Pipe/connection error (child process likely died) — recovering gracefully');
+    return; // Don't show crash dialog for pipe errors
+  }
+
   // Show friendly dialog on macOS (non-blocking)
   try {
     const { dialog } = require('electron');
@@ -166,6 +173,8 @@ let miniTranslateWindow = null;
 let chatWindow = null;
 let tray = null;
 let isRecording = false;
+global._batchProcessing = false;  // Guards focus tracker during async batch transcription
+global._ourPids = new Set([process.pid]); // Our Electron process tree (main + helpers)
 let userHiddenWindow = false;  // Tracks if user intentionally hid everything via Ctrl+Shift+W
 let pythonProcess = null;
 let pythonRestartCount = 0;
@@ -563,9 +572,13 @@ function createWindow() {
     y: windowConfig.y,
 
     // Floating window properties
-    // macOS: 'floating' level = panel that does NOT steal keyboard focus (like a utility palette)
+    // macOS: 'floating' level = non-activating panel (like a utility palette).
+    //   focusable:false = window never becomes key window, so the cursor
+    //   stays blinking in the external app at all times during recording.
+    //   Mouse clicks still work — only keyboard focus is prevented.
     // Linux/Windows: plain alwaysOnTop works fine (xdotool handles focus restore for Linux)
     alwaysOnTop: appearance.alwaysOnTop,
+    focusable: process.platform !== 'darwin',  // Non-focusable on macOS only
     frame: false,           // Frameless for custom UI
     transparent: true,      // Allow CSS transparency for strobe effect
     resizable: true,
@@ -602,22 +615,47 @@ function createWindow() {
     mainWindow.setAlwaysOnTop(true, 'floating');
   }
 
-  // macOS: Intercept focus events during recording.
-  // When getUserMedia/AudioContext activate, Chromium steals focus to our window.
-  // We immediately give it back by blurring + reactivating the target app via PID.
-  // PID-based activation is critical — name-based 'tell app X to activate' fails
-  // when multiple Electron apps share the same process name.
+  // IPC: Temporarily make window focusable when user needs keyboard input
+  // (e.g. settings, typing in transcript). Call 'release-focus' when done.
+  ipcMain.on('request-focus', () => {
+    if (mainWindow && !mainWindow.isDestroyed() && process.platform === 'darwin') {
+      mainWindow.setFocusable(true);
+      mainWindow.focus();
+    }
+  });
+  ipcMain.on('release-focus', () => {
+    if (mainWindow && !mainWindow.isDestroyed() && process.platform === 'darwin') {
+      mainWindow.blur();
+      mainWindow.setFocusable(false);
+    }
+  });
+
+  // macOS: Non-focusable window means getUserMedia/AudioContext can't steal focus.
+  // The cursor stays blinking in the external app at all times.
+  // Fallback focus guard for edge cases (e.g. window temporarily set focusable for settings).
   if (process.platform === 'darwin') {
     mainWindow.on('focus', () => {
-      if (isRecording && global._focusGuardActive && global._lastFocusedPid) {
-        console.info(`[Focus-Guard] Window stole focus during recording — returning to "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
+      if (isRecording) {
+        console.info('[Focus-Guard] Window gained focus during recording — releasing immediately');
         mainWindow.blur();
-        const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
-        execFile('osascript', ['-e', script], { timeout: 2000 });
       }
     });
   }
-  console.info(`[Startup] ★ macOS focus-guard v4 active (floating + delayed focus-intercept)`);
+  console.info(`[Startup] ★ macOS non-activating panel mode (cursor stays in external app)`);
+
+  // ── macOS Accessibility permission: required for auto-paste (Cmd+V keystrokes) ──
+  if (process.platform === 'darwin') {
+    const { systemPreferences } = require('electron');
+    const hasAccess = systemPreferences.isTrustedAccessibilityClient(false);
+    if (!hasAccess) {
+      console.warn('[Startup] ⚠️ Accessibility permission NOT granted — auto-paste will not work');
+      console.warn('[Startup] Requesting Accessibility access…');
+      // This triggers the macOS dialog asking the user to grant access
+      systemPreferences.isTrustedAccessibilityClient(true);
+    } else {
+      console.info('[Startup] ✓ Accessibility permission granted');
+    }
+  }
 
   // Load the renderer
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -2451,33 +2489,42 @@ function registerHotkeys() {
           savedWindowId = execFileSync('xdotool', ['getactivewindow'], { timeout: 500 }).toString().trim();
           if (!/^\d+$/.test(savedWindowId)) savedWindowId = null;
         }
-        // macOS: Take a FRESH PID snapshot RIGHT NOW at hotkey-press time.
-        // The 1s poller might have stale data if the user just clicked a new app.
-        // This synchronous query guarantees we capture the correct target.
+         // macOS: Take a FRESH PID snapshot RIGHT NOW at hotkey-press time.
+        // Use async execFile to avoid blocking — the 500ms tracker already
+        // has a recent PID, so this is just a refinement.
         if (process.platform === 'darwin') {
           try {
-            const ourPid = process.pid;
-            const result = execFileSync('osascript', ['-e',
-              'tell application "System Events"\n' +
-              '  set fp to first application process whose frontmost is true\n' +
-              '  return (name of fp) & "|" & (unix id of fp)\n' +
-              'end tell'
-            ], { timeout: 1000 }).toString().trim();
-            const sep = result.lastIndexOf('|');
-            if (sep > 0) {
-              const appName = result.substring(0, sep);
-              const appPid = parseInt(result.substring(sep + 1), 10);
-              if (appPid && appPid !== ourPid) {
-                global._lastFocusedApp = appName;
-                global._lastFocusedPid = appPid;
-              }
+            const { BrowserWindow } = require('electron');
+            const focusedWin = BrowserWindow.getFocusedWindow();
+            if (!focusedWin) {
+              // Our window is NOT focused — capture the frontmost app (non-blocking)
+              execFile('osascript', ['-e',
+                'tell application "System Events"\n' +
+                '  set fp to first application process whose frontmost is true\n' +
+                '  return (name of fp) & "|" & (unix id of fp)\n' +
+                'end tell'
+              ], { timeout: 1000 }, (err, stdout) => {
+                if (err) return;
+                const result = stdout.toString().trim();
+                const sep = result.lastIndexOf('|');
+                if (sep > 0) {
+                  const appName = result.substring(0, sep);
+                  const appPid = parseInt(result.substring(sep + 1), 10);
+                  if (appPid && !global._ourPids.has(appPid)) {
+                    global._lastFocusedApp = appName;
+                    global._lastFocusedPid = appPid;
+                    console.info(`[Focus] Target app (async snapshot): "${appName}" (pid ${appPid})`);
+                  }
+                }
+              });
+            } else {
+              console.info('[Focus] Hotkey with own window focused — using previously tracked target');
             }
-          } catch (_) { /* use last known tracker value */ }
-          console.info(`[Focus] Target app (fresh snapshot): "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
+          } catch (_) { /* use tracker value */ }
+          console.info(`[Focus] Target (tracker): "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
         }
       } catch (_) { }
 
-      // Disable focus guard during getUserMedia startup (re-enable after 1s)
       global._focusGuardActive = false;
     }
 
@@ -2485,9 +2532,7 @@ function registerHotkeys() {
 
     // Restore focus to the user's target app after a delay (only when STARTING)
     if (!isRecording) {
-      // Just STOPPED recording — clear saved target so tracker captures fresh next time
-      global._lastFocusedPid = null;
-      global._lastFocusedApp = null;
+      // Just STOPPED recording — auto-paste will query current frontmost app
       return;
     }
 
@@ -2500,22 +2545,8 @@ function registerHotkeys() {
       setTimeout(restore, 200);
       setTimeout(restore, 500);
       setTimeout(restore, 1000);
-    } else if (process.platform === 'darwin') {
-      // Enable focus guard after 1s — enough for getUserMedia to complete.
-      setTimeout(() => {
-        global._focusGuardActive = true;
-        console.info('[Focus-Guard] Armed (1s grace period elapsed)');
-        // Explicit restore in case focus was stolen during startup
-        if (global._lastFocusedPid && isRecording) {
-          const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
-          execFile('osascript', ['-e', script], { timeout: 2000 },
-            (err) => {
-              if (!err) console.info(`[Focus] Restored focus to "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
-            }
-          );
-        }
-      }, 1000);
     }
+    // macOS: No focus restore needed — window is non-focusable, cursor stays blinking
   });
   console.info(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
 
@@ -2649,22 +2680,24 @@ function toggleRecording() {
     tray.setToolTip(isRecording ? 'Windy Word - Recording...' : 'Windy Word');
   }
 
-  // macOS: getUserMedia/AudioContext steal focus to Electron window.
-  // Restore focus AGGRESSIVELY so the cursor keeps blinking in the target app.
-  // getUserMedia steals focus once, AudioContext may steal again — we hammer it back.
-  if (isRecording && process.platform === 'darwin') {
-    const restoreFocusToTarget = () => {
-      if (global._lastFocusedPid && isRecording) {
-        const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
-        execFile('osascript', ['-e', script], { timeout: 2000 });
-      }
+  // macOS: getUserMedia/AudioContext in Chromium steal focus even with focusable:false.
+  // Restore focus to the tracked target app in rapid succession to keep the cursor blinking.
+  // The cursor may flicker for ~150ms but comes back immediately.
+  if (isRecording && process.platform === 'darwin' && global._lastFocusedPid) {
+    const targetPid = global._lastFocusedPid;
+    const targetApp = global._lastFocusedApp;
+    const restoreFocus = () => {
+      if (!isRecording) return;
+      execFile('osascript', ['-e',
+        `tell application "System Events" to set frontmost of (first application process whose unix id is ${targetPid}) to true`
+      ], { timeout: 1500 }, (err) => {
+        if (!err) console.info(`[Focus] ✓ Cursor restored to "${targetApp}" (pid ${targetPid})`);
+      });
     };
-    // Rapid-fire restores to keep cursor blinking through getUserMedia + AudioContext
-    setTimeout(restoreFocusToTarget, 200);
-    setTimeout(restoreFocusToTarget, 400);
-    setTimeout(restoreFocusToTarget, 600);
-    setTimeout(restoreFocusToTarget, 1000);
-    setTimeout(restoreFocusToTarget, 1500);
+    // Rapid-fire restores: getUserMedia steals at ~100ms, AudioContext may steal again at ~300ms
+    setTimeout(restoreFocus, 150);
+    setTimeout(restoreFocus, 400);
+    setTimeout(restoreFocus, 800);
   }
 }
 
@@ -2683,14 +2716,18 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
     safeSend('state-change', 'injecting');
     updateTrayIcon('injecting');
 
-    // macOS: Activate target app by PID to give it keyboard focus.
-    // DO NOT hide the window — that causes visual disappearance.
+    // macOS: Activate tracked target app by PID before injecting.
+    // Must actively restore focus because macOS may have shifted
+    // focus to an Electron helper during processing.
     if (process.platform === 'darwin' && global._lastFocusedPid) {
-      const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
-      execFile('osascript', ['-e', script], { timeout: 2000 });
-      await new Promise(resolve => setTimeout(resolve, 300));
-    } else if (mainWindow && mainWindow.isVisible()) {
-      // Non-macOS fallback: hide briefly
+      try {
+        execFileSync('osascript', ['-e',
+          `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`
+        ], { timeout: 2000 });
+        console.info(`[Paste] Activated "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
+      } catch (_) { /* best-effort */ }
+      await new Promise(resolve => setTimeout(resolve, 200));
+    } else if (process.platform !== 'darwin' && mainWindow && mainWindow.isVisible()) {
       mainWindow.hide();
       await new Promise(resolve => setTimeout(resolve, 200));
     }
@@ -3069,8 +3106,172 @@ ipcMain.handle('open-external-url', async (event, url) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// WindyTune Adaptive Model Tracker
+// ═══════════════════════════════════════════════════════════════════
+const _windyTuneHistory = [];          // Rolling window of last 10 transcription timings
+const WINDYTUNE_MODEL_LADDER = ['tiny', 'base', 'small', 'medium', 'large-v3']; // fastest → most accurate
+const WINDYTUNE_THRESHOLDS = {
+  DOWNGRADE_RATIO: 2.0,       // transcription_time / audio_duration > 2x → too slow
+  UPGRADE_RATIO: 0.3,         // ratio < 0.3 → model is fast enough to try bigger
+  CRITICAL_SECONDS: 30,       // single transcription > 30s → immediate downgrade
+  AUTO_DOWNGRADE_AFTER: 2,    // consecutive slow transcriptions before auto-switch
+  PROMPT_UPGRADE_AFTER: 3,    // consecutive fast transcriptions before suggesting upgrade
+};
+
+function _windyTuneRecord(elapsed, audioDuration, model) {
+  const ratio = elapsed / Math.max(audioDuration, 0.1);
+  _windyTuneHistory.push({ elapsed, audioDuration, ratio, model, ts: Date.now() });
+  // Keep last 10
+  if (_windyTuneHistory.length > 10) _windyTuneHistory.shift();
+
+  const isWindyTune = store.get('engine.engine') === 'windytune';
+  if (!isWindyTune) return; // Only adapt in WindyTune auto mode
+
+  const currentIdx = WINDYTUNE_MODEL_LADDER.indexOf(model);
+  if (currentIdx < 0) return; // Unknown model, skip
+
+  // ── Critical: single transcription > 30s → immediate downgrade ──
+  if (elapsed > WINDYTUNE_THRESHOLDS.CRITICAL_SECONDS && currentIdx > 0) {
+    const newModel = WINDYTUNE_MODEL_LADDER[currentIdx - 1];
+    console.warn(`[WindyTune] ⚡ CRITICAL: ${elapsed.toFixed(1)}s transcription → auto-switching ${model} → ${newModel}`);
+    _windyTuneSwitch(newModel, `Transcription took ${elapsed.toFixed(0)}s — switched to ${newModel} for speed`);
+    return;
+  }
+
+  // ── Auto-downgrade: 2+ consecutive slow (ratio > 2x) ──
+  const recentSlow = _windyTuneHistory.slice(-WINDYTUNE_THRESHOLDS.AUTO_DOWNGRADE_AFTER);
+  if (recentSlow.length >= WINDYTUNE_THRESHOLDS.AUTO_DOWNGRADE_AFTER &&
+      recentSlow.every(h => h.ratio > WINDYTUNE_THRESHOLDS.DOWNGRADE_RATIO) &&
+      currentIdx > 0) {
+    const newModel = WINDYTUNE_MODEL_LADDER[currentIdx - 1];
+    const avgRatio = (recentSlow.reduce((s, h) => s + h.ratio, 0) / recentSlow.length).toFixed(1);
+    console.warn(`[WindyTune] ⚡ Auto-downgrade: avg ratio ${avgRatio}x → switching ${model} → ${newModel}`);
+    _windyTuneSwitch(newModel, `WindyTune switched to ${newModel} for faster performance (avg ${avgRatio}x slower than real-time)`);
+    return;
+  }
+
+  // ── Suggest upgrade: 3+ consecutive fast (ratio < 0.3x) ──
+  const recentFast = _windyTuneHistory.slice(-WINDYTUNE_THRESHOLDS.PROMPT_UPGRADE_AFTER);
+  if (recentFast.length >= WINDYTUNE_THRESHOLDS.PROMPT_UPGRADE_AFTER &&
+      recentFast.every(h => h.ratio < WINDYTUNE_THRESHOLDS.UPGRADE_RATIO) &&
+      currentIdx < WINDYTUNE_MODEL_LADDER.length - 1) {
+    const suggestedModel = WINDYTUNE_MODEL_LADDER[currentIdx + 1];
+    const avgRatio = (recentFast.reduce((s, h) => s + h.ratio, 0) / recentFast.length).toFixed(2);
+    console.info(`[WindyTune] 🎯 Upgrade suggestion: avg ratio ${avgRatio}x → suggesting ${suggestedModel}`);
+    safeSend('windytune-suggest-upgrade', {
+      currentModel: model,
+      suggestedModel,
+      avgRatio,
+      message: `Your hardware can handle ${suggestedModel} for better accuracy`
+    });
+    // Don't auto-switch — wait for user confirmation
+  }
+}
+
+function _windyTuneSwitch(newModel, userMessage) {
+  const oldModel = store.get('engine.model');
+  store.set('engine.model', newModel);
+  console.info(`[WindyTune] Model switched: ${oldModel} → ${newModel}`);
+
+  // Notify renderer
+  safeSend('windytune-model-switched', {
+    oldModel, newModel, message: userMessage,
+    canUndo: true
+  });
+
+  // Send config update to the Python WS server to hot-reload the model
+  if (pythonProcess && !pythonProcess.killed) {
+    try {
+      const WebSocket = require('ws');
+      const serverConfig = store.get('server', { host: '127.0.0.1', port: 9876 });
+      const ws = new WebSocket(`ws://${serverConfig.host}:${serverConfig.port}`);
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ action: 'config', config: { model: newModel } }));
+        setTimeout(() => ws.close(), 5000); // Close after model reload
+      });
+      ws.on('error', () => { /* Server may be restarting */ });
+    } catch (_) { /* ws module may not be available */ }
+  }
+}
+
+// IPC: User accepts/rejects upgrade suggestion from renderer
+ipcMain.handle('windytune-accept-upgrade', async (event, newModel) => {
+  console.info(`[WindyTune] User accepted upgrade to ${newModel}`);
+  _windyTuneSwitch(newModel, `Upgraded to ${newModel} for improved accuracy`);
+  return { ok: true };
+});
+
+ipcMain.handle('windytune-undo-switch', async (event, oldModel) => {
+  console.info(`[WindyTune] User undid model switch → reverting to ${oldModel}`);
+  _windyTuneSwitch(oldModel, `Reverted to ${oldModel}`);
+  return { ok: true };
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// WS-routed batch transcription (fast path — model already loaded)
+// ═══════════════════════════════════════════════════════════════════
+async function _transcribeViaWS(wavPath) {
+  const WebSocket = require('ws');
+  const serverConfig = store.get('server', { host: '127.0.0.1', port: 9876 });
+  const wsUrl = `ws://${serverConfig.host}:${serverConfig.port}`;
+
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(wsUrl);
+    let responded = false;
+    const timeout = setTimeout(() => {
+      if (!responded) {
+        responded = true;
+        ws.close();
+        reject(new Error('WS transcription timeout (120s)'));
+      }
+    }, 120000); // 120s — covers up to ~4 min recordings on CPU
+
+    ws.on('open', async () => {
+      try {
+        // Send the command
+        ws.send(JSON.stringify({ action: 'transcribe_blob', language: 'en', format: 'wav' }));
+        // Send the audio data as binary
+        const audioData = await fsp.readFile(wavPath);
+        ws.send(audioData);
+      } catch (err) {
+        responded = true;
+        clearTimeout(timeout);
+        ws.close();
+        reject(err);
+      }
+    });
+
+    ws.on('message', (data) => {
+      if (responded) return;
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'transcribe_result') {
+          responded = true;
+          clearTimeout(timeout);
+          ws.close();
+          if (msg.error) {
+            reject(new Error(msg.error));
+          } else {
+            resolve(msg);
+          }
+        }
+      } catch (_) { /* non-JSON message */ }
+    });
+
+    ws.on('error', (err) => {
+      if (!responded) {
+        responded = true;
+        clearTimeout(timeout);
+        reject(err);
+      }
+    });
+  });
+}
+
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
   console.info('[Batch Local] Starting transcription, audio size:', base64Audio?.length || 0, 'chars');
+  const batchStartTime = Date.now();
   const tmpDir = os.tmpdir();
   // SEC-M8: Use crypto.randomBytes for unpredictable temp filenames
   const tmpId = crypto.randomBytes(16).toString('hex');
@@ -3135,7 +3336,25 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     }
     console.info('[Batch Local] FFmpeg conversion done, wav:', wavPath);
 
-    // Find the Python venv — check multiple locations
+    // ─── PRIMARY: WS-routed transcription (fast path) ───
+    // Model is already loaded in the Python server — no cold start
+    const transcribeStartTime = Date.now();
+    try {
+      const wsResult = await _transcribeViaWS(wavPath);
+      const transcribeElapsed = ((Date.now() - transcribeStartTime) / 1000).toFixed(1);
+      const totalElapsed = ((Date.now() - batchStartTime) / 1000).toFixed(1);
+      console.info(`[Batch Local] ⏱ WS transcription: ${transcribeElapsed}s (total pipeline: ${totalElapsed}s)`);
+      console.info(`[Batch Local] 📊 Ratio: ${wsResult.ratio}x (${wsResult.elapsed_s}s transcribe / ${wsResult.audio_duration_s}s audio, model: ${wsResult.model})`);
+
+      // Record timing for WindyTune adaptive logic
+      _windyTuneRecord(wsResult.elapsed_s, wsResult.audio_duration_s, wsResult.model);
+
+      return wsResult.text || '';
+    } catch (wsErr) {
+      console.warn(`[Batch Local] WS path failed (${wsErr.message}), falling back to standalone Python`);
+    }
+
+    // ─── FALLBACK: Standalone Python process (cold load) ───
     const appRoot = path.resolve(__dirname, '..', '..', '..');
     const venvPaths = process.platform === 'win32'
       ? [
@@ -3150,11 +3369,9 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
         path.join(appDataDir, 'venv', 'bin', 'python3'),
         '/usr/bin/python3'
       ];
-    const pythonPath = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
-    console.info('[Batch Local] Using python:', pythonPath);
+    const pythonPathLocal = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
+    console.info('[Batch Local] Using python (fallback):', pythonPathLocal);
 
-
-    // Run faster-whisper transcription via temp script
     const modelName = store.get('engine.model') || 'base';
     const localModelDir = path.join(os.homedir(), '.windy-pro', 'model', `faster-whisper-${modelName}`);
     let bundledModelDir = '';
@@ -3170,22 +3387,34 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     console.info('[Batch Local] Model ref:', modelRef, '(configured model:', modelName, ')');
     const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${tmpId}.py`);
     const scriptContent = [
+      'import time',
       'from faster_whisper import WhisperModel',
+      't0 = time.monotonic()',
       `model = WhisperModel(${modelRef}, device="cpu", compute_type="int8")`,
       `segments, info = model.transcribe("${wavPath.replace(/\\/g, '/')}", language="en", beam_size=5, condition_on_previous_text=True, vad_filter=False, no_speech_threshold=0.3)`,
       'text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())',
-      'print(text)'
+      'elapsed = round(time.monotonic() - t0, 2)',
+      'print(text)',
+      'import sys; print(f"__TIMING__:{elapsed}", file=sys.stderr)'
     ].join('\n');
     await fsp.writeFile(scriptPath, scriptContent);
-    console.info('[Batch Local] Running Python transcription script...');
+    console.info('[Batch Local] Running Python transcription script (fallback)...');
 
-    // P0-1: Use async execFile for Python transcription (non-blocking)
-    const { stdout, stderr } = await execFileAsync(pythonPath, [scriptPath], {
+    const { stdout, stderr } = await execFileAsync(pythonPathLocal, [scriptPath], {
       timeout: 120000,
       maxBuffer: 10 * 1024 * 1024
     });
-    if (stderr) console.warn('[Batch Local] Python stderr:', stderr.substring(0, 500));
-    console.info('[Batch Local] Transcription complete, output length:', stdout.trim().length, 'chars');
+
+    // Extract timing from stderr
+    const totalElapsed = ((Date.now() - batchStartTime) / 1000).toFixed(1);
+    let pyElapsed = 0;
+    if (stderr) {
+      const timingMatch = stderr.match(/__TIMING__:([\d.]+)/);
+      if (timingMatch) pyElapsed = parseFloat(timingMatch[1]);
+      const cleanStderr = stderr.replace(/__TIMING__:[\d.]+\n?/, '').trim();
+      if (cleanStderr) console.warn('[Batch Local] Python stderr:', cleanStderr.substring(0, 500));
+    }
+    console.info(`[Batch Local] ⏱ Standalone transcription: ${pyElapsed}s (total pipeline: ${totalElapsed}s)`);
 
     try { await fsp.unlink(scriptPath); } catch (_) { }
 
@@ -3210,44 +3439,74 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
     console.info(`[AutoPaste] Target: "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
 
     if (process.platform === 'darwin') {
-      // ── macOS auto-paste via PID ──
+      // ── macOS auto-paste: TRACKER-BASED PID activation ──
+      // The focus tracker continuously updates _lastFocusedPid during recording
+      // and LOCKS it during batch processing (transcription). So at paste time,
+      // _lastFocusedPid = the last app the user interacted with before the
+      // transcription started. This is the most reliable target.
+      //
+      // We MUST actively activate this app by PID before sending Cmd+V, because
+      // macOS may have shifted focus to an Electron helper process during batch
+      // processing, even with focusable:false on our window.
+
       const targetPid = global._lastFocusedPid;
       const targetApp = global._lastFocusedApp || 'unknown';
-      if (!targetPid) {
-        console.warn(`[AutoPaste] No target PID — text on clipboard, use Cmd+V manually`);
+
+      // ── Pre-flight: check Accessibility permission (required for keystrokes) ──
+      const { systemPreferences } = require('electron');
+      const hasAccess = systemPreferences.isTrustedAccessibilityClient(false);
+      if (!hasAccess) {
+        console.warn('[AutoPaste] Accessibility permission not granted — requesting...');
+        systemPreferences.isTrustedAccessibilityClient(true);
+        console.warn('[AutoPaste] Text on clipboard — use Cmd+V manually.');
         return false;
       }
 
-      // Activate the exact target process by PID and send Cmd+V.
-      // PID-based activation works even when multiple apps share the name "Electron".
-      // DO NOT drop alwaysOnTop or hide the window — our floating window stays visible.
-      const appleScript = `
-        tell application "System Events"
-          set frontmost of (first application process whose unix id is ${targetPid}) to true
-        end tell
-        delay 0.3
-        tell application "System Events"
-          keystroke "v" using command down
-        end tell
-      `;
-      await new Promise((resolve) => execFile(
-        'osascript', ['-e', appleScript],
-        { timeout: 8000 }, (err, stdout, stderr) => {
-          if (err) {
-            console.error(`[AutoPaste] Failed:`, err.message);
-            if (stderr) console.error(`[AutoPaste] stderr:`, stderr);
-          } else {
-            console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars to "${targetApp}" (pid ${targetPid})`);
-          }
-          resolve();
+      if (!targetPid) {
+        // No tracked target — just send Cmd+V to whatever is focused
+        console.warn('[AutoPaste] No tracked PID — sending Cmd+V to current focus');
+        await new Promise(r => setTimeout(r, 100));
+        try {
+          execFileSync('/usr/local/bin/cliclick', ['kd:cmd', 't:v', 'ku:cmd'], { timeout: 2000 });
+          console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars via cliclick (blind)`);
+          return true;
+        } catch (_) {
+          return false;
         }
-      ));
+      }
 
-      // After paste, clear the saved target so the tracker captures
-      // whatever the user clicks NEXT, not the app we just activated.
-      global._lastFocusedPid = null;
-      global._lastFocusedApp = null;
-      return true;
+      // Step 1: Activate the TRACKED target app by PID
+      console.info(`[AutoPaste] Activating tracked target: "${targetApp}" (pid ${targetPid})`);
+      try {
+        execFileSync('osascript', ['-e',
+          `tell application "System Events" to set frontmost of (first application process whose unix id is ${targetPid}) to true`
+        ], { timeout: 2000 });
+      } catch (focusErr) {
+        console.warn(`[AutoPaste] Activation failed: ${focusErr.message} — trying blind paste`);
+      }
+
+      // Step 2: Wait for focus to settle
+      await new Promise(r => setTimeout(r, 200));
+
+      // Step 3: Send Cmd+V
+      let pasteOk = false;
+      try {
+        execFileSync('/usr/local/bin/cliclick', ['kd:cmd', 't:v', 'ku:cmd'], { timeout: 2000 });
+        console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars to "${targetApp}" (pid ${targetPid}) via cliclick`);
+        pasteOk = true;
+      } catch (cliErr) {
+        console.warn(`[AutoPaste] cliclick failed: ${cliErr.message}`);
+        try {
+          execFileSync('osascript', ['-e',
+            `tell application "System Events" to key code 9 using command down`
+          ], { timeout: 3000 });
+          console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars to "${targetApp}" (pid ${targetPid}) via osascript`);
+          pasteOk = true;
+        } catch (osErr) {
+          console.warn('[AutoPaste] Both methods failed — text on clipboard, use Cmd+V');
+        }
+      }
+      return pasteOk;
 
     } else if (process.platform === 'linux') {
       // ── Linux auto-paste (xdotool — proven working) ──
@@ -5256,10 +5515,62 @@ ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
   }
 });
 
+// ═══ Mic Access Focus Restore ═══
+// Renderer sends this IMMEDIATELY after getUserMedia succeeds.
+// getUserMedia steals macOS focus → this restores it to the target app.
+// Also fires a second restore 200ms later to catch AudioContext focus-steal.
+ipcMain.on('mic-access-granted', () => {
+  if (process.platform !== 'darwin' || !global._lastFocusedPid) return;
+  const targetPid = global._lastFocusedPid;
+  const targetApp = global._lastFocusedApp;
+  console.info(`[Focus] Mic access granted — restoring cursor to "${targetApp}" (pid ${targetPid})`);
+
+  const restore = (label) => {
+    execFile('osascript', ['-e',
+      `tell application "System Events" to set frontmost of (first application process whose unix id is ${targetPid}) to true`
+    ], { timeout: 1500 }, (err) => {
+      if (!err) console.info(`[Focus] ✓ Cursor restored [${label}] to "${targetApp}" (pid ${targetPid})`);
+    });
+  };
+
+  // Aggressive multi-pulse restore sequence:
+  // - 0ms: Immediate (catches the getUserMedia steal)
+  // - 150ms: Quick follow-up
+  // - 400ms: AudioContext creation often steals focus here
+  // - 800ms: Late AudioContext initialization catch
+  // - 1500ms: Final safety net - ensures caret blink resumes
+  // - 3000ms: Ultra-late catch for slow systems
+  restore('immediate');
+  setTimeout(() => restore('150ms'), 150);
+  setTimeout(() => restore('400ms'), 400);
+  setTimeout(() => restore('800ms'), 800);
+  setTimeout(() => restore('1500ms'), 1500);
+  setTimeout(() => restore('3000ms'), 3000);
+
+  // ── Sustained focus keep-alive during recording ──
+  // Every 5s, re-assert focus to keep the cursor blinking.
+  // Some macOS apps lose caret blink if another process touches focus.
+  if (global._focusKeepAlive) clearInterval(global._focusKeepAlive);
+  global._focusKeepAlive = setInterval(() => {
+    if (!isRecording && !global._batchProcessing) {
+      clearInterval(global._focusKeepAlive);
+      global._focusKeepAlive = null;
+      return;
+    }
+    restore('keepalive');
+  }, 5000);
+});
+
 // Batch transcription complete notification
 ipcMain.on('batch-complete', (event, { wordCount }) => {
   // Sync main process state back to idle
   isRecording = false;
+  global._batchProcessing = false; // Allow focus tracker to resume
+  // Stop sustained focus keep-alive
+  if (global._focusKeepAlive) {
+    clearInterval(global._focusKeepAlive);
+    global._focusKeepAlive = null;
+  }
   // Update tray icon back to idle
   updateTrayIcon('idle');
   updateMiniState('idle');
@@ -5286,6 +5597,7 @@ ipcMain.on('batch-complete', (event, { wordCount }) => {
 // Batch processing started — update tray to red
 ipcMain.on('batch-processing', () => {
   isRecording = false; // Recording stopped, now processing
+  global._batchProcessing = true; // Freeze focus tracker during processing
   updateTrayIcon('error'); // red = processing
   updateMiniState('processing');
   if (tray) tray.setToolTip('Windy Pro — Processing transcription...');
@@ -5294,10 +5606,22 @@ ipcMain.on('batch-processing', () => {
 // Recording failed in renderer — sync main state back to idle
 ipcMain.on('recording-failed', () => {
   isRecording = false;
+  global._batchProcessing = false;
   updateTrayMenu();
   updateTrayIcon('idle');
   updateMiniState('idle');
   if (tray) tray.setToolTip('Windy Pro');
+});
+
+// Recording stopped via UI button (not hotkey) — sync main process state
+// Keep _lastFocusedPid alive for async batch processing + auto-paste
+ipcMain.on('recording-stopped', () => {
+  isRecording = false;
+  updateTrayMenu();
+  updateTrayIcon('idle');
+  updateMiniState('idle');
+  if (tray) tray.setToolTip('Windy Word');
+  console.info(`[Recording] Stopped via UI. PID preserved: "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
 });
 
 // Save file dialog
@@ -5448,20 +5772,40 @@ app.whenReady().then(async () => {
   _perfMark('Window + tray created');
 
   // ═══ macOS Continuous Focus Tracker (PID-based) ═══
-  // Polls frontmost app every 1s — tracks BOTH name and PID.
-  // Filters by PID (not name) so we only skip our OWN Electron process.
-  // This means other Electron apps (VS Code, Cursor, Antigravity, etc.) are
-  // correctly captured as valid paste targets.
-  // Pauses during recording to freeze the target.
+  // Polls frontmost app every 500ms — tracks BOTH name and PID.
+  // Window is non-focusable so we rarely capture ourselves, but we still
+  // filter our own process tree to be safe.
+  // KEEPS RUNNING during recording so user can move cursor freely.
+  // Only pauses during batch processing (transcription) to lock paste target.
   if (process.platform === 'darwin') {
     global._lastFocusedApp = null;
     global._lastFocusedPid = null;
     global._focusGuardActive = false;
     const ourPid = process.pid;
-    global._focusTrackerInterval = setInterval(() => {
-      // Don't update during recording — keep the target frozen
-      if (isRecording) return;
+
+    // Build set of our own PIDs (main + all Electron helper child processes)
+    const _refreshOurPids = () => {
       try {
+        const pgrepOut = execFileSync('pgrep', ['-P', String(ourPid)], { timeout: 500 }).toString().trim();
+        pgrepOut.split('\n').forEach(p => { const n = parseInt(p, 10); if (n) global._ourPids.add(n); });
+      } catch (_) { /* pgrep may fail if no children */ }
+    };
+    _refreshOurPids();
+    // Re-scan child PIDs every 30s (new helper processes can spawn)
+    setInterval(_refreshOurPids, 30000);
+
+    global._focusTrackerInterval = setInterval(() => {
+      // FREEZE during recording AND batch processing.
+      // The PID captured just before recording starts is the paste target.
+      // This is the proven approach — running the tracker during recording
+      // causes rogue processes (e.g. this coding assistant) to corrupt the target.
+      if (isRecording || global._batchProcessing) return;
+      try {
+        // Primary check: if any of OUR windows is focused, skip entirely.
+        const { BrowserWindow } = require('electron');
+        const focusedWin = BrowserWindow.getFocusedWindow();
+        if (focusedWin) return; // Our app is focused — don't capture self
+
         // Query both name and PID of the frontmost process
         const result = execFileSync('osascript', ['-e',
           'tell application "System Events"\n' +
@@ -5473,15 +5817,15 @@ app.whenReady().then(async () => {
         if (sep > 0) {
           const appName = result.substring(0, sep);
           const appPid = parseInt(result.substring(sep + 1), 10);
-          // Only skip our OWN process — allow all other apps including other Electron apps
-          if (appPid && appPid !== ourPid) {
+          // Skip our ENTIRE process tree (main + renderer + GPU + utility helpers)
+          if (appPid && !global._ourPids.has(appPid)) {
             global._lastFocusedApp = appName;
             global._lastFocusedPid = appPid;
           }
         }
       } catch (_) { /* osascript timeout — skip this tick */ }
-    }, 1000);
-    console.info(`[Focus] macOS PID-based focus tracker started (1s poll, our pid=${ourPid})`);
+    }, 500); // 500ms = 2x faster for more responsive cursor tracking
+    console.info(`[Focus] macOS PID-based focus tracker started (500ms poll, our pid=${ourPid}, tree pids=${[...global._ourPids].join(',')})`);
   }
 
   // macOS dark mode: forward system theme changes to renderer

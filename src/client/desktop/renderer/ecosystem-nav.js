@@ -75,9 +75,113 @@ class EcosystemNav {
   }
 
   bindEvents() {
-    document.querySelectorAll('.eco-btn').forEach(btn => {
+    const bar = document.getElementById('ecosystemBar');
+    const btns = bar.querySelectorAll('.eco-btn');
+
+    // Click handler
+    btns.forEach(btn => {
       btn.addEventListener('click', () => this.navigate(btn.dataset.product));
     });
+
+    // ═══ Draggable tab reordering ═══
+    this._initDragReorder(bar, btns);
+
+    // Restore saved tab order
+    this._restoreTabOrder(bar);
+  }
+
+  /**
+   * Initialize HTML5 drag-and-drop on ecosystem tabs.
+   */
+  _initDragReorder(bar, btns) {
+    let draggedBtn = null;
+
+    btns.forEach(btn => {
+      btn.setAttribute('draggable', 'true');
+
+      btn.addEventListener('dragstart', (e) => {
+        draggedBtn = btn;
+        btn.classList.add('eco-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        // Need to set data for Firefox compatibility
+        e.dataTransfer.setData('text/plain', btn.dataset.product);
+      });
+
+      btn.addEventListener('dragend', () => {
+        btn.classList.remove('eco-dragging');
+        // Remove all drag-over indicators
+        bar.querySelectorAll('.eco-btn').forEach(b => b.classList.remove('eco-drag-over'));
+        draggedBtn = null;
+        // Save new order
+        this._saveTabOrder(bar);
+      });
+
+      btn.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (draggedBtn && draggedBtn !== btn) {
+          btn.classList.add('eco-drag-over');
+        }
+      });
+
+      btn.addEventListener('dragleave', () => {
+        btn.classList.remove('eco-drag-over');
+      });
+
+      btn.addEventListener('drop', (e) => {
+        e.preventDefault();
+        btn.classList.remove('eco-drag-over');
+        if (draggedBtn && draggedBtn !== btn) {
+          // Determine insertion point
+          const allBtns = [...bar.querySelectorAll('.eco-btn')];
+          const fromIdx = allBtns.indexOf(draggedBtn);
+          const toIdx = allBtns.indexOf(btn);
+          if (fromIdx < toIdx) {
+            bar.insertBefore(draggedBtn, btn.nextSibling);
+          } else {
+            bar.insertBefore(draggedBtn, btn);
+          }
+        }
+      });
+    });
+  }
+
+  /**
+   * Save current tab order to localStorage.
+   */
+  _saveTabOrder(bar) {
+    const order = [...bar.querySelectorAll('.eco-btn')].map(b => b.dataset.product);
+    localStorage.setItem('windy_tabOrder', JSON.stringify(order));
+  }
+
+  /**
+   * Restore saved tab order from localStorage.
+   */
+  _restoreTabOrder(bar) {
+    try {
+      const saved = JSON.parse(localStorage.getItem('windy_tabOrder'));
+      if (!saved || !Array.isArray(saved)) return;
+
+      const btns = [...bar.querySelectorAll('.eco-btn')];
+      const btnMap = {};
+      btns.forEach(b => { btnMap[b.dataset.product] = b; });
+
+      // Re-insert in saved order
+      saved.forEach(product => {
+        if (btnMap[product]) {
+          bar.appendChild(btnMap[product]);
+        }
+      });
+
+      // Append any new tabs not in saved order (future-proof)
+      btns.forEach(b => {
+        if (!saved.includes(b.dataset.product)) {
+          bar.appendChild(b);
+        }
+      });
+    } catch (e) {
+      // Ignore bad localStorage data
+    }
   }
 
   // #6: Watch recording state and show indicator on Word tab when on other tabs
