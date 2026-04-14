@@ -88,3 +88,6 @@ bundled-portable/
 .bundle-cache/
 extraResources/
 services/*/node_modules
+
+# Local test state (per-machine)
+.test-clean-install-state
