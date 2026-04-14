@@ -59,30 +59,65 @@ class DependencyInstaller {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    // Step 1: Python
-    this.onLog('[DependencyInstaller] Step 1/6: Installing Python...');
-    try {
-      const pythonPath = await this._installPython();
-      results.python = { success: true, path: pythonPath };
-      this.onLog(`[DependencyInstaller] Python: ${pythonPath}`);
-    } catch (e) {
-      errors.push(`Python: ${e.message}`);
-      results.python = { success: false, error: e.message };
-    }
-    this.onProgress(20);
-
-    // Step 2: Python venv + packages
-    if (results.python?.success) {
-      this.onLog('[DependencyInstaller] Step 2/6: Setting up Python environment...');
-      try {
-        await this._setupVenv(results.python.path);
-        results.venv = { success: true };
-      } catch (e) {
-        errors.push(`Python venv: ${e.message}`);
-        results.venv = { success: false, error: e.message };
+    // ── Fast path: bundled Python + bundled wheels (offline, ~10s) ─────────
+    // If the .app ships with a portable Python AND pre-downloaded wheels
+    // (the new bulletproof bundling architecture from build-portable-bundle.js),
+    // we skip the slow legacy "install Python from package manager → pip
+    // install from PyPI" path entirely. This is the architecture that
+    // honors the windyword.ai promise of "30 second install" + "no internet".
+    let usedFastPath = false;
+    if (this.bundled.hasBundledPython() && this.bundled.hasBundledWheels()) {
+      this.onLog('[DependencyInstaller] Bundled Python + wheels detected — using fast path');
+      const reqPath = this.bundled.getBundledRequirementsPath();
+      if (reqPath) {
+        try {
+          const venvPython = await this.bundled.installVenvFromWheels(APP_DIR, reqPath, this.onLog);
+          if (venvPython) {
+            results.python = { success: true, path: venvPython, source: 'bundled-fast-path' };
+            results.venv = { success: true, source: 'bundled-fast-path' };
+            usedFastPath = true;
+            this.onLog(`[DependencyInstaller] Fast-path venv ready: ${venvPython}`);
+            this.onProgress(40);
+          }
+        } catch (e) {
+          this.onLog(`[DependencyInstaller] Fast path failed (${e.message}) — falling back to legacy`);
+        }
+      } else {
+        this.onLog('[DependencyInstaller] Bundled wheels present but no requirements-bundle.txt — falling back to legacy');
       }
     }
-    this.onProgress(40);
+
+    // ── Legacy path: install Python (or detect system) + pip install from PyPI ──
+    // This path runs only when bundled assets aren't present, OR the fast
+    // path failed for some reason. Slower, requires internet, more crash-prone
+    // across distros. Kept as a safety net while the new bundling is rolled
+    // out, and as a fallback for dev installs without a packaged bundle.
+    if (!usedFastPath) {
+      // Step 1: Python
+      this.onLog('[DependencyInstaller] Step 1/6: Installing Python...');
+      try {
+        const pythonPath = await this._installPython();
+        results.python = { success: true, path: pythonPath, source: 'legacy' };
+        this.onLog(`[DependencyInstaller] Python: ${pythonPath}`);
+      } catch (e) {
+        errors.push(`Python: ${e.message}`);
+        results.python = { success: false, error: e.message };
+      }
+      this.onProgress(20);
+
+      // Step 2: Python venv + packages
+      if (results.python?.success) {
+        this.onLog('[DependencyInstaller] Step 2/6: Setting up Python environment...');
+        try {
+          await this._setupVenv(results.python.path);
+          results.venv = { success: true, source: 'legacy' };
+        } catch (e) {
+          errors.push(`Python venv: ${e.message}`);
+          results.venv = { success: false, error: e.message };
+        }
+      }
+      this.onProgress(40);
+    }
 
     // Step 3: ffmpeg
     this.onLog('[DependencyInstaller] Step 3/6: Installing ffmpeg...');

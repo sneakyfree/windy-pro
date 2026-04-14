@@ -88,6 +88,16 @@ class BundledAssets {
   }
 
   /**
+   * Get the path to the bundled production requirements file
+   * (shipped by stage-portable-bundle.js). Used for offline pip install.
+   * Returns null if not bundled (legacy bundle without wheels).
+   */
+  getBundledRequirementsPath() {
+    const p = path.join(this.bundleDir, 'requirements-bundle.txt');
+    return fs.existsSync(p) ? p : null;
+  }
+
+  /**
    * Get the path to the bundled Python directory.
    *
    * Modern flat layout (produced by scripts/build-portable-bundle.js):
