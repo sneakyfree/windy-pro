@@ -121,6 +121,9 @@ jobs:
         # Each new module extracted from app.js for testability adds
         # coverage here. See tests/renderer-*.test.js.
         run: npx jest tests/renderer-transcript-format.test.js tests/renderer-signup-banner.test.js --ci
+      - name: Run logger tests (P5)
+        # Structured JSON-lines + redaction + rotation.
+        run: npx jest tests/logger.test.js --forceExit --testTimeout=15000 --ci
 
   # ── Electron Release Builds (multi-platform, tag-triggered) ──
   build-electron:
