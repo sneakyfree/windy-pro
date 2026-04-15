@@ -1415,19 +1415,9 @@ registerVideoIpc({
 //  FONT SIZE CONTROL
 // ═══════════════════════════════════════════
 
-ipcMain.handle('get-font-size', async () => {
-  return store.get('appearance.fontSize') || 100;
-});
-
-ipcMain.handle('set-font-size', async (event, percent) => {
-  const clamped = Math.max(70, Math.min(150, percent));
-  store.set('appearance.fontSize', clamped);
-  // Notify renderer
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('font-size-changed', clamped);
-  }
-  return clamped;
-});
+// CR-009 cont: font-size / settings / rebind-hotkey extracted to
+// ./ui/settings-ipc.js. Registered lower in the file where
+// registerHotkeys is in scope.
 
 // ═══════════════════════════════════════════
 //  MINI TRANSLATE WINDOW (floating quick-translate)
@@ -2316,31 +2306,8 @@ function sanitizeHotkeys() {
   if (fixed) store.set('hotkeys', hotkeys);
 }
 
-ipcMain.handle('rebind-hotkey', (event, key, accelerator) => {
-  try {
-    // Block reserved system shortcuts
-    if (RESERVED_SHORTCUTS.includes(accelerator)) {
-      return { ok: false, error: `${accelerator} is a reserved system shortcut` };
-    }
-
-    // Unregister all current shortcuts
-    globalShortcut.unregisterAll();
-
-    // Update the specific hotkey in store
-    const hotkeys = store.get('hotkeys');
-    hotkeys[key] = accelerator;
-    store.set('hotkeys', hotkeys);
-
-    // Re-register all shortcuts with updated config
-    registerHotkeys();
-
-    console.info(`[Hotkey] Rebound ${key} → ${accelerator}`);
-    return { ok: true, key, accelerator };
-  } catch (err) {
-    console.error(`[Hotkey] Rebind failed:`, err);
-    return { ok: false, error: err.message };
-  }
-});
+// rebind-hotkey extracted to ./ui/settings-ipc.js — registered
+// below once registerHotkeys is in scope.
 
 /**
  * Toggle recording state
@@ -2454,52 +2421,23 @@ ipcMain.handle('check-injection-permissions', async () => {
 });
 
 // Update settings — accepts flat keys from renderer and routes to correct store namespace
-ipcMain.on('update-settings', (event, settings) => {
-  const appearanceKeys = ['alwaysOnTop', 'opacity'];
-  const serverKeys = ['host', 'port'];
-  const hotkeyKeys = ['toggleRecording', 'pasteTranscript', 'showHide'];
-
-  for (const [key, value] of Object.entries(settings)) {
-    if (appearanceKeys.includes(key)) {
-      store.set(`appearance.${key}`, key === 'opacity' ? value / 100 : value);
-      if (key === 'alwaysOnTop' && mainWindow) mainWindow.setAlwaysOnTop(value, process.platform === 'darwin' ? 'floating' : 'normal');
-      if (key === 'opacity' && mainWindow) mainWindow.setOpacity(value / 100);
-    } else if (serverKeys.includes(key)) {
-      store.set(`server.${key}`, value);
-    } else if (hotkeyKeys.includes(key)) {
-      store.set(`hotkeys.${key}`, value);
-      if (app.isReady()) {
-        globalShortcut.unregisterAll();
-        registerHotkeys();
-      }
-    } else if (key === 'cloudPassword') {
-      // SEC-C1: Encrypt cloud password via safeStorage — never store plaintext
-      if (value && safeStorage.isEncryptionAvailable()) {
-        const encrypted = safeStorage.encryptString(String(value));
-        store.set('engine.cloudPasswordEncrypted', encrypted.toString('base64'));
-      } else if (value) {
-        // Fallback: electron-store (still better than renderer localStorage)
-        store.set('engine.cloudPassword', value);
-      }
-      store.delete('engine.cloudPassword'); // Remove any old plaintext
-    } else {
-      // Engine settings (model, device, language, vibeEnabled, micDeviceId)
-      store.set(`engine.${key}`, value);
-    }
-  }
-});
-
-// Get app version from package.json
-ipcMain.handle('get-app-version', () => app.getVersion());
-
-// Get settings — returns flat keys for the renderer
-ipcMain.handle('get-settings', () => {
-  return {
-    ...store.get('appearance'),
-    ...store.get('server'),
-    ...store.get('engine', {}),
-    hotkeys: store.get('hotkeys')
-  };
+// CR-009 cont: update-settings / get-settings / get-app-version /
+// get-font-size / set-font-size / rebind-hotkey extracted to
+// ./ui/settings-ipc.js. registerHotkeys is defined above, so the
+// registrar can take a direct reference.
+const { registerSettingsIpc } = require('./ui/settings-ipc');
+const _mainWindowRefForSettings = {
+  get current() { return mainWindow; },
+};
+registerSettingsIpc({
+  ipcMain,
+  store,
+  app,
+  safeStorage,
+  globalShortcut,
+  registerHotkeys,
+  mainWindowRef: _mainWindowRefForSettings,
+  reservedShortcuts: RESERVED_SHORTCUTS,
 });
 
 // SEC-P0: Encrypted API key storage via safeStorage (replaces plaintext localStorage)
