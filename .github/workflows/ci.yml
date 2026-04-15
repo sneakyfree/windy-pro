@@ -90,6 +90,23 @@ jobs:
       - run: npm ci
       - run: npm run build --if-present
 
+  # ── Installer Unit Tests ──
+  # Targets the safety-critical install path: the CleanSlate kill-guard
+  # (must never include the wizard's own pid), the bundled-assets layout
+  # detection (must work for both flat and legacy layouts), and the
+  # withTimeout helper (must surface labeled timeouts so a hung wizard
+  # never appears as a silent 0% spinner).
+  test-installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Run installer unit tests
+        run: npx jest tests/installer-bundled-assets.test.js tests/installer-clean-slate.test.js tests/installer-wizard-logger.test.js --testEnvironment=node --ci
+
   # ── Electron Release Builds (multi-platform, tag-triggered) ──
   build-electron:
     needs: [test-account-server, test-backend, build-web-portal]
