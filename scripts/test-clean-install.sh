@@ -148,13 +148,16 @@ cmd_prepare() {
   fi
 
   # 7. Write state file (so 'restore' knows where everything went)
+  # CRITICAL: every value MUST be quoted because paths contain spaces
+  # ("Windy Pro-1.6.1.dmg", "Application Support") — sourcing an
+  # unquoted state file in bash produces "command not found" errors.
   {
-    echo "stamp=$stamp"
-    echo "backup_dir=$backup_dir"
-    echo "dmg_path=$DMG_PATH"
-    echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "stamp='$stamp'"
+    echo "backup_dir='$backup_dir'"
+    echo "dmg_path='$DMG_PATH'"
+    echo "started_at='$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
     echo "moved_count=${#moved[@]}"
-    printf 'moved=%s\n' "${moved[@]}"
+    printf "moved+=('%s')\n" "${moved[@]}"
   } > "$STATE_FILE"
   ok "Wrote state file: $STATE_FILE"
 
@@ -235,6 +238,9 @@ cmd_restore() {
     err "  $0 emergency-restore <backup-dir>"
     exit 2
   fi
+
+  # Initialize array before sourcing (state file appends with +=)
+  moved=()
 
   # shellcheck disable=SC1090
   source "$STATE_FILE"
