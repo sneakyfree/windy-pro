@@ -2397,6 +2397,45 @@
         <p id="model-explanation">WindyTune analyzed your hardware. Here's what we recommend.</p>
       </div>
 
+      <!-- ─── Phase 7: Hero recommended card ─────────────────────────────
+           Big single "this is the right one for your machine" pre-selected
+           pick. Lets normies install in one click without ever touching the
+           3-tier package selector or the engines picker below. -->
+      <div id="hero-recommended"
+        style="background:linear-gradient(135deg, rgba(34,197,94,0.10), rgba(34,197,94,0.04)); border:2px solid var(--green); border-radius:16px; padding:22px; margin-bottom:14px; display:none;">
+        <div style="display:flex; align-items:center; gap:18px;">
+          <div style="font-size:48px;">🌪️</div>
+          <div style="flex:1;">
+            <div style="font-size:13px; font-weight:700; color:var(--green); letter-spacing:0.05em;">
+              ★ RECOMMENDED FOR YOUR MACHINE
+            </div>
+            <div id="hero-rec-name" style="font-size:24px; font-weight:800; color:var(--text); margin-top:4px;">
+              Loading…
+            </div>
+            <div id="hero-rec-detail" style="font-size:14px; color:var(--text-dim); margin-top:6px; line-height:1.5;">
+              Detecting your hardware…
+            </div>
+          </div>
+          <button id="hero-rec-btn" class="btn btn-primary" onclick="acceptHeroRecommendation()"
+            style="font-size:15px; padding:14px 22px; min-width:160px;">
+            Use this →
+          </button>
+        </div>
+      </div>
+
+      <!-- Toggle to reveal everything below — defaults to collapsed so the
+           hero card is the only thing the user sees on first paint. -->
+      <div style="text-align:center; margin-bottom:10px;">
+        <button id="btn-toggle-advanced" onclick="toggleAdvancedModelOptions()"
+          style="background:none; border:1px solid var(--border); border-radius:8px; color:var(--text-dim); padding:8px 16px; cursor:pointer; font-size:13px;">
+          ⚙️ Show advanced options
+        </button>
+      </div>
+
+      <!-- Wrap everything that was here before in this advanced container,
+           hidden by default in Phase 7. Existing IDs and markup unchanged. -->
+      <div id="model-advanced-options" style="display:none;">
+
       <!-- 3-Tier Package Selector -->
       <div id="package-selector" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px;">
         <div class="pkg-option" id="pkg-light" onclick="selectPackage('light')"
@@ -2528,6 +2567,8 @@
           </div>
         </div>
       </div>
+
+      </div><!-- /#model-advanced-options (Phase 7 wrapper) -->
 
       <div class="btn-row">
         <button class="btn btn-ghost" onclick="goToScreen(5)" data-i18n="btn.back">← Back</button>
@@ -3549,6 +3590,55 @@
         selectedModels = new Set(packages.recommended);
       }
       buildSelectedChecklist();
+      renderHeroRecommendation();   // Phase 7 — hero card on top of advanced options
+    }
+
+    /**
+     * Phase 7: render the single "use this" hero card. Picks the smallest
+     * model in the recommended set so the hero pitch is honest about size,
+     * and shows the recommendation reason from WindyTune.
+     */
+    function renderHeroRecommendation() {
+      const hero = document.getElementById('hero-recommended');
+      if (!hero) return;
+      if (!recommendation || !recommendation.recommended || recommendation.recommended.length === 0) {
+        hero.style.display = 'none';
+        return;
+      }
+      // Pick the lead engine — use the first recommended that exists in the catalog.
+      const recId = recommendation.recommended[0];
+      const m = allModels.find(x => x.id === recId);
+      if (!m) { hero.style.display = 'none'; return; }
+      const sizeStr = m.sizeMB >= 1000 ? (m.sizeMB / 1000).toFixed(1) + ' GB' : m.sizeMB + ' MB';
+      const reason = recommendation.explanation || recommendation.reason || '';
+      const totalCount = recommendation.recommended.length;
+      const extras = totalCount > 1 ? ` (+ ${totalCount - 1} companion ${totalCount === 2 ? 'engine' : 'engines'})` : '';
+      document.getElementById('hero-rec-name').textContent = `${m.shortName || m.name} · ${sizeStr}${extras}`;
+      document.getElementById('hero-rec-detail').textContent = reason
+        || `Best fit for your ${hardwareData?.cpu?.cores || ''}-core ${hardwareData?.platform || ''} machine with ${hardwareData?.ram?.totalGB || '?'}GB RAM.`;
+      hero.style.display = '';
+    }
+
+    /**
+     * Phase 7: one-click "use this" — selects the recommended set and
+     * proceeds to install. Skips the 3-tier picker entirely for normies.
+     */
+    function acceptHeroRecommendation() {
+      if (!recommendation || !recommendation.recommended) return;
+      // Reuse the existing recommended-package code path so download size,
+      // pair handling, and tier gating stay consistent.
+      selectPackage('recommended');
+      // Honour the existing free-tier flow (which routes through pair picker
+      // for paid users).
+      proceedFromEngines();
+    }
+
+    function toggleAdvancedModelOptions() {
+      const adv = document.getElementById('model-advanced-options');
+      const btn = document.getElementById('btn-toggle-advanced');
+      const showing = adv.style.display !== 'none';
+      adv.style.display = showing ? 'none' : '';
+      btn.textContent = showing ? '⚙️ Show advanced options' : '⚙️ Hide advanced options';
     }
 
     function buildSelectedChecklist() {
