@@ -16,16 +16,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      # account-server depends on @windy-pro/contracts via
+      # file:../shared/contracts. The contracts package itself depends on
+      # zod. With npm's file: protocol the contracts deps don't get
+      # installed unless we run npm ci inside that directory too.
+      - run: cd shared/contracts && npm ci
       - run: cd account-server && npm ci
       - run: cd account-server && npm test
       - run: cd account-server && npx tsc --noEmit
 
   # ── Python Backend Tests ──
+  # Python 3.10 was dropped from the matrix because the pinned numpy
+  # (>=2.3) requires Python 3.11+, and Windy Pro ships its own 3.11
+  # interpreter via python-build-standalone — the 3.10 lane wasn't
+  # reflecting any real user environment, just blocking CI.
+  # fail-fast disabled so a single version's failure doesn't cancel
+  # the others (we want signal from all supported lanes).
   test-backend:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.10', '3.11', '3.12']
+        python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

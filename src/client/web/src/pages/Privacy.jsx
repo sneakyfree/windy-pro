@@ -39,12 +39,7 @@ export default function Privacy() {
                     <li><strong>Payment information:</strong> billing details processed securely by Stripe. We do not store card numbers on our servers.</li>
                 </ul>
 
-<<<<<<< HEAD
-                <h2 id="cloud-mode">Cloud Mode (Web App)</h2>
-                <p>When you use WindyCloud, the following data is processed:</p>
-=======
                 <h2 id="how-we-store-your-data">3. How We Store Your Data</h2>
->>>>>>> 677e1414521bd8746ee9ef10412308bbf67fad52
                 <ul>
                     <li><strong>Encryption at rest:</strong> all data stored on our servers (SQLite or PostgreSQL) is encrypted at rest.</li>
                     <li><strong>Encryption in transit:</strong> all network communication uses TLS/SSL.</li>
