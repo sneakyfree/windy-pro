@@ -3,6 +3,19 @@
 End-to-end checklist for shipping a new version. Build, smoke-test,
 sign, notarize, upload, promote.
 
+**TL;DR — automated path:**
+```bash
+./scripts/release/preflight.sh                              # 1. gate checks
+./scripts/release/build-all.sh --target all                 # 2. build
+./scripts/release/smoke.sh                                  # 3. smoke
+./scripts/release/sign-and-notarize.sh --target mac-arm64   # 4. sign (mac)
+git tag -s vX.Y.Z -m "Windy Pro vX.Y.Z" && git push origin vX.Y.Z   # 5. tag
+./scripts/release/promote.sh beta vX.Y.Z                    # 6. promote
+# … later, after user testing confirms stability:
+./scripts/release/promote.sh stable vX.Y.Z
+```
+Every script has `--help` and `--dry-run`.
+
 For *how the build works internally*, see [BUILD.md](BUILD.md).
 For *what to do when a release breaks*, see [DEBUGGING.md](DEBUGGING.md).
 
