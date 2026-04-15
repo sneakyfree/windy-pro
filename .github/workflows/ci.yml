@@ -107,6 +107,11 @@ jobs:
       - name: Guard against legacy venv resurrection
         # See scripts/ci/check-no-legacy-venv.sh for context.
         run: bash scripts/ci/check-no-legacy-venv.sh
+      - name: i18n coverage check (P3)
+        # Every data-i18n key in wizard.html must exist in every
+        # locale of wizard-i18n.json. See scripts/ci/check-i18n-coverage.sh
+        # and docs/I18N-AUDIT.md.
+        run: bash scripts/ci/check-i18n-coverage.sh
       - name: Error-code ratchet
         # P7: count of raw `throw new Error` in the install path
         # must not increase. New code uses WindyError.from('WINDY-NNN').
