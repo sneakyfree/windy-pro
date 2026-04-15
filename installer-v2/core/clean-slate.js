@@ -20,6 +20,22 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+/**
+ * Promise-wrapped exec() — unblocks the event loop during the
+ * kill/cleanup path so IPC progress callbacks keep flowing to the
+ * renderer even when the scan takes ~5s.
+ *
+ * Swallows errors by default (returns stderr/stdout/code so callers
+ * can inspect without try/catch) — CleanSlate is best-effort.
+ */
+function execAsync(cmd, opts = {}) {
+  return new Promise((resolve) => {
+    exec(cmd, { timeout: 5000, ...opts }, (err, stdout, stderr) => {
+      resolve({ ok: !err, stdout: stdout || '', stderr: stderr || '', code: err ? err.code : 0 });
+    });
+  });
+}
+
 const APP_DIR = path.join(os.homedir(), '.windy-pro');
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'windy-pro');
 const MODELS_DIR = path.join(APP_DIR, 'models');
@@ -345,15 +361,15 @@ class CleanSlate {
     //   - any process whose argv mentions our execPath (sibling helpers
     //     launched by Electron framework that aren't direct children)
     const safePids = new Set([process.pid, process.ppid]);
-    try {
-      const childOut = execSync(`pgrep -P ${process.pid} 2>/dev/null || true`, { stdio: 'pipe', timeout: 5000 }).toString().trim();
-      if (childOut) childOut.split('\n').forEach(p => p && safePids.add(parseInt(p, 10)));
-    } catch (_) { /* ignore */ }
-    // Also guard the entire process group
-    try {
-      const groupOut = execSync(`ps -o pid= -g ${process.pid} 2>/dev/null || true`, { stdio: 'pipe', timeout: 5000 }).toString().trim();
-      if (groupOut) groupOut.split('\n').forEach(p => p && safePids.add(parseInt(p.trim(), 10)));
-    } catch (_) { /* ignore */ }
+    // CR-007: run the pid-harvest commands in parallel via async
+    // exec. Unblocks the event loop so wizard-install sendProgress
+    // callbacks keep reaching the renderer while CleanSlate runs.
+    const [childResult, groupResult] = await Promise.all([
+      execAsync(`pgrep -P ${process.pid} 2>/dev/null || true`),
+      execAsync(`ps -o pid= -g ${process.pid} 2>/dev/null || true`),
+    ]);
+    childResult.stdout.trim().split('\n').forEach(p => p && safePids.add(parseInt(p, 10)));
+    groupResult.stdout.trim().split('\n').forEach(p => p && safePids.add(parseInt(p.trim(), 10)));
     this.onLog(`[CleanSlate]   _killProcesses: safe-pid guard set: ${[...safePids].join(',')}`);
 
     this.onLog(`[CleanSlate]   _killProcesses: scanning for Windy processes...`);
@@ -380,15 +396,17 @@ class CleanSlate {
         continue;
       }
       this.onLog(`[CleanSlate]   _killProcesses: killing PID ${proc.pid} (${proc.name})`);
-      try {
-        if (this.platform === 'win32') {
-          execSync(`taskkill /PID ${proc.pid} /F 2>NUL`, { stdio: 'pipe', timeout: 5000 });
-        } else {
-          execSync(`kill -9 ${proc.pid} 2>/dev/null`, { stdio: 'pipe', timeout: 5000 });
-        }
+      // CR-007: kill commands via async exec so a slow-to-die
+      // process (e.g. pending SIGTERM handler) doesn't freeze the
+      // event loop for 5s.
+      const killCmd = this.platform === 'win32'
+        ? `taskkill /PID ${proc.pid} /F 2>NUL`
+        : `kill -9 ${proc.pid} 2>/dev/null`;
+      const r = await execAsync(killCmd);
+      if (r.ok) {
         killed.push(`${proc.name} (PID ${proc.pid})`);
-      } catch (e) {
-        this.onLog(`[CleanSlate]   _killProcesses: kill PID ${proc.pid} failed: ${e.message}`);
+      } else {
+        this.onLog(`[CleanSlate]   _killProcesses: kill PID ${proc.pid} failed: ${r.stderr || r.code}`);
       }
     }
 
