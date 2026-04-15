@@ -8,26 +8,32 @@ the same TCP port:
 - **WebSocket** — the bidirectional audio/control channel the desktop
   client uses during recording and transcription.
 
-Both live on `ws://127.0.0.1:9876` by default. `websockets.serve`'s
-`process_request` hook short-circuits HTTP requests before the WS
-handshake, so `curl http://127.0.0.1:9876/health` returns JSON
-without upgrading the connection.
+The WebSocket port defaults to `9876`. The HTTP `/health` endpoint
+runs on a **sibling port** (`9877` by default — ws_port + 1). Override
+via `WINDY_HEALTH_PORT`; set to `0` to disable entirely.
+
+```
+ws://127.0.0.1:9876/   — WebSocket protocol (recording, commands)
+http://127.0.0.1:9877/health  — HTTP JSON status
+```
+
+**Why two ports:** `websockets` 14+ validates the `Connection:` header
+BEFORE the `process_request` hook fires. Plain curl/urllib requests
+(which send `Connection: close`) get a 426 Upgrade Required instead
+of reaching the health handler. A sibling stdlib `http.server` sidesteps
+this entirely — no extra deps, thread-backed daemon in the same process.
 
 ## HTTP
 
 ### `GET /health`
 
-Returns a JSON status payload. Also used as a liveness probe by
-`main.js startPythonServer()` on retries.
+Returns a JSON status payload on the **sibling HTTP port** (see
+above). Used as a liveness probe by `main.js startPythonServer()`
+and external observability tooling.
 
-> **Known limitation (P15 CR-008):** the endpoint depends on
-> `websockets.serve`'s legacy `process_request` hook. websockets
-> **>= 14** validates the HTTP `Connection:` header BEFORE the hook
-> fires, so plain `curl` requests (which send `Connection: close`)
-> get a 426 Upgrade Required instead of the intended 200/503. Until
-> server.py migrates to `websockets.asyncio.server` or serves /health
-> on a separate port, liveness probes should test via the WebSocket
-> handshake or run against websockets<14.
+```bash
+curl http://127.0.0.1:9877/health
+```
 
 ```
 GET /health HTTP/1.1

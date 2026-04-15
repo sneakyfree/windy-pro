@@ -27,20 +27,12 @@ import pytest
 HERE = os.path.dirname(__file__)
 REPO_ROOT = os.path.abspath(os.path.join(HERE, ".."))
 
-# Skip entire file on websockets >= 14 — the library's legacy
-# `websockets.serve` API deprecated `process_request`, so the /health
-# hook doesn't fire. server.py itself targets the bundled websockets
-# version (pinned in requirements-bundle.txt, currently 13.x). Local
-# dev installs may pull newer versions where this test can't run.
+# CR-008b: /health runs on a sibling HTTP port (ws_port + 1 by
+# default, override via WINDY_HEALTH_PORT). This works regardless of
+# websockets version. Requires websockets only at import time for the
+# server to spin up.
 try:
-    import websockets
-    _ws_major = int(websockets.__version__.split('.')[0])
-    if _ws_major >= 14:
-        pytest.skip(
-            f"websockets {websockets.__version__} doesn't fire the legacy "
-            "process_request hook; install websockets<14 to run this test.",
-            allow_module_level=True,
-        )
+    import websockets  # noqa: F401 — ensures server.py can be imported
 except ImportError:
     pytest.skip("websockets not installed", allow_module_level=True)
 
@@ -56,23 +48,26 @@ def _free_port():
 
 @pytest.fixture
 def running_engine():
-    """Spawn the engine on a free port, wait for /health, yield the
-    base URL. Kills the subprocess on teardown."""
-    port = _free_port()
+    """Spawn the engine on a free port, wait for /health on the
+    sibling HTTP port, yield the base URL. Kills the subprocess on
+    teardown."""
+    ws_port = _free_port()
+    health_port = _free_port()
     env = {
         **os.environ,
         "WINDY_SKIP_MODEL_LOAD": "1",
+        "WINDY_HEALTH_PORT": str(health_port),
         "PYTHONPATH": REPO_ROOT,  # so `src.engine.server` resolves
     }
     proc = subprocess.Popen(
         [sys.executable, "-m", "src.engine.server",
-         "--host", "127.0.0.1", "--port", str(port)],
+         "--host", "127.0.0.1", "--port", str(ws_port)],
         cwd=REPO_ROOT,
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
-    base = f"http://127.0.0.1:{port}"
+    base = f"http://127.0.0.1:{health_port}"
     # Wait up to 10s for /health to become reachable.
     deadline = time.time() + 10
     last_err = None
@@ -119,9 +114,11 @@ def test_health_endpoint_cache_control(running_engine):
         assert r.getheader("Cache-Control") == "no-store"
 
 
-def test_non_health_http_gets_no_response(running_engine):
-    """Only /health is implemented. Any other HTTP path should not
-    return 200 — the WS handshake takes over. urllib will see a
-    protocol error or connection drop, not a success."""
-    with pytest.raises((urllib.error.URLError, urllib.error.HTTPError, ConnectionResetError)):
+def test_non_health_http_gets_404(running_engine):
+    """Only /health is implemented on the sibling HTTP port. Anything
+    else → 404. (The WebSocket port rejects HTTP requests with
+    'Connection: close' as 426, which is handled by the dedicated
+    handler on the sibling port.)"""
+    with pytest.raises(urllib.error.HTTPError) as info:
         urllib.request.urlopen(f"{running_engine}/not-a-real-endpoint", timeout=2)
+    assert info.value.code == 404

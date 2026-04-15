@@ -13,6 +13,8 @@ import sys
 import os
 import time
 import http
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Set, Any
 
@@ -45,6 +47,18 @@ class WindyServer:
     def __init__(self, host: str = "127.0.0.1", port: int = 9876):
         self.host = host
         self.port = port
+        # CR-008b: sibling HTTP port for /health. Defaults to ws port
+        # + 1. Set WINDY_HEALTH_PORT=0 to disable.
+        health_port_env = os.environ.get("WINDY_HEALTH_PORT")
+        if health_port_env is None:
+            self.health_port = port + 1
+        else:
+            try:
+                self.health_port = int(health_port_env)
+            except ValueError:
+                self.health_port = port + 1
+        self._health_http_server = None
+        self._health_http_thread = None
         self.transcriber: StreamingTranscriber = None
         self.clients: Set[WebSocketServerProtocol] = set()
         self._server = None
@@ -671,11 +685,69 @@ class WindyServer:
                           file=sys.stderr)
                     return False
         
+        # CR-008b: start the sibling HTTP /health server. Different
+        # port from the WebSocket server because websockets >= 14
+        # rejects HTTP requests that don't carry Connection: Upgrade
+        # BEFORE process_request fires — so /health-over-curl stopped
+        # working when requirements.txt bumped to websockets 16.
+        self._start_health_http_server()
+
         # Start heartbeat task to detect zombie connections
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         
         print(f"Server running. Waiting for connections...")
         return True
+
+    def _start_health_http_server(self):
+        """Spin up a thread-backed stdlib HTTPServer on
+        self.health_port. Uses stdlib only — no extra deps — and
+        runs in a daemon thread so it dies with the process.
+
+        Opt-out via WINDY_HEALTH_PORT=0.
+        """
+        if self.health_port <= 0:
+            return
+        server_ref = self
+        class HealthHandler(BaseHTTPRequestHandler):
+            def log_message(self, fmt, *args):
+                # Silence the default access log; we already print
+                # structured status elsewhere.
+                return
+            def do_GET(self):
+                if self.path != '/health':
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                try:
+                    payload = server_ref._health_payload()
+                    body = json.dumps(payload).encode('utf-8')
+                    code = 200 if payload.get('status') == 'ok' else 503
+                    self.send_response(code)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Content-Length', str(len(body)))
+                    self.send_header('Cache-Control', 'no-store')
+                    self.end_headers()
+                    self.wfile.write(body)
+                except Exception as e:
+                    self.send_response(500)
+                    self.end_headers()
+                    try: self.wfile.write(json.dumps({'status':'error','error':str(e)}).encode('utf-8'))
+                    except Exception: pass
+        try:
+            self._health_http_server = HTTPServer((self.host, self.health_port), HealthHandler)
+        except OSError as e:
+            # Port busy on a re-run — surface but don't crash the main
+            # WS server.
+            print(f"[health] Could not bind {self.host}:{self.health_port} — /health disabled: {e}", file=sys.stderr)
+            self._health_http_server = None
+            return
+        self._health_http_thread = threading.Thread(
+            target=self._health_http_server.serve_forever,
+            name='windy-health-http',
+            daemon=True,
+        )
+        self._health_http_thread.start()
+        print(f"[health] listening on http://{self.host}:{self.health_port}/health")
 
     async def _process_request(self, path, headers):
         """P9: /health endpoint.
@@ -792,6 +864,15 @@ class WindyServer:
         if self._server:
             self._server.close()
             await self._server.wait_closed()
+        # CR-008b: shut the /health sidecar down too. The daemon=True
+        # thread would die with the process anyway, but explicit
+        # shutdown avoids "Address already in use" on a quick restart.
+        if self._health_http_server is not None:
+            try: self._health_http_server.shutdown()
+            except Exception: pass
+            try: self._health_http_server.server_close()
+            except Exception: pass
+            self._health_http_server = None
         if self.transcriber:
             self.transcriber.stop_session()
 
