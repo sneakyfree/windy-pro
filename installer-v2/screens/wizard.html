@@ -2647,7 +2647,83 @@
       </div>
     </div>
 
-    <!-- ═══ SCREEN 9: COMPLETE ═══ -->
+    <!-- ═══ SCREEN 9: PERMISSION VERIFICATION (Phase 4) ═══
+         Sits between install and complete. Verifies what the user
+         was prompted to allow ACTUALLY works. Don't trust System
+         Settings — record 1s of audio and check amplitude; probe
+         accessibility with a no-op keystroke.
+    -->
+    <div class="screen" id="screen-verify">
+      <div class="install-screen" style="text-align:left;">
+        <div style="text-align:center; margin-bottom:32px;">
+          <div style="font-size:48px; margin-bottom:8px;">🔐</div>
+          <div class="install-status-text" style="font-size:28px; font-weight:700;">
+            Final check — make sure permissions actually work
+          </div>
+          <div class="install-detail-text" style="margin-top:8px; opacity:0.8;">
+            macOS hides permission failures behind silent denials.
+            Let's verify each one with a real test before we let you loose.
+          </div>
+        </div>
+
+        <!-- MIC VERIFY CARD -->
+        <div class="brand-card" id="verify-mic-card" style="margin-bottom:16px;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="font-size:32px;">🎙️</div>
+            <div style="flex:1;">
+              <div class="brand-card-title">Microphone</div>
+              <div class="brand-card-body" id="verify-mic-msg">
+                Click <b>Test Mic</b> and speak for one second. We'll show what we heard.
+              </div>
+              <!-- Tiny waveform meter — fills proportional to RMS amplitude -->
+              <div style="height:8px; background:rgba(255,255,255,0.08); border-radius:4px; margin-top:10px; overflow:hidden;">
+                <div id="verify-mic-meter"
+                  style="height:100%; width:0%; background:linear-gradient(90deg,#27d1a8,#3ea0ff); transition:width 80ms;">
+                </div>
+              </div>
+            </div>
+            <div id="verify-mic-status" style="font-size:24px; min-width:32px; text-align:center;">⏳</div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:14px;">
+            <button class="btn btn-primary" id="verify-mic-btn" onclick="runMicVerify()">Test Mic</button>
+            <button class="btn btn-ghost" id="verify-mic-settings" style="display:none;"
+              onclick="window.wizardAPI.openPermSettings('microphone')">Open Mic Settings</button>
+          </div>
+        </div>
+
+        <!-- ACCESSIBILITY VERIFY CARD (macOS only — hidden on other platforms) -->
+        <div class="brand-card" id="verify-access-card" style="margin-bottom:16px; display:none;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="font-size:32px;">⌨️</div>
+            <div style="flex:1;">
+              <div class="brand-card-title">Accessibility</div>
+              <div class="brand-card-body" id="verify-access-msg">
+                Required so Windy Word can paste your transcript right where your cursor is.
+              </div>
+            </div>
+            <div id="verify-access-status" style="font-size:24px; min-width:32px; text-align:center;">⏳</div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:14px;">
+            <button class="btn btn-primary" id="verify-access-btn" onclick="runAccessVerify()">Verify Accessibility</button>
+            <button class="btn btn-ghost" id="verify-access-settings" style="display:none;"
+              onclick="window.wizardAPI.openPermSettings('accessibility')">Open Accessibility Settings</button>
+          </div>
+        </div>
+
+        <div class="install-fun-text" id="verify-hint" style="text-align:center;">
+          We re-check automatically when you come back from System Settings.
+        </div>
+
+        <div style="display:flex; justify-content:space-between; margin-top:24px;">
+          <button class="btn btn-ghost" onclick="skipVerify()">Skip — finish anyway</button>
+          <button class="btn btn-primary" id="verify-finish-btn" disabled onclick="finishVerify()">
+            Finish setup →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SCREEN 10: COMPLETE ═══ -->
     <div class="screen" id="screen-9">
       <div class="complete-screen">
         <div class="complete-strobe"></div>
@@ -2984,6 +3060,7 @@
       if (n === 7) initPairPickerScreen();
       if (n === 8) startBrandRotations();
       if (n !== 8) stopBrandRotations();
+      if (n === 9) initVerifyScreen();   // Phase 4 permission verification (between install and complete)
     }
 
     // ─── SCREEN 1: HARDWARE SCAN ───
@@ -4356,12 +4433,166 @@
           document.getElementById('nxt-key-record').textContent = '⌘+Shift+Space';
         }
 
+        // Phase 4: route through permission verification before celebrating.
+        // Screen index 9 is now the verify screen (DOM order); the original
+        // complete screen moved to index 10.
         setTimeout(() => goToScreen(9), 1500);
       } else {
         document.getElementById('install-status').textContent = '⚠️ Installation Failed';
         document.getElementById('install-detail').textContent = result.error || 'Unknown error. Please try again.';
         addLogEntry('❌ Installation failed: ' + (result.error || 'Unknown error'), 'active');
       }
+    }
+
+    // ─── PHASE 4: PERMISSION VERIFICATION SCREEN ───────────────────────────
+    //
+    // We don't trust "the user clicked Allow in System Settings". Two real
+    // tests verify both permissions actually work:
+    //   • Microphone — getUserMedia + AudioContext, capture 1s, compute RMS
+    //   • Accessibility (macOS only) — IPC to main, which probes via
+    //     `osascript ... keystroke ""`. If accessibility is denied, osascript
+    //     returns "1002: not allowed assistive access".
+    //
+    // The Finish button is disabled until both required permissions verify
+    // (or the user explicitly clicks Skip). When the user goes to System
+    // Settings and comes back, the wizard's window-focus event re-runs
+    // verification automatically.
+
+    let verifyState = { mic: 'pending', access: 'pending', skipped: false };
+
+    function initVerifyScreen() {
+      // macOS is the only platform that needs accessibility (osascript-based
+      // keystroke injection). On Linux/Windows the paste tool is verified
+      // separately (Phase 6) and accessibility-as-an-OS-permission doesn't apply.
+      const isMac = (hardwareData?.platform === 'darwin') || /Mac/.test(navigator.platform);
+      document.getElementById('verify-access-card').style.display = isMac ? '' : 'none';
+      // Mic always needs verification
+      verifyState = { mic: 'pending', access: isMac ? 'pending' : 'granted', skipped: false };
+      updateVerifyFinish();
+
+      // Auto-re-verify when user returns from System Settings.
+      // Only register the listener once per wizard session.
+      if (!window.__verifyFocusBound && window.wizardAPI?.onWindowFocus) {
+        window.__verifyFocusBound = true;
+        window.wizardAPI.onWindowFocus(() => {
+          if (currentScreen !== 9) return; // only re-check while on verify
+          if (verifyState.access !== 'granted' && hardwareData?.platform === 'darwin') {
+            runAccessVerify();
+          }
+        });
+      }
+
+      // Auto-run accessibility check on entry (mic needs an explicit click
+      // because getUserMedia triggers the OS permission dialog — must be a
+      // user gesture).
+      if (isMac) runAccessVerify();
+    }
+
+    function updateVerifyFinish() {
+      const requiredOk = verifyState.mic === 'granted' && verifyState.access === 'granted';
+      document.getElementById('verify-finish-btn').disabled = !requiredOk;
+    }
+
+    function setVerifyStatus(which, status, msg) {
+      verifyState[which] = status;
+      const card = document.getElementById(`verify-${which === 'mic' ? 'mic' : 'access'}-card`);
+      const statusEl = document.getElementById(`verify-${which === 'mic' ? 'mic' : 'access'}-status`);
+      const msgEl = document.getElementById(`verify-${which === 'mic' ? 'mic' : 'access'}-msg`);
+      const settingsBtn = document.getElementById(`verify-${which === 'mic' ? 'mic' : 'access'}-settings`);
+      const icon = { granted: '✅', denied: '❌', pending: '⏳', testing: '🎤', unknown: '❓' }[status] || '⏳';
+      statusEl.textContent = icon;
+      if (msg) msgEl.innerHTML = msg;
+      if (settingsBtn) settingsBtn.style.display = (status === 'denied') ? '' : 'none';
+      updateVerifyFinish();
+    }
+
+    async function runMicVerify() {
+      const btn = document.getElementById('verify-mic-btn');
+      btn.disabled = true;
+      setVerifyStatus('mic', 'testing', '🎤 Listening for one second — please say something out loud!');
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Build an AnalyserNode and sample RMS amplitude over ~1 second
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        source.connect(analyser);
+        const buf = new Uint8Array(analyser.fftSize);
+        const meter = document.getElementById('verify-mic-meter');
+        let peakRms = 0;
+        const start = Date.now();
+        await new Promise((resolve) => {
+          function tick() {
+            analyser.getByteTimeDomainData(buf);
+            // RMS in [0,1] scale (128 is silence, 0/255 are extremes)
+            let sum = 0;
+            for (let i = 0; i < buf.length; i++) {
+              const v = (buf[i] - 128) / 128;
+              sum += v * v;
+            }
+            const rms = Math.sqrt(sum / buf.length);
+            peakRms = Math.max(peakRms, rms);
+            meter.style.width = Math.min(100, rms * 400) + '%';
+            if (Date.now() - start < 1100) requestAnimationFrame(tick);
+            else resolve();
+          }
+          tick();
+        });
+        try { ctx.close(); } catch (_) { }
+        // Threshold tuned for ambient room noise vs. spoken voice. Quiet
+        // typing or HVAC reads ~0.005–0.01; normal speech reads >0.05.
+        if (peakRms >= 0.02) {
+          setVerifyStatus('mic', 'granted',
+            `✅ Heard you loud and clear (peak ${(peakRms * 100).toFixed(1)}%). Mic works!`);
+        } else {
+          setVerifyStatus('mic', 'denied',
+            `⚠️ Audio captured but very quiet (peak ${(peakRms * 100).toFixed(2)}%). Is the mic muted, or is the wrong input device selected?`);
+        }
+      } catch (e) {
+        // User denied permission OR no mic device
+        const denied = /denied|NotAllowed/i.test(String(e?.message || e));
+        setVerifyStatus('mic', 'denied',
+          denied
+            ? '❌ Microphone access denied. Click "Open Mic Settings" to allow Windy Pro, then come back here.'
+            : `❌ Could not access microphone: ${String(e?.message || e).slice(0, 120)}`);
+      } finally {
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        btn.disabled = false;
+      }
+    }
+
+    async function runAccessVerify() {
+      const btn = document.getElementById('verify-access-btn');
+      btn.disabled = true;
+      setVerifyStatus('access', 'testing', '🔍 Probing System Events…');
+      try {
+        const r = await window.wizardAPI.verifyAccessibility();
+        if (r.status === 'granted') {
+          setVerifyStatus('access', 'granted',
+            '✅ Accessibility granted. Paste-to-cursor will work.');
+        } else if (r.status === 'denied') {
+          setVerifyStatus('access', 'denied',
+            '❌ Accessibility denied. Click "Open Accessibility Settings" → toggle Windy Pro on. We re-check automatically when you come back.');
+        } else {
+          setVerifyStatus('access', 'unknown',
+            `❓ Could not determine accessibility status: ${r.message || ''}`);
+        }
+      } catch (e) {
+        setVerifyStatus('access', 'unknown', `❌ Probe failed: ${e.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function skipVerify() {
+      verifyState.skipped = true;
+      // Move to complete (which is now index 10 in DOM order)
+      goToScreen(10);
+    }
+    function finishVerify() {
+      goToScreen(10);
     }
 
     // ─── BRAND ROTATION (during download) ───

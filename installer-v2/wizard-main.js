@@ -126,6 +126,25 @@ class InstallWizard {
       this.window.loadFile(path.join(__dirname, 'screens', 'wizard.html'));
       this.window.setMenuBarVisibility(false);
 
+      // Phase 4 verification needs the wizard renderer to call getUserMedia
+      // (1-second mic capture for amplitude check). Without an explicit
+      // permission handler Electron defaults to "deny" for sandboxed
+      // renderers loading file://, which would break the mic verify step.
+      try {
+        this.window.webContents.session.setPermissionRequestHandler(
+          (webContents, permission, callback) => {
+            // Only the wizard window is allowed media access here, and only
+            // for the mic+audioCapture permissions. Everything else: deny.
+            if (permission === 'media' || permission === 'audioCapture') {
+              return callback(true);
+            }
+            return callback(false);
+          }
+        );
+      } catch (e) {
+        console.warn('[Wizard] Could not register permission handler:', e.message);
+      }
+
       // Debug: log when page finishes loading
       this.window.webContents.on('did-finish-load', () => {
         console.log('[Wizard] Page loaded successfully');
@@ -141,6 +160,16 @@ class InstallWizard {
       });
 
       this.setupIPC();
+
+      // Tell the renderer when our window regains focus. Phase 4
+      // verify screen uses this to re-probe permissions automatically
+      // after the user comes back from System Settings — no need for
+      // the user to click "Re-check".
+      this.window.on('focus', () => {
+        if (this.window && !this.window.isDestroyed()) {
+          this.window.webContents.send('wizard-window-focus');
+        }
+      });
 
       this.window.on('closed', () => {
         this.window = null;
@@ -571,6 +600,113 @@ class InstallWizard {
         this.window.close();
       }
       return true;
+    });
+
+    // ═════════════════════════════════════════════════════════════════════
+    // Phase 4: Permission verification loops
+    //
+    // Don't trust "the user clicked Allow" — actually verify the OS gave
+    // us the access we need. For mic, the renderer side runs a 1-second
+    // getUserMedia capture and checks RMS amplitude (calls back here only
+    // for status reporting). For accessibility, only the main process can
+    // probe via osascript.
+    // ═════════════════════════════════════════════════════════════════════
+
+    /**
+     * Probe macOS Accessibility permission by attempting a no-op keystroke
+     * via System Events. If accessibility is NOT granted, osascript exits
+     * non-zero with a message containing "1002" or "not allowed". Returns
+     * { status: 'granted'|'denied'|'unknown', message }.
+     *
+     * Why this is sufficient: the only thing Windy Pro needs Accessibility
+     * for is keystroke injection (paste-to-cursor). If System Events lets
+     * us issue a keystroke at all, paste-to-cursor will work.
+     */
+    ipcMain.handle('wizard-verify-accessibility', async () => {
+      wizardLog('IPC wizard-verify-accessibility ENTRY');
+      if (process.platform !== 'darwin') {
+        // No equivalent permission on Windows / Linux — caller should
+        // verify the paste tool itself works (separate Phase 6 check).
+        wizardLog('IPC wizard-verify-accessibility EXIT: not applicable on this platform');
+        return { status: 'granted', message: 'Not required on this platform' };
+      }
+      try {
+        const { exec } = require('child_process');
+        const result = await new Promise((resolve) => {
+          exec(
+            `osascript -e 'tell application "System Events" to keystroke ""' 2>&1`,
+            { timeout: 8000 },
+            (err, stdout, stderr) => {
+              const out = `${stdout || ''}${stderr || ''}`;
+              if (!err) {
+                resolve({ status: 'granted', message: 'Accessibility granted' });
+              } else if (/not allowed|1002|1043|assistive access/i.test(out)) {
+                resolve({ status: 'denied', message: out.trim().slice(0, 200) });
+              } else {
+                resolve({ status: 'unknown', message: out.trim().slice(0, 200) });
+              }
+            }
+          );
+        });
+        wizardLog(`IPC wizard-verify-accessibility EXIT: ${result.status}`);
+        return result;
+      } catch (e) {
+        wizardLog(`IPC wizard-verify-accessibility THREW: ${e.message}`);
+        return { status: 'unknown', message: e.message };
+      }
+    });
+
+    /**
+     * Get the OS-reported microphone authorisation status. The renderer
+     * owns the actual amplitude probe (getUserMedia + AudioContext); this
+     * handler just lets the wizard show the right message before/after.
+     */
+    ipcMain.handle('wizard-mic-status', async () => {
+      wizardLog('IPC wizard-mic-status ENTRY');
+      if (process.platform === 'darwin') {
+        try {
+          const { systemPreferences } = require('electron');
+          const status = systemPreferences.getMediaAccessStatus('microphone');
+          wizardLog(`IPC wizard-mic-status EXIT: ${status}`);
+          return { status };
+        } catch (e) {
+          return { status: 'unknown', error: e.message };
+        }
+      }
+      // On Linux/Windows the OS-level status is unreliable — let the
+      // renderer probe getUserMedia and report.
+      return { status: 'check-needed' };
+    });
+
+    /**
+     * Open the OS Settings deep-link for the requested permission. The
+     * wizard then re-runs verification when its window regains focus.
+     *
+     * `which` ∈ { 'microphone', 'accessibility' }
+     */
+    ipcMain.handle('wizard-open-perm-settings', async (event, which) => {
+      wizardLog(`IPC wizard-open-perm-settings: ${which}`);
+      const { exec } = require('child_process');
+      try {
+        if (process.platform === 'darwin') {
+          const urls = {
+            microphone: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+            accessibility: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+          };
+          const url = urls[which];
+          if (!url) return { ok: false, error: `unknown permission: ${which}` };
+          exec(`open "${url}"`);
+        } else if (process.platform === 'win32') {
+          const urls = {
+            microphone: 'ms-settings:privacy-microphone',
+            accessibility: 'ms-settings:easeofaccess-keyboard',
+          };
+          exec(`start ${urls[which] || 'ms-settings:privacy'}`);
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
     });
 
     // ─── Cancel (abort downloads and close) ───
