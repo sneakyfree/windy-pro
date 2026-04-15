@@ -237,7 +237,13 @@ class CleanSlate {
   }
 
   /**
-   * Find running Windy Pro processes
+   * Find running Windy Pro processes.
+   *
+   * Each entry has { name, pid, cmdline? }. cmdline is included on Unix
+   * so _killProcesses can do a path-prefix safety check to never kill
+   * any process whose executable lives inside the currently-running
+   * .app bundle (i.e. ourselves, even if pgrep -P misses a reparented
+   * helper).
    */
   _findWindyProcesses() {
     const processes = [];
@@ -249,24 +255,25 @@ class CleanSlate {
         const lines = output.split('\n').filter(l => l.includes('windy'));
         lines.forEach(l => {
           const match = l.match(/"([^"]+)","(\d+)"/);
-          if (match) processes.push({ name: match[1], pid: parseInt(match[2]) });
+          if (match) processes.push({ name: match[1], pid: parseInt(match[2]), cmdline: '' });
         });
         // Also check for our Python server
         const pythonOut = execSync('netstat -ano | findstr ":9876" 2>NUL', {
           stdio: 'pipe', timeout: 5000
         }).toString();
         const pidMatch = pythonOut.match(/LISTENING\s+(\d+)/);
-        if (pidMatch) processes.push({ name: 'python-server', pid: parseInt(pidMatch[1]) });
+        if (pidMatch) processes.push({ name: 'python-server', pid: parseInt(pidMatch[1]), cmdline: '' });
       } else {
-        // Unix-like (macOS, Linux)
+        // Unix-like (macOS, Linux) — capture the full ps line so callers
+        // can match on the executable path, not just the truncated name.
         const output = execSync(
-          "ps aux | grep -i '[w]indy.pro\\|[w]indy-pro\\|faster_whisper.*server' 2>/dev/null || true",
+          "ps -Ao pid=,command= 2>/dev/null | grep -i '[w]indy.pro\\|[w]indy-pro\\|faster_whisper.*server' || true",
           { stdio: 'pipe', timeout: 5000 }
         ).toString();
         output.split('\n').filter(l => l.trim()).forEach(line => {
-          const parts = line.trim().split(/\s+/);
-          if (parts.length >= 2) {
-            processes.push({ name: parts.slice(10).join(' '), pid: parseInt(parts[1]) });
+          const m = line.trim().match(/^(\d+)\s+(.*)$/);
+          if (m) {
+            processes.push({ name: m[2].slice(0, 80), pid: parseInt(m[1], 10), cmdline: m[2] });
           }
         });
         // Check port 9876 (Python server)
@@ -275,7 +282,7 @@ class CleanSlate {
           if (lsof) {
             lsof.split('\n').forEach(pid => {
               if (pid && !processes.find(p => p.pid === parseInt(pid))) {
-                processes.push({ name: 'port-9876', pid: parseInt(pid) });
+                processes.push({ name: 'port-9876', pid: parseInt(pid), cmdline: '' });
               }
             });
           }
@@ -283,6 +290,24 @@ class CleanSlate {
       }
     } catch (e) { /* ignore errors */ }
     return processes;
+  }
+
+  /**
+   * Try to compute the path prefix of the currently-running .app bundle
+   * (e.g. "/Applications/Windy Pro.app"). Used by _killProcesses to skip
+   * any process whose executable lives inside that bundle — the most
+   * robust "don't kill myself" guard, since pgrep -P can miss reparented
+   * Electron helpers.
+   *
+   * Returns "" if no .app bundle path can be derived (dev mode).
+   */
+  _ownBundlePath() {
+    try {
+      const exec = process.execPath || '';
+      const idx = exec.indexOf('.app/');
+      if (idx > 0) return exec.slice(0, idx + 4); // include ".app"
+    } catch (_) { /* ignore */ }
+    return '';
   }
 
   /**
@@ -314,10 +339,23 @@ class CleanSlate {
     const processes = this._findWindyProcesses();
     this.onLog(`[CleanSlate]   _killProcesses: found ${processes.length} candidates`);
 
+    // Last-line-of-defense guard: skip anything whose command path is
+    // inside our own .app bundle. This catches Electron helper processes
+    // (GPU, network service, renderer) that may have been reparented to
+    // launchd and so don't show up in `pgrep -P process.pid`.
+    const ownBundle = this._ownBundlePath();
+    if (ownBundle) {
+      this.onLog(`[CleanSlate]   _killProcesses: own .app bundle = ${ownBundle}`);
+    }
+
     for (const proc of processes) {
       // CRITICAL SAFETY: never kill ourselves or any process in our tree
       if (safePids.has(proc.pid)) {
         this.onLog(`[CleanSlate]   _killProcesses: SKIPPING own-tree PID ${proc.pid} (${proc.name})`);
+        continue;
+      }
+      if (ownBundle && proc.cmdline && proc.cmdline.includes(ownBundle)) {
+        this.onLog(`[CleanSlate]   _killProcesses: SKIPPING own-bundle PID ${proc.pid} (cmdline matches ${ownBundle})`);
         continue;
       }
       this.onLog(`[CleanSlate]   _killProcesses: killing PID ${proc.pid} (${proc.name})`);
