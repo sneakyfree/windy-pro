@@ -35,9 +35,13 @@ describe('GET /health', () => {
     expect(res.body.status).toBe('ok');
     expect(res.body.service).toBe('windy-pro-account-server');
     expect(res.body.version).toBe('2.0.0');
-    expect(res.body).toHaveProperty('users');
-    expect(res.body).toHaveProperty('devices');
     expect(res.body).toHaveProperty('timestamp');
+    // `/health` shape changed — user + device counts were removed in
+    // favour of a per-service reachability map (`services`) + a
+    // top-level `database` status. Pin the new shape here.
+    expect(res.body).toHaveProperty('database');
+    expect(res.body).toHaveProperty('services');
+    expect(res.body).toHaveProperty('uptime_seconds');
   });
 });
 
