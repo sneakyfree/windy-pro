@@ -424,3 +424,63 @@ Another five priorities off the CR-NNN follow-up queue.
 - **8 CI gates** (was 1)
 - ci.yml should now be fully green
 
+
+---
+
+## Session 2 — fifth wave (post "proceed" #4)
+
+### Fifth-wave commit list
+
+| Hash | Description |
+|---|---|
+| `f852b97` | refactor(ui): extract 11 video-preview IPC handlers to ui/video-ipc.js (CR-009c) |
+| `d3740c3` | refactor(ui): extract 6 settings IPC handlers to ui/settings-ipc.js |
+| `c503f4a` | feat(engine): WebSocket protocol schema + in-process validator |
+
+### Aggregate state across all five waves
+
+- **34 commits** on `installer-bundling-v3` this session
+- **281 tests green locally** (221 jest + 60 pytest, up from 0 at
+  session 2 start)
+- **8 CI gates** all passing locally
+- **main.js**: 6747 → **6269** lines (-478), or **-7%** from
+  session 2 start
+- **Four discrete IPC modules** extracted:
+    chat/ipc.js           (21 handlers, 14 tests)
+    chat/pair-ipc.js      (8 handlers, 12 tests)
+    ui/video-ipc.js       (11 handlers, 16 tests)
+    ui/settings-ipc.js    (6 handlers, 17 tests)
+
+### Fifth-wave surprising findings
+
+1. **Video-preview handlers had the cleanest boundary.** The
+   whole cluster only touched two module-level state vars
+   (`videoWindow`, `videoDismissed`) plus a setInterval for
+   mouse-poll drag. The ref-wrapper pattern (get/set via a
+   closure object) let the registrar mutate main.js's `let`
+   state without losing the reference on reassignment. Same
+   trick used for `chatTranslator` in the chat extract.
+
+2. **Settings extract exposed a subtle semantics question**
+   around cloudPassword fallback: when safeStorage isn't
+   available, the old code stored the password in plaintext
+   via `store.set('engine.cloudPassword', value)` then
+   immediately did `store.delete('engine.cloudPassword')`.
+   Net effect: the password is NOT stored. Preserved that
+   behaviour exactly; flagged in the test comment. Arguably a
+   bug (intent was "fallback plaintext") but fixing would
+   change shipped behaviour — out of scope for an extract.
+
+3. **WS protocol schema is the unsung hero.** Every IPC extract
+   test asserts on channel names. The WS protocol had NO such
+   contract — renames between client and server would ship
+   silently. The new schema at shared/schemas/ + the 21 tests
+   in test_protocol_validator.py close that loop. No runtime
+   dep (we wrote a ~100-LOC Draft-2020-12 subset validator);
+   gated on WINDY_VALIDATE_WS=1 so production pays zero cost.
+
+4. **221 jest + 60 pytest = 281 tests** all green locally.
+   Entire session 2 added ~281 tests from a base of 0 session-2
+   tests (bench started at some legacy pytest; most were broken
+   or skipped).
+
