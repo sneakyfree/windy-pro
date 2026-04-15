@@ -14,6 +14,27 @@
       box-sizing: border-box;
     }
 
+    /* P10 a11y: respect the OS-level reduced-motion preference.
+       The wizard's moniker + brand-card + strobe animations can
+       be disorienting for users with vestibular disorders. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    /* P10 a11y: visible focus ring on every focusable element.
+       Default Electron/Chromium is platform-dependent and often
+       invisible against our dark theme. */
+    :focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
     :root {
       --bg: #0A0E1A;
       --bg-card: #111827;
@@ -2603,19 +2624,25 @@
       <div class="install-screen">
         <!-- Overall progress -->
         <div class="install-progress-section">
-          <div class="install-overall-bar">
+          <!-- P10 a11y: progressbar role + value. JS updates aria-valuenow
+               alongside the width in onProgress handlers. -->
+          <div class="install-overall-bar" role="progressbar" id="install-bar"
+            aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+            aria-label="Installation progress">
             <div class="install-overall-fill" id="install-fill"></div>
           </div>
           <div class="install-percent-row">
             <div class="install-percent" id="install-percent">0%</div>
-            <div class="install-eta" id="install-eta"></div>
+            <div class="install-eta" id="install-eta" aria-live="polite"></div>
           </div>
         </div>
 
-        <!-- Current action -->
-        <div class="install-status-text" id="install-status" data-i18n="install.preparing">Preparing installation...
+        <!-- Current action. aria-live="polite" — screen reader hears the
+             current install step without interrupting the user. -->
+        <div class="install-status-text" id="install-status" data-i18n="install.preparing"
+          role="status" aria-live="polite">Preparing installation...
         </div>
-        <div class="install-detail-text" id="install-detail">We're about to set up your voice-to-text engine, download
+        <div class="install-detail-text" id="install-detail" aria-live="polite">We're about to set up your voice-to-text engine, download
           your selected engines, and configure everything for your hardware.</div>
         <div class="install-fun-text" id="install-fun"></div>
 
@@ -2664,22 +2691,29 @@
         </div>
 
         <!-- MIC VERIFY CARD -->
-        <div class="brand-card" id="verify-mic-card" style="margin-bottom:16px;">
+        <div class="brand-card" id="verify-mic-card" style="margin-bottom:16px;"
+          role="region" aria-label="Microphone verification">
           <div style="display:flex; align-items:center; gap:14px;">
-            <div style="font-size:32px;">🎙️</div>
+            <div style="font-size:32px;" aria-hidden="true">🎙️</div>
             <div style="flex:1;">
               <div class="brand-card-title">Microphone</div>
-              <div class="brand-card-body" id="verify-mic-msg">
+              <div class="brand-card-body" id="verify-mic-msg" aria-live="polite">
                 Click <b>Test Mic</b> and speak for one second. We'll show what we heard.
               </div>
-              <!-- Tiny waveform meter — fills proportional to RMS amplitude -->
-              <div style="height:8px; background:rgba(255,255,255,0.08); border-radius:4px; margin-top:10px; overflow:hidden;">
+              <!-- Tiny waveform meter — fills proportional to RMS amplitude.
+                   P10 a11y: role=meter so screen readers know this is a
+                   live-updating gauge and can announce "low/medium/high"
+                   via the aria-valuetext we'd set from JS. -->
+              <div style="height:8px; background:rgba(255,255,255,0.08); border-radius:4px; margin-top:10px; overflow:hidden;"
+                role="meter" aria-label="Microphone level"
+                aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="verify-mic-meter-outer">
                 <div id="verify-mic-meter"
                   style="height:100%; width:0%; background:linear-gradient(90deg,#27d1a8,#3ea0ff); transition:width 80ms;">
                 </div>
               </div>
             </div>
-            <div id="verify-mic-status" style="font-size:24px; min-width:32px; text-align:center;">⏳</div>
+            <div id="verify-mic-status" style="font-size:24px; min-width:32px; text-align:center;"
+              aria-hidden="true">⏳</div>
           </div>
           <div style="display:flex; gap:8px; margin-top:14px;">
             <button class="btn btn-primary" id="verify-mic-btn" onclick="runMicVerify()">Test Mic</button>
@@ -4505,6 +4539,10 @@
         // Overall progress
         document.getElementById('install-fill').style.width = data.percent + '%';
         document.getElementById('install-percent').textContent = Math.round(data.percent) + '%';
+        // P10 a11y: update aria-valuenow on the progressbar alongside
+        // the width — screen readers announce the change.
+        const bar = document.getElementById('install-bar');
+        if (bar) bar.setAttribute('aria-valuenow', String(Math.round(data.percent)));
 
         if (data.eta) document.getElementById('install-eta').textContent = data.eta;
         if (data.message) document.getElementById('install-status').textContent = data.message;
@@ -4594,6 +4632,8 @@
       if (result.success) {
         document.getElementById('install-fill').style.width = '100%';
         document.getElementById('install-percent').textContent = '100%';
+        const bar = document.getElementById('install-bar');
+        if (bar) bar.setAttribute('aria-valuenow', '100');
         document.getElementById('install-status').textContent = '✅ Installation Complete!';
         document.getElementById('install-detail').textContent = 'Everything is ready. The Green Strobe awaits.';
         addLogEntry('✅ All models verified and ready!', 'success');
@@ -4831,7 +4871,11 @@
             }
             const rms = Math.sqrt(sum / buf.length);
             peakRms = Math.max(peakRms, rms);
-            meter.style.width = Math.min(100, rms * 400) + '%';
+            const displayed = Math.min(100, rms * 400);
+            meter.style.width = displayed + '%';
+            // P10 a11y: screen readers announce the meter value.
+            const outer = document.getElementById('verify-mic-meter-outer');
+            if (outer) outer.setAttribute('aria-valuenow', String(Math.round(displayed)));
             if (Date.now() - start < 1100) requestAnimationFrame(tick);
             else resolve();
           }
