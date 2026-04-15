@@ -329,6 +329,9 @@
   <!-- Phase 8 signup banner module (must load BEFORE app.js so the
        app.maybeShowSignupBanner() wrapper can find it on window). -->
   <script src="signup-banner.js"></script>
+  <!-- P4 transcript-format helpers — pure functions, no DOM, used
+       by app.js _exportTranscript via window.WindyTranscriptFormat. -->
+  <script src="transcript-format.js"></script>
   <script src="app.js"></script>
 </body>
 

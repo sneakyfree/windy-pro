@@ -2851,33 +2851,38 @@ class WindyApp {
       return;
     }
 
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    // Delegate to the pure transcript-format module (extracted in P4
+    // so the format helpers can be unit-tested without spinning up
+    // the renderer). Keep the WindyDateUtils preference for Markdown
+    // headers — module's default is plain toLocaleString.
+    const fmt = window.WindyTranscriptFormat;
     let content, defaultName, filters;
+    const now = new Date();
+    defaultName = fmt ? fmt.defaultFilenameFor(format, now)
+      : `transcript-${now.toISOString().slice(0, 19).replace(/:/g, '-')}.${format}`;
 
     if (format === 'txt') {
-      content = text;
-      defaultName = `transcript-${timestamp}.txt`;
+      content = fmt ? fmt.toTxt(text) : text;
       filters = [{ name: 'Text', extensions: ['txt'] }];
     } else if (format === 'md') {
-      const paragraphs = text.split(/\n+/).filter(p => p.trim());
-      content = `# Transcript — ${window.WindyDateUtils ? WindyDateUtils.formatFull(new Date()) : new Date().toLocaleString()}\n\n${paragraphs.map(p => p.trim()).join('\n\n')}\n`;
-      defaultName = `transcript-${timestamp}.md`;
+      // Allow WindyDateUtils to override the Markdown header timestamp
+      // when present (matches the pre-refactor wording).
+      if (fmt) {
+        if (window.WindyDateUtils) {
+          // Inline path mirrors fmt.toMd with the alternate stamp.
+          const safeText = typeof text === 'string' ? text : '';
+          const stamp = WindyDateUtils.formatFull(now);
+          const paragraphs = safeText.split(/\n+/).filter(p => p.trim());
+          content = `# Transcript — ${stamp}\n\n${paragraphs.map(p => p.trim()).join('\n\n')}\n`;
+        } else {
+          content = fmt.toMd(text, now);
+        }
+      } else {
+        content = `# Transcript — ${now.toLocaleString()}\n\n${text}\n`;
+      }
       filters = [{ name: 'Markdown', extensions: ['md'] }];
     } else if (format === 'srt') {
-      // Generate SRT from text — split into ~10s chunks
-      const words = text.split(/\s+/);
-      const chunkSize = 15; // words per subtitle
-      let srt = '';
-      for (let i = 0, idx = 1; i < words.length; i += chunkSize, idx++) {
-        const chunk = words.slice(i, i + chunkSize).join(' ');
-        const startSec = Math.floor(i / 2.5);
-        const endSec = Math.floor(Math.min(i + chunkSize, words.length) / 2.5);
-        const startTime = this._formatSrtTime(startSec);
-        const endTime = this._formatSrtTime(endSec);
-        srt += `${idx}\n${startTime} --> ${endTime}\n${chunk}\n\n`;
-      }
-      content = srt.trim();
-      defaultName = `transcript-${timestamp}.srt`;
+      content = fmt ? fmt.toSrt(text) : text;
       filters = [{ name: 'Subtitles', extensions: ['srt'] }];
     }
 
