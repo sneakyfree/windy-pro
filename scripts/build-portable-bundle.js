@@ -74,6 +74,22 @@ const PIP_PLATFORM_TAGS = {
   'win-x64':    ['win_amd64'],
 };
 
+// uv (Astral) — drop-in pip replacement that's ~5–10x faster on offline
+// wheel installs because it parallelises wheel resolution and uses
+// hardlinks instead of copies. Bundling it cuts the wizard's pip-install
+// step from ~48s to <10s on Grant's iMac, getting us inside the
+// "30 second install" promise on windyword.ai.
+//
+// Pin a known-good release. To upgrade: check
+// https://github.com/astral-sh/uv/releases and bump UV_VERSION.
+const UV_VERSION = '0.5.13';
+const UV_URLS = {
+  'mac-arm64': `https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-aarch64-apple-darwin.tar.gz`,
+  'mac-x64':   `https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-apple-darwin.tar.gz`,
+  'linux-x64': `https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz`,
+  'win-x64':   `https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-pc-windows-msvc.zip`,
+};
+
 // ─── Argument parsing ───────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
@@ -98,6 +114,7 @@ const skipWheels = args.includes('--skip-wheels');
 const skipFfmpeg = args.includes('--skip-ffmpeg');
 const skipModel = args.includes('--skip-model');
 const skipPython = args.includes('--skip-python');
+const skipUv = args.includes('--skip-uv');
 const force = args.includes('--force');
 
 const targets = target === 'all' ? Object.keys(PBS_URLS) : [target];
@@ -298,6 +315,71 @@ function buildFfmpeg(t, targetOut) {
   return ffmpegOut;
 }
 
+/**
+ * Download and stage uv. The release archives contain a single binary
+ * (uv) at the archive root, so we extract to a temp dir and then move
+ * the binary into bundled-portable/<target>/uv/.
+ */
+async function buildUv(t, targetOut) {
+  const url = UV_URLS[t];
+  if (!url) {
+    warn(`no uv URL for target ${t} — skipping`);
+    return null;
+  }
+  const archiveName = path.basename(url);
+  const archive = path.join(cacheDir, `uv-${UV_VERSION}-${t}-${archiveName}`);
+  await downloadFile(url, archive);
+
+  const uvOut = path.join(targetOut, 'uv');
+  if (fs.existsSync(uvOut) && !force) {
+    ok(`uv already present: ${path.relative(repoRoot, uvOut)}`);
+    return uvOut;
+  }
+  rm(uvOut);
+  fs.mkdirSync(uvOut, { recursive: true });
+
+  const tmpExtract = path.join(cacheDir, `uv-${UV_VERSION}-${t}-extract`);
+  rm(tmpExtract);
+  fs.mkdirSync(tmpExtract, { recursive: true });
+
+  if (archiveName.endsWith('.zip')) {
+    execSync(`unzip -o "${archive}" -d "${tmpExtract}"`, { stdio: 'pipe', timeout: 120000 });
+  } else {
+    execSync(`tar xzf "${archive}" -C "${tmpExtract}"`, { stdio: 'pipe', timeout: 120000 });
+  }
+
+  // The 0.5.x release tarballs put the binary under a subdir named like
+  // the platform tuple (e.g. uv-aarch64-apple-darwin/uv). Find any "uv"
+  // or "uv.exe" anywhere under the extract dir.
+  const wantedName = t === 'win-x64' ? 'uv.exe' : 'uv';
+  const found = findRecursive(tmpExtract, wantedName);
+  if (!found) {
+    rm(tmpExtract);
+    fail(`uv binary not found inside ${archive}`);
+  }
+  const dst = path.join(uvOut, wantedName);
+  fs.copyFileSync(found, dst);
+  if (t !== 'win-x64') fs.chmodSync(dst, 0o755);
+  rm(tmpExtract);
+  ok(`uv staged: ${path.relative(repoRoot, dst)} (${du(uvOut)})`);
+  return uvOut;
+}
+
+function findRecursive(dir, name) {
+  if (!fs.existsSync(dir)) return null;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      const hit = findRecursive(full, name);
+      if (hit) return hit;
+    } else if (e.name === name) {
+      return full;
+    }
+  }
+  return null;
+}
+
 function buildModel(targetOut) {
   const modelOut = path.join(targetOut, 'model', 'faster-whisper-base');
   if (fs.existsSync(modelOut) && !force) {
@@ -324,11 +406,14 @@ function writeManifest(t, targetOut, info) {
     wheelCount: info.wheels ? fs.readdirSync(info.wheels).length : 0,
     hasFfmpeg: !!info.ffmpeg,
     hasModel: !!info.model,
+    hasUv: !!info.uv,
+    uvVersion: info.uv ? UV_VERSION : null,
     sizes: {
       python: du(path.join(targetOut, 'python')),
       wheels: du(path.join(targetOut, 'wheels')),
       ffmpeg: du(path.join(targetOut, 'ffmpeg')),
       model:  du(path.join(targetOut, 'model')),
+      uv:     du(path.join(targetOut, 'uv')),
       total:  du(targetOut),
     },
   };
@@ -369,6 +454,14 @@ function writeManifest(t, targetOut, info) {
 
     if (!skipFfmpeg) {
       info.ffmpeg = buildFfmpeg(t, targetOut);
+    }
+
+    if (!skipUv) {
+      try {
+        info.uv = await buildUv(t, targetOut);
+      } catch (e) {
+        warn(`uv phase failed for ${t}: ${e.message} — wizard will fall back to pip`);
+      }
     }
 
     if (!skipModel) {

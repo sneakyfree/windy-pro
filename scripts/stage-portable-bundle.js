@@ -46,7 +46,7 @@ if (fs.existsSync(dst)) execSync(`rm -rf "${dst}"`);
 fs.mkdirSync(dst, { recursive: true });
 
 // Copy each bundle component
-for (const sub of ['python', 'wheels', 'ffmpeg', 'model']) {
+for (const sub of ['python', 'wheels', 'ffmpeg', 'model', 'uv']) {
   const subSrc = path.join(src, sub);
   if (!fs.existsSync(subSrc)) {
     console.warn(`⚠ ${sub}/ missing in ${src} — skipping`);
