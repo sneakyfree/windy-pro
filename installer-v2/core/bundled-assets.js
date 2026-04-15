@@ -31,7 +31,29 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { execSync } = require('child_process');
+const { execSync, exec } = require('child_process');
+
+/**
+ * Promise-wrapped exec(). MUST be used (instead of execSync) for any
+ * step in the install flow that takes more than ~50ms. execSync blocks
+ * the entire Electron event loop, which freezes IPC delivery — meaning
+ * the wizard's progress bar appears stuck at 0% during long installs
+ * (the actual symptom Grant reported). exec() runs the subprocess in a
+ * worker so the event loop stays free and `sendProgress` IPCs flow.
+ */
+function execAsync(cmd, opts = {}) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { maxBuffer: 16 * 1024 * 1024, ...opts }, (err, stdout, stderr) => {
+      if (err) {
+        err.stdout = stdout;
+        err.stderr = stderr;
+        reject(err);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
 
 class BundledAssets {
   constructor() {
@@ -158,6 +180,23 @@ class BundledAssets {
   }
 
   /**
+   * Locate the bundled uv binary (Astral's fast pip drop-in).
+   *
+   * Layout: bundled/uv/uv (Unix) or bundled/uv/uv.exe (Windows).
+   * Returns null if uv isn't bundled — caller should fall back to pip.
+   *
+   * Why uv: the marketing site promises "30 seconds install". pip from
+   * wheels takes ~48s on Grant's iMac; uv takes ~5s for the same payload
+   * because it parallelises wheel resolution and uses hardlinks.
+   */
+  _findUv() {
+    const exe = this.platform === 'win32'
+      ? path.join(this.bundleDir, 'uv', 'uv.exe')
+      : path.join(this.bundleDir, 'uv', 'uv');
+    return fs.existsSync(exe) ? exe : null;
+  }
+
+  /**
    * Check if bundled wheels are available for offline pip install.
    */
   hasBundledWheels() {
@@ -214,23 +253,41 @@ class BundledAssets {
 
     log(`[BundledAssets] Creating venv at ${venvDir}`);
     fs.mkdirSync(appDir, { recursive: true });
+    const t0Venv = Date.now();
     try {
-      execSync(`"${bundledPyExe}" -m venv "${venvDir}"`, { stdio: 'pipe', timeout: 60000 });
+      await execAsync(`"${bundledPyExe}" -m venv "${venvDir}"`, { timeout: 60000 });
     } catch (e) {
-      log(`[BundledAssets] venv creation failed: ${e.message}`);
+      log(`[BundledAssets] venv creation failed (${Date.now() - t0Venv}ms): ${e.message}`);
+      if (e.stderr) log(`[BundledAssets]   stderr: ${String(e.stderr).slice(0, 500)}`);
       return null;
     }
+    log(`[BundledAssets] venv created in ${Date.now() - t0Venv}ms`);
 
     log(`[BundledAssets] Installing wheels from ${wheelsDir}`);
+    const t0Pip = Date.now();
+    // Prefer uv (Astral) if bundled — drops install time from ~48s to <10s.
+    // Falls back to pip transparently when uv isn't present.
+    const uvExe = this._findUv();
     try {
-      execSync(
-        `"${venvPipExe}" install --no-index --find-links "${wheelsDir}" -r "${requirementsPath}"`,
-        { stdio: 'pipe', timeout: 180000 }
-      );
+      if (uvExe) {
+        log(`[BundledAssets] Using bundled uv at ${uvExe}`);
+        await execAsync(
+          `"${uvExe}" pip install --python "${venvPyExe}" --no-index --find-links "${wheelsDir}" -r "${requirementsPath}"`,
+          { timeout: 180000 }
+        );
+      } else {
+        log('[BundledAssets] uv not bundled — using pip (slower but works)');
+        await execAsync(
+          `"${venvPipExe}" install --no-index --find-links "${wheelsDir}" -r "${requirementsPath}"`,
+          { timeout: 180000 }
+        );
+      }
     } catch (e) {
-      log(`[BundledAssets] pip install failed: ${e.message}`);
+      log(`[BundledAssets] pip install failed (${Date.now() - t0Pip}ms): ${e.message}`);
+      if (e.stderr) log(`[BundledAssets]   stderr: ${String(e.stderr).slice(0, 800)}`);
       return null;
     }
+    log(`[BundledAssets] wheels installed in ${Date.now() - t0Pip}ms`);
 
     if (this._isPythonWorking(venvPyExe)) {
       log('[BundledAssets] Venv ready');
