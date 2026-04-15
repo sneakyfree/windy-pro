@@ -1390,138 +1390,25 @@ function createVideoWindow() {
   return videoWindow;
 }
 
-// Show video preview
-ipcMain.handle('show-video-preview', async () => {
-  if (videoDismissed) return { ok: false, dismissed: true };
-  const win = createVideoWindow();
-  win.show();
-  return { ok: true };
-});
-
-// Relay video frames from main renderer to video preview window
-ipcMain.on('video-frame-to-preview', (event, dataUrl) => {
-  if (videoWindow && !videoWindow.isDestroyed() && !videoWindow.webContents.isDestroyed()) {
-    videoWindow.webContents.send('video-frame', dataUrl);
-  }
-});
-
-// Relay recording state to video preview window
-ipcMain.on('recording-state-to-preview', (event, state) => {
-  if (videoWindow && !videoWindow.isDestroyed() && !videoWindow.webContents.isDestroyed()) {
-    videoWindow.webContents.send('recording-state', state);
-  }
-});
-
-// Hide video preview (only on close button or explicit dismiss)
-ipcMain.handle('hide-video-preview', async () => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    videoWindow.webContents.send('stop-camera');
-    videoWindow.hide();
-  }
-  return { ok: true };
-});
-
-// Resize video preview
-ipcMain.on('resize-video-preview', (event, w, h) => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    videoWindow.setSize(Math.round(w), Math.round(h));
-  }
-});
-
-// Resize + reposition (for corners that need position adjustment)
-ipcMain.on('resize-move-video-preview', (event, w, h, x, y) => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    const rw = Math.round(w);
-    const rh = Math.round(h);
-    if (x !== null && y !== null) {
-      videoWindow.setBounds({ x: Math.round(x), y: Math.round(y), width: rw, height: rh });
-    } else if (x !== null) {
-      const bounds = videoWindow.getBounds();
-      videoWindow.setBounds({ x: Math.round(x), y: bounds.y, width: rw, height: rh });
-    } else if (y !== null) {
-      const bounds = videoWindow.getBounds();
-      videoWindow.setBounds({ x: bounds.x, y: Math.round(y), width: rw, height: rh });
-    } else {
-      videoWindow.setSize(rw, rh);
-    }
-  }
-});
-
-// ═══ Main-process mouse polling for resize (bypasses Electron pointer capture limits) ═══
-let resizeInterval = null;
-ipcMain.on('start-resize-video', (event, corner, startScreenX, startScreenY, startW, startH, startWinX, startWinY) => {
-  if (resizeInterval) clearInterval(resizeInterval);
-  const { screen } = require('electron');
-  resizeInterval = setInterval(() => {
-    if (!videoWindow || videoWindow.isDestroyed()) { clearInterval(resizeInterval); resizeInterval = null; return; }
-    const cursor = screen.getCursorScreenPoint();
-    const dx = cursor.x - startScreenX;
-    let newW, newX, newY;
-    switch (corner) {
-      case 'br':
-        newW = Math.max(160, Math.min(800, startW + dx));
-        break;
-      case 'bl':
-        newW = Math.max(160, Math.min(800, startW - dx));
-        newX = startWinX + (startW - newW);
-        break;
-      case 'tr':
-        newW = Math.max(160, Math.min(800, startW + dx));
-        break;
-      case 'tl':
-        newW = Math.max(160, Math.min(800, startW - dx));
-        newX = startWinX + (startW - newW);
-        break;
-    }
-    const newH = Math.round(newW * 9 / 16);
-    if (corner === 'tr' || corner === 'tl') {
-      newY = startWinY + (startH - newH);
-    }
-    const rw = Math.round(newW);
-    const rh = Math.round(newH);
-    if (newX !== undefined && newY !== undefined) {
-      videoWindow.setBounds({ x: Math.round(newX), y: Math.round(newY), width: rw, height: rh });
-    } else if (newX !== undefined) {
-      const b = videoWindow.getBounds();
-      videoWindow.setBounds({ x: Math.round(newX), y: b.y, width: rw, height: rh });
-    } else if (newY !== undefined) {
-      const b = videoWindow.getBounds();
-      videoWindow.setBounds({ x: b.x, y: Math.round(newY), width: rw, height: rh });
-    } else {
-      videoWindow.setSize(rw, rh);
-    }
-    // Send size back to renderer for label
-    try { videoWindow.webContents.send('resize-feedback', rw, rh); } catch (_) { }
-  }, 16); // ~60fps
-});
-
-ipcMain.on('stop-resize-video', () => {
-  if (resizeInterval) { clearInterval(resizeInterval); resizeInterval = null; }
-});
-
-ipcMain.on('close-video-preview', () => {
-  videoDismissed = true; // Don't auto-show again until app restart
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    videoWindow.webContents.send('stop-camera');
-    videoWindow.hide();
-  }
-});
-
-// Minimize video preview
-ipcMain.on('minimize-video-preview', () => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    videoWindow.minimize();
-  }
-});
-
-// Toggle always-on-top for video preview (send to back / bring to front)
-ipcMain.handle('toggle-video-always-on-top', async () => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    const isOnTop = videoWindow.isAlwaysOnTop();
-    videoWindow.setAlwaysOnTop(!isOnTop);
-    return !isOnTop;
-  }
-  return false;
+// CR-009c: 11 video-preview IPC handlers extracted to ./ui/video-ipc.js.
+// videoWindow + videoDismissed are main.js-scoped `let` globals —
+// passed via ref wrappers so the registrar can mutate them through
+// the getter/setter bridge.
+const { registerVideoIpc } = require('./ui/video-ipc');
+const _videoWindowRef = {
+  get current() { return videoWindow; },
+  set current(v) { videoWindow = v; },
+};
+const _videoDismissedRef = {
+  get current() { return videoDismissed; },
+  set current(v) { videoDismissed = v; },
+};
+registerVideoIpc({
+  ipcMain,
+  createVideoWindow,
+  videoWindowRef: _videoWindowRef,
+  videoDismissedRef: _videoDismissedRef,
+  screen: require('electron').screen,
 });
 
 // ═══════════════════════════════════════════
