@@ -579,14 +579,24 @@ class WindyServer:
     async def start(self, config: TranscriberConfig = None):
         """Start the WebSocket server."""
         self._loop = asyncio.get_running_loop()
-        
+
+        # P9: remember when the server first came up for /health uptime
+        # and cold-start diagnostics. monotonic clock so we're immune to
+        # user clock jumps.
+        self._started_monotonic = time.monotonic()
+        self._started_wall = time.time()
+        self._cold_start_ms = None
+        self._model_config = config or TranscriberConfig()
+        self._load_error = None
+
         if not WEBSOCKETS_AVAILABLE:
             print("websockets not installed. Run: pip install websockets",
                   file=sys.stderr)
+            self._load_error = 'websockets_missing'
             return False
-        
+
         # Initialize transcriber
-        config = config or TranscriberConfig()
+        config = self._model_config
         self.transcriber = StreamingTranscriber(config)
         self.transcriber.on_state_change(self._on_state_change)
         self.transcriber.on_transcript(self._on_transcript)
@@ -594,15 +604,25 @@ class WindyServer:
 
         # Optional test/CI bypass for model loading
         skip_model_load = os.environ.get("WINDY_SKIP_MODEL_LOAD", "0") in ("1", "true", "yes")
-        
-        # Load model
+
+        # P9: measure cold-start time. The model load is the single
+        # biggest chunk of first-packet latency — anything over ~5s
+        # is worth surfacing so we catch regressions (e.g. arm64
+        # falling back to Rosetta) without waiting for user reports.
         if skip_model_load:
             print("WINDY_SKIP_MODEL_LOAD=1 set; skipping model load (test mode)")
         else:
-            print("Loading transcription model...")
+            print(f"[cold-start] loading transcription model: "
+                  f"model={config.model_size} device={config.device}")
+            t0 = time.monotonic()
             if not self.transcriber.load_model():
+                self._load_error = 'model_load_failed'
                 print("Failed to load model", file=sys.stderr)
+                print(f"[cold-start] model load FAILED after "
+                      f"{int((time.monotonic() - t0) * 1000)}ms", file=sys.stderr)
                 return False
+            self._cold_start_ms = int((time.monotonic() - t0) * 1000)
+            print(f"[cold-start] model loaded in {self._cold_start_ms}ms")
 
         # Kill any existing process on our port before binding
         self._kill_port_holder()
@@ -622,7 +642,12 @@ class WindyServer:
                     self.host,
                     self.port,
                     reuse_address=True,
-                    max_size=50 * 1024 * 1024  # 50MB — supports up to ~26 min recordings at 16kHz mono
+                    max_size=50 * 1024 * 1024,  # 50MB — supports up to ~26 min recordings at 16kHz mono
+                    # P9: HTTP handler — short-circuits non-WebSocket
+                    # GET /health requests with a JSON status blob.
+                    # Anything else falls through to the default
+                    # handshake path for real WS clients.
+                    process_request=self._process_request,
                 )
                 break  # Success
             except OSError as e:
@@ -640,6 +665,69 @@ class WindyServer:
         
         print(f"Server running. Waiting for connections...")
         return True
+
+    async def _process_request(self, path, headers):
+        """P9: /health endpoint.
+
+        websockets.serve's `process_request` hook lets us answer plain
+        HTTP requests without breaking the WebSocket handshake path.
+        Returning None means "continue the WS handshake"; returning a
+        (status, headers, body) tuple short-circuits with an HTTP
+        response.
+
+        Payload shape:
+            {
+              "status": "ok" | "loading" | "error",
+              "uptime_sec": <float>,
+              "cold_start_ms": <int|null>,
+              "model": <model-name>,
+              "device": <device>,
+              "clients": <int>,
+              "version": <server-version>,
+              "error": <string|null>
+            }
+        """
+        # `path` is either a string (older websockets) or a Request
+        # object (websockets 12+). Normalise.
+        req_path = path if isinstance(path, str) else getattr(path, 'path', '/')
+        if req_path == '/health':
+            try:
+                payload = self._health_payload()
+                body = json.dumps(payload).encode('utf-8')
+                # Healthy = 200. If the transcriber failed to load, we
+                # still answer — but with 503 so liveness probes see it.
+                status = 200 if payload['status'] == 'ok' else 503
+                return (status, [('Content-Type', 'application/json'),
+                                 ('Cache-Control', 'no-store')], body)
+            except Exception as e:
+                body = json.dumps({'status': 'error', 'error': str(e)}).encode('utf-8')
+                return (500, [('Content-Type', 'application/json')], body)
+        # Return None to let the WS handshake proceed for every other
+        # path.
+        return None
+
+    def _health_payload(self):
+        """Build the /health JSON payload. Single source of truth for
+        what we expose externally — unit-testable without spawning a
+        server."""
+        if self._load_error:
+            status = 'error'
+        elif self.transcriber is None:
+            status = 'loading'
+        else:
+            status = 'ok'
+        cfg = getattr(self, '_model_config', None)
+        uptime = time.monotonic() - getattr(self, '_started_monotonic', time.monotonic())
+        return {
+            'status': status,
+            'uptime_sec': round(uptime, 3),
+            'cold_start_ms': self._cold_start_ms,
+            'model': getattr(cfg, 'model_size', None) if cfg else None,
+            'device': getattr(cfg, 'device', None) if cfg else None,
+            'clients': len(self.clients),
+            'version': SERVER_VERSION,
+            'error': self._load_error,
+        }
 
     def _kill_port_holder(self):
         """Kill any process holding our port (handles stale previous instances)."""
