@@ -223,6 +223,37 @@ catalog after the user opened the wizard) or a corrupt catalog file.
 
 ---
 
+## WINDY-052 — Bundled model failed integrity check
+
+**What:** The installed starter model's SHA-256 doesn't match the
+manifest (`bundle-manifest.json`) that shipped with the .app.
+Detected by `BundledAssets.verifyModelIntegrity()` which hashes
+every file in the model directory against the pinned `modelFiles`
+map in the manifest.
+
+**Why:** Two causes:
+1. The `.dmg` / `.AppImage` / `.exe` was tampered with between
+   download and install.
+2. A disk or filesystem error corrupted a model file during copy
+   (laptop closed mid-install, disk full, permission flip).
+
+Older bundles (pre-2026-04-15) don't include `modelFiles` in the
+manifest; `verifyModelIntegrity` skips silently for those.
+
+**Fix:**
+1. Re-download the installer from windyword.ai and re-install.
+2. If it fails on the fresh download too, file a bug with the
+   mismatched file names from the wizard log.
+
+**Diagnostic:**
+```bash
+# Compare shipped sha to installed sha manually
+jq '.modelFiles' /Applications/Windy\ Pro.app/Contents/Resources/bundled/bundle-manifest.json
+shasum -a 256 ~/.windy-pro/models/faster-whisper-base/model.bin
+```
+
+---
+
 ## WINDY-051 — Empty model repository
 
 **What:** The model server returned a directory listing with zero

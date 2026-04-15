@@ -31,6 +31,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { execSync, exec } = require('child_process');
 
 /**
@@ -436,6 +437,70 @@ class BundledAssets {
 
     log('[BundledAssets] No bundled default model available');
     return null;
+  }
+
+  /**
+   * Verify bundled starter model integrity against bundle-manifest.json.
+   *
+   * WINDY-052 — catches two failure modes:
+   *   1. Tampered .dmg (attacker replaced a model file)
+   *   2. Corrupt install (disk error during copy; user closed laptop
+   *      mid-install)
+   *
+   * Reads bundle-manifest.json from the bundle root; for each file
+   * listed under `modelFiles`, checks the SHA-256 against the
+   * installed copy. Returns:
+   *   { ok: true, verified: <n> }                when all match
+   *   { ok: true, skipped: true, reason }        when manifest lacks
+   *                                               hashes (older bundles)
+   *   { ok: false, issues: [{file, expected, actual}], ... }
+   *                                               on mismatch
+   *
+   * Intentionally does NOT throw — caller can decide whether to
+   * WindyError.from('WINDY-052'), re-download, or continue.
+   *
+   * @param {string} modelDir — path to the installed model directory
+   *                            (e.g. ~/.windy-pro/models/faster-whisper-base)
+   */
+  verifyModelIntegrity(modelDir) {
+    const manifestPath = path.join(this.bundleDir, 'bundle-manifest.json');
+    if (!fs.existsSync(manifestPath)) {
+      return { ok: true, skipped: true, reason: 'no bundle-manifest.json' };
+    }
+    let manifest;
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    } catch (e) {
+      return { ok: true, skipped: true, reason: `manifest unparseable: ${e.message}` };
+    }
+    const expected = manifest.modelFiles;
+    if (!expected || typeof expected !== 'object' || Object.keys(expected).length === 0) {
+      // Older bundles don't have modelFiles — backward-compatible path.
+      return { ok: true, skipped: true, reason: 'manifest lacks modelFiles' };
+    }
+    const issues = [];
+    let verified = 0;
+    for (const [relPath, expectedHash] of Object.entries(expected)) {
+      const full = path.join(modelDir, relPath);
+      if (!fs.existsSync(full)) {
+        issues.push({ file: relPath, expected: expectedHash, actual: null, reason: 'missing' });
+        continue;
+      }
+      try {
+        const actualHash = crypto.createHash('sha256')
+          .update(fs.readFileSync(full))
+          .digest('hex');
+        if (actualHash !== expectedHash) {
+          issues.push({ file: relPath, expected: expectedHash, actual: actualHash, reason: 'sha256 mismatch' });
+        } else {
+          verified++;
+        }
+      } catch (e) {
+        issues.push({ file: relPath, expected: expectedHash, actual: null, reason: `read failed: ${e.message}` });
+      }
+    }
+    if (issues.length === 0) return { ok: true, verified };
+    return { ok: false, verified, issues, message: 'model integrity mismatch' };
   }
 
   // ─── Helpers ───

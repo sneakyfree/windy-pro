@@ -397,7 +397,29 @@ function buildModel(targetOut) {
   return modelOut;
 }
 
+/**
+ * Compute per-file sha256 hashes for every file in a directory,
+ * recursively. Returns a { relPath: sha256 } map sorted by relPath.
+ * Used by writeManifest so the wizard can verify the installed model
+ * hasn't been tampered with or corrupted.
+ */
+function hashDirectoryContents(dir) {
+  const out = {};
+  function walk(d, prefix) {
+    if (!fs.existsSync(d)) return;
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, e.name);
+      const rel = prefix ? `${prefix}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(full, rel);
+      else if (e.isFile()) out[rel] = sha256(full);
+    }
+  }
+  walk(dir, '');
+  return Object.fromEntries(Object.entries(out).sort(([a], [b]) => a.localeCompare(b)));
+}
+
 function writeManifest(t, targetOut, info) {
+  const modelDir = info.model;
   const manifest = {
     target: t,
     builtAt: new Date().toISOString(),
@@ -406,6 +428,10 @@ function writeManifest(t, targetOut, info) {
     wheelCount: info.wheels ? fs.readdirSync(info.wheels).length : 0,
     hasFfmpeg: !!info.ffmpeg,
     hasModel: !!info.model,
+    // Per-file SHA-256 so wizard can detect corruption / tampering.
+    // Keyed by path relative to the model dir. Keeping the map small
+    // enough to inline in the manifest (typical model = 4-6 files).
+    modelFiles: modelDir ? hashDirectoryContents(modelDir) : null,
     hasUv: !!info.uv,
     uvVersion: info.uv ? UV_VERSION : null,
     sizes: {

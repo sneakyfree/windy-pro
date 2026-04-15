@@ -127,6 +127,14 @@ const ERROR_CATALOG = Object.freeze({
     docsAnchor: 'WINDY-051-empty-repo',
     matchers: ['No files found in repo'],
   },
+  'WINDY-052': {
+    code: 'WINDY-052',
+    title: 'Bundled model failed integrity check',
+    user: 'The bundled starter model didn\'t match the shipped checksum. This usually means the .dmg is corrupted. Re-download and re-install.',
+    fix: 'Download the installer again from windyword.ai. If the new download also fails, file a bug with the mismatched file names from the log.',
+    docsAnchor: 'WINDY-052-model-integrity',
+    matchers: ['model integrity mismatch'],
+  },
 });
 
 /**
