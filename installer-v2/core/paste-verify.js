@@ -77,6 +77,22 @@ function installCommandsFor(distro) {
  * by configuring their kernel/group membership.
  */
 async function detect() {
+  // P8: Windows returns "applicable and ready" — PowerShell SendKeys
+  // needs no install, no udev rule, no daemon. The renderer's
+  // verify card still fires the test-inject so we confirm it works.
+  if (process.platform === 'win32') {
+    return {
+      applicable: true,
+      distro: 'windows',
+      session: 'win32',
+      isWayland: false,
+      tools: { sendKeys: true },
+      wayland: null,
+      ready: true,
+      installCommands: null,
+      canPkexecInstall: false,
+    };
+  }
   if (process.platform !== 'linux') {
     return { applicable: false, reason: 'Not Linux — paste tooling not required.' };
   }
@@ -180,8 +196,31 @@ async function install() {
  */
 async function injectTestKeystroke() {
   const det = await detect();
-  if (!det.applicable) return { ok: false, error: 'Not Linux.' };
   const TEXT = 'Hello from Windy Word';
+
+  // P8: Windows path. Linux uses xdotool/ydotool; Windows uses
+  // PowerShell SendKeys (System.Windows.Forms.SendKeys). SendKeys
+  // doesn't need any install — it's part of .NET Framework that
+  // ships with every modern Windows — so the verify flow skips the
+  // install step entirely on Windows.
+  //
+  // SendKeys special characters: + ^ % ~ ( ) { } must be wrapped in
+  // braces. Our test string "Hello from Windy Word" contains none of
+  // them, but the escaping helper is here so future strings don't
+  // silently break.
+  if (process.platform === 'win32') {
+    const escaped = TEXT.replace(/([+^%~(){}\[\]])/g, '{$1}');
+    // PowerShell invocation: load forms, call SendKeys.SendWait.
+    // Not execFile because PowerShell -Command wants the full
+    // script as a single arg. Double-single-quote escaping is the
+    // documented PS escape for a single-quoted string.
+    const ps = `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('${escaped.replace(/'/g, "''")}')`;
+    const r = await execAsync(`powershell -NoProfile -NonInteractive -Command "${ps.replace(/"/g, '""')}"`, { timeout: 5000 });
+    if (!r.ok) return { ok: false, error: r.stderr.trim() || 'SendKeys failed' };
+    return { ok: true, text: TEXT };
+  }
+
+  if (!det.applicable) return { ok: false, error: 'Not Linux.' };
 
   if (det.isWayland) {
     if (!det.tools.ydotool) return { ok: false, error: 'ydotool missing. Run install first.' };

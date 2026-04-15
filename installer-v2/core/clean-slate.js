@@ -304,8 +304,29 @@ class CleanSlate {
   _ownBundlePath() {
     try {
       const exec = process.execPath || '';
+      // macOS: foo.app bundle lives at /Applications/Windy Pro.app/...
       const idx = exec.indexOf('.app/');
       if (idx > 0) return exec.slice(0, idx + 4); // include ".app"
+      // P8 Windows: process.execPath is something like
+      //   C:\Program Files\Windy Pro\Windy Pro.exe
+      // The analogue of the .app bundle root is the directory that
+      // contains the .exe — any helper running from the same
+      // install dir must NOT be killed by CleanSlate. Use path.dirname
+      // so backslashes are handled correctly.
+      if (process.platform === 'win32' && exec.toLowerCase().endsWith('.exe')) {
+        // Explicit path.win32 so the test suite can fake-stamp win32
+        // paths on a Unix CI host and still get Windows-correct
+        // dirname behaviour (`/` on macOS would otherwise treat the
+        // whole backslash string as one segment).
+        return require('path').win32.dirname(exec);
+      }
+      // Linux AppImage: process.execPath points inside the mounted
+      // image at /tmp/.mount_Windy-ProXXXXXX/usr/bin/windy-pro. The
+      // mount root is what we want to guard.
+      if (process.platform === 'linux') {
+        const m = exec.match(/(.*\.mount_[^/]+)\//);
+        if (m) return m[1];
+      }
     } catch (_) { /* ignore */ }
     return '';
   }
