@@ -95,6 +95,10 @@ const fs = require('fs');
 const fsp = fs.promises;
 const os = require('os');
 const util = require('util');
+// CR-003: withTimeout for IPC handlers — bounds long-running awaits
+// so a hung upstream (Matrix, translate API, HF download) can't
+// leave the renderer waiting forever on an IPC reply.
+const { withTimeout } = require('./lib/timeout');
 const execFileAsync = util.promisify(execFile);
 // ═══ Lazy-loaded modules (deferred to speed up startup) ═══
 // These modules pull in heavy deps (matrix-js-sdk, stripe, better-sqlite3, electron-updater)
@@ -1572,9 +1576,19 @@ ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang
   try {
     const https = require('https');
     const token = store.get('license.cloudToken') || '';
+    // CR-003: input sanity — reject absurdly large payloads at the
+    // client before shipping them to the API. Server also validates
+    // (≤5000 chars via shared/contracts/TranslateTextRequestSchema),
+    // but this saves the round-trip on obvious abuse.
+    if (typeof text !== 'string' || text.length === 0) {
+      return { error: 'Empty text' };
+    }
+    if (text.length > 5000) {
+      return { error: 'Text too long (max 5000 chars)' };
+    }
     const postData = JSON.stringify({ text, sourceLang, targetLang });
 
-    return await new Promise((resolve, reject) => {
+    const reqPromise = new Promise((resolve) => {
       const req = https.request('https://windyword.ai/api/v1/translate/text', {
         method: 'POST',
         headers: {
@@ -1597,9 +1611,12 @@ ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang
       req.write(postData);
       req.end();
     });
+    // CR-003: 15s end-to-end bound. The server's p99 is under 3s;
+    // anything above is a dead connection or an outage.
+    return await withTimeout(reqPromise, 15_000, 'mini-translate-text');
   } catch (err) {
     console.error('[mini-translate-text] Error:', err.message);
-    return { error: err.message };
+    return { error: err.message, timedOut: !!err.timedOut };
   }
 });
 
@@ -1724,24 +1741,27 @@ ipcMain.handle('launch-windy-code', async () => {
 ipcMain.handle('chat-login', async (event, userId, password) => {
   try {
     const client = getChatClient();
-    const result = await client.login(userId, password);
+    // CR-003: 30s bound for login — Matrix auth can hang on a dead
+    // homeserver or slow TLS handshake.
+    const result = await withTimeout(client.login(userId, password), 30_000, 'chat-login');
     if (result.success) _setupChatForwarding(client);
     return result;
   } catch (err) {
     console.error('[chat-login] Error:', err.message);
-    return { error: err.message };
+    return { error: err.message, timedOut: !!err.timedOut };
   }
 });
 
 ipcMain.handle('chat-register', async (event, username, password, displayName) => {
   try {
     const client = getChatClient();
-    const result = await client.register(username, password, displayName);
+    const result = await withTimeout(
+      client.register(username, password, displayName), 30_000, 'chat-register');
     if (result.success) _setupChatForwarding(client);
     return result;
   } catch (err) {
     console.error('[chat-register] Error:', err.message);
-    return { error: err.message };
+    return { error: err.message, timedOut: !!err.timedOut };
   }
 });
 
@@ -1773,19 +1793,24 @@ ipcMain.handle('chat-send-message', async (event, roomId, text) => {
     // Validate inputs
     if (typeof roomId !== 'string' || roomId.length > 500) return { error: 'Invalid room ID' };
     if (typeof text !== 'string' || text.length === 0 || text.length > 65535) return { error: 'Message too long or empty' };
-    return await getChatClient().sendMessage(roomId, text);
+    // CR-003: 20s bound — Matrix send can hang indefinitely on a dead
+    // homeserver. Returns a timeout error to the renderer so the UI
+    // can re-enable the send button and let the user retry.
+    return await withTimeout(
+      getChatClient().sendMessage(roomId, text), 20_000, 'chat-send-message');
   } catch (err) {
     console.error('[chat-send-message] Error:', err.message);
-    return { error: err.message };
+    return { error: err.message, timedOut: !!err.timedOut };
   }
 });
 
 ipcMain.handle('chat-get-messages', async (event, roomId, limit) => {
   try {
-    return await getChatClient().getMessages(roomId, limit || 50);
+    return await withTimeout(
+      getChatClient().getMessages(roomId, limit || 50), 15_000, 'chat-get-messages');
   } catch (err) {
     console.error('[chat-get-messages] Error:', err.message);
-    return { error: err.message };
+    return { error: err.message, timedOut: !!err.timedOut };
   }
 });
 
