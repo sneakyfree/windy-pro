@@ -107,10 +107,15 @@ jobs:
       - name: Guard against legacy venv resurrection
         # See scripts/ci/check-no-legacy-venv.sh for context.
         run: bash scripts/ci/check-no-legacy-venv.sh
+      - name: Error-code ratchet
+        # P7: count of raw `throw new Error` in the install path
+        # must not increase. New code uses WindyError.from('WINDY-NNN').
+        # See scripts/ci/check-error-codes.sh + docs/ERRORS.md.
+        run: bash scripts/ci/check-error-codes.sh
       - name: Run installer + security unit tests
         # Includes SEC-PAIR-1 (path traversal) and SEC-WIZARD-1 (Stripe
         # URL allowlist) regression pins. See docs/SECURITY-AUDIT-2026-04.md.
-        run: npx jest tests/installer-bundled-assets.test.js tests/installer-clean-slate.test.js tests/installer-wizard-logger.test.js tests/pair-download-manager.security.test.js tests/wizard-main.security.test.js --testEnvironment=node --ci
+        run: npx jest tests/installer-bundled-assets.test.js tests/installer-clean-slate.test.js tests/installer-wizard-logger.test.js tests/installer-errors.test.js tests/pair-download-manager.security.test.js tests/wizard-main.security.test.js --testEnvironment=node --ci
 
   # ── Electron Release Builds (multi-platform, tag-triggered) ──
   build-electron:

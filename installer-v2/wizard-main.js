@@ -28,6 +28,7 @@ const { CleanSlate } = require('./core/clean-slate');
 const { DependencyInstaller } = require('./core/dependency-installer');
 const { BundledAssets } = require('./core/bundled-assets');
 const { wizardLog, getLogPath, withTimeout } = require('./core/wizard-logger');
+const { friendlyError } = require('./core/errors');
 
 // Per-step fail-fast budgets. These are diagnostic ceilings — every step
 // already self-imposes shorter timeouts on its own subprocesses. If any of
@@ -798,53 +799,14 @@ class InstallWizard {
   /**
    * Convert raw errors into user-friendly messages
    */
+  /**
+   * P7: Convert raw errors into user-friendly messages with stable
+   * WINDY-NNN error codes. Implementation moved to
+   * installer-v2/core/errors.js — single source of truth shared with
+   * docs/ERRORS.md and the renderer-side ERR-display code.
+   */
   _friendlyError(error) {
-    const msg = error.message || String(error);
-
-    // Wizard-internal fail-fast timeouts. The label tells the user (and
-    // support) exactly which step never completed — ten times more useful
-    // than a silent spinner.
-    if (error && error.timedOut && error.label) {
-      return `Setup got stuck while running "${error.label}" (no progress in ${Math.round(error.timeoutMs / 1000)}s). The full diagnostic log is at ${getLogPath()} — please share that file with support.`;
-    }
-
-    // Network errors
-    if (msg.includes('No internet connection') || msg.includes('ENOTFOUND') || msg.includes('ENETUNREACH')) {
-      return 'No internet connection detected. Please connect to the internet and try again.';
-    }
-    if (msg.includes('Network timeout') || msg.includes('ETIMEDOUT') || msg.includes('ESOCKETTIMEDOUT')) {
-      return 'Network connection timed out. Please check your internet connection and try again.';
-    }
-    if (msg.includes('Too many redirects')) {
-      return 'A download server is misconfigured. Please try again later.';
-    }
-    if (msg.includes('HTTP 4') || msg.includes('HTTP 5')) {
-      return `A download server returned an error (${msg}). Please try again later.`;
-    }
-
-    // Disk errors
-    if (msg.includes('ENOSPC') || msg.includes('no space left')) {
-      return 'Not enough disk space to complete the installation. Please free up space and try again.';
-    }
-
-    // Permission errors
-    if (msg.includes('EACCES') || msg.includes('permission denied') || msg.includes('EPERM')) {
-      return 'Permission denied. Try running the installer with administrator/sudo privileges.';
-    }
-
-    // Python/pip errors
-    if (msg.includes('Could not install Python')) {
-      return 'Could not install Python automatically. Please install Python 3.9+ manually and try again.';
-    }
-    if (msg.includes('pip') && msg.includes('install')) {
-      return `A Python package failed to install: ${msg.substring(0, 200)}`;
-    }
-
-    // Generic fallback — truncate very long error messages
-    if (msg.length > 300) {
-      return msg.substring(0, 300) + '…';
-    }
-    return msg;
+    return friendlyError(error, { logPath: getLogPath() });
   }
 }
 

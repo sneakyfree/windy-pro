@@ -4,6 +4,8 @@ How to find the root cause of the failures users actually report. Read
 top-down by symptom.
 
 For *what should be happening*, see [ARCHITECTURE.md](ARCHITECTURE.md).
+For *the catalogue of WINDY-NNN error codes* (look here first if you
+saw a code in the wizard or log file), see [docs/ERRORS.md](docs/ERRORS.md).
 For *Wayland-specific paste/focus weirdness*, see
 [docs/WAYLAND-PASTE-FOCUS-GUIDE.md](docs/WAYLAND-PASTE-FOCUS-GUIDE.md)
 — far more detail than this file, and many fixes that look obvious are
