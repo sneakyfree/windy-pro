@@ -314,3 +314,70 @@ docs/CODE-REVIEW-2026-04.md plus i18n + chat extraction.
    require chain to installer-v2 which is electron-builder
    territory.
 
+
+---
+
+## Session 2 — third wave (post "proceed" #2)
+
+Another five priorities off the CR-NNN follow-up queue.
+
+### Third-wave commit list
+
+| Hash | Description | Source |
+|---|---|---|
+| `d7b526f` | refactor(pair): extract 8 pair-* IPC handlers to chat/pair-ipc.js | CR-009b |
+| `23c84c7` | test(engine): WS health command round-trip + fix lazy-ChatTranslator | CR-012 + regression |
+| `e0dd780` | fix(clean-slate): async exec in kill path — unblocks IPC | CR-007 |
+| `60385c7` | sec(crash): route uncaughtException + unhandledRejection through safeErrorSummary | CR-002 |
+| `(this)` | docs(changelog): consolidated two-session summary to CHANGELOG.md | CR-014 |
+
+### Third-wave findings
+
+1. **The CR-009 chat extract had a silent bug.** `ChatTranslator`
+   was referenced in the `registerChatIpc` call but never imported
+   at module scope — it only existed inside `getChatClient()`'s
+   closure. A fresh app launch that triggered `chat-translate-text`
+   before `chat-login` would throw ReferenceError. Caught while
+   re-reading for CR-012. Fixed by passing a lazy-require factory
+   function; same callsites work for both class and factory forms
+   because `new factoryFn()` returns the inner `new ChatTranslator()`.
+   Lesson: extractions with implicit-import assumptions need a
+   concrete test that exercises the injected dep in isolation.
+
+2. **WS `health` command had no integration coverage.** HTTP /health
+   had CR-008b tests but the WebSocket-level command (added as the
+   recovery path when CR-008 showed HTTP was broken on websockets
+   16) was untested. One `asyncio.run(websockets.connect(...))` test
+   round-trips the command and validates the payload shape.
+
+3. **matrix-js-sdk was already lazy-loaded.** Investigating CR-012
+   revealed `chat-client.js _getSDK()` already uses dynamic
+   `import()` inside a getter. The eager require in main.js
+   (`electron-store`) is <10ms and small enough to not matter.
+   The remaining CR-012 win was the ChatTranslator bug above.
+
+4. **clean-slate execSync → async in kill path only.** Converting
+   `_findWindyProcesses` would cascade (`_detect` → async →
+   `run()` already async → `_verify` needs async). Scoped the
+   change to `_killProcesses` where we have async context and the
+   exec calls can potentially run for 5s each. Harvest commands
+   (`pgrep -P` + `ps -o pid= -g`) now run in parallel via
+   `Promise.all`, cutting worst-case blocking from 10s to ~5s
+   with zero event-loop stall.
+
+5. **CR-002 was mostly already fixed.** The audit flag was
+   `console.log(resultWithToken)`. Grep turned up zero such
+   sites. The real CR-002 win was routing the two process-level
+   error handlers (uncaughtException, unhandledRejection) through
+   safeErrorSummary so the user-visible dialog + console lines
+   can't leak arbitrary `.toString()` output from library errors.
+
+### Aggregate state after 3 waves
+
+- 27 commits on `installer-bundling-v3` (session 2 only)
+- 162 unit tests + 9 pytest + 24 E2E — all green locally
+- 8 CI gates (was 1 at session start)
+- `main.js`: 6497 → 6423 after chat extract, then re-grew slightly
+  with CR-002/CR-007 hardening. Net negative LOC because the
+  extract removed more than the guards added.
+
