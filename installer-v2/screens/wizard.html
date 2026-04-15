@@ -1925,7 +1925,7 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="goToScreen(1)" data-i18n="btn.getStarted">Get Started 🌪️</button>
+        <button class="btn btn-primary" onclick="goToScreen('hardware')" data-i18n="btn.getStarted">Get Started 🌪️</button>
       </div>
     </div>
 
@@ -1976,69 +1976,24 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(0)" data-i18n="btn.back">← Back</button>
+        <button class="btn btn-ghost" onclick="goToScreen('welcome')" data-i18n="btn.back">← Back</button>
         <button class="btn btn-primary" id="btn-to-account" disabled onclick="continueFromHardware()"
           data-i18n="btn.continue">Continue →</button>
       </div>
     </div>
 
-    <!-- ═══ SCREEN 2: ACCOUNT ═══ -->
-    <div class="screen" id="screen-2">
-      <h1 style="font-size:20px; margin-bottom:4px;" data-i18n="acct.title">🔑 Your Windy Pro Account</h1>
-      <p style="font-size:15px; color:var(--text-dim); margin-bottom:16px;">Sign in to activate your engines. One
-        account, up to 5 devices.</p>
-
-      <div class="auth-error" id="auth-error"></div>
-      <div class="auth-success" id="auth-success"></div>
-
-      <div class="account-section">
-        <div class="account-option" id="opt-login" onclick="selectAccountOption('login')">
-          <h3 data-i18n="acct.loginTitle">🔓 Sign In</h3>
-          <p data-i18n="acct.loginDesc">Already have an account? Welcome back.</p>
-          <div class="account-form" id="form-login">
-            <input class="input-field" type="email" id="login-email" placeholder="Email address"
-              data-i18n-placeholder="acct.emailPlaceholder">
-            <input class="input-field" type="password" id="login-password" placeholder="Password"
-              data-i18n-placeholder="acct.passwordPlaceholder">
-            <button class="auth-btn" id="btn-login" onclick="event.stopPropagation(); handleLogin()"
-              data-i18n="acct.loginBtn">Sign In →</button>
-          </div>
-        </div>
-
-        <div class="account-option" id="opt-register" onclick="selectAccountOption('register')">
-          <h3 data-i18n="acct.registerTitle">✨ Create Account</h3>
-          <p data-i18n="acct.registerDesc">New to Windy Pro? Start your journey.</p>
-          <div class="account-form" id="form-register">
-            <input class="input-field" type="text" id="reg-name" placeholder="Full name"
-              data-i18n-placeholder="acct.namePlaceholder">
-            <input class="input-field" type="email" id="reg-email" placeholder="Email address"
-              data-i18n-placeholder="acct.emailPlaceholder">
-            <input class="input-field" type="password" id="reg-password" placeholder="Create password"
-              data-i18n-placeholder="acct.createPasswordPlaceholder">
-            <input class="input-field" type="password" id="reg-password-confirm" placeholder="Confirm password"
-              data-i18n-placeholder="acct.confirmPasswordPlaceholder">
-            <button class="auth-btn" id="btn-register" onclick="event.stopPropagation(); handleRegister()">Create
-              Account →</button>
-          </div>
-        </div>
-
-        <div class="account-option" id="opt-skip" onclick="selectAccountOption('skip'); handleFreeAccount()">
-          <h3 data-i18n="acct.skipTitle">⏭️ Try Free Tier</h3>
-          <p data-i18n="acct.skipDesc">Get started with 2 free engines. Create an account later.</p>
-        </div>
-      </div>
-
-      <div class="device-limit-notice">
-        <span class="notice-icon">📱</span>
-        <span class="notice-text">Free tier: <strong>1 device</strong>. Upgrade to Windy Pro for 3 devices, Windy Ultra for 5, or Windy Max for <strong>10</strong> devices.</span>
-      </div>
-
-      <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(1)" data-i18n="btn.back">← Back</button>
-        <button class="btn btn-primary" id="btn-to-models" disabled onclick="goToScreen(3)"
-          data-i18n="btn.continue">Continue →</button>
-      </div>
-    </div>
+    <!-- ═══ Account screen DELETED in P14 ═══
+         Phase 8 (session 1) bypassed this screen at the navigation
+         level by routing continueFromHardware() to the languages
+         screen and silently provisioning a free-tier account in the
+         background. The DOM markup was kept then because goToScreen
+         used integer DOM-order indices and removing it would have
+         shifted every subsequent screen.
+         P14 (session 2) refactored goToScreen to use stable string
+         names, so the markup can finally be deleted. Account
+         creation now lives entirely in the post-first-transcript
+         banner (src/client/desktop/renderer/signup-banner.js).
+    -->
 
     <!-- ═══ SCREEN 3: YOUR LANGUAGES ═══ -->
     <div class="screen" id="screen-3">
@@ -2222,8 +2177,8 @@
       </div>
 
       <div class="btn-row">
-        <!-- Phase 8: account screen is bypassed; back goes to hardware. -->
-        <button class="btn btn-ghost" onclick="goToScreen(1)" data-i18n="btn.back">← Back</button>
+        <!-- Phase 8: account screen is gone; back goes to hardware. -->
+        <button class="btn btn-ghost" onclick="goToScreen('hardware')" data-i18n="btn.back">← Back</button>
         <button class="btn btn-primary" id="btn-to-translate" disabled onclick="proceedFromLanguages()"
           data-i18n="lang.selectAtLeast">Select at least 1 language →</button>
       </div>
@@ -2235,8 +2190,8 @@
         <!-- Populated by JS based on language count -->
       </div>
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(3)" data-i18n="btn.back">← Back</button>
-        <button class="btn btn-primary" id="btn-past-translate" onclick="goToScreen(5)"
+        <button class="btn btn-ghost" onclick="goToScreen('languages')" data-i18n="btn.back">← Back</button>
+        <button class="btn btn-primary" id="btn-past-translate" onclick="goToScreen('hero')"
           data-i18n="btn.continue">Continue →</button>
       </div>
     </div>
@@ -2254,7 +2209,7 @@
           style="font-size:15px; color:var(--text-dim); margin-bottom:18px; max-width:500px; margin-left:auto; margin-right:auto;">
           WindyTune already analyzed your hardware and picked the perfect engines. One click and you're done.
         </div>
-        <button onclick="selectRecommended(); goToScreen(6);"
+        <button onclick="selectRecommended(); goToScreen('models');"
           style="background:linear-gradient(135deg, #22C55E, #16A34A); color:white; border:none; border-radius:12px; padding:16px 40px; font-size:18px; font-weight:800; cursor:pointer; transition:all 0.2s; box-shadow:0 4px 20px rgba(34,197,94,0.4); letter-spacing:0.5px;"
           onmouseenter="this.style.transform='scale(1.05)'; this.style.boxShadow='0 6px 30px rgba(34,197,94,0.6)'"
           onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 20px rgba(34,197,94,0.4)'">🌪️ Just
@@ -2385,8 +2340,8 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(4)" data-i18n="btn.back">← Back</button>
-        <button class="btn btn-primary" onclick="goToScreen(6)" data-i18n="btn.chooseEngines">Choose My Engines
+        <button class="btn btn-ghost" onclick="goToScreen('translate')" data-i18n="btn.back">← Back</button>
+        <button class="btn btn-primary" onclick="goToScreen('models')" data-i18n="btn.chooseEngines">Choose My Engines
           →</button>
       </div>
     </div>
@@ -2572,7 +2527,7 @@
       </div><!-- /#model-advanced-options (Phase 7 wrapper) -->
 
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(5)" data-i18n="btn.back">← Back</button>
+        <button class="btn btn-ghost" onclick="goToScreen('hero')" data-i18n="btn.back">← Back</button>
         <button class="btn btn-primary" id="btn-install" disabled onclick="proceedFromEngines()"
           data-i18n="btn.installSelected">Install Selected →</button>
       </div>
@@ -2638,7 +2593,7 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(6)" data-i18n="btn.back">← Back</button>
+        <button class="btn btn-ghost" onclick="goToScreen('models')" data-i18n="btn.back">← Back</button>
         <button class="btn btn-primary" id="btn-pairs-continue" onclick="proceedFromPairPicker()">Install Selected →</button>
       </div>
     </div>
@@ -3115,27 +3070,100 @@
     const progressCallbacks = [];
 
     // ─── NAVIGATION ───
-    function goToScreen(n) {
-      document.querySelectorAll('.screen').forEach((s, i) => s.classList.toggle('active', i === n));
+    //
+    // P14 refactor: goToScreen now takes a stable string name OR a
+    // legacy integer index. The string path is canonical going forward;
+    // the integer path is kept temporarily so any unfound call site (or
+    // tests) keeps working. Both resolve to a single source of truth:
+    // SCREEN_ORDER, which lists screens in the order the wizard walks
+    // them. To insert/remove a screen, change THIS list — never the
+    // call sites.
+    //
+    // Why string names: previously the "active" screen was whichever
+    // .screen element was at index N in DOM order. Phase 8 had to
+    // bypass screen-2 (account) by intercepting Continue rather than
+    // deleting screen-2 markup, because deleting would shift every
+    // subsequent index and break a dozen goToScreen(N) calls. With
+    // string names, the position in DOM is decoupled from the name we
+    // navigate by — we can finally delete the account screen.
+    const SCREEN_ORDER = [
+      'welcome',    // 0
+      'hardware',   // 1
+      'languages',  // 2 (was 3)
+      'translate',  // 3 (was 4)
+      'hero',       // 4 (was 5)
+      'models',     // 5 (was 6)
+      'pairs',      // 6 (was 7)
+      'install',    // 7 (was 8)
+      'verify',     // 8 (was 9 — Phase 4 perm verification)
+      'complete',   // 9 (was 10)
+    ];
+    // Map screen name → actual element id. Most are screen-N where N
+    // matches the legacy integer index that owned the markup; verify
+    // and complete have non-numeric ids because they were inserted
+    // out of order historically.
+    const SCREEN_ELEMENT_ID = {
+      welcome:    'screen-0',
+      hardware:   'screen-1',
+      languages:  'screen-3',
+      translate:  'screen-4',
+      hero:       'screen-5',
+      models:     'screen-6',
+      pairs:      'screen-7',
+      install:    'screen-8',
+      verify:     'screen-verify',
+      complete:   'screen-9',
+    };
+
+    /**
+     * Resolve a goToScreen() argument to a canonical screen name.
+     * Accepts:
+     *   - a string name from SCREEN_ORDER
+     *   - a legacy integer index (kept for in-flight refactor; callers
+     *     should migrate to string names)
+     */
+    function resolveScreenName(arg) {
+      if (typeof arg === 'string' && SCREEN_ELEMENT_ID[arg]) return arg;
+      if (typeof arg === 'number' && SCREEN_ORDER[arg]) return SCREEN_ORDER[arg];
+      // Legacy fallthrough: integer index treated as DOM order.
+      // Should never trigger if all call sites migrated.
+      console.warn('[wizard] goToScreen unknown arg:', arg);
+      return null;
+    }
+
+    function goToScreen(arg) {
+      const name = resolveScreenName(arg);
+      if (!name) return;
+      const targetId = SCREEN_ELEMENT_ID[name];
+      // Toggle .active by element id rather than index — DOM order no
+      // longer determines which screen is "next".
+      document.querySelectorAll('.screen').forEach((s) => {
+        s.classList.toggle('active', s.id === targetId);
+      });
+      // Progress bar segments + step labels are still ordered. Map by
+      // the position of `name` in SCREEN_ORDER.
+      const idx = SCREEN_ORDER.indexOf(name);
       document.querySelectorAll('.progress-seg').forEach((s, i) => {
-        s.classList.toggle('done', i < n);
-        s.classList.toggle('active', i === n);
+        s.classList.toggle('done', i < idx);
+        s.classList.toggle('active', i === idx);
       });
       document.querySelectorAll('.step-label').forEach((s, i) => {
-        s.classList.toggle('done', i < n);
-        s.classList.toggle('active', i === n);
+        s.classList.toggle('done', i < idx);
+        s.classList.toggle('active', i === idx);
       });
-      currentScreen = n;
+      // currentScreen exposes the integer index for legacy callers
+      // (e.g. window-focus handlers that compare against a number).
+      currentScreen = idx;
 
-      if (n === 1 && !hardwareData) runHardwareScan();
-      if (n === 3) initLanguageScreen();
-      if (n === 4) { buildTranslateUpsell(); setTimeout(restoreTranslateSelection, 50); }
-      if (n === 5) buildEducationMatrix();
-      if (n === 6) { buildModelList(); updatePlanBanner(); updateTranslateAddonBanner(); buildSpecialistUpsellCard(); }
-      if (n === 7) initPairPickerScreen();
-      if (n === 8) startBrandRotations();
-      if (n !== 8) stopBrandRotations();
-      if (n === 9) initVerifyScreen();   // Phase 4 permission verification (between install and complete)
+      if (name === 'hardware' && !hardwareData) runHardwareScan();
+      if (name === 'languages') initLanguageScreen();
+      if (name === 'translate') { buildTranslateUpsell(); setTimeout(restoreTranslateSelection, 50); }
+      if (name === 'hero') buildEducationMatrix();
+      if (name === 'models') { buildModelList(); updatePlanBanner(); updateTranslateAddonBanner(); buildSpecialistUpsellCard(); }
+      if (name === 'pairs') initPairPickerScreen();
+      if (name === 'install') startBrandRotations();
+      if (name !== 'install') stopBrandRotations();
+      if (name === 'verify') initVerifyScreen();
     }
 
     // ─── SCREEN 1: HARDWARE SCAN ───
@@ -3362,7 +3390,7 @@
         // re-offered after first transcription anyway.
         console.warn('[wizard] silent free-account creation failed:', e);
       }
-      goToScreen(3);
+      goToScreen('languages');
     }
 
     // ─── SCREEN 3: MODEL PICKER ───
@@ -4406,7 +4434,7 @@
 
     // ─── SCREEN 5: INSTALL (THE BRAND EXPERIENCE) ───
     async function startInstall() {
-      goToScreen(8);
+      goToScreen('install');
 
       // Activate progress bar glow
       document.querySelector('.install-overall-bar').classList.add('active-glow');
@@ -4585,9 +4613,7 @@
         }
 
         // Phase 4: route through permission verification before celebrating.
-        // Screen index 9 is now the verify screen (DOM order); the original
-        // complete screen moved to index 10.
-        setTimeout(() => goToScreen(9), 1500);
+        setTimeout(() => goToScreen('verify'), 1500);
       } else {
         document.getElementById('install-status').textContent = '⚠️ Installation Failed';
         document.getElementById('install-detail').textContent = result.error || 'Unknown error. Please try again.';
@@ -4859,11 +4885,10 @@
 
     function skipVerify() {
       verifyState.skipped = true;
-      // Move to complete (which is now index 10 in DOM order)
-      goToScreen(10);
+      goToScreen('complete');
     }
     function finishVerify() {
-      goToScreen(10);
+      goToScreen('complete');
     }
 
     // ─── BRAND ROTATION (during download) ───
@@ -5284,7 +5309,7 @@
 
     function proceedFromLanguages() {
       if (userLanguages.length === 0) return;
-      goToScreen(4);
+      goToScreen('translate');
     }
 
     function updateLangContinueBtn() {
@@ -6007,8 +6032,8 @@
           window.wizardAPI.purchaseTranslate(`${plan}-${billing}-pending`);
         }
 
-        // Auto-proceed to Learn screen after brief delay
-        setTimeout(() => goToScreen(5), 2000);
+        // Auto-proceed to Learn (hero) screen after brief delay
+        setTimeout(() => goToScreen('hero'), 2000);
       }
     }
 
@@ -6073,12 +6098,12 @@
         // Free users skip pair picker — go directly to install
         startInstall();
       } else {
-        goToScreen(7);
+        goToScreen('pairs');
       }
     }
 
     /**
-     * Initialize the pair picker screen when navigating to Screen 7
+     * Initialize the pair picker screen when navigating to it
      */
     function initPairPickerScreen() {
       const catalog = window.PAIR_CATALOG || [];
@@ -6271,7 +6296,7 @@
       if (typeof window.wizardAPI !== 'undefined') {
         window.wizardAPI.purchaseTranslate('deferred');
       }
-      goToScreen(5);
+      goToScreen('hero');
     }
 
     // ─── LAUNCH ───

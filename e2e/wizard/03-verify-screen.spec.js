@@ -54,7 +54,7 @@ async function jumpToVerifyWithStubs(page, { mic, access }) {
       window.setVerifyStatus('access', access === 'granted' ? 'granted' : 'denied',
         access === 'granted' ? '✅ stubbed grant' : '❌ stubbed denial');
     };
-    window.goToScreen(9);
+    window.goToScreen('verify');
   }, { mic, access });
   await page.waitForFunction(() => {
     const a = document.querySelectorAll('.screen.active');
@@ -157,18 +157,16 @@ test('verify screen: both denied → Finish disabled', async ({ }, testInfo) => 
   }
 });
 
-test('verify screen: Skip button always navigates to complete (screen 10)', async () => {
+test('verify screen: Skip button always navigates to complete', async () => {
   const w = await launchWizard();
   try {
     await jumpToVerifyWithStubs(w.page, { mic: 'denied', access: 'denied' });
     // Click Skip without resolving any verify state
     await w.page.click('button:has-text("Skip")');
-    // skipVerify() routes to goToScreen(10) — the original complete screen
+    // skipVerify() routes to goToScreen('complete')
     await w.page.waitForFunction(() => {
-      const all = document.querySelectorAll('.screen');
-      // Index 10 in DOM order is screen-9 (the original complete screen)
-      // — verify it became active
-      return all[10] && all[10].classList.contains('active');
+      const a = document.querySelector('.screen.active');
+      return a && a.id === 'screen-9';   // 'complete' maps to #screen-9
     }, null, { timeout: 5000 });
   } finally {
     await w.cleanup();

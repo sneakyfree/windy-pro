@@ -54,25 +54,21 @@ test('Screen 1 hardware scan populates and Continue enables', async () => {
   }
 });
 
-test('Phase 8: Continue from hardware skips screen-2 and lands on screen-3', async () => {
+test('Phase 8 + P14: Continue from hardware lands on languages (account screen deleted)', async () => {
   const w = await launchWizard();
   try {
     await w.page.click('button[data-i18n="btn.getStarted"]');
     await waitForScreen(w.page, 'screen-1');
     await w.page.waitForSelector('#btn-to-account:not([disabled])', { timeout: 15_000 });
     await w.page.click('#btn-to-account');
-    // continueFromHardware silently provisions a free account then
-    // goToScreen(3). screen-2 (account) MUST NOT become active.
+    // continueFromHardware → goToScreen('languages') → #screen-3
     await waitForScreen(w.page, 'screen-3');
-    // Defensive: assert screen-2 never went active (could fire then leave)
-    const screen2EverActive = await w.page.evaluate(() => {
-      // Inspect classList history isn't kept; check current state.
-      // If it was ever active, our test would have caught it via a
-      // race; since waitForScreen above only resolved on screen-3,
-      // we can be confident this assertion holds.
-      return document.querySelector('#screen-2').classList.contains('active');
-    });
-    expect(screen2EverActive).toBe(false);
+    // P14: the account screen markup was deleted entirely, not just
+    // hidden. Assert #screen-2 no longer exists in the DOM at all.
+    const accountStillExists = await w.page.evaluate(
+      () => !!document.querySelector('#screen-2')
+    );
+    expect(accountStillExists).toBe(false);
   } finally {
     await w.cleanup();
   }
