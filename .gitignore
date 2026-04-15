@@ -91,3 +91,8 @@ services/*/node_modules
 
 # Local test state (per-machine)
 .test-clean-install-state
+
+# Playwright E2E artefacts (traces, screenshots, videos, HTML report)
+e2e-results/
+e2e-report/
+playwright-report/

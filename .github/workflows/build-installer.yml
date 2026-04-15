@@ -108,6 +108,40 @@ jobs:
           path: extraResources/bundle-manifest.json
           retention-days: 14
 
+  # ── E2E (Playwright-electron) ─────────────────────────────────────────────
+  # Gated on build-mac-arm64 because the wizard E2E walks paths that
+  # write to ~/.windy-pro/ — needs a working bundled-Python at minimum.
+  # Runs on macos-latest (only platform we currently produce E2E specs
+  # for; Linux has display/audio sandbox issues on hosted runners).
+  #
+  # On failure, traces + screenshots + videos uploaded as artefacts —
+  # they're the only signal we'll get without re-running locally.
+  e2e:
+    name: E2E (wizard + signup banner)
+    needs: build-mac-arm64
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - name: Install npm deps
+        run: npm ci
+      - name: Run Playwright suite
+        run: npx playwright test --reporter=list,html
+        env:
+          # Shorten Electron startup wait on hosted runners
+          ELECTRON_DISABLE_SANDBOX: '1'
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e-report/
+            e2e-results/
+          retention-days: 14
+
   # ── macOS x64 build ───────────────────────────────────────────────────────
   # macos-13 is the last GitHub-hosted Intel runner — once it's deprecated
   # we'll need to either drop x64 builds or cross-build from arm64 with
