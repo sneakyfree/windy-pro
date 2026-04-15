@@ -104,6 +104,9 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
+      - name: Guard against legacy venv resurrection
+        # See scripts/ci/check-no-legacy-venv.sh for context.
+        run: bash scripts/ci/check-no-legacy-venv.sh
       - name: Run installer + security unit tests
         # Includes SEC-PAIR-1 (path traversal) and SEC-WIZARD-1 (Stripe
         # URL allowlist) regression pins. See docs/SECURITY-AUDIT-2026-04.md.
