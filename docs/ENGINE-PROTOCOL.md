@@ -20,6 +20,15 @@ without upgrading the connection.
 Returns a JSON status payload. Also used as a liveness probe by
 `main.js startPythonServer()` on retries.
 
+> **Known limitation (P15 CR-008):** the endpoint depends on
+> `websockets.serve`'s legacy `process_request` hook. websockets
+> **>= 14** validates the HTTP `Connection:` header BEFORE the hook
+> fires, so plain `curl` requests (which send `Connection: close`)
+> get a 426 Upgrade Required instead of the intended 200/503. Until
+> server.py migrates to `websockets.asyncio.server` or serves /health
+> on a separate port, liveness probes should test via the WebSocket
+> handshake or run against websockets<14.
+
 ```
 GET /health HTTP/1.1
 Host: 127.0.0.1:9876
@@ -69,6 +78,7 @@ are action-specific; unknown actions produce an `error` response.
 | `config` | `{ "config": {...TranscriberConfig...} }` | Re-configure the transcriber (model, device, language, vad_*). Takes effect on the next `start`. |
 | `recovery_check` | `{ "timestamp": <ms> }` | Ask whether any unflushed transcript from before timestamp is still in memory. |
 | `ping` | `{}` | Keepalive. Server replies with `pong`. |
+| `health` | `{}` | Snapshot of server status. Replies with a `health` message carrying the same payload as HTTP `/health`. **Use this over `/health` on websockets >= 14.** |
 | `vault_list` | `{ "limit": 50, "offset": 0 }` | List recent vault entries (transcripts). |
 | `vault_get` | `{ "session_id": <int> }` | Return a specific vault session. |
 | `vault_search` | `{ "query": "<text>" }` | Full-text search the vault. |
@@ -89,6 +99,7 @@ Every server message is a JSON object with a `type` key.
 | `error` | `{ "error": "<message>" }` | Any error surfaced by a handler. |
 | `ack` | `{ "action": "...", ... }` | Confirmation that a command was accepted. Shape varies per command. |
 | `pong` | `{ "heartbeat": <bool> }` | Reply to `ping`, or broadcast by the heartbeat loop. |
+| `health` | `{ status, uptime_sec, cold_start_ms, model, device, clients, version, error }` | Reply to `health` command. Same payload as the HTTP `/health` endpoint. |
 | `recovery_available` | `{ "sessionId": <int>, ... }` | After a `recovery_check` that found recoverable data. |
 | `vault_list` | `{ "entries": [...], "total": <int> }` | Reply to `vault_list`. |
 | `vault_get` | `{ "entry": {...} }` | Reply to `vault_get`. |

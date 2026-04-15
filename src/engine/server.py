@@ -12,6 +12,7 @@ import json
 import sys
 import os
 import time
+import http
 from pathlib import Path
 from typing import Set, Any
 
@@ -388,7 +389,17 @@ class WindyServer:
                 "type": "pong",
                 "timestamp": cmd.get("timestamp")
             }))
-        
+
+        elif action == "health":
+            # P9/P15: WebSocket-level health snapshot. HTTP /health is
+            # deprecated on websockets >= 14; this command is the
+            # supported replacement. Same payload shape as
+            # docs/ENGINE-PROTOCOL.md §"GET /health".
+            await websocket.send(json.dumps({
+                "type": "health",
+                **self._health_payload(),
+            }))
+
         # ═══ Vault Commands ═══
         elif action == "vault_list":
             limit = cmd.get("limit", 50)
@@ -694,14 +705,17 @@ class WindyServer:
             try:
                 payload = self._health_payload()
                 body = json.dumps(payload).encode('utf-8')
-                # Healthy = 200. If the transcriber failed to load, we
-                # still answer — but with 503 so liveness probes see it.
-                status = 200 if payload['status'] == 'ok' else 503
+                # websockets >= 14 requires the status to be an
+                # http.HTTPStatus enum, not a bare int. Older versions
+                # accepted either — the enum works everywhere.
+                status = http.HTTPStatus.OK if payload['status'] == 'ok' \
+                    else http.HTTPStatus.SERVICE_UNAVAILABLE
                 return (status, [('Content-Type', 'application/json'),
                                  ('Cache-Control', 'no-store')], body)
             except Exception as e:
                 body = json.dumps({'status': 'error', 'error': str(e)}).encode('utf-8')
-                return (500, [('Content-Type', 'application/json')], body)
+                return (http.HTTPStatus.INTERNAL_SERVER_ERROR,
+                        [('Content-Type', 'application/json')], body)
         # Return None to let the WS handshake proceed for every other
         # path.
         return None
