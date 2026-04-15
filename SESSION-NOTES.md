@@ -381,3 +381,46 @@ Another five priorities off the CR-NNN follow-up queue.
   with CR-002/CR-007 hardening. Net negative LOC because the
   extract removed more than the guards added.
 
+
+---
+
+## Session 2 — fourth wave (post "proceed" #3)
+
+### Fourth-wave commit list
+
+| Hash | Description |
+|---|---|
+| `2fab58a` | feat(model): SHA-256 integrity check + CR-015 tests/README.md + full suite green |
+| `e984d0f` | ci(triage): fix stale account-server /health shape (1 remaining red) |
+
+### What's in now that wasn't before
+
+1. **Bundled model integrity** (WINDY-052): per-file SHA-256 map in
+   bundle-manifest.json, verifyModelIntegrity() reads + checks,
+   backward-compat with older bundles (skipped with reason).
+   Catches tampered .dmg + disk-corruption-during-install.
+
+2. **tests/README.md** (CR-015 light): categorises the flat layout
+   by filename prefix with conventions for future additions.
+   Deliberately NOT physically restructuring — the ci.yml /
+   pytest.ini / pair-download-manager cascade isn't worth the
+   blast radius at current scale. Criteria for future migration
+   documented.
+
+3. **251 tests, all green locally:**
+     188 unit tests    (15 jest files)
+      39 pytest cases   (3 files — health 6, integration 4, desktop_security 29)
+      24 E2E tests      (5 Playwright files)
+
+4. **ci.yml last red job fixed:** account-server /health test was
+   asserting on `users` / `devices` fields that were removed
+   months ago. Updated to the current shape (database + services
+   + uptime_seconds). Pre-existing drift, unrelated to sessions.
+
+### Aggregate state across all four waves
+
+- **29 commits** on `installer-bundling-v3` this session
+- **251 tests green locally** (was 0 at session 2 start)
+- **8 CI gates** (was 1)
+- ci.yml should now be fully green
+
