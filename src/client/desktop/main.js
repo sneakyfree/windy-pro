@@ -39,10 +39,15 @@ function writeCrashLog(type, err) {
 
 process.on('uncaughtException', (err) => {
   writeCrashLog('UncaughtException', err);
-  console.error('[CRASH]', err.message);
+  // CR-002: route the visible strings through safeErrorSummary so
+  // the console output + the user-facing dialog never show any
+  // attached fields (axios .response, etc.) — only the allow-listed
+  // name / message / code. Stack stays in the JSON crash log only.
+  const _summary = _safeErrorSummary(err);
+  console.error('[CRASH]', _summary.message || _summary.name || '(no details)');
 
   // EPIPE / ECONNRESET from dead child processes (Python server) — handle gracefully
-  if (['EPIPE', 'ECONNRESET', 'ECONNREFUSED'].includes(err.code)) {
+  if (['EPIPE', 'ECONNRESET', 'ECONNREFUSED'].includes(_summary.code)) {
     console.warn('[CRASH] Pipe/connection error (child process likely died) — recovering gracefully');
     return; // Don't show crash dialog for pipe errors
   }
@@ -53,7 +58,7 @@ process.on('uncaughtException', (err) => {
     if (require('electron').app.isReady()) {
       dialog.showErrorBox(
         'Windy Pro encountered an error',
-        `Something went wrong. The error has been logged.\n\nDetails: ${err.message}\n\nLog: ${crashLogPath}`
+        `Something went wrong. The error has been logged.\n\nDetails: ${_summary.message || '(no details)'}\n\nLog: ${crashLogPath}`
       );
     }
   } catch (_) { /* dialog may not be available yet */ }
@@ -61,7 +66,13 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason) => {
   writeCrashLog('UnhandledRejection', reason);
-  console.error('[REJECTION]', String(reason));
+  // CR-002: avoid String(reason) which would call the object's
+  // toString — for most Errors that's safe (name + message) but
+  // a library could override toString to emit arbitrary fields.
+  // Use the crash-summary helper so the console fallback matches
+  // the redaction the crash log applies.
+  const _sum = _safeErrorSummary(reason);
+  console.error('[REJECTION]', _sum.message || _sum.name || '(no details)');
 });
 /**
  * Windy Pro - Electron Main Process
