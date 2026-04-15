@@ -122,3 +122,79 @@ def test_non_health_http_gets_404(running_engine):
     with pytest.raises(urllib.error.HTTPError) as info:
         urllib.request.urlopen(f"{running_engine}/not-a-real-endpoint", timeout=2)
     assert info.value.code == 404
+
+
+# ─── WebSocket-level `health` command (CR-008/CR-008b follow-on) ────────
+#
+# The WS command is the in-app liveness probe. Same payload as
+# HTTP /health, works on every websockets version. The engine spawned
+# by `running_engine` fixture is used for these too, but we need the
+# WS port rather than the health port; override via a second fixture.
+
+@pytest.fixture
+def running_engine_ws_port():
+    """Spawn the engine AND return both the WS port and health base
+    URL. Tests that exercise the WS protocol use this fixture; pure
+    /health tests keep using `running_engine`."""
+    ws_port = _free_port()
+    health_port = _free_port()
+    env = {
+        **os.environ,
+        "WINDY_SKIP_MODEL_LOAD": "1",
+        "WINDY_HEALTH_PORT": str(health_port),
+        "PYTHONPATH": REPO_ROOT,
+    }
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "src.engine.server",
+         "--host", "127.0.0.1", "--port", str(ws_port)],
+        cwd=REPO_ROOT, env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    # Wait for /health to be reachable (proves the server is up)
+    health_base = f"http://127.0.0.1:{health_port}"
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(f"{health_base}/health", timeout=0.5):
+                break
+        except Exception:
+            time.sleep(0.25)
+    else:
+        proc.terminate()
+        raise RuntimeError("engine never came up")
+    yield {'ws_port': ws_port, 'health_base': health_base}
+    proc.terminate()
+    try: proc.wait(timeout=3)
+    except subprocess.TimeoutExpired: proc.kill()
+
+
+def test_ws_health_command_round_trip(running_engine_ws_port):
+    """Send `{"action":"health"}` over the WebSocket; expect a
+    `health` response with the same fields as HTTP /health. This is
+    the in-app liveness probe for modern websockets versions."""
+    import asyncio
+    import json as _json
+
+    async def _probe():
+        import websockets
+        async with websockets.connect(
+            f"ws://127.0.0.1:{running_engine_ws_port['ws_port']}"
+        ) as ws:
+            await ws.send(_json.dumps({'action': 'health'}))
+            # Read messages until we see type=health (the server may
+            # emit a state message first).
+            for _ in range(5):
+                msg = await asyncio.wait_for(ws.recv(), timeout=2)
+                data = _json.loads(msg)
+                if data.get('type') == 'health':
+                    return data
+            raise AssertionError('no health response within 5 messages')
+
+    response = asyncio.run(_probe())
+    # Same contract as HTTP /health
+    assert response['status'] in ('ok', 'loading', 'error')
+    assert isinstance(response['uptime_sec'], (int, float))
+    assert 'model' in response
+    assert 'device' in response
+    assert 'clients' in response
+    assert 'version' in response

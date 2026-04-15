@@ -1754,6 +1754,13 @@ const _chatTranslatorRef = {
   get current() { return chatTranslator; },
   set current(v) { chatTranslator = v; },
 };
+// CR-012: ChatTranslator lazy-required on first chat-translate-text
+// call. Keeps matrix-js-sdk + chat-translate out of the cold path
+// for users who never open the chat window.
+const _ChatTranslatorLazy = function ChatTranslatorLazy(store) {
+  const { ChatTranslator } = require('./chat/chat-translate');
+  return new ChatTranslator(store);
+};
 registerChatIpc({
   ipcMain,
   getChatClient,
@@ -1761,7 +1768,7 @@ registerChatIpc({
   setupChatForwarding: _setupChatForwarding,
   withTimeout,
   store,
-  ChatTranslator,
+  ChatTranslator: _ChatTranslatorLazy,
   translatorRef: _chatTranslatorRef,
 });
 
