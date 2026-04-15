@@ -2582,17 +2582,29 @@ function registerHotkeys() {
   const pasteClipAccel = hotkeys.pasteClipboard || 'CommandOrControl+Shift+B';
   const regClipboard = globalShortcut.register(pasteClipAccel, () => {
     // Small delay to let modifier keys release, then simulate Ctrl+V
-    const { exec } = require('child_process');
-    if (process.platform === 'linux') {
-      // --clearmodifiers ensures held keys (Ctrl+Shift from hotkey) don't interfere
-      exec('sleep 0.1 && xdotool key --clearmodifiers ctrl+v', (err) => {
-        if (err) console.error('[Hotkey] Paste clipboard failed:', err.message);
-      });
-    } else if (process.platform === 'darwin') {
-      exec('sleep 0.1 && osascript -e \'tell application "System Events" to keystroke "v" using command down\'');
-    } else {
-      exec('powershell -command "Start-Sleep -Milliseconds 100; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"');
-    }
+    // CR-005: replace `exec('sleep … && …')` with execFile + setTimeout.
+    // The literal strings were safe (no renderer input interpolated),
+    // but the `&&` shell pattern is easy to accidentally break. Also
+    // avoids spawning a shell just to sleep.
+    const { execFile } = require('child_process');
+    setTimeout(() => {
+      if (process.platform === 'linux') {
+        // --clearmodifiers ensures held keys (Ctrl+Shift from hotkey) don't interfere
+        execFile('xdotool', ['key', '--clearmodifiers', 'ctrl+v'], (err) => {
+          if (err) console.error('[Hotkey] Paste clipboard failed:', err.message);
+        });
+      } else if (process.platform === 'darwin') {
+        execFile('osascript', ['-e',
+          'tell application "System Events" to keystroke "v" using command down'],
+          (err) => { if (err) console.error('[Hotkey] Paste clipboard failed:', err.message); });
+      } else {
+        // Windows: SendKeys ^v — no shell escapes needed when we pass
+        // the script via -Command as a single argv element.
+        execFile('powershell', ['-NoProfile', '-Command',
+          "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^v')"
+        ], (err) => { if (err) console.error('[Hotkey] Paste clipboard failed:', err.message); });
+      }
+    }, 100);
   });
   console.info(`[Hotkey] Paste clipboard (${pasteClipAccel}): ${regClipboard ? 'OK' : 'FAILED'}`);
 

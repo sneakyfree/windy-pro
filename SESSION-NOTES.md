@@ -1,6 +1,9 @@
-# Session Notes — Autonomous run on `installer-bundling-v3`
+# Session Notes — Autonomous runs on `installer-bundling-v3`
 
-## Summary
+> Two sessions, appended chronologically. Session 2 starts below at
+> "## Session 2 summary (2026-04-15)".
+
+## Session 1 summary
 
 Twelve commits across all ten priorities Grant set out. The wizard's
 "stuck at 0%" hang has a root cause (execSync blocking the Electron
@@ -119,3 +122,133 @@ Grant's accounts to verify:
   wizard.html. Bypassing via `continueFromHardware()` was safer.
   Future cleanup: switch `goToScreen` to take a string id and
   walk the DOM by id; then screen-2 can finally be deleted.
+
+---
+
+## Session 2 summary (2026-04-15)
+
+All 15 priorities from the second autonomous prompt completed. 15
+commits + 1 fix applied from the code-review findings. Tests: 127
+unit + 16 E2E, all green locally. CI job count grown from 1 to 7
+gates (e2e, test-installer/renderer/error-ratchet/venv-guard/i18n-
+coverage, build matrix).
+
+## Session 2 commit list
+
+| Hash | Description | Priority |
+|---|---|---|
+| `3c48bf7` | test(e2e): Playwright-electron harness + signup banner | P1 |
+| `16b110c` | sec(audit): IPC + API audit — SEC-PAIR-1 + SEC-WIZARD-1 | P2 |
+| `2117cbf` | ci(guard): block legacy extraResources/venv resurrection | P13 |
+| `64ac4db` | refactor(wizard): goToScreen string IDs + delete account screen | P14 |
+| `b71199a` | feat(errors): WINDY-NNN error taxonomy + ratchet guard | P7 |
+| `6ece454` | test(renderer): jsdom coverage for signup-banner + transcript-format | P4 |
+| `030ee29` | feat(release): scripts/release/ automation | P6 |
+| `7518a34` | feat(engine): /health + cold-start timing + ENGINE-PROTOCOL.md | P9 |
+| `d79526a` | fix(windows): paste-verify SendKeys + clean-slate own-bundle guard | P8 |
+| `8a04523` | feat(a11y): ARIA + prefers-reduced-motion + focus ring | P10 |
+| `5767b23` | docs(updater): auto-updater test playbook | P11 |
+| `08f3684` | docs(dogfood): 30-step normie playbook | P12 |
+| `60fb8ea` | feat(logger): JSON-lines file sink + rotation + redaction | P5 |
+| `65bc6bd` | feat(i18n): wizard coverage check + step.pairs drift fix | P3 |
+| `(this)` | docs(review): fresh code review + CR-005 shell escape fix | P15 |
+
+## Session 2 TODOs / FIXMEs left behind
+
+Listed in docs/CODE-REVIEW-2026-04.md with stable `CR-NNN` codes.
+High-signal follow-ups for future sessions:
+
+- **CR-001** — npm audit: 10 high-severity vulnerabilities
+  (electron 28→33, tar CVEs, lodash). Needs a major electron bump
+  with full regression pass.
+- **CR-002** — console.log bypasses the redaction pipeline in some
+  places. Migrate to logger.js uniformly.
+- **CR-003** — most IPC handlers in main.js are unbounded.
+  Promote withTimeout from wizard-logger to a shared lib and wrap
+  every long-running handler.
+- **CR-004** — ~42 unhandled await calls in event handlers. Most
+  likely to produce a real bug find.
+- **CR-006** — Crash log redaction is deny-list; invert to allow-list.
+- Main app renderer has zero i18n (see I18N-AUDIT.md).
+- Phase 4/6/7/8 UI strings + WINDY-NNN user messages still
+  hardcoded English (see I18N-AUDIT.md).
+- app.js still ~4000 lines; extract more modules for testability
+  (P4 is partial — 38 tests cover signup-banner + transcript-format
+  only; addTranscriptSegment + export + engine switch still
+  untested).
+- `--dump-logs` CLI flag was NOT implemented (mentioned in the P5
+  prompt). Logger infrastructure is there; need the CLI wrapper.
+
+## Session 2 surprising findings
+
+1. **localStorage persistence across Electron.launch() reuses
+   userData dir.** Setting `HOME` in env doesn't move Electron's
+   per-app storage; must set `userData` via `app.setPath`. Hit this
+   in the signup-banner E2E harness; documented in
+   `e2e/fixtures/banner-harness-main.js`.
+
+2. **contextBridge API objects are frozen.** Tests can't monkey-patch
+   `window.wizardAPI.method` — need to override the renderer-side
+   function (`window.runMicVerify`, etc.) instead. Learned the hard
+   way in `e2e/wizard/03-verify-screen.spec.js`.
+
+3. **`pair-delete` had an arbitrary-directory-delete primitive.**
+   `_validatePairId` only checked for non-empty string. A renderer
+   could pass `../../../etc` and `fsp.rm({recursive, force})` would
+   happily wipe /etc. Fixed in SEC-PAIR-1. The original validator
+   looked "defensive" because it threw on empty strings, but didn't
+   check the shape of what IT ACCEPTED.
+
+4. **Account screen was unreachable but un-deletable.** Session 1
+   bypassed it by intercepting navigation; couldn't delete the
+   markup because goToScreen used DOM-order indices. P14 refactored
+   goToScreen to string IDs so the ~60-line account screen could
+   finally go. This is the kind of plumbing that feels trivial but
+   unlocks follow-on cleanup.
+
+5. **The original `_exportTranscript` SRT implementation was
+   inline.** Extracting to `transcript-format.js` (P4) revealed
+   the "2.5 words/sec" rate is a magic number with no source
+   comment — it's synthetic, not derived from engine timestamps.
+   Flagged for a future "real SRT from engine timing" feature.
+
+6. **`console.error` inside logger's `error()` method silently
+   bypasses redaction.** The error object is stringified via
+   `compact(info)` so fields ARE redacted — but if the caller
+   passes the raw `err` object WITHOUT going through
+   `log.error(method, err)`, the redaction doesn't run. Pattern
+   is correct in library code; risk is downstream callers
+   console.log'ing errors themselves.
+
+7. **Electron-builder 24 → 26 is breaking.** npm audit fix --force
+   pushes to 26. Deferred; would require re-testing all three
+   platform builds.
+
+8. **Windows `_ownBundlePath()` test needed path.win32 explicit.**
+   On a macOS CI host, `path.dirname('C:\\foo\\bar.exe')` returns
+   `.` because path treats backslashes as literal characters when
+   the host uses forward-slash. `require('path').win32.dirname`
+   does the right thing regardless of host. Sign that cross-
+   platform tests need to use the explicit `path.win32` /
+   `path.posix` APIs rather than `path.*`.
+
+## Session 2 recommended next moves for Grant
+
+1. **Review the 15 commits in order.** The commit messages carry
+   the WHY + alternatives + what-could-break sections you asked for.
+2. **Run the new CI gates on the next push.** test-installer adds
+   i18n-coverage, error-code ratchet, venv-resurrection guard, and
+   windows-paths unit tests. E2E job runs in parallel.
+3. **Try the release scripts with --dry-run.**
+   `./scripts/release/preflight.sh` is the single most useful one;
+   it'll tell you what's blocking a release.
+4. **Walk through DOGFOOD-PLAYBOOK.md** with a colleague watching.
+   Fill in the "Actual" and "Rough edges" fields — those fields
+   are blank by design; they accumulate signal across sessions.
+5. **Decide on CR-001** (Electron 28 → 33). The biggest outstanding
+   risk + the biggest blast radius. I'd handle it in its own
+   session with a rollback plan, not squeeze into this branch.
+6. **Merge installer-bundling-v3 → main when CI is green.** The
+   branch now has 27 commits across two sessions. Draft PR #1
+   should be ready to promote to ready-for-review.
+
