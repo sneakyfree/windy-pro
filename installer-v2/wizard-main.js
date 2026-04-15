@@ -27,6 +27,7 @@ const { AccountManager } = require('./core/account-manager');
 const { CleanSlate } = require('./core/clean-slate');
 const { DependencyInstaller } = require('./core/dependency-installer');
 const { BundledAssets } = require('./core/bundled-assets');
+const { wizardLog, getLogPath } = require('./core/wizard-logger');
 
 const APP_DIR = path.join(os.homedir(), '.windy-pro');
 const ENGINES_DIR = path.join(APP_DIR, 'engines');
@@ -211,24 +212,34 @@ class InstallWizard {
 
     // ─── Install ───
     ipcMain.handle('wizard-install', async () => {
+      wizardLog('═══════════ wizard-install IPC handler ENTRY ═══════════');
+      wizardLog(`log file location: ${getLogPath()}`);
       const models = this.selectedEngines.length > 0 ? this.selectedEngines : this.recommendation?.recommended || ['windy-lite-ct2'];
+      wizardLog('selected models:', models);
       console.log('[InstallWizard] Starting install for models:', models);
 
       try {
         // ═══ Phase 0: CLEAN SLATE — Remove any prior installation ═══
+        wizardLog('Phase 0: about to call sendProgress(percent: 1)');
         this.sendProgress({
           percent: 1,
           message: '🧹 Checking for prior Windy Pro installation...',
           detail: 'Ensuring a clean start — removing any old files, processes, or configs'
         });
+        wizardLog('Phase 0: sendProgress returned. Constructing CleanSlate...');
         console.log('[InstallWizard] Phase 0: Clean Slate');
 
         const cleanSlate = new CleanSlate({
           preserveModels: true, // Don't re-download gigabytes of models
-          onProgress: (pct) => this.sendProgress({ percent: 1 + pct * 0.04 }),
-          onLog: (msg) => console.log(msg)
+          onProgress: (pct) => {
+            wizardLog(`  cleanSlate.onProgress(${pct})`);
+            this.sendProgress({ percent: 1 + pct * 0.04 });
+          },
+          onLog: (msg) => { wizardLog(`  cleanSlate: ${msg}`); console.log(msg); }
         });
+        wizardLog('Phase 0: CleanSlate constructed. Calling cleanSlate.run()...');
         const cleanResult = await cleanSlate.run();
+        wizardLog('Phase 0: cleanSlate.run() returned:', { wasClean: cleanResult.wasClean, removedCount: cleanResult.removed?.length, errorCount: cleanResult.errors?.length });
 
         if (!cleanResult.wasClean) {
           console.log(`[InstallWizard] Removed prior installation: ${cleanResult.removed.join(', ')}`);
@@ -242,6 +253,7 @@ class InstallWizard {
         }
 
         // ═══ Phase 1: Dependencies (using bundled assets + new installer) ═══
+        wizardLog('Phase 1: starting dependencies (bundled-first)');
         this.sendProgress({
           percent: 5,
           message: INSTALL_STEP_MESSAGES['check-deps']?.title || '🌪️ Preparing the Windy Ecosystem',
@@ -250,8 +262,9 @@ class InstallWizard {
         console.log('[InstallWizard] Phase 1: Dependencies (bundled-first strategy)');
 
         const depInstaller = new DependencyInstaller({
-          onLog: (msg) => console.log(msg),
+          onLog: (msg) => { wizardLog(`  depInstaller: ${msg}`); console.log(msg); },
           onProgress: (pct) => {
+            wizardLog(`  depInstaller.onProgress(${pct})`);
             this.sendProgress({
               percent: 5 + pct * 0.19, // 5% to 24%
               message: '🌪️ Installing dependencies...',
@@ -259,8 +272,10 @@ class InstallWizard {
             });
           }
         });
+        wizardLog('Phase 1: DependencyInstaller constructed. Calling installAll()...');
 
         const depResult = await depInstaller.installAll();
+        wizardLog('Phase 1: installAll() returned:', { success: depResult.success, errorCount: depResult.errors?.length });
         if (!depResult.success) {
           console.log('[InstallWizard] Some deps failed but continuing:', depResult.errors);
           this.sendProgress({
@@ -393,9 +408,13 @@ class InstallWizard {
           defaultModel: engineModels[0] || 'windy-lite-ct2'
         }, null, 2));
 
+        wizardLog('═══════════ wizard-install handler EXIT (success) ═══════════');
         return { success: true, models };
 
       } catch (error) {
+        wizardLog('═══════════ wizard-install handler THREW ═══════════');
+        wizardLog(`error: ${error.message}`);
+        wizardLog(`stack: ${error.stack || '(no stack)'}`);
         console.error('[InstallWizard] Install failed:', error);
         // Surface a user-friendly error to the wizard UI
         const userMessage = this._friendlyError(error);

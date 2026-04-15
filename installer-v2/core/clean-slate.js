@@ -40,10 +40,11 @@ class CleanSlate {
     const result = { wasClean: true, removed: [], errors: [], preserved: [] };
 
     this.onProgress(0);
-    this.onLog('[CleanSlate] Checking for prior Windy Pro installation...');
+    this.onLog('[CleanSlate] >>> Step 1 START: detect prior install');
 
     // Step 1: Detect if anything exists
     const detection = this._detect();
+    this.onLog(`[CleanSlate] <<< Step 1 END: found=${detection.found}, details=${(detection.details||[]).join('|')}`);
     if (!detection.found) {
       this.onLog('[CleanSlate] No prior installation detected. Clean slate confirmed.');
       this.onProgress(100);
@@ -55,96 +56,119 @@ class CleanSlate {
     this.onProgress(10);
 
     // Step 2: Kill running processes
+    this.onLog('[CleanSlate] >>> Step 2 START: kill running processes');
     try {
       const killed = await this._killProcesses();
       result.removed.push(...killed.map(p => `process: ${p}`));
-      this.onLog(`[CleanSlate] Killed ${killed.length} running processes`);
+      this.onLog(`[CleanSlate] <<< Step 2 END: killed ${killed.length} processes`);
     } catch (e) {
       result.errors.push(`Kill processes: ${e.message}`);
-      this.onLog(`[CleanSlate] Warning: ${e.message}`);
+      this.onLog(`[CleanSlate] <<< Step 2 END (with warning): ${e.message}`);
     }
     this.onProgress(30);
 
     // Step 3: Preserve models if requested
+    this.onLog(`[CleanSlate] >>> Step 3 START: preserve models (preserveModels=${this.preserveModels}, MODELS_DIR exists=${fs.existsSync(MODELS_DIR)})`);
     let modelBackup = null;
     if (this.preserveModels && fs.existsSync(MODELS_DIR)) {
       const modelFiles = this._listModels();
+      this.onLog(`[CleanSlate]   found ${modelFiles.length} model files to preserve`);
       if (modelFiles.length > 0) {
         modelBackup = path.join(os.tmpdir(), 'windy-pro-models-backup');
         try {
           if (fs.existsSync(modelBackup)) {
+            this.onLog(`[CleanSlate]   removing stale backup at ${modelBackup}`);
             fs.rmSync(modelBackup, { recursive: true, force: true });
           }
+          this.onLog(`[CleanSlate]   moving ${MODELS_DIR} → ${modelBackup}`);
           fs.renameSync(MODELS_DIR, modelBackup);
           result.preserved.push(...modelFiles);
-          this.onLog(`[CleanSlate] Preserved ${modelFiles.length} model files to temp backup`);
+          this.onLog(`[CleanSlate] <<< Step 3 END: preserved ${modelFiles.length} files`);
         } catch (e) {
-          this.onLog(`[CleanSlate] Could not preserve models: ${e.message}`);
+          this.onLog(`[CleanSlate] <<< Step 3 END (with warning): ${e.message}`);
           modelBackup = null;
         }
+      } else {
+        this.onLog('[CleanSlate] <<< Step 3 END: no models to preserve');
       }
+    } else {
+      this.onLog('[CleanSlate] <<< Step 3 END: skipped');
     }
     this.onProgress(45);
 
     // Step 4: Remove ~/.windy-pro directory
+    this.onLog(`[CleanSlate] >>> Step 4 START: remove ${APP_DIR}`);
     if (fs.existsSync(APP_DIR)) {
       try {
         fs.rmSync(APP_DIR, { recursive: true, force: true });
         result.removed.push('~/.windy-pro/');
-        this.onLog('[CleanSlate] Removed ~/.windy-pro/');
+        this.onLog('[CleanSlate] <<< Step 4 END: removed');
       } catch (e) {
         result.errors.push(`Remove APP_DIR: ${e.message}`);
-        this.onLog(`[CleanSlate] Warning: Could not fully remove ~/.windy-pro: ${e.message}`);
+        this.onLog(`[CleanSlate] <<< Step 4 END (with warning): ${e.message}`);
       }
+    } else {
+      this.onLog('[CleanSlate] <<< Step 4 END: nothing to remove');
     }
     this.onProgress(55);
 
     // Step 5: Remove ~/.config/windy-pro
+    this.onLog(`[CleanSlate] >>> Step 5 START: remove ${CONFIG_DIR}`);
     if (fs.existsSync(CONFIG_DIR)) {
       try {
         fs.rmSync(CONFIG_DIR, { recursive: true, force: true });
         result.removed.push('~/.config/windy-pro/');
-        this.onLog('[CleanSlate] Removed ~/.config/windy-pro/');
+        this.onLog('[CleanSlate] <<< Step 5 END: removed');
       } catch (e) {
         result.errors.push(`Remove CONFIG_DIR: ${e.message}`);
+        this.onLog(`[CleanSlate] <<< Step 5 END (with warning): ${e.message}`);
       }
+    } else {
+      this.onLog('[CleanSlate] <<< Step 5 END: nothing to remove');
     }
 
     // Step 6: Platform-specific cleanup
+    this.onLog('[CleanSlate] >>> Step 6 START: platform-specific cleanup');
     try {
       await this._platformCleanup(result);
+      this.onLog('[CleanSlate] <<< Step 6 END');
     } catch (e) {
       result.errors.push(`Platform cleanup: ${e.message}`);
+      this.onLog(`[CleanSlate] <<< Step 6 END (with warning): ${e.message}`);
     }
     this.onProgress(75);
 
     // Step 7: Restore models if backed up
+    this.onLog(`[CleanSlate] >>> Step 7 START: restore models (modelBackup=${modelBackup})`);
     if (modelBackup && fs.existsSync(modelBackup)) {
       try {
         fs.mkdirSync(APP_DIR, { recursive: true });
         fs.renameSync(modelBackup, MODELS_DIR);
-        this.onLog(`[CleanSlate] Restored ${result.preserved.length} model files`);
+        this.onLog(`[CleanSlate] <<< Step 7 END: restored ${result.preserved.length} files`);
       } catch (e) {
-        this.onLog(`[CleanSlate] Warning: Could not restore models: ${e.message}`);
-        // Try copy as fallback (cross-device move fails)
+        this.onLog(`[CleanSlate]   primary restore failed: ${e.message} — trying copy fallback`);
         try {
           this._copyDir(modelBackup, MODELS_DIR);
           fs.rmSync(modelBackup, { recursive: true, force: true });
-          this.onLog('[CleanSlate] Restored models via copy fallback');
+          this.onLog('[CleanSlate] <<< Step 7 END: restored via copy fallback');
         } catch (e2) {
           result.errors.push(`Restore models: ${e2.message}`);
+          this.onLog(`[CleanSlate] <<< Step 7 END (FAILED): ${e2.message}`);
         }
       }
+    } else {
+      this.onLog('[CleanSlate] <<< Step 7 END: nothing to restore');
     }
     this.onProgress(90);
 
     // Step 8: Verify clean state
+    this.onLog('[CleanSlate] >>> Step 8 START: verify');
     const verify = this._verify();
     if (!verify.clean) {
       result.errors.push(`Verification failed: ${verify.issues.join(', ')}`);
-      this.onLog(`[CleanSlate] Warning: Not fully clean: ${verify.issues.join(', ')}`);
+      this.onLog(`[CleanSlate] <<< Step 8 END (warning): ${verify.issues.join(', ')}`);
     } else {
-      this.onLog('[CleanSlate] Clean slate verified. Ready for fresh install.');
+      this.onLog('[CleanSlate] <<< Step 8 END: clean slate verified');
     }
 
     this.onProgress(100);
@@ -266,9 +290,37 @@ class CleanSlate {
    */
   async _killProcesses() {
     const killed = [];
+    this.onLog(`[CleanSlate]   _killProcesses: my pid=${process.pid}, ppid=${process.ppid}, execPath=${process.execPath}`);
+
+    // Build the "don't kill myself" guard set:
+    //   - own pid
+    //   - parent pid (Electron main launches us)
+    //   - all child pids of own pid (helpers / GPU / renderer)
+    //   - any process whose argv mentions our execPath (sibling helpers
+    //     launched by Electron framework that aren't direct children)
+    const safePids = new Set([process.pid, process.ppid]);
+    try {
+      const childOut = execSync(`pgrep -P ${process.pid} 2>/dev/null || true`, { stdio: 'pipe', timeout: 5000 }).toString().trim();
+      if (childOut) childOut.split('\n').forEach(p => p && safePids.add(parseInt(p, 10)));
+    } catch (_) { /* ignore */ }
+    // Also guard the entire process group
+    try {
+      const groupOut = execSync(`ps -o pid= -g ${process.pid} 2>/dev/null || true`, { stdio: 'pipe', timeout: 5000 }).toString().trim();
+      if (groupOut) groupOut.split('\n').forEach(p => p && safePids.add(parseInt(p.trim(), 10)));
+    } catch (_) { /* ignore */ }
+    this.onLog(`[CleanSlate]   _killProcesses: safe-pid guard set: ${[...safePids].join(',')}`);
+
+    this.onLog(`[CleanSlate]   _killProcesses: scanning for Windy processes...`);
     const processes = this._findWindyProcesses();
+    this.onLog(`[CleanSlate]   _killProcesses: found ${processes.length} candidates`);
 
     for (const proc of processes) {
+      // CRITICAL SAFETY: never kill ourselves or any process in our tree
+      if (safePids.has(proc.pid)) {
+        this.onLog(`[CleanSlate]   _killProcesses: SKIPPING own-tree PID ${proc.pid} (${proc.name})`);
+        continue;
+      }
+      this.onLog(`[CleanSlate]   _killProcesses: killing PID ${proc.pid} (${proc.name})`);
       try {
         if (this.platform === 'win32') {
           execSync(`taskkill /PID ${proc.pid} /F 2>NUL`, { stdio: 'pipe', timeout: 5000 });
@@ -277,12 +329,13 @@ class CleanSlate {
         }
         killed.push(`${proc.name} (PID ${proc.pid})`);
       } catch (e) {
-        // Process may have already exited
+        this.onLog(`[CleanSlate]   _killProcesses: kill PID ${proc.pid} failed: ${e.message}`);
       }
     }
 
     // Wait briefly for processes to fully die
     if (killed.length > 0) {
+      this.onLog(`[CleanSlate]   _killProcesses: waiting 1s for ${killed.length} processes to die`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
