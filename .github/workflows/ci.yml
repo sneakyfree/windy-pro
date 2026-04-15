@@ -55,7 +55,7 @@ jobs:
         id: pytest
         continue-on-error: true
         run: |
-          python -m pytest tests/test_desktop_gaps.py tests/test_desktop_core_features.py tests/test_engine_health.py tests/test_engine_integration.py -v --tb=short --timeout=60
+          python -m pytest tests/test_desktop_gaps.py tests/test_desktop_core_features.py tests/test_engine_health.py tests/test_engine_integration.py tests/test_protocol_validator.py -v --tb=short --timeout=60
       - name: Report pytest outcome
         if: steps.pytest.outcome == 'failure'
         run: |

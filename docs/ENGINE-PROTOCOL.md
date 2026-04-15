@@ -135,10 +135,38 @@ Every server message is a JSON object with a `type` key.
 - `/metrics` — not implemented yet. Prometheus-style exposition is
   a candidate for a future observability PR.
 
+## Schema + Validation
+
+The protocol is formally specified at
+[`shared/schemas/engine-protocol.schema.json`](../shared/schemas/engine-protocol.schema.json).
+The schema is the single source of truth; this doc is prose.
+
+A lightweight in-process validator at
+[`src/engine/protocol_validator.py`](../src/engine/protocol_validator.py)
+checks inbound client messages against the schema when the env var
+`WINDY_VALIDATE_WS=1` is set. Disabled by default in production
+to keep the WS hot path cheap; enabled in dev and CI so schema
+drift surfaces immediately.
+
+```bash
+# Run the server with validation on
+WINDY_VALIDATE_WS=1 python3 -m src.engine.server
+# A bad client message like {"action":"vault_get"} (missing
+# session_id) prints:
+#   [ws-validator] client msg violations: action=vault_get: missing required field 'session_id'
+```
+
+The validator does NOT reject violating messages — mixed-version
+deploys (client newer than server) would break. It only logs.
+Production servers should keep validation OFF; CI and dev runs
+turn it ON.
+
 ## Testing
 
 See `tests/test_engine_health.py` for the contract tests that pin
-`_health_payload()`'s shape. Running:
+`_health_payload()`'s shape, and
+`tests/test_protocol_validator.py` for schema-validation tests.
+Running:
 
 ```bash
 python3 -m pytest tests/test_engine_health.py -v

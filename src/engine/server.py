@@ -209,6 +209,19 @@ class WindyServer:
     
     async def _handle_command(self, cmd: dict, websocket: WebSocketServerProtocol):
         """Handle a command from client."""
+        # Protocol schema validation — gated on WINDY_VALIDATE_WS=1.
+        # Surfaces schema drift early in dev without paying the walk
+        # cost in production. Logs warnings; does not reject the
+        # message (too risky in mixed-version deploys where the
+        # client may be newer than the server).
+        try:
+            from .protocol_validator import validate_client_message, enabled as _validate_on
+            if _validate_on():
+                errs = validate_client_message(cmd)
+                if errs:
+                    print(f"[ws-validator] client msg violations: {'; '.join(errs[:3])}", flush=True)
+        except Exception:
+            pass
         action = cmd.get("action")
         
         if action == "start":

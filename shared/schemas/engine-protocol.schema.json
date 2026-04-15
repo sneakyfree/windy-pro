@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Windy Pro Engine WebSocket Protocol",
+  "description": "Source of truth for the shape of messages between the desktop renderer and src/engine/server.py. See docs/ENGINE-PROTOCOL.md for prose.",
+  "$defs": {
+    "baseClientMessage": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "start", "stop", "config",
+            "recovery_check", "ping", "health",
+            "vault_list", "vault_get", "vault_search",
+            "vault_export", "vault_delete",
+            "translate_blob", "transcribe_blob"
+          ]
+        }
+      }
+    },
+    "baseServerMessage": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "state", "transcript", "performance", "error",
+            "ack", "pong", "health", "recovery_available",
+            "vault_list", "vault_get", "vault_search",
+            "vault_export", "vault_delete",
+            "translate_result", "transcribe_result"
+          ]
+        }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/baseClientMessage" },
+    { "$ref": "#/$defs/baseServerMessage" }
+  ],
+  "clientActions": {
+    "start": { "required": [], "properties": {} },
+    "stop": { "required": [], "properties": {} },
+    "config": {
+      "required": ["config"],
+      "properties": {
+        "config": { "type": "object" }
+      }
+    },
+    "recovery_check": {
+      "required": ["timestamp"],
+      "properties": { "timestamp": { "type": "number" } }
+    },
+    "ping": { "required": [], "properties": {} },
+    "health": { "required": [], "properties": {} },
+    "vault_list": {
+      "properties": {
+        "limit": { "type": "number", "minimum": 1, "maximum": 500 },
+        "offset": { "type": "number", "minimum": 0 }
+      }
+    },
+    "vault_get": {
+      "required": ["session_id"],
+      "properties": { "session_id": { "type": "number" } }
+    },
+    "vault_search": {
+      "required": ["query"],
+      "properties": { "query": { "type": "string", "maxLength": 1024 } }
+    },
+    "vault_export": {
+      "required": ["session_id"],
+      "properties": {
+        "session_id": { "type": "number" },
+        "format": { "enum": ["txt", "md", "srt"] }
+      }
+    },
+    "vault_delete": {
+      "required": ["session_id"],
+      "properties": { "session_id": { "type": "number" } }
+    },
+    "translate_blob": {
+      "properties": {
+        "language": { "type": "string", "maxLength": 16 }
+      }
+    },
+    "transcribe_blob": {
+      "properties": {
+        "language": { "type": "string", "maxLength": 16 },
+        "format": { "enum": ["wav", "webm", "ogg", "flac"] }
+      }
+    }
+  },
+  "serverTypes": {
+    "state": {
+      "required": ["oldState", "newState"],
+      "properties": {
+        "oldState": { "type": "string" },
+        "newState": { "type": "string" }
+      }
+    },
+    "transcript": {
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string" },
+        "partial": { "type": "boolean" },
+        "sessionId": { "type": "number" }
+      }
+    },
+    "performance": {
+      "required": ["ratio"],
+      "properties": {
+        "ratio": { "type": "number" },
+        "currentModel": { "type": "string" },
+        "recommend": { "type": ["string", "null"] }
+      }
+    },
+    "error": {
+      "required": ["error"],
+      "properties": { "error": { "type": "string" } }
+    },
+    "pong": {
+      "properties": { "heartbeat": { "type": "boolean" } }
+    },
+    "health": {
+      "required": ["status", "uptime_sec"],
+      "properties": {
+        "status": { "enum": ["ok", "loading", "error"] },
+        "uptime_sec": { "type": "number" },
+        "cold_start_ms": { "type": ["number", "null"] },
+        "model": { "type": ["string", "null"] },
+        "device": { "type": ["string", "null"] },
+        "clients": { "type": "number" },
+        "version": { "type": "string" },
+        "error": { "type": ["string", "null"] }
+      }
+    }
+  }
+}
