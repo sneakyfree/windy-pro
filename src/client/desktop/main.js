@@ -2777,7 +2777,13 @@ function pasteTranscript() {
 
 // Get transcript and paste it via cursor injection
 ipcMain.on('transcript-for-paste', async (event, transcript) => {
-  if (transcript && transcript.trim()) {
+  // CR-004: ipcMain.on (not handle) doesn't propagate the rejection
+  // back to the renderer — async exceptions become process-level
+  // unhandledRejection events. Wrap the WHOLE body so any throw
+  // (mainWindow destroyed mid-flight, injector unavailable, etc.)
+  // becomes a logged error instead of crashing the dialog handler.
+  try {
+    if (!transcript || !transcript.trim()) return;
     safeSend('state-change', 'injecting');
     updateTrayIcon('injecting');
 
@@ -2792,7 +2798,7 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
         console.info(`[Paste] Activated "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
       } catch (_) { /* best-effort */ }
       await new Promise(resolve => setTimeout(resolve, 200));
-    } else if (process.platform !== 'darwin' && mainWindow && mainWindow.isVisible()) {
+    } else if (process.platform !== 'darwin' && mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
       mainWindow.hide();
       await new Promise(resolve => setTimeout(resolve, 200));
     }
@@ -2806,13 +2812,20 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
 
     // Restore UI state (window is already visible on macOS)
     setTimeout(() => {
-      if (mainWindow && !mainWindow.isVisible()) {
-        mainWindow.showInactive();  // Show without taking focus (non-macOS)
-      }
-      const newState = isRecording ? 'listening' : 'idle';
-      safeSend('state-change', newState);
-      updateTrayIcon(newState);
+      try {
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+          mainWindow.showInactive();  // Show without taking focus (non-macOS)
+        }
+        const newState = isRecording ? 'listening' : 'idle';
+        safeSend('state-change', newState);
+        updateTrayIcon(newState);
+      } catch (e) { console.error('[transcript-for-paste] restore-state failed:', e.message); }
     }, 500);
+  } catch (e) {
+    // Last-line-of-defence: never let an async exception escape an
+    // ipcMain.on listener.
+    console.error('[transcript-for-paste] handler threw:', e?.message || e);
+    writeCrashLog('transcript-for-paste', e);
   }
 });
 

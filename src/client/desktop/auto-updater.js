@@ -29,10 +29,24 @@ class AutoUpdater {
      * Start periodic update checks
      */
     start() {
+        // CR-004: catch on the timer callbacks. checkForUpdates is
+        // async; if it rejects (network down, JSON parse error)
+        // without a .catch the rejection becomes a process-level
+        // unhandledRejection. Logging keeps the periodic timer
+        // alive.
+        const safeCheck = () => {
+            try {
+                Promise.resolve(this.checkForUpdates()).catch((e) => {
+                    log.warn('autoUpdater', `check failed: ${e?.message || e}`);
+                });
+            } catch (e) {
+                log.warn('autoUpdater', `check threw synchronously: ${e?.message || e}`);
+            }
+        };
         // Check on startup (after a short delay to avoid blocking)
-        setTimeout(() => this.checkForUpdates(), 10000);
+        setTimeout(safeCheck, 10000);
         // Schedule periodic checks
-        this._timer = setInterval(() => this.checkForUpdates(), this.checkInterval);
+        this._timer = setInterval(safeCheck, this.checkInterval);
     }
 
     /**
