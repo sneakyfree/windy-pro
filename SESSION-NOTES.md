@@ -252,3 +252,65 @@ High-signal follow-ups for future sessions:
    branch now has 27 commits across two sessions. Draft PR #1
    should be ready to promote to ready-for-review.
 
+
+---
+
+## Session 2 — second wave (post "proceed" #1)
+
+After completing the first 15 priorities, Grant said "proceed".
+Cherry-picked from the CR-NNN follow-up list in
+docs/CODE-REVIEW-2026-04.md plus i18n + chat extraction.
+
+### Second-wave commit list
+
+| Hash | Description | Source |
+|---|---|---|
+| `48890f9` | fix(engine): sibling HTTP /health port (websockets 14+ fix) | CR-008b |
+| `c2b88ee` | feat(ipc): withTimeout on chat-* + mini-translate IPC | CR-003 |
+| `201c230` | sec(crash): invert crash-log redaction to allow-list | CR-006 |
+| `efded2f` | i18n: data-i18n on Phase 4/6/7 verify + hero strings | P3 follow-up |
+| `7c62761` | fix(async): catch unhandled rejections in timers + ipcMain.on | CR-004 |
+| `0603dfc` | refactor(chat): extract 21 chat-* IPC handlers to chat/ipc.js | CR-009 |
+| `50281cd` | ci(triage): fix 3 stale + drift structural tests; wire engine pytest | (drift) |
+
+### Tests after the second wave
+
+- 162 unit tests across 12 jest files (was 127 after first wave)
+- 9 pytest cases (6 health-payload + 3 integration)
+- 16 wizard E2E + 8 main-app banner E2E
+- 29 desktop_security structural tests now green again
+
+### Surprising findings, second wave
+
+1. **/health didn't actually work in production.** Shipped in P9 with
+   unit tests that mocked the server state directly — the integration
+   test (CR-008) revealed `process_request` doesn't fire on
+   websockets >= 14 (production pin is 16). Fixed by running a
+   thread-backed stdlib `http.server` on a sibling port.
+
+2. **The CSP test suite was stale.** `test_csp_has_exact_deepgram` /
+   `test_csp_has_exact_groq` had been failing on test-backend for
+   weeks — unrelated to either session. Vendor refs were
+   intentionally removed in commit dc54d08 (white-label refactor).
+   Tests updated to enforce the white-label posture instead.
+
+3. **chat-* extraction kept lazy chatTranslator semantics with a
+   ref wrapper.** `let chatTranslator = null` in main.js can't be
+   passed by reference. Solution: `{ get current() {...}, set current(v) {...} }`
+   wrapper. Trick is good for any other lazy-init globals that
+   need extracting.
+
+4. **registerChatIpc is the seed for the rest of the IPC migration.**
+   Pattern works: deps object + drift-detection test of the
+   exported channel list. Future PRs can extract pair-download,
+   video-preview, settings, etc. with the same shape.
+
+5. **withTimeout is one place but used three ways.**
+   `installer-v2/core/wizard-logger.js` (install path), now
+   `src/client/desktop/lib/timeout.js` (main-app IPC), and
+   `installer-v2/wizard-main.js` imports the first. The two copies
+   are deliberately kept behaviour-equivalent via parallel test
+   suites — one shared package.json import would tie main-app's
+   require chain to installer-v2 which is electron-builder
+   territory.
+
