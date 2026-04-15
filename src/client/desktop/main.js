@@ -17,16 +17,22 @@ const crashLogDir = process.platform === 'darwin'
     : _path.join(_os.homedir(), '.config', 'windy-pro');
 const crashLogPath = _path.join(crashLogDir, 'crash.log');
 
+// CR-006 (P15): allow-list redaction. The previous deny-list missed
+// anything other than Bearer/sk-/key_. Inverted: extract only known-
+// safe fields (message, code, name, top-N stack frames) and drop
+// everything else on the error object. Implementation in
+// src/client/desktop/lib/crash-summary.js (unit tested).
+const { safeErrorSummary: _safeErrorSummary } = require('./lib/crash-summary');
+
 function writeCrashLog(type, err) {
   try {
     const dir = _path.dirname(crashLogPath);
     if (!_fs.existsSync(dir)) _fs.mkdirSync(dir, { recursive: true });
-    // Redact API keys from error messages
-    let msg = String(err?.stack || err?.message || err);
-    msg = msg.replace(/Bearer\s+\S+/gi, 'Bearer ***REDACTED***');
-    msg = msg.replace(/sk-[a-zA-Z0-9]+/g, 'sk-***');
-    msg = msg.replace(/key[_-]?[a-zA-Z0-9]{10,}/gi, 'KEY_REDACTED');
-    const entry = `[${new Date().toISOString()}] ${type}: ${msg}\n`;
+    const entry = JSON.stringify({
+      ts: new Date().toISOString(),
+      type,
+      ..._safeErrorSummary(err),
+    }) + '\n';
     _fs.appendFileSync(crashLogPath, entry);
   } catch (_) { }
 }
