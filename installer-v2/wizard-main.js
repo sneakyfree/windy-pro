@@ -709,6 +709,35 @@ class InstallWizard {
       }
     });
 
+    // ═════════════════════════════════════════════════════════════════════
+    // Phase 6: Linux paste tooling (xdotool/ydotool/wl-clipboard/xclip).
+    // Only relevant on Linux — handlers are still registered everywhere
+    // so the renderer can probe and get a clean "not applicable" reply
+    // from the same code path.
+    // ═════════════════════════════════════════════════════════════════════
+    const pasteVerify = require('./core/paste-verify');
+
+    ipcMain.handle('wizard-paste-detect', async () => {
+      wizardLog('IPC wizard-paste-detect ENTRY');
+      const r = await pasteVerify.detect();
+      wizardLog(`IPC wizard-paste-detect EXIT: applicable=${r.applicable} ready=${r.ready} session=${r.session}`);
+      return r;
+    });
+
+    ipcMain.handle('wizard-paste-install', async () => {
+      wizardLog('IPC wizard-paste-install ENTRY');
+      const r = await pasteVerify.install();
+      wizardLog(`IPC wizard-paste-install EXIT: ok=${r.ok} requiresReLogin=${r.requiresReLogin}`);
+      return r;
+    });
+
+    ipcMain.handle('wizard-paste-test-inject', async () => {
+      wizardLog('IPC wizard-paste-test-inject ENTRY');
+      const r = await pasteVerify.injectTestKeystroke();
+      wizardLog(`IPC wizard-paste-test-inject EXIT: ok=${r.ok}`);
+      return r;
+    });
+
     // ─── Cancel (abort downloads and close) ───
     ipcMain.handle('wizard-cancel', async () => {
       this.downloadManager.abort();

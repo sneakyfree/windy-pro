@@ -33,6 +33,11 @@ contextBridge.exposeInMainWorld('wizardAPI', {
   openPermSettings: (which) => ipcRenderer.invoke('wizard-open-perm-settings', which),
   onWindowFocus: (cb) => { ipcRenderer.on('wizard-window-focus', () => cb()); },
 
+  // Phase 6 Linux paste tooling
+  pasteDetect: () => ipcRenderer.invoke('wizard-paste-detect'),
+  pasteInstall: () => ipcRenderer.invoke('wizard-paste-install'),
+  pasteTestInject: () => ipcRenderer.invoke('wizard-paste-test-inject'),
+
   // Open URL in system browser (for Stripe checkout)
   openExternal: (url) => ipcRenderer.invoke('wizard-open-external', url),
 

@@ -2691,6 +2691,39 @@
           </div>
         </div>
 
+        <!-- LINUX PASTE-TOOL VERIFY CARD (Linux only — hidden on macOS/Windows).
+             xdotool/ydotool/wl-clipboard/xclip can't be bundled (kernel-adjacent),
+             so we detect, install via pkexec, then test-inject into a hidden
+             scratch textarea and verify the keystrokes landed. -->
+        <div class="brand-card" id="verify-paste-card" style="margin-bottom:16px; display:none;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="font-size:32px;">📋</div>
+            <div style="flex:1;">
+              <div class="brand-card-title">Paste-to-cursor (Linux)</div>
+              <div class="brand-card-body" id="verify-paste-msg">
+                Detecting…
+              </div>
+              <!-- Hidden scratch textarea — the test-paste injects into this
+                   when the wizard window is focused. We read its value to
+                   prove the keystrokes actually landed. -->
+              <textarea id="verify-paste-scratch" aria-hidden="true"
+                style="position:absolute; left:-9999px; top:0; width:1px; height:1px; opacity:0;"></textarea>
+            </div>
+            <div id="verify-paste-status" style="font-size:24px; min-width:32px; text-align:center;">⏳</div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+            <button class="btn btn-primary" id="verify-paste-install-btn" onclick="runPasteInstall()" style="display:none;">
+              Install paste tools
+            </button>
+            <button class="btn btn-primary" id="verify-paste-test-btn" onclick="runPasteTest()" style="display:none;">
+              Test paste
+            </button>
+            <button class="btn btn-ghost" id="verify-paste-recheck-btn" onclick="runPasteDetect()">
+              Re-check
+            </button>
+          </div>
+        </div>
+
         <!-- ACCESSIBILITY VERIFY CARD (macOS only — hidden on other platforms) -->
         <div class="brand-card" id="verify-access-card" style="margin-bottom:16px; display:none;">
           <div style="display:flex; align-items:center; gap:14px;">
@@ -4458,17 +4491,25 @@
     // Settings and comes back, the wizard's window-focus event re-runs
     // verification automatically.
 
-    let verifyState = { mic: 'pending', access: 'pending', skipped: false };
+    let verifyState = { mic: 'pending', access: 'pending', paste: 'pending', skipped: false };
 
     function initVerifyScreen() {
       // macOS is the only platform that needs accessibility (osascript-based
       // keystroke injection). On Linux/Windows the paste tool is verified
       // separately (Phase 6) and accessibility-as-an-OS-permission doesn't apply.
       const isMac = (hardwareData?.platform === 'darwin') || /Mac/.test(navigator.platform);
+      const isLinux = (hardwareData?.platform === 'linux') || /Linux/.test(navigator.platform);
       document.getElementById('verify-access-card').style.display = isMac ? '' : 'none';
+      document.getElementById('verify-paste-card').style.display = isLinux ? '' : 'none';
       // Mic always needs verification
-      verifyState = { mic: 'pending', access: isMac ? 'pending' : 'granted', skipped: false };
+      verifyState = {
+        mic: 'pending',
+        access: isMac ? 'pending' : 'granted',
+        paste: isLinux ? 'pending' : 'granted',
+        skipped: false,
+      };
       updateVerifyFinish();
+      if (isLinux) runPasteDetect();
 
       // Auto-re-verify when user returns from System Settings.
       // Only register the listener once per wizard session.
@@ -4489,21 +4530,133 @@
     }
 
     function updateVerifyFinish() {
-      const requiredOk = verifyState.mic === 'granted' && verifyState.access === 'granted';
+      const requiredOk = verifyState.mic === 'granted'
+        && verifyState.access === 'granted'
+        && verifyState.paste === 'granted';
       document.getElementById('verify-finish-btn').disabled = !requiredOk;
     }
 
     function setVerifyStatus(which, status, msg) {
       verifyState[which] = status;
-      const card = document.getElementById(`verify-${which === 'mic' ? 'mic' : 'access'}-card`);
-      const statusEl = document.getElementById(`verify-${which === 'mic' ? 'mic' : 'access'}-status`);
-      const msgEl = document.getElementById(`verify-${which === 'mic' ? 'mic' : 'access'}-msg`);
-      const settingsBtn = document.getElementById(`verify-${which === 'mic' ? 'mic' : 'access'}-settings`);
-      const icon = { granted: '✅', denied: '❌', pending: '⏳', testing: '🎤', unknown: '❓' }[status] || '⏳';
-      statusEl.textContent = icon;
-      if (msg) msgEl.innerHTML = msg;
+      // which ∈ { 'mic', 'access', 'paste' } maps to verify-<which>-{card,status,msg,settings}
+      const statusEl = document.getElementById(`verify-${which}-status`);
+      const msgEl = document.getElementById(`verify-${which}-msg`);
+      const settingsBtn = document.getElementById(`verify-${which}-settings`);
+      const icon = { granted: '✅', denied: '❌', pending: '⏳', testing: '🎤', unknown: '❓', installing: '⚙️' }[status] || '⏳';
+      if (statusEl) statusEl.textContent = icon;
+      if (msg && msgEl) msgEl.innerHTML = msg;
       if (settingsBtn) settingsBtn.style.display = (status === 'denied') ? '' : 'none';
       updateVerifyFinish();
+    }
+
+    // ─── Linux paste tool detect / install / test ─────────────────────────
+    let pasteState = null;
+
+    async function runPasteDetect() {
+      setVerifyStatus('paste', 'testing', '🔍 Detecting installed paste tools…');
+      try {
+        const r = await window.wizardAPI.pasteDetect();
+        pasteState = r;
+        if (!r.applicable) { setVerifyStatus('paste', 'granted', 'Not required on this platform.'); return; }
+        const tools = r.tools || {};
+        const have = Object.entries(tools).filter(([, v]) => v).map(([k]) => k);
+        const missing = Object.entries(tools).filter(([, v]) => !v).map(([k]) => k);
+        const sessionInfo = `Session: <b>${r.session || 'unknown'}</b> · Distro: <b>${r.distro}</b>`;
+
+        // Visibility of action buttons
+        const installBtn = document.getElementById('verify-paste-install-btn');
+        const testBtn = document.getElementById('verify-paste-test-btn');
+
+        if (r.ready) {
+          setVerifyStatus('paste', 'granted',
+            `✅ All paste tools installed and ready.<br><span style="opacity:0.7">${sessionInfo}<br>Installed: ${have.join(', ') || 'none'}</span>`);
+          installBtn.style.display = 'none';
+          testBtn.style.display = '';
+        } else {
+          // Not ready — surface install button if pkexec is available
+          let detail = `${sessionInfo}<br>`;
+          if (missing.length) detail += `Missing: <b>${missing.join(', ')}</b><br>`;
+          if (r.isWayland && r.wayland) {
+            const w = r.wayland;
+            if (w.uinputAccess !== 'writable') detail += `⚠️ /dev/uinput not writable (need group=input + udev rule)<br>`;
+            if (!w.inInputGroup) detail += `⚠️ User not in <code>input</code> group (log out + back in after install)<br>`;
+            if (!w.ydotooldRunning) detail += `⚠️ ydotoold daemon not running<br>`;
+          }
+          setVerifyStatus('paste', 'denied', detail);
+          installBtn.style.display = r.canPkexecInstall ? '' : 'none';
+          testBtn.style.display = (have.length > 0) ? '' : 'none';
+          if (!r.canPkexecInstall) {
+            // Append a manual command they can run themselves
+            const msg = document.getElementById('verify-paste-msg');
+            msg.innerHTML += `<br><br>Manual install: <code>${(r.installCommands || ['(unknown distro)']).join(' && ')}</code>`;
+          }
+        }
+      } catch (e) {
+        setVerifyStatus('paste', 'unknown', `❌ Detection failed: ${e.message}`);
+      }
+    }
+
+    async function runPasteInstall() {
+      const btn = document.getElementById('verify-paste-install-btn');
+      btn.disabled = true;
+      setVerifyStatus('paste', 'installing', '⚙️ Running install via pkexec — please confirm the system password prompt that just appeared.');
+      try {
+        const r = await window.wizardAPI.pasteInstall();
+        if (r.ok) {
+          let extra = '';
+          if (r.requiresReLogin) extra = '<br>⚠️ <b>Log out and back in</b> for input-group membership to take effect.';
+          setVerifyStatus('paste', 'pending', `✅ Install completed.${extra}<br>Re-checking…`);
+          // Re-detect now (and the user can re-test)
+          await runPasteDetect();
+        } else {
+          setVerifyStatus('paste', 'denied', `❌ Install failed: ${r.error || 'unknown error'}`);
+        }
+      } catch (e) {
+        setVerifyStatus('paste', 'denied', `❌ Install error: ${e.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function runPasteTest() {
+      const scratch = document.getElementById('verify-paste-scratch');
+      const btn = document.getElementById('verify-paste-test-btn');
+      btn.disabled = true;
+      // Make scratch visible+focusable so xdotool/ydotool keystrokes land here.
+      // We move it on-screen briefly because some compositors won't deliver
+      // keystrokes to fully off-screen elements.
+      scratch.value = '';
+      scratch.style.left = '20px';
+      scratch.style.opacity = '0.01';
+      scratch.style.width = '300px';
+      scratch.style.height = '24px';
+      scratch.focus();
+      setVerifyStatus('paste', 'testing', '🎯 Injecting test keystroke into a scratch buffer…');
+      try {
+        // Small delay so the focus actually settles before xdotool fires.
+        await new Promise(r => setTimeout(r, 200));
+        const r = await window.wizardAPI.pasteTestInject();
+        // Wait for keystrokes to fully arrive
+        await new Promise(r => setTimeout(r, 600));
+        const got = scratch.value;
+        scratch.style.left = '-9999px';
+        scratch.style.opacity = '0';
+        scratch.style.width = '1px';
+        scratch.style.height = '1px';
+        if (r.ok && got.includes('Hello from Windy Word')) {
+          setVerifyStatus('paste', 'granted',
+            `✅ Test paste worked! Received: "${got.slice(0, 60)}"`);
+        } else if (r.ok) {
+          setVerifyStatus('paste', 'denied',
+            `⚠️ Inject command succeeded but no keystrokes arrived. The wizard window may not be focused, or the compositor blocked the inject. Got: "${got || '(empty)'}"`);
+        } else {
+          setVerifyStatus('paste', 'denied', `❌ Inject failed: ${r.error}`);
+        }
+      } catch (e) {
+        setVerifyStatus('paste', 'denied', `❌ Test failed: ${e.message}`);
+      } finally {
+        btn.disabled = false;
+      }
     }
 
     async function runMicVerify() {
