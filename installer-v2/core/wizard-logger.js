@@ -131,4 +131,35 @@ function getLogPath() {
   return LOG_PATH;
 }
 
-module.exports = { wizardLog, logAsyncStep, logSyncStep, getLogPath };
+/**
+ * Race a promise against a timeout. If the timeout wins, rejects with a
+ * clearly-labeled error so the wizard log shows exactly which step tripped.
+ *
+ * Use this around every await in the install path. The wizard's worst
+ * failure mode is a silent hang — fail-fast with a label is always better
+ * than spinning forever at 0%.
+ *
+ * @param {Promise<T>} promise - the operation to bound
+ * @param {number} ms - timeout in milliseconds
+ * @param {string} label - human-readable name used in logs and error
+ * @returns {Promise<T>}
+ */
+function withTimeout(promise, ms, label) {
+  let timeoutId = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const err = new Error(`[wizard-timeout] ${label} did not complete within ${ms}ms`);
+      err.timedOut = true;
+      err.label = label;
+      err.timeoutMs = ms;
+      try { wizardLog(`✗ TIMEOUT after ${ms}ms in: ${label}`); } catch (_) { /* ignore */ }
+      reject(err);
+    }, ms);
+  });
+  return Promise.race([
+    Promise.resolve(promise).finally(() => { if (timeoutId) clearTimeout(timeoutId); }),
+    timeoutPromise
+  ]);
+}
+
+module.exports = { wizardLog, logAsyncStep, logSyncStep, getLogPath, withTimeout };

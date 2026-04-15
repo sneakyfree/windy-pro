@@ -27,7 +27,19 @@ const { AccountManager } = require('./core/account-manager');
 const { CleanSlate } = require('./core/clean-slate');
 const { DependencyInstaller } = require('./core/dependency-installer');
 const { BundledAssets } = require('./core/bundled-assets');
-const { wizardLog, getLogPath } = require('./core/wizard-logger');
+const { wizardLog, getLogPath, withTimeout } = require('./core/wizard-logger');
+
+// Per-step fail-fast budgets. These are diagnostic ceilings — every step
+// already self-imposes shorter timeouts on its own subprocesses. If any of
+// these trips, the log line `✗ TIMEOUT after Nms in: <label>` is the
+// debugging anchor: it identifies exactly which await never returned.
+const TIMEOUT_CLEAN_SLATE = 60_000;       // 60s for prior-install removal
+const TIMEOUT_DEPS_INSTALL = 600_000;     // 10min for full dep cocktail (legacy slow path)
+const TIMEOUT_DEPS_FAST_PATH = 180_000;   // 3min for bundled fast-path (uv/pip from wheels)
+const TIMEOUT_HARDWARE_SCAN = 30_000;     // 30s — incl. 8s network speedtest
+const TIMEOUT_DOWNLOAD_MODELS = 30 * 60_000; // 30min for largest model + slow networks
+const TIMEOUT_PLATFORM_VERIFY = 30_000;
+const TIMEOUT_PLATFORM_PERMS = 60_000;
 
 const APP_DIR = path.join(os.homedir(), '.windy-pro');
 const ENGINES_DIR = path.join(APP_DIR, 'engines');
@@ -140,14 +152,30 @@ class InstallWizard {
   setupIPC() {
     // ─── Prior Version Check ───
     ipcMain.handle('wizard-check-prior-install', async () => {
-      const cleanSlate = new CleanSlate({ preserveModels: true });
-      const detection = cleanSlate._detect();
-      return detection;
+      wizardLog('IPC wizard-check-prior-install ENTRY');
+      try {
+        const cleanSlate = new CleanSlate({ preserveModels: true });
+        const detection = cleanSlate._detect();
+        wizardLog(`IPC wizard-check-prior-install EXIT: found=${detection.found}`);
+        return detection;
+      } catch (e) {
+        wizardLog(`IPC wizard-check-prior-install THREW: ${e.message}`);
+        throw e;
+      }
     });
 
     // ─── Hardware Scan ───
     ipcMain.handle('wizard-scan-hardware', async () => {
-      this.hardware = await this.detector.detect();
+      wizardLog('IPC wizard-scan-hardware ENTRY');
+      // Network speedtest in HardwareDetector hits speed.cloudflare.com with
+      // its own 8s timeout, but we still bound the whole scan in case any
+      // subprocess (e.g. system_profiler on first boot) wedges.
+      this.hardware = await withTimeout(
+        this.detector.detect(),
+        TIMEOUT_HARDWARE_SCAN,
+        'HardwareDetector.detect'
+      );
+      wizardLog(`IPC wizard-scan-hardware: detected ram=${this.hardware?.ram?.totalGB}GB cores=${this.hardware?.cpu?.cores} arch=${this.hardware?.cpu?.arch} disk=${this.hardware?.disk?.freeGB}GB`);
       this.recommendation = recommend(this.hardware);
 
       // Initialize storage-aware model system with detected hardware
@@ -164,6 +192,7 @@ class InstallWizard {
         familyInfo: ENGINE_FAMILIES[m.family]
       }));
 
+      wizardLog(`IPC wizard-scan-hardware EXIT: ${annotatedModels.length} models annotated, ${storageState?.recommendedModels?.length || 0} pre-selected`);
       return {
         hardware: this.hardware,
         recommendation: this.recommendation,
@@ -174,8 +203,10 @@ class InstallWizard {
 
     // ─── Model Selection (set all) ───
     ipcMain.handle('wizard-select-models', async (event, modelIds) => {
+      wizardLog(`IPC wizard-select-models ENTRY: ${(Array.isArray(modelIds) ? modelIds : [modelIds]).join(',')}`);
       this.selectedEngines = Array.isArray(modelIds) ? modelIds : [modelIds];
       const result = this.storageEngines.setSelectedModels(this.selectedEngines);
+      wizardLog(`IPC wizard-select-models EXIT: selected=${this.selectedEngines.length}`);
       return { selected: this.selectedEngines, ...result };
     });
 
@@ -237,8 +268,12 @@ class InstallWizard {
           },
           onLog: (msg) => { wizardLog(`  cleanSlate: ${msg}`); console.log(msg); }
         });
-        wizardLog('Phase 0: CleanSlate constructed. Calling cleanSlate.run()...');
-        const cleanResult = await cleanSlate.run();
+        wizardLog('Phase 0: CleanSlate constructed. Calling cleanSlate.run() with timeout...');
+        const cleanResult = await withTimeout(
+          cleanSlate.run(),
+          TIMEOUT_CLEAN_SLATE,
+          'CleanSlate.run'
+        );
         wizardLog('Phase 0: cleanSlate.run() returned:', { wasClean: cleanResult.wasClean, removedCount: cleanResult.removed?.length, errorCount: cleanResult.errors?.length });
 
         if (!cleanResult.wasClean) {
@@ -272,9 +307,20 @@ class InstallWizard {
             });
           }
         });
-        wizardLog('Phase 1: DependencyInstaller constructed. Calling installAll()...');
+        wizardLog('Phase 1: DependencyInstaller constructed. Calling installAll() with timeout...');
 
-        const depResult = await depInstaller.installAll();
+        // Use the larger legacy budget when bundled assets aren't present
+        // (since legacy hits brew/apt which can take minutes), but the
+        // bundled fast-path label is used for the typical happy path.
+        const depTimeout = (new BundledAssets()).hasBundledPython() && (new BundledAssets()).hasBundledWheels()
+          ? TIMEOUT_DEPS_FAST_PATH
+          : TIMEOUT_DEPS_INSTALL;
+        wizardLog(`Phase 1: timeout budget = ${depTimeout}ms (${depTimeout === TIMEOUT_DEPS_FAST_PATH ? 'fast-path' : 'legacy'})`);
+        const depResult = await withTimeout(
+          depInstaller.installAll(),
+          depTimeout,
+          'DependencyInstaller.installAll'
+        );
         wizardLog('Phase 1: installAll() returned:', { success: depResult.success, errorCount: depResult.errors?.length });
         if (!depResult.success) {
           console.log('[InstallWizard] Some deps failed but continuing:', depResult.errors);
@@ -298,7 +344,8 @@ class InstallWizard {
         const downloadStart = Date.now();
         let completedModels = 0;
 
-        await this.downloadManager.downloadModels(
+        wizardLog(`Phase 2: starting downloadManager.downloadModels with timeout ${TIMEOUT_DOWNLOAD_MODELS}ms`);
+        await withTimeout(this.downloadManager.downloadModels(
           models,
           // Per-model progress callback
           (modelId, progress) => {
@@ -355,7 +402,8 @@ class InstallWizard {
               eta: eta,
             });
           }
-        );
+        ), TIMEOUT_DOWNLOAD_MODELS, 'DownloadManager.downloadModels');
+        wizardLog('Phase 2: downloadModels complete');
 
         // Phase 3: Verify
         this.sendProgress({
@@ -365,7 +413,13 @@ class InstallWizard {
         });
 
         if (this.platformAdapter) {
-          await this.platformAdapter.verify();
+          wizardLog('Phase 3: platformAdapter.verify() with timeout');
+          await withTimeout(
+            this.platformAdapter.verify(),
+            TIMEOUT_PLATFORM_VERIFY,
+            'platformAdapter.verify'
+          );
+          wizardLog('Phase 3: verify done');
         }
 
         // Phase 4: Permissions
@@ -376,7 +430,13 @@ class InstallWizard {
         });
 
         if (this.platformAdapter) {
-          await this.platformAdapter.requestPermissions();
+          wizardLog('Phase 4: platformAdapter.requestPermissions() with timeout');
+          await withTimeout(
+            this.platformAdapter.requestPermissions(),
+            TIMEOUT_PLATFORM_PERMS,
+            'platformAdapter.requestPermissions'
+          );
+          wizardLog('Phase 4: permissions done');
         }
 
         // Done!
@@ -545,6 +605,13 @@ class InstallWizard {
    */
   _friendlyError(error) {
     const msg = error.message || String(error);
+
+    // Wizard-internal fail-fast timeouts. The label tells the user (and
+    // support) exactly which step never completed — ten times more useful
+    // than a silent spinner.
+    if (error && error.timedOut && error.label) {
+      return `Setup got stuck while running "${error.label}" (no progress in ${Math.round(error.timeoutMs / 1000)}s). The full diagnostic log is at ${getLogPath()} — please share that file with support.`;
+    }
 
     // Network errors
     if (msg.includes('No internet connection') || msg.includes('ENOTFOUND') || msg.includes('ENETUNREACH')) {
