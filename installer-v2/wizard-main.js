@@ -55,6 +55,27 @@ try {
 } catch (_) { /* pair catalog optional */ }
 
 /**
+ * Allowlist check for Stripe Checkout URLs. SEC-WIZARD-1.
+ *
+ * Stripe Checkout sessions live at:
+ *   https://checkout.stripe.com/c/pay/...        (current)
+ *   https://checkout.stripe.com/pay/...          (legacy)
+ *   https://billing.stripe.com/p/session/...     (Stripe Billing portal)
+ *
+ * Refuses anything else, including http://, file://, javascript:, or
+ * lookalike hosts (e.g. `https://checkout.stripe.com.evil.example/`).
+ */
+function _isAllowedStripeUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:') return false;
+    return u.hostname === 'checkout.stripe.com' || u.hostname === 'billing.stripe.com';
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
  * Auto-detect Linux distro and return the appropriate platform adapter
  */
 function getLinuxAdapter() {
@@ -567,10 +588,19 @@ class InstallWizard {
                 signal: AbortSignal.timeout(10000)
               });
               const data = await res.json();
-              if (data.url) {
+              // SEC-WIZARD-1 (MED): API response is trusted by the
+              // wizard but a compromised account-server (or MITM'd
+              // response) could return data.url as `javascript:…`
+              // or a `file://` URL, which shell.openExternal would
+              // happily open. Hard-restrict to HTTPS Stripe Checkout
+              // hosts — anything else is a misconfiguration or attack.
+              if (data.url && _isAllowedStripeUrl(data.url)) {
                 const { shell } = require('electron');
                 await shell.openExternal(data.url);
                 return { success: true, checkoutUrl: data.url };
+              }
+              if (data.url) {
+                wizardLog(`SEC-WIZARD-1: refused checkout URL with disallowed host: ${data.url.slice(0, 80)}`);
               }
             } catch (apiErr) {
               console.warn('[Wizard] Stripe checkout failed (user can upgrade later):', apiErr.message);

@@ -104,8 +104,10 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-      - name: Run installer unit tests
-        run: npx jest tests/installer-bundled-assets.test.js tests/installer-clean-slate.test.js tests/installer-wizard-logger.test.js --testEnvironment=node --ci
+      - name: Run installer + security unit tests
+        # Includes SEC-PAIR-1 (path traversal) and SEC-WIZARD-1 (Stripe
+        # URL allowlist) regression pins. See docs/SECURITY-AUDIT-2026-04.md.
+        run: npx jest tests/installer-bundled-assets.test.js tests/installer-clean-slate.test.js tests/installer-wizard-logger.test.js tests/pair-download-manager.security.test.js tests/wizard-main.security.test.js --testEnvironment=node --ci
 
   # ── Electron Release Builds (multi-platform, tag-triggered) ──
   build-electron:
