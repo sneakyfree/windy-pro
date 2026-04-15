@@ -2383,7 +2383,8 @@
         <div style="display:flex; align-items:center; gap:18px;">
           <div style="font-size:48px;">🌪️</div>
           <div style="flex:1;">
-            <div style="font-size:13px; font-weight:700; color:var(--green); letter-spacing:0.05em;">
+            <div style="font-size:13px; font-weight:700; color:var(--green); letter-spacing:0.05em;"
+              data-i18n="hero.recommendedForYou">
               ★ RECOMMENDED FOR YOUR MACHINE
             </div>
             <div id="hero-rec-name" style="font-size:24px; font-weight:800; color:var(--text); margin-top:4px;">
@@ -2394,7 +2395,8 @@
             </div>
           </div>
           <button id="hero-rec-btn" class="btn btn-primary" onclick="acceptHeroRecommendation()"
-            style="font-size:15px; padding:14px 22px; min-width:160px;">
+            style="font-size:15px; padding:14px 22px; min-width:160px;"
+            data-i18n="hero.useThis">
             Use this →
           </button>
         </div>
@@ -2681,10 +2683,12 @@
       <div class="install-screen" style="text-align:left;">
         <div style="text-align:center; margin-bottom:32px;">
           <div style="font-size:48px; margin-bottom:8px;">🔐</div>
-          <div class="install-status-text" style="font-size:28px; font-weight:700;">
+          <div class="install-status-text" style="font-size:28px; font-weight:700;"
+            data-i18n="verify.title">
             Final check — make sure permissions actually work
           </div>
-          <div class="install-detail-text" style="margin-top:8px; opacity:0.8;">
+          <div class="install-detail-text" style="margin-top:8px; opacity:0.8;"
+            data-i18n="verify.subtitle">
             macOS hides permission failures behind silent denials.
             Let's verify each one with a real test before we let you loose.
           </div>
@@ -2696,8 +2700,9 @@
           <div style="display:flex; align-items:center; gap:14px;">
             <div style="font-size:32px;" aria-hidden="true">🎙️</div>
             <div style="flex:1;">
-              <div class="brand-card-title">Microphone</div>
-              <div class="brand-card-body" id="verify-mic-msg" aria-live="polite">
+              <div class="brand-card-title" data-i18n="verify.micTitle">Microphone</div>
+              <div class="brand-card-body" id="verify-mic-msg" aria-live="polite"
+                data-i18n="verify.micDesc">
                 Click <b>Test Mic</b> and speak for one second. We'll show what we heard.
               </div>
               <!-- Tiny waveform meter — fills proportional to RMS amplitude.
@@ -2716,9 +2721,11 @@
               aria-hidden="true">⏳</div>
           </div>
           <div style="display:flex; gap:8px; margin-top:14px;">
-            <button class="btn btn-primary" id="verify-mic-btn" onclick="runMicVerify()">Test Mic</button>
+            <button class="btn btn-primary" id="verify-mic-btn" onclick="runMicVerify()"
+              data-i18n="verify.testMic">Test Mic</button>
             <button class="btn btn-ghost" id="verify-mic-settings" style="display:none;"
-              onclick="window.wizardAPI.openPermSettings('microphone')">Open Mic Settings</button>
+              onclick="window.wizardAPI.openPermSettings('microphone')"
+              data-i18n="verify.openMicSettings">Open Mic Settings</button>
           </div>
         </div>
 
@@ -2730,7 +2737,7 @@
           <div style="display:flex; align-items:center; gap:14px;">
             <div style="font-size:32px;">📋</div>
             <div style="flex:1;">
-              <div class="brand-card-title">Paste-to-cursor (Linux)</div>
+              <div class="brand-card-title" data-i18n="verify.pasteTitle">Paste-to-cursor (Linux)</div>
               <div class="brand-card-body" id="verify-paste-msg">
                 Detecting…
               </div>
@@ -2743,13 +2750,16 @@
             <div id="verify-paste-status" style="font-size:24px; min-width:32px; text-align:center;">⏳</div>
           </div>
           <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
-            <button class="btn btn-primary" id="verify-paste-install-btn" onclick="runPasteInstall()" style="display:none;">
+            <button class="btn btn-primary" id="verify-paste-install-btn" onclick="runPasteInstall()" style="display:none;"
+              data-i18n="verify.installPaste">
               Install paste tools
             </button>
-            <button class="btn btn-primary" id="verify-paste-test-btn" onclick="runPasteTest()" style="display:none;">
+            <button class="btn btn-primary" id="verify-paste-test-btn" onclick="runPasteTest()" style="display:none;"
+              data-i18n="verify.testPaste">
               Test paste
             </button>
-            <button class="btn btn-ghost" id="verify-paste-recheck-btn" onclick="runPasteDetect()">
+            <button class="btn btn-ghost" id="verify-paste-recheck-btn" onclick="runPasteDetect()"
+              data-i18n="verify.recheck">
               Re-check
             </button>
           </div>
@@ -2760,27 +2770,32 @@
           <div style="display:flex; align-items:center; gap:14px;">
             <div style="font-size:32px;">⌨️</div>
             <div style="flex:1;">
-              <div class="brand-card-title">Accessibility</div>
-              <div class="brand-card-body" id="verify-access-msg">
+              <div class="brand-card-title" data-i18n="verify.accessTitle">Accessibility</div>
+              <div class="brand-card-body" id="verify-access-msg"
+                data-i18n="verify.accessDesc">
                 Required so Windy Word can paste your transcript right where your cursor is.
               </div>
             </div>
             <div id="verify-access-status" style="font-size:24px; min-width:32px; text-align:center;">⏳</div>
           </div>
           <div style="display:flex; gap:8px; margin-top:14px;">
-            <button class="btn btn-primary" id="verify-access-btn" onclick="runAccessVerify()">Verify Accessibility</button>
+            <button class="btn btn-primary" id="verify-access-btn" onclick="runAccessVerify()"
+              data-i18n="verify.testAccess">Verify Accessibility</button>
             <button class="btn btn-ghost" id="verify-access-settings" style="display:none;"
-              onclick="window.wizardAPI.openPermSettings('accessibility')">Open Accessibility Settings</button>
+              onclick="window.wizardAPI.openPermSettings('accessibility')"
+              data-i18n="verify.openAccessSettings">Open Accessibility Settings</button>
           </div>
         </div>
 
-        <div class="install-fun-text" id="verify-hint" style="text-align:center;">
+        <div class="install-fun-text" id="verify-hint" style="text-align:center;"
+          data-i18n="verify.autoRecheck">
           We re-check automatically when you come back from System Settings.
         </div>
 
         <div style="display:flex; justify-content:space-between; margin-top:24px;">
-          <button class="btn btn-ghost" onclick="skipVerify()">Skip — finish anyway</button>
-          <button class="btn btn-primary" id="verify-finish-btn" disabled onclick="finishVerify()">
+          <button class="btn btn-ghost" onclick="skipVerify()" data-i18n="verify.skip">Skip — finish anyway</button>
+          <button class="btn btn-primary" id="verify-finish-btn" disabled onclick="finishVerify()"
+            data-i18n="verify.finish">
             Finish setup →
           </button>
         </div>
