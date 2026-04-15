@@ -3720,6 +3720,11 @@ class WindyApp {
     // Always retain final segments for copy/paste reliability
     if (!msg.partial) {
       this.transcript.push(msg);
+      // Phase 8: account creation moved out of wizard. After the user's
+      // first successful transcription, surface a one-time "save your
+      // sessions to the cloud" banner. Only the first final segment ever
+      // triggers it; once dismissed (or accepted) it never reappears.
+      try { this.maybeShowSignupBanner(msg); } catch (e) { /* never break record flow */ }
     }
 
     // In strobe-only mode, suppress live rendering while recording/buffering
@@ -3765,6 +3770,84 @@ class WindyApp {
 
     // Auto-scroll to bottom
     this.transcriptScroll.scrollTop = this.transcriptScroll.scrollHeight;
+  }
+
+  /**
+   * Phase 8: post-first-transcription cloud-account upsell.
+   *
+   * Replaces the in-wizard account screen. Shown exactly once: the first
+   * time the user actually feels the magic of a transcription landing.
+   * Two outcomes:
+   *   "Create free account" → opens the existing account UI / web flow.
+   *   "No thanks"            → stamps localStorage so we never bug them again.
+   *
+   * Returns silently and never throws — record flow is sacred.
+   */
+  maybeShowSignupBanner(msg) {
+    if (!msg || msg.partial) return;
+    if (!msg.text || !msg.text.trim()) return;
+    if (localStorage.getItem('windy_signup_banner_shown') === '1') return;
+    if (localStorage.getItem('windy_account_token')) return; // already signed in
+    if (document.getElementById('windy-signup-banner')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'windy-signup-banner';
+    banner.style.cssText = [
+      'position:fixed', 'left:50%', 'bottom:20px', 'transform:translateX(-50%)',
+      'background:linear-gradient(135deg, #1f2937, #111827)',
+      'border:1px solid rgba(34,197,94,0.5)',
+      'border-radius:14px', 'box-shadow:0 8px 32px rgba(0,0,0,0.4)',
+      'padding:14px 20px', 'display:flex', 'align-items:center', 'gap:14px',
+      'max-width:520px', 'z-index:99999', 'color:#f3f4f6', 'font-size:14px',
+      'line-height:1.4', 'animation:windy-slideup 280ms ease-out',
+    ].join(';');
+    banner.innerHTML = `
+      <div style="font-size:32px;">🌪️</div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:700; margin-bottom:2px;">Loved that?</div>
+        <div style="opacity:0.8;">Save your sessions to the cloud — sync across devices, never lose a transcript.</div>
+      </div>
+      <button id="windy-signup-yes"
+        style="background:#22c55e; color:#0b1220; border:none; border-radius:8px; padding:8px 14px; font-weight:700; cursor:pointer; font-size:13px;">
+        Create free account
+      </button>
+      <button id="windy-signup-no"
+        style="background:transparent; color:#9ca3af; border:none; cursor:pointer; font-size:13px; padding:8px 6px;">
+        No thanks
+      </button>
+    `;
+    if (!document.getElementById('windy-signup-banner-style')) {
+      const style = document.createElement('style');
+      style.id = 'windy-signup-banner-style';
+      style.textContent = '@keyframes windy-slideup { from { transform: translate(-50%, 24px); opacity:0 } to { transform: translate(-50%, 0); opacity:1 } }';
+      document.head.appendChild(style);
+    }
+    document.body.appendChild(banner);
+
+    const dismiss = (rememberDecline) => {
+      if (rememberDecline) localStorage.setItem('windy_signup_banner_shown', '1');
+      banner.style.transition = 'opacity 200ms';
+      banner.style.opacity = '0';
+      setTimeout(() => banner.remove(), 220);
+    };
+
+    document.getElementById('windy-signup-no').onclick = () => dismiss(true);
+    document.getElementById('windy-signup-yes').onclick = () => {
+      localStorage.setItem('windy_signup_banner_shown', '1');
+      // Open the windyword.ai signup page in the system browser.
+      // The desktop app exposes window.electronAPI.openExternal; fall back
+      // to plain window.open if the bridge isn't loaded for some reason.
+      const url = 'https://windyword.ai/signup?source=app-first-transcript';
+      try {
+        if (window.electronAPI?.openExternal) window.electronAPI.openExternal(url);
+        else window.open(url, '_blank', 'noopener');
+      } catch (_) { window.open(url, '_blank', 'noopener'); }
+      dismiss(false);
+    };
+
+    // Auto-dismiss (without remembering) after 30s if untouched, so it
+    // doesn't camp permanently if the user just walked away from the desk.
+    setTimeout(() => { if (document.body.contains(banner)) dismiss(false); }, 30000);
   }
 
   /**

@@ -1977,7 +1977,7 @@
 
       <div class="btn-row">
         <button class="btn btn-ghost" onclick="goToScreen(0)" data-i18n="btn.back">← Back</button>
-        <button class="btn btn-primary" id="btn-to-account" disabled onclick="goToScreen(2)"
+        <button class="btn btn-primary" id="btn-to-account" disabled onclick="continueFromHardware()"
           data-i18n="btn.continue">Continue →</button>
       </div>
     </div>
@@ -2222,7 +2222,8 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(2)" data-i18n="btn.back">← Back</button>
+        <!-- Phase 8: account screen is bypassed; back goes to hardware. -->
+        <button class="btn btn-ghost" onclick="goToScreen(1)" data-i18n="btn.back">← Back</button>
         <button class="btn btn-primary" id="btn-to-translate" disabled onclick="proceedFromLanguages()"
           data-i18n="lang.selectAtLeast">Select at least 1 language →</button>
       </div>
@@ -3335,6 +3336,33 @@
       } catch (e) {
         showAuthError('Could not create free account. Please try again.');
       }
+    }
+
+    /**
+     * Phase 8: bypass the account screen.
+     *
+     * Old flow: hardware → ACCOUNT → languages → translate → models → install.
+     * New flow: hardware → languages → translate → models → install.
+     *
+     * Account creation moves into the main app, shown as a one-time banner
+     * after the user's first successful transcription. Here we silently
+     * provision a free-tier account in the background so the rest of the
+     * wizard (which references userTier and accountManager.getToken()) keeps
+     * working unchanged. Screen 2's markup is left in place so screen
+     * indices used by goToScreen elsewhere don't shift.
+     */
+    async function continueFromHardware() {
+      try {
+        if (window.wizardAPI && window.wizardAPI.createFreeAccount) {
+          const r = await window.wizardAPI.createFreeAccount();
+          if (r && r.success) userTier = 'free';
+        }
+      } catch (e) {
+        // Non-fatal — wizard can still proceed; account creation will be
+        // re-offered after first transcription anyway.
+        console.warn('[wizard] silent free-account creation failed:', e);
+      }
+      goToScreen(3);
     }
 
     // ─── SCREEN 3: MODEL PICKER ───
