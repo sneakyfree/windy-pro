@@ -36,6 +36,7 @@ import {
     generateTotpSecret, buildOtpauthUri, verifyTotpCode,
     generateBackupCodes, hashBackupCodes, consumeBackupCode,
 } from '../services/mfa';
+import { enqueueIdentityEvent, attemptDelivery } from '../services/webhook-bus';
 
 const router = Router();
 
@@ -273,6 +274,26 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
                 console.warn('[Ecosystem] Auto-provision failed (non-fatal):', err.message);
             }
         });
+
+        // PR4: Fan out identity.created to all configured consumers. Enqueue
+        // synchronously (cheap DB writes), then attempt immediate delivery
+        // off the response path. The worker will pick up retries.
+        try {
+            const { deliveryIds } = enqueueIdentityEvent('identity.created', {
+                windy_identity_id: windyIdentityId,
+                email: email.toLowerCase(),
+                display_name: name,
+                tier: 'free',
+                created_at: new Date().toISOString(),
+            });
+            setImmediate(async () => {
+                for (const id of deliveryIds) {
+                    try { await attemptDelivery(id); } catch { /* worker will retry */ }
+                }
+            });
+        } catch (e: any) {
+            console.warn('[webhook-bus] identity.created enqueue failed:', e.message);
+        }
 
         // PR1: Verification email is sent on explicit POST /send-verification, not here.
         // Reason: setImmediate-queued sends race with the client's own resend
@@ -536,6 +557,32 @@ router.patch('/me', authenticateToken, (req: Request, res: Response) => {
 
         // Return updated profile
         const user = stmts().findUserById.get(userId) as any;
+
+        // PR4: Fan out identity.updated. Send only the fields that actually
+        // changed in this request so consumers can do targeted updates rather
+        // than a full re-sync.
+        try {
+            const changed: Record<string, any> = {};
+            if (name !== undefined) changed.display_name = name;
+            if (avatarUrl !== undefined) changed.avatar_url = avatarUrl;
+            if (phone !== undefined) changed.phone = phone;
+            if (preferredLang !== undefined) changed.preferred_lang = preferredLang;
+            const { deliveryIds } = enqueueIdentityEvent('identity.updated', {
+                windy_identity_id: user.windy_identity_id || user.id,
+                email: user.email,
+                display_name: user.name,
+                tier: user.tier,
+                created_at: user.created_at,
+            }, { changed });
+            setImmediate(async () => {
+                for (const id of deliveryIds) {
+                    try { await attemptDelivery(id); } catch { /* worker retries */ }
+                }
+            });
+        } catch (e: any) {
+            console.warn('[webhook-bus] identity.updated enqueue failed:', e.message);
+        }
+
         res.json({
             success: true,
             userId: user.id,
@@ -1041,8 +1088,9 @@ const handleAccountDeletion = async (req: Request, res: Response) => {
         const userId = (req as AuthRequest).user.userId;
         const db = getDb();
 
-        // Verify user exists
-        const user = db.prepare('SELECT id, email, password_hash FROM users WHERE id = ?').get(userId) as any;
+        // Verify user exists. Pull the full identity row so we can fan out
+        // identity.revoked BEFORE the cascade delete strips it.
+        const user = db.prepare('SELECT id, email, password_hash, name, tier, created_at, windy_identity_id FROM users WHERE id = ?').get(userId) as any;
         if (!user) return res.status(404).json({ error: 'User not found' });
 
         // Require password confirmation if provided (recommended but optional for backward compat)
@@ -1051,6 +1099,25 @@ const handleAccountDeletion = async (req: Request, res: Response) => {
             if (!passwordValid) {
                 return res.status(401).json({ error: 'Password confirmation failed' });
             }
+        }
+
+        // PR4: Fan out identity.revoked BEFORE the cascade delete — we still
+        // need email/identity for the consumers to deprovision their accounts.
+        try {
+            const { deliveryIds } = enqueueIdentityEvent('identity.revoked', {
+                windy_identity_id: user.windy_identity_id || user.id,
+                email: user.email,
+                display_name: user.name,
+                tier: user.tier,
+                created_at: user.created_at,
+            }, { revoked_at: new Date().toISOString(), reason: 'self_deleted' });
+            setImmediate(async () => {
+                for (const id of deliveryIds) {
+                    try { await attemptDelivery(id); } catch { /* worker retries */ }
+                }
+            });
+        } catch (e: any) {
+            console.warn('[webhook-bus] identity.revoked enqueue failed:', e.message);
         }
 
         // Cascade delete all user data

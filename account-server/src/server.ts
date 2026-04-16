@@ -403,6 +403,10 @@ if (process.env.NODE_ENV !== 'test') {
     const { startRetryWorker } = require('./services/ecosystem-provisioner');
     startRetryWorker();
 
+    // PR4: Start identity webhook fan-out worker (polls webhook_deliveries every 30s)
+    const { startWebhookWorker } = require('./services/webhook-bus');
+    startWebhookWorker();
+
     // Register with Eternitas as a platform (idempotent — skips if already registered)
     const { registerWithEternitas } = require('./services/eternitas-register');
     registerWithEternitas().catch((err: any) => console.warn('[Startup] Eternitas registration deferred:', err.message));

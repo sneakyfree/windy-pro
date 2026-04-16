@@ -519,6 +519,29 @@ function initSchema(db: DbAdapter): void {
     CREATE INDEX IF NOT EXISTS idx_otp_user_purpose ON otp_codes(user_id, purpose);
     CREATE INDEX IF NOT EXISTS idx_otp_expires ON otp_codes(expires_at);
 
+    -- Webhook deliveries (PR4 — identity fan-out bus).
+    -- One row per (event, target). Worker polls WHERE delivered_at IS NULL
+    -- AND dead_lettered_at IS NULL AND next_attempt_at <= now.
+    -- Retry schedule: 0ms, 5s, 30s, 5m, 1h, 6h, 24h (7 attempts → dead letter).
+    CREATE TABLE IF NOT EXISTS webhook_deliveries (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      target TEXT NOT NULL,
+      target_url TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      signature TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at TEXT NOT NULL,
+      delivered_at TEXT,
+      dead_lettered_at TEXT,
+      last_error TEXT,
+      identity_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_webhook_due ON webhook_deliveries(next_attempt_at) WHERE delivered_at IS NULL AND dead_lettered_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_webhook_identity ON webhook_deliveries(identity_id);
+    CREATE INDEX IF NOT EXISTS idx_webhook_event ON webhook_deliveries(event_type);
+
     -- MFA secrets: TOTP-based two-factor authentication.
     -- totp_secret_encrypted = AES-256-GCM(base32_secret), keyed by MFA_ENCRYPTION_KEY env.
     -- backup_codes_hash = JSON array of bcrypt hashes (consumed by setting to '' on use).
