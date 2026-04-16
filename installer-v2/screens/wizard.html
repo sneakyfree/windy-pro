@@ -2653,6 +2653,17 @@
         <div class="complete-strobe"></div>
         <div class="complete-title" data-i18n="complete.title">You're Ready! 🌪️</div>
         <div class="complete-models" id="complete-models"></div>
+
+        <!-- Provisioned-products status. Populated by loadProvisioningStatus()
+             which calls /api/v1/identity/me about 2s after the screen shows.
+             Hidden for offline / free-tier / skipped-signup flows. -->
+        <div id="complete-ecosystem" style="display:none; margin:16px auto; max-width:520px; background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px 20px;">
+          <div style="font-size:12px; font-weight:800; letter-spacing:1.5px; color:var(--text-dim); text-transform:uppercase; margin-bottom:10px;">Your Windy Ecosystem</div>
+          <div id="complete-ecosystem-rows" style="display:flex; flex-direction:column; gap:8px;">
+            <!-- Rows injected by JS: 📫 Mail, 💬 Chat, ☁️ Cloud -->
+          </div>
+        </div>
+
         <div class="complete-desc">
           The Green Strobe is waiting. Your voice creates worlds. Your keyboard is already packing its bags. 👋⌨️<br>
           Here are your shortcuts:
@@ -4356,7 +4367,13 @@
           document.getElementById('nxt-key-record').textContent = '⌘+Shift+Space';
         }
 
-        setTimeout(() => goToScreen(9), 1500);
+        setTimeout(() => {
+          goToScreen(9);
+          // Give ecosystem-provisioner a head start before we poll — register
+          // fires Mail webhook + creates cloud quota on setImmediate; 2s buys
+          // enough room for the common case to settle.
+          setTimeout(loadProvisioningStatus, 2000);
+        }, 1500);
       } else {
         document.getElementById('install-status').textContent = '⚠️ Installation Failed';
         document.getElementById('install-detail').textContent = result.error || 'Unknown error. Please try again.';
@@ -5770,6 +5787,97 @@
         window.wizardAPI.purchaseTranslate('deferred');
       }
       goToScreen(5);
+    }
+
+    // ─── PROVISIONING STATUS (Complete screen) ───
+    // Polls /api/v1/identity/me a couple of times to surface the real state
+    // of the user's Mailbox / Chat handle / Cloud quota as ecosystem
+    // provisioning settles. Silently hides the section for offline or
+    // free-tier signups — there's nothing to display.
+
+    function formatBytes(n) {
+      if (!n && n !== 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let i = 0;
+      let v = Number(n);
+      while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+      return `${v >= 10 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+    }
+
+    function renderEcosystemRow(icon, label, value, statusClass) {
+      // statusClass: 'ok' (green ✓), 'pending' (amber …), 'failed' (muted —)
+      const dot = statusClass === 'ok' ? '#10b981'
+                : statusClass === 'pending' ? '#f59e0b'
+                : '#6b7280';
+      const mark = statusClass === 'ok' ? '✓'
+                 : statusClass === 'pending' ? '…'
+                 : '—';
+      return `
+        <div style="display:flex; align-items:center; gap:12px; font-size:14px;">
+          <span style="font-size:18px; width:22px; text-align:center;">${icon}</span>
+          <span style="flex:1; color:var(--text);">${label}</span>
+          <span style="color:var(--text-dim); font-variant-numeric:tabular-nums;">${value}</span>
+          <span style="width:18px; height:18px; border-radius:50%; background:${dot}; color:white; font-size:11px; font-weight:700; display:inline-flex; align-items:center; justify-content:center;">${mark}</span>
+        </div>`;
+    }
+
+    function paintEcosystem(identity) {
+      const host = document.getElementById('complete-ecosystem');
+      const rows = document.getElementById('complete-ecosystem-rows');
+      if (!host || !rows) return;
+
+      const products = identity.products || [];
+      const byName = Object.fromEntries(products.map(p => [p.product, p]));
+      const mail = byName['windy_mail'];
+      const chat = byName['windy_chat'];
+      const chatHandle = identity.chatProfile?.matrix_user_id || chat?.external_id;
+      const emailLocalPart = (identity.identity?.email || '').split('@')[0];
+      const storageLimit = identity.identity?.storageLimit || 0;
+
+      const mailStatus = mail?.status === 'active' ? 'ok'
+                       : mail?.status === 'pending' ? 'pending'
+                       : 'failed';
+      const chatStatus = chatHandle ? 'ok' : (chat?.status === 'pending' ? 'pending' : 'failed');
+      const cloudStatus = storageLimit > 0 ? 'ok' : 'pending';
+
+      rows.innerHTML = [
+        renderEcosystemRow('📫', 'Mailbox',
+          mail?.status === 'active' && emailLocalPart ? `${emailLocalPart}@windy.mail`
+          : mail?.status === 'pending' ? 'Provisioning…'
+          : 'Unavailable', mailStatus),
+        renderEcosystemRow('💬', 'Chat handle',
+          chatHandle ? chatHandle
+          : chat?.status === 'pending' ? 'Provisioning…'
+          : 'Unavailable', chatStatus),
+        renderEcosystemRow('☁️', 'Cloud quota',
+          storageLimit > 0 ? `${formatBytes(storageLimit)} free`
+          : 'Provisioning…', cloudStatus),
+      ].join('');
+      host.style.display = 'block';
+    }
+
+    async function loadProvisioningStatus(retriesLeft = 2) {
+      if (typeof window.wizardAPI === 'undefined' || !window.wizardAPI.getIdentity) return;
+      let result;
+      try {
+        result = await window.wizardAPI.getIdentity();
+      } catch (e) {
+        result = { success: false, error: String(e && e.message || e) };
+      }
+      if (!result?.success || !result.identity) {
+        // offline / free-tier / not logged in — leave the section hidden
+        return;
+      }
+      paintEcosystem(result.identity);
+      // If anything is still pending, try once more after another 2s.
+      const identity = result.identity;
+      const products = identity.products || [];
+      const anyPending = products.some(p => p.status === 'pending')
+        || !identity.chatProfile
+        || !(identity.identity?.storageLimit > 0);
+      if (anyPending && retriesLeft > 0) {
+        setTimeout(() => loadProvisioningStatus(retriesLeft - 1), 2000);
+      }
     }
 
     // ─── LAUNCH ───
