@@ -1200,12 +1200,20 @@ function generateUserCode(): string {
 //  SEED ECOSYSTEM CLIENTS
 // ═══════════════════════════════════════════
 
+// Note: client_ids use a mix of underscores and hyphens. Match whatever the
+// actual consumer sends — e.g. windy-code (hyphen) is how the VS Code fork
+// identifies itself in extensions/windy-ecosystem/src/signIn.ts. Don't
+// normalize here — the INSERT below stores the literal value.
 const ECOSYSTEM_CLIENTS = [
   { client_id: 'windy_chat', name: 'Windy Chat', scopes: ['windy_chat:*'] },
   { client_id: 'windy_mail', name: 'Windy Mail', scopes: ['windy_mail:*'] },
   { client_id: 'eternitas', name: 'Eternitas', scopes: ['eternitas:*'] },
   { client_id: 'windy_fly', name: 'Windy Fly', scopes: ['windy_fly:*'] },
   { client_id: 'windy_pro_mobile', name: 'Windy Word Mobile', scopes: ['openid', 'profile', 'email', 'windy_pro:*', 'windy_mail:read'] },
+  // Windy Code — VS Code soft fork IDE. Uses OAuth device-code flow from
+  // extensions/windy-ecosystem/src/signIn.ts with exactly these scopes.
+  // Public client (no secret); no redirect_uris (device flow doesn't use them).
+  { client_id: 'windy-code', name: 'Windy Code', scopes: ['openid', 'profile', 'email', 'windy_code:*', 'windy_chat:*', 'windy_mail:*', 'windy_fly:*'] },
 ];
 
 /**
