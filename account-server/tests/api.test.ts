@@ -35,8 +35,9 @@ describe('GET /health', () => {
     expect(res.body.status).toBe('ok');
     expect(res.body.service).toBe('windy-pro-account-server');
     expect(res.body.version).toBe('2.0.0');
-    expect(res.body).toHaveProperty('users');
-    expect(res.body).toHaveProperty('devices');
+    // /health shape evolved — now exposes database/jwks/services/uptime instead of users/devices
+    expect(res.body).toHaveProperty('database');
+    expect(res.body).toHaveProperty('uptime_seconds');
     expect(res.body).toHaveProperty('timestamp');
   });
 });

@@ -61,6 +61,24 @@ export const ChangePasswordRequestSchema = z.object({
     newPassword: PasswordSchema,
 });
 
+// ─── Email Verification (PR1) ───────────────────────────────
+
+export const VerifyEmailRequestSchema = z.object({
+    code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+});
+
+// ─── Password Reset (PR2) ───────────────────────────────────
+
+export const ForgotPasswordRequestSchema = z.object({
+    email: z.string().email('Invalid email address'),
+});
+
+export const ResetPasswordRequestSchema = z.object({
+    email: z.string().email('Invalid email address'),
+    code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+    newPassword: PasswordSchema,
+});
+
 // ─── Translation Schemas ─────────────────────────────────────
 
 export const TranslateTextRequestSchema = z.object({

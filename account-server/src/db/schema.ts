@@ -500,5 +500,23 @@ function initSchema(db: DbAdapter): void {
       FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_pending_provisions_retry ON pending_provisions(next_retry_at);
+
+    -- OTP codes: hashed one-time codes for email verification + password reset.
+    -- code_hash = sha256(raw 6-digit code) — never store the raw code.
+    -- purpose: 'email_verification' | 'password_reset'
+    -- consumed_at NULL until used; non-null entries are kept for audit.
+    CREATE TABLE IF NOT EXISTS otp_codes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_otp_user_purpose ON otp_codes(user_id, purpose);
+    CREATE INDEX IF NOT EXISTS idx_otp_expires ON otp_codes(expires_at);
   `);
 }

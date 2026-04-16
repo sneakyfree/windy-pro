@@ -24,7 +24,9 @@ import {
     RegisterDeviceRequestSchema,
     RemoveDeviceRequestSchema,
     ChangePasswordRequestSchema,
+    VerifyEmailRequestSchema,
 } from '@windy-pro/contracts';
+import { sendMail, verificationEmail } from '../services/mailer';
 
 const router = Router();
 
@@ -40,6 +42,65 @@ const authLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
 });
+
+// PR1: send-verification rate limit — 3 per hour per user (or per IP if unauth slipped through)
+const sendVerificationLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: process.env.NODE_ENV === 'test' ? 10000 : 3,
+    keyGenerator: (req) => (req as AuthRequest).user?.userId || req.ip || 'unknown',
+    message: { error: 'Too many verification emails sent. Try again in an hour.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// PR1: forgot-password rate limit — 3 per hour per IP (no auth on this endpoint).
+// Also caps per-email reset spam: see route handler.
+const forgotPasswordLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: process.env.NODE_ENV === 'test' ? 10000 : 3,
+    keyGenerator: (req) => (req.body as any)?.email?.toLowerCase() || req.ip || 'unknown',
+    message: { error: 'Too many password reset attempts. Try again in an hour.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// ─── PR1 helpers — email verification OTP lifecycle ───
+//
+// Stored as sha256(code) so the raw code is never persisted. 6-digit numeric
+// codes (one of 900,000) are brute-forceable in theory, but the OTP row's
+// attempts counter caps wrong tries at 5 before invalidation, expiry is 15 min,
+// and rate limits cap send/verify volume.
+
+function generateOtpCode(): string {
+    return String(crypto.randomInt(100000, 1000000));
+}
+
+function hashOtp(code: string): string {
+    return crypto.createHash('sha256').update(code).digest('hex');
+}
+
+async function issueAndSendVerificationCode(
+    userId: string,
+    email: string,
+): Promise<{ stub: boolean; code?: string }> {
+    const db = getDb();
+    const code = generateOtpCode();
+    const codeHash = hashOtp(code);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    // Invalidate prior unconsumed verification codes for this user
+    db.prepare(
+        "UPDATE otp_codes SET consumed_at = datetime('now') WHERE user_id = ? AND purpose = 'email_verification' AND consumed_at IS NULL",
+    ).run(userId);
+
+    db.prepare(
+        "INSERT INTO otp_codes (id, user_id, code_hash, purpose, expires_at) VALUES (?, ?, ?, 'email_verification', ?)",
+    ).run(uuidv4(), userId, codeHash, expiresAt);
+
+    const tpl = verificationEmail(code);
+    const result = await sendMail({ ...tpl, to: email });
+    return { stub: !!result.stub, code: result.stub ? code : undefined };
+}
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -203,6 +264,13 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
                 console.warn('[Ecosystem] Auto-provision failed (non-fatal):', err.message);
             }
         });
+
+        // PR1: Verification email is sent on explicit POST /send-verification, not here.
+        // Reason: setImmediate-queued sends race with the client's own resend
+        // call — the later INSERT becomes "latest by created_at" and the code
+        // the user sees from the first email no longer matches the latest row.
+        // 24h login grace window covers the UX of "log in immediately after
+        // register" without requiring the email to land first.
     } catch (err: any) {
         console.error('Register error:', err);
         res.status(500).json({ error: 'Registration failed' });
@@ -225,6 +293,26 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
         if (!passwordValid) {
             logAuditEvent('login_failed', user.id, { email: email.toLowerCase(), reason: 'invalid_password' }, req.ip, req.get('user-agent'));
             return res.status(401).json({ error: 'Invalid email or password' });
+        }
+
+        // PR1: Block login if email not verified AND account is older than 24h.
+        // The 24h grace window lets the verify flow itself complete without
+        // a chicken-and-egg lockout (user must log in to hit /send-verification).
+        if (!user.email_verified) {
+            const createdMs = user.created_at ? new Date(user.created_at).getTime() : Date.now();
+            const ageHours = (Date.now() - createdMs) / (1000 * 60 * 60);
+            if (ageHours > 24) {
+                logAuditEvent('login_blocked', user.id, {
+                    email: email.toLowerCase(),
+                    reason: 'email_not_verified',
+                    accountAgeHours: Math.round(ageHours),
+                }, req.ip, req.get('user-agent'));
+                return res.status(403).json({
+                    error: 'Please verify your email before logging in.',
+                    code: 'email_verification_required',
+                    email: user.email,
+                });
+            }
         }
 
         if (deviceId) {
@@ -589,6 +677,92 @@ router.post('/change-password', authenticateToken, validate(ChangePasswordReques
         res.json({ success: true });
     } catch (err: any) {
         res.status(500).json({ error: 'Password change failed' });
+    }
+});
+
+// ─── POST /api/v1/auth/send-verification ─────────────────────
+//
+// Issues a fresh 6-digit code and emails it to the authed user. Rate limited
+// to 3/hour per user. Idempotent in spirit: if the user is already verified,
+// returns 200 with alreadyVerified:true and skips sending.
+
+router.post('/send-verification', authenticateToken, sendVerificationLimiter, async (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthRequest).user.userId;
+        const db = getDb();
+        const user = db.prepare('SELECT email, email_verified FROM users WHERE id = ?').get(userId) as any;
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        if (user.email_verified) return res.json({ success: true, alreadyVerified: true });
+
+        const result = await issueAndSendVerificationCode(userId, user.email);
+
+        logAuditEvent('verification_email_sent', userId, { stub: result.stub }, req.ip, req.get('user-agent'));
+
+        res.json({
+            success: true,
+            sent: true,
+            expiresInSeconds: 15 * 60,
+            // _devCode is only included when no real mail provider is configured —
+            // lets dev/test envs read the code without a real inbox.
+            ...(result.stub && result.code ? { _devCode: result.code } : {}),
+        });
+    } catch (err: any) {
+        console.error('Send verification error:', err);
+        res.status(500).json({ error: 'Failed to send verification email' });
+    }
+});
+
+// ─── POST /api/v1/auth/verify-email ──────────────────────────
+//
+// Validates the 6-digit code against the latest unconsumed
+// 'email_verification' otp_code for the authed user. On success, marks
+// users.email_verified=1 and consumes the code.
+
+router.post('/verify-email', authenticateToken, validate(VerifyEmailRequestSchema), (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthRequest).user.userId;
+        const { code } = req.body;
+        const db = getDb();
+        const codeHash = hashOtp(code);
+
+        const row = db.prepare(
+            "SELECT id, expires_at, consumed_at, attempts FROM otp_codes WHERE user_id = ? AND purpose = 'email_verification' AND code_hash = ? ORDER BY created_at DESC LIMIT 1",
+        ).get(userId, codeHash) as { id: string; expires_at: string; consumed_at: string | null; attempts: number } | undefined;
+
+        if (!row) {
+            // Wrong code — bump attempts on the latest unconsumed row to bound brute force.
+            // After 5 wrong attempts, invalidate the outstanding code.
+            const latest = db.prepare(
+                "SELECT id, attempts FROM otp_codes WHERE user_id = ? AND purpose = 'email_verification' AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1",
+            ).get(userId) as { id: string; attempts: number } | undefined;
+            if (latest) {
+                const newAttempts = latest.attempts + 1;
+                if (newAttempts >= 5) {
+                    db.prepare("UPDATE otp_codes SET consumed_at = datetime('now'), attempts = ? WHERE id = ?")
+                        .run(newAttempts, latest.id);
+                    return res.status(429).json({ error: 'Too many incorrect attempts. Request a new code.' });
+                }
+                db.prepare('UPDATE otp_codes SET attempts = ? WHERE id = ?').run(newAttempts, latest.id);
+            }
+            return res.status(400).json({ error: 'Invalid verification code' });
+        }
+
+        if (row.consumed_at) {
+            return res.status(400).json({ error: 'Code already used. Request a new one.' });
+        }
+        if (new Date(row.expires_at) < new Date()) {
+            return res.status(400).json({ error: 'Code expired. Request a new one.' });
+        }
+
+        db.prepare("UPDATE otp_codes SET consumed_at = datetime('now') WHERE id = ?").run(row.id);
+        db.prepare("UPDATE users SET email_verified = 1, updated_at = datetime('now') WHERE id = ?").run(userId);
+
+        logAuditEvent('email_verified', userId, {}, req.ip, req.get('user-agent'));
+
+        res.json({ success: true, verified: true });
+    } catch (err: any) {
+        console.error('Verify email error:', err);
+        res.status(500).json({ error: 'Verification failed' });
     }
 });
 
