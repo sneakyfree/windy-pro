@@ -25,8 +25,10 @@ import {
     RemoveDeviceRequestSchema,
     ChangePasswordRequestSchema,
     VerifyEmailRequestSchema,
+    ForgotPasswordRequestSchema,
+    ResetPasswordRequestSchema,
 } from '@windy-pro/contracts';
-import { sendMail, verificationEmail } from '../services/mailer';
+import { sendMail, verificationEmail, passwordResetEmail } from '../services/mailer';
 
 const router = Router();
 
@@ -763,6 +765,99 @@ router.post('/verify-email', authenticateToken, validate(VerifyEmailRequestSchem
     } catch (err: any) {
         console.error('Verify email error:', err);
         res.status(500).json({ error: 'Verification failed' });
+    }
+});
+
+// ─── POST /api/v1/auth/forgot-password ───────────────────────
+//
+// Always returns 200 (don't leak whether the email is registered). When the
+// email IS known, generates a long random reset token, stores its sha256 in
+// otp_codes (purpose='password_reset', 30min expiry), and emails the raw
+// token. Rate limit: 3/hr per email + IP.
+
+router.post('/forgot-password', forgotPasswordLimiter, validate(ForgotPasswordRequestSchema), async (req: Request, res: Response) => {
+    try {
+        const email = String(req.body.email || '').toLowerCase().trim();
+        const db = getDb();
+        const user = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email) as any;
+
+        if (user) {
+            // 32-byte token base64url-encoded → ~43 chars, 256 bits of entropy.
+            // Stored as sha256 hash; raw token only sent in the email.
+            const token = crypto.randomBytes(32).toString('base64url');
+            const tokenHash = hashOtp(token);
+            const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+            // Invalidate prior unconsumed reset tokens for this user (one in flight at a time)
+            db.prepare(
+                "UPDATE otp_codes SET consumed_at = datetime('now') WHERE user_id = ? AND purpose = 'password_reset' AND consumed_at IS NULL",
+            ).run(user.id);
+
+            db.prepare(
+                "INSERT INTO otp_codes (id, user_id, code_hash, purpose, expires_at) VALUES (?, ?, ?, 'password_reset', ?)",
+            ).run(uuidv4(), user.id, tokenHash, expiresAt);
+
+            const tpl = passwordResetEmail(token, process.env.PASSWORD_RESET_URL_BASE);
+            const result = await sendMail({ ...tpl, to: user.email });
+
+            logAuditEvent('password_reset_requested', user.id, { stub: !!result.stub }, req.ip, req.get('user-agent'));
+
+            // Dev convenience: return raw token when no real mail provider is configured
+            if (result.stub) {
+                return res.json({ success: true, _devToken: token });
+            }
+        } else {
+            // Even when the email is unknown, log the attempt for audit visibility
+            // (without leaking via response shape) so abuse can be reviewed.
+            logAuditEvent('password_reset_requested', null, { email, reason: 'email_not_found' }, req.ip, req.get('user-agent'));
+        }
+
+        res.json({ success: true });
+    } catch (err: any) {
+        console.error('Forgot password error:', err);
+        // Even on internal error, don't leak — 200 keeps the email-existence oracle closed.
+        res.json({ success: true });
+    }
+});
+
+// ─── POST /api/v1/auth/reset-password ────────────────────────
+//
+// Consumes the reset token and sets the new password. Invalidates ALL refresh
+// tokens for the user so any compromised session is forced off. The auth user
+// herself will need to log in again on every device after reset.
+
+router.post('/reset-password', validate(ResetPasswordRequestSchema), async (req: Request, res: Response) => {
+    try {
+        const { token, newPassword } = req.body;
+        const tokenHash = hashOtp(token);
+        const db = getDb();
+
+        const row = db.prepare(
+            "SELECT id, user_id, expires_at, consumed_at FROM otp_codes WHERE purpose = 'password_reset' AND code_hash = ? ORDER BY created_at DESC LIMIT 1",
+        ).get(tokenHash) as { id: string; user_id: string; expires_at: string; consumed_at: string | null } | undefined;
+
+        if (!row || row.consumed_at) {
+            return res.status(400).json({ error: 'Invalid or already-used reset token' });
+        }
+        if (new Date(row.expires_at) < new Date()) {
+            return res.status(400).json({ error: 'Reset token expired. Request a new one.' });
+        }
+
+        const newHash = await bcrypt.hash(newPassword, config.BCRYPT_ROUNDS);
+
+        // Atomic-ish: consume the row, update password, kill all refresh tokens.
+        // If any DB op fails, the user can retry — token is still consumed so
+        // the same token can't be replayed.
+        db.prepare("UPDATE otp_codes SET consumed_at = datetime('now') WHERE id = ?").run(row.id);
+        db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").run(newHash, row.user_id);
+        db.prepare('DELETE FROM refresh_tokens WHERE user_id = ?').run(row.user_id);
+
+        logAuditEvent('password_reset_completed', row.user_id, {}, req.ip, req.get('user-agent'));
+
+        res.json({ success: true });
+    } catch (err: any) {
+        console.error('Reset password error:', err);
+        res.status(500).json({ error: 'Password reset failed' });
     }
 });
 
