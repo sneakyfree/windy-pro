@@ -1,0 +1,10 @@
+# Terraform local state / working dir
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+
+# Plan output — contains secret values in cleartext
+*.tfplan
+plan.out
