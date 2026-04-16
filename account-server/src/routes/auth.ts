@@ -27,8 +27,15 @@ import {
     VerifyEmailRequestSchema,
     ForgotPasswordRequestSchema,
     ResetPasswordRequestSchema,
+    MfaVerifySetupRequestSchema,
+    MfaDisableRequestSchema,
 } from '@windy-pro/contracts';
 import { sendMail, verificationEmail, passwordResetEmail } from '../services/mailer';
+import {
+    encryptSecret, decryptSecret,
+    generateTotpSecret, buildOtpauthUri, verifyTotpCode,
+    generateBackupCodes, hashBackupCodes, consumeBackupCode,
+} from '../services/mfa';
 
 const router = Router();
 
@@ -283,7 +290,7 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
 
 router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Request, res: Response) => {
     try {
-        const { email, password, deviceId, deviceName, platform } = req.body;
+        const { email, password, deviceId, deviceName, platform, mfaCode } = req.body;
 
         const user = stmts().findUserByEmail.get(email.toLowerCase()) as any;
         if (!user) {
@@ -315,6 +322,59 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
                     email: user.email,
                 });
             }
+        }
+
+        // PR3: MFA gate. If the user has TOTP enabled, the first call (no
+        // mfaCode) returns 401 mfa_required; the second call must include
+        // mfaCode (TOTP digits OR a backup code).
+        const mfa = getDb().prepare(
+            'SELECT totp_secret_encrypted, totp_secret_iv, totp_secret_tag, backup_codes_hash, enabled_at FROM mfa_secrets WHERE user_id = ?',
+        ).get(user.id) as any;
+
+        if (mfa?.enabled_at) {
+            if (!mfaCode) {
+                logAuditEvent('mfa_login_challenge', user.id, { email: email.toLowerCase() }, req.ip, req.get('user-agent'));
+                return res.status(401).json({
+                    error: 'mfa_required',
+                    code: 'mfa_required',
+                    message: 'Multi-factor authentication required. Resubmit with mfaCode.',
+                });
+            }
+
+            // Try TOTP first (cheap), then backup code (per-code bcrypt compare).
+            let mfaPassed = false;
+            try {
+                const secret = decryptSecret({
+                    ciphertext: mfa.totp_secret_encrypted,
+                    iv: mfa.totp_secret_iv,
+                    tag: mfa.totp_secret_tag,
+                });
+                if (verifyTotpCode(secret, mfaCode)) {
+                    mfaPassed = true;
+                }
+            } catch (e) {
+                // Decryption failed — corrupted secret, key rotation, etc. Fall
+                // through to backup-code attempt rather than 500ing.
+                console.error('[MFA] Failed to decrypt TOTP secret:', (e as any).message);
+            }
+
+            if (!mfaPassed) {
+                const hashes: string[] = JSON.parse(mfa.backup_codes_hash || '[]');
+                const idx = await consumeBackupCode(mfaCode, hashes);
+                if (idx >= 0) {
+                    hashes[idx] = ''; // mark consumed; keep array indices stable
+                    getDb().prepare('UPDATE mfa_secrets SET backup_codes_hash = ? WHERE user_id = ?')
+                        .run(JSON.stringify(hashes), user.id);
+                    mfaPassed = true;
+                }
+            }
+
+            if (!mfaPassed) {
+                logAuditEvent('mfa_login_failed', user.id, { email: email.toLowerCase() }, req.ip, req.get('user-agent'));
+                return res.status(401).json({ error: 'Invalid MFA code', code: 'mfa_invalid' });
+            }
+
+            logAuditEvent('mfa_login_success', user.id, { email: email.toLowerCase() }, req.ip, req.get('user-agent'));
         }
 
         if (deviceId) {
@@ -765,6 +825,118 @@ router.post('/verify-email', authenticateToken, validate(VerifyEmailRequestSchem
     } catch (err: any) {
         console.error('Verify email error:', err);
         res.status(500).json({ error: 'Verification failed' });
+    }
+});
+
+// ─── POST /api/v1/auth/mfa/setup ─────────────────────────────
+//
+// Generates a fresh TOTP secret + 10 backup codes for the authed user. The
+// secret is encrypted at rest (AES-256-GCM); backup codes are bcrypt-hashed.
+// MFA is NOT yet active — the row's enabled_at stays NULL until the user
+// confirms with /mfa/verify-setup.
+//
+// Returns the raw secret + provisioning URI + a pre-rendered QR data URL +
+// backup codes (shown ONCE). Re-calling setup overwrites a pending (unenabled)
+// row; once MFA is enabled, returns 409 — disable first.
+
+router.post('/mfa/setup', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthRequest).user.userId;
+        const db = getDb();
+        const user = db.prepare('SELECT email FROM users WHERE id = ?').get(userId) as any;
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const existing = db.prepare('SELECT enabled_at FROM mfa_secrets WHERE user_id = ?').get(userId) as any;
+        if (existing?.enabled_at) {
+            return res.status(409).json({ error: 'MFA already enabled. Disable first to re-enroll.', code: 'mfa_already_enabled' });
+        }
+
+        const secret = generateTotpSecret();
+        const enc = encryptSecret(secret);
+        const otpauthUrl = buildOtpauthUri({ secret, accountLabel: user.email, issuer: 'Windy' });
+        const backupCodes = generateBackupCodes();
+        const backupHashes = await hashBackupCodes(backupCodes);
+
+        db.prepare(
+            "INSERT OR REPLACE INTO mfa_secrets (user_id, totp_secret_encrypted, totp_secret_iv, totp_secret_tag, backup_codes_hash, enabled_at, created_at) VALUES (?, ?, ?, ?, ?, NULL, datetime('now'))",
+        ).run(userId, enc.ciphertext, enc.iv, enc.tag, JSON.stringify(backupHashes));
+
+        // Lazy-load qrcode so test envs without it don't crash. PNG data URL
+        // is convenient for HTML img tags in the setup screen.
+        let qrCodeDataUrl: string | undefined;
+        try {
+            const QRCode = require('qrcode');
+            qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl, { width: 256, margin: 2 });
+        } catch { /* qrcode optional */ }
+
+        logAuditEvent('mfa_setup_started', userId, {}, req.ip, req.get('user-agent'));
+
+        res.json({
+            secret,         // base32 — for manual entry into authenticator apps
+            otpauthUrl,     // for "scan QR" flow
+            qrCodeDataUrl,  // pre-rendered PNG, optional
+            backupCodes,    // shown ONCE — user must save them now
+        });
+    } catch (err: any) {
+        console.error('MFA setup error:', err);
+        res.status(500).json({ error: 'MFA setup failed' });
+    }
+});
+
+// ─── POST /api/v1/auth/mfa/verify-setup ──────────────────────
+//
+// Confirms the user successfully enrolled their authenticator: validates a
+// 6-digit TOTP code against the pending (unenabled) secret. On success, sets
+// enabled_at — MFA is now active for login.
+
+router.post('/mfa/verify-setup', authenticateToken, validate(MfaVerifySetupRequestSchema), (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthRequest).user.userId;
+        const { code } = req.body;
+        const db = getDb();
+        const row = db.prepare('SELECT * FROM mfa_secrets WHERE user_id = ?').get(userId) as any;
+        if (!row) return res.status(400).json({ error: 'No MFA setup in progress. Call /mfa/setup first.' });
+        if (row.enabled_at) return res.status(409).json({ error: 'MFA already enabled.', code: 'mfa_already_enabled' });
+
+        const secret = decryptSecret({
+            ciphertext: row.totp_secret_encrypted,
+            iv: row.totp_secret_iv,
+            tag: row.totp_secret_tag,
+        });
+        if (!verifyTotpCode(secret, code)) {
+            return res.status(400).json({ error: 'Invalid code. Make sure your authenticator clock is in sync.' });
+        }
+
+        db.prepare("UPDATE mfa_secrets SET enabled_at = datetime('now') WHERE user_id = ?").run(userId);
+        logAuditEvent('mfa_enabled', userId, {}, req.ip, req.get('user-agent'));
+
+        res.json({ success: true, enabled: true });
+    } catch (err: any) {
+        console.error('MFA verify-setup error:', err);
+        res.status(500).json({ error: 'MFA verification failed' });
+    }
+});
+
+// ─── POST /api/v1/auth/mfa/disable ───────────────────────────
+//
+// Removes the user's MFA row entirely. Requires password confirmation so a
+// stolen access token alone can't disable MFA.
+
+router.post('/mfa/disable', authenticateToken, validate(MfaDisableRequestSchema), async (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthRequest).user.userId;
+        const { password } = req.body;
+        const db = getDb();
+        const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as any;
+        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+            return res.status(401).json({ error: 'Password incorrect' });
+        }
+        db.prepare('DELETE FROM mfa_secrets WHERE user_id = ?').run(userId);
+        logAuditEvent('mfa_disabled', userId, {}, req.ip, req.get('user-agent'));
+        res.json({ success: true });
+    } catch (err: any) {
+        console.error('MFA disable error:', err);
+        res.status(500).json({ error: 'MFA disable failed' });
     }
 });
 

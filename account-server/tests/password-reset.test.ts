@@ -19,6 +19,10 @@ process.env.JWT_SECRET = 'test-secret-for-jest';
 import { app } from '../src/server';
 import { getDb } from '../src/db/schema';
 
+// Each test does register (bcrypt) + sometimes a full reset (bcrypt). Under
+// full-suite load these can exceed Jest's 5s default.
+jest.setTimeout(30000);
+
 function uniqueEmail(label: string): string {
   return `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 }
