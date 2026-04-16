@@ -274,7 +274,20 @@ router.get('/authorize', authenticateToken, oauthLimiter, (req: Request, res: Re
       });
     }
 
-    // Consent required — return client info for consent UI
+    // Consent required. For browser requests (Accept: text/html), redirect
+    // straight to the rendered consent screen so the user lands on a page
+    // they can interact with. For API clients, return JSON describing what's
+    // needed so they can build their own UX.
+    const acceptsHtml = (req.headers.accept || '').toLowerCase().includes('text/html');
+    if (acceptsHtml) {
+      const consentUrl = new URL('/api/v1/oauth/consent', `${req.protocol}://${req.get('host')}`);
+      for (const k of ['client_id', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method'] as const) {
+        const v = req.query[k];
+        if (typeof v === 'string' && v.length > 0) consentUrl.searchParams.set(k, v);
+      }
+      return res.redirect(302, consentUrl.pathname + consentUrl.search);
+    }
+
     res.json({
       consent_required: true,
       client: {
@@ -285,6 +298,12 @@ router.get('/authorize', authenticateToken, oauthLimiter, (req: Request, res: Re
       requestedScopes,
       state: state || undefined,
       code_challenge: code_challenge || undefined,
+      consent_url: `/api/v1/oauth/consent?${new URLSearchParams({
+        client_id, redirect_uri,
+        ...(scope ? { scope } : {}),
+        ...(state ? { state } : {}),
+        ...(code_challenge ? { code_challenge } : {}),
+      }).toString()}`,
     });
   } catch (err: any) {
     console.error('[oauth] Authorization error:', err);
@@ -1186,6 +1205,7 @@ const ECOSYSTEM_CLIENTS = [
   { client_id: 'windy_mail', name: 'Windy Mail', scopes: ['windy_mail:*'] },
   { client_id: 'eternitas', name: 'Eternitas', scopes: ['eternitas:*'] },
   { client_id: 'windy_fly', name: 'Windy Fly', scopes: ['windy_fly:*'] },
+  { client_id: 'windy_pro_mobile', name: 'Windy Word Mobile', scopes: ['openid', 'profile', 'email', 'windy_pro:*', 'windy_mail:read'] },
 ];
 
 /**
