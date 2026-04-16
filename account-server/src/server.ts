@@ -29,6 +29,7 @@ import cloudRoutes from './routes/cloud';
 import identityRoutes from './routes/identity';
 import verificationRoutes from './routes/verification';
 import oauthRoutes, { seedEcosystemClients } from './routes/oauth';
+import deviceApprovalRoutes from './routes/device-approval';
 import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
 import flyRoutes from './routes/fly';
@@ -102,6 +103,10 @@ app.use('/api/v1/identity/verify', verificationRoutes);
 
 // OAuth2 / SSO (Phase 5 — "Sign in with Windy")
 app.use('/api/v1/oauth', oauthRoutes);
+
+// Top-level device-code approval page (GET /device, POST /device/approve).
+// Mobile shows "Visit windyword.ai/device" — this is the operator UI.
+app.use('/', deviceApprovalRoutes);
 
 // JWKS endpoint (Phase 4 — public keys for RS256 token verification)
 app.get('/.well-known/jwks.json', (_req, res) => {
