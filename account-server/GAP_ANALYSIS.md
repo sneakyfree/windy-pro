@@ -3,7 +3,7 @@
 **Generated:** 2026-03-31
 **Last Verified:** 2026-04-16 (Wave 1 in flight)
 **Scope:** `/account-server/src/` checked against `DNA_STRAND_MASTER_PLAN.md` (v2.2.0)
-**Test Results:** 406 passed, 0 failed, 0 skipped (25 suites)
+**Test Results:** 422 passed, 0 failed, 0 skipped (26 suites)
 **TypeScript:** Clean (0 errors in app code; pre-existing `transcription.ts` Buffer→BodyInit cast fixed in PR1)
 
 ---
@@ -17,7 +17,7 @@ Producer-side webhook contracts documented in `account-server/docs/webhooks.md`.
 | PR1 — Email verification | `auth/email-verification` | **shipped** | otp_codes table, POST /send-verification (3/hr), POST /verify-email, login gate (24h grace), Resend stub (TODO swap to Windy Mail bot API), 13 new tests |
 | PR2 — Password reset | `auth/password-reset` | **shipped** | POST /forgot-password (always 200, 3/hr per email), POST /reset-password (long random token, invalidates all refresh tokens), 12 new tests |
 | PR3 — MFA / TOTP | `auth/mfa-totp` | **shipped** | mfa_secrets table (AES-256-GCM secret, bcrypt backup codes), POST /mfa/setup + /verify-setup + /disable, login MFA gate (401 mfa_required → resubmit with mfaCode), 17 new tests |
-| PR4 — Webhook fan-out bus | `identity/webhook-fanout` | pending | webhook_deliveries, HMAC X-Windy-Signature, 5 targets, retry schedule 0/5s/30s/5m/1h/6h/24h |
+| PR4 — Webhook fan-out bus | `identity/webhook-fanout` | **shipped** | webhook_deliveries table, HMAC-SHA256 X-Windy-Signature per-target, 5 configurable targets (mail/chat/cloud/eternitas/clone), retry schedule 0/5s/30s/5m/1h/6h/24h then dead-letter, register/PATCH-me/delete-me wired, producer doc at docs/webhooks.md, 16 new tests |
 | PR5 — Consent UI (bonus) | `oauth/consent-ui` | pending | Server-rendered /oauth/authorize screen |
 
 ---
