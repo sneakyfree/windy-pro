@@ -65,29 +65,40 @@ class BundledAssets {
   }
 
   /**
-   * Find the bundled/ directory. It can be in:
-   * - ./bundled/ (development)
-   * - ../bundled/ (from installer-v2/)
-   * - resources/bundled/ (Electron packaged)
-   * - process.resourcesPath/bundled/ (Electron asar)
+   * Find the bundle directory. Possible locations:
+   * - process.resourcesPath/bundled/ (Electron packaged — extraResources/ lands here)
+   * - ./extraResources/ or ../../extraResources/ (dev mode — source of truth)
+   * - ./bundled/ or ../../bundled/ (legacy/partial bundle)
+   *
+   * We prefer a *complete* bundle (python + wheels) over a partial one, because
+   * dev checkouts can have a stale bundled/ from earlier layouts that's missing
+   * wheels — silently picking it sends the installer down the legacy pip-from-
+   * PyPI path and llvmlite tries to build from source.
    */
   _findBundleDir() {
-    const candidates = [
-      path.join(__dirname, '..', '..', 'bundled'),          // from core/ → installer-v2/ → project root
-      path.join(__dirname, '..', 'bundled'),                 // from core/ → installer-v2/bundled
-      path.join(process.cwd(), 'bundled'),                   // from project root
-      path.join(process.cwd(), '..', 'bundled'),
-    ];
-
-    // Electron packaged app
+    const candidates = [];
     if (process.resourcesPath) {
-      candidates.unshift(path.join(process.resourcesPath, 'bundled'));
+      candidates.push(path.join(process.resourcesPath, 'bundled'));
     }
+    candidates.push(
+      path.join(__dirname, '..', '..', 'extraResources'),  // dev: from core/ → installer-v2/ → repo root
+      path.join(process.cwd(), 'extraResources'),
+      path.join(__dirname, '..', '..', 'bundled'),
+      path.join(__dirname, '..', 'bundled'),
+      path.join(process.cwd(), 'bundled'),
+      path.join(process.cwd(), '..', 'bundled'),
+    );
+
+    const exists = (p) => fs.existsSync(p);
+    const isComplete = (dir) =>
+      exists(dir) && exists(path.join(dir, 'python')) && exists(path.join(dir, 'wheels'));
+    const hasPython = (dir) => exists(dir) && exists(path.join(dir, 'python'));
 
     for (const dir of candidates) {
-      if (fs.existsSync(dir) && fs.existsSync(path.join(dir, 'python'))) {
-        return dir;
-      }
+      if (isComplete(dir)) return dir;
+    }
+    for (const dir of candidates) {
+      if (hasPython(dir)) return dir;
     }
 
     return path.join(process.cwd(), 'bundled'); // fallback, may not exist
