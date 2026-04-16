@@ -349,12 +349,12 @@ class InstallWizard {
 
         const depInstaller = new DependencyInstaller({
           onLog: (msg) => { wizardLog(`  depInstaller: ${msg}`); console.log(msg); },
-          onProgress: (pct) => {
-            wizardLog(`  depInstaller.onProgress(${pct})`);
+          onProgress: (pct, msg) => {
+            wizardLog(`  depInstaller.onProgress(${pct}${msg ? ' — ' + msg : ''})`);
             this.sendProgress({
               percent: 5 + pct * 0.19, // 5% to 24%
               message: '🌪️ Installing dependencies...',
-              detail: `${pct}% complete`
+              detail: msg || 'Setting up Python environment — this can take a few minutes...'
             });
           }
         });
