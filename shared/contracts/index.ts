@@ -200,6 +200,10 @@ export {
     // Verification schemas (Phase 1 — promoted from chat-onboarding)
     VerificationSendSchema,
     VerificationCheckSchema,
+    // Email verification + password reset (Wave 1 — PR1, PR2)
+    VerifyEmailRequestSchema,
+    ForgotPasswordRequestSchema,
+    ResetPasswordRequestSchema,
     // Bot API key schemas (Phase 3)
     BotApiKeyCreateSchema,
     SecretaryConsentSchema,
