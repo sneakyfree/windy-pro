@@ -204,6 +204,9 @@ export {
     VerifyEmailRequestSchema,
     ForgotPasswordRequestSchema,
     ResetPasswordRequestSchema,
+    // MFA / TOTP (Wave 1 — PR3)
+    MfaVerifySetupRequestSchema,
+    MfaDisableRequestSchema,
     // Bot API key schemas (Phase 3)
     BotApiKeyCreateSchema,
     SecretaryConsentSchema,

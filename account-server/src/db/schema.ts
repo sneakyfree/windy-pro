@@ -518,5 +518,20 @@ function initSchema(db: DbAdapter): void {
     );
     CREATE INDEX IF NOT EXISTS idx_otp_user_purpose ON otp_codes(user_id, purpose);
     CREATE INDEX IF NOT EXISTS idx_otp_expires ON otp_codes(expires_at);
+
+    -- MFA secrets: TOTP-based two-factor authentication.
+    -- totp_secret_encrypted = AES-256-GCM(base32_secret), keyed by MFA_ENCRYPTION_KEY env.
+    -- backup_codes_hash = JSON array of bcrypt hashes (consumed by setting to '' on use).
+    -- enabled_at NULL while setup is pending; set to a timestamp on verify-setup success.
+    CREATE TABLE IF NOT EXISTS mfa_secrets (
+      user_id TEXT PRIMARY KEY,
+      totp_secret_encrypted TEXT NOT NULL,
+      totp_secret_iv TEXT NOT NULL,
+      totp_secret_tag TEXT NOT NULL,
+      backup_codes_hash TEXT NOT NULL DEFAULT '[]',
+      enabled_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 }

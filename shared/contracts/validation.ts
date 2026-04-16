@@ -39,6 +39,10 @@ export const LoginRequestSchema = z.object({
     deviceId: z.string().optional(),
     deviceName: z.string().optional(),
     platform: z.string().optional(),
+    // PR3: TOTP code (6 digits) or backup code (XXXX-XXXX). Optional on the
+    // first call; required on the second call when MFA is enabled and the
+    // server returned 401 mfa_required.
+    mfaCode: z.string().optional(),
 });
 
 export const RefreshRequestSchema = z.object({
@@ -76,6 +80,16 @@ export const ForgotPasswordRequestSchema = z.object({
 export const ResetPasswordRequestSchema = z.object({
     token: z.string().min(20, 'Reset token is required'),
     newPassword: PasswordSchema,
+});
+
+// ─── MFA / TOTP (PR3) ───────────────────────────────────────
+
+export const MfaVerifySetupRequestSchema = z.object({
+    code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+});
+
+export const MfaDisableRequestSchema = z.object({
+    password: z.string().min(1, 'Password is required'),
 });
 
 // ─── Translation Schemas ─────────────────────────────────────
