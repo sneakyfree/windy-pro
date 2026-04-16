@@ -250,6 +250,27 @@ describe('GET /api/v1/identity/me', () => {
     const res = await request(app).get('/api/v1/identity/me');
     expect(res.status).toBe(401);
   });
+
+  it('returns identity with storage fields for the wizard Complete screen', async () => {
+    // Fresh register so we have a real token + user row with storage defaults.
+    const email = `identity-me-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
+    const reg = await request(app)
+      .post('/api/v1/auth/register')
+      .send({ name: 'Identity Me Test', email, password: 'SecurePass1' });
+    expect(reg.status).toBe(201);
+
+    const res = await request(app)
+      .get('/api/v1/identity/me')
+      .set('Authorization', `Bearer ${reg.body.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.identity.email).toBe(email);
+    expect(res.body.identity.windyIdentityId).toBe(reg.body.windyIdentityId);
+    // Wizard Complete screen relies on these — added 2026-04-16.
+    expect(res.body.identity).toHaveProperty('storageLimit');
+    expect(res.body.identity).toHaveProperty('storageUsed');
+    expect(Array.isArray(res.body.products)).toBe(true);
+    expect(Array.isArray(res.body.scopes)).toBe(true);
+  });
 });
 
 // ─── Analytics (no auth required) ─────────────────────────────

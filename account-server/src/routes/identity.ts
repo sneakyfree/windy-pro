@@ -50,7 +50,8 @@ router.get('/me', authenticateToken, (req: Request, res: Response) => {
     const user = db.prepare(`
       SELECT id, email, name, tier, identity_type, phone, display_name,
              avatar_url, email_verified, phone_verified, passport_id,
-             preferred_lang, last_login_at, windy_identity_id, created_at, updated_at
+             preferred_lang, last_login_at, windy_identity_id, created_at, updated_at,
+             storage_used, storage_limit
       FROM users WHERE id = ?
     `).get(userId) as any;
 
@@ -89,6 +90,10 @@ router.get('/me', authenticateToken, (req: Request, res: Response) => {
         lastLoginAt: user.last_login_at,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
+        // Storage surfaced so the install wizard's Complete screen can show
+        // the user's provisioned cloud quota without a second round-trip.
+        storageUsed: user.storage_used ?? 0,
+        storageLimit: user.storage_limit ?? 0,
       },
       products,
       scopes,
