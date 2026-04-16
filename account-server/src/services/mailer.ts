@@ -85,16 +85,22 @@ export function verificationEmail(code: string): SendMailArgs {
   };
 }
 
-export function passwordResetEmail(code: string): SendMailArgs {
+export function passwordResetEmail(token: string, resetUrlBase?: string): SendMailArgs {
+  const link = resetUrlBase ? `${resetUrlBase}?token=${encodeURIComponent(token)}` : null;
+  const linkLine = link ? `\n\nClick to reset: ${link}` : '';
+  const linkBlock = link
+    ? `<p><a href="${link}" style="display:inline-block;padding:14px 28px;background:#1a1a2e;color:#fff;border-radius:10px;text-decoration:none;font-weight:600;">Reset password</a></p><p style="color:#888;font-size:12px;word-break:break-all;">Or paste this token into the reset form:<br><code>${token}</code></p>`
+    : `<p>Paste this token into the reset form:</p><p style="background:#f0f0f5;border-radius:10px;padding:16px;font-family:monospace;font-size:13px;word-break:break-all;color:#1a1a2e;">${token}</p>`;
   return {
     to: '',
     subject: 'Windy — Reset your password',
-    text: `Your Windy password reset code is: ${code}\n\nThis code expires in 30 minutes.\n\nIf you didn't request a password reset, you can ignore this email — your account is safe.`,
-    html: template(
-      'Your password reset code:',
-      code,
-      'This code expires in 30 minutes.',
-      'If you didn\'t request a password reset, you can safely ignore this email — your account is safe.',
-    ),
+    text: `You requested a password reset for your Windy account.${linkLine}\n\nReset token: ${token}\n\nThis token expires in 30 minutes.\n\nIf you didn't request a password reset, you can ignore this email — your account is safe.`,
+    html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:40px 20px;">
+  <h2 style="color:#1a1a2e;margin:0 0 8px 0;">Windy</h2>
+  <p style="color:#555;font-size:16px;">You requested a password reset.</p>
+  ${linkBlock}
+  <p style="color:#888;font-size:14px;">This token expires in 30 minutes.</p>
+  <p style="color:#aaa;font-size:12px;margin-top:32px;">If you didn't request a password reset, you can safely ignore this email — your account is safe.</p>
+</div>`,
   };
 }
