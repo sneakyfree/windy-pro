@@ -4541,7 +4541,10 @@
         dlList.appendChild(div);
       });
 
-      await window.wizardAPI.selectModels([...selectedModels]);
+      // Non-fatal: selectModels tells the main process what to download,
+      // but a failure here must not prevent the install from running.
+      try { await window.wizardAPI.selectModels([...selectedModels]); }
+      catch (e) { console.warn('[wizard] selectModels failed (continuing):', e); }
 
       // Track last logged model for log entries
       let lastLoggedModel = null;

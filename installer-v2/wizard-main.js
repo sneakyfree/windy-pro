@@ -256,7 +256,7 @@ class InstallWizard {
     ipcMain.handle('wizard-select-models', async (event, modelIds) => {
       wizardLog(`IPC wizard-select-models ENTRY: ${(Array.isArray(modelIds) ? modelIds : [modelIds]).join(',')}`);
       this.selectedEngines = Array.isArray(modelIds) ? modelIds : [modelIds];
-      const result = this.storageEngines.setSelectedModels(this.selectedEngines);
+      const result = this.storageEngines.setSelectedEngines(this.selectedEngines);
       wizardLog(`IPC wizard-select-models EXIT: selected=${this.selectedEngines.length}`);
       return { selected: this.selectedEngines, ...result };
     });
