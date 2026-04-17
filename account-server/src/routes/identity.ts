@@ -1408,6 +1408,17 @@ router.post('/webhooks/eternitas', (req: Request, res: Response) => {
     if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
       return res.status(401).json({ error: 'Invalid signature' });
     }
+    // P1-15 replay protection — mirror the ±5 min window from
+    // /eternitas/webhook. An attacker who captured a valid signed
+    // webhook could otherwise replay it indefinitely.
+    if (timestamp !== undefined && timestamp !== null) {
+      const ts = typeof timestamp === 'string' ? parseInt(timestamp, 10) : timestamp;
+      const tsSec = typeof ts === 'number' && ts > 1e12 ? ts / 1000 : ts; // accept ms or s
+      const ageSec = Math.abs(Date.now() / 1000 - tsSec);
+      if (!Number.isFinite(ageSec) || ageSec > 300) {
+        return res.status(401).json({ error: 'Webhook timestamp outside accepted window (±5 min)' });
+      }
+    }
 
     if (!event || !passport_number) {
       return res.status(400).json({ error: 'event and passport_number are required' });
