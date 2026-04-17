@@ -261,6 +261,28 @@ Terraform auto-generates and stores these in `<runtime_secrets_arn>` as a single
 
 **ECS pulls individual keys** via `valueFrom = "<arn>:<KEY>::"` — see `aws_ecs_task_definition.account_server`'s `secrets` block. They're injected as environment variables into the container at task startup. Never appear in task-def JSON or logs.
 
+### Production hard-fails the server will throw on boot
+
+After Wave 7 P0 hardening, the account-server **refuses to boot** in production when these are missing. Set them in the task-def `environment` array (not Secrets Manager — they're not secret):
+
+- `TRUST_PROXY` — required so rate limiting uses the real client IP behind ALB instead of the LB's IP. Set to `"1"` for a single-LB hop, or an explicit CIDR list for multi-hop.
+- `CORS_ALLOWED_ORIGINS` — required to lock down the browser origin list. Set to a comma-separated allow-list.
+
+Example edit to `account-server.tf`:
+
+```hcl
+# aws_ecs_task_definition.account_server, container environment:
+environment = [
+  { name = "NODE_ENV",             value = "production" },
+  { name = "PORT",                 value = "8098" },
+  { name = "OIDC_ISSUER",          value = "https://${local.api_fqdn}" },
+  { name = "TRUST_PROXY",          value = "1" },
+  { name = "CORS_ALLOWED_ORIGINS", value = "https://windyword.ai,https://account.windyword.ai" },
+]
+```
+
+Server logs the proxy trust config at boot: `[server] trust proxy = "1"`.
+
 ### Secrets Terraform does NOT generate (add manually)
 
 These need to come from external services — add to the JSON document after `apply`:
