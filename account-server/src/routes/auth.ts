@@ -174,8 +174,21 @@ function generateTokens(user: { id: string; email: string; tier: string }, devic
         windyIdentityId = identity?.windy_identity_id;
     } catch { /* default human */ }
 
+    // Fetch active Eternitas passport (if any). Kept in sync with the same
+    // claim on the OAuth-token path (generateOAuthTokens in routes/oauth.ts)
+    // so either codepath produces a JWT that windy-code's agentBusServer can
+    // verify against expectedPassport. Revoked/suspended passports produce
+    // no claim.
+    let passportNumber: string | undefined;
+    try {
+        const row = db.prepare(
+            "SELECT passport_number FROM eternitas_passports WHERE identity_id = ? AND status = 'active' LIMIT 1",
+        ).get(user.id) as { passport_number: string } | undefined;
+        passportNumber = row?.passport_number;
+    } catch { /* table may not exist on first-run SQLite bootstrap */ }
+
     // Phase 4: Sign with RS256 if available, HS256 fallback
-    const tokenPayload = {
+    const tokenPayload: Record<string, any> = {
         userId: user.id,
         email: user.email,
         tier: user.tier,
@@ -187,6 +200,7 @@ function generateTokens(user: { id: string; email: string; tier: string }, devic
         products,
         iss: 'windy-identity',
     };
+    if (passportNumber) tokenPayload.eternitas_passport = passportNumber;
 
     let accessToken: string;
     const signingKey = getSigningKey();
