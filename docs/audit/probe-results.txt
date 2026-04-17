@@ -1,0 +1,77 @@
+# Probe results — 2026-04-17T03:21:00Z
+# API: http://127.0.0.1:8098
+
+## 1. Public endpoints — expected 200
+  health         GET    /health                                       → 200 0.001377
+  jwks           GET    /.well-known/jwks.json                        → 200 0.001646
+  oidc-discovery GET    /.well-known/openid-configuration             → 200 0.001974
+  device-page    GET    /device                                       → 200 0.001609
+  languages      GET    /api/v1/translate/languages                   → 200 0.001487
+  updates-check  GET    /api/v1/updates/check                         → 501 0.001437
+  download-ver   GET    /download/version                             → 200 0.340401
+
+## 2. Register flow
+  register         → token present
+
+## 3. Auth required — missing token (expected 401)
+  me-no-auth     GET    /api/v1/auth/me                               → 401 0.001449
+  devices-no-auth GET    /api/v1/auth/devices                          → 401 0.001324
+  identity-no-auth GET    /api/v1/identity/me                           → 401 0.001415
+  audit-no-auth  GET    /api/v1/identity/audit                        → 401 0.001621
+  logout-no-auth POST   /api/v1/auth/logout                           → 401 0.001133
+  mfa-setup-noauth POST   /api/v1/auth/mfa/setup                        → 401 0.001304
+  userinfo-noauth GET    /api/v1/oauth/userinfo                        → 401 0.001357
+  admin-users    GET    /api/v1/admin/users                           → 401 0.001688
+  admin-cons-root GET    /admin/                                       → 401 0.001588
+  admin-cons-users GET    /admin/users                                  → 401 0.001343
+
+## 4. Auth required — invalid token (expected 401/403)
+  me-bad-token   GET    /api/v1/auth/me                               → 403 0.002137
+  me-alg-none    GET    /api/v1/auth/me                               → 403 0.001842
+  me-empty       GET    /api/v1/auth/me                               → 401 0.001319
+  me-wrong-sch   GET    /api/v1/auth/me                               → 403 0.001483
+
+## 5. With valid token — expected 200
+  me             GET    /api/v1/auth/me                               → 200 0.005425
+  identity-me    GET    /api/v1/identity/me                           → 200 0.017289
+  devices        GET    /api/v1/auth/devices                          → 200 0.002577
+  userinfo       GET    /api/v1/oauth/userinfo                        → 200 0.002123
+  mfa-setup      POST   /api/v1/auth/mfa/setup                        → 200 1.452986
+  audit-self     GET    /api/v1/identity/audit                        → 200 0.014620
+  scopes         GET    /api/v1/identity/scopes                       → 200 0.004089
+  products       GET    /api/v1/identity/products                     → 200 0.002937
+
+## 6. Malformed body (expected 400/422)
+  reg-bad-json   POST   /api/v1/auth/register                         → 500 0.002184
+  reg-empty      POST   /api/v1/auth/register                         → 400 0.002606
+  reg-bad-email  POST   /api/v1/auth/register                         → 400 0.001787
+  reg-weak-pw    POST   /api/v1/auth/register                         → 400 0.001696
+  login-empty    POST   /api/v1/auth/login                            → 400 0.002529
+  login-wrong-ct POST   /api/v1/auth/login                            → 429 0.001392
+  verify-bad     POST   /api/v1/auth/verify-email                     → 400 0.003100
+  reset-no-token POST   /api/v1/auth/reset-password                   → 400 0.001582
+  device-bad     POST   /api/v1/oauth/device                          → 400 0.001524
+  device-unk-cli POST   /api/v1/oauth/device                          → 400 0.001642
+
+## 7. Oversized body (1 MiB, via file)
+  reg-huge       POST   /api/v1/auth/register                         → 500 0.004219
+
+## 8. Inbound webhook — no signature (expected 401)
+  eternitas-webhook-no-sig POST   /api/v1/identity/eternitas/webhook            → 500 0.003785
+
+## 9. Forgot-password — no user (should still return 200, no oracle)
+  forgot-unknown POST   /api/v1/auth/forgot-password                  → 200 0.003754
+  reset-garbage  POST   /api/v1/auth/reset-password                   → 400 0.014430
+
+## 10. /device approval form
+  device-html    GET    /device                                       → 200 0.001451
+  device-prefill GET    /device?user_code=TEST-1234                   → 200 0.002574
+  device-denied-form POST   /device/approve                               → 401 0.002181
+
+## 11. CORS preflight
+  cors-preflight OPTIONS /api/v1/auth/login                            → 204 0.001012
+
+## 12. Unknown route
+  nonexistent    GET    /api/v1/does/not/exist                        → 404 0.001397
+  api-catchall   GET    /api/totally/unknown                          → 404 0.001480
+

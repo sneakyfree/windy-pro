@@ -1,0 +1,196 @@
+# Endpoint inventory — account-server (generated 2026-04-17T03:14:21Z)
+
+## Mount map (from src/server.ts)
+
+46:app.use(cors({
+52:app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response-time ms'));
+55:app.use('/api/v1/stripe', express.raw({ type: 'application/json' }), stripeRouter);
+57:app.use(express.json());
+58:app.use(express.urlencoded({ extended: false })); // Admin console HTML forms
+68:app.use('/assets', express.static(path.join(webDistDir, 'assets'), {
+71:app.use('/landing', express.static(path.join(webDistDir, 'landing'), {
+78:app.use('/wizard', express.static(path.join(webDistDir, 'wizard')));
+79:app.use(express.static(webDistDir, {
+94:app.use('/api/v1/auth', authRoutes);
+96:app.use('/v1/auth', authRoutes);
+99:app.use('/api/v1/identity', identityRoutes);
+102:app.use('/api/v1/identity/verify', verificationRoutes);
+105:app.use('/api/v1/oauth', oauthRoutes);
+109:app.use('/', deviceApprovalRoutes);
+148:app.use('/api/v1/translate', translationRoutes);
+154:app.use('/api/v1/recordings', recordingRoutes);
+157:app.use('/api/v1/transcribe', transcriptionRoutes);
+160:app.use('/api/v1/clone', cloneRoutes);
+163:app.use('/api/v1/admin', adminRoutes);
+166:app.use('/admin', adminConsoleRoutes);
+169:app.use('/download', downloadRoutes);
+172:app.use('/', miscRoutes);
+175:app.use('/api/v1/files', storageRoutes);
+178:app.use('/api/v1/cloud', cloudRoutes);
+181:app.use('/api/v1/fly', flyRoutes);
+184:app.use('/api/v1/billing', billingRouter);
+201:app.use('/api/', (req: express.Request, res: express.Response) => {
+225:app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+
+## Routes (method, path, flags, handler:line)
+
+
+### src/routes/admin-console.ts
+  GET    /                                          (L120)
+  GET    /users                                     (L207)
+  GET    /users/:id                                 (L296)
+  POST   /users/:id/freeze                          (L454)
+  POST   /users/:id/tier                            (L471)
+  GET    /oauth-clients                             (L495)
+  GET    /audit                                     (L535)
+  GET    /bots                                      (L639)
+
+### src/routes/admin.ts
+  GET    /users                                    [auth] [admin]  (L16)
+  GET    /stats                                    [auth] [admin]  (L49)
+  GET    /revenue                                  [auth] [admin]  (L104)
+  GET    /users/:userId                            [auth] [admin]  (L125)
+  POST   /users/:userId/freeze                     [auth] [admin]  (L152)
+  POST   /users/:userId/tier                       [auth] [admin]  (L169)
+  DELETE /users/:userId                            [auth] [admin]  (L201)
+  GET    /overview                                 [auth] [admin]  (L232)
+  GET    /billing/transactions                     [auth] [admin]  (L267)
+  POST   /billing/refund                           [auth] [admin]  (L296)
+  GET    /analytics                                [auth] [admin]  (L336)
+
+### src/routes/auth.ts
+  POST   /register                                 [rate] [zod]  (L208)
+  POST   /login                                    [rate] [zod]  (L312)
+  POST   /chat-validate                            [rate]  (L447)
+  GET    /me                                       [auth]  (L502)
+  PATCH  /me                                       [auth]  (L523)
+  GET    /devices                                  [auth]  (L601)
+  POST   /devices/register                         [auth] [zod]  (L613)
+  POST   /devices/remove                           [auth] [zod]  (L653)
+  POST   /refresh                                  [rate] [zod]  (L680)
+  POST   /logout                                   [auth]  (L723)
+  POST   /change-password                          [auth] [zod]  (L767)
+  POST   /send-verification                        [auth] [rate]  (L798)
+  POST   /verify-email                             [auth] [zod]  (L830)
+  POST   /mfa/setup                                [auth]  (L889)
+  POST   /mfa/verify-setup                         [auth] [zod]  (L939)
+  POST   /mfa/disable                              [auth] [zod]  (L972)
+  POST   /forgot-password                          [rate] [zod]  (L997)
+  POST   /reset-password                           [zod]  (L1048)
+  DELETE /me                                       [auth]  (L1158)
+  DELETE /delete-account                           [auth]  (L1159)
+  GET    /billing                                  [auth]  (L1163)
+  POST   /create-portal-session                    [auth]  (L1186)
+
+### src/routes/billing.ts
+
+### src/routes/clone.ts
+  GET    /training-data                            [auth]  (L16)
+  POST   /start-training                           [auth] [zod]  (L47)
+  GET    /training-status/:jobId                   [auth]  (L138)
+
+### src/routes/cloud.ts
+  POST   /phone/provision                          [auth]  (L7)
+  POST   /phone/release                            [auth]  (L15)
+  POST   /push/send                                [auth]  (L23)
+
+### src/routes/device-approval.ts
+  GET    /device                                    (L28)
+  POST   /device/approve                            (L36)
+
+### src/routes/downloads.ts
+  GET    /latest/:platform                          (L48)
+  GET    /verify                                    (L86)
+  GET    /version                                   (L122)
+
+### src/routes/fly.ts
+  POST   /chat                                     [auth]  (L11)
+
+### src/routes/identity.ts
+  GET    /me                                       [auth]  (L45)
+  PATCH  /me                                       [auth]  (L110)
+  GET    /products                                 [auth]  (L155)
+  POST   /products/provision                       [auth]  (L162)
+  GET    /scopes                                   [auth]  (L187)
+  POST   /scopes/grant                             [auth] [admin]  (L194)
+  DELETE /scopes/:scope                            [auth] [admin]  (L211)
+  GET    /audit                                    [auth]  (L223)
+  POST   /eternitas/webhook                        [rate]  (L260)
+  POST   /backfill                                 [auth] [admin]  (L341)
+  POST   /chat/provision                           [auth]  (L357)
+  POST   /mail/provision                           [auth]  (L482)
+  POST   /agent/provision                          [auth]  (L566)
+  GET    /chat/profile                             [auth]  (L626)
+  POST   /api-keys                                 [auth]  (L648)
+  DELETE /api-keys/:keyId                          [auth]  (L693)
+  GET    /api-keys                                 [auth]  (L699)
+  POST   /secretary/consent                        [auth]  (L717)
+  GET    /secretary/status                         [auth]  (L748)
+  POST   /hatch/credentials                        [auth] [admin]  (L781)
+  GET    /resolve/:windyIdentityId                 [auth]  (L849)
+  POST   /provision-all                            [auth]  (L968)
+  POST   /ecosystem/provision-all                  [auth]  (L1112)
+  GET    /ecosystem-status                         [auth]  (L1211)
+  GET    /validate-token                           [auth]  (L1324)
+  POST   /webhooks/eternitas                        (L1366)
+  GET    /provisioning-status/:identity_id         [auth]  (L1477)
+
+### src/routes/misc.ts
+  GET    /health                                    (L133)
+  POST   /api/v1/analytics                         [rate] [zod]  (L163)
+  GET    /api/v1/updates/check                      (L171)
+  POST   /api/v1/license/activate                  [auth] [zod]  (L180)
+  POST   /api/v1/rtc/signal                        [auth]  (L205)
+  GET    /api/v1/rtc/signal                        [auth]  (L236)
+  POST   /api/v1/ocr/translate                      (L249)
+
+### src/routes/oauth.ts
+  POST   /clients                                  [auth] [admin]  (L54)
+  GET    /clients                                  [auth] [admin]  (L110)
+  POST   /register-client                          [rate]  (L130)
+  GET    /authorize                                [auth] [rate]  (L203)
+  POST   /authorize                                [auth] [rate]  (L320)
+  POST   /token                                    [rate]  (L392)
+  POST   /device                                   [rate]  (L669)
+  POST   /device/approve                           [auth]  (L713)
+  GET    /userinfo                                 [auth]  (L762)
+  GET    /consents                                 [auth]  (L824)
+  DELETE /consents/:clientId                       [auth]  (L841)
+  GET    /consent                                  [auth] [rate]  (L865)
+
+### src/routes/recordings.ts
+  GET    /                                         [auth]  (L167)
+  GET    /list                                     [auth]  (L202)
+  GET    /check                                    [auth]  (L229)
+  GET    /stats                                    [auth]  (L246)
+  DELETE /bulk                                     [auth]  (L291)
+  POST   /export                                   [auth]  (L334)
+  GET    /:id                                      [auth]  (L445)
+  PATCH  /:id                                      [auth]  (L486)
+  DELETE /:id                                      [auth]  (L541)
+  POST   /upload                                   [auth]  (L568)
+  POST   /upload/chunk                             [auth]  (L604)
+  POST   /upload/batch                             [auth]  (L640)
+  POST   /sync                                     [auth]  (L689)
+  GET    /:id/audio                                [auth]  (L749)
+  GET    /:id/video                                [auth]  (L797)
+
+### src/routes/storage.ts
+  POST   /upload                                   [auth]  (L75)
+  GET    /                                         [auth]  (L149)
+  GET    /:fileId                                  [auth]  (L188)
+  DELETE /:fileId                                  [auth]  (L231)
+
+### src/routes/transcription.ts
+  POST   /                                         [auth]  (L167)
+  POST   /batch                                    [auth]  (L251)
+
+### src/routes/translations.ts
+  POST   /speech                                   [auth] [zod]  (L41)
+  POST   /text                                     [auth] [zod]  (L66)
+  GET    /languages                                 (L156)
+
+### src/routes/verification.ts
+  POST   /send                                     [auth] [rate] [zod]  (L152)
+  POST   /check                                    [auth] [zod]  (L228)
+  GET    /status                                   [auth]  (L302)
