@@ -30,6 +30,7 @@ import identityRoutes from './routes/identity';
 import verificationRoutes from './routes/verification';
 import oauthRoutes, { seedEcosystemClients } from './routes/oauth';
 import deviceApprovalRoutes from './routes/device-approval';
+import passwordResetPageRoutes from './routes/password-reset-page';
 import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
 import flyRoutes from './routes/fly';
@@ -190,6 +191,10 @@ app.use('/api/v1/oauth', oauthRoutes);
 // Top-level device-code approval page (GET /device, POST /device/approve).
 // Mobile shows "Visit windyword.ai/device" — this is the operator UI.
 app.use('/', deviceApprovalRoutes);
+
+// P1-14: /reset-password page so the email link from forgot-password
+// actually lands on a working form instead of the SPA's 404 wildcard.
+app.use('/', passwordResetPageRoutes);
 
 // JWKS + OIDC-discovery rate limit — Wave 7 P1-7. Both endpoints are cheap
 // but unauthenticated. Public CDN fronts would normally absorb abuse; lacking
