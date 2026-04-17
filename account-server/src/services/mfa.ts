@@ -30,8 +30,27 @@ function getEncryptionKey(): Buffer {
   if (explicit && /^[0-9a-fA-F]{64}$/.test(explicit)) {
     return Buffer.from(explicit, 'hex');
   }
-  // Derived fallback — fine for dev/test, NOT for production.
-  // Logged once per process so noisy startup is bounded.
+  // Wave 7 P1-1: hard-fail in production. The derived-from-JWT_SECRET
+  // fallback is fine for dev/test but catastrophic in prod — rotating
+  // JWT_SECRET would brick every enrolled user's MFA because their
+  // TOTP secrets are encrypted under a key tied to the old JWT_SECRET.
+  // A warn alone is not enough: operators miss warnings, and by the time
+  // anyone notices, the only recovery is mass MFA re-enrollment.
+  if (process.env.NODE_ENV === 'production') {
+    if (explicit) {
+      throw new Error(
+        '❌ MFA_ENCRYPTION_KEY is set but not a valid 32-byte hex string (64 chars). ' +
+        'Generate with: openssl rand -hex 32',
+      );
+    }
+    throw new Error(
+      '❌ MFA_ENCRYPTION_KEY is required in production. ' +
+      'Without it, MFA secrets would be encrypted with a key derived from JWT_SECRET, ' +
+      'which means rotating JWT_SECRET bricks every enrolled user. ' +
+      'Generate with: openssl rand -hex 32',
+    );
+  }
+  // Dev/test fallback — logged once per process so noisy startup is bounded.
   if (!KEY_WARNED.value && process.env.NODE_ENV !== 'test') {
     console.warn('[mfa] MFA_ENCRYPTION_KEY unset — deriving from JWT_SECRET. Set MFA_ENCRYPTION_KEY in production (32-byte hex).');
     KEY_WARNED.value = true;
