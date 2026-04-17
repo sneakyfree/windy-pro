@@ -102,8 +102,43 @@ app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response
 // Stripe webhook needs raw body — must come BEFORE express.json()
 app.use('/api/v1/stripe', express.raw({ type: 'application/json' }), stripeRouter);
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false })); // Admin console HTML forms
+// Cap request body at 100 KiB. Everything legitimate (register, verify,
+// login, webhook payloads) fits well under this. An oversized body throws
+// `PayloadTooLargeError` which the error handler below converts to 413.
+const JSON_BODY_LIMIT = '100kb';
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: false, limit: JSON_BODY_LIMIT })); // Admin console HTML forms
+
+// ─── Body-parser error handler ────────────────────────────────
+//
+// Wave 7 P1-4 + P1-5 — malformed JSON and oversized bodies previously
+// surfaced as 500 "Internal server error" because express.json()'s
+// SyntaxError / entity.too.large errors bubbled to the catch-all below.
+// This explicit handler runs BEFORE routes mount, so body-parser errors
+// return well-formed 4xx responses instead.
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err?.type === 'entity.too.large') {
+        return res.status(413).json({
+            error: 'Request body too large',
+            code: 'payload_too_large',
+            limit: JSON_BODY_LIMIT,
+        });
+    }
+    if (err instanceof SyntaxError && 'body' in err) {
+        return res.status(400).json({
+            error: 'Malformed JSON body',
+            code: 'invalid_json',
+        });
+    }
+    if (err?.type === 'entity.parse.failed') {
+        return res.status(400).json({
+            error: 'Could not parse request body',
+            code: 'invalid_body',
+        });
+    }
+    // Not a body-parser error — let the general handler below deal with it.
+    return next(err);
+});
 
 // ─── Static Website ──────────────────────────────────────────
 // Serve the Windy Pro landing page and web app from the web dist folder
