@@ -56,10 +56,19 @@ export const config = {
     WINDY_CHAT_WEBHOOK_URL: process.env.WINDY_CHAT_WEBHOOK_URL || '',   // e.g. http://chat-onboarding:8101/api/v1/chat/provision-hook
     WINDY_MAIL_WEBHOOK_URL: process.env.WINDY_MAIL_WEBHOOK_URL || '',   // e.g. http://windy-mail:8105/api/v1/mail/provision-hook
     // Ecosystem service URLs — used for direct provisioning and health checks
+    // Ecosystem service URLs — used for direct provisioning and health checks.
+    // Dev defaults reflect each service's own documented port (see each
+    // repo's CLAUDE.md). Note: mail + cloud + eternitas all use 8200 by
+    // default in their own repos; running them simultaneously in dev
+    // requires overriding these via .env. Wave 7 P1-3 fix:
+    //   - WINDY_CLOUD_URL was pointing at 8098, the account-server's own
+    //     port — asking it to call itself when checking cloud health.
+    //   - ETERNITAS_URL had the same 8200 as mail; now uses 8500 which is
+    //     the conventional bot-registry dev port and avoids the collision.
     WINDY_CHAT_URL: process.env.WINDY_CHAT_URL || 'http://localhost:8101',
     WINDY_MAIL_URL: process.env.WINDY_MAIL_URL || 'http://localhost:8200',
-    WINDY_CLOUD_URL: process.env.WINDY_CLOUD_URL || 'http://localhost:8098',
-    ETERNITAS_URL: process.env.ETERNITAS_URL || 'http://localhost:8200',
+    WINDY_CLOUD_URL: process.env.WINDY_CLOUD_URL || 'http://localhost:8103',
+    ETERNITAS_URL: process.env.ETERNITAS_URL || 'http://localhost:8500',
     // Eternitas — bot identity & trust registry
     ETERNITAS_API_KEY: process.env.ETERNITAS_API_KEY || '',           // et_plt_xxx (platform API key)
     ETERNITAS_WEBHOOK_SECRET: process.env.ETERNITAS_WEBHOOK_SECRET || '', // For verifying inbound webhooks
