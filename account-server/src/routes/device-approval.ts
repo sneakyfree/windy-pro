@@ -15,7 +15,7 @@
 import { Router, Request, Response } from 'express';
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import rateLimit from 'express-rate-limit';
+import { makeRateLimiter } from '../services/rate-limiter';
 import { getDb } from '../db/schema';
 import { logAuditEvent } from '../identity-service';
 
@@ -39,7 +39,7 @@ router.use('/device', express.urlencoded({ extended: false }));
 //      user_code after 5 wrong passwords — enforced at the handler level.
 //      The counter lives in a Map keyed by `${email}::${userCode}` with
 //      5-minute sliding windows.
-const deviceApproveLimiter = rateLimit({
+const deviceApproveLimiter = makeRateLimiter('device-approve', {
   windowMs: 10 * 60 * 1000,
   max: process.env.NODE_ENV === 'test' ? 10000 : 5,
   keyGenerator: (req) => {

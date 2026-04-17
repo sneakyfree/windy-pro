@@ -18,7 +18,7 @@ import express from 'express';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import rateLimit from 'express-rate-limit';
+import { makeRateLimiter } from '../services/rate-limiter';
 import { config } from '../config';
 import { getDb } from '../db/schema';
 import { authenticateToken, adminOnly, AuthRequest } from '../middleware/auth';
@@ -28,7 +28,7 @@ import { isRS256Available, getSigningKey } from '../jwks';
 const router = Router();
 
 // Rate limits for OAuth endpoints
-const oauthLimiter = rateLimit({
+const oauthLimiter = makeRateLimiter('oauth', {
   windowMs: 60 * 1000,
   max: 30,
   message: { error: 'Too many requests. Try again later.' },
@@ -36,7 +36,7 @@ const oauthLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-const tokenLimiter = rateLimit({
+const tokenLimiter = makeRateLimiter('oauth-token', {
   windowMs: 60 * 1000,
   max: 20,
   message: { error: 'Too many token requests. Try again later.' },

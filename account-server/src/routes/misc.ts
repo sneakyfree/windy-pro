@@ -3,7 +3,7 @@
  */
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import rateLimit from 'express-rate-limit';
+import { makeRateLimiter } from '../services/rate-limiter';
 import http from 'http';
 import { getDb } from '../db/schema';
 import { config } from '../config';
@@ -21,7 +21,7 @@ import { tierFromKey } from '@windy-pro/contracts';
 import packageJson from '../../package.json';
 const SERVER_VERSION: string = packageJson.version;
 
-const analyticsLimiter = rateLimit({
+const analyticsLimiter = makeRateLimiter('analytics', {
     windowMs: 60 * 1000,
     max: 30,
     message: { error: 'Too many requests' },

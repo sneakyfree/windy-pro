@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
-import rateLimit from 'express-rate-limit';
+import { makeRateLimiter } from '../services/rate-limiter';
 import { config } from '../config';
 import { getDb } from '../db/schema';
 import { getStatements } from '../db/statements';
@@ -45,7 +45,7 @@ const router = Router();
 function stmts() { return getStatements(); }
 
 // Rate limit on auth endpoints: 5 attempts per minute (disabled in test env)
-const authLimiter = rateLimit({
+const authLimiter = makeRateLimiter('auth', {
     windowMs: 60 * 1000,
     max: process.env.NODE_ENV === 'test' ? 10000 : 5,
     message: { error: 'Too many attempts, please try again later' },
@@ -54,7 +54,7 @@ const authLimiter = rateLimit({
 });
 
 // PR1: send-verification rate limit — 3 per hour per user (or per IP if unauth slipped through)
-const sendVerificationLimiter = rateLimit({
+const sendVerificationLimiter = makeRateLimiter('send-verification', {
     windowMs: 60 * 60 * 1000,
     max: process.env.NODE_ENV === 'test' ? 10000 : 3,
     keyGenerator: (req) => (req as AuthRequest).user?.userId || req.ip || 'unknown',
@@ -76,7 +76,7 @@ function normalizeEmail(raw: unknown): string {
 // PR1: forgot-password rate limit — 3 per hour per email (no auth on this
 // endpoint). keyGenerator uses normalizeEmail() so the bucket can't be
 // evaded by case/whitespace permutations.
-const forgotPasswordLimiter = rateLimit({
+const forgotPasswordLimiter = makeRateLimiter('forgot-password', {
     windowMs: 60 * 60 * 1000,
     max: process.env.NODE_ENV === 'test' ? 10000 : 3,
     keyGenerator: (req) => normalizeEmail((req.body as any)?.email) || req.ip || 'unknown',
@@ -92,7 +92,7 @@ const forgotPasswordLimiter = rateLimit({
 // 15 guesses/hr against a 6-digit code (10^6 entropy). Still far from
 // feasible, but a per-user hourly cap on verify-email itself removes
 // the amplification.
-const verifyEmailLimiter = rateLimit({
+const verifyEmailLimiter = makeRateLimiter('verify-email', {
     windowMs: 60 * 60 * 1000,
     max: process.env.NODE_ENV === 'test' ? 10000 : 30,
     keyGenerator: (req) => (req as AuthRequest).user?.userId || req.ip || 'unknown',

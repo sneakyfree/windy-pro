@@ -18,7 +18,7 @@
  */
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
-import rateLimit from 'express-rate-limit';
+import { makeRateLimiter } from '../services/rate-limiter';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validation';
 import { getDb } from '../db/schema';
@@ -36,7 +36,7 @@ const router = Router();
 
 // ─── Rate limiters ──
 
-const sendLimiter = rateLimit({
+const sendLimiter = makeRateLimiter('verification-send', {
   windowMs: 60 * 1000,
   max: 5,
   keyGenerator: (req) => (req.body as any)?.identifier || req.ip || 'unknown',
@@ -45,7 +45,7 @@ const sendLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-const hourlyLimiter = rateLimit({
+const hourlyLimiter = makeRateLimiter('verification-hourly', {
   windowMs: 60 * 60 * 1000,
   max: 10,
   keyGenerator: (req) => (req.body as any)?.identifier || req.ip || 'unknown',
