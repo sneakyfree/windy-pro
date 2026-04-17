@@ -261,19 +261,37 @@ router.post('/eternitas/webhook', botWebhookLimiter, (req: Request, res: Respons
   try {
     const { event, passportNumber, agentName, operatorEmail, timestamp, signature, trustScore } = req.body;
 
-    // Verify webhook signature — REQUIRED in production
+    // P0 fix: signature verification is REQUIRED regardless of NODE_ENV.
+    // The old code skipped verification when ETERNITAS_WEBHOOK_SECRET was
+    // unset in non-production — which meant anyone on the network could
+    // forge passport.revoked events. No env-dependent short-circuits.
     const webhookSecret = process.env.ETERNITAS_WEBHOOK_SECRET;
-    if (webhookSecret) {
-      const expectedSig = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(`${event}:${passportNumber}:${timestamp}`)
-        .digest('hex');
-
-      if (signature !== expectedSig) {
-        return res.status(401).json({ error: 'Invalid webhook signature' });
+    if (!webhookSecret) {
+      return res.status(503).json({
+        error: 'ETERNITAS_WEBHOOK_SECRET not configured on this server',
+        code: 'webhook_secret_not_configured',
+      });
+    }
+    if (typeof signature !== 'string' || !signature) {
+      return res.status(401).json({ error: 'Missing webhook signature' });
+    }
+    const expectedSig = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(`${event}:${passportNumber}:${timestamp}`)
+      .digest('hex');
+    // Constant-time compare — prevents timing-attack signature discovery.
+    const a = Buffer.from(signature);
+    const b = Buffer.from(expectedSig);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
+    // Replay protection: reject events older than 5 minutes.
+    if (typeof timestamp === 'number' || typeof timestamp === 'string') {
+      const ts = typeof timestamp === 'string' ? parseInt(timestamp, 10) : timestamp;
+      const ageSeconds = Math.abs(Date.now() / 1000 - ts);
+      if (Number.isFinite(ageSeconds) && ageSeconds > 300) {
+        return res.status(401).json({ error: 'Webhook timestamp outside accepted window (±5 min)' });
       }
-    } else if (process.env.NODE_ENV === 'production') {
-      return res.status(500).json({ error: 'Webhook secret not configured' });
     }
 
     // Basic validation
@@ -1367,21 +1385,28 @@ router.post('/webhooks/eternitas', (req: Request, res: Response) => {
   try {
     const { event, passport_number, timestamp, data } = req.body;
 
-    // Verify HMAC-SHA256 signature
+    // P0 fix: signature verification is REQUIRED regardless of NODE_ENV.
+    // See /eternitas/webhook above for the same pattern.
     const signature = req.headers['x-eternitas-signature'] as string | undefined;
     const webhookSecret = config.ETERNITAS_WEBHOOK_SECRET;
 
-    if (webhookSecret) {
-      const expectedSig = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(JSON.stringify(req.body))
-        .digest('hex');
-
-      if (signature !== expectedSig) {
-        return res.status(401).json({ error: 'Invalid signature' });
-      }
-    } else if (process.env.NODE_ENV === 'production') {
-      return res.status(500).json({ error: 'Webhook secret not configured' });
+    if (!webhookSecret) {
+      return res.status(503).json({
+        error: 'ETERNITAS_WEBHOOK_SECRET not configured on this server',
+        code: 'webhook_secret_not_configured',
+      });
+    }
+    if (typeof signature !== 'string' || !signature) {
+      return res.status(401).json({ error: 'Missing X-Eternitas-Signature header' });
+    }
+    const expectedSig = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(JSON.stringify(req.body))
+      .digest('hex');
+    const a = Buffer.from(signature);
+    const b = Buffer.from(expectedSig);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      return res.status(401).json({ error: 'Invalid signature' });
     }
 
     if (!event || !passport_number) {
