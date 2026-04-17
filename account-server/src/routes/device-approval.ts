@@ -15,6 +15,7 @@
 import { Router, Request, Response } from 'express';
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
 import { getDb } from '../db/schema';
 import { logAuditEvent } from '../identity-service';
 
@@ -22,6 +23,53 @@ const router = Router();
 
 // Form posts come as application/x-www-form-urlencoded.
 router.use('/device', express.urlencoded({ extended: false }));
+
+// P0-3 hardening: the device-approval form accepts email + password inline
+// (no cookie session on account-server). Without a rate limit, anyone who
+// obtains one valid user_code (which /api/v1/oauth/device issues freely
+// at 30/min/IP) can brute-force every Windy account's password through
+// /device/approve at full bcrypt speed.
+//
+// Two defenses layered:
+//   1. Rate limiter keyed by (email, user_code) — 5 attempts per 10 min.
+//      Scoped by both keys so a legit user who mis-typed their own
+//      password once isn't blocked by an attacker hammering a different
+//      email on the same device.
+//   2. Per-(email, user_code) failed-attempt counter that invalidates the
+//      user_code after 5 wrong passwords — enforced at the handler level.
+//      The counter lives in a Map keyed by `${email}::${userCode}` with
+//      5-minute sliding windows.
+const deviceApproveLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: process.env.NODE_ENV === 'test' ? 10000 : 5,
+  keyGenerator: (req) => {
+    const email = String((req.body as any)?.email || '').toLowerCase().trim();
+    const code  = String((req.body as any)?.user_code || '').toUpperCase().trim();
+    // Include IP so an attacker with many emails behind one IP can't cycle.
+    return `${req.ip}::${email}::${code}`;
+  },
+  message: { error: 'Too many approval attempts. Wait 10 minutes and try again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Tracks consecutive wrong-password tries per (email, user_code). Pruned
+// at 5-min idle to keep the map bounded.
+const wrongAttempts = new Map<string, { count: number; lastAttempt: number }>();
+function wrongKey(email: string, userCode: string) { return `${email}::${userCode}`; }
+function recordWrong(k: string): number {
+  const now = Date.now();
+  const entry = wrongAttempts.get(k);
+  if (!entry || now - entry.lastAttempt > 5 * 60 * 1000) {
+    wrongAttempts.set(k, { count: 1, lastAttempt: now });
+    return 1;
+  }
+  entry.count++;
+  entry.lastAttempt = now;
+  return entry.count;
+}
+function clearWrong(k: string) { wrongAttempts.delete(k); }
+const WRONG_LIMIT = 5;
 
 // ─── Routes ──────────────────────────────────────────────────
 
@@ -33,7 +81,7 @@ router.get('/device', (req: Request, res: Response) => {
   res.send(renderPage({ userCode, error }));
 });
 
-router.post('/device/approve', async (req: Request, res: Response) => {
+router.post('/device/approve', deviceApproveLimiter, async (req: Request, res: Response) => {
   const userCodeRaw = String(req.body?.user_code || '').trim();
   const email = String(req.body?.email || '').toLowerCase().trim();
   const password = String(req.body?.password || '');
@@ -48,12 +96,35 @@ router.post('/device/approve', async (req: Request, res: Response) => {
     return res.status(400).send(renderPage({ userCode, error: 'Sign in with your Windy account to approve this device.' }));
   }
 
+  // P0-3 lockout check — if this (email, user_code) pair has already been
+  // wrong WRONG_LIMIT times, burn the user_code so even a correct password
+  // won't approve it. User restarts sign-in on their device for a new code.
+  const wKey = wrongKey(email, userCode);
+  const currentWrong = wrongAttempts.get(wKey)?.count ?? 0;
+  if (currentWrong >= WRONG_LIMIT) {
+    const db = getDb();
+    db.prepare("UPDATE oauth_device_codes SET status = 'denied' WHERE user_code = ? AND status = 'pending'").run(userCode);
+    clearWrong(wKey);
+    return res.status(429).send(renderPage({
+      userCode, email,
+      error: 'Too many incorrect attempts for this code. It has been invalidated — please restart sign-in on your device to get a new code.',
+    }));
+  }
+
   const db = getDb();
   const user = db.prepare('SELECT id, password_hash, email_verified FROM users WHERE email = ?').get(email) as any;
   // Generic credential error — never disclose whether the email is registered.
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+    const n = recordWrong(wKey);
+    if (n >= WRONG_LIMIT) {
+      db.prepare("UPDATE oauth_device_codes SET status = 'denied' WHERE user_code = ? AND status = 'pending'").run(userCode);
+    }
     return res.status(401).send(renderPage({ userCode, email, error: 'Email or password is incorrect.' }));
   }
+
+  // Password was correct — clear any accumulated wrong-attempt state for
+  // this pair so the user isn't penalized on future legitimate retries.
+  clearWrong(wKey);
 
   const deviceAuth = db.prepare(
     "SELECT device_code, client_id, status, expires_at FROM oauth_device_codes WHERE user_code = ?",
