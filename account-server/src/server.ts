@@ -41,12 +41,60 @@ initErrorReporting();
 
 const app = express();
 
-// ─── Middleware ───────────────────────────────────────────────
+// ─── Proxy trust ──────────────────────────────────────────────
+//
+// Required for rate limiting + `req.ip` to reflect the real client when
+// we're behind AWS ALB, CloudFront, nginx, etc. Without this, every
+// request looks like it comes from the load balancer's IP and the
+// per-IP rate-limit becomes a global cap shared across all users.
+//
+// `TRUST_PROXY` env var accepts anything Express understands:
+//   - "true" / "1"         → trust ALL proxies (fine behind a single LB)
+//   - an integer like "1"  → trust N hops
+//   - a CIDR list          → e.g. "10.0.0.0/8, 172.16.0.0/12"
+// Default in dev: `loopback` so localhost testing works. In production
+// we hard-fail instead of silently trusting the wrong thing — requiring
+// operator to set TRUST_PROXY with an explicit value.
+{
+    const raw = process.env.TRUST_PROXY;
+    if (raw && raw.length > 0) {
+        // Accept 'true'/'false', integers, or comma-separated strings.
+        const parsed = raw === 'true' ? true
+            : raw === 'false' ? false
+            : /^\d+$/.test(raw) ? parseInt(raw, 10)
+            : raw.includes(',') ? raw.split(',').map(s => s.trim())
+            : raw;
+        app.set('trust proxy', parsed);
+        console.log(`[server] trust proxy = ${JSON.stringify(parsed)}`);
+    } else if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+            '❌ TRUST_PROXY is required in production. Set it to the number of proxy hops ' +
+            '(e.g. "1" behind a single ALB) or an explicit CIDR list. ' +
+            'Without this, rate limits use the load-balancer IP instead of the real client IP.',
+        );
+    } else {
+        // Dev-only — trust the loopback so supertest / localhost works.
+        app.set('trust proxy', 'loopback');
+    }
+}
 
+// ─── CORS ─────────────────────────────────────────────────────
+//
+// In production, CORS_ALLOWED_ORIGINS MUST be set. A wildcard origin with
+// `credentials: true` creates a CSRF vector for any cookie-authed flow we
+// add later, and silently accepts tokens issued at one origin from every
+// other origin.
+if (process.env.NODE_ENV === 'production' && !process.env.CORS_ALLOWED_ORIGINS) {
+    throw new Error(
+        '❌ CORS_ALLOWED_ORIGINS is required in production. ' +
+        'Set it to a comma-separated list of allowed origins, e.g. ' +
+        '"https://windyword.ai,https://account.windyword.ai".',
+    );
+}
 app.use(cors({
     origin: process.env.CORS_ALLOWED_ORIGINS
         ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim())
-        : true, // Allow all in development; set CORS_ALLOWED_ORIGINS in production
+        : true, // Dev-only: reflect whatever origin the browser presents.
     credentials: true,
 }));
 app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response-time ms'));
