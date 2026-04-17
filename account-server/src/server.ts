@@ -197,8 +197,9 @@ app.use('/', deviceApprovalRoutes);
 // 120/min per client is generous for legitimate JWKS clients (which cache for
 // 1 hour via our Cache-Control header) and enough to trip obvious abuse.
 const wellKnownLimiter = (() => {
-    const rl = require('express-rate-limit') as typeof import('express-rate-limit');
-    return rl.default({
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { makeRateLimiter } = require('./services/rate-limiter');
+    return makeRateLimiter('well-known', {
         windowMs: 60 * 1000,
         max: process.env.NODE_ENV === 'test' ? 10000 : 120,
         standardHeaders: true,

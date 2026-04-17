@@ -90,6 +90,45 @@ export function isRedisAvailable(): boolean {
   return redisAvailable;
 }
 
+/**
+ * Raw Redis client accessor — for modules (like rate-limit-redis) that
+ * need direct command access. Returns null when Redis isn't configured;
+ * callers must handle the null case with an in-memory fallback.
+ */
+export function getRedisClient(): any | null {
+  return redisAvailable ? redisClient : null;
+}
+
+/**
+ * Rate-limit store factory for express-rate-limit 7.x.
+ *
+ * Returns a `rate-limit-redis` store keyed by the given prefix when Redis
+ * is available, otherwise `undefined` so express-rate-limit falls back to
+ * its built-in MemoryStore (existing behaviour on a single task; safe for
+ * tests and single-instance dev).
+ *
+ * Behind a multi-task deployment (e.g. ECS `desired_count: 2`) the shared
+ * Redis store is what actually makes the limit global — the in-memory
+ * fallback only holds within one process, so an attacker could cycle tasks
+ * and effectively multiply their allowance.
+ */
+export function makeRateLimitStore(prefix: string): any | undefined {
+  if (!redisAvailable || !redisClient) return undefined;
+  try {
+    // Lazy-require so test envs without rate-limit-redis still load this
+    // module; only evaluated once Redis is actually up.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { RedisStore } = require('rate-limit-redis');
+    return new RedisStore({
+      sendCommand: (...args: string[]) => redisClient.call(...args),
+      prefix: `rl:${prefix}:`,
+    });
+  } catch (err: any) {
+    console.warn(`[redis] makeRateLimitStore(${prefix}) failed: ${err?.message || err}`);
+    return undefined;
+  }
+}
+
 // ═══════════════════════════════════════════
 //  IN-MEMORY FALLBACK STORES
 // ═══════════════════════════════════════════

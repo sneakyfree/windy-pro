@@ -9,7 +9,7 @@
  */
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
-import rateLimit from 'express-rate-limit';
+import { makeRateLimiter } from '../services/rate-limiter';
 import { config } from '../config';
 import { getDb } from '../db/schema';
 import { authenticateToken, adminOnly, AuthRequest } from '../middleware/auth';
@@ -249,7 +249,7 @@ router.get('/audit', authenticateToken, (req: Request, res: Response) => {
 // ─── POST /api/v1/identity/eternitas/webhook ─────────────────
 
 // Bot-specific rate limit: stricter than humans
-const botWebhookLimiter = rateLimit({
+const botWebhookLimiter = makeRateLimiter('bot-webhook', {
   windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Too many webhook requests. Try again later.' },
@@ -677,7 +677,7 @@ router.get('/chat/profile', authenticateToken, (req: Request, res: Response) => 
 // ─── Phase 3: Bot API Key Endpoints ───────────────────────────
 
 // Bot-specific auth rate limiter
-const botAuthLimiter = rateLimit({
+const botAuthLimiter = makeRateLimiter('bot-auth', {
   windowMs: 60 * 1000,
   max: 3, // Stricter than human: 3/min vs 5/min
   message: { error: 'Too many bot auth attempts. Try again later.' },
