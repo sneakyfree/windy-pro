@@ -217,7 +217,20 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
         const userId = uuidv4();
         const windyIdentityId = crypto.randomUUID();
         const passwordHash = await bcrypt.hash(password, config.BCRYPT_ROUNDS);
-        stmts().createUser.run(userId, email.toLowerCase(), name, passwordHash, 'free');
+        try {
+            stmts().createUser.run(userId, email.toLowerCase(), name, passwordHash, 'free');
+        } catch (err: any) {
+            // P0-8: TOCTOU between findUserByEmail and createUser. Two concurrent
+            // registers for the same email can both pass the check, then race
+            // the INSERT. The loser hits UNIQUE constraint — convert to 409
+            // instead of letting it bubble up as a 500 "Registration failed".
+            const msg = String(err?.message || '');
+            if (/UNIQUE constraint failed: users\.email/i.test(msg) ||
+                /duplicate key value violates.*users.*email/i.test(msg)) {
+                return res.status(409).json({ error: 'An account with this email already exists' });
+            }
+            throw err;
+        }
 
         // Set the universal cross-product identity ID
         try {
