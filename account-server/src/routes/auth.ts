@@ -461,9 +461,17 @@ router.post('/chat-validate', authLimiter, async (req: Request, res: Response) =
     try {
         const { username, password, shared_secret } = req.body;
 
-        // Verify shared secret (same secret Synapse uses for registration)
+        // Verify shared secret (same secret Synapse uses for registration).
+        // P1-11: constant-time compare — string !== would leak byte-position
+        // timing to an attacker making many attempts. Length comparison
+        // before timingSafeEqual is required (throws otherwise on mismatch).
         const expectedSecret = process.env.SYNAPSE_REGISTRATION_SECRET || '';
-        if (!expectedSecret || shared_secret !== expectedSecret) {
+        const presented = typeof shared_secret === 'string' ? shared_secret : '';
+        const ok =
+            expectedSecret.length > 0 &&
+            presented.length === expectedSecret.length &&
+            crypto.timingSafeEqual(Buffer.from(presented), Buffer.from(expectedSecret));
+        if (!ok) {
             return res.status(403).json({ valid: false, error: 'Invalid shared secret' });
         }
 
