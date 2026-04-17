@@ -191,15 +191,30 @@ app.use('/api/v1/oauth', oauthRoutes);
 // Mobile shows "Visit windyword.ai/device" — this is the operator UI.
 app.use('/', deviceApprovalRoutes);
 
+// JWKS + OIDC-discovery rate limit — Wave 7 P1-7. Both endpoints are cheap
+// but unauthenticated. Public CDN fronts would normally absorb abuse; lacking
+// one, a naive loop hitting these at 10k rps can still fill the event loop.
+// 120/min per client is generous for legitimate JWKS clients (which cache for
+// 1 hour via our Cache-Control header) and enough to trip obvious abuse.
+const wellKnownLimiter = (() => {
+    const rl = require('express-rate-limit') as typeof import('express-rate-limit');
+    return rl.default({
+        windowMs: 60 * 1000,
+        max: process.env.NODE_ENV === 'test' ? 10000 : 120,
+        standardHeaders: true,
+        legacyHeaders: false,
+    });
+})();
+
 // JWKS endpoint (Phase 4 — public keys for RS256 token verification)
-app.get('/.well-known/jwks.json', (_req, res) => {
+app.get('/.well-known/jwks.json', wellKnownLimiter, (_req, res) => {
     const jwks = getJWKSDocument();
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.json(jwks);
 });
 
 // OIDC Discovery (Phase 5 — OpenID Connect provider metadata)
-app.get('/.well-known/openid-configuration', (req, res) => {
+app.get('/.well-known/openid-configuration', wellKnownLimiter, (req, res) => {
     const issuer = process.env.OIDC_ISSUER || `${req.protocol}://${req.get('host')}`;
     res.json({
         issuer,
