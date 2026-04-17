@@ -74,7 +74,10 @@ export const VerifyEmailRequestSchema = z.object({
 // ─── Password Reset (PR2) ───────────────────────────────────
 
 export const ForgotPasswordRequestSchema = z.object({
-    email: z.string().email('Invalid email address'),
+    // Trim first so leading/trailing whitespace doesn't fail .email() and
+    // so the normalized value reaches the handler. Wave 7 P1-12 keeps
+    // this aligned with the rate-limit keyGenerator's normalizeEmail().
+    email: z.string().trim().email('Invalid email address'),
 });
 
 export const ResetPasswordRequestSchema = z.object({

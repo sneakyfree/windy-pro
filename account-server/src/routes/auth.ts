@@ -63,12 +63,23 @@ const sendVerificationLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// PR1: forgot-password rate limit — 3 per hour per IP (no auth on this endpoint).
-// Also caps per-email reset spam: see route handler.
+// Email normalization — used by register/login/forgot-password/reset-password
+// handlers AND the forgotPasswordLimiter keyGenerator so the rate-limit
+// bucket collapses "Alice@Foo.com" and "  alice@foo.com " onto the same
+// identity. P1-12: without trim(), an attacker could evade the per-email
+// cap by appending/stripping whitespace on each request.
+function normalizeEmail(raw: unknown): string {
+    if (typeof raw !== 'string') return '';
+    return raw.trim().toLowerCase();
+}
+
+// PR1: forgot-password rate limit — 3 per hour per email (no auth on this
+// endpoint). keyGenerator uses normalizeEmail() so the bucket can't be
+// evaded by case/whitespace permutations.
 const forgotPasswordLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
     max: process.env.NODE_ENV === 'test' ? 10000 : 3,
-    keyGenerator: (req) => (req.body as any)?.email?.toLowerCase() || req.ip || 'unknown',
+    keyGenerator: (req) => normalizeEmail((req.body as any)?.email) || req.ip || 'unknown',
     message: { error: 'Too many password reset attempts. Try again in an hour.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -1033,7 +1044,9 @@ router.post('/mfa/disable', authenticateToken, validate(MfaDisableRequestSchema)
 
 router.post('/forgot-password', forgotPasswordLimiter, validate(ForgotPasswordRequestSchema), async (req: Request, res: Response) => {
     try {
-        const email = String(req.body.email || '').toLowerCase().trim();
+        // Same normalization function as the rate limiter's keyGenerator
+        // — so per-email bucket and per-user DB lookup agree on identity.
+        const email = normalizeEmail(req.body.email);
         const db = getDb();
         const user = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email) as any;
 
