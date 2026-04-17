@@ -1133,7 +1133,22 @@ const handleAccountDeletion = async (req: Request, res: Response) => {
             console.warn('[webhook-bus] identity.revoked enqueue failed:', e.message);
         }
 
-        // Cascade delete all user data
+        // Cascade delete all user data.
+        //
+        // Most user-scoped tables declare ON DELETE CASCADE on a foreign key
+        // to users(id), and sqlite-adapter sets PRAGMA foreign_keys = ON at
+        // boot — so the final `DELETE FROM users` would cascade them anyway.
+        // We still run explicit DELETEs so:
+        //   (a) tables that lack a FK declaration get cleaned (webhook_deliveries,
+        //       analytics_events — both carry user identifying data and have
+        //       no FK, so they'd survive the cascade);
+        //   (b) Postgres-adapter (when we migrate) sees the same behavior
+        //       regardless of whether we add FKs then.
+        //
+        // Wave 7 P0-5 added the three trailing entries. Any new user-scoped
+        // table MUST be added here — tests/account-delete-cascade.test.ts
+        // enforces "no rows matching deleted user across every user-scoped
+        // table" so forgetting an entry fails the suite.
         const tables = [
             'DELETE FROM recordings WHERE user_id = ?',
             'DELETE FROM refresh_tokens WHERE user_id = ?',
@@ -1148,16 +1163,39 @@ const handleAccountDeletion = async (req: Request, res: Response) => {
             'DELETE FROM bot_api_keys WHERE identity_id = ?',
             'DELETE FROM identity_audit_log WHERE identity_id = ?',
             'DELETE FROM eternitas_passports WHERE identity_id = ?',
+            // P0-5: GDPR right-to-erasure — these tables have no FK, so the
+            // final DELETE FROM users wouldn't cascade-clean them.
+            'DELETE FROM mfa_secrets WHERE user_id = ?',
+            'DELETE FROM otp_codes WHERE user_id = ?',
+            'DELETE FROM webhook_deliveries WHERE identity_id = ?',
+            'DELETE FROM analytics_events WHERE user_id = ?',
+            'DELETE FROM sync_queue WHERE session_id IN (SELECT bundle_id FROM recordings WHERE user_id = ?)',
+            'DELETE FROM clone_training_jobs WHERE user_id = ?',
+            'DELETE FROM oauth_consents WHERE identity_id = ?',
+            'DELETE FROM oauth_codes WHERE identity_id = ?',
+            'DELETE FROM oauth_device_codes WHERE identity_id = ?',
+            'DELETE FROM secretary_consents WHERE owner_identity_id = ? OR bot_identity_id = ?',
+            'DELETE FROM pending_provisions WHERE identity_id = ?',
         ];
 
         for (const sql of tables) {
-            try { db.prepare(sql).run(userId); } catch { /* table may not exist */ }
+            try {
+                // secretary_consents takes userId twice (owner OR bot side)
+                if (sql.includes('? OR bot_identity_id')) db.prepare(sql).run(userId, userId);
+                else db.prepare(sql).run(userId);
+            } catch { /* table may not exist on older migrations */ }
         }
 
         // Delete the user record last
         db.prepare('DELETE FROM users WHERE id = ?').run(userId);
 
-        logAuditEvent('account_self_deleted', userId, { email: user.email }, req.ip, req.get('user-agent'));
+        // P0-5: Audit the deletion WITHOUT the user's own identity_id, so the
+        // right-to-erasure invariant ("no rows matching deleted user id")
+        // holds while we still keep a trail that the action happened.
+        // Email is hashed for the audit entry so it stays traceable across a
+        // support case without storing the plaintext address.
+        const emailHash = crypto.createHash('sha256').update(user.email).digest('hex').slice(0, 16);
+        logAuditEvent('account_self_deleted', null, { emailHash }, req.ip, req.get('user-agent'));
 
         console.log(`🗑️  Account self-deleted: ${user.email} (${userId.slice(0, 8)}...)`);
 
