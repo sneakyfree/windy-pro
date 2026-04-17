@@ -298,6 +298,29 @@ router.post('/eternitas/webhook', botWebhookLimiter, (req: Request, res: Respons
     if (!event || !passportNumber) {
       return res.status(400).json({ error: 'event and passportNumber are required' });
     }
+    // P1-6: field-level validation so a signature-verified but malformed
+    // payload can't crash downstream handlers (e.g. `passport.registered`
+    // with a NULL agentName previously hit an INSERT that violates
+    // users.name NOT NULL and bubbled a 500).
+    if (typeof event !== 'string' || typeof passportNumber !== 'string') {
+      return res.status(400).json({ error: 'event and passportNumber must be strings' });
+    }
+    if (!/^ET-[A-Z0-9]{4,32}$/i.test(passportNumber)) {
+      return res.status(400).json({ error: 'passportNumber must match ET-XXXX format' });
+    }
+    if (event === 'passport.registered') {
+      if (typeof agentName !== 'string' || !agentName.trim()) {
+        return res.status(400).json({ error: 'agentName is required for passport.registered' });
+      }
+      if (operatorEmail !== undefined && typeof operatorEmail !== 'string') {
+        return res.status(400).json({ error: 'operatorEmail must be a string when provided' });
+      }
+    }
+    if (event === 'trust_updated') {
+      if (typeof trustScore !== 'number' || !(trustScore >= 0 && trustScore <= 1)) {
+        return res.status(400).json({ error: 'trustScore must be a number between 0 and 1' });
+      }
+    }
 
     // Handle trust_updated event separately
     if (event === 'trust_updated') {
