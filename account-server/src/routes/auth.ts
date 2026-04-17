@@ -74,6 +74,22 @@ const forgotPasswordLimiter = rateLimit({
     legacyHeaders: false,
 });
 
+// PR1 follow-up (Wave 7 P1-9): outer cap on /verify-email itself.
+// The OTP row already caps wrong guesses at 5 per code, but an attacker
+// with a stolen session token can burn through codes by calling
+// /send-verification (3/hr per user) and getting 5 attempts each time —
+// 15 guesses/hr against a 6-digit code (10^6 entropy). Still far from
+// feasible, but a per-user hourly cap on verify-email itself removes
+// the amplification.
+const verifyEmailLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: process.env.NODE_ENV === 'test' ? 10000 : 30,
+    keyGenerator: (req) => (req as AuthRequest).user?.userId || req.ip || 'unknown',
+    message: { error: 'Too many verification attempts. Try again in an hour.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 // ─── PR1 helpers — email verification OTP lifecycle ───
 //
 // Stored as sha256(code) so the raw code is never persisted. 6-digit numeric
@@ -848,7 +864,7 @@ router.post('/send-verification', authenticateToken, sendVerificationLimiter, as
 // 'email_verification' otp_code for the authed user. On success, marks
 // users.email_verified=1 and consumes the code.
 
-router.post('/verify-email', authenticateToken, validate(VerifyEmailRequestSchema), (req: Request, res: Response) => {
+router.post('/verify-email', authenticateToken, verifyEmailLimiter, validate(VerifyEmailRequestSchema), (req: Request, res: Response) => {
     try {
         const userId = (req as AuthRequest).user.userId;
         const { code } = req.body;
