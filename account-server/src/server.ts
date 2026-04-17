@@ -507,8 +507,10 @@ if (process.env.NODE_ENV !== 'test') {
     startRetryWorker();
 
     // PR4: Start identity webhook fan-out worker (polls webhook_deliveries every 30s)
-    const { startWebhookWorker } = require('./services/webhook-bus');
+    // P1-10: Start hourly cleanup of terminal webhook_deliveries rows.
+    const { startWebhookWorker, startWebhookCleanup } = require('./services/webhook-bus');
     startWebhookWorker();
+    startWebhookCleanup();
 
     // Register with Eternitas as a platform (idempotent — skips if already registered)
     const { registerWithEternitas } = require('./services/eternitas-register');

@@ -248,6 +248,77 @@ export async function attemptDelivery(deliveryId: string): Promise<AttemptResult
   return { status: 'retry', httpStatus, error };
 }
 
+// ─── Cleanup ─────────────────────────────────────────────────────
+
+/**
+ * Retention defaults. Delivered rows are kept long enough for the usual
+ * "did the downstream consumer actually get event X for user Y?" audit
+ * question; dead-lettered rows are kept longer so on-call has time to
+ * notice a broken integration and replay.
+ */
+export const DEFAULT_DELIVERED_RETENTION_DAYS = 30;
+export const DEFAULT_DEAD_RETENTION_DAYS = 90;
+
+export interface PruneResult {
+  deliveredPurged: number;
+  deadPurged: number;
+}
+
+/**
+ * Delete webhook_deliveries rows that have aged out of their retention
+ * window. Only terminal rows are touched — anything still in flight
+ * (delivered_at IS NULL AND dead_lettered_at IS NULL) is left alone so
+ * the retry worker keeps owning it.
+ */
+export function pruneWebhookDeliveries(opts?: {
+  deliveredOlderThanDays?: number;
+  deadOlderThanDays?: number;
+}): PruneResult {
+  const db = getDb();
+  const deliveredDays = opts?.deliveredOlderThanDays ?? DEFAULT_DELIVERED_RETENTION_DAYS;
+  const deadDays = opts?.deadOlderThanDays ?? DEFAULT_DEAD_RETENTION_DAYS;
+  const now = Date.now();
+  const deliveredCutoff = new Date(now - deliveredDays * 24 * 60 * 60 * 1000).toISOString();
+  const deadCutoff = new Date(now - deadDays * 24 * 60 * 60 * 1000).toISOString();
+
+  const delivered = db.prepare(
+    'DELETE FROM webhook_deliveries WHERE delivered_at IS NOT NULL AND delivered_at < ?',
+  ).run(deliveredCutoff);
+  const dead = db.prepare(
+    'DELETE FROM webhook_deliveries WHERE dead_lettered_at IS NOT NULL AND dead_lettered_at < ?',
+  ).run(deadCutoff);
+
+  return { deliveredPurged: delivered.changes, deadPurged: dead.changes };
+}
+
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+export function startWebhookCleanup(intervalMs: number = CLEANUP_INTERVAL_MS): void {
+  if (cleanupTimer) return;
+  cleanupTimer = setInterval(() => {
+    try {
+      const r = pruneWebhookDeliveries();
+      if (r.deliveredPurged > 0 || r.deadPurged > 0) {
+        console.log(
+          `[webhook-bus] pruned ${r.deliveredPurged} delivered, ${r.deadPurged} dead-lettered rows`,
+        );
+      }
+    } catch (e: any) {
+      console.error('[webhook-bus] cleanup error:', e?.message || e);
+    }
+  }, intervalMs);
+  cleanupTimer.unref();
+  console.log('[webhook-bus] cleanup started (every 1h)');
+}
+
+export function stopWebhookCleanup(): void {
+  if (cleanupTimer) {
+    clearInterval(cleanupTimer);
+    cleanupTimer = null;
+  }
+}
+
 // ─── Worker ──────────────────────────────────────────────────────
 
 const WORKER_INTERVAL_MS = 30 * 1000;
