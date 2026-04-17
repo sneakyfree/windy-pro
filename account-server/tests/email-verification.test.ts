@@ -21,6 +21,11 @@ process.env.JWT_SECRET = 'test-secret-for-jest';
 import { app } from '../src/server';
 import { getDb } from '../src/db/schema';
 
+// Login-gate cases register users (bcrypt) and the brute-force test runs
+// 5 verifies in a row. Under heavier full-suite load these can exceed the
+// 5s default — matches password-reset / mfa-totp / webhook-fanout.
+jest.setTimeout(30000);
+
 function uniqueEmail(label: string): string {
   return `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 }
