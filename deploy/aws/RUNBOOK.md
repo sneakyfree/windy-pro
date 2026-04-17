@@ -251,6 +251,7 @@ Terraform auto-generates and stores these in `<runtime_secrets_arn>` as a single
 | `DATABASE_URL` | Terraform (RDS endpoint + password) | Postgres connection |
 | `REDIS_URL` | Terraform (ElastiCache endpoint) | Redis for token blacklist / rate limits |
 | `JWT_SECRET` | Terraform (`random_password` 64 chars) | HS256 fallback when RS256 not used |
+| `JWT_PRIVATE_KEY` | Terraform (`tls_private_key` RSA 2048) | **P0-4**: RS256 signing key, inline PEM. `jwks.ts` parses at boot; `/.well-known/jwks.json` publishes the derived public key. Every ecosystem consumer verifies tokens via this JWKS. Without it, JWKS is empty → all tokens rejected. |
 | `MFA_ENCRYPTION_KEY` | Terraform (`random_password` 64 hex chars) | AES-256-GCM key for `mfa_secrets` |
 | `WINDY_MAIL_WEBHOOK_SECRET` | Terraform | HMAC secret for Windy Mail fan-out |
 | `WINDY_CHAT_WEBHOOK_SECRET` | Terraform | HMAC secret for Windy Chat fan-out |

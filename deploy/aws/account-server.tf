@@ -31,6 +31,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.70"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
 
   # Uncomment and configure before first apply — don't keep state local in prod.
@@ -463,6 +467,21 @@ resource "random_password" "webhook_secret" {
   numeric  = true
 }
 
+# P0-4: RSA keypair for RS256 JWT signing. Without this, /well-known/jwks.json
+# returns empty and every ecosystem consumer that verifies via JWKS rejects
+# our tokens. We generate the key IN Terraform and ship it via Secrets
+# Manager as JWT_PRIVATE_KEY (the inline-PEM env var strategy added to
+# src/jwks.ts). PEM lives only in state + Secrets Manager, never on the ECS
+# host filesystem.
+#
+# Rotating: bump the `rotation` count to force Terraform to regenerate.
+# The account-server's JWKS cache will include the new kid after task
+# restart; tokens signed with the old key still verify until they expire.
+resource "tls_private_key" "jwt" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
 locals {
   # All runtime secrets for the account-server. Stored as a single JSON
   # document in Secrets Manager — ECS pulls individual keys via `valueFrom`
@@ -472,6 +491,11 @@ locals {
     REDIS_URL          = "redis://${aws_elasticache_cluster.main.cache_nodes[0].address}:${aws_elasticache_cluster.main.cache_nodes[0].port}"
     JWT_SECRET         = random_password.jwt_secret.result
     MFA_ENCRYPTION_KEY = random_password.mfa_encryption_key.result
+    # Inline PEM — src/jwks.ts strategy 0 parses this (standard PEM with
+    # newlines OR "\n"-escaped single-line). Ships as a Secrets Manager
+    # JSON key so ECS can pull it via the same mechanism as the other
+    # secrets, no extra IAM or volume mount required.
+    JWT_PRIVATE_KEY    = tls_private_key.jwt.private_key_pem
     }, {
     for name, pw in random_password.webhook_secret :
     (name == "eternitas" ? "ETERNITAS_WEBHOOK_SECRET" : "WINDY_${upper(name)}_WEBHOOK_SECRET") => pw.result
@@ -561,9 +585,13 @@ resource "aws_ecs_task_definition" "account_server" {
     essential    = true
     portMappings = [{ containerPort = 8098, protocol = "tcp" }]
     environment = [
-      { name = "NODE_ENV",     value = "production" },
-      { name = "PORT",         value = "8098" },
-      { name = "OIDC_ISSUER",  value = "https://${local.api_fqdn}" },
+      { name = "NODE_ENV",             value = "production" },
+      { name = "PORT",                 value = "8098" },
+      { name = "OIDC_ISSUER",          value = "https://${local.api_fqdn}" },
+      # P0-1: rate limits per-IP require trust proxy behind ALB.
+      { name = "TRUST_PROXY",          value = "1" },
+      # P0-7: without this server refuses to boot.
+      { name = "CORS_ALLOWED_ORIGINS", value = "https://${var.apex_domain},https://${local.api_fqdn}" },
     ]
     secrets = [
       for k in keys(local.runtime_secrets) :
