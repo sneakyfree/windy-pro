@@ -109,4 +109,34 @@ describe('POST /api/v1/identity/webhooks/eternitas — signature enforcement', (
     expect(res.status).toBeLessThan(500);
     expect(res.status).not.toBe(401);
   });
+
+  it('P1-15: rejects a replayed timestamp >5 min old', async () => {
+    const oldTs = Date.now() - 10 * 60 * 1000; // 10 min ago (ms)
+    const body = { event: 'passport.revoked', passport_number: 'ET-NOTFOUND', timestamp: oldTs };
+    const res = await request(app)
+      .post('/api/v1/identity/webhooks/eternitas')
+      .set('X-Eternitas-Signature', signBody(body))
+      .send(body);
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/window|timestamp/i);
+  });
+
+  it('P1-15: accepts timestamp in seconds (not ms)', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const body = { event: 'passport.revoked', passport_number: 'ET-NOTFOUND', timestamp: nowSec };
+    const res = await request(app)
+      .post('/api/v1/identity/webhooks/eternitas')
+      .set('X-Eternitas-Signature', signBody(body))
+      .send(body);
+    expect(res.status).not.toBe(401);
+  });
+
+  it('P1-15: webhook with NO timestamp still allowed (back-compat)', async () => {
+    const body = { event: 'passport.revoked', passport_number: 'ET-NOTFOUND' };
+    const res = await request(app)
+      .post('/api/v1/identity/webhooks/eternitas')
+      .set('X-Eternitas-Signature', signBody(body))
+      .send(body);
+    expect(res.status).not.toBe(401);
+  });
 });
