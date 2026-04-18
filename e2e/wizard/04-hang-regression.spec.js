@@ -62,6 +62,9 @@ test('preload exposes every IPC the renderer relies on (signature contract)', as
     expect(exposed).toEqual([
       'complete',
       'createFreeAccount',
+      // Wave 8: signup ribbon reads the just-provisioned identity so the
+      // Complete screen can render "Your Windy Ecosystem" + ❄ passport.
+      'getIdentity',
       'install',
       'login',
       'micStatus',
