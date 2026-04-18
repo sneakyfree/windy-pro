@@ -57,49 +57,114 @@ export function chooseProvider(tier: string | null | undefined): ProviderChoice 
 
 // ─── HMAC signing for service-to-service calls ───────────────
 //
-// Canonical string: `${timestamp}.${method}.${path}.${sha256(body)}`
-// The gateway computes the same string and compares signatures in constant
-// time. Replay is bounded by a ±5 minute timestamp window.
+// Headers:   X-Windy-Signature: sha256=<hex>
+//            X-Windy-Timestamp: <unix seconds>
+// Canonical: `${timestamp}.${method}.${path}.${sha256(canonical_body)}`
+//   where canonical_body is the payload serialized with sorted keys and
+//   minimal separators — matching python's
+//   json.dumps(payload, separators=(",", ":"), sort_keys=True).
+// Replay is bounded by a ±5 minute timestamp window.
+//
+// Both header names are the ecosystem-wide "X-Windy-*" convention (the
+// same scheme the outbound webhook bus uses). Sort-keys canonicalization
+// is load-bearing because Express's body-parser discards the raw bytes
+// by the time our handler runs — we re-canonicalize on this side and
+// clients must canonicalize the same way when they sign.
 export interface SignedRequest {
     timestamp: string;   // Unix seconds as string
-    signature: string;   // hex(hmac_sha256(secret, canonical))
+    signature: string;   // "sha256=<hex>" — ready to put in the header
+    canonicalBody: string; // the bytes that were actually signed
+}
+
+/**
+ * Canonical JSON: recursively sorts object keys and emits minimal
+ * separators (`,` and `:`). Matches python's
+ * `json.dumps(x, separators=(",", ":"), sort_keys=True)` byte-for-byte
+ * for any value the two languages share (strings, numbers, booleans,
+ * null, arrays, plain objects). Non-finite numbers throw like
+ * JSON.stringify would.
+ */
+export function canonicalJsonStringify(value: unknown): string {
+    if (value === null) return 'null';
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
+        return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+        return '[' + value.map(canonicalJsonStringify).join(',') + ']';
+    }
+    if (typeof value === 'object') {
+        const obj = value as Record<string, unknown>;
+        const keys = Object.keys(obj).sort();
+        return '{' + keys.map(k =>
+            JSON.stringify(k) + ':' + canonicalJsonStringify(obj[k]),
+        ).join(',') + '}';
+    }
+    // undefined / function / symbol — match JSON.stringify's "silently drop"
+    // behavior inside objects; at top level we return 'null' so the HMAC
+    // is still deterministic.
+    return 'null';
+}
+
+/**
+ * Strip the "sha256=" prefix from a header value. Accepts either the
+ * prefixed form (preferred) or a bare hex signature (for back-compat
+ * during the rename rollout).
+ */
+function parseSignatureHeader(raw: string): string | null {
+    if (!raw) return null;
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('sha256=')) return trimmed.slice(7);
+    // Bare hex — accept so an in-flight client that hasn't adopted the
+    // prefix yet doesn't silently 401. Reject anything non-hex.
+    if (/^[a-f0-9]+$/i.test(trimmed)) return trimmed;
+    return null;
 }
 
 export function signBrokerRequest(
     method: string,
     path: string,
-    body: string,
+    bodyOrPayload: string | Record<string, unknown> | unknown[] | null,
     secret = config.BROKER_HMAC_SECRET,
     timestamp = Math.floor(Date.now() / 1000).toString(),
 ): SignedRequest {
     if (!secret) throw new Error('BROKER_HMAC_SECRET is not configured');
-    const bodyHash = crypto.createHash('sha256').update(body).digest('hex');
+    // Accept either a pre-canonicalized string (caller is already in
+    // charge of sort-keys) or a parsed payload we canonicalize here.
+    const canonicalBody = typeof bodyOrPayload === 'string'
+        ? bodyOrPayload
+        : canonicalJsonStringify(bodyOrPayload ?? {});
+    const bodyHash = crypto.createHash('sha256').update(canonicalBody).digest('hex');
     const canonical = `${timestamp}.${method.toUpperCase()}.${path}.${bodyHash}`;
-    const signature = crypto.createHmac('sha256', secret).update(canonical).digest('hex');
-    return { timestamp, signature };
+    const hex = crypto.createHmac('sha256', secret).update(canonical).digest('hex');
+    return { timestamp, signature: `sha256=${hex}`, canonicalBody };
 }
 
 export function verifyBrokerSignature(
     method: string,
     path: string,
-    body: string,
+    payload: unknown,
     timestamp: string,
-    signature: string,
+    signatureHeader: string,
     secret = config.BROKER_HMAC_SECRET,
     nowSec = Math.floor(Date.now() / 1000),
 ): { ok: true } | { ok: false; reason: string } {
     if (!secret) return { ok: false, reason: 'broker_secret_not_configured' };
-    if (!timestamp || !signature) return { ok: false, reason: 'missing_sig_headers' };
+    if (!timestamp || !signatureHeader) return { ok: false, reason: 'missing_sig_headers' };
     const ts = parseInt(timestamp, 10);
     if (!Number.isFinite(ts)) return { ok: false, reason: 'bad_timestamp' };
     if (Math.abs(nowSec - ts) > 300) return { ok: false, reason: 'stale_timestamp' };
 
-    const bodyHash = crypto.createHash('sha256').update(body).digest('hex');
+    const providedHex = parseSignatureHeader(signatureHeader);
+    if (!providedHex) return { ok: false, reason: 'bad_signature' };
+
+    const canonicalBody = canonicalJsonStringify(payload ?? {});
+    const bodyHash = crypto.createHash('sha256').update(canonicalBody).digest('hex');
     const canonical = `${timestamp}.${method.toUpperCase()}.${path}.${bodyHash}`;
-    const expected = crypto.createHmac('sha256', secret).update(canonical).digest('hex');
-    const a = Buffer.from(expected);
-    const b = Buffer.from(signature);
-    if (a.length !== b.length) return { ok: false, reason: 'bad_signature' };
+    const expectedHex = crypto.createHmac('sha256', secret).update(canonical).digest('hex');
+
+    const a = Buffer.from(expectedHex, 'hex');
+    const b = Buffer.from(providedHex, 'hex');
+    if (a.length === 0 || a.length !== b.length) return { ok: false, reason: 'bad_signature' };
     if (!crypto.timingSafeEqual(a, b)) return { ok: false, reason: 'bad_signature' };
     return { ok: true };
 }

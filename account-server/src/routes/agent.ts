@@ -60,17 +60,19 @@ const hatchLimiter = makeRateLimiter('agent-hatch', {
 // provider/model chosen by plan tier.
 router.post('/credentials/issue', issueLimiter, async (req: Request, res: Response) => {
     try {
-        const timestamp = (req.header('x-broker-timestamp') || '').trim();
-        const signature = (req.header('x-broker-signature') || '').trim();
-        // Sign the exact raw body the client sent. We re-stringify here since
-        // express.json() has already parsed it; callers must use canonical
-        // JSON.stringify with no extra whitespace (same as Stripe-style).
-        const bodyStr = JSON.stringify(req.body ?? {});
+        // Ecosystem-wide "X-Windy-*" convention — matches windy-agent's
+        // outbound signing and our own outbound webhook bus.
+        const timestamp = (req.header('x-windy-timestamp') || '').trim();
+        const signature = (req.header('x-windy-signature') || '').trim();
 
+        // Pass the parsed body. verifyBrokerSignature re-canonicalizes
+        // with sorted keys + minimal separators, matching the serialize
+        // side that windy-agent uses (python json.dumps(..., sort_keys=
+        // True, separators=(",", ":"))).
         const check = verifyBrokerSignature(
             'POST',
             '/api/v1/agent/credentials/issue',
-            bodyStr,
+            req.body ?? {},
             timestamp,
             signature,
         );

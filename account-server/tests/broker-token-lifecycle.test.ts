@@ -28,6 +28,8 @@ import {
     verifyBrokerToken,
     meterBrokerUsage,
     signBrokerRequest,
+    verifyBrokerSignature,
+    canonicalJsonStringify,
     revokeBrokerTokensForPassport,
     chooseProvider,
 } from '../src/services/credential-broker';
@@ -123,6 +125,60 @@ describe('Wave 8 — broker token lifecycle', () => {
     });
 });
 
+describe('Wave 8 — canonical JSON serialization', () => {
+    it('sorts object keys alphabetically at every level', () => {
+        const out = canonicalJsonStringify({ b: 1, a: 2, c: { z: 1, y: 2 } });
+        expect(out).toBe('{"a":2,"b":1,"c":{"y":2,"z":1}}');
+    });
+    it('preserves array element order', () => {
+        expect(canonicalJsonStringify([{ b: 1, a: 2 }, 3])).toBe('[{"a":2,"b":1},3]');
+    });
+    it('uses minimal separators (no spaces)', () => {
+        expect(canonicalJsonStringify({ a: [1, 2], b: null })).toBe('{"a":[1,2],"b":null}');
+    });
+    it('matches python json.dumps(payload, separators=(",", ":"), sort_keys=True) byte-for-byte', () => {
+        // Reference string produced by: python3 -c 'import json; print(json.dumps({"windy_identity_id":"u-1","duration_seconds":600,"scope":"llm:chat","nested":{"z":1,"a":2}}, separators=(",", ":"), sort_keys=True))'
+        const payload = {
+            windy_identity_id: 'u-1',
+            duration_seconds: 600,
+            scope: 'llm:chat',
+            nested: { z: 1, a: 2 },
+        };
+        expect(canonicalJsonStringify(payload)).toBe(
+            '{"duration_seconds":600,"nested":{"a":2,"z":1},"scope":"llm:chat","windy_identity_id":"u-1"}',
+        );
+    });
+});
+
+describe('Wave 8 — signature verify / sort-keys canonicalization', () => {
+    it('accepts a signature over the sort-keys canonical body regardless of send-order', () => {
+        const payload = { windy_identity_id: 'abc', duration_seconds: 600, scope: 'llm:chat' };
+        const { timestamp, signature } = signBrokerRequest('POST', '/x', payload);
+        // Re-order keys on the "received" side — verify must still pass
+        // because both sides re-canonicalize the parsed object.
+        const reordered = { scope: 'llm:chat', duration_seconds: 600, windy_identity_id: 'abc' };
+        const r = verifyBrokerSignature('POST', '/x', reordered, timestamp, signature);
+        expect(r.ok).toBe(true);
+    });
+    it('rejects a signature computed over a different payload', () => {
+        const { timestamp, signature } = signBrokerRequest('POST', '/x', { a: 1 });
+        const r = verifyBrokerSignature('POST', '/x', { a: 2 }, timestamp, signature);
+        expect(r.ok).toBe(false);
+    });
+    it('accepts the header value with "sha256=" prefix', () => {
+        const payload = { windy_identity_id: 'abc' };
+        const { timestamp, signature } = signBrokerRequest('POST', '/x', payload);
+        expect(signature).toMatch(/^sha256=[a-f0-9]+$/);
+        expect(verifyBrokerSignature('POST', '/x', payload, timestamp, signature).ok).toBe(true);
+    });
+    it('accepts a bare-hex signature (back-compat for in-flight clients)', () => {
+        const payload = { a: 1 };
+        const { timestamp, signature } = signBrokerRequest('POST', '/x', payload);
+        const bare = signature.replace(/^sha256=/, '');
+        expect(verifyBrokerSignature('POST', '/x', payload, timestamp, bare).ok).toBe(true);
+    });
+});
+
 describe('Wave 8 — POST /api/v1/agent/credentials/issue HMAC gate', () => {
     it('rejects a request with NO signature (401)', async () => {
         const user = makeUser('free');
@@ -137,8 +193,8 @@ describe('Wave 8 — POST /api/v1/agent/credentials/issue HMAC gate', () => {
         const body = { windy_identity_id: user.windy_identity_id };
         const res = await request(app)
             .post('/api/v1/agent/credentials/issue')
-            .set('X-Broker-Timestamp', Math.floor(Date.now() / 1000).toString())
-            .set('X-Broker-Signature', 'deadbeef')
+            .set('X-Windy-Timestamp', Math.floor(Date.now() / 1000).toString())
+            .set('X-Windy-Signature', 'sha256=deadbeef')
             .send(body);
         expect(res.status).toBe(401);
     });
@@ -147,27 +203,46 @@ describe('Wave 8 — POST /api/v1/agent/credentials/issue HMAC gate', () => {
         const user = makeUser('free');
         const body = { windy_identity_id: user.windy_identity_id };
         const oldTs = (Math.floor(Date.now() / 1000) - 600).toString();
-        const { signature } = signBrokerRequest('POST', '/api/v1/agent/credentials/issue', JSON.stringify(body), undefined, oldTs);
+        const { signature } = signBrokerRequest('POST', '/api/v1/agent/credentials/issue', body, undefined, oldTs);
         const res = await request(app)
             .post('/api/v1/agent/credentials/issue')
-            .set('X-Broker-Timestamp', oldTs)
-            .set('X-Broker-Signature', signature)
+            .set('X-Windy-Timestamp', oldTs)
+            .set('X-Windy-Signature', signature)
             .send(body);
         expect(res.status).toBe(401);
     });
 
-    it('accepts a correctly-signed request and returns a token', async () => {
-        const user = makeUser('pro');
-        const body = { windy_identity_id: user.windy_identity_id, duration_seconds: 600 };
+    it('rejects the old X-Broker-* header names (401)', async () => {
+        // The rename is the whole point of this fix. If a caller is still
+        // sending the legacy headers, the verify must 401 rather than
+        // silently accepting them.
+        const user = makeUser('free');
+        const body = { windy_identity_id: user.windy_identity_id };
         const { timestamp, signature } = signBrokerRequest(
-            'POST',
-            '/api/v1/agent/credentials/issue',
-            JSON.stringify(body),
+            'POST', '/api/v1/agent/credentials/issue', body,
         );
         const res = await request(app)
             .post('/api/v1/agent/credentials/issue')
             .set('X-Broker-Timestamp', timestamp)
             .set('X-Broker-Signature', signature)
+            .send(body);
+        expect(res.status).toBe(401);
+    });
+
+    it('accepts a correctly-signed request with X-Windy-* headers and returns a token', async () => {
+        const user = makeUser('pro');
+        const body = { windy_identity_id: user.windy_identity_id, duration_seconds: 600 };
+        const { timestamp, signature } = signBrokerRequest(
+            'POST',
+            '/api/v1/agent/credentials/issue',
+            body,
+        );
+        // Header must carry the "sha256=" prefix by default.
+        expect(signature).toMatch(/^sha256=[a-f0-9]{64}$/);
+        const res = await request(app)
+            .post('/api/v1/agent/credentials/issue')
+            .set('X-Windy-Timestamp', timestamp)
+            .set('X-Windy-Signature', signature)
             .send(body);
         expect(res.status).toBe(200);
         expect(res.body.broker_token).toMatch(/^bk_live_/);
@@ -175,15 +250,37 @@ describe('Wave 8 — POST /api/v1/agent/credentials/issue HMAC gate', () => {
         expect(res.body.expires_at).toBeTruthy();
     });
 
-    it('rejects a signed request for an unknown identity (404)', async () => {
-        const body = { windy_identity_id: crypto.randomUUID() };
+    it('accepts a signature computed over the sort-keys canonical body when the client sends keys in arbitrary JSON order', async () => {
+        // This mimics windy-agent's python side: it signs
+        // json.dumps(payload, separators=(",", ":"), sort_keys=True) and
+        // sends the request. Supertest will serialize our unsorted object
+        // in insertion order, but on the server side express.json()
+        // parses to an object and we re-canonicalize with sort_keys.
+        const user = makeUser('starter');
+        const body = { scope: 'llm:chat', windy_identity_id: user.windy_identity_id, duration_seconds: 900 };
         const { timestamp, signature } = signBrokerRequest(
-            'POST', '/api/v1/agent/credentials/issue', JSON.stringify(body),
+            'POST',
+            '/api/v1/agent/credentials/issue',
+            body, // signed via canonicalJsonStringify (sort_keys)
         );
         const res = await request(app)
             .post('/api/v1/agent/credentials/issue')
-            .set('X-Broker-Timestamp', timestamp)
-            .set('X-Broker-Signature', signature)
+            .set('X-Windy-Timestamp', timestamp)
+            .set('X-Windy-Signature', signature)
+            .send(body);
+        expect(res.status).toBe(200);
+        expect(res.body.provider).toBe('openai');
+    });
+
+    it('rejects a signed request for an unknown identity (404)', async () => {
+        const body = { windy_identity_id: crypto.randomUUID() };
+        const { timestamp, signature } = signBrokerRequest(
+            'POST', '/api/v1/agent/credentials/issue', body,
+        );
+        const res = await request(app)
+            .post('/api/v1/agent/credentials/issue')
+            .set('X-Windy-Timestamp', timestamp)
+            .set('X-Windy-Signature', signature)
             .send(body);
         expect(res.status).toBe(404);
     });
