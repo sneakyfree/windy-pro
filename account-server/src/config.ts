@@ -39,7 +39,7 @@ export const config = {
     REFRESH_EXPIRY: '30d' as const,
     MAX_DEVICES: 5,
     BCRYPT_ROUNDS: 12, // SEC-L2: Increased from 10 to meet modern recommendations
-    DB_PATH: path.join(__dirname, '..', 'accounts.db'),
+    DB_PATH: process.env.DB_PATH || path.join(__dirname, '..', 'accounts.db'),
     GROQ_API_KEY: process.env.GROQ_API_KEY || '',
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
     // File storage
@@ -80,4 +80,17 @@ export const config = {
     // AWS cloud STT failover — GPU instances for heavy transcription workloads
     AWS_STT_ENABLED: process.env.AWS_STT_ENABLED === 'true',
     AWS_STT_ENDPOINT: process.env.AWS_STT_ENDPOINT || '',  // e.g. https://stt.windycloud.ai/api/v1/compute/stt
+    // Wave 8: Managed-credential broker — shared HMAC secret for
+    // service-to-service credential issuance. Any caller of
+    // POST /api/v1/agent/credentials/issue must sign with this.
+    BROKER_HMAC_SECRET: process.env.BROKER_HMAC_SECRET || '',
+    // Wave 8: Provider LLM keys — Pro holds these centrally and hands out
+    // short-lived broker tokens; the agent never sees them directly.
+    OPENAI_KEY: process.env.OPENAI_KEY || process.env.OPENAI_API_KEY || '',
+    ANTHROPIC_KEY: process.env.ANTHROPIC_KEY || process.env.ANTHROPIC_API_KEY || '',
+    GEMINI_KEY: process.env.GEMINI_KEY || process.env.GOOGLE_API_KEY || '',
+    // Wave 8: Windy Fly (windy-agent) remote hatch — Pro calls /hatch/remote
+    // on the agent host to spin up the user's managed agent.
+    WINDY_AGENT_URL: process.env.WINDY_AGENT_URL || 'http://localhost:3000',
+    WINDY_AGENT_SERVICE_TOKEN: process.env.WINDY_AGENT_SERVICE_TOKEN || '',
 } as const;

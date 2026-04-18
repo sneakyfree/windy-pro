@@ -14,6 +14,7 @@
 import { getDb } from '../db/schema';
 import { logAuditEvent } from '../identity-service';
 import { config } from '../config';
+import { revokeBrokerTokensForPassport } from './credential-broker';
 import crypto from 'crypto';
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -299,6 +300,13 @@ export async function cascadeRevocation(passportNumber: string): Promise<void> {
     db.prepare(
         "UPDATE bot_api_keys SET status = 'revoked' WHERE identity_id = ?",
     ).run(botUserId);
+
+    // Wave 8: Revoke all managed-credential broker tokens issued against
+    // this passport. Fire-and-forget — bcrypt hash of the reason makes
+    // this path do real CPU work and we don't want to block the webhook.
+    revokeBrokerTokensForPassport(passportNumber).catch(err =>
+        console.warn('[Ecosystem] broker revocation failed:', err?.message || err),
+    );
 
     // Log
     logAuditEvent('product_deprovision', botUserId, {

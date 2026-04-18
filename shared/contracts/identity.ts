@@ -190,7 +190,11 @@ export type IdentityAuditEvent =
   // Wave 1 — PR4 (webhook fan-out)
   | 'webhook_delivered'
   | 'webhook_failed'
-  | 'webhook_dead_lettered';
+  | 'webhook_dead_lettered'
+  // Wave 8 — Grandma Ribbon (managed-credential broker + Pro-hosted hatch)
+  | 'broker_token_issue'
+  | 'broker_token_revoke'
+  | 'agent_hatch_complete';
 
 /** Audit log entry */
 export interface IdentityAuditEntry {
