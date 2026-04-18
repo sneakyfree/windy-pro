@@ -342,3 +342,151 @@ If anything stays red after 30 min of investigation, **roll back**:
 aws ecs update-service --cluster $CLUSTER --service $SVC \
   --task-definition <previous-revision-arn>
 ```
+
+---
+
+## Wave 7 update — 2026-04-18
+
+The sections below were added after the Wave 7 gap-analysis sweep
+(PRs #14–#38). Run them on top of the existing §1–§12 checks; they do
+NOT replace any prior step.
+
+### W7.1 New / now-required env vars
+
+Every value below **must** be present in Secrets Manager or the task
+env before the service will serve traffic. Wave 7 converted several
+previously-soft defaults into hard-fails so production can't silently
+run in an insecure state.
+
+| Env var | Mandatory in prod? | Behaviour if missing | Wave 7 PR |
+|---|---|---|---|
+| `TRUST_PROXY` | **yes** | server throws at boot | P0-1 #15 |
+| `CORS_ALLOWED_ORIGINS` | **yes** | server throws at boot | P0-7 #15 |
+| `JWT_PRIVATE_KEY` (PEM, `\n`-escaped) | **yes** for RS256 | falls back to HS256 (worse key hygiene) | P0-4 #21 |
+| `MFA_ENCRYPTION_KEY` (64-char hex) | **yes** | server throws at boot | P1-1 #24 |
+| `ETERNITAS_WEBHOOK_SECRET` | **yes** | webhook returns 503 per request | P0-2 #16 |
+| `STRIPE_WEBHOOK_SECRET` | **yes** for billing | webhook returns 503 per request | P1-13 #31 |
+| `REDIS_URL` | **strongly recommended** behind `desired_count > 1` | rate limiters fall back to per-task MemoryStore → attacker multiplies quota by task count | P1-2 #34 |
+
+Verify all are present:
+```sh
+aws secretsmanager get-secret-value --secret-id $SECRET_ARN \
+  --query SecretString --output text | jq 'keys[]' \
+  | sort -u > /tmp/have.txt
+cat <<'EOF' | sort -u > /tmp/want.txt
+DATABASE_URL
+REDIS_URL
+JWT_SECRET
+JWT_PRIVATE_KEY
+MFA_ENCRYPTION_KEY
+ETERNITAS_WEBHOOK_SECRET
+STRIPE_WEBHOOK_SECRET
+WINDY_MAIL_WEBHOOK_SECRET
+WINDY_CHAT_WEBHOOK_SECRET
+WINDY_CLOUD_WEBHOOK_SECRET
+WINDY_CLONE_WEBHOOK_SECRET
+EOF
+comm -23 /tmp/want.txt /tmp/have.txt   # lists anything missing
+```
+
+### W7.2 Webhook secrets — one per (producer, receiver) pair
+
+Every identity-hub → product-service webhook is HMAC-SHA256-signed
+with a secret that ONLY the producer and the receiver share. A leak at
+one receiver must not let an attacker forge events to another, so
+**don't reuse secrets across receivers.** Mint with:
+
+```sh
+openssl rand -hex 32
+```
+
+Load into Secrets Manager under its canonical name (the account-server
+reads these — see `src/services/webhook-bus.ts:50`):
+
+- `WINDY_MAIL_WEBHOOK_SECRET`   (account-server → windy-mail)
+- `WINDY_CHAT_WEBHOOK_SECRET`   (account-server → windy-chat)
+- `WINDY_CLOUD_WEBHOOK_SECRET`  (account-server → windy-cloud)
+- `WINDY_CLONE_WEBHOOK_SECRET`  (account-server → windy-clone)
+- `ETERNITAS_WEBHOOK_SECRET`    (eternitas → account-server — validates inbound revocations)
+
+The **same** secret value must be loaded into each receiver's own
+config under that service's env var name (owning terminals handle
+their side; coordinate via the ecosystem-contracts channel).
+
+### W7.3 Post-deploy ecosystem smoke
+
+Running the per-service checks in §8 + §9 proves the account-server
+side works. What they don't prove is that the webhook fan-out
+actually lands valid state on every consumer. For that, run the
+end-to-end smoke script:
+
+```sh
+ACCOUNT_SERVER_URL=$API \
+MAIL_URL=https://mail.windyword.ai \
+CHAT_URL=https://chat.windyword.ai \
+CLOUD_URL=https://cloud.windyword.ai \
+ETERNITAS_URL=https://eternitas.windyword.ai \
+bash scripts/launch-smoke-test.sh
+```
+
+☐ W7.3.1 Script exits 0 and the "pass : N" count covers every non-SKIP
+   step. Any FAIL means a receiver failed to pick up a provisioning
+   webhook or failed to revoke on cascade — check
+   `/api/v1/identity/audit?event=webhook_dead_lettered` and the
+   receiver's ingest logs.
+
+### W7.4 Wave 7 behavioural deltas worth knowing
+
+These are live behaviours the deploy inherits from Wave 7 — not
+checklist items per se, but worth noting so on-call doesn't
+mis-diagnose them as regressions:
+
+- `/api/v1/identity/eternitas/webhook` now **rejects** any payload
+  older than 5 minutes or without `agentName` on `passport.registered`
+  (P1-15, P1-6). A delayed retry from Eternitas may 401/400.
+- `/reset-password?token=…` now renders a real HTML form instead of
+  the SPA 404 (P1-14). Browser follows the password-reset email.
+- Malformed token / `alg:none` now returns **401** not 403 (P2-3).
+  Any downstream client pinned to 403 will silently accept and retry
+  indefinitely; update them.
+- Name field on register is capped at 128 chars (P2-8). Any prior
+  user with >128 chars still works for login; only new registers
+  are rejected.
+- Backup-code bcrypt cost dropped from 8 to 6 for MFA setup latency
+  (P2-1). Unrelated to password hashing, which stays at
+  `config.BCRYPT_ROUNDS`.
+
+### W7.5 Cross-terminal product decisions outstanding
+
+These are tracking items owned by other terminals that weren't fully
+resolved when Wave 7 landed on this repo. Listed for visibility at
+deploy sign-off; the **Blocks deploy?** column reflects our side's
+dependency, not the owning terminal's readiness.
+
+| # | Owner terminal | Topic | Blocks deploy? |
+|---|---|---|---|
+| 1 | windy-mail | `WINDYMAIL_WINDY_ACCOUNT_SERVER_URL` post-merge note from Mail #4 — confirm mail task def has this set | **yes** — receiver can't validate incoming webhooks without it |
+| 2 | windy-chat | Chat send endpoint for smoke step D (`TODO(chat)` in `launch-smoke-test.sh`) | no — step is SKIP until resolved |
+| 3 | windy-chat | Chat fetch endpoint for smoke step F | no — same |
+| 4 | windy-cloud | Generic blob-upload endpoint for smoke step E | no if cloud `/api/v1/upload` exists; yes if we actually need `/archive/code-settings` |
+| 5 | eternitas | Eternitas #21 — bot revocation cascade timing (does revocation land synchronously or via retry?) | **yes** if cascade test in §9 depends on synchronous | 
+| 6 | eternitas | Eternitas #22 — passport registry prod URL | **yes** — `ETERNITAS_URL` in Secrets Manager must resolve |
+| 7 | eternitas | Eternitas #23 — trust-index scoring GA vs. beta flag default | no |
+| 8 | windy-pro-mobile | Mobile P1-6 — deep-link handler for `/reset-password` and `/verify-email` | no — web stub (P1-14) covers the 404 for now |
+| 9 | windy-code | `WINDY_DEV_PASSPORT` scaffold deletion (unblocked by PR #13 `a3eecb4`) | no — we're the unblocker, they ship when ready |
+| 10 | windy-agent | Agent-bus auth contract v2 | no — current contract still works |
+| 11 | ops | Actual `*.windyword.ai` cert issuance for chat/mail/cloud subdomains | **yes** for W7.3.1 to pass against real URLs |
+
+Items marked **yes** must be green before announcing launch. Items
+marked no can ship post-deploy; open a tracking issue per item in
+the ecosystem-contracts channel.
+
+### W7.6 Rollback caveat
+
+A rollback that drops `JWT_PRIVATE_KEY` (revert to pre-P0-4 code)
+will silently fall back to HS256. All JWTs minted during the
+rolled-forward window stay valid (same `JWT_SECRET`) but any
+downstream consumer that pinned RS256 will reject them. Plan a
+coordinated JWKS-rotation before rolling back if Wave 7 has already
+been live long enough for consumers to cache the RS256 key.
+
