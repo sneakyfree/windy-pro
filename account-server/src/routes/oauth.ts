@@ -1139,7 +1139,21 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
     products = rows.length > 0 ? rows.map(r => r.product) : ['windy_pro'];
   } catch { products = ['windy_pro']; }
 
-  const tokenPayload = {
+  // Fetch active Eternitas passport (if any). Included as the
+  // `eternitas_passport` JWT claim so consumers like windy-code's
+  // agentBusServer can verify passport-gated flows without a round-trip
+  // to the passport registry. Only active passports — revoked/suspended
+  // passports MUST NOT produce a claim (that would let a revoked bot
+  // continue to authenticate until the JWT expires).
+  let passportNumber: string | undefined;
+  try {
+    const row = db.prepare(
+      "SELECT passport_number FROM eternitas_passports WHERE identity_id = ? AND status = 'active' LIMIT 1",
+    ).get(identityId) as { passport_number: string } | undefined;
+    passportNumber = row?.passport_number;
+  } catch { /* table may not exist on first-run SQLite bootstrap */ }
+
+  const tokenPayload: Record<string, any> = {
     userId: identityId,
     windyIdentityId: user.windy_identity_id,
     email: user.email,
@@ -1152,6 +1166,7 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
     client_id: clientId,
     scope,
   };
+  if (passportNumber) tokenPayload.eternitas_passport = passportNumber;
 
   let accessToken: string;
   const signingKey = getSigningKey();
