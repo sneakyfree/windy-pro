@@ -1,0 +1,1 @@
+{"status":"ok","service":"windy-pro-account-server","version":"2.0.0","uptime_seconds":10,"database":"ok","jwks":"ok","services":{"windy_chat":"unreachable","windy_mail":"unreachable","windy_cloud":"unreachable","eternitas":"unreachable"},"timestamp":"2026-04-18T23:13:58.875Z"}
