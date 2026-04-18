@@ -292,6 +292,19 @@ class InstallWizard {
       return { success: true, account: { name: account.name, tier: account.tier } };
     });
 
+    // Extended identity view — used by the Complete screen to display
+    // provisioned products (mailbox, chat handle, cloud quota).
+    ipcMain.handle('wizard-identity-me', async () => {
+      try {
+        const identity = await this.accountManager.getIdentity();
+        if (!identity) return { success: false, reason: 'offline', identity: null };
+        if (identity.error) return { success: false, reason: 'error', error: identity.error };
+        return { success: true, identity };
+      } catch (e) {
+        return { success: false, reason: 'exception', error: e.message };
+      }
+    });
+
     // ─── Install ───
     ipcMain.handle('wizard-install', async () => {
       wizardLog('═══════════ wizard-install IPC handler ENTRY ═══════════');

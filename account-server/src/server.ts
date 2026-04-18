@@ -29,6 +29,8 @@ import cloudRoutes from './routes/cloud';
 import identityRoutes from './routes/identity';
 import verificationRoutes from './routes/verification';
 import oauthRoutes, { seedEcosystemClients } from './routes/oauth';
+import deviceApprovalRoutes from './routes/device-approval';
+import passwordResetPageRoutes from './routes/password-reset-page';
 import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
 import flyRoutes from './routes/fly';
@@ -40,12 +42,60 @@ initErrorReporting();
 
 const app = express();
 
-// ─── Middleware ───────────────────────────────────────────────
+// ─── Proxy trust ──────────────────────────────────────────────
+//
+// Required for rate limiting + `req.ip` to reflect the real client when
+// we're behind AWS ALB, CloudFront, nginx, etc. Without this, every
+// request looks like it comes from the load balancer's IP and the
+// per-IP rate-limit becomes a global cap shared across all users.
+//
+// `TRUST_PROXY` env var accepts anything Express understands:
+//   - "true" / "1"         → trust ALL proxies (fine behind a single LB)
+//   - an integer like "1"  → trust N hops
+//   - a CIDR list          → e.g. "10.0.0.0/8, 172.16.0.0/12"
+// Default in dev: `loopback` so localhost testing works. In production
+// we hard-fail instead of silently trusting the wrong thing — requiring
+// operator to set TRUST_PROXY with an explicit value.
+{
+    const raw = process.env.TRUST_PROXY;
+    if (raw && raw.length > 0) {
+        // Accept 'true'/'false', integers, or comma-separated strings.
+        const parsed = raw === 'true' ? true
+            : raw === 'false' ? false
+            : /^\d+$/.test(raw) ? parseInt(raw, 10)
+            : raw.includes(',') ? raw.split(',').map(s => s.trim())
+            : raw;
+        app.set('trust proxy', parsed);
+        console.log(`[server] trust proxy = ${JSON.stringify(parsed)}`);
+    } else if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+            '❌ TRUST_PROXY is required in production. Set it to the number of proxy hops ' +
+            '(e.g. "1" behind a single ALB) or an explicit CIDR list. ' +
+            'Without this, rate limits use the load-balancer IP instead of the real client IP.',
+        );
+    } else {
+        // Dev-only — trust the loopback so supertest / localhost works.
+        app.set('trust proxy', 'loopback');
+    }
+}
 
+// ─── CORS ─────────────────────────────────────────────────────
+//
+// In production, CORS_ALLOWED_ORIGINS MUST be set. A wildcard origin with
+// `credentials: true` creates a CSRF vector for any cookie-authed flow we
+// add later, and silently accepts tokens issued at one origin from every
+// other origin.
+if (process.env.NODE_ENV === 'production' && !process.env.CORS_ALLOWED_ORIGINS) {
+    throw new Error(
+        '❌ CORS_ALLOWED_ORIGINS is required in production. ' +
+        'Set it to a comma-separated list of allowed origins, e.g. ' +
+        '"https://windyword.ai,https://account.windyword.ai".',
+    );
+}
 app.use(cors({
     origin: process.env.CORS_ALLOWED_ORIGINS
         ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim())
-        : true, // Allow all in development; set CORS_ALLOWED_ORIGINS in production
+        : true, // Dev-only: reflect whatever origin the browser presents.
     credentials: true,
 }));
 app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response-time ms'));
@@ -53,8 +103,43 @@ app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response
 // Stripe webhook needs raw body — must come BEFORE express.json()
 app.use('/api/v1/stripe', express.raw({ type: 'application/json' }), stripeRouter);
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false })); // Admin console HTML forms
+// Cap request body at 100 KiB. Everything legitimate (register, verify,
+// login, webhook payloads) fits well under this. An oversized body throws
+// `PayloadTooLargeError` which the error handler below converts to 413.
+const JSON_BODY_LIMIT = '100kb';
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: false, limit: JSON_BODY_LIMIT })); // Admin console HTML forms
+
+// ─── Body-parser error handler ────────────────────────────────
+//
+// Wave 7 P1-4 + P1-5 — malformed JSON and oversized bodies previously
+// surfaced as 500 "Internal server error" because express.json()'s
+// SyntaxError / entity.too.large errors bubbled to the catch-all below.
+// This explicit handler runs BEFORE routes mount, so body-parser errors
+// return well-formed 4xx responses instead.
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err?.type === 'entity.too.large') {
+        return res.status(413).json({
+            error: 'Request body too large',
+            code: 'payload_too_large',
+            limit: JSON_BODY_LIMIT,
+        });
+    }
+    if (err instanceof SyntaxError && 'body' in err) {
+        return res.status(400).json({
+            error: 'Malformed JSON body',
+            code: 'invalid_json',
+        });
+    }
+    if (err?.type === 'entity.parse.failed') {
+        return res.status(400).json({
+            error: 'Could not parse request body',
+            code: 'invalid_body',
+        });
+    }
+    // Not a body-parser error — let the general handler below deal with it.
+    return next(err);
+});
 
 // ─── Static Website ──────────────────────────────────────────
 // Serve the Windy Pro landing page and web app from the web dist folder
@@ -103,15 +188,39 @@ app.use('/api/v1/identity/verify', verificationRoutes);
 // OAuth2 / SSO (Phase 5 — "Sign in with Windy")
 app.use('/api/v1/oauth', oauthRoutes);
 
+// Top-level device-code approval page (GET /device, POST /device/approve).
+// Mobile shows "Visit windyword.ai/device" — this is the operator UI.
+app.use('/', deviceApprovalRoutes);
+
+// P1-14: /reset-password page so the email link from forgot-password
+// actually lands on a working form instead of the SPA's 404 wildcard.
+app.use('/', passwordResetPageRoutes);
+
+// JWKS + OIDC-discovery rate limit — Wave 7 P1-7. Both endpoints are cheap
+// but unauthenticated. Public CDN fronts would normally absorb abuse; lacking
+// one, a naive loop hitting these at 10k rps can still fill the event loop.
+// 120/min per client is generous for legitimate JWKS clients (which cache for
+// 1 hour via our Cache-Control header) and enough to trip obvious abuse.
+const wellKnownLimiter = (() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { makeRateLimiter } = require('./services/rate-limiter');
+    return makeRateLimiter('well-known', {
+        windowMs: 60 * 1000,
+        max: process.env.NODE_ENV === 'test' ? 10000 : 120,
+        standardHeaders: true,
+        legacyHeaders: false,
+    });
+})();
+
 // JWKS endpoint (Phase 4 — public keys for RS256 token verification)
-app.get('/.well-known/jwks.json', (_req, res) => {
+app.get('/.well-known/jwks.json', wellKnownLimiter, (_req, res) => {
     const jwks = getJWKSDocument();
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.json(jwks);
 });
 
 // OIDC Discovery (Phase 5 — OpenID Connect provider metadata)
-app.get('/.well-known/openid-configuration', (req, res) => {
+app.get('/.well-known/openid-configuration', wellKnownLimiter, (req, res) => {
     const issuer = process.env.OIDC_ISSUER || `${req.protocol}://${req.get('host')}`;
     res.json({
         issuer,
@@ -402,6 +511,12 @@ if (process.env.NODE_ENV !== 'test') {
     // Start ecosystem provisioning retry worker
     const { startRetryWorker } = require('./services/ecosystem-provisioner');
     startRetryWorker();
+
+    // PR4: Start identity webhook fan-out worker (polls webhook_deliveries every 30s)
+    // P1-10: Start hourly cleanup of terminal webhook_deliveries rows.
+    const { startWebhookWorker, startWebhookCleanup } = require('./services/webhook-bus');
+    startWebhookWorker();
+    startWebhookCleanup();
 
     // Register with Eternitas as a platform (idempotent — skips if already registered)
     const { registerWithEternitas } = require('./services/eternitas-register');

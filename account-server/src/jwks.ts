@@ -56,8 +56,38 @@ let rs256Available = false;
  * Returns true if RS256 is available, false if falling back to HS256.
  */
 export function initializeJWKS(): boolean {
+  const privateKeyInline = process.env.JWT_PRIVATE_KEY;
   const privateKeyPath = process.env.JWT_PRIVATE_KEY_PATH;
   const keyDir = process.env.JWKS_KEY_DIR;
+
+  // Strategy 0: Inline PEM from env var (simplest prod deploy — key lives
+  // in Secrets Manager, ECS injects it as an env var, no filesystem mount
+  // needed). Supports standard PEM with real newlines OR with literal "\n"
+  // escapes (which is how some secret stores return multi-line values).
+  if (privateKeyInline) {
+    try {
+      const privateKeyPem = privateKeyInline.includes('\\n')
+        ? privateKeyInline.replace(/\\n/g, '\n')
+        : privateKeyInline;
+      const publicKeyPem = derivePublicKey(privateKeyPem);
+      const kid = generateKid(publicKeyPem);
+
+      managedKeys = [{
+        kid,
+        privateKey: privateKeyPem,
+        publicKey: publicKeyPem,
+        createdAt: new Date().toISOString(),
+      }];
+      activeKid = kid;
+      rs256Available = true;
+
+      console.log(`[jwks] RS256 initialized from JWT_PRIVATE_KEY env var (kid: ${kid.slice(0, 8)}...)`);
+      return true;
+    } catch (err: any) {
+      console.error('[jwks] Failed to parse JWT_PRIVATE_KEY env var:', err.message);
+      // Fall through to file-path / dir strategies
+    }
+  }
 
   // Strategy 1: Single key file (simple deployment)
   if (privateKeyPath) {

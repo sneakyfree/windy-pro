@@ -9,7 +9,7 @@
  */
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
-import rateLimit from 'express-rate-limit';
+import { makeRateLimiter } from '../services/rate-limiter';
 import { config } from '../config';
 import { getDb } from '../db/schema';
 import { authenticateToken, adminOnly, AuthRequest } from '../middleware/auth';
@@ -50,7 +50,8 @@ router.get('/me', authenticateToken, (req: Request, res: Response) => {
     const user = db.prepare(`
       SELECT id, email, name, tier, identity_type, phone, display_name,
              avatar_url, email_verified, phone_verified, passport_id,
-             preferred_lang, last_login_at, windy_identity_id, created_at, updated_at
+             preferred_lang, last_login_at, windy_identity_id, created_at, updated_at,
+             storage_used, storage_limit
       FROM users WHERE id = ?
     `).get(userId) as any;
 
@@ -89,6 +90,10 @@ router.get('/me', authenticateToken, (req: Request, res: Response) => {
         lastLoginAt: user.last_login_at,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
+        // Storage surfaced so the install wizard's Complete screen can show
+        // the user's provisioned cloud quota without a second round-trip.
+        storageUsed: user.storage_used ?? 0,
+        storageLimit: user.storage_limit ?? 0,
       },
       products,
       scopes,
@@ -244,7 +249,7 @@ router.get('/audit', authenticateToken, (req: Request, res: Response) => {
 // ─── POST /api/v1/identity/eternitas/webhook ─────────────────
 
 // Bot-specific rate limit: stricter than humans
-const botWebhookLimiter = rateLimit({
+const botWebhookLimiter = makeRateLimiter('bot-webhook', {
   windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Too many webhook requests. Try again later.' },
@@ -256,24 +261,65 @@ router.post('/eternitas/webhook', botWebhookLimiter, (req: Request, res: Respons
   try {
     const { event, passportNumber, agentName, operatorEmail, timestamp, signature, trustScore } = req.body;
 
-    // Verify webhook signature — REQUIRED in production
+    // P0 fix: signature verification is REQUIRED regardless of NODE_ENV.
+    // The old code skipped verification when ETERNITAS_WEBHOOK_SECRET was
+    // unset in non-production — which meant anyone on the network could
+    // forge passport.revoked events. No env-dependent short-circuits.
     const webhookSecret = process.env.ETERNITAS_WEBHOOK_SECRET;
-    if (webhookSecret) {
-      const expectedSig = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(`${event}:${passportNumber}:${timestamp}`)
-        .digest('hex');
-
-      if (signature !== expectedSig) {
-        return res.status(401).json({ error: 'Invalid webhook signature' });
+    if (!webhookSecret) {
+      return res.status(503).json({
+        error: 'ETERNITAS_WEBHOOK_SECRET not configured on this server',
+        code: 'webhook_secret_not_configured',
+      });
+    }
+    if (typeof signature !== 'string' || !signature) {
+      return res.status(401).json({ error: 'Missing webhook signature' });
+    }
+    const expectedSig = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(`${event}:${passportNumber}:${timestamp}`)
+      .digest('hex');
+    // Constant-time compare — prevents timing-attack signature discovery.
+    const a = Buffer.from(signature);
+    const b = Buffer.from(expectedSig);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
+    // Replay protection: reject events older than 5 minutes.
+    if (typeof timestamp === 'number' || typeof timestamp === 'string') {
+      const ts = typeof timestamp === 'string' ? parseInt(timestamp, 10) : timestamp;
+      const ageSeconds = Math.abs(Date.now() / 1000 - ts);
+      if (Number.isFinite(ageSeconds) && ageSeconds > 300) {
+        return res.status(401).json({ error: 'Webhook timestamp outside accepted window (±5 min)' });
       }
-    } else if (process.env.NODE_ENV === 'production') {
-      return res.status(500).json({ error: 'Webhook secret not configured' });
     }
 
     // Basic validation
     if (!event || !passportNumber) {
       return res.status(400).json({ error: 'event and passportNumber are required' });
+    }
+    // P1-6: field-level validation so a signature-verified but malformed
+    // payload can't crash downstream handlers (e.g. `passport.registered`
+    // with a NULL agentName previously hit an INSERT that violates
+    // users.name NOT NULL and bubbled a 500).
+    if (typeof event !== 'string' || typeof passportNumber !== 'string') {
+      return res.status(400).json({ error: 'event and passportNumber must be strings' });
+    }
+    if (!/^ET-[A-Z0-9]{4,32}$/i.test(passportNumber)) {
+      return res.status(400).json({ error: 'passportNumber must match ET-XXXX format' });
+    }
+    if (event === 'passport.registered') {
+      if (typeof agentName !== 'string' || !agentName.trim()) {
+        return res.status(400).json({ error: 'agentName is required for passport.registered' });
+      }
+      if (operatorEmail !== undefined && typeof operatorEmail !== 'string') {
+        return res.status(400).json({ error: 'operatorEmail must be a string when provided' });
+      }
+    }
+    if (event === 'trust_updated') {
+      if (typeof trustScore !== 'number' || !(trustScore >= 0 && trustScore <= 1)) {
+        return res.status(400).json({ error: 'trustScore must be a number between 0 and 1' });
+      }
     }
 
     // Handle trust_updated event separately
@@ -631,7 +677,7 @@ router.get('/chat/profile', authenticateToken, (req: Request, res: Response) => 
 // ─── Phase 3: Bot API Key Endpoints ───────────────────────────
 
 // Bot-specific auth rate limiter
-const botAuthLimiter = rateLimit({
+const botAuthLimiter = makeRateLimiter('bot-auth', {
   windowMs: 60 * 1000,
   max: 3, // Stricter than human: 3/min vs 5/min
   message: { error: 'Too many bot auth attempts. Try again later.' },
@@ -1362,21 +1408,39 @@ router.post('/webhooks/eternitas', (req: Request, res: Response) => {
   try {
     const { event, passport_number, timestamp, data } = req.body;
 
-    // Verify HMAC-SHA256 signature
+    // P0 fix: signature verification is REQUIRED regardless of NODE_ENV.
+    // See /eternitas/webhook above for the same pattern.
     const signature = req.headers['x-eternitas-signature'] as string | undefined;
     const webhookSecret = config.ETERNITAS_WEBHOOK_SECRET;
 
-    if (webhookSecret) {
-      const expectedSig = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(JSON.stringify(req.body))
-        .digest('hex');
-
-      if (signature !== expectedSig) {
-        return res.status(401).json({ error: 'Invalid signature' });
+    if (!webhookSecret) {
+      return res.status(503).json({
+        error: 'ETERNITAS_WEBHOOK_SECRET not configured on this server',
+        code: 'webhook_secret_not_configured',
+      });
+    }
+    if (typeof signature !== 'string' || !signature) {
+      return res.status(401).json({ error: 'Missing X-Eternitas-Signature header' });
+    }
+    const expectedSig = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(JSON.stringify(req.body))
+      .digest('hex');
+    const a = Buffer.from(signature);
+    const b = Buffer.from(expectedSig);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+    // P1-15 replay protection — mirror the ±5 min window from
+    // /eternitas/webhook. An attacker who captured a valid signed
+    // webhook could otherwise replay it indefinitely.
+    if (timestamp !== undefined && timestamp !== null) {
+      const ts = typeof timestamp === 'string' ? parseInt(timestamp, 10) : timestamp;
+      const tsSec = typeof ts === 'number' && ts > 1e12 ? ts / 1000 : ts; // accept ms or s
+      const ageSec = Math.abs(Date.now() / 1000 - tsSec);
+      if (!Number.isFinite(ageSec) || ageSec > 300) {
+        return res.status(401).json({ error: 'Webhook timestamp outside accepted window (±5 min)' });
       }
-    } else if (process.env.NODE_ENV === 'production') {
-      return res.status(500).json({ error: 'Webhook secret not configured' });
     }
 
     if (!event || !passport_number) {

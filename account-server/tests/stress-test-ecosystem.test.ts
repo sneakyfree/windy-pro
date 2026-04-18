@@ -11,6 +11,9 @@ import http from 'http';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
+
+// Wave 7 P1-15 follow-up — register path exceeds 5s default under full-suite load
+jest.setTimeout(30000);
 import path from 'path';
 import fs from 'fs';
 

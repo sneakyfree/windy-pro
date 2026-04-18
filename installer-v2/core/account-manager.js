@@ -187,6 +187,26 @@ class AccountManager {
   }
 
   /**
+   * Fetch the extended identity view (including provisioned products:
+   * mailbox, chat handle, cloud quota) for the currently-authenticated
+   * user. Used by the wizard Complete screen.
+   *
+   * Returns null for offline / free-tier accounts (no token to present).
+   */
+  async getIdentity() {
+    if (!this.account?.token) return null;
+    // /api/v1/identity/* isn't aliased under /v1 the way /auth/* is, so
+    // reach it through the API root directly.
+    const rootUrl = API_BASE.replace(/\/v1\/?$/, '');
+    return this._apiRequestAbsolute(
+      'GET',
+      `${rootUrl}/api/v1/identity/me`,
+      null,
+      this.account.token,
+    );
+  }
+
+  /**
    * Check if logged in
    */
   isLoggedIn() {
@@ -286,14 +306,21 @@ class AccountManager {
     return this._apiRequest('GET', endpoint, null, token);
   }
 
+  _apiRequestAbsolute(method, fullUrl, body, token) {
+    return this._apiRequestInternal(method, new URL(fullUrl), body, token);
+  }
+
   _apiRequest(method, endpoint, body, token) {
+    return this._apiRequestInternal(method, new URL(`${API_BASE}${endpoint}`), body, token);
+  }
+
+  _apiRequestInternal(method, url, body, token) {
     return new Promise((resolve, reject) => {
-      const url = new URL(`${API_BASE}${endpoint}`);
       const isHttps = url.protocol === 'https:';
       const options = {
         hostname: url.hostname,
         port: url.port || (isHttps ? 443 : 80),
-        path: url.pathname,
+        path: url.pathname + (url.search || ''),
         method,
         timeout: 15000,
         headers: {

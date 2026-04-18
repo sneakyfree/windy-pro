@@ -500,5 +500,61 @@ function initSchema(db: DbAdapter): void {
       FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_pending_provisions_retry ON pending_provisions(next_retry_at);
+
+    -- OTP codes: hashed one-time codes for email verification + password reset.
+    -- code_hash = sha256(raw 6-digit code) — never store the raw code.
+    -- purpose: 'email_verification' | 'password_reset'
+    -- consumed_at NULL until used; non-null entries are kept for audit.
+    CREATE TABLE IF NOT EXISTS otp_codes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_otp_user_purpose ON otp_codes(user_id, purpose);
+    CREATE INDEX IF NOT EXISTS idx_otp_expires ON otp_codes(expires_at);
+
+    -- Webhook deliveries (PR4 — identity fan-out bus).
+    -- One row per (event, target). Worker polls WHERE delivered_at IS NULL
+    -- AND dead_lettered_at IS NULL AND next_attempt_at <= now.
+    -- Retry schedule: 0ms, 5s, 30s, 5m, 1h, 6h, 24h (7 attempts → dead letter).
+    CREATE TABLE IF NOT EXISTS webhook_deliveries (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      target TEXT NOT NULL,
+      target_url TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      signature TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at TEXT NOT NULL,
+      delivered_at TEXT,
+      dead_lettered_at TEXT,
+      last_error TEXT,
+      identity_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_webhook_due ON webhook_deliveries(next_attempt_at) WHERE delivered_at IS NULL AND dead_lettered_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_webhook_identity ON webhook_deliveries(identity_id);
+    CREATE INDEX IF NOT EXISTS idx_webhook_event ON webhook_deliveries(event_type);
+
+    -- MFA secrets: TOTP-based two-factor authentication.
+    -- totp_secret_encrypted = AES-256-GCM(base32_secret), keyed by MFA_ENCRYPTION_KEY env.
+    -- backup_codes_hash = JSON array of bcrypt hashes (consumed by setting to '' on use).
+    -- enabled_at NULL while setup is pending; set to a timestamp on verify-setup success.
+    CREATE TABLE IF NOT EXISTS mfa_secrets (
+      user_id TEXT PRIMARY KEY,
+      totp_secret_encrypted TEXT NOT NULL,
+      totp_secret_iv TEXT NOT NULL,
+      totp_secret_tag TEXT NOT NULL,
+      backup_codes_hash TEXT NOT NULL DEFAULT '[]',
+      enabled_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 }

@@ -60,7 +60,7 @@ async function callAwsSttAPI(
             'X-Service-Token': process.env.WINDY_CLOUD_SERVICE_TOKEN || '',
             ...form.getHeaders(),
         },
-        body: form.getBuffer(),
+        body: form.getBuffer() as any, // form-data Buffer; modern fetch types want BodyInit
         signal: AbortSignal.timeout(120000), // 2min — GPU processing can take longer for large files
     });
 
@@ -112,7 +112,7 @@ async function callWhisperAPI(
             'Authorization': `Bearer ${apiKey}`,
             ...form.getHeaders(),
         },
-        body: form.getBuffer(),
+        body: form.getBuffer() as any, // form-data Buffer; modern fetch types want BodyInit
         signal: AbortSignal.timeout(30000), // 30s — audio files can be large
     });
 

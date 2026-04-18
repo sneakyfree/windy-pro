@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('wizardAPI', {
   login: (email, password) => ipcRenderer.invoke('wizard-login', email, password),
   register: (name, email, password) => ipcRenderer.invoke('wizard-register', name, email, password),
   createFreeAccount: () => ipcRenderer.invoke('wizard-free-account'),
+  // Full identity view (products + storage) for the Complete screen
+  getIdentity: () => ipcRenderer.invoke('wizard-identity-me'),
 
   // Language Profile
   saveLanguageProfile: (languages) => ipcRenderer.invoke('wizard-save-language-profile', languages),
