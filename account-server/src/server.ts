@@ -509,8 +509,10 @@ if (process.env.NODE_ENV !== 'test') {
     console.log('');
 
     // Start ecosystem provisioning retry worker
-    const { startRetryWorker } = require('./services/ecosystem-provisioner');
+    // P2-6: Start hourly cleanup of exhausted / orphaned pending_provisions rows.
+    const { startRetryWorker, startPendingCleanup } = require('./services/ecosystem-provisioner');
     startRetryWorker();
+    startPendingCleanup();
 
     // PR4: Start identity webhook fan-out worker (polls webhook_deliveries every 30s)
     // P1-10: Start hourly cleanup of terminal webhook_deliveries rows.
