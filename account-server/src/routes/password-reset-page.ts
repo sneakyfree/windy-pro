@@ -23,6 +23,13 @@ import express from 'express';
 
 const router = Router();
 
+// Narrow an `unknown` to a plain record so field reads type-check.
+// Use for parsed JSON responses where we don't want to lie to the
+// compiler by casting to `any`.
+function isObjectRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === 'object' && x !== null && !Array.isArray(x);
+}
+
 // Form posts come as application/x-www-form-urlencoded. Scope this
 // middleware to our two paths so we don't conflict with the global
 // express.urlencoded() cap or the Stripe raw-body route.
@@ -73,10 +80,13 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     if (apiRes.status === 200) {
       return res.send(renderPage({ token: '', success: true }));
     }
-    const body = await apiRes.json().catch(() => ({} as any));
-    const message = typeof body.error === 'string'
-      ? body.error
-      : 'That reset link is no longer valid. Request a new one from the app.';
+    // apiRes.json() is typed Promise<unknown> under Node's fetch typings,
+    // which surfaces as TS18046 if we touch fields directly. Narrow
+    // through a small type-guard helper so field access is type-safe.
+    const body: unknown = await apiRes.json().catch(() => ({}));
+    const errorField = isObjectRecord(body) && typeof body.error === 'string' ? body.error : null;
+    const message = errorField
+      ?? 'That reset link is no longer valid. Request a new one from the app.';
     return res.status(apiRes.status).send(renderPage({ token, error: message }));
   } catch (_err) {
     return res.status(502).send(renderPage({ token, error: 'Reset service unreachable. Try again in a moment.' }));

@@ -128,9 +128,14 @@ async function buildHealthResult(): Promise<HealthResult> {
     };
 }
 
-// ─── GET /health ─────────────────────────────────────────────
+// ─── GET /health (+ /healthz K8s alias) ──────────────────────
+//
+// /healthz is the cloud-native convention (Kubernetes liveness /
+// readiness probes, most cloud load balancers). /health is what the
+// rest of the ecosystem already hits. Both point at the same handler
+// so ops can pick either without lying about what's actually live.
 
-router.get('/health', async (_req: Request, res: Response) => {
+router.get(['/health', '/healthz'], async (_req: Request, res: Response) => {
     try {
         const now = Date.now();
         if (!cachedHealth || now > cacheExpiry) {
