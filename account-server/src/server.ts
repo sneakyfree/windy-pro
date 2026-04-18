@@ -34,6 +34,7 @@ import passwordResetPageRoutes from './routes/password-reset-page';
 import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
 import flyRoutes from './routes/fly';
+import agentRoutes from './routes/agent';
 import { authenticateToken } from './middleware/auth';
 import { initErrorReporting, reportError } from './services/error-reporter';
 
@@ -283,6 +284,10 @@ app.use('/api/v1/cloud', cloudRoutes);
 
 // Fly agent proxy (ecosystem dashboard chat)
 app.use('/api/v1/fly', flyRoutes);
+
+// Wave 8 — Managed-credential broker + hatch-from-Pro endpoint.
+// HMAC-gated credentials/issue for S2S, Bearer-JWT /hatch that streams SSE.
+app.use('/api/v1/agent', agentRoutes);
 
 // Billing
 app.use('/api/v1/billing', billingRouter);

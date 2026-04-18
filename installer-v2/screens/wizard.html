@@ -2868,10 +2868,38 @@
 
         <p class="complete-quote">"In the beginning was the Word. The words of your mouth create worlds." 🌪️</p>
 
+        <!-- Wave 8 Grandma Ribbon: opt-in to hatch a personal agent on first launch.
+             Default is ON — the ceremony is the "wow" moment of first run and
+             the fastest path from "installed" to "my AI just texted me." The
+             checkbox is a deliberate opt-OUT rather than an opt-in because the
+             friction of a second click kills the demo effect. -->
+        <div id="hatch-on-launch-card" style="max-width:520px;margin:16px auto;padding:16px 20px;background:linear-gradient(135deg, rgba(139,92,246,0.12), rgba(236,72,153,0.08));border:1px solid rgba(139,92,246,0.35);border-radius:14px;">
+          <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
+            <input type="checkbox" id="hatch-on-launch-toggle" checked style="margin-top:4px;accent-color:#8B5CF6;width:18px;height:18px;">
+            <div style="flex:1;">
+              <div style="font-size:15px;font-weight:700;color:#F8FAFC;margin-bottom:4px;">🪰 Hatch your agent on first launch</div>
+              <div style="font-size:13px;color:#94A3B8;line-height:1.45;">In 60 seconds, your own AI agent is born — with an email, a chat room, cloud storage, and a verifiable passport. No config.</div>
+            </div>
+          </label>
+        </div>
+
         <div class="btn-row" style="border-top:none; justify-content:center;">
-          <button class="btn btn-primary" style="padding:14px 40px; font-size:16px;" onclick="launchApp()"
+          <button class="btn btn-primary" style="padding:14px 40px; font-size:16px;" onclick="saveHatchPreference(); launchApp();"
             data-i18n="btn.launch">Launch Windy Pro 🎙️</button>
         </div>
+
+        <script>
+          // Persist the opt-in to localStorage so the main app picks it up
+          // on first run. The desktop renderer reads this in index.html and
+          // auto-starts the ceremony once on boot if set.
+          function saveHatchPreference() {
+            try {
+              var el = document.getElementById('hatch-on-launch-toggle');
+              if (!el) return;
+              localStorage.setItem('windy_hatch_on_launch', el.checked ? 'yes' : 'no');
+            } catch (e) { /* noop */ }
+          }
+        </script>
       </div>
     </div>
 

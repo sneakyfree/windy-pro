@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="video-clone-features.css">
   <link rel="stylesheet" href="auto-sync.css">
   <link rel="stylesheet" href="marketplace.css">
+  <link rel="stylesheet" href="hatch-ceremony.css">
 </head>
 
 <body>
@@ -130,6 +131,8 @@
         <div class="transcript-content" id="transcriptContent">
           <!-- Transcript segments will appear here -->
           <div class="placeholder" id="shortcutsPlaceholder">
+            <!-- Wave 8 Grandma Ribbon: Hatch Your Agent card is mounted here by hatch-ceremony.js -->
+            <div id="hatchCardMount"></div>
             <div style="margin-bottom:8px;font-weight:600;">⌨️ Keyboard Shortcuts</div>
             <div id="shortcutRow_toggle" style="margin:4px 0;"></div>
             <div id="shortcutRow_paste" style="margin:4px 0;"></div>
@@ -325,6 +328,8 @@
   <div id="effectsOverlay" class="effects-overlay"></div>
   <script src="tooltip.js"></script>
   <script src="ecosystem-nav.js"></script>
+  <script src="hatch-ceremony.js"></script>
+  <script src="hatch-mount.js"></script>
   <script src="first-run.js"></script>
   <!-- Phase 8 signup banner module (must load BEFORE app.js so the
        app.maybeShowSignupBanner() wrapper can find it on window). -->

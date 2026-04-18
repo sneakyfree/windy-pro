@@ -78,6 +78,8 @@ src/client/web/node_modules/
 .pytest_cache/
 htmlcov/
 .coverage
+coverage/
+account-server/coverage/
 
 # Antigravity brain
 .gemini/
