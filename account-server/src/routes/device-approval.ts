@@ -81,6 +81,12 @@ router.get('/device', (req: Request, res: Response) => {
   res.send(renderPage({ userCode, error }));
 });
 
+// ⚠️ P2-7: This POST has NO CSRF token. That's intentional TODAY because
+// auth is inline — the form includes the user's email + password in the
+// body, so a cross-origin forgery can't proceed without those. If anyone
+// ever moves this flow behind a cookie session (e.g. shedding the password
+// field in favour of a logged-in-user cookie), add CSRF protection BEFORE
+// landing that change. Same applies to any future POST in this router.
 router.post('/device/approve', deviceApproveLimiter, async (req: Request, res: Response) => {
   const userCodeRaw = String(req.body?.user_code || '').trim();
   const email = String(req.body?.email || '').toLowerCase().trim();

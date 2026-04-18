@@ -152,11 +152,14 @@ describe('GET /api/v1/auth/me', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 403 with invalid token', async () => {
+  it('returns 401 with invalid token', async () => {
+    // P2-3: malformed / unsigned / wrong-algo tokens are 401, not 403,
+    // per RFC 6750 — "could not prove authentication" rather than
+    // "authenticated but not authorized".
     const res = await request(app)
       .get('/api/v1/auth/me')
       .set('Authorization', 'Bearer invalid-token');
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 });
 
