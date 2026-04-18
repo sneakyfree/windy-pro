@@ -25,7 +25,11 @@ export const PasswordSchema = z.string()
     .regex(/[0-9]/, 'Password must contain at least one digit');
 
 export const RegisterRequestSchema = z.object({
-    name: z.string().min(1, 'Name is required'),
+    // P2-8: cap name at 128 chars. The JWT payload embeds `name`, so an
+    // unbounded field lets a user bloat every one of their tokens; also
+    // the admin console + emails render this verbatim so a pathological
+    // value breaks those UIs.
+    name: z.string().min(1, 'Name is required').max(128, 'Name must be 128 characters or fewer'),
     email: z.string().email('Invalid email address'),
     password: PasswordSchema,
     deviceId: z.string().optional(),

@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import archiver from 'archiver';
 import { getDb } from '../db/schema';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { logAuditEvent } from '../identity-service';
 import { validate } from '../middleware/validation';
 import {
     ChunkUploadRequestSchema,
@@ -322,6 +323,12 @@ router.delete('/bulk', authenticateToken, (req: Request, res: Response) => {
         }
 
         console.log(`🗑️  Bulk delete: ${deleted}/${ids.length} recordings`);
+        // P3-2: individual delete emits an audit event; bulk delete should too.
+        logAuditEvent('recordings_bulk_deleted' as any, userId, {
+            requested: ids.length,
+            deleted,
+            errorCount: errors.length,
+        });
         res.json({ deleted, errors });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });
