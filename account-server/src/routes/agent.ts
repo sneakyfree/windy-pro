@@ -131,11 +131,14 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
     const userId = (req as AuthRequest).user.userId;
     const db = getDb();
 
+    // Pull owner with the extra fields sister repos need. windy-agent's
+    // /hatch/remote contract requires owner_phone + owner_name (drift #2)
+    // so we SELECT them here up front rather than re-querying later.
     const owner = db.prepare(
-        `SELECT id, email, name, tier, license_tier, windy_identity_id
+        `SELECT id, email, name, phone, tier, license_tier, windy_identity_id
          FROM users WHERE id = ?`,
     ).get(userId) as
-        { id: string; email: string; name: string; tier: string; license_tier: string; windy_identity_id: string } | undefined;
+        { id: string; email: string; name: string; phone: string | null; tier: string; license_tier: string; windy_identity_id: string } | undefined;
     if (!owner) {
         return res.status(404).json({ error: 'identity_not_found' });
     }
@@ -155,16 +158,18 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
     for (const ev of session.events) writeSse(res, ev);
 
     // If the session is already done or a hatch is in-flight in another
-    // request, return the latest snapshot + done.
+    // request, emit a terminal hatch.complete frame with resumed:true so
+    // the client can render the existing state without double-hatching.
     if (session.existing && session.status !== 'running') {
         const snap = getHatchSession(session.id);
         writeSse(res, {
             seq: (snap?.events.length ?? 0) + 1,
             at: new Date().toISOString(),
-            type: 'ceremony.resumed',
+            type: 'hatch.complete',
             status: 'ok',
             label: 'Agent already hatched — here is the existing session.',
             data: {
+                resumed: true,
                 session_id: session.id,
                 status: snap?.status,
                 passport_number: snap?.passport_number,
@@ -181,23 +186,25 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
     }, 10_000);
     req.on('close', () => clearInterval(heartbeat));
 
+    // SSE emit — only the canonical event set is written to the stream.
+    // Internal mechanics (broker issuance, bot-identity row creation,
+    // windy-fly remote hatch call) log via console.log but never append
+    // to hatch_sessions.events, so replay stays clean too.
     const emit = (ev: Omit<HatchEvent, 'seq' | 'at'>): HatchEvent => {
         const full = appendHatchEvent(session.id, ev);
         writeSse(res, full);
         return full;
     };
 
+    const logInternal = (stage: string, detail: Record<string, any> = {}) => {
+        console.log(`[hatch] ${stage}`, detail);
+    };
+
     const agentName = `${(owner.name || owner.email.split('@')[0]).split(' ')[0]}'s Agent`;
 
-    emit({
-        type: 'ceremony.started',
-        status: 'ok',
-        label: `Hatching ${agentName}…`,
-        data: { session_id: session.id, agent_name: agentName, owner_email: owner.email },
-    });
+    logInternal('ceremony.started', { session_id: session.id, agent_name: agentName, owner_email: owner.email });
 
-    // ── Step 1: bot identity row ───────────────────────────────
-    // The bot needs its own user row so ecosystem tables FK-reference it.
+    // ── Step 1: bot identity row (internal, not SSE) ──────────
     let botUserId: string;
     try {
         const existingBot = db.prepare(
@@ -223,16 +230,18 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
             );
         }
     } catch (err: any) {
-        emit({ type: 'ceremony.failed', status: 'failed', label: 'Could not allocate bot identity', data: { error: String(err?.message || err) } });
+        // Internal failure pre-Eternitas — surface as eternitas.registered
+        // failed so the canonical client sees a step it recognises.
+        emit({ type: 'eternitas.registered', status: 'failed', label: 'Could not allocate bot identity.', data: { error: String(err?.message || err) } });
         finishHatchSession(session.id, { status: 'failed', error: String(err?.message || err) });
         clearInterval(heartbeat);
         res.end();
         return;
     }
 
-    // ── Step 2: Eternitas auto-hatch ───────────────────────────
+    // ── Step 2: Eternitas passport registration ───────────────
     let passportNumber: string | null = null;
-    emit({ type: 'eternitas.issuing', status: 'pending', label: 'Registering passport with Eternitas…' });
+    emit({ type: 'eternitas.registering', status: 'pending', label: 'Registering passport with Eternitas…' });
     try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (config.ETERNITAS_API_KEY) headers['Authorization'] = `Bearer ${config.ETERNITAS_API_KEY}`;
@@ -250,7 +259,7 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
         });
         if (!result.ok) {
             emit({
-                type: 'eternitas.issued',
+                type: 'eternitas.registered',
                 status: 'failed',
                 label: `Eternitas refused the hatch (HTTP ${result.status}).`,
                 data: { error: result.data?.error || `status_${result.status}` },
@@ -262,7 +271,7 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
         }
         passportNumber = result.data?.passport || result.data?.passport_number || result.data?.passportNumber || null;
         if (!passportNumber) {
-            emit({ type: 'eternitas.issued', status: 'failed', label: 'Eternitas returned no passport number.', data: result.data });
+            emit({ type: 'eternitas.registered', status: 'failed', label: 'Eternitas returned no passport number.', data: result.data });
             finishHatchSession(session.id, { status: 'failed', bot_identity_id: botUserId, agent_name: agentName, error: 'no_passport' });
             clearInterval(heartbeat);
             res.end();
@@ -275,21 +284,22 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
         ).run(crypto.randomUUID(), botUserId, passportNumber, userId);
 
         emit({
-            type: 'eternitas.issued',
+            type: 'eternitas.registered',
             status: 'ok',
             label: `Eternitas passport issued: ${passportNumber}`,
             data: { passport_number: passportNumber },
         });
     } catch (err: any) {
-        emit({ type: 'eternitas.issued', status: 'failed', label: 'Eternitas call threw.', data: { error: String(err?.message || err) } });
+        emit({ type: 'eternitas.registered', status: 'failed', label: 'Eternitas call threw.', data: { error: String(err?.message || err) } });
         finishHatchSession(session.id, { status: 'failed', bot_identity_id: botUserId, agent_name: agentName, error: String(err?.message || err) });
         clearInterval(heartbeat);
         res.end();
         return;
     }
 
-    // ── Step 3: Broker token ───────────────────────────────────
-    emit({ type: 'broker.issuing', status: 'pending', label: 'Minting brain credentials…' });
+    // ── Step 3: Broker token (internal, not SSE) ──────────────
+    // The canonical event set treats broker mechanics as Pro-internal —
+    // the token itself is S2S-only and sister repos don't parse it.
     let brokerTokenValue: string | null = null;
     let brokerTokenId: string | null = null;
     let brokerProvider = '';
@@ -305,30 +315,25 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
         brokerTokenId = issued.token_id;
         brokerProvider = issued.provider;
         brokerModel = issued.model;
-        emit({
-            type: 'broker.issued',
-            status: 'ok',
-            label: `Brain online: ${issued.provider} / ${issued.model}`,
-            // Do NOT include the raw broker_token in the SSE stream — it's
-            // passed to windy-agent in the server-side call. The client UI
-            // only needs the provider + model for the certificate.
-            data: {
-                provider: issued.provider,
-                model: issued.model,
-                expires_at: issued.expires_at,
-                usage_cap_tokens: issued.usage_cap_tokens,
-            },
+        logInternal('broker.issued', {
+            token_id: brokerTokenId,
+            provider: brokerProvider,
+            model: brokerModel,
+            expires_at: issued.expires_at,
         });
     } catch (err: any) {
-        emit({ type: 'broker.issued', status: 'failed', label: 'Broker could not issue a token.', data: { error: String(err?.message || err) } });
+        // Surface broker failure as a hatch.complete/failed terminal frame
+        // so the client gets a deterministic end to the stream.
+        emit({ type: 'hatch.complete', status: 'failed', label: 'Broker could not issue credentials.', data: { error: String(err?.message || err) } });
         finishHatchSession(session.id, { status: 'failed', bot_identity_id: botUserId, agent_name: agentName, passport_number: passportNumber, error: 'broker_failed' });
         clearInterval(heartbeat);
         res.end();
         return;
     }
 
-    // ── Step 4: Windy Fly remote hatch ─────────────────────────
-    emit({ type: 'windy_fly.hatching', status: 'pending', label: 'Starting your agent on Windy Fly…' });
+    // ── Step 4: Windy Fly remote hatch (internal, not SSE) ────
+    // Drift #2 fix — /hatch/remote requires owner_phone + owner_name for
+    // the agent's SMS/greeting wiring. Without them windy-agent 400s.
     try {
         const hatchResult = await fetchJson(`${config.WINDY_AGENT_URL}/hatch/remote`, {
             method: 'POST',
@@ -345,40 +350,64 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
                 provider: brokerProvider,
                 model: brokerModel,
                 owner_email: owner.email,
+                owner_phone: owner.phone || null,
+                owner_name: owner.name || owner.email.split('@')[0],
             }),
         });
-        if (!hatchResult.ok) {
-            // The agent host not being reachable isn't fatal — the user
-            // will still have a passport and credentials; the agent can
-            // be started later. Mark as degraded, not failed.
-            emit({
-                type: 'windy_fly.hatched',
-                status: 'failed',
-                label: 'Agent host unreachable — will retry in background.',
-                data: { http_status: hatchResult.status },
-            });
-        } else {
-            emit({
-                type: 'windy_fly.hatched',
-                status: 'ok',
-                label: 'Agent is running.',
-                data: {
-                    agent_host: hatchResult.data?.host || null,
-                    agent_id: hatchResult.data?.agent_id || null,
-                },
-            });
-        }
-    } catch (err: any) {
-        emit({
-            type: 'windy_fly.hatched',
-            status: 'failed',
-            label: 'Agent host call threw.',
-            data: { error: String(err?.message || err) },
+        logInternal('windy_fly.hatch_remote', {
+            ok: hatchResult.ok,
+            http_status: hatchResult.status,
+            agent_host: hatchResult.data?.host || null,
+            agent_id: hatchResult.data?.agent_id || null,
         });
+    } catch (err: any) {
+        // Non-fatal — the user keeps their passport + credentials; the
+        // agent process can be started later. Log and continue.
+        logInternal('windy_fly.hatch_remote_error', { error: String(err?.message || err) });
     }
 
-    // ── Step 5: Chat onboarding (Matrix DM room) ───────────────
-    emit({ type: 'windy_chat.provisioning', status: 'pending', label: 'Opening your chat with the agent…' });
+    // ── Step 5: Mail inbox ─────────────────────────────────────
+    // Drift #3 fix — without { bot_type, owner_email, phone } windy-mail
+    // skips the welcome-email branch because the payload looks human-
+    // shaped. These fields are additive; mail's schema already expects
+    // them from the canonical contract.
+    emit({ type: 'mail.provisioning', status: 'pending', label: 'Allocating agent inbox…' });
+    let agentEmail: string | null = null;
+    try {
+        if (process.env.WINDYMAIL_API_URL) {
+            const mailResult = await fetchJson(`${process.env.WINDYMAIL_API_URL}/api/v1/webhooks/identity/created`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Service-Token': process.env.WINDYMAIL_SERVICE_TOKEN || '',
+                },
+                body: JSON.stringify({
+                    windy_identity_id: botUserId,
+                    email: `${agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}@windymail.ai`,
+                    display_name: agentName,
+                    identity_type: 'bot',
+                    passport_number: passportNumber,
+                    bot_type: 'agent',
+                    owner_email: owner.email,
+                    phone: null,
+                }),
+            });
+            agentEmail = mailResult.data?.email || null;
+            emit({
+                type: 'mail.provisioned',
+                status: mailResult.ok ? 'ok' : 'failed',
+                label: mailResult.ok ? `Inbox: ${agentEmail}` : 'Mail inbox pending — will retry.',
+                data: { email: agentEmail },
+            });
+        } else {
+            emit({ type: 'mail.provisioned', status: 'ok', label: 'Mail inbox skipped (no mail service configured).', data: { skipped: true } });
+        }
+    } catch (err: any) {
+        emit({ type: 'mail.provisioned', status: 'failed', label: 'Mail inbox call threw.', data: { error: String(err?.message || err) } });
+    }
+
+    // ── Step 6: Chat onboarding (Matrix DM room) ──────────────
+    emit({ type: 'chat.provisioning', status: 'pending', label: 'Opening your chat with the agent…' });
     let matrixUserId: string | null = null;
     let dmRoomId: string | null = null;
     try {
@@ -419,14 +448,14 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
                 }),
             );
             emit({
-                type: 'windy_chat.provisioned',
+                type: 'chat.provisioned',
                 status: 'ok',
                 label: 'Chat room is live.',
                 data: { matrix_user_id: matrixUserId, dm_room_id: dmRoomId },
             });
         } else {
             emit({
-                type: 'windy_chat.provisioned',
+                type: 'chat.provisioned',
                 status: 'failed',
                 label: 'Chat onboarding failed — will retry.',
                 data: { http_status: chatResult.status },
@@ -434,58 +463,40 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
         }
     } catch (err: any) {
         emit({
-            type: 'windy_chat.provisioned',
+            type: 'chat.provisioned',
             status: 'failed',
             label: 'Chat onboarding threw.',
             data: { error: String(err?.message || err) },
         });
     }
 
-    // ── Step 6: Mail inbox ─────────────────────────────────────
-    emit({ type: 'windy_mail.provisioning', status: 'pending', label: 'Allocating agent inbox…' });
-    let agentEmail: string | null = null;
-    try {
-        if (process.env.WINDYMAIL_API_URL) {
-            const mailResult = await fetchJson(`${process.env.WINDYMAIL_API_URL}/api/v1/webhooks/identity/created`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Service-Token': process.env.WINDYMAIL_SERVICE_TOKEN || '',
-                },
-                body: JSON.stringify({
-                    windy_identity_id: botUserId,
-                    email: `${agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}@windymail.ai`,
-                    display_name: agentName,
-                    identity_type: 'bot',
-                    passport_number: passportNumber,
-                }),
-            });
-            agentEmail = mailResult.data?.email || null;
-            emit({
-                type: 'windy_mail.provisioned',
-                status: mailResult.ok ? 'ok' : 'failed',
-                label: mailResult.ok ? `Inbox: ${agentEmail}` : 'Mail inbox pending — will retry.',
-                data: { email: agentEmail },
-            });
-        } else {
-            emit({ type: 'windy_mail.provisioned', status: 'ok', label: 'Mail inbox skipped (no mail service configured).', data: { skipped: true } });
-        }
-    } catch (err: any) {
-        emit({ type: 'windy_mail.provisioned', status: 'failed', label: 'Mail inbox call threw.', data: { error: String(err?.message || err) } });
-    }
-
-    // ── Step 7: Cloud quota allocation (bot) ───────────────────
-    emit({ type: 'windy_cloud.provisioning', status: 'pending', label: 'Allocating cloud storage…' });
+    // ── Step 7: Cloud quota allocation (bot) ──────────────────
+    emit({ type: 'cloud.provisioning', status: 'pending', label: 'Allocating cloud storage…' });
     try {
         db.prepare(
             `UPDATE users SET storage_limit = ? WHERE id = ? AND (storage_limit IS NULL OR storage_limit = 0)`,
         ).run(5 * 1024 * 1024 * 1024, botUserId);
-        emit({ type: 'windy_cloud.provisioned', status: 'ok', label: '5 GB allocated.', data: { storage_limit_bytes: 5 * 1024 * 1024 * 1024 } });
+        emit({ type: 'cloud.provisioned', status: 'ok', label: '5 GB allocated.', data: { storage_limit_bytes: 5 * 1024 * 1024 * 1024 } });
     } catch (err: any) {
-        emit({ type: 'windy_cloud.provisioned', status: 'failed', label: 'Cloud allocation failed.', data: { error: String(err?.message || err) } });
+        emit({ type: 'cloud.provisioned', status: 'failed', label: 'Cloud allocation failed.', data: { error: String(err?.message || err) } });
     }
 
-    // ── Step 8: Birth certificate ──────────────────────────────
+    // ── Step 8: Phone assignment ──────────────────────────────
+    // SMS gateway isn't wired yet, but the canonical contract requires
+    // these two frames so sister clients can draw the "Phone: …" row on
+    // the certificate. We emit assigned/ok with skipped:true — clients
+    // render "—" for a null number.
+    emit({ type: 'phone.assigning', status: 'pending', label: 'Assigning a phone number…' });
+    const agentPhone: string | null = null;
+    emit({
+        type: 'phone.assigned',
+        status: 'ok',
+        label: 'Phone assignment queued (SMS gateway pending).',
+        data: { phone: agentPhone, skipped: true },
+    });
+
+    // ── Step 9: Birth certificate ─────────────────────────────
+    emit({ type: 'birth_certificate.generating', status: 'pending', label: 'Generating birth certificate…' });
     const certificateNo = `WF-${(passportNumber || 'XXXX-XXXX').replace(/[^A-Z0-9]/gi, '').slice(-8).toUpperCase()}`;
     const certificate = {
         certificate_no: certificateNo,
@@ -495,18 +506,20 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
         creator: owner.name || owner.email.split('@')[0],
         creator_email: owner.email,
         email: agentEmail,
-        phone: null,  // SMS gateway integration is pending — field reserved.
+        phone: agentPhone,
         cloud_storage_bytes: 5 * 1024 * 1024 * 1024,
         brain: { provider: brokerProvider, model: brokerModel },
         chat: { matrix_user_id: matrixUserId, dm_room_id: dmRoomId },
     };
     emit({
-        type: 'certificate.ready',
+        type: 'birth_certificate.ready',
         status: 'ok',
         label: 'Birth certificate issued.',
         data: certificate,
     });
-    emit({ type: 'ceremony.complete', status: 'ok', label: 'Your agent is here.', data: { session_id: session.id } });
+
+    // ── Step 10: Hatch complete ───────────────────────────────
+    emit({ type: 'hatch.complete', status: 'ok', label: 'Your agent is here.', data: { session_id: session.id, resumed: false } });
 
     finishHatchSession(session.id, {
         status: 'complete',

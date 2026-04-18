@@ -155,13 +155,15 @@ class HatchCeremony {
         if (typeof ev.seq === 'number') this.lastSeq = ev.seq;
         this._pushLog(ev);
 
-        if (ev.type === 'certificate.ready' && ev.data) {
+        if (ev.type === 'birth_certificate.ready' && ev.data) {
             this.passportNumber = ev.data.passport_number || this.passportNumber;
             this.dmRoomId = ev.data.chat?.dm_room_id || this.dmRoomId;
             this.agentName = ev.data.agent_name || this.agentName;
             this._renderCertificate(ev.data);
         }
-        if (ev.type === 'ceremony.complete' || ev.type === 'ceremony.resumed') {
+        if (ev.type === 'hatch.complete') {
+            // Resume frames carry resumed:true in the payload — persist
+            // state either way so the card flips to "Open" next launch.
             this._saveState({
                 hatched_at: new Date().toISOString(),
                 passport_number: this.passportNumber,
@@ -228,8 +230,12 @@ class HatchCeremony {
     _pushLog(ev) {
         if (!this.log) return;
         // Re-use an existing row for ".provisioning → .provisioned"-style
-        // pairs so we get spinner → tick animations instead of two rows.
-        const baseType = (ev.type || '').replace(/\.(issuing|provisioning|hatching)$/, '').replace(/\.(issued|provisioned|hatched)$/, '');
+        // pairs (and .registering/.registered, .assigning/.assigned,
+        // .generating/.ready) so we get spinner → tick animations instead
+        // of two rows.
+        const baseType = (ev.type || '')
+            .replace(/\.(registering|provisioning|assigning|generating|issuing|hatching)$/, '')
+            .replace(/\.(registered|provisioned|assigned|ready|issued|hatched|complete)$/, '');
         let row = this.stepsByType[baseType];
         if (!row) {
             const li = document.createElement('li');

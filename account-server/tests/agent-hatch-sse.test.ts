@@ -42,15 +42,15 @@ beforeEach(() => {
 });
 afterAll(() => { global.fetch = realFetch; });
 
-function makeUser(): { token: string; userId: string; windyIdentityId: string; email: string } {
+function makeUser(opts: { phone?: string | null } = {}): { token: string; userId: string; windyIdentityId: string; email: string } {
     const db = getDb();
     const userId = crypto.randomUUID();
     const wid = crypto.randomUUID();
     const email = `u-${userId}@test.local`;
     db.prepare(
-        `INSERT INTO users (id, email, name, password_hash, tier, license_tier, windy_identity_id, identity_type)
-         VALUES (?, ?, 'Nora Grandma', 'x', 'free', 'free', ?, 'human')`,
-    ).run(userId, email, wid);
+        `INSERT INTO users (id, email, name, password_hash, tier, license_tier, windy_identity_id, identity_type, phone)
+         VALUES (?, ?, 'Nora Grandma', 'x', 'free', 'free', ?, 'human', ?)`,
+    ).run(userId, email, wid, opts.phone ?? null);
     const token = jwt.sign({ userId, email }, process.env.JWT_SECRET!, { algorithm: 'HS256', expiresIn: '5m' });
     return { token, userId, windyIdentityId: wid, email };
 }
@@ -77,36 +77,40 @@ function parseSse(body: string): Array<{ event: string; data: any; id: string | 
 }
 
 describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
-    it('streams events in the contract order and completes with ceremony.complete', async () => {
-        const user = makeUser();
+    it('streams events in the canonical contract order and completes with hatch.complete', async () => {
+        const user = makeUser({ phone: '+14155550100' });
+        const calls: Record<string, any> = {};
 
-        handler = async (url, _init) => {
+        handler = async (url, init) => {
+            let body: any = {};
+            try { body = JSON.parse(String(init.body || '{}')); } catch { /* noop */ }
+
             if (url.includes('eternitas') && url.includes('auto-hatch')) {
-                return {
-                    ok: true,
-                    status: 200,
-                    json: async () => ({ passport_number: 'ET26-8A3F-2B1C' }),
-                };
+                calls.eternitas = body;
+                return { ok: true, status: 200, json: async () => ({ passport_number: 'ET26-8A3F-2B1C' }) };
             }
             if (url.includes('agent.test/hatch/remote')) {
-                return {
-                    ok: true,
-                    status: 200,
-                    json: async () => ({ host: 'vps-01', agent_id: 'agt_xyz' }),
-                };
+                calls.hatchRemote = body;
+                return { ok: true, status: 200, json: async () => ({ host: 'vps-01', agent_id: 'agt_xyz' }) };
             }
             if (url.includes('chat.test') && url.includes('/api/v1/onboarding/agent')) {
-                return {
-                    ok: true,
-                    status: 200,
-                    json: async () => ({
-                        matrix_user_id: '@noras-agent:chat.windypro.com',
-                        dm_room_id: '!dm:chat.windypro.com',
-                    }),
-                };
+                calls.chat = body;
+                return { ok: true, status: 200, json: async () => ({
+                    matrix_user_id: '@noras-agent:chat.windypro.com',
+                    dm_room_id: '!dm:chat.windypro.com',
+                }) };
+            }
+            if (url.includes('windymail') || url.includes('mail') && url.includes('identity/created')) {
+                calls.mail = body;
+                return { ok: true, status: 200, json: async () => ({ email: 'noras-agent@windymail.ai' }) };
             }
             return { ok: false, status: 500, json: async () => ({}) };
         };
+        // windy-mail call is only made when WINDYMAIL_API_URL is set — set
+        // it here so we can assert the drift-#3 fields on the outgoing
+        // webhook body.
+        process.env.WINDYMAIL_API_URL = 'http://mail.test';
+        process.env.WINDYMAIL_SERVICE_TOKEN = 'test-token';
 
         const res = await request(app)
             .post('/api/v1/agent/hatch')
@@ -121,33 +125,55 @@ describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
         const events = parseSse(res.body as unknown as string);
         const order = events.map(e => e.event);
 
-        // Contract order.
+        // Canonical event order only — broker.*, ceremony.*, and
+        // windy_fly.* must NOT appear on the stream.
         expect(order).toEqual([
-            'ceremony.started',
-            'eternitas.issuing',
-            'eternitas.issued',
-            'broker.issuing',
-            'broker.issued',
-            'windy_fly.hatching',
-            'windy_fly.hatched',
-            'windy_chat.provisioning',
-            'windy_chat.provisioned',
-            'windy_mail.provisioning',
-            'windy_mail.provisioned',
-            'windy_cloud.provisioning',
-            'windy_cloud.provisioned',
-            'certificate.ready',
-            'ceremony.complete',
+            'eternitas.registering',
+            'eternitas.registered',
+            'mail.provisioning',
+            'mail.provisioned',
+            'chat.provisioning',
+            'chat.provisioned',
+            'cloud.provisioning',
+            'cloud.provisioned',
+            'phone.assigning',
+            'phone.assigned',
+            'birth_certificate.generating',
+            'birth_certificate.ready',
+            'hatch.complete',
         ]);
+        expect(order).not.toContain('ceremony.started');
+        expect(order).not.toContain('broker.issuing');
+        expect(order).not.toContain('broker.issued');
+        expect(order).not.toContain('windy_fly.hatching');
+        expect(order).not.toContain('windy_fly.hatched');
+        expect(order).not.toContain('certificate.ready');
+        expect(order).not.toContain('ceremony.complete');
 
-        // The certificate payload is useful to the UI — confirm the minimum
-        // shape.
-        const cert = events.find(e => e.event === 'certificate.ready')!.data;
+        const cert = events.find(e => e.event === 'birth_certificate.ready')!.data;
         expect(cert.data.certificate_no).toMatch(/^WF-/);
         expect(cert.data.passport_number).toBe('ET26-8A3F-2B1C');
         expect(cert.data.brain.provider).toBe('gemini');
 
-        // Seq numbers must be strictly increasing.
+        const complete = events.find(e => e.event === 'hatch.complete')!.data;
+        expect(complete.status).toBe('ok');
+        expect(complete.data.resumed).toBe(false);
+
+        // Drift #2 — /hatch/remote body includes owner_phone + owner_name.
+        expect(calls.hatchRemote).toBeDefined();
+        expect(calls.hatchRemote.owner_phone).toBe('+14155550100');
+        expect(calls.hatchRemote.owner_name).toBe('Nora Grandma');
+        expect(calls.hatchRemote.owner_email).toBe(user.email);
+        expect(calls.hatchRemote.broker_token).toMatch(/^bk_live_/);
+
+        // Drift #3 — mail webhook body includes bot_type / owner_email / phone.
+        expect(calls.mail).toBeDefined();
+        expect(calls.mail.bot_type).toBe('agent');
+        expect(calls.mail.owner_email).toBe(user.email);
+        expect('phone' in calls.mail).toBe(true);  // present even if null
+        expect(calls.mail.phone).toBeNull();
+
+        // Seq numbers strictly increasing.
         let prev = 0;
         for (const e of events) {
             const n = e.data.seq as number;
@@ -156,14 +182,13 @@ describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
         }
     });
 
-    it('is idempotent — a second call replays existing state and emits ceremony.resumed', async () => {
+    it('is idempotent — a second call replays existing state via hatch.complete with resumed=true', async () => {
         const user = makeUser();
         handler = async (url) => {
             if (url.includes('eternitas')) return { ok: true, status: 200, json: async () => ({ passport_number: 'ET26-ID-IDEMP' }) };
             return { ok: true, status: 200, json: async () => ({}) };
         };
 
-        // First call — run to completion.
         await request(app)
             .post('/api/v1/agent/hatch')
             .set('Authorization', `Bearer ${user.token}`)
@@ -173,7 +198,7 @@ describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
                 r.on('end', () => cb(null, chunks));
             });
 
-        // Second call — should not re-run the ceremony.
+        // Second call — must not re-run the ceremony.
         handler = async () => { throw new Error('second hatch should not make external calls'); };
 
         const res = await request(app)
@@ -186,7 +211,13 @@ describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
             });
 
         const events = parseSse(res.body as unknown as string);
-        expect(events.some(e => e.event === 'ceremony.resumed')).toBe(true);
-        expect(events.some(e => e.event === 'ceremony.complete')).toBe(true);
+        const completes = events.filter(e => e.event === 'hatch.complete');
+        expect(completes.length).toBeGreaterThanOrEqual(1);
+        // The terminal frame on a resume should carry resumed:true.
+        const terminal = completes[completes.length - 1]!.data;
+        expect(terminal.data.resumed).toBe(true);
+        // No legacy event names should leak through on a resume either.
+        expect(events.some(e => e.event === 'ceremony.resumed')).toBe(false);
+        expect(events.some(e => e.event === 'ceremony.complete')).toBe(false);
     });
 });
