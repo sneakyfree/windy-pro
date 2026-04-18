@@ -109,7 +109,8 @@ export const TranslateTextRequestSchema = z.object({
     source: z.string().min(1).optional(),
     target: z.string().min(1).optional(),
 }).refine(
-    (d) => (d.sourceLang || d.source) && (d.targetLang || d.target),
+    (d: { sourceLang?: string; targetLang?: string; source?: string; target?: string }) =>
+        Boolean((d.sourceLang || d.source) && (d.targetLang || d.target)),
     { message: 'sourceLang/source and targetLang/target are required' }
 );
 
@@ -215,7 +216,8 @@ export const SpeechTranslateBodySchema = z.object({
     source: z.string().min(1).optional(),
     target: z.string().min(1).optional(),
 }).refine(
-    (d) => (d.sourceLang || d.source) && (d.targetLang || d.target),
+    (d: { sourceLang?: string; targetLang?: string; source?: string; target?: string }) =>
+        Boolean((d.sourceLang || d.source) && (d.targetLang || d.target)),
     { message: 'sourceLang/source and targetLang/target are required' }
 );
 

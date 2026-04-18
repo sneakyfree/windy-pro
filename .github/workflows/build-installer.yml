@@ -1,0 +1,266 @@
+name: Build Installer
+
+# Builds the portable Python+wheels bundle and packages a .dmg/.exe/.AppImage
+# on every push to main or installer-* branches, and on every pull request.
+# Artifacts are uploaded to the workflow run for manual download + smoke testing.
+#
+# This is the foundation of the bulletproof installer plan: catches build
+# breakage on every change, not just at tagged releases. Once stable, smoke
+# tests in fresh VMs will run after each successful build.
+
+on:
+  push:
+    branches:
+      - main
+      - 'installer-*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+# Cancel in-flight runs for the same branch when a new push arrives —
+# only the latest commit's build matters.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── macOS arm64 build ─────────────────────────────────────────────────────
+  # Uses macos-latest (currently macos-14, Apple Silicon).
+  # Produces an unsigned .dmg suitable for manual install testing.
+  # Code signing / notarization will be added once Apple Developer ID is set up.
+  build-mac-arm64:
+    name: macOS arm64
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # Cache npm install
+          cache: 'npm'
+
+      - name: Setup Python (used by build-portable-bundle.js for pip download)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build portable Python+wheels bundle
+        run: node scripts/build-portable-bundle.js --target mac-arm64
+
+      - name: Stage bundle into extraResources/
+        run: node scripts/stage-portable-bundle.js --target mac-arm64
+
+      - name: Show staged extraResources/
+        run: |
+          du -sh extraResources/
+          ls -la extraResources/
+          cat extraResources/bundle-manifest.json
+
+      - name: Verify bundled Python boots
+        run: |
+          extraResources/python/bin/python3 --version
+          extraResources/python/bin/python3 -c "import sys; print(sys.executable); print(sys.platform)"
+
+      - name: Verify bundled wheels create a working venv (offline)
+        run: |
+          extraResources/python/bin/python3 -m venv /tmp/smoke-venv
+          /tmp/smoke-venv/bin/pip install --no-index --find-links extraResources/wheels/ -r extraResources/requirements-bundle.txt
+          /tmp/smoke-venv/bin/python -c "
+          import faster_whisper, websockets, sounddevice, numpy
+          print('faster_whisper', faster_whisper.__version__)
+          print('numpy', numpy.__version__)
+          print('all imports ok')
+          "
+
+      - name: Build unsigned .dmg (arm64 only)
+        run: npx electron-builder --mac dmg --arm64 --publish never
+        env:
+          # No code signing yet — disable auto-discovery so build doesn't fail
+          # looking for a certificate that isn't there.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Show build output
+        run: ls -la dist/
+
+      - name: Upload .dmg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windy-pro-mac-arm64
+          path: |
+            dist/*.dmg
+            dist/*.dmg.blockmap
+            dist/latest-mac.yml
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload bundle manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-manifest-mac-arm64
+          path: extraResources/bundle-manifest.json
+          retention-days: 14
+
+  # ── E2E (Playwright-electron) ─────────────────────────────────────────────
+  # Gated on build-mac-arm64 because the wizard E2E walks paths that
+  # write to ~/.windy-pro/ — needs a working bundled-Python at minimum.
+  # Runs on macos-latest (only platform we currently produce E2E specs
+  # for; Linux has display/audio sandbox issues on hosted runners).
+  #
+  # On failure, traces + screenshots + videos uploaded as artefacts —
+  # they're the only signal we'll get without re-running locally.
+  e2e:
+    name: E2E (wizard + signup banner)
+    needs: build-mac-arm64
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - name: Install npm deps
+        run: npm ci
+      - name: Run Playwright suite
+        run: npx playwright test --reporter=list,html
+        env:
+          # Shorten Electron startup wait on hosted runners
+          ELECTRON_DISABLE_SANDBOX: '1'
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e-report/
+            e2e-results/
+          retention-days: 14
+
+  # ── macOS x64 build ───────────────────────────────────────────────────────
+  # macos-13 is the last GitHub-hosted Intel runner — once it's deprecated
+  # we'll need to either drop x64 builds or cross-build from arm64 with
+  # the --x64 electron-builder flag (which doesn't fully work today because
+  # python-build-standalone is target-specific).
+  build-mac-x64:
+    name: macOS x64
+    runs-on: macos-13
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install npm deps
+        run: npm ci
+      - name: Build portable Python+wheels bundle (mac-x64)
+        run: node scripts/build-portable-bundle.js --target mac-x64
+      - name: Stage bundle into extraResources/
+        run: node scripts/stage-portable-bundle.js --target mac-x64
+      - name: Smoke-test bundled Python + venv
+        run: |
+          extraResources/python/bin/python3 --version
+          extraResources/python/bin/python3 -m venv /tmp/smoke-venv
+          /tmp/smoke-venv/bin/pip install --no-index --find-links extraResources/wheels/ -r extraResources/requirements-bundle.txt
+          /tmp/smoke-venv/bin/python -c "import faster_whisper, websockets, sounddevice, numpy; print('imports ok')"
+      - name: Build unsigned .dmg (x64)
+        run: npx electron-builder --mac dmg --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windy-pro-mac-x64
+          path: |
+            dist/*.dmg
+            dist/*.dmg.blockmap
+            dist/latest-mac.yml
+          retention-days: 14
+          if-no-files-found: error
+
+  # ── Linux x64 build ───────────────────────────────────────────────────────
+  # Targets glibc-based distros (Debian/Ubuntu/Fedora/Arch). Produces an
+  # AppImage (universal) and a .deb (Debian/Ubuntu friendly).
+  build-linux-x64:
+    name: Linux x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install OS deps for AppImage build
+        # libfuse2 needed by AppImage runtime; the rest is for portaudio
+        # and friends so the bundled wheels can build their native parts
+        # if a sdist sneaks through.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2 portaudio19-dev libasound2-dev
+      - name: Install npm deps
+        run: npm ci
+      - name: Build portable Python+wheels bundle (linux-x64)
+        run: node scripts/build-portable-bundle.js --target linux-x64
+      - name: Stage bundle into extraResources/
+        run: node scripts/stage-portable-bundle.js --target linux-x64
+      - name: Smoke-test bundled Python + venv
+        run: |
+          extraResources/python/bin/python3 --version
+          extraResources/python/bin/python3 -m venv /tmp/smoke-venv
+          /tmp/smoke-venv/bin/pip install --no-index --find-links extraResources/wheels/ -r extraResources/requirements-bundle.txt
+          /tmp/smoke-venv/bin/python -c "import faster_whisper, websockets, numpy; print('imports ok')"
+      - name: Build .AppImage and .deb
+        run: npx electron-builder --linux AppImage deb --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windy-pro-linux-x64
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+          retention-days: 14
+          if-no-files-found: error
+
+  # ── Windows x64 build ─────────────────────────────────────────────────────
+  # Produces an NSIS installer .exe. No code signing yet — Windows users
+  # will see SmartScreen warnings until we get an EV certificate (deferred
+  # to v2.1 per the install-wizard plan).
+  build-win-x64:
+    name: Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install npm deps
+        run: npm ci
+      - name: Build portable Python+wheels bundle (win-x64)
+        run: node scripts/build-portable-bundle.js --target win-x64
+      - name: Stage bundle into extraResources/
+        run: node scripts/stage-portable-bundle.js --target win-x64
+      - name: Smoke-test bundled Python + venv (PowerShell)
+        shell: pwsh
+        run: |
+          & ".\extraResources\python\python.exe" --version
+          & ".\extraResources\python\python.exe" -m venv $env:TEMP\smoke-venv
+          & "$env:TEMP\smoke-venv\Scripts\pip.exe" install --no-index --find-links extraResources\wheels\ -r extraResources\requirements-bundle.txt
+          & "$env:TEMP\smoke-venv\Scripts\python.exe" -c "import faster_whisper, websockets, numpy; print('imports ok')"
+      - name: Build NSIS installer .exe
+        run: npx electron-builder --win nsis --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windy-pro-win-x64
+          path: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
+          retention-days: 14
+          if-no-files-found: error

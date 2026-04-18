@@ -31,7 +31,30 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { execSync } = require('child_process');
+const crypto = require('crypto');
+const { execSync, exec } = require('child_process');
+
+/**
+ * Promise-wrapped exec(). MUST be used (instead of execSync) for any
+ * step in the install flow that takes more than ~50ms. execSync blocks
+ * the entire Electron event loop, which freezes IPC delivery — meaning
+ * the wizard's progress bar appears stuck at 0% during long installs
+ * (the actual symptom Grant reported). exec() runs the subprocess in a
+ * worker so the event loop stays free and `sendProgress` IPCs flow.
+ */
+function execAsync(cmd, opts = {}) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { maxBuffer: 16 * 1024 * 1024, ...opts }, (err, stdout, stderr) => {
+      if (err) {
+        err.stdout = stdout;
+        err.stderr = stderr;
+        reject(err);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
 
 class BundledAssets {
   constructor() {
@@ -42,29 +65,40 @@ class BundledAssets {
   }
 
   /**
-   * Find the bundled/ directory. It can be in:
-   * - ./bundled/ (development)
-   * - ../bundled/ (from installer-v2/)
-   * - resources/bundled/ (Electron packaged)
-   * - process.resourcesPath/bundled/ (Electron asar)
+   * Find the bundle directory. Possible locations:
+   * - process.resourcesPath/bundled/ (Electron packaged — extraResources/ lands here)
+   * - ./extraResources/ or ../../extraResources/ (dev mode — source of truth)
+   * - ./bundled/ or ../../bundled/ (legacy/partial bundle)
+   *
+   * We prefer a *complete* bundle (python + wheels) over a partial one, because
+   * dev checkouts can have a stale bundled/ from earlier layouts that's missing
+   * wheels — silently picking it sends the installer down the legacy pip-from-
+   * PyPI path and llvmlite tries to build from source.
    */
   _findBundleDir() {
-    const candidates = [
-      path.join(__dirname, '..', '..', 'bundled'),          // from core/ → installer-v2/ → project root
-      path.join(__dirname, '..', 'bundled'),                 // from core/ → installer-v2/bundled
-      path.join(process.cwd(), 'bundled'),                   // from project root
-      path.join(process.cwd(), '..', 'bundled'),
-    ];
-
-    // Electron packaged app
+    const candidates = [];
     if (process.resourcesPath) {
-      candidates.unshift(path.join(process.resourcesPath, 'bundled'));
+      candidates.push(path.join(process.resourcesPath, 'bundled'));
     }
+    candidates.push(
+      path.join(__dirname, '..', '..', 'extraResources'),  // dev: from core/ → installer-v2/ → repo root
+      path.join(process.cwd(), 'extraResources'),
+      path.join(__dirname, '..', '..', 'bundled'),
+      path.join(__dirname, '..', 'bundled'),
+      path.join(process.cwd(), 'bundled'),
+      path.join(process.cwd(), '..', 'bundled'),
+    );
+
+    const exists = (p) => fs.existsSync(p);
+    const isComplete = (dir) =>
+      exists(dir) && exists(path.join(dir, 'python')) && exists(path.join(dir, 'wheels'));
+    const hasPython = (dir) => exists(dir) && exists(path.join(dir, 'python'));
 
     for (const dir of candidates) {
-      if (fs.existsSync(dir) && fs.existsSync(path.join(dir, 'python'))) {
-        return dir;
-      }
+      if (isComplete(dir)) return dir;
+    }
+    for (const dir of candidates) {
+      if (hasPython(dir)) return dir;
     }
 
     return path.join(process.cwd(), 'bundled'); // fallback, may not exist
@@ -88,22 +122,57 @@ class BundledAssets {
   }
 
   /**
-   * Get the path to the bundled Python directory (extracted)
+   * Get the path to the bundled production requirements file
+   * (shipped by stage-portable-bundle.js). Used for offline pip install.
+   * Returns null if not bundled (legacy bundle without wheels).
+   */
+  getBundledRequirementsPath() {
+    const p = path.join(this.bundleDir, 'requirements-bundle.txt');
+    return fs.existsSync(p) ? p : null;
+  }
+
+  /**
+   * Get the path to the bundled Python directory.
+   *
+   * Modern flat layout (produced by scripts/build-portable-bundle.js):
+   *   bundled/python/{bin,lib,...}                 — single platform per build
+   *
+   * Legacy platform-segmented layout (older prepare-bundle.js):
+   *   bundled/python/{macos,linux,win64}/python/   — all platforms in one dir
+   *
+   * We check the modern layout first, then fall back to legacy.
    */
   _getPythonExtractedDir() {
+    // Modern flat layout: bundled/python/bin/python3 (Unix) or python.exe (Win)
+    const flatProbe = this.platform === 'win32'
+      ? path.join(this.bundleDir, 'python', 'python.exe')
+      : path.join(this.bundleDir, 'python', 'bin', 'python3');
+    if (fs.existsSync(flatProbe)) {
+      return path.join(this.bundleDir, 'python');
+    }
+    // Legacy platform-segmented layout
     if (this.platform === 'win32') {
       return path.join(this.bundleDir, 'python', 'win64');
     } else if (this.platform === 'darwin') {
-      return path.join(this.bundleDir, 'python', 'macos');
+      return path.join(this.bundleDir, 'python', 'macos', 'python');
     } else {
-      return path.join(this.bundleDir, 'python', 'linux');
+      return path.join(this.bundleDir, 'python', 'linux', 'python');
     }
   }
 
   /**
-   * Get the path to the bundled ffmpeg directory (extracted)
+   * Get the path to the bundled ffmpeg directory.
+   *
+   * Modern flat layout: bundled/ffmpeg/ffmpeg(.exe)
+   * Legacy layout:      bundled/ffmpeg/extracted-{mac,linux,win}/...
    */
   _getFfmpegExtractedDir() {
+    const flatProbe = this.platform === 'win32'
+      ? path.join(this.bundleDir, 'ffmpeg', 'ffmpeg.exe')
+      : path.join(this.bundleDir, 'ffmpeg', 'ffmpeg');
+    if (fs.existsSync(flatProbe)) {
+      return path.join(this.bundleDir, 'ffmpeg');
+    }
     if (this.platform === 'win32') {
       return path.join(this.bundleDir, 'ffmpeg', 'extracted-win');
     } else if (this.platform === 'darwin') {
@@ -111,6 +180,133 @@ class BundledAssets {
     } else {
       return path.join(this.bundleDir, 'ffmpeg', 'extracted-linux');
     }
+  }
+
+  /**
+   * Get path to the bundled wheels directory.
+   * Returns null if no wheels are bundled (legacy bundle without wheels).
+   */
+  _getWheelsDir() {
+    const dir = path.join(this.bundleDir, 'wheels');
+    return fs.existsSync(dir) ? dir : null;
+  }
+
+  /**
+   * Locate the bundled uv binary (Astral's fast pip drop-in).
+   *
+   * Layout: bundled/uv/uv (Unix) or bundled/uv/uv.exe (Windows).
+   * Returns null if uv isn't bundled — caller should fall back to pip.
+   *
+   * Why uv: the marketing site promises "30 seconds install". pip from
+   * wheels takes ~48s on Grant's iMac; uv takes ~5s for the same payload
+   * because it parallelises wheel resolution and uses hardlinks.
+   */
+  _findUv() {
+    const exe = this.platform === 'win32'
+      ? path.join(this.bundleDir, 'uv', 'uv.exe')
+      : path.join(this.bundleDir, 'uv', 'uv');
+    return fs.existsSync(exe) ? exe : null;
+  }
+
+  /**
+   * Check if bundled wheels are available for offline pip install.
+   */
+  hasBundledWheels() {
+    const dir = this._getWheelsDir();
+    if (!dir) return false;
+    try {
+      return fs.readdirSync(dir).some(f => f.endsWith('.whl'));
+    } catch { return false; }
+  }
+
+  /**
+   * Create a fresh venv using bundled Python and install dependencies
+   * from bundled wheels. Fully offline, no system Python required.
+   *
+   * Returns the venv's python executable path on success, null on failure.
+   *
+   * @param {string} appDir - User app dir, typically ~/.windy-pro/
+   * @param {string} requirementsPath - Path to requirements file
+   * @param {Function} onLog - Optional logger
+   */
+  async installVenvFromWheels(appDir, requirementsPath, onLog) {
+    const log = onLog || console.log;
+    const wheelsDir = this._getWheelsDir();
+    if (!wheelsDir) {
+      log('[BundledAssets] No bundled wheels — cannot do offline venv install');
+      return null;
+    }
+    if (!fs.existsSync(requirementsPath)) {
+      log(`[BundledAssets] Requirements file not found: ${requirementsPath}`);
+      return null;
+    }
+
+    // Get bundled Python
+    const bundledPyDir = this._getPythonExtractedDir();
+    const bundledPyExe = this._findPythonExe(bundledPyDir);
+    if (!bundledPyExe || !this._isPythonWorking(bundledPyExe)) {
+      log('[BundledAssets] Bundled Python not available or not working');
+      return null;
+    }
+
+    // Create fresh venv on user's machine — no path portability issues possible
+    const venvDir = path.join(appDir, 'venv');
+    const venvPyExe = this.platform === 'win32'
+      ? path.join(venvDir, 'Scripts', 'python.exe')
+      : path.join(venvDir, 'bin', 'python');
+    const venvPipExe = this.platform === 'win32'
+      ? path.join(venvDir, 'Scripts', 'pip.exe')
+      : path.join(venvDir, 'bin', 'pip');
+
+    if (fs.existsSync(venvPyExe) && this._isPythonWorking(venvPyExe)) {
+      log('[BundledAssets] Venv already exists and works');
+      return venvPyExe;
+    }
+
+    log(`[BundledAssets] Creating venv at ${venvDir}`);
+    fs.mkdirSync(appDir, { recursive: true });
+    const t0Venv = Date.now();
+    try {
+      await execAsync(`"${bundledPyExe}" -m venv "${venvDir}"`, { timeout: 60000 });
+    } catch (e) {
+      log(`[BundledAssets] venv creation failed (${Date.now() - t0Venv}ms): ${e.message}`);
+      if (e.stderr) log(`[BundledAssets]   stderr: ${String(e.stderr).slice(0, 500)}`);
+      return null;
+    }
+    log(`[BundledAssets] venv created in ${Date.now() - t0Venv}ms`);
+
+    log(`[BundledAssets] Installing wheels from ${wheelsDir}`);
+    const t0Pip = Date.now();
+    // Prefer uv (Astral) if bundled — drops install time from ~48s to <10s.
+    // Falls back to pip transparently when uv isn't present.
+    const uvExe = this._findUv();
+    try {
+      if (uvExe) {
+        log(`[BundledAssets] Using bundled uv at ${uvExe}`);
+        await execAsync(
+          `"${uvExe}" pip install --python "${venvPyExe}" --no-index --find-links "${wheelsDir}" -r "${requirementsPath}"`,
+          { timeout: 180000 }
+        );
+      } else {
+        log('[BundledAssets] uv not bundled — using pip (slower but works)');
+        await execAsync(
+          `"${venvPipExe}" install --no-index --find-links "${wheelsDir}" -r "${requirementsPath}"`,
+          { timeout: 180000 }
+        );
+      }
+    } catch (e) {
+      log(`[BundledAssets] pip install failed (${Date.now() - t0Pip}ms): ${e.message}`);
+      if (e.stderr) log(`[BundledAssets]   stderr: ${String(e.stderr).slice(0, 800)}`);
+      return null;
+    }
+    log(`[BundledAssets] wheels installed in ${Date.now() - t0Pip}ms`);
+
+    if (this._isPythonWorking(venvPyExe)) {
+      log('[BundledAssets] Venv ready');
+      return venvPyExe;
+    }
+    log('[BundledAssets] Venv created but not working');
+    return null;
   }
 
   /**
@@ -252,6 +448,70 @@ class BundledAssets {
 
     log('[BundledAssets] No bundled default model available');
     return null;
+  }
+
+  /**
+   * Verify bundled starter model integrity against bundle-manifest.json.
+   *
+   * WINDY-052 — catches two failure modes:
+   *   1. Tampered .dmg (attacker replaced a model file)
+   *   2. Corrupt install (disk error during copy; user closed laptop
+   *      mid-install)
+   *
+   * Reads bundle-manifest.json from the bundle root; for each file
+   * listed under `modelFiles`, checks the SHA-256 against the
+   * installed copy. Returns:
+   *   { ok: true, verified: <n> }                when all match
+   *   { ok: true, skipped: true, reason }        when manifest lacks
+   *                                               hashes (older bundles)
+   *   { ok: false, issues: [{file, expected, actual}], ... }
+   *                                               on mismatch
+   *
+   * Intentionally does NOT throw — caller can decide whether to
+   * WindyError.from('WINDY-052'), re-download, or continue.
+   *
+   * @param {string} modelDir — path to the installed model directory
+   *                            (e.g. ~/.windy-pro/models/faster-whisper-base)
+   */
+  verifyModelIntegrity(modelDir) {
+    const manifestPath = path.join(this.bundleDir, 'bundle-manifest.json');
+    if (!fs.existsSync(manifestPath)) {
+      return { ok: true, skipped: true, reason: 'no bundle-manifest.json' };
+    }
+    let manifest;
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    } catch (e) {
+      return { ok: true, skipped: true, reason: `manifest unparseable: ${e.message}` };
+    }
+    const expected = manifest.modelFiles;
+    if (!expected || typeof expected !== 'object' || Object.keys(expected).length === 0) {
+      // Older bundles don't have modelFiles — backward-compatible path.
+      return { ok: true, skipped: true, reason: 'manifest lacks modelFiles' };
+    }
+    const issues = [];
+    let verified = 0;
+    for (const [relPath, expectedHash] of Object.entries(expected)) {
+      const full = path.join(modelDir, relPath);
+      if (!fs.existsSync(full)) {
+        issues.push({ file: relPath, expected: expectedHash, actual: null, reason: 'missing' });
+        continue;
+      }
+      try {
+        const actualHash = crypto.createHash('sha256')
+          .update(fs.readFileSync(full))
+          .digest('hex');
+        if (actualHash !== expectedHash) {
+          issues.push({ file: relPath, expected: expectedHash, actual: actualHash, reason: 'sha256 mismatch' });
+        } else {
+          verified++;
+        }
+      } catch (e) {
+        issues.push({ file: relPath, expected: expectedHash, actual: null, reason: `read failed: ${e.message}` });
+      }
+    }
+    if (issues.length === 0) return { ok: true, verified };
+    return { ok: false, verified, issues, message: 'model integrity mismatch' };
   }
 
   // ─── Helpers ───

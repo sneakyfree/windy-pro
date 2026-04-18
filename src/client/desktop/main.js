@@ -17,26 +17,37 @@ const crashLogDir = process.platform === 'darwin'
     : _path.join(_os.homedir(), '.config', 'windy-pro');
 const crashLogPath = _path.join(crashLogDir, 'crash.log');
 
+// CR-006 (P15): allow-list redaction. The previous deny-list missed
+// anything other than Bearer/sk-/key_. Inverted: extract only known-
+// safe fields (message, code, name, top-N stack frames) and drop
+// everything else on the error object. Implementation in
+// src/client/desktop/lib/crash-summary.js (unit tested).
+const { safeErrorSummary: _safeErrorSummary } = require('./lib/crash-summary');
+
 function writeCrashLog(type, err) {
   try {
     const dir = _path.dirname(crashLogPath);
     if (!_fs.existsSync(dir)) _fs.mkdirSync(dir, { recursive: true });
-    // Redact API keys from error messages
-    let msg = String(err?.stack || err?.message || err);
-    msg = msg.replace(/Bearer\s+\S+/gi, 'Bearer ***REDACTED***');
-    msg = msg.replace(/sk-[a-zA-Z0-9]+/g, 'sk-***');
-    msg = msg.replace(/key[_-]?[a-zA-Z0-9]{10,}/gi, 'KEY_REDACTED');
-    const entry = `[${new Date().toISOString()}] ${type}: ${msg}\n`;
+    const entry = JSON.stringify({
+      ts: new Date().toISOString(),
+      type,
+      ..._safeErrorSummary(err),
+    }) + '\n';
     _fs.appendFileSync(crashLogPath, entry);
   } catch (_) { }
 }
 
 process.on('uncaughtException', (err) => {
   writeCrashLog('UncaughtException', err);
-  console.error('[CRASH]', err.message);
+  // CR-002: route the visible strings through safeErrorSummary so
+  // the console output + the user-facing dialog never show any
+  // attached fields (axios .response, etc.) — only the allow-listed
+  // name / message / code. Stack stays in the JSON crash log only.
+  const _summary = _safeErrorSummary(err);
+  console.error('[CRASH]', _summary.message || _summary.name || '(no details)');
 
   // EPIPE / ECONNRESET from dead child processes (Python server) — handle gracefully
-  if (['EPIPE', 'ECONNRESET', 'ECONNREFUSED'].includes(err.code)) {
+  if (['EPIPE', 'ECONNRESET', 'ECONNREFUSED'].includes(_summary.code)) {
     console.warn('[CRASH] Pipe/connection error (child process likely died) — recovering gracefully');
     return; // Don't show crash dialog for pipe errors
   }
@@ -47,7 +58,7 @@ process.on('uncaughtException', (err) => {
     if (require('electron').app.isReady()) {
       dialog.showErrorBox(
         'Windy Pro encountered an error',
-        `Something went wrong. The error has been logged.\n\nDetails: ${err.message}\n\nLog: ${crashLogPath}`
+        `Something went wrong. The error has been logged.\n\nDetails: ${_summary.message || '(no details)'}\n\nLog: ${crashLogPath}`
       );
     }
   } catch (_) { /* dialog may not be available yet */ }
@@ -55,7 +66,13 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason) => {
   writeCrashLog('UnhandledRejection', reason);
-  console.error('[REJECTION]', String(reason));
+  // CR-002: avoid String(reason) which would call the object's
+  // toString — for most Errors that's safe (name + message) but
+  // a library could override toString to emit arbitrary fields.
+  // Use the crash-summary helper so the console fallback matches
+  // the redaction the crash log applies.
+  const _sum = _safeErrorSummary(reason);
+  console.error('[REJECTION]', _sum.message || _sum.name || '(no details)');
 });
 /**
  * Windy Pro - Electron Main Process
@@ -95,6 +112,10 @@ const fs = require('fs');
 const fsp = fs.promises;
 const os = require('os');
 const util = require('util');
+// CR-003: withTimeout for IPC handlers — bounds long-running awaits
+// so a hung upstream (Matrix, translate API, HF download) can't
+// leave the renderer waiting forever on an IPC reply.
+const { withTimeout } = require('./lib/timeout');
 const execFileAsync = util.promisify(execFile);
 // ═══ Lazy-loaded modules (deferred to speed up startup) ═══
 // These modules pull in heavy deps (matrix-js-sdk, stripe, better-sqlite3, electron-updater)
@@ -450,11 +471,33 @@ function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
 function startPythonServer() {
   const serverConfig = store.get('server');
   const appDataDir = path.join(os.homedir(), '.windy-pro');
-  const venvPython = process.platform === 'win32'
+
+  // Resolution order (matches the bundle-don't-install architecture):
+  //   1. User-data venv (~/.windy-pro/venv) — created at first-run by wizard
+  //      from bundled wheels. Preferred because it's writable for future deps.
+  //   2. Packaged bundled Python (process.resourcesPath/bundled/python) —
+  //      safety net: if wizard didn't run yet (or failed), the engine can still
+  //      boot using bundled Python directly, no system Python needed.
+  //   3. System python3 — last-resort fallback for dev environments.
+  const userVenvPython = process.platform === 'win32'
     ? path.join(appDataDir, 'venv', 'Scripts', 'python.exe')
     : path.join(appDataDir, 'venv', 'bin', 'python');
+  const bundledPython = process.resourcesPath
+    ? (process.platform === 'win32'
+        ? path.join(process.resourcesPath, 'bundled', 'python', 'python.exe')
+        : path.join(process.resourcesPath, 'bundled', 'python', 'bin', 'python3'))
+    : null;
 
-  const pythonPath = fs.existsSync(venvPython) ? venvPython : 'python3';
+  let pythonPath;
+  if (fs.existsSync(userVenvPython)) {
+    pythonPath = userVenvPython;
+  } else if (bundledPython && fs.existsSync(bundledPython)) {
+    pythonPath = bundledPython;
+    console.info('[Python] Using bundled Python (wizard venv not yet created)');
+  } else {
+    pythonPath = 'python3';
+    console.warn('[Python] Falling back to system python3 — bundled assets not detected');
+  }
   const projectRoot = app.isPackaged
     ? process.resourcesPath
     : path.join(__dirname, '..', '..', '..');
@@ -1347,157 +1390,34 @@ function createVideoWindow() {
   return videoWindow;
 }
 
-// Show video preview
-ipcMain.handle('show-video-preview', async () => {
-  if (videoDismissed) return { ok: false, dismissed: true };
-  const win = createVideoWindow();
-  win.show();
-  return { ok: true };
-});
-
-// Relay video frames from main renderer to video preview window
-ipcMain.on('video-frame-to-preview', (event, dataUrl) => {
-  if (videoWindow && !videoWindow.isDestroyed() && !videoWindow.webContents.isDestroyed()) {
-    videoWindow.webContents.send('video-frame', dataUrl);
-  }
-});
-
-// Relay recording state to video preview window
-ipcMain.on('recording-state-to-preview', (event, state) => {
-  if (videoWindow && !videoWindow.isDestroyed() && !videoWindow.webContents.isDestroyed()) {
-    videoWindow.webContents.send('recording-state', state);
-  }
-});
-
-// Hide video preview (only on close button or explicit dismiss)
-ipcMain.handle('hide-video-preview', async () => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    videoWindow.webContents.send('stop-camera');
-    videoWindow.hide();
-  }
-  return { ok: true };
-});
-
-// Resize video preview
-ipcMain.on('resize-video-preview', (event, w, h) => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    videoWindow.setSize(Math.round(w), Math.round(h));
-  }
-});
-
-// Resize + reposition (for corners that need position adjustment)
-ipcMain.on('resize-move-video-preview', (event, w, h, x, y) => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    const rw = Math.round(w);
-    const rh = Math.round(h);
-    if (x !== null && y !== null) {
-      videoWindow.setBounds({ x: Math.round(x), y: Math.round(y), width: rw, height: rh });
-    } else if (x !== null) {
-      const bounds = videoWindow.getBounds();
-      videoWindow.setBounds({ x: Math.round(x), y: bounds.y, width: rw, height: rh });
-    } else if (y !== null) {
-      const bounds = videoWindow.getBounds();
-      videoWindow.setBounds({ x: bounds.x, y: Math.round(y), width: rw, height: rh });
-    } else {
-      videoWindow.setSize(rw, rh);
-    }
-  }
-});
-
-// ═══ Main-process mouse polling for resize (bypasses Electron pointer capture limits) ═══
-let resizeInterval = null;
-ipcMain.on('start-resize-video', (event, corner, startScreenX, startScreenY, startW, startH, startWinX, startWinY) => {
-  if (resizeInterval) clearInterval(resizeInterval);
-  const { screen } = require('electron');
-  resizeInterval = setInterval(() => {
-    if (!videoWindow || videoWindow.isDestroyed()) { clearInterval(resizeInterval); resizeInterval = null; return; }
-    const cursor = screen.getCursorScreenPoint();
-    const dx = cursor.x - startScreenX;
-    let newW, newX, newY;
-    switch (corner) {
-      case 'br':
-        newW = Math.max(160, Math.min(800, startW + dx));
-        break;
-      case 'bl':
-        newW = Math.max(160, Math.min(800, startW - dx));
-        newX = startWinX + (startW - newW);
-        break;
-      case 'tr':
-        newW = Math.max(160, Math.min(800, startW + dx));
-        break;
-      case 'tl':
-        newW = Math.max(160, Math.min(800, startW - dx));
-        newX = startWinX + (startW - newW);
-        break;
-    }
-    const newH = Math.round(newW * 9 / 16);
-    if (corner === 'tr' || corner === 'tl') {
-      newY = startWinY + (startH - newH);
-    }
-    const rw = Math.round(newW);
-    const rh = Math.round(newH);
-    if (newX !== undefined && newY !== undefined) {
-      videoWindow.setBounds({ x: Math.round(newX), y: Math.round(newY), width: rw, height: rh });
-    } else if (newX !== undefined) {
-      const b = videoWindow.getBounds();
-      videoWindow.setBounds({ x: Math.round(newX), y: b.y, width: rw, height: rh });
-    } else if (newY !== undefined) {
-      const b = videoWindow.getBounds();
-      videoWindow.setBounds({ x: b.x, y: Math.round(newY), width: rw, height: rh });
-    } else {
-      videoWindow.setSize(rw, rh);
-    }
-    // Send size back to renderer for label
-    try { videoWindow.webContents.send('resize-feedback', rw, rh); } catch (_) { }
-  }, 16); // ~60fps
-});
-
-ipcMain.on('stop-resize-video', () => {
-  if (resizeInterval) { clearInterval(resizeInterval); resizeInterval = null; }
-});
-
-ipcMain.on('close-video-preview', () => {
-  videoDismissed = true; // Don't auto-show again until app restart
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    videoWindow.webContents.send('stop-camera');
-    videoWindow.hide();
-  }
-});
-
-// Minimize video preview
-ipcMain.on('minimize-video-preview', () => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    videoWindow.minimize();
-  }
-});
-
-// Toggle always-on-top for video preview (send to back / bring to front)
-ipcMain.handle('toggle-video-always-on-top', async () => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    const isOnTop = videoWindow.isAlwaysOnTop();
-    videoWindow.setAlwaysOnTop(!isOnTop);
-    return !isOnTop;
-  }
-  return false;
+// CR-009c: 11 video-preview IPC handlers extracted to ./ui/video-ipc.js.
+// videoWindow + videoDismissed are main.js-scoped `let` globals —
+// passed via ref wrappers so the registrar can mutate them through
+// the getter/setter bridge.
+const { registerVideoIpc } = require('./ui/video-ipc');
+const _videoWindowRef = {
+  get current() { return videoWindow; },
+  set current(v) { videoWindow = v; },
+};
+const _videoDismissedRef = {
+  get current() { return videoDismissed; },
+  set current(v) { videoDismissed = v; },
+};
+registerVideoIpc({
+  ipcMain,
+  createVideoWindow,
+  videoWindowRef: _videoWindowRef,
+  videoDismissedRef: _videoDismissedRef,
+  screen: require('electron').screen,
 });
 
 // ═══════════════════════════════════════════
 //  FONT SIZE CONTROL
 // ═══════════════════════════════════════════
 
-ipcMain.handle('get-font-size', async () => {
-  return store.get('appearance.fontSize') || 100;
-});
-
-ipcMain.handle('set-font-size', async (event, percent) => {
-  const clamped = Math.max(70, Math.min(150, percent));
-  store.set('appearance.fontSize', clamped);
-  // Notify renderer
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('font-size-changed', clamped);
-  }
-  return clamped;
-});
+// CR-009 cont: font-size / settings / rebind-hotkey extracted to
+// ./ui/settings-ipc.js. Registered lower in the file where
+// registerHotkeys is in scope.
 
 // ═══════════════════════════════════════════
 //  MINI TRANSLATE WINDOW (floating quick-translate)
@@ -1550,9 +1470,19 @@ ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang
   try {
     const https = require('https');
     const token = store.get('license.cloudToken') || '';
+    // CR-003: input sanity — reject absurdly large payloads at the
+    // client before shipping them to the API. Server also validates
+    // (≤5000 chars via shared/contracts/TranslateTextRequestSchema),
+    // but this saves the round-trip on obvious abuse.
+    if (typeof text !== 'string' || text.length === 0) {
+      return { error: 'Empty text' };
+    }
+    if (text.length > 5000) {
+      return { error: 'Text too long (max 5000 chars)' };
+    }
     const postData = JSON.stringify({ text, sourceLang, targetLang });
 
-    return await new Promise((resolve, reject) => {
+    const reqPromise = new Promise((resolve) => {
       const req = https.request('https://windyword.ai/api/v1/translate/text', {
         method: 'POST',
         headers: {
@@ -1575,9 +1505,12 @@ ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang
       req.write(postData);
       req.end();
     });
+    // CR-003: 15s end-to-end bound. The server's p99 is under 3s;
+    // anything above is a dead connection or an outage.
+    return await withTimeout(reqPromise, 15_000, 'mini-translate-text');
   } catch (err) {
     console.error('[mini-translate-text] Error:', err.message);
-    return { error: err.message };
+    return { error: err.message, timedOut: !!err.timedOut };
   }
 });
 
@@ -1699,237 +1632,32 @@ ipcMain.handle('launch-windy-code', async () => {
 });
 
 // Chat IPC — Authentication
-ipcMain.handle('chat-login', async (event, userId, password) => {
-  try {
-    const client = getChatClient();
-    const result = await client.login(userId, password);
-    if (result.success) _setupChatForwarding(client);
-    return result;
-  } catch (err) {
-    console.error('[chat-login] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-register', async (event, username, password, displayName) => {
-  try {
-    const client = getChatClient();
-    const result = await client.register(username, password, displayName);
-    if (result.success) _setupChatForwarding(client);
-    return result;
-  } catch (err) {
-    console.error('[chat-register] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-logout', async () => {
-  try {
-    if (chatClient) return await chatClient.logout();
-    return { success: true };
-  } catch (err) {
-    console.error('[chat-logout] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-get-session', async () => {
-  try {
-    const client = getChatClient();
-    const result = await client.resumeSession();
-    if (result.success) _setupChatForwarding(client);
-    return result;
-  } catch (err) {
-    console.error('[chat-get-session] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Messaging (client handles translation metadata internally)
-ipcMain.handle('chat-send-message', async (event, roomId, text) => {
-  try {
-    // Validate inputs
-    if (typeof roomId !== 'string' || roomId.length > 500) return { error: 'Invalid room ID' };
-    if (typeof text !== 'string' || text.length === 0 || text.length > 65535) return { error: 'Message too long or empty' };
-    return await getChatClient().sendMessage(roomId, text);
-  } catch (err) {
-    console.error('[chat-send-message] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-get-messages', async (event, roomId, limit) => {
-  try {
-    return await getChatClient().getMessages(roomId, limit || 50);
-  } catch (err) {
-    console.error('[chat-get-messages] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-send-typing', async (event, roomId, isTyping) => {
-  try {
-    return await getChatClient().sendTyping(roomId, isTyping);
-  } catch (err) {
-    console.error('[chat-send-typing] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Cached messages (offline access)
-ipcMain.handle('chat-get-cached-messages', async (event, roomId) => {
-  try {
-    return await getChatClient().getCachedMessages(roomId);
-  } catch (err) {
-    console.error('[chat-get-cached-messages] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Contacts & Rooms
-ipcMain.handle('chat-get-contacts', async () => {
-  try {
-    return await getChatClient().getContacts();
-  } catch (err) {
-    console.error('[chat-get-contacts] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-create-dm', async (event, userId) => {
-  try {
-    return await getChatClient().createDM(userId);
-  } catch (err) {
-    console.error('[chat-create-dm] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-accept-invite', async (event, roomId) => {
-  try {
-    return await getChatClient().acceptInvite(roomId);
-  } catch (err) {
-    console.error('[chat-accept-invite] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-decline-invite', async (event, roomId) => {
-  try {
-    return await getChatClient().declineInvite(roomId);
-  } catch (err) {
-    console.error('[chat-decline-invite] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Encryption
-ipcMain.handle('chat-get-crypto-status', async () => {
-  try {
-    return chatClient ? await chatClient.getCryptoStatus() : { enabled: false, deviceId: null, syncState: null };
-  } catch (err) {
-    console.error('[chat-get-crypto-status] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Profile & Presence
-ipcMain.handle('chat-set-display-name', async (event, displayName) => {
-  try {
-    return await getChatClient().setDisplayName(displayName);
-  } catch (err) {
-    console.error('[chat-set-display-name] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-set-presence', async (event, status) => {
-  try {
-    return await getChatClient().setPresence(status);
-  } catch (err) {
-    console.error('[chat-set-presence] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-get-user-profile', async (event, userId) => {
-  try {
-    return await getChatClient().getUserProfile(userId);
-  } catch (err) {
-    console.error('[chat-get-user-profile] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-get-total-unread', async () => {
-  try {
-    return await getChatClient().getTotalUnread();
-  } catch (err) {
-    console.error('[chat-get-total-unread] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Settings
-ipcMain.handle('chat-get-settings', async () => {
-  try {
-    return {
-      homeserver: store.get('chat.homeserver', 'https://matrix.org'),
-      displayName: store.get('chat.displayName', ''),
-      language: store.get('chat.language', 'en'),
-      userId: store.get('chat.userId', '')
-    };
-  } catch (err) {
-    console.error('[chat-get-settings] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-set-settings', async (event, settings) => {
-  try {
-    if (settings.homeserver) {
-      // Validate homeserver URL before saving
-      try {
-        const parsed = new URL(settings.homeserver);
-        const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
-        if (parsed.protocol !== 'https:' && !isLocalhost) {
-          return { ok: false, error: 'Homeserver must use HTTPS (except localhost for development)' };
-        }
-      } catch (e) {
-        return { ok: false, error: 'Invalid homeserver URL' };
-      }
-      store.set('chat.homeserver', settings.homeserver);
-    }
-    if (settings.displayName) {
-      store.set('chat.displayName', settings.displayName);
-      try { getChatClient().setDisplayName(settings.displayName); } catch (e) { console.debug('[Chat] setDisplayName failed:', e.message); }
-    }
-    if (settings.language) store.set('chat.language', settings.language);
-    return { ok: true };
-  } catch (err) {
-    console.error('[chat-set-settings] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Translation utilities
-ipcMain.handle('chat-get-user-language', async () => {
-  try {
-    return chatTranslator ? chatTranslator.getUserLanguage() : store.get('chat.language', 'en');
-  } catch (err) {
-    console.error('[chat-get-user-language] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-translate-text', async (event, text, srcLang, tgtLang) => {
-  try {
-    if (!chatTranslator) chatTranslator = new ChatTranslator(store);
-    return await chatTranslator.translate(text, srcLang, tgtLang);
-  } catch (err) {
-    console.error('[chat-translate-text] Error:', err.message);
-    return { error: err.message };
-  }
+// CR-009: 21 chat-* IPC handlers extracted to ./chat/ipc.js so the
+// main.js cold path stays manageable. The translatorRef wrapper
+// preserves the original lazy-instantiate-on-first-translate
+// semantics — chatTranslator is a module-level let that can be
+// null until the first chat-translate-text call.
+const { registerChatIpc } = require('./chat/ipc');
+const _chatTranslatorRef = {
+  get current() { return chatTranslator; },
+  set current(v) { chatTranslator = v; },
+};
+// CR-012: ChatTranslator lazy-required on first chat-translate-text
+// call. Keeps matrix-js-sdk + chat-translate out of the cold path
+// for users who never open the chat window.
+const _ChatTranslatorLazy = function ChatTranslatorLazy(store) {
+  const { ChatTranslator } = require('./chat/chat-translate');
+  return new ChatTranslator(store);
+};
+registerChatIpc({
+  ipcMain,
+  getChatClient,
+  getChatClientUnsafe: () => chatClient,
+  setupChatForwarding: _setupChatForwarding,
+  withTimeout,
+  store,
+  ChatTranslator: _ChatTranslatorLazy,
+  translatorRef: _chatTranslatorRef,
 });
 
 // Forward events from Matrix client → chat BrowserWindow
@@ -2140,86 +1868,15 @@ async function migrateUnencryptedModels() {
   }
 }
 
-ipcMain.handle('pair-catalog', async () => {
-  try {
-    const catalogPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'shared', 'pair-catalog.json')
-      : path.join(__dirname, '..', '..', '..', 'shared', 'pair-catalog.json');
-    return JSON.parse(await fsp.readFile(catalogPath, 'utf-8'));
-  } catch (err) {
-    console.error('[PairDL] Failed to load catalog:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('pair-bundles', async () => {
-  try {
-    const bundlesPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'shared', 'pair-bundles.json')
-      : path.join(__dirname, '..', '..', '..', 'shared', 'pair-bundles.json');
-    return JSON.parse(await fsp.readFile(bundlesPath, 'utf-8'));
-  } catch (err) {
-    console.error('[PairDL] Failed to load bundles:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('pair-download', async (event, pairId) => {
-  try {
-    const mgr = getPairDownloadManager();
-    const catalogPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'shared', 'pair-catalog.json')
-      : path.join(__dirname, '..', '..', '..', 'shared', 'pair-catalog.json');
-    const catalog = JSON.parse(await fsp.readFile(catalogPath, 'utf-8'));
-    return await mgr.downloadPair(pairId, catalog);
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-ipcMain.handle('pair-download-bundle', async (event, pairIds) => {
-  try {
-    const mgr = getPairDownloadManager();
-    const catalogPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'shared', 'pair-catalog.json')
-      : path.join(__dirname, '..', '..', '..', 'shared', 'pair-catalog.json');
-    const catalog = JSON.parse(await fsp.readFile(catalogPath, 'utf-8'));
-    return await mgr.downloadBundle(pairIds, catalog);
-  } catch (err) {
-    return { results: {}, error: err.message };
-  }
-});
-
-ipcMain.handle('pair-cancel', async (event, pairId) => {
-  try {
-    return getPairDownloadManager().cancelDownload(pairId);
-  } catch (err) {
-    return { cancelled: false, error: err.message };
-  }
-});
-
-ipcMain.handle('pair-delete', async (event, pairId) => {
-  try {
-    return await getPairDownloadManager().deletePair(pairId);
-  } catch (err) {
-    return { deleted: false, error: err.message };
-  }
-});
-
-ipcMain.handle('pair-list-downloaded', async () => {
-  try {
-    return getPairDownloadManager().getDownloadedPairs();
-  } catch (err) {
-    return [];
-  }
-});
-
-ipcMain.handle('pair-storage-info', async () => {
-  try {
-    return await getPairDownloadManager().getStorageInfo();
-  } catch (err) {
-    return { usedBytes: 0, availableBytes: 0, pairs: [], error: err.message };
-  }
+// CR-009b: 8 pair-* IPC handlers extracted to ./chat/pair-ipc.js.
+// Same registrar pattern as chat/ipc.js; deps object keeps main.js
+// the sole owner of the PairDownloadManager cache.
+const { registerPairIpc } = require('./chat/pair-ipc');
+registerPairIpc({
+  ipcMain,
+  app,
+  getPairDownloadManager,
+  withTimeout,
 });
 
 // ── Live Listen: speech translation for Quick Translate ──
@@ -2560,17 +2217,29 @@ function registerHotkeys() {
   const pasteClipAccel = hotkeys.pasteClipboard || 'CommandOrControl+Shift+B';
   const regClipboard = globalShortcut.register(pasteClipAccel, () => {
     // Small delay to let modifier keys release, then simulate Ctrl+V
-    const { exec } = require('child_process');
-    if (process.platform === 'linux') {
-      // --clearmodifiers ensures held keys (Ctrl+Shift from hotkey) don't interfere
-      exec('sleep 0.1 && xdotool key --clearmodifiers ctrl+v', (err) => {
-        if (err) console.error('[Hotkey] Paste clipboard failed:', err.message);
-      });
-    } else if (process.platform === 'darwin') {
-      exec('sleep 0.1 && osascript -e \'tell application "System Events" to keystroke "v" using command down\'');
-    } else {
-      exec('powershell -command "Start-Sleep -Milliseconds 100; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"');
-    }
+    // CR-005: replace `exec('sleep … && …')` with execFile + setTimeout.
+    // The literal strings were safe (no renderer input interpolated),
+    // but the `&&` shell pattern is easy to accidentally break. Also
+    // avoids spawning a shell just to sleep.
+    const { execFile } = require('child_process');
+    setTimeout(() => {
+      if (process.platform === 'linux') {
+        // --clearmodifiers ensures held keys (Ctrl+Shift from hotkey) don't interfere
+        execFile('xdotool', ['key', '--clearmodifiers', 'ctrl+v'], (err) => {
+          if (err) console.error('[Hotkey] Paste clipboard failed:', err.message);
+        });
+      } else if (process.platform === 'darwin') {
+        execFile('osascript', ['-e',
+          'tell application "System Events" to keystroke "v" using command down'],
+          (err) => { if (err) console.error('[Hotkey] Paste clipboard failed:', err.message); });
+      } else {
+        // Windows: SendKeys ^v — no shell escapes needed when we pass
+        // the script via -Command as a single argv element.
+        execFile('powershell', ['-NoProfile', '-Command',
+          "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^v')"
+        ], (err) => { if (err) console.error('[Hotkey] Paste clipboard failed:', err.message); });
+      }
+    }, 100);
   });
   console.info(`[Hotkey] Paste clipboard (${pasteClipAccel}): ${regClipboard ? 'OK' : 'FAILED'}`);
 
@@ -2637,31 +2306,8 @@ function sanitizeHotkeys() {
   if (fixed) store.set('hotkeys', hotkeys);
 }
 
-ipcMain.handle('rebind-hotkey', (event, key, accelerator) => {
-  try {
-    // Block reserved system shortcuts
-    if (RESERVED_SHORTCUTS.includes(accelerator)) {
-      return { ok: false, error: `${accelerator} is a reserved system shortcut` };
-    }
-
-    // Unregister all current shortcuts
-    globalShortcut.unregisterAll();
-
-    // Update the specific hotkey in store
-    const hotkeys = store.get('hotkeys');
-    hotkeys[key] = accelerator;
-    store.set('hotkeys', hotkeys);
-
-    // Re-register all shortcuts with updated config
-    registerHotkeys();
-
-    console.info(`[Hotkey] Rebound ${key} → ${accelerator}`);
-    return { ok: true, key, accelerator };
-  } catch (err) {
-    console.error(`[Hotkey] Rebind failed:`, err);
-    return { ok: false, error: err.message };
-  }
-});
+// rebind-hotkey extracted to ./ui/settings-ipc.js — registered
+// below once registerHotkeys is in scope.
 
 /**
  * Toggle recording state
@@ -2712,7 +2358,13 @@ function pasteTranscript() {
 
 // Get transcript and paste it via cursor injection
 ipcMain.on('transcript-for-paste', async (event, transcript) => {
-  if (transcript && transcript.trim()) {
+  // CR-004: ipcMain.on (not handle) doesn't propagate the rejection
+  // back to the renderer — async exceptions become process-level
+  // unhandledRejection events. Wrap the WHOLE body so any throw
+  // (mainWindow destroyed mid-flight, injector unavailable, etc.)
+  // becomes a logged error instead of crashing the dialog handler.
+  try {
+    if (!transcript || !transcript.trim()) return;
     safeSend('state-change', 'injecting');
     updateTrayIcon('injecting');
 
@@ -2727,7 +2379,7 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
         console.info(`[Paste] Activated "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
       } catch (_) { /* best-effort */ }
       await new Promise(resolve => setTimeout(resolve, 200));
-    } else if (process.platform !== 'darwin' && mainWindow && mainWindow.isVisible()) {
+    } else if (process.platform !== 'darwin' && mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
       mainWindow.hide();
       await new Promise(resolve => setTimeout(resolve, 200));
     }
@@ -2741,13 +2393,20 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
 
     // Restore UI state (window is already visible on macOS)
     setTimeout(() => {
-      if (mainWindow && !mainWindow.isVisible()) {
-        mainWindow.showInactive();  // Show without taking focus (non-macOS)
-      }
-      const newState = isRecording ? 'listening' : 'idle';
-      safeSend('state-change', newState);
-      updateTrayIcon(newState);
+      try {
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+          mainWindow.showInactive();  // Show without taking focus (non-macOS)
+        }
+        const newState = isRecording ? 'listening' : 'idle';
+        safeSend('state-change', newState);
+        updateTrayIcon(newState);
+      } catch (e) { console.error('[transcript-for-paste] restore-state failed:', e.message); }
     }, 500);
+  } catch (e) {
+    // Last-line-of-defence: never let an async exception escape an
+    // ipcMain.on listener.
+    console.error('[transcript-for-paste] handler threw:', e?.message || e);
+    writeCrashLog('transcript-for-paste', e);
   }
 });
 
@@ -2762,52 +2421,23 @@ ipcMain.handle('check-injection-permissions', async () => {
 });
 
 // Update settings — accepts flat keys from renderer and routes to correct store namespace
-ipcMain.on('update-settings', (event, settings) => {
-  const appearanceKeys = ['alwaysOnTop', 'opacity'];
-  const serverKeys = ['host', 'port'];
-  const hotkeyKeys = ['toggleRecording', 'pasteTranscript', 'showHide'];
-
-  for (const [key, value] of Object.entries(settings)) {
-    if (appearanceKeys.includes(key)) {
-      store.set(`appearance.${key}`, key === 'opacity' ? value / 100 : value);
-      if (key === 'alwaysOnTop' && mainWindow) mainWindow.setAlwaysOnTop(value, process.platform === 'darwin' ? 'floating' : 'normal');
-      if (key === 'opacity' && mainWindow) mainWindow.setOpacity(value / 100);
-    } else if (serverKeys.includes(key)) {
-      store.set(`server.${key}`, value);
-    } else if (hotkeyKeys.includes(key)) {
-      store.set(`hotkeys.${key}`, value);
-      if (app.isReady()) {
-        globalShortcut.unregisterAll();
-        registerHotkeys();
-      }
-    } else if (key === 'cloudPassword') {
-      // SEC-C1: Encrypt cloud password via safeStorage — never store plaintext
-      if (value && safeStorage.isEncryptionAvailable()) {
-        const encrypted = safeStorage.encryptString(String(value));
-        store.set('engine.cloudPasswordEncrypted', encrypted.toString('base64'));
-      } else if (value) {
-        // Fallback: electron-store (still better than renderer localStorage)
-        store.set('engine.cloudPassword', value);
-      }
-      store.delete('engine.cloudPassword'); // Remove any old plaintext
-    } else {
-      // Engine settings (model, device, language, vibeEnabled, micDeviceId)
-      store.set(`engine.${key}`, value);
-    }
-  }
-});
-
-// Get app version from package.json
-ipcMain.handle('get-app-version', () => app.getVersion());
-
-// Get settings — returns flat keys for the renderer
-ipcMain.handle('get-settings', () => {
-  return {
-    ...store.get('appearance'),
-    ...store.get('server'),
-    ...store.get('engine', {}),
-    hotkeys: store.get('hotkeys')
-  };
+// CR-009 cont: update-settings / get-settings / get-app-version /
+// get-font-size / set-font-size / rebind-hotkey extracted to
+// ./ui/settings-ipc.js. registerHotkeys is defined above, so the
+// registrar can take a direct reference.
+const { registerSettingsIpc } = require('./ui/settings-ipc');
+const _mainWindowRefForSettings = {
+  get current() { return mainWindow; },
+};
+registerSettingsIpc({
+  ipcMain,
+  store,
+  app,
+  safeStorage,
+  globalShortcut,
+  registerHotkeys,
+  mainWindowRef: _mainWindowRefForSettings,
+  reservedShortcuts: RESERVED_SHORTCUTS,
 });
 
 // SEC-P0: Encrypted API key storage via safeStorage (replaces plaintext localStorage)

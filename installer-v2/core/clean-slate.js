@@ -20,6 +20,22 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+/**
+ * Promise-wrapped exec() — unblocks the event loop during the
+ * kill/cleanup path so IPC progress callbacks keep flowing to the
+ * renderer even when the scan takes ~5s.
+ *
+ * Swallows errors by default (returns stderr/stdout/code so callers
+ * can inspect without try/catch) — CleanSlate is best-effort.
+ */
+function execAsync(cmd, opts = {}) {
+  return new Promise((resolve) => {
+    exec(cmd, { timeout: 5000, ...opts }, (err, stdout, stderr) => {
+      resolve({ ok: !err, stdout: stdout || '', stderr: stderr || '', code: err ? err.code : 0 });
+    });
+  });
+}
+
 const APP_DIR = path.join(os.homedir(), '.windy-pro');
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'windy-pro');
 const MODELS_DIR = path.join(APP_DIR, 'models');
@@ -40,10 +56,11 @@ class CleanSlate {
     const result = { wasClean: true, removed: [], errors: [], preserved: [] };
 
     this.onProgress(0);
-    this.onLog('[CleanSlate] Checking for prior Windy Pro installation...');
+    this.onLog('[CleanSlate] >>> Step 1 START: detect prior install');
 
     // Step 1: Detect if anything exists
     const detection = this._detect();
+    this.onLog(`[CleanSlate] <<< Step 1 END: found=${detection.found}, details=${(detection.details||[]).join('|')}`);
     if (!detection.found) {
       this.onLog('[CleanSlate] No prior installation detected. Clean slate confirmed.');
       this.onProgress(100);
@@ -55,96 +72,119 @@ class CleanSlate {
     this.onProgress(10);
 
     // Step 2: Kill running processes
+    this.onLog('[CleanSlate] >>> Step 2 START: kill running processes');
     try {
       const killed = await this._killProcesses();
       result.removed.push(...killed.map(p => `process: ${p}`));
-      this.onLog(`[CleanSlate] Killed ${killed.length} running processes`);
+      this.onLog(`[CleanSlate] <<< Step 2 END: killed ${killed.length} processes`);
     } catch (e) {
       result.errors.push(`Kill processes: ${e.message}`);
-      this.onLog(`[CleanSlate] Warning: ${e.message}`);
+      this.onLog(`[CleanSlate] <<< Step 2 END (with warning): ${e.message}`);
     }
     this.onProgress(30);
 
     // Step 3: Preserve models if requested
+    this.onLog(`[CleanSlate] >>> Step 3 START: preserve models (preserveModels=${this.preserveModels}, MODELS_DIR exists=${fs.existsSync(MODELS_DIR)})`);
     let modelBackup = null;
     if (this.preserveModels && fs.existsSync(MODELS_DIR)) {
       const modelFiles = this._listModels();
+      this.onLog(`[CleanSlate]   found ${modelFiles.length} model files to preserve`);
       if (modelFiles.length > 0) {
         modelBackup = path.join(os.tmpdir(), 'windy-pro-models-backup');
         try {
           if (fs.existsSync(modelBackup)) {
+            this.onLog(`[CleanSlate]   removing stale backup at ${modelBackup}`);
             fs.rmSync(modelBackup, { recursive: true, force: true });
           }
+          this.onLog(`[CleanSlate]   moving ${MODELS_DIR} → ${modelBackup}`);
           fs.renameSync(MODELS_DIR, modelBackup);
           result.preserved.push(...modelFiles);
-          this.onLog(`[CleanSlate] Preserved ${modelFiles.length} model files to temp backup`);
+          this.onLog(`[CleanSlate] <<< Step 3 END: preserved ${modelFiles.length} files`);
         } catch (e) {
-          this.onLog(`[CleanSlate] Could not preserve models: ${e.message}`);
+          this.onLog(`[CleanSlate] <<< Step 3 END (with warning): ${e.message}`);
           modelBackup = null;
         }
+      } else {
+        this.onLog('[CleanSlate] <<< Step 3 END: no models to preserve');
       }
+    } else {
+      this.onLog('[CleanSlate] <<< Step 3 END: skipped');
     }
     this.onProgress(45);
 
     // Step 4: Remove ~/.windy-pro directory
+    this.onLog(`[CleanSlate] >>> Step 4 START: remove ${APP_DIR}`);
     if (fs.existsSync(APP_DIR)) {
       try {
         fs.rmSync(APP_DIR, { recursive: true, force: true });
         result.removed.push('~/.windy-pro/');
-        this.onLog('[CleanSlate] Removed ~/.windy-pro/');
+        this.onLog('[CleanSlate] <<< Step 4 END: removed');
       } catch (e) {
         result.errors.push(`Remove APP_DIR: ${e.message}`);
-        this.onLog(`[CleanSlate] Warning: Could not fully remove ~/.windy-pro: ${e.message}`);
+        this.onLog(`[CleanSlate] <<< Step 4 END (with warning): ${e.message}`);
       }
+    } else {
+      this.onLog('[CleanSlate] <<< Step 4 END: nothing to remove');
     }
     this.onProgress(55);
 
     // Step 5: Remove ~/.config/windy-pro
+    this.onLog(`[CleanSlate] >>> Step 5 START: remove ${CONFIG_DIR}`);
     if (fs.existsSync(CONFIG_DIR)) {
       try {
         fs.rmSync(CONFIG_DIR, { recursive: true, force: true });
         result.removed.push('~/.config/windy-pro/');
-        this.onLog('[CleanSlate] Removed ~/.config/windy-pro/');
+        this.onLog('[CleanSlate] <<< Step 5 END: removed');
       } catch (e) {
         result.errors.push(`Remove CONFIG_DIR: ${e.message}`);
+        this.onLog(`[CleanSlate] <<< Step 5 END (with warning): ${e.message}`);
       }
+    } else {
+      this.onLog('[CleanSlate] <<< Step 5 END: nothing to remove');
     }
 
     // Step 6: Platform-specific cleanup
+    this.onLog('[CleanSlate] >>> Step 6 START: platform-specific cleanup');
     try {
       await this._platformCleanup(result);
+      this.onLog('[CleanSlate] <<< Step 6 END');
     } catch (e) {
       result.errors.push(`Platform cleanup: ${e.message}`);
+      this.onLog(`[CleanSlate] <<< Step 6 END (with warning): ${e.message}`);
     }
     this.onProgress(75);
 
     // Step 7: Restore models if backed up
+    this.onLog(`[CleanSlate] >>> Step 7 START: restore models (modelBackup=${modelBackup})`);
     if (modelBackup && fs.existsSync(modelBackup)) {
       try {
         fs.mkdirSync(APP_DIR, { recursive: true });
         fs.renameSync(modelBackup, MODELS_DIR);
-        this.onLog(`[CleanSlate] Restored ${result.preserved.length} model files`);
+        this.onLog(`[CleanSlate] <<< Step 7 END: restored ${result.preserved.length} files`);
       } catch (e) {
-        this.onLog(`[CleanSlate] Warning: Could not restore models: ${e.message}`);
-        // Try copy as fallback (cross-device move fails)
+        this.onLog(`[CleanSlate]   primary restore failed: ${e.message} — trying copy fallback`);
         try {
           this._copyDir(modelBackup, MODELS_DIR);
           fs.rmSync(modelBackup, { recursive: true, force: true });
-          this.onLog('[CleanSlate] Restored models via copy fallback');
+          this.onLog('[CleanSlate] <<< Step 7 END: restored via copy fallback');
         } catch (e2) {
           result.errors.push(`Restore models: ${e2.message}`);
+          this.onLog(`[CleanSlate] <<< Step 7 END (FAILED): ${e2.message}`);
         }
       }
+    } else {
+      this.onLog('[CleanSlate] <<< Step 7 END: nothing to restore');
     }
     this.onProgress(90);
 
     // Step 8: Verify clean state
+    this.onLog('[CleanSlate] >>> Step 8 START: verify');
     const verify = this._verify();
     if (!verify.clean) {
       result.errors.push(`Verification failed: ${verify.issues.join(', ')}`);
-      this.onLog(`[CleanSlate] Warning: Not fully clean: ${verify.issues.join(', ')}`);
+      this.onLog(`[CleanSlate] <<< Step 8 END (warning): ${verify.issues.join(', ')}`);
     } else {
-      this.onLog('[CleanSlate] Clean slate verified. Ready for fresh install.');
+      this.onLog('[CleanSlate] <<< Step 8 END: clean slate verified');
     }
 
     this.onProgress(100);
@@ -213,7 +253,13 @@ class CleanSlate {
   }
 
   /**
-   * Find running Windy Pro processes
+   * Find running Windy Pro processes.
+   *
+   * Each entry has { name, pid, cmdline? }. cmdline is included on Unix
+   * so _killProcesses can do a path-prefix safety check to never kill
+   * any process whose executable lives inside the currently-running
+   * .app bundle (i.e. ourselves, even if pgrep -P misses a reparented
+   * helper).
    */
   _findWindyProcesses() {
     const processes = [];
@@ -225,24 +271,25 @@ class CleanSlate {
         const lines = output.split('\n').filter(l => l.includes('windy'));
         lines.forEach(l => {
           const match = l.match(/"([^"]+)","(\d+)"/);
-          if (match) processes.push({ name: match[1], pid: parseInt(match[2]) });
+          if (match) processes.push({ name: match[1], pid: parseInt(match[2]), cmdline: '' });
         });
         // Also check for our Python server
         const pythonOut = execSync('netstat -ano | findstr ":9876" 2>NUL', {
           stdio: 'pipe', timeout: 5000
         }).toString();
         const pidMatch = pythonOut.match(/LISTENING\s+(\d+)/);
-        if (pidMatch) processes.push({ name: 'python-server', pid: parseInt(pidMatch[1]) });
+        if (pidMatch) processes.push({ name: 'python-server', pid: parseInt(pidMatch[1]), cmdline: '' });
       } else {
-        // Unix-like (macOS, Linux)
+        // Unix-like (macOS, Linux) — capture the full ps line so callers
+        // can match on the executable path, not just the truncated name.
         const output = execSync(
-          "ps aux | grep -i '[w]indy.pro\\|[w]indy-pro\\|faster_whisper.*server' 2>/dev/null || true",
+          "ps -Ao pid=,command= 2>/dev/null | grep -i '[w]indy.pro\\|[w]indy-pro\\|faster_whisper.*server' || true",
           { stdio: 'pipe', timeout: 5000 }
         ).toString();
         output.split('\n').filter(l => l.trim()).forEach(line => {
-          const parts = line.trim().split(/\s+/);
-          if (parts.length >= 2) {
-            processes.push({ name: parts.slice(10).join(' '), pid: parseInt(parts[1]) });
+          const m = line.trim().match(/^(\d+)\s+(.*)$/);
+          if (m) {
+            processes.push({ name: m[2].slice(0, 80), pid: parseInt(m[1], 10), cmdline: m[2] });
           }
         });
         // Check port 9876 (Python server)
@@ -251,7 +298,7 @@ class CleanSlate {
           if (lsof) {
             lsof.split('\n').forEach(pid => {
               if (pid && !processes.find(p => p.pid === parseInt(pid))) {
-                processes.push({ name: 'port-9876', pid: parseInt(pid) });
+                processes.push({ name: 'port-9876', pid: parseInt(pid), cmdline: '' });
               }
             });
           }
@@ -262,27 +309,110 @@ class CleanSlate {
   }
 
   /**
+   * Try to compute the path prefix of the currently-running .app bundle
+   * (e.g. "/Applications/Windy Pro.app"). Used by _killProcesses to skip
+   * any process whose executable lives inside that bundle — the most
+   * robust "don't kill myself" guard, since pgrep -P can miss reparented
+   * Electron helpers.
+   *
+   * Returns "" if no .app bundle path can be derived (dev mode).
+   */
+  _ownBundlePath() {
+    try {
+      const exec = process.execPath || '';
+      // macOS: foo.app bundle lives at /Applications/Windy Pro.app/...
+      const idx = exec.indexOf('.app/');
+      if (idx > 0) return exec.slice(0, idx + 4); // include ".app"
+      // P8 Windows: process.execPath is something like
+      //   C:\Program Files\Windy Pro\Windy Pro.exe
+      // The analogue of the .app bundle root is the directory that
+      // contains the .exe — any helper running from the same
+      // install dir must NOT be killed by CleanSlate. Use path.dirname
+      // so backslashes are handled correctly.
+      if (process.platform === 'win32' && exec.toLowerCase().endsWith('.exe')) {
+        // Explicit path.win32 so the test suite can fake-stamp win32
+        // paths on a Unix CI host and still get Windows-correct
+        // dirname behaviour (`/` on macOS would otherwise treat the
+        // whole backslash string as one segment).
+        return require('path').win32.dirname(exec);
+      }
+      // Linux AppImage: process.execPath points inside the mounted
+      // image at /tmp/.mount_Windy-ProXXXXXX/usr/bin/windy-pro. The
+      // mount root is what we want to guard.
+      if (process.platform === 'linux') {
+        const m = exec.match(/(.*\.mount_[^/]+)\//);
+        if (m) return m[1];
+      }
+    } catch (_) { /* ignore */ }
+    return '';
+  }
+
+  /**
    * Kill all running Windy Pro processes
    */
   async _killProcesses() {
     const killed = [];
+    this.onLog(`[CleanSlate]   _killProcesses: my pid=${process.pid}, ppid=${process.ppid}, execPath=${process.execPath}`);
+
+    // Build the "don't kill myself" guard set:
+    //   - own pid
+    //   - parent pid (Electron main launches us)
+    //   - all child pids of own pid (helpers / GPU / renderer)
+    //   - any process whose argv mentions our execPath (sibling helpers
+    //     launched by Electron framework that aren't direct children)
+    const safePids = new Set([process.pid, process.ppid]);
+    // CR-007: run the pid-harvest commands in parallel via async
+    // exec. Unblocks the event loop so wizard-install sendProgress
+    // callbacks keep reaching the renderer while CleanSlate runs.
+    const [childResult, groupResult] = await Promise.all([
+      execAsync(`pgrep -P ${process.pid} 2>/dev/null || true`),
+      execAsync(`ps -o pid= -g ${process.pid} 2>/dev/null || true`),
+    ]);
+    childResult.stdout.trim().split('\n').forEach(p => p && safePids.add(parseInt(p, 10)));
+    groupResult.stdout.trim().split('\n').forEach(p => p && safePids.add(parseInt(p.trim(), 10)));
+    this.onLog(`[CleanSlate]   _killProcesses: safe-pid guard set: ${[...safePids].join(',')}`);
+
+    this.onLog(`[CleanSlate]   _killProcesses: scanning for Windy processes...`);
     const processes = this._findWindyProcesses();
+    this.onLog(`[CleanSlate]   _killProcesses: found ${processes.length} candidates`);
+
+    // Last-line-of-defense guard: skip anything whose command path is
+    // inside our own .app bundle. This catches Electron helper processes
+    // (GPU, network service, renderer) that may have been reparented to
+    // launchd and so don't show up in `pgrep -P process.pid`.
+    const ownBundle = this._ownBundlePath();
+    if (ownBundle) {
+      this.onLog(`[CleanSlate]   _killProcesses: own .app bundle = ${ownBundle}`);
+    }
 
     for (const proc of processes) {
-      try {
-        if (this.platform === 'win32') {
-          execSync(`taskkill /PID ${proc.pid} /F 2>NUL`, { stdio: 'pipe', timeout: 5000 });
-        } else {
-          execSync(`kill -9 ${proc.pid} 2>/dev/null`, { stdio: 'pipe', timeout: 5000 });
-        }
+      // CRITICAL SAFETY: never kill ourselves or any process in our tree
+      if (safePids.has(proc.pid)) {
+        this.onLog(`[CleanSlate]   _killProcesses: SKIPPING own-tree PID ${proc.pid} (${proc.name})`);
+        continue;
+      }
+      if (ownBundle && proc.cmdline && proc.cmdline.includes(ownBundle)) {
+        this.onLog(`[CleanSlate]   _killProcesses: SKIPPING own-bundle PID ${proc.pid} (cmdline matches ${ownBundle})`);
+        continue;
+      }
+      this.onLog(`[CleanSlate]   _killProcesses: killing PID ${proc.pid} (${proc.name})`);
+      // CR-007: kill commands via async exec so a slow-to-die
+      // process (e.g. pending SIGTERM handler) doesn't freeze the
+      // event loop for 5s.
+      const killCmd = this.platform === 'win32'
+        ? `taskkill /PID ${proc.pid} /F 2>NUL`
+        : `kill -9 ${proc.pid} 2>/dev/null`;
+      const r = await execAsync(killCmd);
+      if (r.ok) {
         killed.push(`${proc.name} (PID ${proc.pid})`);
-      } catch (e) {
-        // Process may have already exited
+      } else {
+        this.onLog(`[CleanSlate]   _killProcesses: kill PID ${proc.pid} failed: ${r.stderr || r.code}`);
       }
     }
 
     // Wait briefly for processes to fully die
     if (killed.length > 0) {
+      this.onLog(`[CleanSlate]   _killProcesses: waiting 1s for ${killed.length} processes to die`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 

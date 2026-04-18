@@ -52,40 +52,77 @@ class DependencyInstaller {
     const results = {};
 
     this.onLog('[DependencyInstaller] Starting complete dependency installation...');
-    this.onProgress(0);
+    this.onProgress(0, 'Starting dependency install...');
 
     // Create base directories
     for (const dir of [APP_DIR, MODELS_DIR, BIN_DIR]) {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    // Step 1: Python
-    this.onLog('[DependencyInstaller] Step 1/6: Installing Python...');
-    try {
-      const pythonPath = await this._installPython();
-      results.python = { success: true, path: pythonPath };
-      this.onLog(`[DependencyInstaller] Python: ${pythonPath}`);
-    } catch (e) {
-      errors.push(`Python: ${e.message}`);
-      results.python = { success: false, error: e.message };
-    }
-    this.onProgress(20);
-
-    // Step 2: Python venv + packages
-    if (results.python?.success) {
-      this.onLog('[DependencyInstaller] Step 2/6: Setting up Python environment...');
-      try {
-        await this._setupVenv(results.python.path);
-        results.venv = { success: true };
-      } catch (e) {
-        errors.push(`Python venv: ${e.message}`);
-        results.venv = { success: false, error: e.message };
+    // ── Fast path: bundled Python + bundled wheels (offline, ~10s) ─────────
+    // If the .app ships with a portable Python AND pre-downloaded wheels
+    // (the new bulletproof bundling architecture from build-portable-bundle.js),
+    // we skip the slow legacy "install Python from package manager → pip
+    // install from PyPI" path entirely. This is the architecture that
+    // honors the windyword.ai promise of "30 second install" + "no internet".
+    let usedFastPath = false;
+    if (this.bundled.hasBundledPython() && this.bundled.hasBundledWheels()) {
+      this.onLog('[DependencyInstaller] Bundled Python + wheels detected — using fast path');
+      const reqPath = this.bundled.getBundledRequirementsPath();
+      if (reqPath) {
+        try {
+          const venvPython = await this.bundled.installVenvFromWheels(APP_DIR, reqPath, this.onLog);
+          if (venvPython) {
+            results.python = { success: true, path: venvPython, source: 'bundled-fast-path' };
+            results.venv = { success: true, source: 'bundled-fast-path' };
+            usedFastPath = true;
+            this.onLog(`[DependencyInstaller] Fast-path venv ready: ${venvPython}`);
+            this.onProgress(40, '✓ Python environment ready (fast path)');
+          }
+        } catch (e) {
+          this.onLog(`[DependencyInstaller] Fast path failed (${e.message}) — falling back to legacy`);
+        }
+      } else {
+        this.onLog('[DependencyInstaller] Bundled wheels present but no requirements-bundle.txt — falling back to legacy');
       }
     }
-    this.onProgress(40);
+
+    // ── Legacy path: install Python (or detect system) + pip install from PyPI ──
+    // This path runs only when bundled assets aren't present, OR the fast
+    // path failed for some reason. Slower, requires internet, more crash-prone
+    // across distros. Kept as a safety net while the new bundling is rolled
+    // out, and as a fallback for dev installs without a packaged bundle.
+    if (!usedFastPath) {
+      // Step 1: Python
+      this.onLog('[DependencyInstaller] Step 1/6: Installing Python...');
+      this.onProgress(5, 'Installing Python runtime...');
+      try {
+        const pythonPath = await this._installPython();
+        results.python = { success: true, path: pythonPath, source: 'legacy' };
+        this.onLog(`[DependencyInstaller] Python: ${pythonPath}`);
+      } catch (e) {
+        errors.push(`Python: ${e.message}`);
+        results.python = { success: false, error: e.message };
+      }
+      this.onProgress(20, '✓ Python runtime ready');
+
+      // Step 2: Python venv + packages
+      if (results.python?.success) {
+        this.onLog('[DependencyInstaller] Step 2/6: Setting up Python environment...');
+        try {
+          await this._setupVenv(results.python.path);
+          results.venv = { success: true, source: 'legacy' };
+        } catch (e) {
+          errors.push(`Python venv: ${e.message}`);
+          results.venv = { success: false, error: e.message };
+        }
+      }
+      this.onProgress(40, '✓ Python environment ready');
+    }
 
     // Step 3: ffmpeg
     this.onLog('[DependencyInstaller] Step 3/6: Installing ffmpeg...');
+    this.onProgress(45, 'Installing ffmpeg...');
     try {
       const ffmpegPath = await this._installFfmpeg();
       results.ffmpeg = { success: true, path: ffmpegPath };
@@ -94,10 +131,11 @@ class DependencyInstaller {
       errors.push(`ffmpeg: ${e.message}`);
       results.ffmpeg = { success: false, error: e.message };
     }
-    this.onProgress(55);
+    this.onProgress(55, '✓ ffmpeg ready');
 
     // Step 4: Audio subsystem
     this.onLog('[DependencyInstaller] Step 4/6: Setting up audio subsystem...');
+    this.onProgress(58, 'Configuring audio subsystem...');
     try {
       await this._installAudioDeps();
       results.audio = { success: true };
@@ -105,43 +143,47 @@ class DependencyInstaller {
       // Audio deps are non-fatal — some will already exist
       results.audio = { success: true, warning: e.message };
     }
-    this.onProgress(65);
+    this.onProgress(65, '✓ Audio configured');
 
     // Step 5: CUDA (if applicable)
     this.onLog('[DependencyInstaller] Step 5/6: Checking GPU/CUDA...');
+    this.onProgress(70, 'Checking for GPU acceleration...');
     try {
       const cuda = await this._installCuda();
       results.cuda = cuda;
     } catch (e) {
       results.cuda = { success: false, error: e.message, reason: 'Will use CPU inference' };
     }
-    this.onProgress(80);
+    this.onProgress(80, '✓ GPU check complete');
 
     // Step 6: Clipboard/injection tools
     this.onLog('[DependencyInstaller] Step 6/6: Installing clipboard tools...');
+    this.onProgress(85, 'Installing paste/clipboard tools...');
     try {
       await this._installClipboardTools();
       results.clipboard = { success: true };
     } catch (e) {
       results.clipboard = { success: true, warning: e.message };
     }
-    this.onProgress(90);
+    this.onProgress(90, '✓ Paste tools ready');
 
     // Step 7: Default model from bundle
     this.onLog('[DependencyInstaller] Installing default model...');
+    this.onProgress(92, 'Installing starter voice model...');
     try {
       const modelPath = await this.bundled.installDefaultModel(APP_DIR, this.onLog);
       results.defaultModel = { success: !!modelPath, path: modelPath };
     } catch (e) {
       results.defaultModel = { success: false, error: e.message };
     }
-    this.onProgress(95);
+    this.onProgress(95, '✓ Starter model installed');
 
     // Verify
     this.onLog('[DependencyInstaller] Verifying installation...');
+    this.onProgress(97, 'Verifying installation...');
     const verification = await this._verify();
     results.verification = verification;
-    this.onProgress(100);
+    this.onProgress(100, '✓ All dependencies ready');
 
     const success = results.python?.success && results.ffmpeg?.success;
     this.results = results;
@@ -295,11 +337,13 @@ class DependencyInstaller {
 
     // Create venv if needed
     if (!fs.existsSync(venvPy)) {
+      this.onProgress(22, 'Creating Python virtual environment...');
       await this._exec(`"${pythonPath}" -m venv "${VENV_DIR}"`, 120000);
     }
 
     // Upgrade pip
     const pip = path.join(VENV_DIR, this.platform === 'win32' ? 'Scripts\\pip.exe' : 'bin/pip');
+    this.onProgress(25, 'Upgrading pip, setuptools, wheel...');
     await this._exec(`"${pip}" install --upgrade pip setuptools wheel`, 120000);
 
     // Install packages in order of importance
@@ -318,22 +362,55 @@ class DependencyInstaller {
       'transformers',         // For loading HF models
     ];
 
-    // Install in batches of 3 for speed, with individual fallback
+    // Install in batches of 3 for speed, with individual fallback.
+    // Between batch boundaries we emit onProgress so the UI bar moves;
+    // inside a single `pip install` call we can't see progress, but a
+    // ticker asymptotically advances the bar + rotates the message so
+    // a 5-minute llvmlite compile doesn't look like a frozen wizard.
     const batchSize = 3;
+    const totalBatches = Math.ceil(packages.length / batchSize);
+    // Batch progress spans pct 27 → 38 (final onProgress(40) lives in installAll)
+    const batchStart = 27;
+    const batchSpan = 11;
+
     for (let i = 0; i < packages.length; i += batchSize) {
-      const batch = packages.slice(i, i + batchSize).join(' ');
+      const batchIdx = Math.floor(i / batchSize);
+      const batchPkgs = packages.slice(i, i + batchSize);
+      const batchLabel = batchPkgs.join(', ');
+      const startPct = batchStart + (batchIdx / totalBatches) * batchSpan;
+      const endPct = batchStart + ((batchIdx + 1) / totalBatches) * batchSpan;
+
+      this.onProgress(startPct, `Installing ${batchLabel}...`);
+
+      // Heartbeat — advance pct asymptotically toward endPct so the bar
+      // visibly creeps forward even when pip is blocked on a slow compile.
+      const tickerStart = Date.now();
+      const ticker = setInterval(() => {
+        const elapsed = (Date.now() - tickerStart) / 1000;
+        const advanced = startPct + (endPct - startPct) * (1 - Math.exp(-elapsed / 45));
+        const hint = elapsed > 30
+          ? `Installing ${batchLabel}... (${Math.round(elapsed)}s — some packages build from source, this is normal)`
+          : `Installing ${batchLabel}...`;
+        this.onProgress(advanced, hint);
+      }, 3000);
+
       try {
-        await this._exec(`"${pip}" install ${batch}`, 600000);
+        await this._exec(`"${pip}" install ${batchPkgs.join(' ')}`, 600000);
       } catch (e) {
         // Retry individually
-        for (const pkg of packages.slice(i, i + batchSize)) {
+        for (const pkg of batchPkgs) {
+          this.onProgress(startPct, `Retrying ${pkg} individually...`);
           try {
             await this._exec(`"${pip}" install ${pkg}`, 300000);
           } catch (e2) {
             this.onLog(`[DependencyInstaller] Warning: Failed to install ${pkg}: ${e2.message}`);
           }
         }
+      } finally {
+        clearInterval(ticker);
       }
+
+      this.onProgress(endPct, `✓ ${batchLabel} installed`);
     }
   }
 

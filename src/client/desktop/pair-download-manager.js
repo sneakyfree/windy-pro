@@ -99,10 +99,39 @@ class PairDownloadManager extends EventEmitter {
   // Input Validation
   // ═══════════════════════════════════════════
 
-  /** Validate pairId is a non-empty string */
+  /**
+   * Validate pairId — strict allowlist of characters AND a final
+   * resolved-path containment check.
+   *
+   * SEC-PAIR-1 (HIGH): the previous version only checked for non-empty
+   * string. A renderer-supplied pairId of `../../../etc` would join into
+   * `path.resolve(pairsDir, '../../../etc')` and later get `fsp.rm`'d
+   * with `recursive: true, force: true`. That's an arbitrary-directory
+   * delete primitive — devastating from a sandboxed renderer. Lock the
+   * shape AND containment.
+   *
+   * Allowlist matches the catalog format `windy-pair-<src>-<tgt>`
+   * (lowercase letters, digits, hyphens, underscores).
+   */
   _validatePairId(pairId) {
     if (typeof pairId !== 'string' || pairId.trim().length === 0) {
       throw new Error('pairId must be a non-empty string');
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(pairId)) {
+      throw new Error('pairId may only contain letters, digits, hyphen, underscore');
+    }
+    if (pairId.length > 80) {
+      throw new Error('pairId too long (max 80 chars)');
+    }
+    // Defence in depth: even with the allowlist above, refuse if the
+    // resolved target escapes pairsDir. Catches future regressions in
+    // the regex (e.g. someone widens it to allow ".") and any path
+    // helpers that interpret backslashes specially on Windows.
+    const resolved = path.resolve(this.pairsDir, pairId);
+    const root = path.resolve(this.pairsDir) + path.sep;
+    if (resolved !== path.resolve(this.pairsDir, pairId)
+        || (!resolved.startsWith(root) && resolved !== path.resolve(this.pairsDir))) {
+      throw new Error('pairId escapes pairsDir');
     }
   }
 

@@ -2851,33 +2851,38 @@ class WindyApp {
       return;
     }
 
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    // Delegate to the pure transcript-format module (extracted in P4
+    // so the format helpers can be unit-tested without spinning up
+    // the renderer). Keep the WindyDateUtils preference for Markdown
+    // headers — module's default is plain toLocaleString.
+    const fmt = window.WindyTranscriptFormat;
     let content, defaultName, filters;
+    const now = new Date();
+    defaultName = fmt ? fmt.defaultFilenameFor(format, now)
+      : `transcript-${now.toISOString().slice(0, 19).replace(/:/g, '-')}.${format}`;
 
     if (format === 'txt') {
-      content = text;
-      defaultName = `transcript-${timestamp}.txt`;
+      content = fmt ? fmt.toTxt(text) : text;
       filters = [{ name: 'Text', extensions: ['txt'] }];
     } else if (format === 'md') {
-      const paragraphs = text.split(/\n+/).filter(p => p.trim());
-      content = `# Transcript — ${window.WindyDateUtils ? WindyDateUtils.formatFull(new Date()) : new Date().toLocaleString()}\n\n${paragraphs.map(p => p.trim()).join('\n\n')}\n`;
-      defaultName = `transcript-${timestamp}.md`;
+      // Allow WindyDateUtils to override the Markdown header timestamp
+      // when present (matches the pre-refactor wording).
+      if (fmt) {
+        if (window.WindyDateUtils) {
+          // Inline path mirrors fmt.toMd with the alternate stamp.
+          const safeText = typeof text === 'string' ? text : '';
+          const stamp = WindyDateUtils.formatFull(now);
+          const paragraphs = safeText.split(/\n+/).filter(p => p.trim());
+          content = `# Transcript — ${stamp}\n\n${paragraphs.map(p => p.trim()).join('\n\n')}\n`;
+        } else {
+          content = fmt.toMd(text, now);
+        }
+      } else {
+        content = `# Transcript — ${now.toLocaleString()}\n\n${text}\n`;
+      }
       filters = [{ name: 'Markdown', extensions: ['md'] }];
     } else if (format === 'srt') {
-      // Generate SRT from text — split into ~10s chunks
-      const words = text.split(/\s+/);
-      const chunkSize = 15; // words per subtitle
-      let srt = '';
-      for (let i = 0, idx = 1; i < words.length; i += chunkSize, idx++) {
-        const chunk = words.slice(i, i + chunkSize).join(' ');
-        const startSec = Math.floor(i / 2.5);
-        const endSec = Math.floor(Math.min(i + chunkSize, words.length) / 2.5);
-        const startTime = this._formatSrtTime(startSec);
-        const endTime = this._formatSrtTime(endSec);
-        srt += `${idx}\n${startTime} --> ${endTime}\n${chunk}\n\n`;
-      }
-      content = srt.trim();
-      defaultName = `transcript-${timestamp}.srt`;
+      content = fmt ? fmt.toSrt(text) : text;
       filters = [{ name: 'Subtitles', extensions: ['srt'] }];
     }
 
@@ -3720,6 +3725,11 @@ class WindyApp {
     // Always retain final segments for copy/paste reliability
     if (!msg.partial) {
       this.transcript.push(msg);
+      // Phase 8: account creation moved out of wizard. After the user's
+      // first successful transcription, surface a one-time "save your
+      // sessions to the cloud" banner. Only the first final segment ever
+      // triggers it; once dismissed (or accepted) it never reappears.
+      try { this.maybeShowSignupBanner(msg); } catch (e) { /* never break record flow */ }
     }
 
     // In strobe-only mode, suppress live rendering while recording/buffering
@@ -3765,6 +3775,22 @@ class WindyApp {
 
     // Auto-scroll to bottom
     this.transcriptScroll.scrollTop = this.transcriptScroll.scrollHeight;
+  }
+
+  /**
+   * Phase 8: post-first-transcription cloud-account upsell.
+   * Implementation moved to renderer/signup-banner.js so it can be
+   * unit-tested in jsdom and E2E-tested in Playwright without launching
+   * the full record/transcribe stack. This wrapper keeps the call site
+   * in addTranscriptSegment unchanged.
+   */
+  maybeShowSignupBanner(msg) {
+    // window.WindySignupBanner is loaded via index.html's <script> tag.
+    // If it's missing for any reason (preload race, packaging bug),
+    // fail silent — record flow is sacred.
+    if (typeof window.WindySignupBanner === 'function') {
+      window.WindySignupBanner(msg);
+    }
   }
 
   /**

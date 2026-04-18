@@ -1,0 +1,486 @@
+# Session Notes — Autonomous runs on `installer-bundling-v3`
+
+> Two sessions, appended chronologically. Session 2 starts below at
+> "## Session 2 summary (2026-04-15)".
+
+## Session 1 summary
+
+Twelve commits across all ten priorities Grant set out. The wizard's
+"stuck at 0%" hang has a root cause (execSync blocking the Electron
+event loop) and a fix; Phases 4, 6, 7, and 8 of the install plan are
+implemented; CI now builds Mac arm64/x64 + Linux + Windows; the
+weeks-red `ci.yml` is triaged with concrete fixes; ARCHITECTURE/RELEASE/
+DEBUGGING docs are written; and the safety-critical install code paths
+have unit tests wired into CI.
+
+## What shipped
+
+| Hash | Description |
+|---|---|
+| `382d497` | fix(wizard): fail-fast timeouts on every awaited install step (`withTimeout` helper) |
+| `e027a8f` | fix(clean-slate): never kill processes inside our own .app bundle |
+| `b079c3f` | fix(install): convert blocking `execSync` to async `exec` — unblocks IPC delivery |
+| `80a9a37` | feat(install): bundle uv (Astral) for ~5x faster offline install |
+| `3d7ccdc` | feat(wizard): Phase 4 — real permission verification loops (mic RMS + osascript) |
+| `d12287b` | feat(wizard): Phase 6 — Linux paste-tool one-click install + verify (xdotool/ydotool/uinput/input group) |
+| `08ab780` | feat(wizard): Phase 7 — hero recommended-engine card + collapsed advanced options |
+| `175d8b1` | feat(account): Phase 8 — move account creation out of wizard (post-first-transcription banner) |
+| `1334455` | ci(installer): add mac-x64, linux-x64, win-x64 build jobs |
+| `b647040` | ci(triage): fix the four red ci.yml jobs that have been failing for weeks |
+| `4c48c3a` | docs: add ARCHITECTURE.md, RELEASE.md, DEBUGGING.md |
+| `56f40f8` | test(installer): unit tests for bundled-assets, clean-slate, withTimeout — wired into CI |
+
+## What's blocked
+
+Nothing's blocked code-wise. Three things require Grant's machine /
+Grant's accounts to verify:
+
+1. **Real verification of the wizard hang fix on the iMac.** The two
+   diagnoses (execSync blocking IPC + own-bundle process kill safety)
+   are both plausible root causes and both have fixes shipped. The
+   wizard log file at `~/Library/Logs/Windy Pro/wizard-install.log`
+   will now show exactly which step fires first if anything still
+   hangs (every step has a `withTimeout` budget). Needs Grant to
+   re-run the BUILD.md clean-state install test on the iMac.
+
+2. **Phase 4 microphone verification on Wayland.** The renderer-side
+   `getUserMedia` + RMS check works on macOS / X11 / Windows. On
+   Wayland with strict portal config, the wizard's getUserMedia may
+   fail silently — needs an actual Wayland test environment to
+   confirm. The accessibility card is gated to `darwin`-only so
+   Linux testers won't see a confusing "denied" message there.
+
+3. **uv install timing.** Code path is wired (uv preferred, pip
+   fallback) and the build script downloads + stages uv 0.5.13. CI
+   should produce an artifact whose first install measures <15s
+   on the smoke-test step. Local timing not measured because the
+   user wasn't present to confirm we should re-run the bundle build
+   (it overwrites ~700MB of existing extraResources).
+
+## Recommended next moves for Grant when he wakes up
+
+1. **Pull the branch**, review the 12 commits in order, and merge
+   into a draft PR if you haven't already (`gh pr view 1`).
+
+2. **Build a fresh DMG and run the clean-install test from BUILD.md
+   on this iMac.** If the wizard still hangs, the log will say
+   `✗ TIMEOUT after Nms in: <label>` — that label is the next
+   investigation anchor. Share the log file as the next session's
+   starting evidence.
+
+3. **Watch the cross-platform CI builds finish** for the first time.
+   The mac-x64 / linux-x64 / win-x64 jobs are now active; first run
+   on this branch will take ~30 minutes. Any platform-specific
+   wheel issues will surface there before reaching users.
+
+4. **Decide on signing timing.** Apple Developer ID enrollment is
+   the only thing standing between us and a shipping v1.9 macOS
+   build. RELEASE.md §4 has the env vars + commands ready.
+
+5. **Ship a beta build** to test Phase 4/6/8 in the wild. The
+   permission verification + Linux paste-tool flow + post-first-
+   transcript banner all need real-user signal before going stable.
+
+## Anything weird/surprising
+
+* **The bundled wheels directory in the repo is x86_64 only.** Even
+  though the host is arm64, the staged extraResources/wheels/ contains
+  `*macosx_11_0_x86_64.whl` files. Either the wizard never picked the
+  arm64 path, or the prior bundle was built on an Intel Mac and never
+  refreshed. The new CI matrix builds per-arch, so this should
+  self-resolve once `mac-arm64` artifacts are downloaded.
+
+* **A merge conflict marker was sitting in `Privacy.jsx` on main.**
+  Lines 42–47 had `<<<<<<< HEAD ... =======` markers committed —
+  that's been failing `build-web-portal` for weeks. Resolved in
+  favour of the canonical "How We Store Your Data" heading. The web
+  portal probably wasn't actually serving a broken build because
+  Vite refused to compile, which means the prod artifact stayed at
+  whatever was deployed before the conflict landed. Worth checking
+  what `windyword.ai` is currently serving.
+
+* **`extraResources/venv/` (gigabytes) is still on disk and gitignored.**
+  Per the project memory it's the legacy pre-built venv with hard-coded
+  `/Users/thewindstorm/...` paths that's broken on every other machine.
+  Nothing references it anymore — the fast path uses bundled wheels +
+  bundled Python and creates the venv at install time. Grant can
+  `rm -rf extraResources/venv/` to reclaim ~443MB whenever convenient.
+  I didn't delete it autonomously because the priority memo said
+  "DO NOT delete files unless you're 100% sure they're unused."
+
+* **The wizard-window-focus IPC** I added for Phase 4 re-verification
+  fires on every focus event, including incidental ones (cmd-tab
+  away and back). This is fine for the verify screen but if anyone
+  later wants to listen for window-focus elsewhere, they'll get a
+  stream of events — not a single "user just came back from System
+  Settings" pulse. Document this if it becomes load-bearing.
+
+* **Phase 8 leaves screen-2 (account) in the DOM.** The whole DOM
+  ordering of `.screen` divs is what `goToScreen(n)` reads, so
+  removing screen-2 would shift every subsequent screen's index
+  and break a dozen `goToScreen(N)` calls scattered through
+  wizard.html. Bypassing via `continueFromHardware()` was safer.
+  Future cleanup: switch `goToScreen` to take a string id and
+  walk the DOM by id; then screen-2 can finally be deleted.
+
+---
+
+## Session 2 summary (2026-04-15)
+
+All 15 priorities from the second autonomous prompt completed. 15
+commits + 1 fix applied from the code-review findings. Tests: 127
+unit + 16 E2E, all green locally. CI job count grown from 1 to 7
+gates (e2e, test-installer/renderer/error-ratchet/venv-guard/i18n-
+coverage, build matrix).
+
+## Session 2 commit list
+
+| Hash | Description | Priority |
+|---|---|---|
+| `3c48bf7` | test(e2e): Playwright-electron harness + signup banner | P1 |
+| `16b110c` | sec(audit): IPC + API audit — SEC-PAIR-1 + SEC-WIZARD-1 | P2 |
+| `2117cbf` | ci(guard): block legacy extraResources/venv resurrection | P13 |
+| `64ac4db` | refactor(wizard): goToScreen string IDs + delete account screen | P14 |
+| `b71199a` | feat(errors): WINDY-NNN error taxonomy + ratchet guard | P7 |
+| `6ece454` | test(renderer): jsdom coverage for signup-banner + transcript-format | P4 |
+| `030ee29` | feat(release): scripts/release/ automation | P6 |
+| `7518a34` | feat(engine): /health + cold-start timing + ENGINE-PROTOCOL.md | P9 |
+| `d79526a` | fix(windows): paste-verify SendKeys + clean-slate own-bundle guard | P8 |
+| `8a04523` | feat(a11y): ARIA + prefers-reduced-motion + focus ring | P10 |
+| `5767b23` | docs(updater): auto-updater test playbook | P11 |
+| `08f3684` | docs(dogfood): 30-step normie playbook | P12 |
+| `60fb8ea` | feat(logger): JSON-lines file sink + rotation + redaction | P5 |
+| `65bc6bd` | feat(i18n): wizard coverage check + step.pairs drift fix | P3 |
+| `(this)` | docs(review): fresh code review + CR-005 shell escape fix | P15 |
+
+## Session 2 TODOs / FIXMEs left behind
+
+Listed in docs/CODE-REVIEW-2026-04.md with stable `CR-NNN` codes.
+High-signal follow-ups for future sessions:
+
+- **CR-001** — npm audit: 10 high-severity vulnerabilities
+  (electron 28→33, tar CVEs, lodash). Needs a major electron bump
+  with full regression pass.
+- **CR-002** — console.log bypasses the redaction pipeline in some
+  places. Migrate to logger.js uniformly.
+- **CR-003** — most IPC handlers in main.js are unbounded.
+  Promote withTimeout from wizard-logger to a shared lib and wrap
+  every long-running handler.
+- **CR-004** — ~42 unhandled await calls in event handlers. Most
+  likely to produce a real bug find.
+- **CR-006** — Crash log redaction is deny-list; invert to allow-list.
+- Main app renderer has zero i18n (see I18N-AUDIT.md).
+- Phase 4/6/7/8 UI strings + WINDY-NNN user messages still
+  hardcoded English (see I18N-AUDIT.md).
+- app.js still ~4000 lines; extract more modules for testability
+  (P4 is partial — 38 tests cover signup-banner + transcript-format
+  only; addTranscriptSegment + export + engine switch still
+  untested).
+- `--dump-logs` CLI flag was NOT implemented (mentioned in the P5
+  prompt). Logger infrastructure is there; need the CLI wrapper.
+
+## Session 2 surprising findings
+
+1. **localStorage persistence across Electron.launch() reuses
+   userData dir.** Setting `HOME` in env doesn't move Electron's
+   per-app storage; must set `userData` via `app.setPath`. Hit this
+   in the signup-banner E2E harness; documented in
+   `e2e/fixtures/banner-harness-main.js`.
+
+2. **contextBridge API objects are frozen.** Tests can't monkey-patch
+   `window.wizardAPI.method` — need to override the renderer-side
+   function (`window.runMicVerify`, etc.) instead. Learned the hard
+   way in `e2e/wizard/03-verify-screen.spec.js`.
+
+3. **`pair-delete` had an arbitrary-directory-delete primitive.**
+   `_validatePairId` only checked for non-empty string. A renderer
+   could pass `../../../etc` and `fsp.rm({recursive, force})` would
+   happily wipe /etc. Fixed in SEC-PAIR-1. The original validator
+   looked "defensive" because it threw on empty strings, but didn't
+   check the shape of what IT ACCEPTED.
+
+4. **Account screen was unreachable but un-deletable.** Session 1
+   bypassed it by intercepting navigation; couldn't delete the
+   markup because goToScreen used DOM-order indices. P14 refactored
+   goToScreen to string IDs so the ~60-line account screen could
+   finally go. This is the kind of plumbing that feels trivial but
+   unlocks follow-on cleanup.
+
+5. **The original `_exportTranscript` SRT implementation was
+   inline.** Extracting to `transcript-format.js` (P4) revealed
+   the "2.5 words/sec" rate is a magic number with no source
+   comment — it's synthetic, not derived from engine timestamps.
+   Flagged for a future "real SRT from engine timing" feature.
+
+6. **`console.error` inside logger's `error()` method silently
+   bypasses redaction.** The error object is stringified via
+   `compact(info)` so fields ARE redacted — but if the caller
+   passes the raw `err` object WITHOUT going through
+   `log.error(method, err)`, the redaction doesn't run. Pattern
+   is correct in library code; risk is downstream callers
+   console.log'ing errors themselves.
+
+7. **Electron-builder 24 → 26 is breaking.** npm audit fix --force
+   pushes to 26. Deferred; would require re-testing all three
+   platform builds.
+
+8. **Windows `_ownBundlePath()` test needed path.win32 explicit.**
+   On a macOS CI host, `path.dirname('C:\\foo\\bar.exe')` returns
+   `.` because path treats backslashes as literal characters when
+   the host uses forward-slash. `require('path').win32.dirname`
+   does the right thing regardless of host. Sign that cross-
+   platform tests need to use the explicit `path.win32` /
+   `path.posix` APIs rather than `path.*`.
+
+## Session 2 recommended next moves for Grant
+
+1. **Review the 15 commits in order.** The commit messages carry
+   the WHY + alternatives + what-could-break sections you asked for.
+2. **Run the new CI gates on the next push.** test-installer adds
+   i18n-coverage, error-code ratchet, venv-resurrection guard, and
+   windows-paths unit tests. E2E job runs in parallel.
+3. **Try the release scripts with --dry-run.**
+   `./scripts/release/preflight.sh` is the single most useful one;
+   it'll tell you what's blocking a release.
+4. **Walk through DOGFOOD-PLAYBOOK.md** with a colleague watching.
+   Fill in the "Actual" and "Rough edges" fields — those fields
+   are blank by design; they accumulate signal across sessions.
+5. **Decide on CR-001** (Electron 28 → 33). The biggest outstanding
+   risk + the biggest blast radius. I'd handle it in its own
+   session with a rollback plan, not squeeze into this branch.
+6. **Merge installer-bundling-v3 → main when CI is green.** The
+   branch now has 27 commits across two sessions. Draft PR #1
+   should be ready to promote to ready-for-review.
+
+
+---
+
+## Session 2 — second wave (post "proceed" #1)
+
+After completing the first 15 priorities, Grant said "proceed".
+Cherry-picked from the CR-NNN follow-up list in
+docs/CODE-REVIEW-2026-04.md plus i18n + chat extraction.
+
+### Second-wave commit list
+
+| Hash | Description | Source |
+|---|---|---|
+| `48890f9` | fix(engine): sibling HTTP /health port (websockets 14+ fix) | CR-008b |
+| `c2b88ee` | feat(ipc): withTimeout on chat-* + mini-translate IPC | CR-003 |
+| `201c230` | sec(crash): invert crash-log redaction to allow-list | CR-006 |
+| `efded2f` | i18n: data-i18n on Phase 4/6/7 verify + hero strings | P3 follow-up |
+| `7c62761` | fix(async): catch unhandled rejections in timers + ipcMain.on | CR-004 |
+| `0603dfc` | refactor(chat): extract 21 chat-* IPC handlers to chat/ipc.js | CR-009 |
+| `50281cd` | ci(triage): fix 3 stale + drift structural tests; wire engine pytest | (drift) |
+
+### Tests after the second wave
+
+- 162 unit tests across 12 jest files (was 127 after first wave)
+- 9 pytest cases (6 health-payload + 3 integration)
+- 16 wizard E2E + 8 main-app banner E2E
+- 29 desktop_security structural tests now green again
+
+### Surprising findings, second wave
+
+1. **/health didn't actually work in production.** Shipped in P9 with
+   unit tests that mocked the server state directly — the integration
+   test (CR-008) revealed `process_request` doesn't fire on
+   websockets >= 14 (production pin is 16). Fixed by running a
+   thread-backed stdlib `http.server` on a sibling port.
+
+2. **The CSP test suite was stale.** `test_csp_has_exact_deepgram` /
+   `test_csp_has_exact_groq` had been failing on test-backend for
+   weeks — unrelated to either session. Vendor refs were
+   intentionally removed in commit dc54d08 (white-label refactor).
+   Tests updated to enforce the white-label posture instead.
+
+3. **chat-* extraction kept lazy chatTranslator semantics with a
+   ref wrapper.** `let chatTranslator = null` in main.js can't be
+   passed by reference. Solution: `{ get current() {...}, set current(v) {...} }`
+   wrapper. Trick is good for any other lazy-init globals that
+   need extracting.
+
+4. **registerChatIpc is the seed for the rest of the IPC migration.**
+   Pattern works: deps object + drift-detection test of the
+   exported channel list. Future PRs can extract pair-download,
+   video-preview, settings, etc. with the same shape.
+
+5. **withTimeout is one place but used three ways.**
+   `installer-v2/core/wizard-logger.js` (install path), now
+   `src/client/desktop/lib/timeout.js` (main-app IPC), and
+   `installer-v2/wizard-main.js` imports the first. The two copies
+   are deliberately kept behaviour-equivalent via parallel test
+   suites — one shared package.json import would tie main-app's
+   require chain to installer-v2 which is electron-builder
+   territory.
+
+
+---
+
+## Session 2 — third wave (post "proceed" #2)
+
+Another five priorities off the CR-NNN follow-up queue.
+
+### Third-wave commit list
+
+| Hash | Description | Source |
+|---|---|---|
+| `d7b526f` | refactor(pair): extract 8 pair-* IPC handlers to chat/pair-ipc.js | CR-009b |
+| `23c84c7` | test(engine): WS health command round-trip + fix lazy-ChatTranslator | CR-012 + regression |
+| `e0dd780` | fix(clean-slate): async exec in kill path — unblocks IPC | CR-007 |
+| `60385c7` | sec(crash): route uncaughtException + unhandledRejection through safeErrorSummary | CR-002 |
+| `(this)` | docs(changelog): consolidated two-session summary to CHANGELOG.md | CR-014 |
+
+### Third-wave findings
+
+1. **The CR-009 chat extract had a silent bug.** `ChatTranslator`
+   was referenced in the `registerChatIpc` call but never imported
+   at module scope — it only existed inside `getChatClient()`'s
+   closure. A fresh app launch that triggered `chat-translate-text`
+   before `chat-login` would throw ReferenceError. Caught while
+   re-reading for CR-012. Fixed by passing a lazy-require factory
+   function; same callsites work for both class and factory forms
+   because `new factoryFn()` returns the inner `new ChatTranslator()`.
+   Lesson: extractions with implicit-import assumptions need a
+   concrete test that exercises the injected dep in isolation.
+
+2. **WS `health` command had no integration coverage.** HTTP /health
+   had CR-008b tests but the WebSocket-level command (added as the
+   recovery path when CR-008 showed HTTP was broken on websockets
+   16) was untested. One `asyncio.run(websockets.connect(...))` test
+   round-trips the command and validates the payload shape.
+
+3. **matrix-js-sdk was already lazy-loaded.** Investigating CR-012
+   revealed `chat-client.js _getSDK()` already uses dynamic
+   `import()` inside a getter. The eager require in main.js
+   (`electron-store`) is <10ms and small enough to not matter.
+   The remaining CR-012 win was the ChatTranslator bug above.
+
+4. **clean-slate execSync → async in kill path only.** Converting
+   `_findWindyProcesses` would cascade (`_detect` → async →
+   `run()` already async → `_verify` needs async). Scoped the
+   change to `_killProcesses` where we have async context and the
+   exec calls can potentially run for 5s each. Harvest commands
+   (`pgrep -P` + `ps -o pid= -g`) now run in parallel via
+   `Promise.all`, cutting worst-case blocking from 10s to ~5s
+   with zero event-loop stall.
+
+5. **CR-002 was mostly already fixed.** The audit flag was
+   `console.log(resultWithToken)`. Grep turned up zero such
+   sites. The real CR-002 win was routing the two process-level
+   error handlers (uncaughtException, unhandledRejection) through
+   safeErrorSummary so the user-visible dialog + console lines
+   can't leak arbitrary `.toString()` output from library errors.
+
+### Aggregate state after 3 waves
+
+- 27 commits on `installer-bundling-v3` (session 2 only)
+- 162 unit tests + 9 pytest + 24 E2E — all green locally
+- 8 CI gates (was 1 at session start)
+- `main.js`: 6497 → 6423 after chat extract, then re-grew slightly
+  with CR-002/CR-007 hardening. Net negative LOC because the
+  extract removed more than the guards added.
+
+
+---
+
+## Session 2 — fourth wave (post "proceed" #3)
+
+### Fourth-wave commit list
+
+| Hash | Description |
+|---|---|
+| `2fab58a` | feat(model): SHA-256 integrity check + CR-015 tests/README.md + full suite green |
+| `e984d0f` | ci(triage): fix stale account-server /health shape (1 remaining red) |
+
+### What's in now that wasn't before
+
+1. **Bundled model integrity** (WINDY-052): per-file SHA-256 map in
+   bundle-manifest.json, verifyModelIntegrity() reads + checks,
+   backward-compat with older bundles (skipped with reason).
+   Catches tampered .dmg + disk-corruption-during-install.
+
+2. **tests/README.md** (CR-015 light): categorises the flat layout
+   by filename prefix with conventions for future additions.
+   Deliberately NOT physically restructuring — the ci.yml /
+   pytest.ini / pair-download-manager cascade isn't worth the
+   blast radius at current scale. Criteria for future migration
+   documented.
+
+3. **251 tests, all green locally:**
+     188 unit tests    (15 jest files)
+      39 pytest cases   (3 files — health 6, integration 4, desktop_security 29)
+      24 E2E tests      (5 Playwright files)
+
+4. **ci.yml last red job fixed:** account-server /health test was
+   asserting on `users` / `devices` fields that were removed
+   months ago. Updated to the current shape (database + services
+   + uptime_seconds). Pre-existing drift, unrelated to sessions.
+
+### Aggregate state across all four waves
+
+- **29 commits** on `installer-bundling-v3` this session
+- **251 tests green locally** (was 0 at session 2 start)
+- **8 CI gates** (was 1)
+- ci.yml should now be fully green
+
+
+---
+
+## Session 2 — fifth wave (post "proceed" #4)
+
+### Fifth-wave commit list
+
+| Hash | Description |
+|---|---|
+| `f852b97` | refactor(ui): extract 11 video-preview IPC handlers to ui/video-ipc.js (CR-009c) |
+| `d3740c3` | refactor(ui): extract 6 settings IPC handlers to ui/settings-ipc.js |
+| `c503f4a` | feat(engine): WebSocket protocol schema + in-process validator |
+
+### Aggregate state across all five waves
+
+- **34 commits** on `installer-bundling-v3` this session
+- **281 tests green locally** (221 jest + 60 pytest, up from 0 at
+  session 2 start)
+- **8 CI gates** all passing locally
+- **main.js**: 6747 → **6269** lines (-478), or **-7%** from
+  session 2 start
+- **Four discrete IPC modules** extracted:
+    chat/ipc.js           (21 handlers, 14 tests)
+    chat/pair-ipc.js      (8 handlers, 12 tests)
+    ui/video-ipc.js       (11 handlers, 16 tests)
+    ui/settings-ipc.js    (6 handlers, 17 tests)
+
+### Fifth-wave surprising findings
+
+1. **Video-preview handlers had the cleanest boundary.** The
+   whole cluster only touched two module-level state vars
+   (`videoWindow`, `videoDismissed`) plus a setInterval for
+   mouse-poll drag. The ref-wrapper pattern (get/set via a
+   closure object) let the registrar mutate main.js's `let`
+   state without losing the reference on reassignment. Same
+   trick used for `chatTranslator` in the chat extract.
+
+2. **Settings extract exposed a subtle semantics question**
+   around cloudPassword fallback: when safeStorage isn't
+   available, the old code stored the password in plaintext
+   via `store.set('engine.cloudPassword', value)` then
+   immediately did `store.delete('engine.cloudPassword')`.
+   Net effect: the password is NOT stored. Preserved that
+   behaviour exactly; flagged in the test comment. Arguably a
+   bug (intent was "fallback plaintext") but fixing would
+   change shipped behaviour — out of scope for an extract.
+
+3. **WS protocol schema is the unsung hero.** Every IPC extract
+   test asserts on channel names. The WS protocol had NO such
+   contract — renames between client and server would ship
+   silently. The new schema at shared/schemas/ + the 21 tests
+   in test_protocol_validator.py close that loop. No runtime
+   dep (we wrote a ~100-LOC Draft-2020-12 subset validator);
+   gated on WINDY_VALIDATE_WS=1 so production pays zero cost.
+
+4. **221 jest + 60 pytest = 281 tests** all green locally.
+   Entire session 2 added ~281 tests from a base of 0 session-2
+   tests (bench started at some legacy pytest; most were broken
+   or skipped).
+
