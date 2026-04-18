@@ -429,3 +429,71 @@ export function stopRetryWorker(): void {
         retryTimer = null;
     }
 }
+
+// ─── Cleanup (P2-6) ──────────────────────────────────────────
+//
+// Succeeded rows are already deleted on success in processPendingProvisions.
+// But two terminal classes accumulate:
+//   1. `attempts >= 10` — rows that exhausted the retry budget. The retry
+//      loop's `WHERE attempts < 10` stops processing them, so they sit
+//      forever. Keep them for 30 days of forensics, then delete.
+//   2. Rows older than the retention window with ANY state — e.g. if the
+//      action enum drifts and a row becomes unmatchable, it never retries
+//      and never succeeds. Delete after 90 days as a safety net.
+
+export const DEFAULT_EXHAUSTED_RETENTION_DAYS = 30;
+export const DEFAULT_ORPHAN_RETENTION_DAYS = 90;
+
+export interface PendingPruneResult {
+    exhaustedPurged: number;
+    orphanPurged: number;
+}
+
+export function prunePendingProvisions(opts?: {
+    exhaustedOlderThanDays?: number;
+    orphanOlderThanDays?: number;
+}): PendingPruneResult {
+    const db = getDb();
+    const exhaustedDays = opts?.exhaustedOlderThanDays ?? DEFAULT_EXHAUSTED_RETENTION_DAYS;
+    const orphanDays = opts?.orphanOlderThanDays ?? DEFAULT_ORPHAN_RETENTION_DAYS;
+
+    const exhausted = db.prepare(
+        `DELETE FROM pending_provisions
+         WHERE attempts >= 10
+           AND created_at < datetime('now', '-${exhaustedDays} days')`,
+    ).run();
+    const orphan = db.prepare(
+        `DELETE FROM pending_provisions
+         WHERE created_at < datetime('now', '-${orphanDays} days')`,
+    ).run();
+
+    return { exhaustedPurged: exhausted.changes, orphanPurged: orphan.changes };
+}
+
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+export function startPendingCleanup(intervalMs: number = CLEANUP_INTERVAL_MS): void {
+    if (cleanupTimer) return;
+    cleanupTimer = setInterval(() => {
+        try {
+            const r = prunePendingProvisions();
+            if (r.exhaustedPurged > 0 || r.orphanPurged > 0) {
+                console.log(
+                    `[Ecosystem] pruned ${r.exhaustedPurged} exhausted, ${r.orphanPurged} orphan pending provisions`,
+                );
+            }
+        } catch (e: any) {
+            console.error('[Ecosystem] pending-provisions cleanup error:', e?.message || e);
+        }
+    }, intervalMs);
+    cleanupTimer.unref();
+    console.log('[Ecosystem] pending-provisions cleanup started (every 1h)');
+}
+
+export function stopPendingCleanup(): void {
+    if (cleanupTimer) {
+        clearInterval(cleanupTimer);
+        cleanupTimer = null;
+    }
+}
