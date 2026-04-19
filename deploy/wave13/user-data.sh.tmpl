@@ -148,6 +148,24 @@ docker compose -f docker-compose.aws.yml \
     --env-file /opt/windy-pro/.env.production \
     up -d
 
+# Chown the bind-mounted keys dir to the container's windy UID/GID.
+# The image's `adduser -S windy` in Dockerfile assigns UID 100 / GID
+# 101 by Alpine convention, but reading the container's own `id`
+# output is safer than hardcoding — it'll track Dockerfile changes.
+# Without this step /keys/private.pem is owned by root:root 0600 on
+# the host, the container's non-root windy user can't open it, and
+# JWKS falls back to HS256 with jwks=error in /health.
+sleep 8
+WINDY_UID=$(docker exec wave13-account-server-1 id -u 2>/dev/null || echo 100)
+WINDY_GID=$(docker exec wave13-account-server-1 id -g 2>/dev/null || echo 101)
+chown -R "$WINDY_UID:$WINDY_GID" /var/lib/windypro/keys
+chmod 750 /var/lib/windypro/keys
+chmod 640 /var/lib/windypro/keys/private.pem
+chmod 644 /var/lib/windypro/keys/public.pem
+docker compose -f docker-compose.aws.yml \
+    --env-file /opt/windy-pro/.env.production \
+    restart account-server
+
 # ─── Run Postgres migrations (account-server ships them) ─────
 # The image is already up; it runs initSchema on boot for fresh DBs,
 # so no manual step is strictly required. Keep a placeholder marker.
