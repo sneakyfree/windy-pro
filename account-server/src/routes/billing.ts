@@ -17,6 +17,7 @@ import { getDb } from '../db/schema';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { trackEvent } from '../services/analytics';
 import { BillingTransactionsQuerySchema } from '@windy-pro/contracts';
+import { ZodError } from 'zod';
 
 // ─── Stripe client (lazy — only initialized if STRIPE_SECRET_KEY is set) ────
 
@@ -396,6 +397,15 @@ billingRouter.get('/transactions', authenticateToken, (req: Request, res: Respon
 
         res.json({ ok: true, transactions: txs, total, limit: query.limit, offset: query.offset });
     } catch (err: any) {
+        // Wave 12 B2: narrow ZodError → 400. Mirrors the fix in storage.ts
+        // for the /files endpoint — a malformed ?limit=non-numeric used to
+        // 500 because the same wide catch buckets validation + server errors.
+        if (err instanceof ZodError || err?.name === 'ZodError') {
+            return res.status(400).json({
+                error: 'invalid_query',
+                details: err.flatten ? err.flatten() : err.issues || err.errors,
+            });
+        }
         res.status(500).json({ error: 'Internal server error' });
     }
 });

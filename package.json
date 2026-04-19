@@ -81,6 +81,17 @@
     "directories": {
       "output": "dist"
     },
+    "protocols": [
+      {
+        "name": "Windy Pro Deep Links",
+        "schemes": [
+          "windypro",
+          "windychat",
+          "windyword",
+          "windyfly"
+        ]
+      }
+    ],
     "publish": [
       {
         "provider": "github",
