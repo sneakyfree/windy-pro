@@ -10,8 +10,16 @@ FROM node:22-alpine AS builder
 
 WORKDIR /build
 
-# Copy shared contracts first (local "file:" dependency)
+# Copy shared contracts first (local "file:" dependency). Its
+# package.json declares `main: dist/index.js` and `types:
+# dist/index.d.ts`, and shared/contracts/dist is NOT committed to
+# git (generated artifact). So we must install the contracts' own
+# deps (zod) and `tsc` compile its sources here before
+# account-server's tsc can resolve @windy-pro/contracts at all.
+# Without this step the build fails with:
+#   error TS2307: Cannot find module 'zod' or its corresponding type declarations.
 COPY shared/contracts ./shared/contracts
+RUN cd shared/contracts && npm ci && npm run build
 
 # Copy account-server package files
 COPY account-server/package.json account-server/package-lock.json ./account-server/
