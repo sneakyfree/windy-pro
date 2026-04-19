@@ -51,9 +51,14 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Copy compiled JS from builder
 COPY --from=builder /build/account-server/dist ./dist
 
-# Copy web client dist if it exists (static site served by account-server)
-# This is optional — the build won't fail if the directory doesn't exist
-COPY account-server/src/client/web/dist* ./src/client/web/dist/
+# NOTE: The original Dockerfile had a COPY for
+# `account-server/src/client/web/dist*` here, but the web client
+# actually lives at src/client/web/ at the repo root (not inside
+# account-server/), AND a COPY glob with a missing parent dir is
+# a hard Docker build failure despite the old comment claiming
+# otherwise. Phase 1 is API-only; the Express server's
+# express.static() is a no-op when the target dir is missing and
+# simply falls through to the API handlers.
 
 # Create data directories
 RUN mkdir -p /app/data/uploads /keys && chown -R windy:windy /app /keys
