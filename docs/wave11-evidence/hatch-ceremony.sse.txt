@@ -1,0 +1,52 @@
+id: 1
+event: eternitas.registering
+data: {"seq":1,"at":"2026-04-18T23:17:09.538Z","type":"eternitas.registering","status":"pending","label":"Registering passport with Eternitas…"}
+
+id: 2
+event: eternitas.registered
+data: {"seq":2,"at":"2026-04-18T23:17:09.541Z","type":"eternitas.registered","status":"ok","label":"Eternitas passport issued: ET26-WAVE-1111","data":{"passport_number":"ET26-WAVE-1111"}}
+
+id: 3
+event: mail.provisioning
+data: {"seq":3,"at":"2026-04-18T23:17:09.619Z","type":"mail.provisioning","status":"pending","label":"Allocating agent inbox…"}
+
+id: 4
+event: mail.provisioned
+data: {"seq":4,"at":"2026-04-18T23:17:09.695Z","type":"mail.provisioned","status":"ok","label":"Inbox: hardening-agent@windymail.ai","data":{"email":"hardening-agent@windymail.ai"}}
+
+id: 5
+event: chat.provisioning
+data: {"seq":5,"at":"2026-04-18T23:17:09.695Z","type":"chat.provisioning","status":"pending","label":"Opening your chat with the agent…"}
+
+id: 6
+event: chat.provisioned
+data: {"seq":6,"at":"2026-04-18T23:17:09.698Z","type":"chat.provisioned","status":"ok","label":"Chat room is live.","data":{"matrix_user_id":"@hardening-agent:chat.windypro.com","dm_room_id":"!dm-hardening:chat.windypro.com"}}
+
+id: 7
+event: cloud.provisioning
+data: {"seq":7,"at":"2026-04-18T23:17:09.699Z","type":"cloud.provisioning","status":"pending","label":"Allocating cloud storage…"}
+
+id: 8
+event: cloud.provisioned
+data: {"seq":8,"at":"2026-04-18T23:17:09.699Z","type":"cloud.provisioned","status":"ok","label":"5 GB allocated.","data":{"storage_limit_bytes":5368709120}}
+
+id: 9
+event: phone.assigning
+data: {"seq":9,"at":"2026-04-18T23:17:09.699Z","type":"phone.assigning","status":"pending","label":"Assigning a phone number…"}
+
+id: 10
+event: phone.assigned
+data: {"seq":10,"at":"2026-04-18T23:17:09.699Z","type":"phone.assigned","status":"ok","label":"Phone assignment queued (SMS gateway pending).","data":{"phone":null,"skipped":true}}
+
+id: 11
+event: birth_certificate.generating
+data: {"seq":11,"at":"2026-04-18T23:17:09.734Z","type":"birth_certificate.generating","status":"pending","label":"Generating birth certificate…"}
+
+id: 12
+event: birth_certificate.ready
+data: {"seq":12,"at":"2026-04-18T23:17:09.734Z","type":"birth_certificate.ready","status":"ok","label":"Birth certificate issued.","data":{"certificate_no":"WF-WAVE1111","agent_name":"Hardening's Agent","passport_number":"ET26-WAVE-1111","born_at":"2026-04-18T23:17:09.734Z","creator":"Hardening Tester Two","creator_email":"wave11b-1776554221@hardening.test","email":"hardening-agent@windymail.ai","phone":null,"cloud_storage_bytes":5368709120,"brain":{"provider":"gemini","model":"gemini-1.5-flash"},"chat":{"matrix_user_id":"@hardening-agent:chat.windypro.com","dm_room_id":"!dm-hardening:chat.windypro.com"}}}
+
+id: 13
+event: hatch.complete
+data: {"seq":13,"at":"2026-04-18T23:17:09.739Z","type":"hatch.complete","status":"ok","label":"Your agent is here.","data":{"session_id":"e30941cc-c84e-4b80-88bb-827fabc97127","resumed":false}}
+
