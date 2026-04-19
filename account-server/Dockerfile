@@ -39,10 +39,15 @@ FROM node:22-alpine
 # Security: run as non-root
 RUN addgroup -S windy && adduser -S windy -G windy
 
-WORKDIR /app
+# Copy shared contracts ONE LEVEL ABOVE /app so that
+# account-server's `"@windy-pro/contracts": "file:../shared/contracts"`
+# resolves correctly at npm-ci time. account-server's package.json
+# expects the sibling layout /shared/contracts alongside itself, so
+# we replicate the /build/shared + /build/account-server layout of
+# the builder stage here as /shared + /app.
+COPY --from=builder /build/shared/contracts /shared/contracts
 
-# Copy shared contracts (needed at runtime for the file: link)
-COPY --from=builder /build/shared/contracts ./shared/contracts
+WORKDIR /app
 
 # Copy package files and install production deps only
 COPY account-server/package.json account-server/package-lock.json ./
