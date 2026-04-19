@@ -35,6 +35,7 @@ import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
 import flyRoutes from './routes/fly';
 import agentRoutes from './routes/agent';
+import webhooksEternitasRoutes from './routes/webhooks-eternitas';
 import { authenticateToken } from './middleware/auth';
 import { initErrorReporting, reportError } from './services/error-reporter';
 
@@ -103,6 +104,11 @@ app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response
 
 // Stripe webhook needs raw body — must come BEFORE express.json()
 app.use('/api/v1/stripe', express.raw({ type: 'application/json' }), stripeRouter);
+
+// Wave 13 — Eternitas firehose also needs raw body for HMAC verify,
+// so mount it before the global express.json() body parser (same
+// reason + same pattern as Stripe above).
+app.use('/webhooks', express.raw({ type: 'application/json', limit: '1mb' }), webhooksEternitasRoutes);
 
 // Cap request body at 100 KiB. Everything legitimate (register, verify,
 // login, webhook payloads) fits well under this. An oversized body throws
@@ -288,6 +294,7 @@ app.use('/api/v1/fly', flyRoutes);
 // Wave 8 — Managed-credential broker + hatch-from-Pro endpoint.
 // HMAC-gated credentials/issue for S2S, Bearer-JWT /hatch that streams SSE.
 app.use('/api/v1/agent', agentRoutes);
+
 
 // Billing
 app.use('/api/v1/billing', billingRouter);
