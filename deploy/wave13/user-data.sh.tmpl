@@ -82,7 +82,10 @@ JWT_KEY_ID=${JWT_KEY_ID}
 OIDC_ISSUER=https://api.windyword.ai
 
 # ─── Database (RDS) ───
-DATABASE_URL=postgres://windypro:__RDS_PASSWORD__@__RDS_ENDPOINT__:5432/windyproidentity
+# sslmode=require is non-negotiable on AWS RDS — pg_hba.conf rejects
+# plaintext connections with "no pg_hba.conf entry for host X, no
+# encryption". Appending to the URL is simpler than wiring PGSSLMODE.
+DATABASE_URL=postgres://windypro:__RDS_PASSWORD__@__RDS_ENDPOINT__:5432/windyproidentity?sslmode=require
 
 # ─── Broker + ecosystem secrets ───
 BROKER_HMAC_SECRET=${BROKER_HMAC_SECRET}
