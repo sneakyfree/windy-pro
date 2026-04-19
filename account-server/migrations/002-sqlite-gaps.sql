@@ -23,9 +23,10 @@ CREATE INDEX IF NOT EXISTS idx_analytics_event   ON analytics_events(event);
 CREATE INDEX IF NOT EXISTS idx_analytics_created ON analytics_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_analytics_user    ON analytics_events(user_id);
 
--- mfa_secrets — TOTP + backup codes per user
+-- mfa_secrets — TOTP + backup codes per user.
+-- user_id matches 001's users.id type (UUID). pg coerces string inputs.
 CREATE TABLE IF NOT EXISTS mfa_secrets (
-    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     totp_secret_encrypted TEXT NOT NULL,
     totp_secret_iv TEXT NOT NULL,
     totp_secret_tag TEXT NOT NULL,
@@ -37,7 +38,7 @@ CREATE TABLE IF NOT EXISTS mfa_secrets (
 -- otp_codes — email-verify + password-reset one-time codes
 CREATE TABLE IF NOT EXISTS otp_codes (
     id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     code_hash TEXT NOT NULL,
     purpose TEXT NOT NULL,
     expires_at TEXT NOT NULL,
@@ -73,7 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_webhook_event    ON webhook_deliveries(event_type
 -- ── Wave 8 broker tables ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS broker_tokens (
     id TEXT PRIMARY KEY,
-    identity_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    identity_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     passport_number TEXT,
     token_hash TEXT UNIQUE NOT NULL,
     token_prefix TEXT NOT NULL,
