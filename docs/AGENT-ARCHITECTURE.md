@@ -210,7 +210,75 @@ Nobody has shipped this specific combination — *every user gets a deeply privi
 
 ---
 
-## 10. Open questions for future sessions
+## 10. Memory & learning preservation
+
+A naive sub-agent architecture spawns fresh instances that behave like amnesiacs — the 51st fix of a familiar bug looks to the agent like the first. This is a real risk and the wrong way to build. It is solved here by treating memory as a **shared persistent store**, not something living in any one agent's context window.
+
+### 10.1 Context vs memory
+
+- **Context window** = what's in the current conversation. Ephemeral. Fresh per invocation. Even the orchestrator gets a new context each session.
+- **Memory (soul store)** = persistent disk-backed store. Accumulates forever. Read by every agent on spawn, written to by every agent before returning.
+
+Agents do not learn by preserving context across runs. They learn by reading from and writing to the soul store. A 2-year-old orchestrator is "smart" because its soul file has been growing for 2 years, not because its context remembers anything from 2 years ago.
+
+### 10.2 All agents share the same soul store
+
+Orchestrator AND every sub-agent read/write the same per-user soul file plus the fleet-wide playbook library. Sub-agents are not isolated from accumulated learning — they are instantiations that *bind* to the shared soul on spawn.
+
+```
+                    ┌─────────────────────────────┐
+                    │  Shared Soul Store          │
+                    │  • Fleet playbook library   │
+                    │  • Per-user soul file       │
+                    │  • Dream-compacted summaries│
+                    │  • Bug fix history          │
+                    └──────────┬──────────────────┘
+                               │ read/write
+         ┌────────┬────────────┼────────────┬─────────┐
+         ▼        ▼            ▼            ▼         ▼
+   Orchestrator Mechanic     Phone        Mail     Browser
+```
+
+### 10.3 Retrieval on spawn
+
+When the orchestrator dispatches to a sub-agent, the spawn prompt includes:
+
+1. **Fleet playbooks matching the task signature.** The mechanic handling a macOS mic permission bug receives the fleet's accumulated playbooks for that error class — potentially hundreds of prior fixes across all users.
+2. **This-user's relevant soul slice.** Entries tagged for the sub-agent type (e.g. `mechanic`) and/or matching the error signature, ranked by recency + relevance. Not the full soul — targeted retrieval.
+3. **Current task details** (error, logs, what the user said).
+
+This is targeted retrieval, not context stuffing. The mechanic gets the ~15 mic-relevant entries out of a user's 200 total, not all 200. Sharper signal, lower token cost, faster response.
+
+### 10.4 Write-back is mandatory
+
+Every sub-agent MUST call `record_learning(tag, content)` before returning, even to record "nothing novel — matched existing playbook N." This produces:
+
+- **New playbook** if the sub-agent solved a novel class of bug → promoted to fleet library after review
+- **User soul entry** capturing the specifics of this fix (hardware quirks, user preferences revealed, config before/after)
+- **Telemetry ping** to fleet learning loop for aggregation
+
+No silent returns. Learning is a first-class side effect.
+
+### 10.5 Dream cycle
+
+A background process (nightly per user + weekly fleet-wide) compacts raw soul entries into durable summaries. Raw entries from the past week are reviewed, deduplicated, promoted to permanent soul if they represent stable user traits, or demoted/dropped if ephemeral. Fleet-wide: similar bug fixes from multiple users get merged into stronger consolidated playbooks.
+
+This is what the ecosystem already calls "dreaming." It's the compaction step that keeps memory from becoming noise over years of accumulation.
+
+### 10.6 Why this beats a monolithic agent on learning
+
+1. **Fleet learning only works with sub-agents sharing a playbook library.** A monolithic per-user agent cannot share learning across users. The sub-agent pattern is what makes a bug grandma in Atlanta hits today automatically already-solved when grandma in Boise hits it tomorrow.
+2. **Targeted retrieval beats context stuffing.** Pulling ~15 relevant entries into a sub-agent's context is better focus than dragging 200 topics into a monolith's context window every time.
+3. **Soul durability.** In a monolith, recent debug noise eventually pushes deep user context out of the window. With targeted retrieval, the soul is disk-backed permanent and re-injected as needed.
+4. **Cross-session continuity is equivalent.** Both patterns start fresh each session and rely on the soul store for continuity — sub-agents don't lose anything here vs a monolith.
+
+### 10.7 Practical consequence
+
+The mechanic in 2028 has the benefit of 2 years of fleet playbooks plus this specific user's 200+ prior fixes, compacted into a retrievable soul. It is never a brand-new amnesiac. That's what separates a real agentic product from a toy.
+
+---
+
+## 11. Open questions for future sessions
 
 1. Does the mechanic MCP server bind to `127.0.0.1` only, or do we allow fleet-level mechanic dispatch (Kit 0 fixing grandma's Windy 0 remotely)? Probably local-only for v1, fleet-level as a paid tier later.
 2. Who writes the first 20 playbooks, and what error signatures are they keyed on? Initial list driven by the top 20 bugs we hit during the first ballroom event.
