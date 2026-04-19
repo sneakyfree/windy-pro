@@ -21,6 +21,7 @@ import {
     FileUploadBodySchema,
     FileListQuerySchema,
 } from '@windy-pro/contracts';
+import { ZodError } from 'zod';
 import { validateFileMagicBytes } from '../middleware/file-validation';
 import { R2StorageAdapter, isR2Configured } from '../services/r2-adapter';
 
@@ -179,6 +180,15 @@ router.get('/', authenticateToken, (req: Request, res: Response) => {
             storageLimit: userRow?.storage_limit || 524288000,
         });
     } catch (err: any) {
+        // Wave 12 B1: narrow ZodError → 400. Without this, a malformed
+        // ?limit=… query 500s because the same wide catch buckets both
+        // validation and server errors into "Internal server error".
+        if (err instanceof ZodError || err?.name === 'ZodError') {
+            return res.status(400).json({
+                error: 'invalid_query',
+                details: err.flatten ? err.flatten() : err.issues || err.errors,
+            });
+        }
         res.status(500).json({ error: 'Internal server error' });
     }
 });
