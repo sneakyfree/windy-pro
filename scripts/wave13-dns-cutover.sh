@@ -58,16 +58,24 @@ fi
 OLD_ID=""
 OLD_TYPE=""
 OLD_CONTENT=""
+OLD_PROXIED="false"
 if [ "$OLD_COUNT" -eq 1 ]; then
-    eval "$(echo "$OLD_JSON" | python3 -c '
-import sys, json
-r = json.load(sys.stdin)["result"][0]
-print(f"OLD_ID={r[\"id\"]}")
-print(f"OLD_TYPE={r[\"type\"]}")
-print(f"OLD_CONTENT=\"{r[\"content\"]}\"")
-print(f"OLD_PROXIED={str(r[\"proxied\"]).lower()}")
-')"
-    echo "OLD → type=$OLD_TYPE  content=$OLD_CONTENT  id=$OLD_ID"
+    # Pass the Cloudflare response in via env (CF_JSON) so the heredoc
+    # delimiter isn't competing with stdin for the python interpreter.
+    # Emit shell assignments with single-quote-safe escaping.
+    OLD_VARS=$(CF_JSON="$OLD_JSON" python3 <<'PY'
+import os, json
+r = json.loads(os.environ['CF_JSON'])['result'][0]
+def q(s):
+    return "'" + str(s).replace("'", "'\\''") + "'"
+print(f"OLD_ID={q(r['id'])}")
+print(f"OLD_TYPE={q(r['type'])}")
+print(f"OLD_CONTENT={q(r['content'])}")
+print(f"OLD_PROXIED={q(str(r['proxied']).lower())}")
+PY
+)
+    eval "$OLD_VARS"
+    echo "OLD → type=$OLD_TYPE  content=$OLD_CONTENT  proxied=$OLD_PROXIED  id=$OLD_ID"
 fi
 
 # Step 3: plan vs apply
