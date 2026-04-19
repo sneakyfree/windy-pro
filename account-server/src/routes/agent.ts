@@ -1,10 +1,14 @@
 /**
  * Wave 8 — Agent routes.
  *
- * Two endpoints:
- *   POST /api/v1/agent/credentials/issue  (HMAC-signed S2S)
+ * Endpoints:
+ *   POST /api/v1/agent/credentials/issue   (HMAC-signed S2S)
  *     → mints a broker token the agent hands to the LLM gateway.
- *   POST /api/v1/agent/hatch  (Bearer JWT)
+ *   POST /api/v1/agent/credentials/verify  (HMAC-signed S2S)
+ *     → verifies an opaque broker_token so sister services (windy-fly-agent)
+ *       can fail-closed on the cryptographic source of truth before
+ *       acting on the token.
+ *   POST /api/v1/agent/hatch               (Bearer JWT)
  *     → idempotent per windy_identity_id. Streams SSE events through
  *       the bootcamp-demo.md ceremony: eternitas → broker → remote
  *       hatch → chat/mail/cloud → birth certificate.
@@ -27,6 +31,7 @@ import { makeRateLimiter } from '../services/rate-limiter';
 import {
     issueBrokerToken,
     verifyBrokerSignature,
+    verifyBrokerToken,
     createHatchSession,
     appendHatchEvent,
     finishHatchSession,
@@ -103,6 +108,67 @@ router.post('/credentials/issue', issueLimiter, async (req: Request, res: Respon
         }
         console.error('[broker] issue error:', err);
         return res.status(500).json({ error: 'broker_issue_failed' });
+    }
+});
+
+// ─── POST /api/v1/agent/credentials/verify ───────────────────
+//
+// S2S broker-token verification. windy-fly-agent calls this before it
+// acts on a bk_live_* token an agent presents. Pro is the only
+// authoritative verifier — tokens are opaque (sha256 hash lookups),
+// not JWTs — so sister services MUST round-trip here before trusting
+// any claim a token carries.
+//
+// Same HMAC gate as /credentials/issue. Body: { "broker_token": "bk_live_..." }.
+// 200 with {ok,true,token} or {ok,false,reason} is the expected shape;
+// 401 means the signature is bad. Sister-side contract is pinned in
+// windy-agent/gateway/src/broker-verify.ts.
+router.post('/credentials/verify', issueLimiter, async (req: Request, res: Response) => {
+    try {
+        const timestamp = (req.header('x-windy-timestamp') || '').trim();
+        const signature = (req.header('x-windy-signature') || '').trim();
+
+        const check = verifyBrokerSignature(
+            'POST',
+            '/api/v1/agent/credentials/verify',
+            req.body ?? {},
+            timestamp,
+            signature,
+        );
+        if (!check.ok) {
+            return res.status(401).json({ error: 'invalid_signature', reason: check.reason });
+        }
+
+        const { broker_token } = req.body || {};
+        if (!broker_token || typeof broker_token !== 'string') {
+            return res.status(400).json({ error: 'broker_token is required' });
+        }
+
+        const result = verifyBrokerToken(broker_token);
+        if (!result.ok) {
+            return res.json({ ok: false, reason: result.reason });
+        }
+
+        // Reshape the DB row into the BrokerTokenClaims contract the
+        // sister repos expect. `id` is Pro-internal; callers keyed by
+        // identity_id + passport_number + token metadata only.
+        const t = result.token!;
+        return res.json({
+            ok: true,
+            token: {
+                identity_id: t.identity_id,
+                passport_number: t.passport_number,
+                provider: t.provider,
+                model: t.model,
+                scope: t.scope,
+                expires_at: t.expires_at,
+                usage_cap_tokens: t.usage_cap_tokens,
+                usage_tokens: t.usage_tokens,
+            },
+        });
+    } catch (err: any) {
+        console.error('[broker] verify error:', err);
+        return res.status(500).json({ error: 'broker_verify_failed' });
     }
 });
 
