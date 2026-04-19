@@ -1,0 +1,78 @@
+# Wave 13 Phase 1 — Windy Pro account-server on AWS
+#
+# Differs from deploy/docker-compose.production.yml in two ways:
+#   1. Postgres is external (AWS RDS) — no local postgres container.
+#      DATABASE_URL is sourced from .env.production.
+#   2. Chat-* sidecars are NOT included. Phase 1 is the identity hub
+#      only; Windy Chat ships in Wave 13 Phase 4 with its own stack.
+#
+# Redis stays local for launch simplicity; ElastiCache is a later
+# swap once multi-instance deploys matter.
+#
+# Usage on the EC2 instance (cloud-init writes /opt/windy-pro/.env.production):
+#   cd /opt/windy-pro/deploy/wave13
+#   docker compose -f docker-compose.aws.yml --env-file /opt/windy-pro/.env.production up -d
+
+services:
+  account-server:
+    build:
+      context: ../..
+      dockerfile: account-server/Dockerfile
+    network_mode: host            # talk to host-side nginx on 127.0.0.1:8098 → :443
+    environment:
+      - NODE_ENV=production
+      - PORT=8098
+      - TRUST_PROXY=1
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://127.0.0.1:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_PRIVATE_KEY_PATH=/keys/private.pem
+      - JWT_PUBLIC_KEY_PATH=/keys/public.pem
+      - JWT_KEY_ID=${JWT_KEY_ID}
+      - OIDC_ISSUER=${OIDC_ISSUER}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - BROKER_HMAC_SECRET=${BROKER_HMAC_SECRET}
+      - ETERNITAS_WEBHOOK_SECRET=${ETERNITAS_WEBHOOK_SECRET}
+      - WINDYMAIL_SERVICE_TOKEN=${WINDYMAIL_SERVICE_TOKEN}
+      - CHAT_SERVICE_TOKEN=${CHAT_SERVICE_TOKEN}
+      - WINDY_CLOUD_SERVICE_TOKEN=${WINDY_CLOUD_SERVICE_TOKEN}
+      - WINDY_AGENT_SERVICE_TOKEN=${WINDY_AGENT_SERVICE_TOKEN}
+      - OPENAI_KEY=${OPENAI_KEY:-}
+      - ANTHROPIC_KEY=${ANTHROPIC_KEY:-}
+      - GEMINI_KEY=${GEMINI_KEY:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - R2_BUCKET=${R2_BUCKET:-windypro-storage}
+      - DATA_ROOT=/data
+    volumes:
+      - /var/lib/windypro/keys:/keys
+      - /var/lib/windypro/uploads:/data/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8098/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    network_mode: host
+    command: ["redis-server", "--bind", "127.0.0.1", "--port", "6379"]
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redisdata:

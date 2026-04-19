@@ -14,7 +14,7 @@
  * IMPORTANT: This adapter exists for migration purposes. The long-term
  * plan is to migrate the codebase to async/await and use pg natively.
  */
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import type { DbAdapter, PreparedStatement, RunResult } from './adapter';
 
 // pg is a peer dependency — only loaded when DATABASE_URL is postgres://
@@ -116,8 +116,16 @@ function querySyncViaChild(connectionString: string, sql: string, params: any[])
   `;
 
   try {
-    const result = execSync(
-      `node -e ${JSON.stringify(script)} ${JSON.stringify(queryPayload)}`,
+    // Wave 13 prod fix — use execFileSync instead of execSync so the
+    // multi-line `script` passes through argv directly without shell
+    // parsing. The previous `execSync(\`node -e ${JSON.stringify(script)}\`)`
+    // pipeline relied on the shell to unescape \n inside double-quoted
+    // JSON strings, which it does NOT — the script arrived at node -e
+    // with literal "\n" char-pairs and failed with
+    //   SyntaxError: Invalid or unexpected token / Expected unicode escape
+    const result = execFileSync(
+      'node',
+      ['-e', script, queryPayload],
       {
         encoding: 'utf-8',
         timeout: 30000,

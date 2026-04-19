@@ -209,12 +209,23 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
     // ── Step 1: bot identity row (internal, not SSE) ──────────
     let botUserId: string;
     try {
-        const existingBot = db.prepare(
-            `SELECT u.id FROM users u
-             JOIN product_accounts pa ON pa.identity_id = u.id
-             WHERE pa.product = 'windy_fly' AND pa.metadata LIKE ?
-             LIMIT 1`,
-        ).get(`%"owner":"${userId}"%`) as { id: string } | undefined;
+        // Bot-lookup idempotency. `product_accounts.metadata` is TEXT on
+        // SQLite (dev) and JSONB on Postgres (prod). Postgres rejects
+        // `jsonb LIKE text` so we cast metadata → text on that engine.
+        // This is a redundant safety check — hatch_sessions dedupes at a
+        // higher level via UNIQUE(windy_identity_id) — but we keep it for
+        // the edge case where a session row was manually cleaned up.
+        const existingBotSql = db.engine === 'postgres'
+            ? `SELECT u.id FROM users u
+               JOIN product_accounts pa ON pa.identity_id = u.id
+               WHERE pa.product = 'windy_fly' AND pa.metadata::text LIKE ?
+               LIMIT 1`
+            : `SELECT u.id FROM users u
+               JOIN product_accounts pa ON pa.identity_id = u.id
+               WHERE pa.product = 'windy_fly' AND pa.metadata LIKE ?
+               LIMIT 1`;
+        const existingBot = db.prepare(existingBotSql)
+            .get(`%"owner":"${userId}"%`) as { id: string } | undefined;
 
         if (existingBot) {
             botUserId = existingBot.id;

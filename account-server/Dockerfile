@@ -10,8 +10,16 @@ FROM node:22-alpine AS builder
 
 WORKDIR /build
 
-# Copy shared contracts first (local "file:" dependency)
+# Copy shared contracts first (local "file:" dependency). Its
+# package.json declares `main: dist/index.js` and `types:
+# dist/index.d.ts`, and shared/contracts/dist is NOT committed to
+# git (generated artifact). So we must install the contracts' own
+# deps (zod) and `tsc` compile its sources here before
+# account-server's tsc can resolve @windy-pro/contracts at all.
+# Without this step the build fails with:
+#   error TS2307: Cannot find module 'zod' or its corresponding type declarations.
 COPY shared/contracts ./shared/contracts
+RUN cd shared/contracts && npm ci && npm run build
 
 # Copy account-server package files
 COPY account-server/package.json account-server/package-lock.json ./account-server/
@@ -31,10 +39,15 @@ FROM node:22-alpine
 # Security: run as non-root
 RUN addgroup -S windy && adduser -S windy -G windy
 
-WORKDIR /app
+# Copy shared contracts ONE LEVEL ABOVE /app so that
+# account-server's `"@windy-pro/contracts": "file:../shared/contracts"`
+# resolves correctly at npm-ci time. account-server's package.json
+# expects the sibling layout /shared/contracts alongside itself, so
+# we replicate the /build/shared + /build/account-server layout of
+# the builder stage here as /shared + /app.
+COPY --from=builder /build/shared/contracts /shared/contracts
 
-# Copy shared contracts (needed at runtime for the file: link)
-COPY --from=builder /build/shared/contracts ./shared/contracts
+WORKDIR /app
 
 # Copy package files and install production deps only
 COPY account-server/package.json account-server/package-lock.json ./
@@ -43,9 +56,14 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Copy compiled JS from builder
 COPY --from=builder /build/account-server/dist ./dist
 
-# Copy web client dist if it exists (static site served by account-server)
-# This is optional — the build won't fail if the directory doesn't exist
-COPY account-server/src/client/web/dist* ./src/client/web/dist/
+# NOTE: The original Dockerfile had a COPY for
+# `account-server/src/client/web/dist*` here, but the web client
+# actually lives at src/client/web/ at the repo root (not inside
+# account-server/), AND a COPY glob with a missing parent dir is
+# a hard Docker build failure despite the old comment claiming
+# otherwise. Phase 1 is API-only; the Express server's
+# express.static() is a no-op when the target dir is missing and
+# simply falls through to the API handlers.
 
 # Create data directories
 RUN mkdir -p /app/data/uploads /keys && chown -R windy:windy /app /keys

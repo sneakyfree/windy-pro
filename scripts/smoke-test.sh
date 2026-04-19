@@ -152,37 +152,43 @@ fi
 pass "login returns a usable JWT" "$RESP_DUR"
 
 # ─── 6. Agent hatch SSE ────────────────────────────────────────
-info "POST /api/v1/agent/hatch  (SSE; up to 45s for sister services)"
-# --no-buffer + 45s max-time is enough for a real hatch even if
-# Eternitas/Chat/Mail are slow. We look for the canonical terminal
-# event hatch.complete in the stream.
-HATCH_BODY_FILE=$(mktemp)
-START_T=$(date +%s.%N)
-HATCH_STATUS=$(curl -sS -o "$HATCH_BODY_FILE" -w "%{http_code}" \
-    -X POST "$BASE_URL/api/v1/agent/hatch" \
-    -H "Authorization: Bearer $JWT" \
-    -H "Accept: text/event-stream" \
-    -H "Content-Type: application/json" \
-    -d '{}' \
-    --max-time 45 \
-    --no-buffer || true)
-END_T=$(date +%s.%N)
-HATCH_DUR=$(awk "BEGIN {print $END_T - $START_T}")
-HATCH_BODY=$(cat "$HATCH_BODY_FILE"); rm -f "$HATCH_BODY_FILE"
-
-if [[ "$HATCH_STATUS" != "200" ]]; then
-    fail "hatch" "expected 200, got $HATCH_STATUS — body: $HATCH_BODY"
-fi
-if ! grep -q "event: hatch.complete" <<<"$HATCH_BODY"; then
-    fail "hatch" "SSE stream did not terminate with hatch.complete — body: $(echo "$HATCH_BODY" | tail -c 400)"
-fi
-# Sanity: at least the eternitas.registering frame should be present.
-# If it's not, the route is probably returning a cached session without
-# streaming — still fine (idempotent replay) but worth noting.
-if grep -q "event: eternitas.registering" <<<"$HATCH_BODY"; then
-    pass "hatch SSE ran a fresh ceremony and ended with hatch.complete" "$HATCH_DUR"
+#
+# The hatch orchestrator depends on Eternitas (Phase 2), Windy Chat
+# (Phase 4), Windy Mail (Phase 6), and Windy Fly (Phase 5). During a
+# phased ecosystem rollout those services are not yet deployed, and
+# the stream ends at `eternitas.registered:failed` rather than a full
+# `hatch.complete`. Set SMOKE_SKIP_HATCH=1 on Phase 1-only runs; the
+# check re-enables itself by default for Phase 2+.
+if [[ "${SMOKE_SKIP_HATCH:-0}" = "1" ]]; then
+    info "POST /api/v1/agent/hatch  (SKIPPED via SMOKE_SKIP_HATCH=1)"
+    printf "  %sSKIP%s /api/v1/agent/hatch — sister services not yet deployed\n" "$C_YELLOW" "$C_RESET"
 else
-    pass "hatch SSE resumed an existing session and ended with hatch.complete" "$HATCH_DUR"
+    info "POST /api/v1/agent/hatch  (SSE; up to 45s for sister services)"
+    HATCH_BODY_FILE=$(mktemp)
+    START_T=$(date +%s.%N)
+    HATCH_STATUS=$(curl -sS -o "$HATCH_BODY_FILE" -w "%{http_code}" \
+        -X POST "$BASE_URL/api/v1/agent/hatch" \
+        -H "Authorization: Bearer $JWT" \
+        -H "Accept: text/event-stream" \
+        -H "Content-Type: application/json" \
+        -d '{}' \
+        --max-time 45 \
+        --no-buffer || true)
+    END_T=$(date +%s.%N)
+    HATCH_DUR=$(awk "BEGIN {print $END_T - $START_T}")
+    HATCH_BODY=$(cat "$HATCH_BODY_FILE"); rm -f "$HATCH_BODY_FILE"
+
+    if [[ "$HATCH_STATUS" != "200" ]]; then
+        fail "hatch" "expected 200, got $HATCH_STATUS — body: $HATCH_BODY"
+    fi
+    if ! grep -q "event: hatch.complete" <<<"$HATCH_BODY"; then
+        fail "hatch" "SSE stream did not terminate with hatch.complete — body: $(echo "$HATCH_BODY" | tail -c 400)"
+    fi
+    if grep -q "event: eternitas.registering" <<<"$HATCH_BODY"; then
+        pass "hatch SSE ran a fresh ceremony and ended with hatch.complete" "$HATCH_DUR"
+    else
+        pass "hatch SSE resumed an existing session and ended with hatch.complete" "$HATCH_DUR"
+    fi
 fi
 
 # ─── Done ──────────────────────────────────────────────────────
