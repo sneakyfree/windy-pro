@@ -50,13 +50,13 @@ CREATE TABLE IF NOT EXISTS users (
     license_tier TEXT DEFAULT 'free',
     storage_used BIGINT DEFAULT 0,
     storage_limit BIGINT DEFAULT 524288000,
-    frozen BOOLEAN DEFAULT false,
+    frozen INTEGER DEFAULT 0,
     identity_type TEXT DEFAULT 'human',
     phone TEXT,
     display_name TEXT,
     avatar_url TEXT,
-    email_verified BOOLEAN DEFAULT false,
-    phone_verified BOOLEAN DEFAULT false,
+    email_verified INTEGER DEFAULT 0,
+    phone_verified INTEGER DEFAULT 0,
     passport_id TEXT,
     preferred_lang TEXT DEFAULT 'en',
     last_login_at TIMESTAMPTZ,
@@ -119,14 +119,14 @@ CREATE TABLE IF NOT EXISTS recordings (
     engine_used TEXT NOT NULL DEFAULT 'cloud-standard',
     source TEXT NOT NULL DEFAULT 'record',
     languages_json JSONB NOT NULL DEFAULT '["en"]'::jsonb,
-    media_audio BOOLEAN NOT NULL DEFAULT true,
-    media_video BOOLEAN NOT NULL DEFAULT false,
+    media_audio INTEGER NOT NULL DEFAULT 1,
+    media_video INTEGER NOT NULL DEFAULT 0,
     file_path TEXT,
     file_size BIGINT NOT NULL DEFAULT 0,
-    synced BOOLEAN NOT NULL DEFAULT false,
+    synced INTEGER NOT NULL DEFAULT 0,
     synced_at TIMESTAMPTZ,
-    clone_usable BOOLEAN NOT NULL DEFAULT false,
-    clone_training_ready BOOLEAN DEFAULT false,
+    clone_usable INTEGER NOT NULL DEFAULT 0,
+    clone_training_ready INTEGER DEFAULT 0,
     tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
     latitude DOUBLE PRECISION,
     longitude DOUBLE PRECISION,
@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS recordings (
     device_id TEXT,
     device_name TEXT,
     app_version TEXT,
-    has_video BOOLEAN DEFAULT false,
+    has_video INTEGER DEFAULT 0,
     video_resolution TEXT,
     camera_source TEXT,
     sync_status TEXT DEFAULT 'pending'
@@ -192,7 +192,7 @@ CREATE TABLE IF NOT EXISTS coupons (
     max_uses INTEGER NOT NULL DEFAULT 999,
     usage_count INTEGER NOT NULL DEFAULT 0,
     expires_at TIMESTAMPTZ,
-    active BOOLEAN NOT NULL DEFAULT true,
+    active INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -287,7 +287,7 @@ CREATE TABLE IF NOT EXISTS secretary_consents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_identity_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     bot_identity_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    active BOOLEAN NOT NULL DEFAULT true,
+    active INTEGER NOT NULL DEFAULT 1,
     granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     revoked_at TIMESTAMPTZ
 );
@@ -303,8 +303,8 @@ CREATE TABLE IF NOT EXISTS oauth_clients (
     redirect_uris JSONB NOT NULL DEFAULT '[]'::jsonb,
     allowed_scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
     owner_identity_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    is_first_party BOOLEAN NOT NULL DEFAULT false,
-    is_public BOOLEAN NOT NULL DEFAULT false,
+    is_first_party INTEGER NOT NULL DEFAULT 0,
+    is_public INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -319,7 +319,7 @@ CREATE TABLE IF NOT EXISTS oauth_codes (
     state TEXT,
     code_challenge TEXT,
     code_challenge_method TEXT DEFAULT 'S256',
-    used BOOLEAN NOT NULL DEFAULT false,
+    used INTEGER NOT NULL DEFAULT 0,
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -365,7 +365,7 @@ CREATE TABLE IF NOT EXISTS chat_profiles (
     display_name TEXT,
     languages JSONB NOT NULL DEFAULT '["en"]'::jsonb,
     primary_language TEXT NOT NULL DEFAULT 'en',
-    onboarding_complete BOOLEAN NOT NULL DEFAULT false,
+    onboarding_complete INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
