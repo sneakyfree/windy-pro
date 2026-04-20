@@ -513,6 +513,14 @@ const db = getDb();
 // Seed ecosystem OAuth clients (windy_chat, windy_mail, eternitas, windy_fly)
 seedEcosystemClients();
 
+// Wave 14 P1-3 — bootstrap an admin user if ADMIN_BOOTSTRAP_EMAIL +
+// ADMIN_BOOTSTRAP_PASSWORD are set and no admin exists yet. Phase 1
+// shipped dormant; this is how ops brings the admin console online.
+import { maybeBootstrapAdmin } from './services/admin-bootstrap';
+maybeBootstrapAdmin().catch(err => {
+    console.error('[admin-bootstrap] failed:', err?.message || err);
+});
+
 // Phase 4: Initialize RS256 key management (falls back to HS256 if unconfigured)
 initializeJWKS();
 
