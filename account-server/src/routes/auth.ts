@@ -1085,8 +1085,17 @@ router.post('/forgot-password', forgotPasswordLimiter, validate(ForgotPasswordRe
 
             logAuditEvent('password_reset_requested', user.id, { stub: !!result.stub }, req.ip, req.get('user-agent'));
 
-            // Dev convenience: return raw token when no real mail provider is configured
-            if (result.stub) {
+            // Dev convenience: return raw token when no real mail provider is
+            // configured AND we are not running in production. Gating on
+            // NODE_ENV prevents the P0 leak surfaced in the 2026-04-19 smoke
+            // report: any anonymous caller that knows a user's email could
+            // otherwise pull the reset token from the response body and
+            // take over the account.
+            //
+            // Production startup already fails closed when RESEND_API_KEY
+            // is unset (see config.ts), so in production this branch is
+            // unreachable anyway — but defence in depth.
+            if (result.stub && process.env.NODE_ENV !== 'production') {
                 return res.json({ success: true, _devToken: token });
             }
         } else {

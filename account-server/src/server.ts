@@ -94,6 +94,25 @@ if (process.env.NODE_ENV === 'production' && !process.env.CORS_ALLOWED_ORIGINS) 
         '"https://windyword.ai,https://account.windyword.ai".',
     );
 }
+
+// ─── RESEND_API_KEY fail-closed ────────────────────────────────
+//
+// Wave 14 P0 — smoke report 2026-04-19 found /auth/forgot-password
+// leaking reset tokens in the response body when services/mailer.ts
+// stubs delivery. The code-side fix gates the `_devToken` branch on
+// NODE_ENV !== 'production', but defence-in-depth: in production the
+// mailer MUST be able to actually send — otherwise password-reset
+// emails silently disappear while /forgot-password returns success.
+// Fail closed so an unconfigured prod deploy can't start.
+if (process.env.NODE_ENV === 'production' && !process.env.RESEND_API_KEY) {
+    throw new Error(
+        '❌ RESEND_API_KEY is required in production. ' +
+        'Without it, /auth/forgot-password + email verification stub ' +
+        'silently (reset tokens never reach users). Set RESEND_API_KEY ' +
+        'to an active Resend key, or rewire services/mailer.ts to another ' +
+        'provider before deploying to production.',
+    );
+}
 app.use(cors({
     origin: process.env.CORS_ALLOWED_ORIGINS
         ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim())
