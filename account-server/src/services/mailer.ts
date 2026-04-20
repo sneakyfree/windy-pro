@@ -11,7 +11,7 @@
  * Eat our own dogfood. Don't block PR1 on Windy Mail being live.
  */
 
-const FROM = process.env.MAIL_FROM || 'Windy <noreply@windypro.com>';
+const FROM = process.env.MAIL_FROM || 'Windy <noreply@windyword.ai>';
 
 export interface SendMailArgs {
   to: string;
