@@ -331,6 +331,44 @@ app.get('*', (req: express.Request, res: express.Response, next: express.NextFun
     if (fs.existsSync(spaIndexPath)) {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.sendFile(spaIndexPath);
+    } else if (req.path === '/' || req.path === '/index.html') {
+        // Wave 14 P0-2 — minimal landing stub. The SPA bundle is not
+        // included in the Phase 1 Docker image (the web builder stage
+        // was removed to keep the image lean; see account-server/
+        // Dockerfile). Without this stub, GET / falls through to
+        // Express's default 404 ("Cannot GET /") — the first thing a
+        // human visiting the domain saw. Keep the response tiny,
+        // link to the things that DO exist, and NEVER leak backend
+        // shape (no version, no uptime, no endpoint table).
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.status(200).send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Windy — windypro account API</title>
+  <style>
+    html,body{margin:0;padding:0;background:#0F1219;color:#E2E8F0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+    .card{max-width:540px;padding:40px 44px;text-align:center}
+    h1{margin:0 0 16px;font-size:28px;font-weight:700;color:#F8FAFC;letter-spacing:-0.01em}
+    p{margin:0 0 12px;font-size:15px;line-height:1.55;color:#94A3B8}
+    a{color:#8B5CF6;text-decoration:none}
+    a:hover{text-decoration:underline}
+    code{font-family:SFMono-Regular,Menlo,Monaco,Consolas,monospace;background:rgba(139,92,246,0.12);padding:2px 6px;border-radius:4px;font-size:13px;color:#CBD5E1}
+    .footer{margin-top:24px;font-size:12px;color:#64748B}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🌪️ Windy Pro — account API</h1>
+    <p>This host serves the Windy ecosystem's identity and authentication API. There is no UI here yet.</p>
+    <p>If you meant to install the desktop app, visit <a href="https://windyword.ai">windyword.ai</a>.</p>
+    <p>If you are integrating with the API, start at <code>/.well-known/openid-configuration</code>.</p>
+    <p class="footer">Uptime + health at <code>/healthz</code>.</p>
+  </div>
+</body>
+</html>`);
     } else {
         next();
     }
