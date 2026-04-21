@@ -48,6 +48,21 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Debug — token presence (TEMP — will remove after first green)
+        env:
+          T: ${{ secrets.CF_PAGES_TOKEN }}
+        run: |
+          echo "token length in runner env: ${#T}"
+          echo "token prefix: $(echo "$T" | cut -c1-6)"
+          echo "account id to use: 193b347aedeaafe35de0b5a534b2d9aa"
+
+      - name: wrangler whoami (auth sanity)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_PAGES_TOKEN }}
+          accountId: "193b347aedeaafe35de0b5a534b2d9aa"
+          command: whoami
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
