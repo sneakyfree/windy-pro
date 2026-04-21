@@ -1,0 +1,115 @@
+/* Verify Email page — builds on .auth-page / .auth-container from Auth.css */
+
+.verify-email-container {
+    /* Same layout/chrome as Auth; no extra tweaks needed beyond this namespace hook */
+}
+
+.verify-email-title {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.verify-email-sub {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+.verify-email-sub strong {
+    color: var(--text-primary);
+}
+
+.verify-email-code-input {
+    /* Override the standard .form-group input for the code-entry feel.
+       Big, centered, monospace — grandma-legible, "fills in the blanks." */
+    font-size: 28px !important;
+    font-weight: 700 !important;
+    letter-spacing: 10px;
+    text-align: center;
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace !important;
+    padding: 16px 14px !important;
+}
+
+.verify-email-code-input::placeholder {
+    letter-spacing: 10px;
+    color: var(--text-muted);
+    opacity: 0.4;
+}
+
+.verify-email-message {
+    min-height: 22px;
+    margin: 12px 0 16px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.verify-email-message-info {
+    color: var(--text-secondary);
+}
+
+.verify-email-message-error {
+    color: var(--red);
+}
+
+.verify-email-message-success {
+    color: var(--green);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.verify-email-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--green);
+    color: #0F172A;
+    font-weight: 900;
+    font-size: 14px;
+}
+
+.verify-email-submit {
+    /* Uses .auth-submit sizing — nothing to add */
+}
+
+.verify-email-resend-row {
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    margin-bottom: 16px;
+}
+
+.verify-email-resend-row .auth-switch {
+    font-size: 14px;
+    padding: 4px 6px;
+}
+
+.verify-email-resend-row .auth-switch:disabled {
+    color: var(--text-muted);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.verify-email-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .verify-email-code-input {
+        font-size: 24px !important;
+        letter-spacing: 8px;
+    }
+}

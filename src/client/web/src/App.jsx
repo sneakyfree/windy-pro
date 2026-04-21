@@ -9,6 +9,7 @@ import SoulFile from './pages/SoulFile'
 import Vault from './pages/Vault'
 import Translate from './pages/Translate'
 import Auth from './pages/Auth'
+import VerifyEmail from './pages/VerifyEmail'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 import Settings from './pages/Settings'
@@ -190,6 +191,9 @@ export default function App() {
                     <ProtectedRoute><EcosystemDashboard /></ProtectedRoute>
                 } />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/verify-email" element={
+                    <ProtectedRoute><VerifyEmail /></ProtectedRoute>
+                } />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="*" element={<NotFound />} />
