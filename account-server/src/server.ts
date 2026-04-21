@@ -12,7 +12,7 @@ import WebSocket from 'ws';
 import jwt from 'jsonwebtoken';
 
 import { config } from './config';
-import { getDb, closeDb } from './db/schema';
+import { getDb, closeDb, closeDbAsync } from './db/schema';
 import { initializeJWKS, getJWKSDocument } from './jwks';
 import { startWALCheckpoint } from './db-maintenance';
 import { initRedis, closeRedis } from './redis';
@@ -621,16 +621,20 @@ process.on('uncaughtException', (err: Error) => {
     process.exit(1);
 });
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-    closeRedis().catch(() => {});
-    closeDb();
+// Graceful shutdown — await the pool drain so in-flight registrations finish.
+// A 5 s hard deadline protects against a hung driver keeping the container alive.
+async function gracefulShutdown(signal: string): Promise<void> {
+    const deadline = setTimeout(() => {
+        console.error(`[${signal}] graceful shutdown timed out — forcing exit`);
+        process.exit(0);
+    }, 5000);
+    deadline.unref();
+    try { await closeRedis(); } catch { /* best-effort */ }
+    try { await closeDbAsync(); } catch { /* best-effort */ }
     process.exit(0);
-});
-process.on('SIGTERM', () => {
-    closeRedis().catch(() => {});
-    closeDb();
-    process.exit(0);
-});
+}
+
+process.on('SIGINT', () => { void gracefulShutdown('SIGINT'); });
+process.on('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
 
 export { app, server };
