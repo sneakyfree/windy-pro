@@ -28,8 +28,30 @@ export interface RunResult {
 }
 
 /**
+ * Transaction context passed to transactionAsync's callback. Exposes
+ * run/get/all pinned to the same pool connection so the queries
+ * actually execute inside the BEGIN/COMMIT block.
+ */
+export interface AsyncTxContext {
+  run(sql: string, ...params: any[]): Promise<RunResult>;
+  get<T = any>(sql: string, ...params: any[]): Promise<T | undefined>;
+  all<T = any>(sql: string, ...params: any[]): Promise<T[]>;
+}
+
+/**
  * Database adapter interface. Both SQLite and PostgreSQL adapters
  * implement this, making the rest of the codebase database-agnostic.
+ *
+ * Two interfaces exist in parallel during the async migration:
+ * - Sync methods (run/get/all/prepare/transaction) — backed by
+ *   better-sqlite3 directly on SQLite, and by an execFileSync
+ *   subprocess on Postgres. The subprocess path blocks the main
+ *   event loop and serializes concurrent requests; hot-path code
+ *   should prefer the *Async variants below.
+ * - Async methods (runAsync/getAsync/allAsync/transactionAsync) —
+ *   backed by a pooled `pg.Pool` on Postgres (non-blocking) and
+ *   by Promise.resolve-wrapped sync calls on SQLite. Migrated
+ *   route-by-route; see fix/postgres-adapter-pg-pool.
  */
 export interface DbAdapter {
   /** Execute a write query (INSERT, UPDATE, DELETE). */
@@ -41,11 +63,27 @@ export interface DbAdapter {
   /** Execute a read query, return all rows. */
   all<T = any>(sql: string, ...params: any[]): T[];
 
+  /** Async, pool-backed write. Does not block the event loop on Postgres. */
+  runAsync(sql: string, ...params: any[]): Promise<RunResult>;
+
+  /** Async, pool-backed single-row read. Does not block the event loop on Postgres. */
+  getAsync<T = any>(sql: string, ...params: any[]): Promise<T | undefined>;
+
+  /** Async, pool-backed multi-row read. Does not block the event loop on Postgres. */
+  allAsync<T = any>(sql: string, ...params: any[]): Promise<T[]>;
+
   /** Create a prepared statement for repeated execution. */
   prepare(sql: string): PreparedStatement;
 
-  /** Execute a function inside a transaction. */
+  /** Execute a function inside a transaction (sync). */
   transaction<T>(fn: () => T): T;
+
+  /**
+   * Execute an async function inside a real transaction. The queries
+   * run through the ctx argument share one pooled connection and are
+   * committed or rolled back atomically.
+   */
+  transactionAsync<T>(fn: (ctx: AsyncTxContext) => Promise<T>): Promise<T>;
 
   /** Execute raw SQL (DDL, multi-statement scripts). */
   exec(sql: string): void;
@@ -53,8 +91,11 @@ export interface DbAdapter {
   /** Execute a pragma (SQLite-specific, no-op on PostgreSQL). */
   pragma(sql: string): any;
 
-  /** Close the database connection / pool. */
+  /** Close the database connection / pool (sync fire-and-forget). */
   close(): void;
+
+  /** Close the database connection / pool and wait for in-flight queries. */
+  shutdownAsync(): Promise<void>;
 
   /** The underlying engine: 'sqlite' or 'postgres'. */
   readonly engine: 'sqlite' | 'postgres';
