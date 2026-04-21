@@ -1,0 +1,311 @@
+/* Hatch ceremony — ported from src/client/desktop/renderer/hatch-ceremony.css.
+   Page-level layout on top; the modal / log / certificate / CTAs match the
+   Electron visual grammar (purple accent, dark surface, green ticks). */
+
+.hatch-page {
+    min-height: 100vh;
+    background:
+        radial-gradient(
+            ellipse at top,
+            rgba(139, 92, 246, 0.12),
+            transparent 55%
+        ),
+        #0B0F1A;
+    color: #E2E8F0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    box-sizing: border-box;
+}
+
+.hatch-modal {
+    background: #0F1219;
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    border-radius: 18px;
+    padding: 36px 36px 28px;
+    width: min(640px, 100%);
+    box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.6),
+        0 0 80px rgba(139, 92, 246, 0.18);
+    position: relative;
+}
+
+/* ─── Header ─────────────────────────────────────────────── */
+.hatch-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+.hatch-mascot {
+    font-size: 48px;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+.hatch-title {
+    font-size: 26px;
+    font-weight: 800;
+    color: #F8FAFC;
+    margin: 0 0 8px;
+    line-height: 1.2;
+}
+.hatch-sub {
+    font-size: 15px;
+    color: #94A3B8;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* ─── Body ───────────────────────────────────────────────── */
+.hatch-body {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+/* ─── Progress log ───────────────────────────────────────── */
+.hatch-log {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.hatch-step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.025);
+    transition: background 0.2s ease;
+}
+.hatch-step-label {
+    font-size: 15px;
+    color: #CBD5E1;
+    line-height: 1.4;
+}
+.hatch-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+.hatch-step-pending .hatch-dot {
+    border: 2px solid #8B5CF6;
+    border-top-color: transparent;
+    animation: hatch-spin 0.9s linear infinite;
+}
+.hatch-step-ok .hatch-dot {
+    background: #10B981;
+}
+.hatch-step-ok .hatch-dot::after {
+    content: '✓';
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+}
+.hatch-step-failed .hatch-dot {
+    background: #EF4444;
+}
+.hatch-step-failed .hatch-dot::after {
+    content: '✕';
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+}
+.hatch-step-ok .hatch-step-label { color: #E2E8F0; }
+.hatch-step-failed .hatch-step-label { color: #FCA5A5; }
+
+@keyframes hatch-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+/* ─── Birth certificate ──────────────────────────────────── */
+.hatch-cert {
+    background: #0B0E15;
+    border: 1px dashed rgba(139, 92, 246, 0.4);
+    border-radius: 12px;
+    padding: 20px 22px;
+    color: #F8FAFC;
+    font-family:
+        'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', monospace;
+}
+.hatch-cert-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px dashed rgba(139, 92, 246, 0.35);
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+}
+.hatch-cert-title {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #A78BFA;
+}
+.hatch-cert-seal {
+    font-size: 26px;
+    line-height: 1;
+}
+.hatch-cert-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 18px;
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.5;
+}
+.hatch-cert-row {
+    display: contents;
+}
+.hatch-cert-row dt {
+    color: #94A3B8;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.hatch-cert-row dd {
+    margin: 0;
+    color: #F8FAFC;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+/* ─── Banner (transport errors) ──────────────────────────── */
+.hatch-banner {
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+.hatch-banner-error {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #FCA5A5;
+}
+
+/* ─── CTAs ───────────────────────────────────────────────── */
+.hatch-ctas {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding-top: 4px;
+    flex-wrap: wrap;
+}
+.hatch-cta {
+    padding: 12px 22px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    background: transparent;
+    color: #E2E8F0;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-family: inherit;
+}
+.hatch-cta:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+}
+.hatch-cta:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.hatch-cta-primary {
+    background: #8B5CF6;
+    border-color: #8B5CF6;
+    color: white;
+}
+.hatch-cta-primary:hover:not(:disabled) {
+    background: #7C3AED;
+    border-color: #7C3AED;
+}
+
+/* ─── HatchCard (Dashboard hero) ─────────────────────────── */
+.hatch-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 22px;
+    margin: 20px 24px;
+    background: linear-gradient(
+        135deg,
+        rgba(139, 92, 246, 0.14),
+        rgba(236, 72, 153, 0.08)
+    );
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(139, 92, 246, 0.12);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hatch-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 40px rgba(139, 92, 246, 0.22);
+}
+.hatch-card-art {
+    font-size: 42px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.hatch-card-body {
+    flex: 1;
+    min-width: 0;
+}
+.hatch-card-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #F8FAFC;
+    margin-bottom: 4px;
+}
+.hatch-card-sub {
+    font-size: 13.5px;
+    color: #94A3B8;
+    line-height: 1.45;
+}
+.hatch-card-cta {
+    padding: 11px 20px;
+    border: none;
+    border-radius: 10px;
+    background: #8B5CF6;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0;
+    transition: background 0.18s ease;
+    font-family: inherit;
+}
+.hatch-card-cta:hover { background: #7C3AED; }
+.hatch-card-cta:active { transform: translateY(1px); }
+
+@media (max-width: 560px) {
+    .hatch-modal {
+        padding: 24px 20px 20px;
+    }
+    .hatch-title {
+        font-size: 22px;
+    }
+    .hatch-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 12px;
+    }
+    .hatch-cert-grid {
+        grid-template-columns: 1fr;
+        gap: 2px 0;
+    }
+    .hatch-cert-row dt {
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        margin-top: 6px;
+    }
+}
