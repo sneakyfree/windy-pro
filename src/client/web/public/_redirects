@@ -1,0 +1,6 @@
+# Cloudflare Pages — SPA fallback routing.
+# Any path that doesn't match a built asset falls through to index.html,
+# letting React Router handle the route client-side. Without this, a user
+# hitting /verify-email or /hatch directly (or refreshing on those pages)
+# gets a 404 from the static server.
+/*    /index.html   200
