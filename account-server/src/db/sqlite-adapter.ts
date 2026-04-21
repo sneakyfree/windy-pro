@@ -5,7 +5,7 @@
  * is preserved exactly. The adapter just forwards calls to better-sqlite3.
  */
 import Database from 'better-sqlite3';
-import type { DbAdapter, PreparedStatement, RunResult } from './adapter';
+import type { AsyncTxContext, DbAdapter, PreparedStatement, RunResult } from './adapter';
 
 export class SqliteAdapter implements DbAdapter {
   private db: Database.Database;
@@ -56,6 +56,50 @@ export class SqliteAdapter implements DbAdapter {
   transaction<T>(fn: () => T): T {
     const wrapped = this.db.transaction(fn);
     return wrapped();
+  }
+
+  // ── Async surface ────────────────────────────────────────────────────
+  // better-sqlite3 is synchronous; the Async variants exist to match the
+  // DbAdapter interface used by hot-path code that awaits. Wrapping in
+  // Promise.resolve preserves existing behavior exactly (same errors, same
+  // return shapes) — it just yields a microtask between each call.
+
+  async runAsync(sql: string, ...params: any[]): Promise<RunResult> {
+    return this.run(sql, ...params);
+  }
+
+  async getAsync<T = any>(sql: string, ...params: any[]): Promise<T | undefined> {
+    return this.get<T>(sql, ...params);
+  }
+
+  async allAsync<T = any>(sql: string, ...params: any[]): Promise<T[]> {
+    return this.all<T>(sql, ...params);
+  }
+
+  async transactionAsync<T>(fn: (ctx: AsyncTxContext) => Promise<T>): Promise<T> {
+    // SQLite's better-sqlite3 transactions are sync, so we can't run an
+    // async callback inside the native transaction wrapper. Instead we
+    // issue BEGIN / COMMIT / ROLLBACK manually and expose a ctx that
+    // delegates to the sync methods. For a single-writer SQLite DB this
+    // is equivalent to the native wrapper.
+    this.db.exec('BEGIN');
+    try {
+      const ctx: AsyncTxContext = {
+        run: async (sql: string, ...params: any[]): Promise<RunResult> => this.run(sql, ...params),
+        get: async <R = any>(sql: string, ...params: any[]): Promise<R | undefined> => this.get<R>(sql, ...params),
+        all: async <R = any>(sql: string, ...params: any[]): Promise<R[]> => this.all<R>(sql, ...params),
+      };
+      const result = await fn(ctx);
+      this.db.exec('COMMIT');
+      return result;
+    } catch (err) {
+      try { this.db.exec('ROLLBACK'); } catch { /* rollback best-effort */ }
+      throw err;
+    }
+  }
+
+  async shutdownAsync(): Promise<void> {
+    this.close();
   }
 
   exec(sql: string): void {

@@ -227,11 +227,70 @@ function mockDbPrepare(sql: string) {
 }
 
 jest.mock('../db/schema', () => ({
-  getDb: () => ({
-    prepare: (sql: string) => mockDbPrepare(sql),
-    exec: jest.fn(),
-    pragma: jest.fn().mockReturnValue([]),
-  }),
+  getDb: () => {
+    const asyncify = {
+      // /register's inline async adapter calls land here (see fix/postgres-adapter-pg-pool).
+      // Delegate to the same pattern matcher used by prepare, with a few extra
+      // regex branches so the hot-path inline SQL resolves.
+      runAsync: async (sql: string, ...args: any[]) => {
+        if (sql.includes('INSERT INTO users (id, email, name, password_hash, tier)')) {
+          users.set(args[0], {
+            id: args[0],
+            email: args[1],
+            name: args[2],
+            password_hash: args[3],
+            tier: args[4],
+            identity_type: 'human',
+            windy_identity_id: null,
+            display_name: args[2],
+            avatar_url: null,
+            phone: null,
+            email_verified: 0,
+            phone_verified: 0,
+            preferred_lang: 'en',
+            role: 'user',
+            last_login_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          return { changes: 1, lastInsertRowid: 0 };
+        }
+        if (sql.includes('INSERT OR REPLACE INTO devices')) {
+          const [deviceId, userId, deviceName, platform] = args;
+          const userDevices = devices.get(userId) || [];
+          const idx = userDevices.findIndex(d => d.id === deviceId);
+          const device = {
+            id: deviceId, user_id: userId, name: deviceName, platform,
+            registered_at: new Date().toISOString(), last_seen: new Date().toISOString(),
+          };
+          if (idx >= 0) userDevices[idx] = device; else userDevices.push(device);
+          devices.set(userId, userDevices);
+          return { changes: 1, lastInsertRowid: 0 };
+        }
+        return mockDbPrepare(sql).run(...args);
+      },
+      getAsync: async (sql: string, ...args: any[]) => {
+        if (sql.includes('FROM users WHERE email')) {
+          for (const u of users.values()) if (u.email === args[0]) return u;
+          return undefined;
+        }
+        return mockDbPrepare(sql).get(...args) ?? undefined;
+      },
+      allAsync: async (sql: string, ...args: any[]) => mockDbPrepare(sql).all(...args),
+      transactionAsync: async (fn: any) => fn({
+        run: async (sql: string, ...args: any[]) => mockDbPrepare(sql).run(...args),
+        get: async (sql: string, ...args: any[]) => mockDbPrepare(sql).get(...args),
+        all: async (sql: string, ...args: any[]) => mockDbPrepare(sql).all(...args),
+      }),
+      shutdownAsync: async () => undefined,
+    };
+    return {
+      prepare: (sql: string) => mockDbPrepare(sql),
+      exec: jest.fn(),
+      pragma: jest.fn().mockReturnValue([]),
+      ...asyncify,
+    };
+  },
 }));
 
 jest.mock('../config', () => ({
@@ -267,6 +326,10 @@ jest.mock('../identity-service', () => ({
   logAuditEvent: jest.fn(),
   provisionProduct: jest.fn(),
   grantScopes: jest.fn(),
+  // Async variants used by the /register hot path (fix/postgres-adapter-pg-pool).
+  logAuditEventAsync: jest.fn().mockResolvedValue('audit-id'),
+  provisionProductAsync: jest.fn().mockResolvedValue({ id: 'prod-id', created: true }),
+  grantScopesAsync: jest.fn().mockResolvedValue(undefined),
   revokeScope: jest.fn(),
   hasScope: jest.fn(),
   getAuditLog: jest.fn().mockReturnValue([]),

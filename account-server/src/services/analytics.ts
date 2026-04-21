@@ -26,3 +26,27 @@ export function trackEvent(
     // Non-blocking — swallow errors silently
   }
 }
+
+/** Async variant of trackEvent. Same swallow-errors-silently behavior. */
+export async function trackEventAsync(
+  event: string,
+  userId?: string,
+  properties?: Record<string, any>,
+): Promise<void> {
+  if (!event) return;
+
+  try {
+    const db = getDb();
+    const id = crypto.randomUUID();
+    const propsJson = properties ? JSON.stringify(properties) : null;
+    await db.runAsync(
+      'INSERT INTO analytics_events (id, event, user_id, properties) VALUES (?, ?, ?, ?)',
+      id,
+      event,
+      userId || null,
+      propsJson,
+    );
+  } catch {
+    // Non-blocking — swallow errors silently
+  }
+}

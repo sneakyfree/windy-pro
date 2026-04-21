@@ -41,6 +41,17 @@ export function closeDb(): void {
 }
 
 /**
+ * Graceful shutdown — awaits in-flight queries and then drains the pool.
+ * Prefer this over closeDb() in SIGTERM handlers so concurrent registrations
+ * don't get killed mid-write.
+ */
+export async function closeDbAsync(): Promise<void> {
+  if (db) {
+    await db.shutdownAsync();
+  }
+}
+
+/**
  * Get the underlying SQLite database for SQLite-specific operations
  * (backup, WAL checkpoint). Returns null if using PostgreSQL.
  */

@@ -275,6 +275,49 @@ jest.mock('../db/schema', () => ({
     prepare: (sql: string) => mockDbPrepare(sql),
     exec: jest.fn(),
     pragma: jest.fn().mockReturnValue([]),
+    // Async adapter surface used by the /register hot path (fix/postgres-adapter-pg-pool).
+    // Delegates to the same pattern matcher for symmetry with the sync path.
+    runAsync: async (sql: string, ...args: any[]) => {
+      // /register writes users + devices via runAsync (not via prepared statements).
+      // Mirror the behavior the statements mock had for createUser/addDevice.
+      if (sql.includes('INSERT INTO users (id, email, name, password_hash, tier)')) {
+        users.set(args[0], {
+          id: args[0], email: args[1], name: args[2], password_hash: args[3],
+          tier: args[4], email_verified: 0, created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(), windy_identity_id: null,
+        });
+        return { changes: 1, lastInsertRowid: 0 };
+      }
+      if (sql.includes('INSERT OR REPLACE INTO devices')) {
+        const [deviceId, userId, deviceName, platform] = args;
+        const list = devices.get(userId) || [];
+        const idx = list.findIndex((d: any) => d.id === deviceId);
+        const device = {
+          id: deviceId, user_id: userId, name: deviceName, platform,
+          registered_at: new Date().toISOString(), last_seen: new Date().toISOString(),
+        };
+        if (idx >= 0) list[idx] = device; else list.push(device);
+        devices.set(userId, list);
+        return { changes: 1, lastInsertRowid: 0 };
+      }
+      return mockDbPrepare(sql).run(...args);
+    },
+    getAsync: async (sql: string, ...args: any[]) => {
+      // /register checks by email — route this through the user map directly so
+      // the SELECT works without adding every pattern to mockDbPrepare.
+      if (sql.includes('FROM users WHERE email')) {
+        for (const u of users.values()) if (u.email === args[0]) return u;
+        return undefined;
+      }
+      return mockDbPrepare(sql).get(...args) ?? undefined;
+    },
+    allAsync: async (sql: string, ...args: any[]) => mockDbPrepare(sql).all(...args),
+    transactionAsync: async (fn: any) => fn({
+      run: async (sql: string, ...args: any[]) => mockDbPrepare(sql).run(...args),
+      get: async (sql: string, ...args: any[]) => mockDbPrepare(sql).get(...args),
+      all: async (sql: string, ...args: any[]) => mockDbPrepare(sql).all(...args),
+    }),
+    shutdownAsync: async () => undefined,
   }),
 }));
 
@@ -316,6 +359,10 @@ jest.mock('../identity-service', () => ({
   provisionProduct: jest.fn(),
   grantScopes: jest.fn(),
   validateBotApiKey: jest.fn().mockReturnValue({ valid: false }),
+  // Async variants used by the /register hot path.
+  logAuditEventAsync: jest.fn().mockResolvedValue('audit-id'),
+  provisionProductAsync: jest.fn().mockResolvedValue({ id: 'prod-id', created: true }),
+  grantScopesAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../redis', () => ({
