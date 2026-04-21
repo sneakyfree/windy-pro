@@ -1,0 +1,60 @@
+name: Deploy Web to Cloudflare Pages
+
+# Wave 13 launch pipeline — builds src/client/web/ (React + Vite webapp)
+# and deploys to the `windypro-webapp` Cloudflare Pages project, which
+# is custom-domain-aliased to `app.windyword.ai`.
+#
+# Triggers:
+#   - push to main AND the push touched src/client/web or this workflow
+#   - manual via "Run workflow" button (workflow_dispatch)
+#
+# Required secret:
+#   CF_PAGES_TOKEN — Cloudflare API token with "Account → Cloudflare Pages: Edit"
+#                    scoped to account 193b347aedeaafe35de0b5a534b2d9aa. Created
+#                    via Cloudflare Dashboard → My Profile → API Tokens.
+#
+# See docs/DEPLOY-WEB.md (Wave 13) for the runbook.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/client/web/**'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/client/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node (from .nvmrc)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: 'src/client/web/.nvmrc'
+
+      - name: Install deps (frozen lockfile)
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_PAGES_TOKEN }}
+          accountId: "193b347aedeaafe35de0b5a534b2d9aa"
+          # Paths are relative to repo root, NOT the working-directory above —
+          # wrangler-action re-roots at the repo root when it resolves the
+          # directory argument.
+          command: pages deploy src/client/web/dist --project-name=windypro-webapp --branch=main --commit-dirty=true
+          workingDirectory: .
