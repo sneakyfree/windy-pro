@@ -240,7 +240,7 @@ export default function Transcribe() {
         <div className="transcribe-page">
             {/* Top bar */}
             <nav className="transcribe-nav">
-                <Link to="/" className="transcribe-back">← Windy Pro</Link>
+                <Link to="/" className="transcribe-back">← Windy Word</Link>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div className={`connection-dot ${connected && authStatus === 'authenticated' ? 'connected' : ''}`}></div>
                     <span style={{ fontSize: '12px', color: !connected ? '#EF4444' : authStatus === 'authenticated' ? '#22C55E' : authStatus === 'failed' ? '#EF4444' : '#F59E0B' }}>

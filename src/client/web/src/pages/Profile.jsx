@@ -66,7 +66,7 @@ export default function Profile() {
             <header className="dash-header">
                 <div className="dash-header-left">
                     <Link to="/" className="dash-logo">
-                        <span className="dash-logo-icon">🌪️</span> Windy Pro
+                        <span className="dash-logo-icon">🌪️</span> Windy Word
                     </Link>
                 </div>
                 <div className="dash-header-right">

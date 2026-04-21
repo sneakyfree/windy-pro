@@ -380,7 +380,7 @@ app.get('*', (req: express.Request, res: express.Response, next: express.NextFun
 </head>
 <body>
   <div class="card">
-    <h1>🌪️ Windy Pro — account API</h1>
+    <h1>🌪️ Windy Word — account API</h1>
     <p>This host serves the Windy ecosystem's identity and authentication API. There is no UI here yet.</p>
     <p>If you meant to install the desktop app, visit <a href="https://windyword.ai">windyword.ai</a>.</p>
     <p>If you are integrating with the API, start at <code>/.well-known/openid-configuration</code>.</p>

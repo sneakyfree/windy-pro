@@ -166,7 +166,7 @@ export default function Dashboard() {
                 <div className="dash-header-left">
                     <Link to="/" className="dash-logo">
                         <span className="dash-logo-icon">🌪️</span>
-                        <span>Windy Pro</span>
+                        <span>Windy Word</span>
                     </Link>
                 </div>
                 <div className="dash-header-right">
