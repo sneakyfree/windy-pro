@@ -408,7 +408,7 @@ router.post('/chat/provision', authenticateToken, async (req: Request, res: Resp
         alreadyProvisioned: true,
         matrix: {
           matrixUserId: existingProfile.matrix_user_id,
-          homeServer: process.env.SYNAPSE_SERVER_NAME || 'chat.windypro.com',
+          homeServer: process.env.SYNAPSE_SERVER_NAME || 'chat.windychat.ai',
           // Don't return the access token — it's stored but not re-issued
         },
       });
@@ -421,7 +421,7 @@ router.post('/chat/provision', authenticateToken, async (req: Request, res: Resp
     const SYNAPSE_URL = process.env.SYNAPSE_URL || 'http://localhost:8008';
     const SYNAPSE_ADMIN_URL = process.env.SYNAPSE_ADMIN_URL || `${SYNAPSE_URL}/_synapse/admin`;
     const SYNAPSE_REGISTRATION_SECRET = process.env.SYNAPSE_REGISTRATION_SECRET || '';
-    const SYNAPSE_SERVER_NAME = process.env.SYNAPSE_SERVER_NAME || 'chat.windypro.com';
+    const SYNAPSE_SERVER_NAME = process.env.SYNAPSE_SERVER_NAME || 'chat.windychat.ai';
 
     // Generate localpart
     const base = displayName.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9._/-]/g, '').slice(0, 32);
@@ -464,14 +464,23 @@ router.post('/chat/provision', authenticateToken, async (req: Request, res: Resp
           hint: 'Is the Synapse homeserver running?',
         });
       }
-    } else {
-      // Dev mode stub
+    } else if (process.env.NODE_ENV !== 'production' && process.env.ALLOW_CHAT_STUB === 'true') {
+      // Dev-only stub — explicitly opted in via ALLOW_CHAT_STUB=true AND non-production
+      // NODE_ENV. Previously this branch ran any time SYNAPSE_REGISTRATION_SECRET was
+      // unset, which silently masked real outages with fake credentials.
+      console.warn('[identity] ALLOW_CHAT_STUB=true — returning dev-stub chat credentials (NOT for production)');
       matrixCredentials = {
         matrixUserId: `@${localpart}:${SYNAPSE_SERVER_NAME}`,
         accessToken: `dev_token_${crypto.randomUUID()}`,
         deviceId: `dev_device_${crypto.randomUUID().slice(0, 8)}`,
         homeServer: SYNAPSE_SERVER_NAME,
       };
+    } else {
+      console.error('[identity] SYNAPSE_REGISTRATION_SECRET not configured; refusing to stub chat provisioning');
+      return res.status(503).json({
+        error: 'Chat provisioning unavailable',
+        hint: 'SYNAPSE_REGISTRATION_SECRET must be set. For local dev, also set NODE_ENV!=production and ALLOW_CHAT_STUB=true.',
+      });
     }
 
     // Update chat profile
@@ -858,7 +867,7 @@ router.post('/hatch/credentials', authenticateToken, adminOnly, (req: Request, r
             matrixUserId: chatProfile.matrix_user_id,
             accessToken: chatProfile.matrix_access_token,
             deviceId: chatProfile.matrix_device_id,
-            homeServer: process.env.SYNAPSE_SERVER_NAME || 'chat.windypro.com',
+            homeServer: process.env.SYNAPSE_SERVER_NAME || 'chat.windychat.ai',
           },
         } : {}),
         ...(products.find((p: any) => p.product === 'windy_mail') ? {
