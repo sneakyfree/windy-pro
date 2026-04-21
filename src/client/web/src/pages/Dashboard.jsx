@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import HatchCard from '../components/HatchCard'
 import './Dashboard.css'
+import './Hatch.css'
 
 const API_BASE = '/api/v1'
 
@@ -182,6 +184,9 @@ export default function Dashboard() {
                     <button className="dash-logout" onClick={handleLogout}>Sign Out</button>
                 </div>
             </header>
+
+            {/* Hatch hero card — ballroom-blocker ribbon entry point */}
+            <HatchCard />
 
             {/* Stats Bar */}
             {stats && (

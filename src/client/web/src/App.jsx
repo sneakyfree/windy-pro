@@ -10,6 +10,7 @@ import Vault from './pages/Vault'
 import Translate from './pages/Translate'
 import Auth from './pages/Auth'
 import VerifyEmail from './pages/VerifyEmail'
+import Hatch from './pages/Hatch'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 import Settings from './pages/Settings'
@@ -193,6 +194,9 @@ export default function App() {
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/verify-email" element={
                     <ProtectedRoute><VerifyEmail /></ProtectedRoute>
+                } />
+                <Route path="/hatch" element={
+                    <ProtectedRoute><Hatch /></ProtectedRoute>
                 } />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/terms" element={<Terms />} />
