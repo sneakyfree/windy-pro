@@ -10,12 +10,16 @@ import { makeRateLimiter } from '../services/rate-limiter';
 import { config } from '../config';
 import { getDb } from '../db/schema';
 import { getStatements } from '../db/statements';
-import { logAuditEvent, provisionProduct, grantScopes } from '../identity-service';
+import {
+    logAuditEvent, logAuditEventAsync,
+    provisionProduct, provisionProductAsync,
+    grantScopes, grantScopesAsync,
+} from '../identity-service';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { blacklistToken as redisBlacklistToken, isRedisAvailable } from '../redis';
 import { isRS256Available, getSigningKey } from '../jwks';
 import { provisionEcosystem } from '../services/ecosystem-provisioner';
-import { trackEvent } from '../services/analytics';
+import { trackEvent, trackEventAsync } from '../services/analytics';
 import { validate } from '../middleware/validation';
 import {
     RegisterRequestSchema,
@@ -244,13 +248,31 @@ function getDeviceList(userId: string) {
     return stmts().getDevices.all(userId);
 }
 
+// Pool-backed device read for the hot path. The sync variant above is still
+// used by /login, /refresh, /auth/me, and devices endpoints until PR 2+.
+async function getDeviceListAsync(userId: string) {
+    return getDb().allAsync(
+        'SELECT id, name, platform, registered_at, last_seen FROM devices WHERE user_id = ?',
+        userId,
+    );
+}
+
 // ─── POST /api/v1/auth/register ──────────────────────────────
 
 router.post('/register', authLimiter, validate(RegisterRequestSchema), async (req: Request, res: Response) => {
     try {
         const { name, email, password, deviceId, deviceName, platform } = req.body;
 
-        const existing = stmts().findUserByEmail.get(email.toLowerCase()) as any;
+        // Pool-backed path — see fix/postgres-adapter-pg-pool. Every pre-response
+        // DB call below goes through the async adapter methods so 20 concurrent
+        // signups don't serialize through an execFileSync subprocess chain.
+        const db = getDb();
+        const normalizedEmail = email.toLowerCase();
+
+        const existing = await db.getAsync<any>(
+            'SELECT * FROM users WHERE email = ?',
+            normalizedEmail,
+        );
         if (existing) {
             return res.status(409).json({ error: 'An account with this email already exists' });
         }
@@ -259,15 +281,26 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
         const windyIdentityId = crypto.randomUUID();
         const passwordHash = await bcrypt.hash(password, config.BCRYPT_ROUNDS);
         try {
-            stmts().createUser.run(userId, email.toLowerCase(), name, passwordHash, 'free');
+            await db.runAsync(
+                'INSERT INTO users (id, email, name, password_hash, tier) VALUES (?, ?, ?, ?, ?)',
+                userId,
+                normalizedEmail,
+                name,
+                passwordHash,
+                'free',
+            );
         } catch (err: any) {
-            // P0-8: TOCTOU between findUserByEmail and createUser. Two concurrent
+            // P0-8: TOCTOU between the SELECT above and this INSERT. Two concurrent
             // registers for the same email can both pass the check, then race
             // the INSERT. The loser hits UNIQUE constraint — convert to 409
             // instead of letting it bubble up as a 500 "Registration failed".
+            // Match both engines' messages AND the pg error code for robustness.
             const msg = String(err?.message || '');
-            if (/UNIQUE constraint failed: users\.email/i.test(msg) ||
-                /duplicate key value violates.*users.*email/i.test(msg)) {
+            if (
+                err?.code === '23505' ||
+                /UNIQUE constraint failed: users\.email/i.test(msg) ||
+                /duplicate key value violates.*users.*email/i.test(msg)
+            ) {
                 return res.status(409).json({ error: 'An account with this email already exists' });
             }
             throw err;
@@ -275,38 +308,45 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
 
         // Set the universal cross-product identity ID
         try {
-            const db = getDb();
-            db.prepare('UPDATE users SET windy_identity_id = ? WHERE id = ?').run(windyIdentityId, userId);
+            await db.runAsync('UPDATE users SET windy_identity_id = ? WHERE id = ?', windyIdentityId, userId);
         } catch { /* column may not exist during first migration cycle */ }
 
         if (deviceId) {
-            stmts().addDevice.run(deviceId, userId, deviceName || 'Unknown Device', platform || 'unknown');
+            await db.runAsync(
+                "INSERT OR REPLACE INTO devices (id, user_id, name, platform, last_seen) VALUES (?, ?, ?, ?, datetime('now'))",
+                deviceId,
+                userId,
+                deviceName || 'Unknown Device',
+                platform || 'unknown',
+            );
         }
 
         // Phase 10.0: Auto-provision Windy Pro product account + default scopes
         // NOTE: Provision BEFORE generateTokens so the access token includes correct scopes/products
-        provisionProduct(userId, 'windy_pro', { tier: 'free', registeredVia: 'api' });
-        grantScopes(userId, ['windy_pro:*'], 'registration');
+        await provisionProductAsync(userId, 'windy_pro', { tier: 'free', registeredVia: 'api' });
+        await grantScopesAsync(userId, ['windy_pro:*'], 'registration');
 
         // Phase 2: Auto-create pending windy_chat product account
-        provisionProduct(userId, 'windy_chat', { status: 'pending', registeredVia: 'api' });
+        await provisionProductAsync(userId, 'windy_chat', { status: 'pending', registeredVia: 'api' });
         // Mark as pending (not yet provisioned on Matrix)
         try {
-            const db = getDb();
-            db.prepare("UPDATE product_accounts SET status = 'pending' WHERE identity_id = ? AND product = 'windy_chat'").run(userId);
+            await db.runAsync(
+                "UPDATE product_accounts SET status = 'pending' WHERE identity_id = ? AND product = 'windy_chat'",
+                userId,
+            );
         } catch { /* non-critical */ }
 
-        const user = { id: userId, email: email.toLowerCase(), tier: 'free' };
+        const user = { id: userId, email: normalizedEmail, tier: 'free' };
         const tokens = generateTokens(user, deviceId);
-        const devices = getDeviceList(userId);
+        const devices = await getDeviceListAsync(userId);
 
-        logAuditEvent('register', userId, {
-            email: email.toLowerCase(),
+        await logAuditEventAsync('register', userId, {
+            email: normalizedEmail,
             deviceId,
             platform: platform || 'unknown',
         }, req.ip, req.get('user-agent'));
 
-        trackEvent('user_registered', userId);
+        await trackEventAsync('user_registered', userId);
         console.log(`✅ Registered: ${email} (${userId.slice(0, 8)}...)`);
 
         res.status(201).json({
