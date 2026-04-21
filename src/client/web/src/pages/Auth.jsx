@@ -73,11 +73,11 @@ export default function Auth() {
                 <div className="auth-brand">
                     <Link to="/" className="auth-logo">
                         <div className="auth-logo-icon"></div>
-                        <span>Windy Pro</span>
+                        <span>Windy Word</span>
                     </Link>
                     <h2 className="auth-tagline">Voice to text,<br />in the cloud.</h2>
                     <p className="auth-desc">
-                        Stream audio from any device. Get real-time transcription powered by the Windy Pro Engine.
+                        Stream audio from any device. Get real-time transcription powered by the Windy Word Engine.
                         No downloads, no installs.
                     </p>
                     <div className="auth-features">

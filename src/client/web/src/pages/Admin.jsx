@@ -125,7 +125,7 @@ export default function Admin() {
             <header className="dash-header">
                 <div className="dash-header-left">
                     <Link to="/" className="dash-logo">
-                        <span className="dash-logo-icon">🌪️</span> Windy Pro
+                        <span className="dash-logo-icon">🌪️</span> Windy Word
                     </Link>
                     <span style={{ background: '#7F1D1D', color: '#FCA5A5', padding: '2px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 600 }}>
                         ADMIN

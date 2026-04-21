@@ -97,7 +97,7 @@ export default function Landing() {
                 <div className="container nav-inner">
                     <div className="nav-logo">
                         <div className="logo-icon"></div>
-                        <span className="logo-text">Windy Pro</span>
+                        <span className="logo-text">Windy Word</span>
                     </div>
                     <button
                         className={`nav-hamburger ${menuOpen ? 'open' : ''}`}
@@ -133,7 +133,7 @@ export default function Landing() {
                         <span className="hero-gradient">Speak your vision into existence.</span>
                     </h1>
                     <p className="hero-subtitle">
-                        Windy Pro transforms speech into text at the speed of thought.
+                        Windy Word transforms speech into text at the speed of thought.
                         Unlimited recording, local-first privacy, 99 languages. Guided setup gets you running in 60 seconds.
                     </p>
                     <div className="hero-actions">
@@ -232,7 +232,7 @@ export default function Landing() {
                         <div className="feature-card">
                             <div className="feature-icon">🔒</div>
                             <h3>Local-First</h3>
-                            <p>Windy Pro runs on YOUR hardware by default. Audio stays on your machine unless you choose cloud processing.</p>
+                            <p>Windy Word runs on YOUR hardware by default. Audio stays on your machine unless you choose cloud processing.</p>
                         </div>
                         <div className="feature-card">
                             <div className="feature-icon">⚡</div>
@@ -247,7 +247,7 @@ export default function Landing() {
                         <div className="feature-card">
                             <div className="feature-icon">☁️</div>
                             <h3>WindyCloud</h3>
-                            <p>Archive recordings to Windy Pro's distributed cloud. Sync across devices, access from anywhere.</p>
+                            <p>Archive recordings to Windy Word's distributed cloud. Sync across devices, access from anywhere.</p>
                         </div>
                         <div className="feature-card">
                             <div className="feature-icon">🌪️</div>
@@ -460,7 +460,7 @@ export default function Landing() {
                     <h2 className="section-title">What Users Say</h2>
                     <div className="testimonial-grid">
                         {[
-                            { name: 'James M.', role: 'Podcast Creator', text: 'Windy Pro replaced three different tools for me. The local transcription is incredibly fast and I never worry about my content leaking.', avatar: '🎙️' },
+                            { name: 'James M.', role: 'Podcast Creator', text: 'Windy Word replaced three different tools for me. The local transcription is incredibly fast and I never worry about my content leaking.', avatar: '🎙️' },
                             { name: 'Dr. Sarah K.', role: 'Medical Researcher', text: 'The medical glossary support in Windy Max is a game-changer. Accurate transcription of clinical terms that other tools butcher.', avatar: '🩺' },
                             { name: 'Carlos R.', role: 'Freelance Translator', text: 'Conversation mode lets me conduct bilingual interviews effortlessly. The real-time translation is surprisingly accurate.', avatar: '🌍' },
                             { name: 'Priya D.', role: 'Software Engineer', text: 'I use the cursor injection feature daily for voice-coding comments and documentation. Saves me hours every week.', avatar: '💻' }
@@ -499,7 +499,7 @@ export default function Landing() {
             {/* Download — Cache-proof: all links use /download/latest/:platform redirect */}
             <section className="download" id="download">
                 <div className="container download-inner">
-                    <h2 className="section-title">Download Windy Pro</h2>
+                    <h2 className="section-title">Download Windy Word</h2>
                     <p className="section-subtitle">
                         {latestVersion ? `${latestVersion}` : 'Loading...'} · Available for all major platforms.
                     </p>
@@ -566,7 +566,7 @@ export default function Landing() {
                 <div className="container footer-inner">
                     <div className="footer-brand">
                         <div className="logo-icon small"></div>
-                        <span>Windy Pro</span>
+                        <span>Windy Word</span>
                     </div>
                     <div className="footer-links">
                         <a href="https://github.com/sneakyfree/windy-pro" target="_blank" rel="noopener noreferrer">GitHub</a>
@@ -574,7 +574,7 @@ export default function Landing() {
                         <Link to="/privacy">Privacy</Link>
                         <Link to="/terms">Terms</Link>
                     </div>
-                    <div className="footer-copy">© 2026 Windy Pro. The Green Strobe Never Lies.</div>
+                    <div className="footer-copy">© 2026 Windy Word. The Green Strobe Never Lies.</div>
                     <div className="footer-location">
                         <USFlag size={12} />
                         <span>Built and hosted in the United States · New York, NY</span>
