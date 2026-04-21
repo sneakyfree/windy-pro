@@ -61,6 +61,22 @@ jobs:
       - name: Install Python deps
         run: python -m pip install --quiet requests
 
+      - name: Debug — inspect token state in runner
+        env:
+          T: ${{ secrets.CF_PAGES_TOKEN }}
+        run: |
+          echo "== token metadata =="
+          echo "length: ${#T}"
+          echo "prefix (first 8): ${T:0:8}"
+          echo "suffix (last 4): ${T: -4}"
+          echo ""
+          echo "== direct curl to /user/tokens/verify =="
+          curl -sS -w "\nHTTP %{http_code}\n" -H "Authorization: Bearer $T" https://api.cloudflare.com/client/v4/user/tokens/verify
+          echo ""
+          echo "== direct curl to upload-token endpoint (the one that fails) =="
+          curl -sS -w "\nHTTP %{http_code}\n" -H "Authorization: Bearer $T" https://api.cloudflare.com/client/v4/accounts/193b347aedeaafe35de0b5a534b2d9aa/pages/projects/windypro-webapp/upload-token
+          echo ""
+
       - name: Deploy via Cloudflare Pages Direct Upload API
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_PAGES_TOKEN }}
