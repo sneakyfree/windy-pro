@@ -60,6 +60,40 @@ export function logAuditEvent(
 }
 
 /**
+ * Async variant of logAuditEvent. Writes through the pooled async adapter
+ * so it doesn't block the event loop on Postgres. Same swallow-on-error
+ * semantics as the sync variant — audit logging must never break the
+ * primary flow.
+ */
+export async function logAuditEventAsync(
+  event: IdentityAuditEvent,
+  identityId: string | null,
+  details: Record<string, unknown> = {},
+  ipAddress?: string,
+  userAgent?: string,
+): Promise<string> {
+  const db = getDb();
+  const id = crypto.randomUUID();
+
+  try {
+    await db.runAsync(
+      `INSERT INTO identity_audit_log (id, identity_id, event, details, ip_address, user_agent)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      id,
+      identityId,
+      event,
+      JSON.stringify(details),
+      ipAddress ?? null,
+      userAgent ?? null,
+    );
+  } catch (err) {
+    console.error('[identity-service] Failed to log audit event:', event, err);
+  }
+
+  return id;
+}
+
+/**
  * Query audit log entries for an identity.
  */
 export function getAuditLog(
@@ -133,6 +167,44 @@ export function provisionProduct(
 }
 
 /**
+ * Async variant of provisionProduct. Uses the pooled async adapter so it
+ * can participate in a non-blocking hot-path chain.
+ */
+export async function provisionProductAsync(
+  identityId: string,
+  product: WindyProduct,
+  metadata: Record<string, unknown> = {},
+  externalId?: string,
+): Promise<{ id: string; created: boolean }> {
+  const db = getDb();
+
+  const existing = await db.getAsync<{ id: string }>(
+    'SELECT id FROM product_accounts WHERE identity_id = ? AND product = ?',
+    identityId,
+    product,
+  );
+
+  if (existing) {
+    return { id: existing.id, created: false };
+  }
+
+  const id = crypto.randomUUID();
+  await db.runAsync(
+    `INSERT INTO product_accounts (id, identity_id, product, external_id, metadata)
+     VALUES (?, ?, ?, ?, ?)`,
+    id,
+    identityId,
+    product,
+    externalId ?? null,
+    JSON.stringify(metadata),
+  );
+
+  await logAuditEventAsync('product_provision', identityId, { product, externalId });
+
+  return { id, created: true };
+}
+
+/**
  * Get all product accounts for an identity.
  */
 export function getProductAccounts(identityId: string): any[] {
@@ -195,6 +267,34 @@ export function grantScopes(
     }
   });
   logAuditEvent('scope_grant', identityId, { scopes, grantedBy });
+}
+
+/**
+ * Async variant of grantScopes. Runs the INSERTs inside a real atomic
+ * transactionAsync — previously the sync Postgres path was only
+ * pseudo-transactional because BEGIN/COMMIT landed in separate
+ * subprocesses.
+ */
+export async function grantScopesAsync(
+  identityId: string,
+  scopes: IdentityScope[],
+  grantedBy: string = 'system',
+): Promise<void> {
+  const db = getDb();
+
+  await db.transactionAsync(async (tx) => {
+    for (const scope of scopes) {
+      await tx.run(
+        `INSERT OR IGNORE INTO identity_scopes (id, identity_id, scope, granted_by)
+         VALUES (?, ?, ?, ?)`,
+        crypto.randomUUID(),
+        identityId,
+        scope,
+        grantedBy,
+      );
+    }
+  });
+  await logAuditEventAsync('scope_grant', identityId, { scopes, grantedBy });
 }
 
 /**
