@@ -23,7 +23,15 @@ services:
       - NODE_ENV=production
       - PORT=8098
       - TRUST_PROXY=1
+      # Node.js libuv thread pool — raise above default 4 so bcrypt/crypto
+      # work doesn't starve other async I/O under concurrent signup bursts.
+      - UV_THREADPOOL_SIZE=${UV_THREADPOOL_SIZE:-}
       - DATABASE_URL=${DATABASE_URL}
+      # pg.Pool tuning — raise defaults (max=10, idle=10s, connect=2s) for
+      # ballroom-scale bursts. Empty = adapter's built-in defaults.
+      - PG_POOL_MAX=${PG_POOL_MAX:-}
+      - PG_POOL_IDLE_MS=${PG_POOL_IDLE_MS:-}
+      - PG_POOL_CONNECT_MS=${PG_POOL_CONNECT_MS:-}
       - REDIS_URL=redis://127.0.0.1:6379
       - JWT_SECRET=${JWT_SECRET}
       - JWT_PRIVATE_KEY_PATH=/keys/private.pem
@@ -39,6 +47,7 @@ services:
       - WINDY_AGENT_SERVICE_TOKEN=${WINDY_AGENT_SERVICE_TOKEN}
       # Service-mesh URLs — Pro fans identity events out to whichever of these is set.
       # Empty string silently skips that target (webhook-bus.ts getTargets()).
+      - ETERNITAS_HMAC_SECRET=${ETERNITAS_HMAC_SECRET:-}
       - ETERNITAS_URL=${ETERNITAS_URL:-}
       - WINDY_CLOUD_URL=${WINDY_CLOUD_URL:-}
       - WINDY_CLOUD_WEBHOOK_SECRET=${WINDY_CLOUD_WEBHOOK_SECRET:-}
@@ -52,6 +61,10 @@ services:
       - OPENAI_KEY=${OPENAI_KEY:-}
       - ANTHROPIC_KEY=${ANTHROPIC_KEY:-}
       - GEMINI_KEY=${GEMINI_KEY:-}
+      # Transactional email (Resend). Without these the mailer logs to stdout
+      # instead of sending — verification + reset flows silently fail.
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - MAIL_FROM=${MAIL_FROM:-}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
