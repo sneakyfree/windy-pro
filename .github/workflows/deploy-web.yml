@@ -1,25 +1,31 @@
 name: Deploy Web to Cloudflare Pages
 
-# Wave 13 launch pipeline — builds src/client/web/ (React + Vite webapp)
-# and deploys to the `windypro-webapp` Cloudflare Pages project, which
-# is custom-domain-aliased to `app.windyword.ai`.
+# Builds src/client/web/ (Windy Word webapp — React + Vite) and deploys
+# to the `windypro-webapp` Cloudflare Pages project, which is aliased to
+# app.windyword.ai.
 #
-# Triggers:
-#   - push to main AND the push touched src/client/web or this workflow
+# Deploy path uses scripts/cf-pages-deploy.py — a direct-upload script
+# against the Cloudflare API that sidesteps wrangler's version-specific
+# auth quirks (wrangler 3.90 returns API error 9106 with our tokens
+# despite the same tokens working cleanly on every underlying endpoint).
+# See docs/DEPLOY-WEB.md for the full runbook + rationale.
+#
+# Triggers
+#   - push to main with changes under src/client/web/ or this workflow
 #   - manual via "Run workflow" button (workflow_dispatch)
 #
-# Required secret:
-#   CF_PAGES_TOKEN — Cloudflare API token with "Account → Cloudflare Pages: Edit"
-#                    scoped to account 193b347aedeaafe35de0b5a534b2d9aa. Created
-#                    via Cloudflare Dashboard → My Profile → API Tokens.
-#
-# See docs/DEPLOY-WEB.md (Wave 13) for the runbook.
+# Required repo secret
+#   CF_PAGES_TOKEN — Cloudflare API token with account-level write to
+#                    Cloudflare Pages (Pages project read + asset upload
+#                    + deployment create). Stored encrypted in repo
+#                    secrets; rotated per the lockbox rotation plan.
 
 on:
   push:
     branches: [main]
     paths:
       - 'src/client/web/**'
+      - 'scripts/cf-pages-deploy.py'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
@@ -30,9 +36,6 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src/client/web
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,18 +46,24 @@ jobs:
           node-version-file: 'src/client/web/.nvmrc'
 
       - name: Install deps (frozen lockfile)
+        working-directory: src/client/web
         run: npm ci
 
       - name: Build
+        working-directory: src/client/web
         run: npm run build
 
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+      - name: Set up Python (for deploy script)
+        uses: actions/setup-python@v5
         with:
-          apiToken: ${{ secrets.CF_PAGES_TOKEN }}
-          accountId: "193b347aedeaafe35de0b5a534b2d9aa"
-          # Paths are relative to repo root, NOT the working-directory above —
-          # wrangler-action re-roots at the repo root when it resolves the
-          # directory argument.
-          command: pages deploy src/client/web/dist --project-name=windypro-webapp --branch=main --commit-dirty=true
-          workingDirectory: .
+          python-version: '3.12'
+
+      - name: Install Python deps
+        run: python -m pip install --quiet requests
+
+      - name: Deploy via Cloudflare Pages Direct Upload API
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_PAGES_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: '193b347aedeaafe35de0b5a534b2d9aa'
+        run: |
+          python3 scripts/cf-pages-deploy.py windypro-webapp src/client/web/dist main
