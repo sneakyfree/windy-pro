@@ -61,21 +61,19 @@ jobs:
       - name: Install Python deps
         run: python -m pip install --quiet requests
 
-      - name: Debug — inspect token state in runner
+      - name: Secret sanity check (fail fast if CF_PAGES_TOKEN is malformed)
+        # Guards against the `gh secret set NAME --body -` bug that silently
+        # set the literal string "-" as the secret value instead of reading
+        # from stdin. Cloudflare tokens are 40-60+ chars; anything shorter
+        # than 20 is definitely wrong. See docs/DEPLOY-WEB.md "Common issues".
         env:
           T: ${{ secrets.CF_PAGES_TOKEN }}
         run: |
-          echo "== token metadata =="
-          echo "length: ${#T}"
-          echo "prefix (first 8): ${T:0:8}"
-          echo "suffix (last 4): ${T: -4}"
-          echo ""
-          echo "== direct curl to /user/tokens/verify =="
-          curl -sS -w "\nHTTP %{http_code}\n" -H "Authorization: Bearer $T" https://api.cloudflare.com/client/v4/user/tokens/verify
-          echo ""
-          echo "== direct curl to upload-token endpoint (the one that fails) =="
-          curl -sS -w "\nHTTP %{http_code}\n" -H "Authorization: Bearer $T" https://api.cloudflare.com/client/v4/accounts/193b347aedeaafe35de0b5a534b2d9aa/pages/projects/windypro-webapp/upload-token
-          echo ""
+          if [ "${#T}" -lt 20 ]; then
+            echo "::error::CF_PAGES_TOKEN secret is length ${#T} — expected 40+. Token was probably set via 'gh secret set --body -' which stores the literal '-'. See docs/DEPLOY-WEB.md."
+            exit 1
+          fi
+          echo "Secret length OK (${#T} chars)."
 
       - name: Deploy via Cloudflare Pages Direct Upload API
         env:

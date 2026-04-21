@@ -145,14 +145,26 @@ Useful when the bad state isn't attributable to a single commit (env drift, cont
 
 ### `9106 Authorization error` from the deploy step
 
-Means `CF_PAGES_TOKEN` has been rotated/revoked without updating the repo secret, or the token lacks `Account → Cloudflare Pages: Edit`. Refresh from the lockbox:
+Usually means the `CF_PAGES_TOKEN` repo secret was set incorrectly. Verify first by checking the "Secret sanity check" workflow step — if it reports length < 20, the secret is malformed (see next item). If length looks right but 9106 still fires, the token may have been rotated/revoked or no longer has `Account → Cloudflare Pages: Edit`. Refresh from the lockbox:
 
 ```bash
-VPS_GOD=$(ssh -i ~/.ssh/kit_mesh root@72.60.118.54 \
-    "grep CLOUDFLARE_API_TOKEN /root/clawd/.secrets/cloudflare-god.env | cut -d= -f2- | tr -d '\"\n '")
-printf '%s' "$VPS_GOD" | gh secret set CF_PAGES_TOKEN --repo sneakyfree/windy-pro --body -
+# CORRECT invocation — pipe value via stdin, NO --body flag:
+echo "$TOKEN_VALUE" | gh secret set CF_PAGES_TOKEN --repo sneakyfree/windy-pro
 gh workflow run deploy-web.yml --repo sneakyfree/windy-pro --ref main
 ```
+
+### ⚠️ `gh secret set --body -` does NOT mean "read from stdin"
+
+**This burned an hour of debugging on 2026-04-21.** The `gh` CLI's `--body -` flag does NOT read from stdin — it sets the secret's value to the literal string `-` (one character). Every run with a `-`-valued token will return 9106 because the HTTP Authorization header becomes malformed.
+
+| Invocation | Actual behavior |
+|---|---|
+| `echo "$T" \| gh secret set NAME --repo R --body -` | ❌ Sets secret to literal `-`. Runner sees a 1-char secret. |
+| `echo "$T" \| gh secret set NAME --repo R` | ✅ Reads from stdin (default behavior when stdin is a pipe). |
+| `gh secret set NAME --repo R --body "$T"` | ✅ Uses `$T` as the literal body value. Works. |
+| `gh secret set NAME --repo R -f file` | ✅ Reads from a file. Works. |
+
+The `Secret sanity check` step in `deploy-web.yml` now catches this with a fail-fast if the runner sees a secret shorter than 20 characters.
 
 ### Build succeeds but site serves old content
 
