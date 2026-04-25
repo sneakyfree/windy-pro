@@ -14,6 +14,7 @@
 import { getDb } from '../db/schema';
 import { logAuditEvent } from '../identity-service';
 import { config } from '../config';
+import { revokeBrokerTokensForPassport } from './credential-broker';
 import crypto from 'crypto';
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -300,6 +301,13 @@ export async function cascadeRevocation(passportNumber: string): Promise<void> {
         "UPDATE bot_api_keys SET status = 'revoked' WHERE identity_id = ?",
     ).run(botUserId);
 
+    // Wave 8: Revoke all managed-credential broker tokens issued against
+    // this passport. Fire-and-forget — bcrypt hash of the reason makes
+    // this path do real CPU work and we don't want to block the webhook.
+    revokeBrokerTokensForPassport(passportNumber).catch(err =>
+        console.warn('[Ecosystem] broker revocation failed:', err?.message || err),
+    );
+
     // Log
     logAuditEvent('product_deprovision', botUserId, {
         action: 'cascade_revocation',
@@ -427,5 +435,73 @@ export function stopRetryWorker(): void {
     if (retryTimer) {
         clearInterval(retryTimer);
         retryTimer = null;
+    }
+}
+
+// ─── Cleanup (P2-6) ──────────────────────────────────────────
+//
+// Succeeded rows are already deleted on success in processPendingProvisions.
+// But two terminal classes accumulate:
+//   1. `attempts >= 10` — rows that exhausted the retry budget. The retry
+//      loop's `WHERE attempts < 10` stops processing them, so they sit
+//      forever. Keep them for 30 days of forensics, then delete.
+//   2. Rows older than the retention window with ANY state — e.g. if the
+//      action enum drifts and a row becomes unmatchable, it never retries
+//      and never succeeds. Delete after 90 days as a safety net.
+
+export const DEFAULT_EXHAUSTED_RETENTION_DAYS = 30;
+export const DEFAULT_ORPHAN_RETENTION_DAYS = 90;
+
+export interface PendingPruneResult {
+    exhaustedPurged: number;
+    orphanPurged: number;
+}
+
+export function prunePendingProvisions(opts?: {
+    exhaustedOlderThanDays?: number;
+    orphanOlderThanDays?: number;
+}): PendingPruneResult {
+    const db = getDb();
+    const exhaustedDays = opts?.exhaustedOlderThanDays ?? DEFAULT_EXHAUSTED_RETENTION_DAYS;
+    const orphanDays = opts?.orphanOlderThanDays ?? DEFAULT_ORPHAN_RETENTION_DAYS;
+
+    const exhausted = db.prepare(
+        `DELETE FROM pending_provisions
+         WHERE attempts >= 10
+           AND created_at < datetime('now', '-${exhaustedDays} days')`,
+    ).run();
+    const orphan = db.prepare(
+        `DELETE FROM pending_provisions
+         WHERE created_at < datetime('now', '-${orphanDays} days')`,
+    ).run();
+
+    return { exhaustedPurged: exhausted.changes, orphanPurged: orphan.changes };
+}
+
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+export function startPendingCleanup(intervalMs: number = CLEANUP_INTERVAL_MS): void {
+    if (cleanupTimer) return;
+    cleanupTimer = setInterval(() => {
+        try {
+            const r = prunePendingProvisions();
+            if (r.exhaustedPurged > 0 || r.orphanPurged > 0) {
+                console.log(
+                    `[Ecosystem] pruned ${r.exhaustedPurged} exhausted, ${r.orphanPurged} orphan pending provisions`,
+                );
+            }
+        } catch (e: any) {
+            console.error('[Ecosystem] pending-provisions cleanup error:', e?.message || e);
+        }
+    }, intervalMs);
+    cleanupTimer.unref();
+    console.log('[Ecosystem] pending-provisions cleanup started (every 1h)');
+}
+
+export function stopPendingCleanup(): void {
+    if (cleanupTimer) {
+        clearInterval(cleanupTimer);
+        cleanupTimer = null;
     }
 }

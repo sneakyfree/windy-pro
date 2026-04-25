@@ -12,6 +12,9 @@ import json
 import sys
 import os
 import time
+import http
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Set, Any
 
@@ -44,6 +47,18 @@ class WindyServer:
     def __init__(self, host: str = "127.0.0.1", port: int = 9876):
         self.host = host
         self.port = port
+        # CR-008b: sibling HTTP port for /health. Defaults to ws port
+        # + 1. Set WINDY_HEALTH_PORT=0 to disable.
+        health_port_env = os.environ.get("WINDY_HEALTH_PORT")
+        if health_port_env is None:
+            self.health_port = port + 1
+        else:
+            try:
+                self.health_port = int(health_port_env)
+            except ValueError:
+                self.health_port = port + 1
+        self._health_http_server = None
+        self._health_http_thread = None
         self.transcriber: StreamingTranscriber = None
         self.clients: Set[WebSocketServerProtocol] = set()
         self._server = None
@@ -194,6 +209,19 @@ class WindyServer:
     
     async def _handle_command(self, cmd: dict, websocket: WebSocketServerProtocol):
         """Handle a command from client."""
+        # Protocol schema validation — gated on WINDY_VALIDATE_WS=1.
+        # Surfaces schema drift early in dev without paying the walk
+        # cost in production. Logs warnings; does not reject the
+        # message (too risky in mixed-version deploys where the
+        # client may be newer than the server).
+        try:
+            from .protocol_validator import validate_client_message, enabled as _validate_on
+            if _validate_on():
+                errs = validate_client_message(cmd)
+                if errs:
+                    print(f"[ws-validator] client msg violations: {'; '.join(errs[:3])}", flush=True)
+        except Exception:
+            pass
         action = cmd.get("action")
         
         if action == "start":
@@ -388,7 +416,17 @@ class WindyServer:
                 "type": "pong",
                 "timestamp": cmd.get("timestamp")
             }))
-        
+
+        elif action == "health":
+            # P9/P15: WebSocket-level health snapshot. HTTP /health is
+            # deprecated on websockets >= 14; this command is the
+            # supported replacement. Same payload shape as
+            # docs/ENGINE-PROTOCOL.md §"GET /health".
+            await websocket.send(json.dumps({
+                "type": "health",
+                **self._health_payload(),
+            }))
+
         # ═══ Vault Commands ═══
         elif action == "vault_list":
             limit = cmd.get("limit", 50)
@@ -499,6 +537,77 @@ class WindyServer:
                     "error": "No model loaded"
                 }))
         
+        elif action == "transcribe_blob":
+            # One-shot batch transcription: process audio file without starting a streaming session.
+            # Client sends raw audio (webm/wav) as the next binary message.
+            # Uses the in-memory model — no cold load, much faster than spawning a new Python process.
+            language = cmd.get("language", "en")
+            if self.transcriber and self.transcriber.model:
+                try:
+                    audio_data = await websocket.recv()
+                    if isinstance(audio_data, bytes) and len(audio_data) > 100:
+                        import tempfile
+                        # Determine suffix from hint or default to .wav
+                        fmt = cmd.get("format", "wav")
+                        suffix = f".{fmt}" if fmt else ".wav"
+                        tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+                        tmp.write(audio_data)
+                        tmp.close()
+                        
+                        try:
+                            t0 = time.monotonic()
+                            lang = language if language not in ('auto', '') else None
+                            segments, info = self.transcriber.model.transcribe(
+                                tmp.name,
+                                language=lang,
+                                task="transcribe",
+                                beam_size=self.transcriber.config.beam_size,
+                                vad_filter=True,
+                                condition_on_previous_text=True,
+                                no_speech_threshold=0.3,
+                                log_prob_threshold=-1.0
+                            )
+                            
+                            text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())
+                            elapsed = round(time.monotonic() - t0, 2)
+                            audio_duration = getattr(info, 'duration', 0) or 0
+                            ratio = round(elapsed / max(audio_duration, 0.01), 2)
+                            
+                            await websocket.send(json.dumps({
+                                "type": "transcribe_result",
+                                "text": text,
+                                "elapsed_s": elapsed,
+                                "audio_duration_s": round(audio_duration, 1),
+                                "ratio": ratio,
+                                "model": self.transcriber.config.model_size,
+                                "engine": "local-whisper-ws"
+                            }))
+                            print(f"🎤 Batch transcribe: {len(text)} chars in {elapsed}s (ratio {ratio}, model {self.transcriber.config.model_size})")
+                        finally:
+                            try:
+                                os.unlink(tmp.name)
+                            except Exception:
+                                pass
+                    else:
+                        await websocket.send(json.dumps({
+                            "type": "transcribe_result",
+                            "text": "",
+                            "error": "No audio data received"
+                        }))
+                except Exception as e:
+                    print(f"Transcribe blob error: {e}", file=sys.stderr)
+                    await websocket.send(json.dumps({
+                        "type": "transcribe_result",
+                        "text": "",
+                        "error": str(e)
+                    }))
+            else:
+                await websocket.send(json.dumps({
+                    "type": "transcribe_result",
+                    "text": "",
+                    "error": "No model loaded"
+                }))
+        
         else:
             await websocket.send(json.dumps({
                 "type": "error",
@@ -508,14 +617,24 @@ class WindyServer:
     async def start(self, config: TranscriberConfig = None):
         """Start the WebSocket server."""
         self._loop = asyncio.get_running_loop()
-        
+
+        # P9: remember when the server first came up for /health uptime
+        # and cold-start diagnostics. monotonic clock so we're immune to
+        # user clock jumps.
+        self._started_monotonic = time.monotonic()
+        self._started_wall = time.time()
+        self._cold_start_ms = None
+        self._model_config = config or TranscriberConfig()
+        self._load_error = None
+
         if not WEBSOCKETS_AVAILABLE:
             print("websockets not installed. Run: pip install websockets",
                   file=sys.stderr)
+            self._load_error = 'websockets_missing'
             return False
-        
+
         # Initialize transcriber
-        config = config or TranscriberConfig()
+        config = self._model_config
         self.transcriber = StreamingTranscriber(config)
         self.transcriber.on_state_change(self._on_state_change)
         self.transcriber.on_transcript(self._on_transcript)
@@ -523,15 +642,25 @@ class WindyServer:
 
         # Optional test/CI bypass for model loading
         skip_model_load = os.environ.get("WINDY_SKIP_MODEL_LOAD", "0") in ("1", "true", "yes")
-        
-        # Load model
+
+        # P9: measure cold-start time. The model load is the single
+        # biggest chunk of first-packet latency — anything over ~5s
+        # is worth surfacing so we catch regressions (e.g. arm64
+        # falling back to Rosetta) without waiting for user reports.
         if skip_model_load:
             print("WINDY_SKIP_MODEL_LOAD=1 set; skipping model load (test mode)")
         else:
-            print("Loading transcription model...")
+            print(f"[cold-start] loading transcription model: "
+                  f"model={config.model_size} device={config.device}")
+            t0 = time.monotonic()
             if not self.transcriber.load_model():
+                self._load_error = 'model_load_failed'
                 print("Failed to load model", file=sys.stderr)
+                print(f"[cold-start] model load FAILED after "
+                      f"{int((time.monotonic() - t0) * 1000)}ms", file=sys.stderr)
                 return False
+            self._cold_start_ms = int((time.monotonic() - t0) * 1000)
+            print(f"[cold-start] model loaded in {self._cold_start_ms}ms")
 
         # Kill any existing process on our port before binding
         self._kill_port_holder()
@@ -550,7 +679,13 @@ class WindyServer:
                     self._handle_client,
                     self.host,
                     self.port,
-                    reuse_address=True
+                    reuse_address=True,
+                    max_size=50 * 1024 * 1024,  # 50MB — supports up to ~26 min recordings at 16kHz mono
+                    # P9: HTTP handler — short-circuits non-WebSocket
+                    # GET /health requests with a JSON status blob.
+                    # Anything else falls through to the default
+                    # handshake path for real WS clients.
+                    process_request=self._process_request,
                 )
                 break  # Success
             except OSError as e:
@@ -563,11 +698,135 @@ class WindyServer:
                           file=sys.stderr)
                     return False
         
+        # CR-008b: start the sibling HTTP /health server. Different
+        # port from the WebSocket server because websockets >= 14
+        # rejects HTTP requests that don't carry Connection: Upgrade
+        # BEFORE process_request fires — so /health-over-curl stopped
+        # working when requirements.txt bumped to websockets 16.
+        self._start_health_http_server()
+
         # Start heartbeat task to detect zombie connections
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         
         print(f"Server running. Waiting for connections...")
         return True
+
+    def _start_health_http_server(self):
+        """Spin up a thread-backed stdlib HTTPServer on
+        self.health_port. Uses stdlib only — no extra deps — and
+        runs in a daemon thread so it dies with the process.
+
+        Opt-out via WINDY_HEALTH_PORT=0.
+        """
+        if self.health_port <= 0:
+            return
+        server_ref = self
+        class HealthHandler(BaseHTTPRequestHandler):
+            def log_message(self, fmt, *args):
+                # Silence the default access log; we already print
+                # structured status elsewhere.
+                return
+            def do_GET(self):
+                if self.path != '/health':
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                try:
+                    payload = server_ref._health_payload()
+                    body = json.dumps(payload).encode('utf-8')
+                    code = 200 if payload.get('status') == 'ok' else 503
+                    self.send_response(code)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Content-Length', str(len(body)))
+                    self.send_header('Cache-Control', 'no-store')
+                    self.end_headers()
+                    self.wfile.write(body)
+                except Exception as e:
+                    self.send_response(500)
+                    self.end_headers()
+                    try: self.wfile.write(json.dumps({'status':'error','error':str(e)}).encode('utf-8'))
+                    except Exception: pass
+        try:
+            self._health_http_server = HTTPServer((self.host, self.health_port), HealthHandler)
+        except OSError as e:
+            # Port busy on a re-run — surface but don't crash the main
+            # WS server.
+            print(f"[health] Could not bind {self.host}:{self.health_port} — /health disabled: {e}", file=sys.stderr)
+            self._health_http_server = None
+            return
+        self._health_http_thread = threading.Thread(
+            target=self._health_http_server.serve_forever,
+            name='windy-health-http',
+            daemon=True,
+        )
+        self._health_http_thread.start()
+        print(f"[health] listening on http://{self.host}:{self.health_port}/health")
+
+    async def _process_request(self, path, headers):
+        """P9: /health endpoint.
+
+        websockets.serve's `process_request` hook lets us answer plain
+        HTTP requests without breaking the WebSocket handshake path.
+        Returning None means "continue the WS handshake"; returning a
+        (status, headers, body) tuple short-circuits with an HTTP
+        response.
+
+        Payload shape:
+            {
+              "status": "ok" | "loading" | "error",
+              "uptime_sec": <float>,
+              "cold_start_ms": <int|null>,
+              "model": <model-name>,
+              "device": <device>,
+              "clients": <int>,
+              "version": <server-version>,
+              "error": <string|null>
+            }
+        """
+        # `path` is either a string (older websockets) or a Request
+        # object (websockets 12+). Normalise.
+        req_path = path if isinstance(path, str) else getattr(path, 'path', '/')
+        if req_path == '/health':
+            try:
+                payload = self._health_payload()
+                body = json.dumps(payload).encode('utf-8')
+                # websockets >= 14 requires the status to be an
+                # http.HTTPStatus enum, not a bare int. Older versions
+                # accepted either — the enum works everywhere.
+                status = http.HTTPStatus.OK if payload['status'] == 'ok' \
+                    else http.HTTPStatus.SERVICE_UNAVAILABLE
+                return (status, [('Content-Type', 'application/json'),
+                                 ('Cache-Control', 'no-store')], body)
+            except Exception as e:
+                body = json.dumps({'status': 'error', 'error': str(e)}).encode('utf-8')
+                return (http.HTTPStatus.INTERNAL_SERVER_ERROR,
+                        [('Content-Type', 'application/json')], body)
+        # Return None to let the WS handshake proceed for every other
+        # path.
+        return None
+
+    def _health_payload(self):
+        """Build the /health JSON payload. Single source of truth for
+        what we expose externally — unit-testable without spawning a
+        server."""
+        if self._load_error:
+            status = 'error'
+        elif self.transcriber is None:
+            status = 'loading'
+        else:
+            status = 'ok'
+        cfg = getattr(self, '_model_config', None)
+        uptime = time.monotonic() - getattr(self, '_started_monotonic', time.monotonic())
+        return {
+            'status': status,
+            'uptime_sec': round(uptime, 3),
+            'cold_start_ms': self._cold_start_ms,
+            'model': getattr(cfg, 'model_size', None) if cfg else None,
+            'device': getattr(cfg, 'device', None) if cfg else None,
+            'clients': len(self.clients),
+            'version': SERVER_VERSION,
+            'error': self._load_error,
+        }
 
     def _kill_port_holder(self):
         """Kill any process holding our port (handles stale previous instances)."""
@@ -618,6 +877,15 @@ class WindyServer:
         if self._server:
             self._server.close()
             await self._server.wait_closed()
+        # CR-008b: shut the /health sidecar down too. The daemon=True
+        # thread would die with the process anyway, but explicit
+        # shutdown avoids "Address already in use" on a quick restart.
+        if self._health_http_server is not None:
+            try: self._health_http_server.shutdown()
+            except Exception: pass
+            try: self._health_http_server.server_close()
+            except Exception: pass
+            self._health_http_server = None
         if self.transcriber:
             self.transcriber.stop_session()
 

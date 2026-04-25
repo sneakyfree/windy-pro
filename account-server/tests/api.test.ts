@@ -35,9 +35,13 @@ describe('GET /health', () => {
     expect(res.body.status).toBe('ok');
     expect(res.body.service).toBe('windy-pro-account-server');
     expect(res.body.version).toBe('2.0.0');
-    expect(res.body).toHaveProperty('users');
-    expect(res.body).toHaveProperty('devices');
     expect(res.body).toHaveProperty('timestamp');
+    // `/health` shape changed — user + device counts were removed in
+    // favour of a per-service reachability map (`services`) + a
+    // top-level `database` status. Pin the new shape here.
+    expect(res.body).toHaveProperty('database');
+    expect(res.body).toHaveProperty('services');
+    expect(res.body).toHaveProperty('uptime_seconds');
   });
 });
 
@@ -151,11 +155,14 @@ describe('GET /api/v1/auth/me', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 403 with invalid token', async () => {
+  it('returns 401 with invalid token', async () => {
+    // P2-3: malformed / unsigned / wrong-algo tokens are 401, not 403,
+    // per RFC 6750 — "could not prove authentication" rather than
+    // "authenticated but not authorized".
     const res = await request(app)
       .get('/api/v1/auth/me')
       .set('Authorization', 'Bearer invalid-token');
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 });
 
@@ -248,6 +255,27 @@ describe('GET /api/v1/identity/me', () => {
   it('returns 401 without auth', async () => {
     const res = await request(app).get('/api/v1/identity/me');
     expect(res.status).toBe(401);
+  });
+
+  it('returns identity with storage fields for the wizard Complete screen', async () => {
+    // Fresh register so we have a real token + user row with storage defaults.
+    const email = `identity-me-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
+    const reg = await request(app)
+      .post('/api/v1/auth/register')
+      .send({ name: 'Identity Me Test', email, password: 'SecurePass1' });
+    expect(reg.status).toBe(201);
+
+    const res = await request(app)
+      .get('/api/v1/identity/me')
+      .set('Authorization', `Bearer ${reg.body.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.identity.email).toBe(email);
+    expect(res.body.identity.windyIdentityId).toBe(reg.body.windyIdentityId);
+    // Wizard Complete screen relies on these — added 2026-04-16.
+    expect(res.body.identity).toHaveProperty('storageLimit');
+    expect(res.body.identity).toHaveProperty('storageUsed');
+    expect(Array.isArray(res.body.products)).toBe(true);
+    expect(Array.isArray(res.body.scopes)).toBe(true);
   });
 });
 

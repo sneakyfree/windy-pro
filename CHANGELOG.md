@@ -2,6 +2,123 @@
 
 All notable changes to Windy Pro are documented here.
 
+## [Unreleased] — installer-bundling-v3 branch
+
+Two autonomous working sessions (2026-04-14 + 2026-04-15) on the
+bulletproof installer + platform hardening plan.
+
+### Installer (sessions 1 + 2)
+
+- **Install never hangs at 0%**: fail-fast `withTimeout` around every
+  awaited step; sub-second event-loop stalls eliminated by converting
+  the bundled-wheels install + CleanSlate kill path from `execSync`
+  to `exec` (async).
+- **CleanSlate won't kill its own .app bundle** on any platform —
+  macOS (`.app`), Windows (`.exe` parent dir), Linux AppImage
+  (`.mount_*` root) all guarded.
+- **uv (Astral) bundled** alongside pip for offline wheel installs
+  — ~5x faster when present.
+- **Phase 4 permission verification** — real tests (mic RMS amplitude,
+  osascript keystroke probe, Linux paste-tool one-click install via
+  pkexec). Auto re-check on window-focus.
+- **Phase 6 Linux paste-tool detect + install + test-inject**
+  (xdotool / ydotool / wl-clipboard / xclip, including uinput
+  permissions + input group + ydotoold).
+- **Phase 7 "Recommended for your machine" hero card** with collapsed
+  advanced options.
+- **Phase 8 moves account creation out of the wizard** entirely —
+  free tier silently provisioned; post-first-transcription banner
+  in the main app offers signup.
+- **P14 `goToScreen` refactor** to stable string IDs; account screen
+  markup deleted (was DOM-only dead code after Phase 8).
+
+### Error handling + diagnostics
+
+- **WINDY-NNN error code taxonomy** in `installer-v2/core/errors.js`
+  with CI ratchet guard; `docs/ERRORS.md` catalogue.
+- **`/health` endpoint** on the engine's sibling HTTP port (9877 by
+  default) + WebSocket-level `health` command.
+- **Allow-list crash log redaction** (`lib/crash-summary.js`) —
+  drops attached `response` / `config` / `headers` objects; applies
+  redact patterns for Bearer, sk-, ghp_, xoxb-, AKIA, glpat-, key_.
+- **Structured JSON-lines file logger** at
+  `~/Library/Logs/Windy Pro/app.log` with 10MB rotation × 5 files.
+
+### Security
+
+- **SEC-PAIR-1 (CRITICAL)**: `pair-delete` IPC path-traversal —
+  malicious renderer could `fsp.rm({recursive, force})` arbitrary
+  directories. `_validatePairId` now enforces allow-list regex +
+  containment check.
+- **SEC-WIZARD-1 (MED)**: `wizard-purchase-translate` now requires
+  the Stripe Checkout URL to be under `checkout.stripe.com` or
+  `billing.stripe.com` — compromised account-server can't redirect
+  users to arbitrary hosts via `shell.openExternal`.
+- **withTimeout bounds** on chat-login/register/send-message/
+  get-messages, mini-translate-text, pair-download, pair-download-
+  bundle.
+- **Unhandled rejection audit** — `transcript-for-paste` ipcMain.on,
+  auto-updater setTimeout/setInterval all wrapped against
+  unhandled rejection.
+
+### Accessibility (P10)
+
+- ARIA `role=progressbar` / `role=meter` / `role=region` +
+  `aria-live` on every status-updating element.
+- Global `:focus-visible` ring at 2px green outline.
+- `@media (prefers-reduced-motion: reduce)` honoured — animations
+  disabled for vestibular-sensitive users.
+
+### Testing
+
+- **Playwright-electron E2E harness** — 24 tests across 5 spec files
+  covering wizard cold-boot, screen flow, verify state matrix,
+  signup banner, IPC contract, hang regression.
+- **162 unit tests** across 12 jest files: signup-banner,
+  transcript-format, logger, crash-summary, lib-timeout, errors,
+  bundled-assets, clean-slate, wizard-logger, Windows paths,
+  security audits, chat IPC, pair IPC.
+- **9 pytest cases**: engine health payload (6) + integration
+  (3 HTTP + 1 WebSocket round-trip).
+- **CI gates** grew 1 → 8: e2e, test-installer, renderer-tests,
+  error-code ratchet, legacy-venv guard, i18n coverage,
+  desktop_security, engine integration.
+
+### Release automation (P6)
+
+- `scripts/release/{preflight,build-all,smoke,sign-and-notarize,
+  promote}.sh` — each with `--help` and `--dry-run`.
+
+### Docs
+
+- `ARCHITECTURE.md`, `RELEASE.md`, `DEBUGGING.md` (session 1).
+- `SECURITY-AUDIT-2026-04.md`, `ERRORS.md`, `A11Y.md`, `I18N-AUDIT.md`,
+  `ENGINE-PROTOCOL.md`, `UPDATER-TEST.md`, `DOGFOOD-PLAYBOOK.md`,
+  `CODE-REVIEW-2026-04.md` (session 2).
+
+### Code organisation
+
+- `src/client/desktop/chat/ipc.js` — 21 chat-* IPC handlers
+  extracted (was inline in main.js).
+- `src/client/desktop/chat/pair-ipc.js` — 8 pair-* handlers
+  extracted.
+- `src/client/desktop/lib/timeout.js`, `lib/crash-summary.js` — new
+  pure utility modules.
+- `src/client/desktop/renderer/signup-banner.js`,
+  `transcript-format.js` — extracted from app.js for testability.
+- `installer-v2/core/errors.js`, `core/paste-verify.js` — new
+  wizard utility modules.
+
+### CI
+
+- Cross-platform installer builds: mac-arm64, mac-x64, linux-x64,
+  win-x64 all producing signed .dmg / .AppImage / .deb / .exe
+  artefacts on every push (session 1).
+- Triage of weeks-red `ci.yml`: fixed zod install, dropped Python
+  3.10 (numpy incompatibility), resolved `Privacy.jsx` merge
+  conflict markers, updated stale CSP / crash-log structural
+  tests.
+
 ## [1.6.1] — 2026-03-11
 
 ### Desktop Hardening — 20 Bug Fixes

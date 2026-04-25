@@ -197,9 +197,15 @@ class HardwareDetector {
         const match = output.match(/FreeSpace=(\d+)/);
         return match ? Math.round(parseInt(match[1]) / (1024 ** 3) * 10) / 10 : 0;
       } else {
-        const output = await this.execAsync(`df -B1 "${os.homedir()}" | tail -1`);
+        // BSD df (macOS) doesn't accept -B1 — that's a GNU coreutils
+        // flag. Use -k (1024-byte blocks) which is portable across
+        // macOS + Linux. Column 4 ("Available") in KB.
+        const output = await this.execAsync(`df -k "${os.homedir()}" | tail -1`);
         const parts = output.trim().split(/\s+/);
-        return parts.length >= 4 ? Math.round(parseInt(parts[3]) / (1024 ** 3) * 10) / 10 : 0;
+        if (parts.length < 4) return 0;
+        const kb = parseInt(parts[3], 10);
+        if (!Number.isFinite(kb)) return 0;
+        return Math.round(kb / (1024 * 1024) * 10) / 10;
       }
     } catch (e) {
       return 0;

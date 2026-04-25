@@ -97,7 +97,7 @@ export default function Landing() {
                 <div className="container nav-inner">
                     <div className="nav-logo">
                         <div className="logo-icon"></div>
-                        <span className="logo-text">Windy Pro</span>
+                        <span className="logo-text">Windy Word</span>
                     </div>
                     <button
                         className={`nav-hamburger ${menuOpen ? 'open' : ''}`}
@@ -127,46 +127,75 @@ export default function Landing() {
             {/* Hero Section */}
             <header className="hero">
                 <div className="container hero-inner">
-                    <div className="hero-badge">🌪️ {latestVersion} — Cloud Storage, Stripe Payments, Setup Wizard</div>
+                    <div className="hero-badge">🌱 Your own AI agent, hatched in minutes</div>
                     <h1 className="hero-title">
-                        Stop typing through a straw.<br />
-                        <span className="hero-gradient">Speak your vision into existence.</span>
+                        Meet your Windy —<br />
+                        <span className="hero-gradient">a little AI friend who gets things done.</span>
                     </h1>
                     <p className="hero-subtitle">
-                        Windy Pro transforms speech into text at the speed of thought.
-                        Unlimited recording, local-first privacy, 99 languages. Guided setup gets you running in 60 seconds.
+                        Chat with it. Ask it to send an email, remember what matters, or help you book a trip.
+                        It lives in your account, learns over time, and is always yours. No command lines. No jargon. Just your Windy.
                     </p>
                     <div className="hero-actions">
-                        <a href="#download" className="btn btn-primary btn-large">
-                            ⬇ Download Desktop App
+                        {loggedIn ? (
+                            <Link to="/dashboard" className="btn btn-primary btn-large">
+                                Open Your Windy →
+                            </Link>
+                        ) : (
+                            <Link to="/auth" className="btn btn-primary btn-large">
+                                Create Your Agent
+                            </Link>
+                        )}
+                        <a href="#how-it-works" className="btn btn-secondary btn-large">
+                            See How It Works
                         </a>
-                        <Link to="/transcribe" className="btn btn-secondary btn-large">
-                            ☁ Try in Browser
-                        </Link>
                     </div>
                     <div className="hero-trust-badge">
                         <USFlag size={14} />
-                        <span>Built in the USA · Privacy-First</span>
+                        <span>Built in the USA · Privacy-First · Your data, your agent</span>
                     </div>
                     <div className="hero-stats">
                         <div className="stat">
-                            <div className="stat-value">∞</div>
-                            <div className="stat-label">Recording Time</div>
+                            <div className="stat-value">≈5 min</div>
+                            <div className="stat-label">To Hatch</div>
                         </div>
                         <div className="stat">
-                            <div className="stat-value">&lt;500ms</div>
-                            <div className="stat-label">Latency</div>
+                            <div className="stat-value">24/7</div>
+                            <div className="stat-label">At Your Side</div>
                         </div>
                         <div className="stat">
-                            <div className="stat-value">99</div>
-                            <div className="stat-label">Languages</div>
+                            <div className="stat-value">100%</div>
+                            <div className="stat-label">Yours</div>
                         </div>
                     </div>
                 </div>
                 <div className="hero-glow"></div>
             </header>
 
-            {/* Green Strobe Demo */}
+            {/* Agent Feature Trio — above the fold promise */}
+            <section className="agent-trio">
+                <div className="container">
+                    <div className="feature-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px', maxWidth: '980px', margin: '0 auto' }}>
+                        <div className="feature-card">
+                            <div className="feature-icon">💬</div>
+                            <h3>Chats with you</h3>
+                            <p>Ask it anything. Your Windy answers in plain English — no typing commands, no learning how.</p>
+                        </div>
+                        <div className="feature-card">
+                            <div className="feature-icon">✅</div>
+                            <h3>Does things for you</h3>
+                            <p>Send an email. Draft a note. Find a recipe. Plan a trip. Your Windy handles the fiddly bits.</p>
+                        </div>
+                        <div className="feature-card">
+                            <div className="feature-icon">🧠</div>
+                            <h3>Remembers what matters</h3>
+                            <p>Your coffee order. Your sister's birthday. The name of your cardiologist. It keeps track, so you don't have to.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Safety / Trust callout — your agent, your data */}
             <section className="strobe-section">
                 <div className="container">
                     <div className="strobe-demo">
@@ -174,8 +203,8 @@ export default function Landing() {
                             <div className="strobe-core"></div>
                         </div>
                         <div className="strobe-text">
-                            <h3>The Green Strobe Never Lies</h3>
-                            <p>When it pulses, audio is being captured. When it stops, it stops. No hidden recording. No trust issues.</p>
+                            <h3>Your agent. Your data. Your rules.</h3>
+                            <p>Your Windy answers to you and nobody else. Your conversations stay private, your memories belong to you, and you can pause or delete your agent any time.</p>
                         </div>
                     </div>
                 </div>
@@ -221,8 +250,8 @@ export default function Landing() {
             {/* Features */}
             <section className="features" id="features">
                 <div className="container">
-                    <h2 className="section-title">Everything Your Voice Needs</h2>
-                    <p className="section-subtitle">Built for speed, privacy, and power users.</p>
+                    <h2 className="section-title">What your Windy can do</h2>
+                    <p className="section-subtitle">Your agent also handles voice-to-text out of the box — so you can talk instead of type.</p>
                     <div className="feature-grid">
                         <div className="feature-card">
                             <div className="feature-icon">🎙️</div>
@@ -232,7 +261,7 @@ export default function Landing() {
                         <div className="feature-card">
                             <div className="feature-icon">🔒</div>
                             <h3>Local-First</h3>
-                            <p>Windy Pro runs on YOUR hardware by default. Audio stays on your machine unless you choose cloud processing.</p>
+                            <p>Windy Word runs on YOUR hardware by default. Audio stays on your machine unless you choose cloud processing.</p>
                         </div>
                         <div className="feature-card">
                             <div className="feature-icon">⚡</div>
@@ -247,7 +276,7 @@ export default function Landing() {
                         <div className="feature-card">
                             <div className="feature-icon">☁️</div>
                             <h3>WindyCloud</h3>
-                            <p>Archive recordings to Windy Pro's distributed cloud. Sync across devices, access from anywhere.</p>
+                            <p>Archive recordings to Windy Word's distributed cloud. Sync across devices, access from anywhere.</p>
                         </div>
                         <div className="feature-card">
                             <div className="feature-icon">🌪️</div>
@@ -274,26 +303,27 @@ export default function Landing() {
             </section>
 
             {/* How It Works */}
-            <section className="how-it-works">
+            <section className="how-it-works" id="how-it-works">
                 <div className="container">
-                    <h2 className="section-title">3 Steps. Zero Learning Curve.</h2>
+                    <h2 className="section-title">Three steps. No tech knowledge needed.</h2>
+                    <p className="section-subtitle">From zero to chatting with your own little AI friend — in about five minutes.</p>
                     <div className="steps">
                         <div className="step">
                             <div className="step-number">1</div>
-                            <h3>Install</h3>
-                            <p>Guided wizard detects your hardware, picks the right model, downloads everything.</p>
+                            <h3>Sign up</h3>
+                            <p>Just your name, email, and a password. We'll send a short code to your inbox to confirm it's you.</p>
                         </div>
                         <div className="step-arrow">→</div>
                         <div className="step">
                             <div className="step-number">2</div>
-                            <h3>Record</h3>
-                            <p>Hit Ctrl+Shift+Space. The green strobe pulses. Start speaking.</p>
+                            <h3>Hatch your agent</h3>
+                            <p>Tap one button. Your Windy comes to life, picks its own name, and says hello. It's yours from that moment on.</p>
                         </div>
                         <div className="step-arrow">→</div>
                         <div className="step">
                             <div className="step-number">3</div>
-                            <h3>Paste</h3>
-                            <p>Text injects directly at your cursor. Or copy to clipboard. Or export from the Vault.</p>
+                            <h3>Chat with it</h3>
+                            <p>Ask it questions. Tell it what to do. It remembers, it helps, and it grows with you over time.</p>
                         </div>
                     </div>
                 </div>
@@ -460,7 +490,7 @@ export default function Landing() {
                     <h2 className="section-title">What Users Say</h2>
                     <div className="testimonial-grid">
                         {[
-                            { name: 'James M.', role: 'Podcast Creator', text: 'Windy Pro replaced three different tools for me. The local transcription is incredibly fast and I never worry about my content leaking.', avatar: '🎙️' },
+                            { name: 'James M.', role: 'Podcast Creator', text: 'Windy Word replaced three different tools for me. The local transcription is incredibly fast and I never worry about my content leaking.', avatar: '🎙️' },
                             { name: 'Dr. Sarah K.', role: 'Medical Researcher', text: 'The medical glossary support in Windy Max is a game-changer. Accurate transcription of clinical terms that other tools butcher.', avatar: '🩺' },
                             { name: 'Carlos R.', role: 'Freelance Translator', text: 'Conversation mode lets me conduct bilingual interviews effortlessly. The real-time translation is surprisingly accurate.', avatar: '🌍' },
                             { name: 'Priya D.', role: 'Software Engineer', text: 'I use the cursor injection feature daily for voice-coding comments and documentation. Saves me hours every week.', avatar: '💻' }
@@ -484,24 +514,28 @@ export default function Landing() {
             <section className="cta-banner">
                 <div className="container" style={{ textAlign: 'center' }}>
                     <h2 style={{ fontSize: '32px', fontWeight: 800, marginBottom: '12px', color: '#F8FAFC' }}>
-                        Ready to transform your voice into text?
+                        Ready to meet your Windy?
                     </h2>
-                    <p style={{ fontSize: '18px', color: '#94A3B8', maxWidth: '500px', margin: '0 auto 24px' }}>
-                        Free forever. No credit card required. Download now and start recording in 60 seconds.
+                    <p style={{ fontSize: '18px', color: '#94A3B8', maxWidth: '520px', margin: '0 auto 24px' }}>
+                        Free to start. No credit card. Sign up and you'll be chatting with your own AI friend in about five minutes.
                     </p>
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                        <a href="#download" className="btn btn-primary btn-large">⬇ Download Free</a>
-                        <Link to="/auth" className="btn btn-secondary btn-large">Create Account →</Link>
+                        {loggedIn ? (
+                            <Link to="/dashboard" className="btn btn-primary btn-large">Open Your Windy →</Link>
+                        ) : (
+                            <Link to="/auth" className="btn btn-primary btn-large">Create Your Agent</Link>
+                        )}
+                        <a href="#how-it-works" className="btn btn-secondary btn-large">See How It Works</a>
                     </div>
                 </div>
             </section>
 
-            {/* Download — Cache-proof: all links use /download/latest/:platform redirect */}
+            {/* Download — Companion desktop app, soft-demoted below main agent pitch */}
             <section className="download" id="download">
                 <div className="container download-inner">
-                    <h2 className="section-title">Download Windy Pro</h2>
+                    <h2 className="section-title">Prefer a desktop app?</h2>
                     <p className="section-subtitle">
-                        {latestVersion ? `${latestVersion}` : 'Loading...'} · Available for all major platforms.
+                        Your Windy lives in your account and works in any browser. If you'd also like a native companion app for voice-to-text, it's available for Mac, Windows, and Linux. {latestVersion ? `(${latestVersion})` : ''}
                     </p>
                     <div className="download-grid">
                         <a href="/download/latest/macos" className="download-card">
@@ -566,7 +600,7 @@ export default function Landing() {
                 <div className="container footer-inner">
                     <div className="footer-brand">
                         <div className="logo-icon small"></div>
-                        <span>Windy Pro</span>
+                        <span>Windy Word</span>
                     </div>
                     <div className="footer-links">
                         <a href="https://github.com/sneakyfree/windy-pro" target="_blank" rel="noopener noreferrer">GitHub</a>
@@ -574,7 +608,7 @@ export default function Landing() {
                         <Link to="/privacy">Privacy</Link>
                         <Link to="/terms">Terms</Link>
                     </div>
-                    <div className="footer-copy">© 2026 Windy Pro. The Green Strobe Never Lies.</div>
+                    <div className="footer-copy">© 2026 Windy Word. The Green Strobe Never Lies.</div>
                     <div className="footer-location">
                         <USFlag size={12} />
                         <span>Built and hosted in the United States · New York, NY</span>

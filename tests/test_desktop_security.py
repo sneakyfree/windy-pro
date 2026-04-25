@@ -139,13 +139,22 @@ def test_csp_no_wildcard_https():
     csp = ' '.join(csp_line)
     assert not re.search(r'\bhttps:\s', csp), 'CSP should not have wildcard https:'
 
-def test_csp_has_exact_deepgram():
+def test_csp_has_windyword_proxy():
+    """Cloud STT now goes through the windyword.ai proxy (commit dc54d08
+    'Kill STT everywhere + remove competitor names + white-label vendor
+    refs'). Direct vendor connect-src entries (api.deepgram.com,
+    api.groq.com, api.openai.com) were intentionally removed."""
     html = read('src/client/desktop/renderer/index.html')
-    assert 'api.deepgram.com' in html, 'CSP should include api.deepgram.com'
+    assert 'windyword.ai' in html, 'CSP should include the windyword.ai cloud proxy'
 
-def test_csp_has_exact_groq():
+def test_csp_has_no_vendor_refs():
+    """Confirms the white-label refactor stuck — no direct vendor
+    hostnames in the CSP. If anyone restores them, this test fails
+    and forces them to update the white-label policy explicitly."""
     html = read('src/client/desktop/renderer/index.html')
-    assert 'api.groq.com' in html, 'CSP should include api.groq.com'
+    assert 'api.deepgram.com' not in html
+    assert 'api.groq.com' not in html
+    assert 'api.openai.com' not in html
 
 def test_csp_has_img_src():
     html = read('src/client/desktop/renderer/index.html')
@@ -170,8 +179,15 @@ def test_uncaught_exception_handler():
     assert 'uncaughtException' in m, 'Missing uncaughtException handler'
 
 def test_crash_log_redacts_api_keys():
+    """CR-006 (P15): redaction logic moved to lib/crash-summary.js
+    so it's unit-testable. main.js delegates via writeCrashLog →
+    safeErrorSummary. Verify both layers are wired correctly."""
     m = get_main()
-    assert 'REDACTED' in m, 'Crash log should redact API keys'
+    assert 'safeErrorSummary' in m, \
+        'main.js should delegate crash-log redaction to crash-summary lib'
+    lib = read('src/client/desktop/lib/crash-summary.js')
+    assert '[REDACTED]' in lib, 'lib/crash-summary.js should perform redaction'
+    assert 'Bearer' in lib, 'Bearer pattern should be in the secret allowlist'
 
 def test_web_contents_created_handler():
     m = get_main()

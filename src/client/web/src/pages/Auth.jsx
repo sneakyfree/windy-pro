@@ -53,12 +53,29 @@ export default function Auth() {
                 return
             }
 
-            // Store JWT token
+            // Store JWT token. The /register response returns user fields at
+            // the top level (userId/name/email/tier/token/refreshToken/devices),
+            // not under a `user` key — build the cached user object from those
+            // top-level fields so /verify-email can display the email back to
+            // the user.
             localStorage.setItem('windy_token', data.token)
-            localStorage.setItem('windy_user', JSON.stringify(data.user))
+            const cachedUser = data.user || {
+                userId: data.userId,
+                name: data.name,
+                email: data.email,
+                tier: data.tier,
+            }
+            localStorage.setItem('windy_user', JSON.stringify(cachedUser))
 
-            // Redirect to dashboard
-            navigate('/dashboard')
+            if (isLogin) {
+                navigate('/dashboard')
+            } else {
+                // New signup → route through /verify-email so the user can
+                // enter the 6-digit code the backend will email. Without
+                // this, the 24h login-grace window silently expires and the
+                // user is locked out (see account-server/src/routes/auth.ts:425-439).
+                navigate('/verify-email', { state: { email: cachedUser.email } })
+            }
         } catch (err) {
             setError('Unable to connect to server')
         } finally {
@@ -73,11 +90,11 @@ export default function Auth() {
                 <div className="auth-brand">
                     <Link to="/" className="auth-logo">
                         <div className="auth-logo-icon"></div>
-                        <span>Windy Pro</span>
+                        <span>Windy Word</span>
                     </Link>
                     <h2 className="auth-tagline">Voice to text,<br />in the cloud.</h2>
                     <p className="auth-desc">
-                        Stream audio from any device. Get real-time transcription powered by the Windy Pro Engine.
+                        Stream audio from any device. Get real-time transcription powered by the Windy Word Engine.
                         No downloads, no installs.
                     </p>
                     <div className="auth-features">

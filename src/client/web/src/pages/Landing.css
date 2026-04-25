@@ -175,6 +175,11 @@ html {
     pointer-events: none;
 }
 
+/* Agent Trio — the three-card above-the-fold promise */
+.agent-trio {
+    padding: 40px 0 20px;
+}
+
 /* Green Strobe Demo */
 .strobe-section {
     padding: 80px 0;

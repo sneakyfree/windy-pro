@@ -14,7 +14,7 @@ const API_CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
 const OFFLINE_PAGE = `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Windy Pro — Offline</title>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Windy Word — Offline</title>
 <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -31,7 +31,7 @@ const OFFLINE_PAGE = `<!DOCTYPE html>
 <body>
     <div class="icon">🌪️</div>
     <h1>You're Offline</h1>
-    <p>Windy Pro needs an internet connection for cloud features. Your local desktop app works offline!</p>
+    <p>Windy Word needs an internet connection for cloud features. Your local desktop app works offline!</p>
     <button onclick="location.reload()">Try Again</button>
     <div class="cached-info">Some cached pages may still be available.</div>
 </body></html>`;

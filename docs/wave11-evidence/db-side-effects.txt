@@ -1,0 +1,25 @@
+-- users --
+009d252e-765e-41f1-a574-06ccd6eef4d5|wave11-1776554072@hardening.test|human|free
+c833d9ac-3040-4035-a8f3-d6e13d5b6e9b|agent-c833d9ac@agents.windy.internal|bot|free
+caa9cf90-1d69-4da8-98a9-29dce1aa4709|wave11b-1776554221@hardening.test|human|free
+3bffe4ca-1460-451c-a423-1f77ada7727a|agent-3bffe4ca@agents.windy.internal|bot|free
+fb575847-47d2-4113-8e36-c4ced6f40169|probe-1776554555@hardening.test|human|free
+aabdc940-99ea-4348-86f2-597a312bc1f4|probe2-1776554701@hardening.test|human|free
+-- eternitas_passports --
+ET26-WAVE-1111|active|caa9cf90-1d69-4da8-98a9-29dce1aa4709
+-- broker_tokens --
+bk_live_2QSa|gemini|gemini-1.5-flash|free|active|0|50000
+-- hatch_sessions --
+9b436e5e-64ee-47b5-a101-4bc042d21c15|failed|2|Hardening's Agent|
+e30941cc-c84e-4b80-88bb-827fabc97127|complete|13|Hardening's Agent|ET26-WAVE-1111
+-- product_accounts --
+009d252e-765e-41f1-a574-06ccd6eef4d5|windy_chat|pending|
+009d252e-765e-41f1-a574-06ccd6eef4d5|windy_pro|active|
+3bffe4ca-1460-451c-a423-1f77ada7727a|windy_chat|active|@hardening-agent:chat.windypro.com
+aabdc940-99ea-4348-86f2-597a312bc1f4|windy_chat|active|@windy_probe_user_2:chat.windypro.com
+aabdc940-99ea-4348-86f2-597a312bc1f4|windy_pro|active|
+caa9cf90-1d69-4da8-98a9-29dce1aa4709|windy_chat|pending|
+caa9cf90-1d69-4da8-98a9-29dce1aa4709|windy_fly|active|@hardening-agent:chat.windypro.com
+caa9cf90-1d69-4da8-98a9-29dce1aa4709|windy_pro|active|
+fb575847-47d2-4113-8e36-c4ced6f40169|windy_chat|pending|
+fb575847-47d2-4113-8e36-c4ced6f40169|windy_pro|active|

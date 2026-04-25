@@ -3,7 +3,7 @@
  */
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import rateLimit from 'express-rate-limit';
+import { makeRateLimiter } from '../services/rate-limiter';
 import http from 'http';
 import { getDb } from '../db/schema';
 import { config } from '../config';
@@ -21,7 +21,7 @@ import { tierFromKey } from '@windy-pro/contracts';
 import packageJson from '../../package.json';
 const SERVER_VERSION: string = packageJson.version;
 
-const analyticsLimiter = rateLimit({
+const analyticsLimiter = makeRateLimiter('analytics', {
     windowMs: 60 * 1000,
     max: 30,
     message: { error: 'Too many requests' },
@@ -128,9 +128,16 @@ async function buildHealthResult(): Promise<HealthResult> {
     };
 }
 
-// ─── GET /health ─────────────────────────────────────────────
+// ─── GET /health (+ /healthz + /api/v1/health aliases) ─────
+//
+// /healthz is the cloud-native convention (Kubernetes liveness /
+// readiness probes, most cloud load balancers). /health is what the
+// rest of the ecosystem already hits. /api/v1/health is what the
+// smoke-test brief + the ECOSYSTEM_API_REFERENCE route-table
+// assume (Wave 14 P1-2 fix). All three point at the same handler
+// so ops + clients can pick any without lying about what's live.
 
-router.get('/health', async (_req: Request, res: Response) => {
+router.get(['/health', '/healthz', '/api/v1/health'], async (_req: Request, res: Response) => {
     try {
         const now = Date.now();
         if (!cachedHealth || now > cacheExpiry) {

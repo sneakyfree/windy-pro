@@ -25,7 +25,11 @@ export const PasswordSchema = z.string()
     .regex(/[0-9]/, 'Password must contain at least one digit');
 
 export const RegisterRequestSchema = z.object({
-    name: z.string().min(1, 'Name is required'),
+    // P2-8: cap name at 128 chars. The JWT payload embeds `name`, so an
+    // unbounded field lets a user bloat every one of their tokens; also
+    // the admin console + emails render this verbatim so a pathological
+    // value breaks those UIs.
+    name: z.string().min(1, 'Name is required').max(128, 'Name must be 128 characters or fewer'),
     email: z.string().email('Invalid email address'),
     password: PasswordSchema,
     deviceId: z.string().optional(),
@@ -39,6 +43,10 @@ export const LoginRequestSchema = z.object({
     deviceId: z.string().optional(),
     deviceName: z.string().optional(),
     platform: z.string().optional(),
+    // PR3: TOTP code (6 digits) or backup code (XXXX-XXXX). Optional on the
+    // first call; required on the second call when MFA is enabled and the
+    // server returned 401 mfa_required.
+    mfaCode: z.string().optional(),
 });
 
 export const RefreshRequestSchema = z.object({
@@ -61,6 +69,36 @@ export const ChangePasswordRequestSchema = z.object({
     newPassword: PasswordSchema,
 });
 
+// ─── Email Verification (PR1) ───────────────────────────────
+
+export const VerifyEmailRequestSchema = z.object({
+    code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+});
+
+// ─── Password Reset (PR2) ───────────────────────────────────
+
+export const ForgotPasswordRequestSchema = z.object({
+    // Trim first so leading/trailing whitespace doesn't fail .email() and
+    // so the normalized value reaches the handler. Wave 7 P1-12 keeps
+    // this aligned with the rate-limit keyGenerator's normalizeEmail().
+    email: z.string().trim().email('Invalid email address'),
+});
+
+export const ResetPasswordRequestSchema = z.object({
+    token: z.string().min(20, 'Reset token is required'),
+    newPassword: PasswordSchema,
+});
+
+// ─── MFA / TOTP (PR3) ───────────────────────────────────────
+
+export const MfaVerifySetupRequestSchema = z.object({
+    code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+});
+
+export const MfaDisableRequestSchema = z.object({
+    password: z.string().min(1, 'Password is required'),
+});
+
 // ─── Translation Schemas ─────────────────────────────────────
 
 export const TranslateTextRequestSchema = z.object({
@@ -71,7 +109,8 @@ export const TranslateTextRequestSchema = z.object({
     source: z.string().min(1).optional(),
     target: z.string().min(1).optional(),
 }).refine(
-    (d) => (d.sourceLang || d.source) && (d.targetLang || d.target),
+    (d: { sourceLang?: string; targetLang?: string; source?: string; target?: string }) =>
+        Boolean((d.sourceLang || d.source) && (d.targetLang || d.target)),
     { message: 'sourceLang/source and targetLang/target are required' }
 );
 
@@ -177,7 +216,8 @@ export const SpeechTranslateBodySchema = z.object({
     source: z.string().min(1).optional(),
     target: z.string().min(1).optional(),
 }).refine(
-    (d) => (d.sourceLang || d.source) && (d.targetLang || d.target),
+    (d: { sourceLang?: string; targetLang?: string; source?: string; target?: string }) =>
+        Boolean((d.sourceLang || d.source) && (d.targetLang || d.target)),
     { message: 'sourceLang/source and targetLang/target are required' }
 );
 

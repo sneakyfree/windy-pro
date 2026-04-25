@@ -15,6 +15,10 @@ const ALLOWED_RECEIVE_CHANNELS = new Set([
   'license-updated', 'license-expired', 'open-translate', 'show-welcome',
   'show-keyboard-shortcuts', 'system-theme-changed', 'pair-download-progress',
   'video-frame-to-preview', 'recording-state-to-preview',
+  'windytune-model-switched', 'windytune-suggest-upgrade',
+  // Wave 12 B4 — inbound deep-link payload from main.js handleDeepLink().
+  // Renderer listens via windyAPI.onDeepLink(cb).
+  'windy:deep-link',
 ]);
 
 function safeOn(channel, callback) {
@@ -71,6 +75,24 @@ contextBridge.exposeInMainWorld('windyAPI', {
   notifyBatchComplete: (wordCount) => ipcRenderer.send('batch-complete', { wordCount }),
   notifyBatchProcessing: () => ipcRenderer.send('batch-processing'),
   notifyRecordingFailed: () => ipcRenderer.send('recording-failed'),
+  notifyRecordingStopped: () => ipcRenderer.send('recording-stopped'),
+
+  // ═══ WindyTune Adaptive ═══
+  windytuneAcceptUpgrade: (model) => ipcRenderer.invoke('windytune-accept-upgrade', model),
+  windytuneUndoSwitch: (oldModel) => ipcRenderer.invoke('windytune-undo-switch', oldModel),
+  onWindyTuneModelSwitched: (callback) => {
+    safeOn('windytune-model-switched', (event, data) => callback(data));
+  },
+  onWindyTuneSuggestUpgrade: (callback) => {
+    safeOn('windytune-suggest-upgrade', (event, data) => callback(data));
+  },
+
+  // ═══ Focus Management ═══
+  // Temporarily make window focusable when user needs keyboard input
+  requestFocus: () => ipcRenderer.send('request-focus'),
+  releaseFocus: () => ipcRenderer.send('release-focus'),
+  // Restore focus to target app after getUserMedia steals it
+  restoreFocus: () => ipcRenderer.send('mic-access-granted'),
 
   // ═══ Video ═════════════════════════════════════════════════════
   showVideoPreview: () => ipcRenderer.invoke('show-video-preview'),
@@ -87,6 +109,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   openChat: () => ipcRenderer.send('open-windy-chat'),
   openExternal: (url) => ipcRenderer.invoke('open-external-url', url),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
+  launchWindyCode: () => ipcRenderer.invoke('launch-windy-code'),
   openCheckoutUrl: (opts) => ipcRenderer.invoke('open-checkout-url', opts),
   copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
   saveFile: (options) => ipcRenderer.invoke('save-file', options),
@@ -111,6 +134,14 @@ contextBridge.exposeInMainWorld('windyAPI', {
   dismissWelcome: () => ipcRenderer.invoke('dismiss-welcome'),
   onShowKeyboardShortcuts: (callback) => safeOn('show-keyboard-shortcuts', () => callback()),
   onSystemThemeChanged: (callback) => safeOn('system-theme-changed', (_e, theme) => callback(theme)),
+
+  // ═══ Deep links (Wave 12 B4) ══════════════════════════════════
+  // Payload shape: { scheme, host, path, query, url }. Fires when a
+  // windypro://, windychat://, windyword://, or windyfly:// link
+  // opens the app — either cold boot (argv) or warm (open-url /
+  // second-instance). The renderer decides what to do with it;
+  // main.js never navigates on its own.
+  onDeepLink: (callback) => safeOn('windy:deep-link', (_e, payload) => callback(payload)),
 
   // ═══ Injection / Accessibility ════════════════════════════════
   checkInjectionPermissions: () => ipcRenderer.invoke('check-injection-permissions'),

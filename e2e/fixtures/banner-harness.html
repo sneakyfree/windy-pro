@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- E2E harness page for the signup banner. Loads the real
+     signup-banner.js module from src/client/desktop/renderer/ so
+     the test exercises actual production code, not a copy. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>signup banner harness</title>
+  <style>
+    body { background: #0a0e1a; color: #f3f4f6; font-family: system-ui; padding: 20px; }
+  </style>
+</head>
+<body>
+  <div id="harness-status">Banner harness ready.</div>
+
+  <!-- Load the actual banner module from the real source tree. -->
+  <script src="../../src/client/desktop/renderer/signup-banner.js"></script>
+
+  <script>
+    // Provide a `window.__app` shim with maybeShowSignupBanner so the
+    // E2E spec's call sites mirror what app.js does in production.
+    window.__app = {
+      maybeShowSignupBanner(msg) {
+        if (typeof window.WindySignupBanner === 'function') {
+          // Test hook: shorter auto-dismiss for the auto-dismiss test
+          const opts = window.__bannerOpts || undefined;
+          window.WindySignupBanner(msg, opts);
+        }
+      }
+    };
+  </script>
+</body>
+</html>

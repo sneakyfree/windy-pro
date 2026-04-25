@@ -14,6 +14,27 @@
       box-sizing: border-box;
     }
 
+    /* P10 a11y: respect the OS-level reduced-motion preference.
+       The wizard's moniker + brand-card + strobe animations can
+       be disorienting for users with vestibular disorders. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    /* P10 a11y: visible focus ring on every focusable element.
+       Default Electron/Chromium is platform-dependent and often
+       invisible against our dark theme. */
+    :focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
     :root {
       --bg: #0A0E1A;
       --bg-card: #111827;
@@ -2024,7 +2045,7 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="goToScreen(1)" data-i18n="btn.getStarted">Get Started 🌪️</button>
+        <button class="btn btn-primary" onclick="goToScreen('hardware')" data-i18n="btn.getStarted">Get Started 🌪️</button>
       </div>
     </div>
 
@@ -2075,8 +2096,8 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(0)" data-i18n="btn.back">← Back</button>
-        <button class="btn btn-primary" id="btn-to-account" disabled onclick="goToScreen(2)"
+        <button class="btn btn-ghost" onclick="goToScreen('welcome')" data-i18n="btn.back">← Back</button>
+        <button class="btn btn-primary" id="btn-to-account" disabled onclick="continueFromHardware()"
           data-i18n="btn.continue">Continue →</button>
       </div>
     </div>
@@ -2357,7 +2378,8 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(2)" data-i18n="btn.back">← Back</button>
+        <!-- Phase 8: account screen is gone; back goes to hardware. -->
+        <button class="btn btn-ghost" onclick="goToScreen('hardware')" data-i18n="btn.back">← Back</button>
         <button class="btn btn-primary" id="btn-to-translate" disabled onclick="proceedFromLanguages()"
           data-i18n="lang.selectAtLeast">Select at least 1 language →</button>
       </div>
@@ -2369,8 +2391,8 @@
         <!-- Populated by JS based on language count -->
       </div>
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(3)" data-i18n="btn.back">← Back</button>
-        <button class="btn btn-primary" id="btn-past-translate" onclick="goToScreen(5)"
+        <button class="btn btn-ghost" onclick="goToScreen('languages')" data-i18n="btn.back">← Back</button>
+        <button class="btn btn-primary" id="btn-past-translate" onclick="goToScreen('hero')"
           data-i18n="btn.continue">Continue →</button>
       </div>
     </div>
@@ -2388,7 +2410,7 @@
           style="font-size:15px; color:var(--text-dim); margin-bottom:18px; max-width:500px; margin-left:auto; margin-right:auto;">
           WindyTune already analyzed your hardware and picked the perfect engines. One click and you're done.
         </div>
-        <button onclick="selectRecommended(); goToScreen(6);"
+        <button onclick="selectRecommended(); goToScreen('models');"
           style="background:linear-gradient(135deg, #22C55E, #16A34A); color:white; border:none; border-radius:12px; padding:16px 40px; font-size:18px; font-weight:800; cursor:pointer; transition:all 0.2s; box-shadow:0 4px 20px rgba(34,197,94,0.4); letter-spacing:0.5px;"
           onmouseenter="this.style.transform='scale(1.05)'; this.style.boxShadow='0 6px 30px rgba(34,197,94,0.6)'"
           onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 20px rgba(34,197,94,0.4)'">🌪️ Just
@@ -2519,8 +2541,8 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(4)" data-i18n="btn.back">← Back</button>
-        <button class="btn btn-primary" onclick="goToScreen(6)" data-i18n="btn.chooseEngines">Choose My Engines
+        <button class="btn btn-ghost" onclick="goToScreen('translate')" data-i18n="btn.back">← Back</button>
+        <button class="btn btn-primary" onclick="goToScreen('models')" data-i18n="btn.chooseEngines">Choose My Engines
           →</button>
       </div>
     </div>
@@ -2531,6 +2553,47 @@
         <h1 data-i18n="choose.title">🌪️ Choose Your Engines</h1>
         <p id="model-explanation">WindyTune analyzed your hardware. Here's what we recommend.</p>
       </div>
+
+      <!-- ─── Phase 7: Hero recommended card ─────────────────────────────
+           Big single "this is the right one for your machine" pre-selected
+           pick. Lets normies install in one click without ever touching the
+           3-tier package selector or the engines picker below. -->
+      <div id="hero-recommended"
+        style="background:linear-gradient(135deg, rgba(34,197,94,0.10), rgba(34,197,94,0.04)); border:2px solid var(--green); border-radius:16px; padding:22px; margin-bottom:14px; display:none;">
+        <div style="display:flex; align-items:center; gap:18px;">
+          <div style="font-size:48px;">🌪️</div>
+          <div style="flex:1;">
+            <div style="font-size:13px; font-weight:700; color:var(--green); letter-spacing:0.05em;"
+              data-i18n="hero.recommendedForYou">
+              ★ RECOMMENDED FOR YOUR MACHINE
+            </div>
+            <div id="hero-rec-name" style="font-size:24px; font-weight:800; color:var(--text); margin-top:4px;">
+              Loading…
+            </div>
+            <div id="hero-rec-detail" style="font-size:14px; color:var(--text-dim); margin-top:6px; line-height:1.5;">
+              Detecting your hardware…
+            </div>
+          </div>
+          <button id="hero-rec-btn" class="btn btn-primary" onclick="acceptHeroRecommendation()"
+            style="font-size:15px; padding:14px 22px; min-width:160px;"
+            data-i18n="hero.useThis">
+            Use this →
+          </button>
+        </div>
+      </div>
+
+      <!-- Toggle to reveal everything below — defaults to collapsed so the
+           hero card is the only thing the user sees on first paint. -->
+      <div style="text-align:center; margin-bottom:10px;">
+        <button id="btn-toggle-advanced" onclick="toggleAdvancedModelOptions()"
+          style="background:none; border:1px solid var(--border); border-radius:8px; color:var(--text-dim); padding:8px 16px; cursor:pointer; font-size:13px;">
+          ⚙️ Show advanced options
+        </button>
+      </div>
+
+      <!-- Wrap everything that was here before in this advanced container,
+           hidden by default in Phase 7. Existing IDs and markup unchanged. -->
+      <div id="model-advanced-options" style="display:none;">
 
       <!-- 3-Tier Package Selector -->
       <div id="package-selector" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px;">
@@ -2664,8 +2727,10 @@
         </div>
       </div>
 
+      </div><!-- /#model-advanced-options (Phase 7 wrapper) -->
+
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(5)" data-i18n="btn.back">← Back</button>
+        <button class="btn btn-ghost" onclick="goToScreen('hero')" data-i18n="btn.back">← Back</button>
         <button class="btn btn-primary" id="btn-install" disabled onclick="proceedFromEngines()"
           data-i18n="btn.installSelected">Install Selected →</button>
       </div>
@@ -2747,19 +2812,25 @@
       <div class="install-screen">
         <!-- Overall progress -->
         <div class="install-progress-section">
-          <div class="install-overall-bar">
+          <!-- P10 a11y: progressbar role + value. JS updates aria-valuenow
+               alongside the width in onProgress handlers. -->
+          <div class="install-overall-bar" role="progressbar" id="install-bar"
+            aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+            aria-label="Installation progress">
             <div class="install-overall-fill" id="install-fill"></div>
           </div>
           <div class="install-percent-row">
             <div class="install-percent" id="install-percent">0%</div>
-            <div class="install-eta" id="install-eta"></div>
+            <div class="install-eta" id="install-eta" aria-live="polite"></div>
           </div>
         </div>
 
-        <!-- Current action -->
-        <div class="install-status-text" id="install-status" data-i18n="install.preparing">Preparing installation...
+        <!-- Current action. aria-live="polite" — screen reader hears the
+             current install step without interrupting the user. -->
+        <div class="install-status-text" id="install-status" data-i18n="install.preparing"
+          role="status" aria-live="polite">Preparing installation...
         </div>
-        <div class="install-detail-text" id="install-detail">We're about to set up your voice-to-text engine, download
+        <div class="install-detail-text" id="install-detail" aria-live="polite">We're about to set up your voice-to-text engine, download
           your selected engines, and configure everything for your hardware.</div>
         <div class="install-fun-text" id="install-fun"></div>
 
@@ -2788,12 +2859,152 @@
       </div>
     </div>
 
-    <!-- ═══ SCREEN 9: COMPLETE ═══ -->
+    <!-- ═══ SCREEN 9: PERMISSION VERIFICATION (Phase 4) ═══
+         Sits between install and complete. Verifies what the user
+         was prompted to allow ACTUALLY works. Don't trust System
+         Settings — record 1s of audio and check amplitude; probe
+         accessibility with a no-op keystroke.
+    -->
+    <div class="screen" id="screen-verify">
+      <div class="install-screen" style="text-align:left;">
+        <div style="text-align:center; margin-bottom:32px;">
+          <div style="font-size:48px; margin-bottom:8px;">🔐</div>
+          <div class="install-status-text" style="font-size:28px; font-weight:700;"
+            data-i18n="verify.title">
+            Final check — make sure permissions actually work
+          </div>
+          <div class="install-detail-text" style="margin-top:8px; opacity:0.8;"
+            data-i18n="verify.subtitle">
+            macOS hides permission failures behind silent denials.
+            Let's verify each one with a real test before we let you loose.
+          </div>
+        </div>
+
+        <!-- MIC VERIFY CARD -->
+        <div class="brand-card" id="verify-mic-card" style="margin-bottom:16px;"
+          role="region" aria-label="Microphone verification">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="font-size:32px;" aria-hidden="true">🎙️</div>
+            <div style="flex:1;">
+              <div class="brand-card-title" data-i18n="verify.micTitle">Microphone</div>
+              <div class="brand-card-body" id="verify-mic-msg" aria-live="polite"
+                data-i18n="verify.micDesc">
+                Click <b>Test Mic</b> and speak for one second. We'll show what we heard.
+              </div>
+              <!-- Tiny waveform meter — fills proportional to RMS amplitude.
+                   P10 a11y: role=meter so screen readers know this is a
+                   live-updating gauge and can announce "low/medium/high"
+                   via the aria-valuetext we'd set from JS. -->
+              <div style="height:8px; background:rgba(255,255,255,0.08); border-radius:4px; margin-top:10px; overflow:hidden;"
+                role="meter" aria-label="Microphone level"
+                aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="verify-mic-meter-outer">
+                <div id="verify-mic-meter"
+                  style="height:100%; width:0%; background:linear-gradient(90deg,#27d1a8,#3ea0ff); transition:width 80ms;">
+                </div>
+              </div>
+            </div>
+            <div id="verify-mic-status" style="font-size:24px; min-width:32px; text-align:center;"
+              aria-hidden="true">⏳</div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:14px;">
+            <button class="btn btn-primary" id="verify-mic-btn" onclick="runMicVerify()"
+              data-i18n="verify.testMic">Test Mic</button>
+            <button class="btn btn-ghost" id="verify-mic-settings" style="display:none;"
+              onclick="window.wizardAPI.openPermSettings('microphone')"
+              data-i18n="verify.openMicSettings">Open Mic Settings</button>
+          </div>
+        </div>
+
+        <!-- LINUX PASTE-TOOL VERIFY CARD (Linux only — hidden on macOS/Windows).
+             xdotool/ydotool/wl-clipboard/xclip can't be bundled (kernel-adjacent),
+             so we detect, install via pkexec, then test-inject into a hidden
+             scratch textarea and verify the keystrokes landed. -->
+        <div class="brand-card" id="verify-paste-card" style="margin-bottom:16px; display:none;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="font-size:32px;">📋</div>
+            <div style="flex:1;">
+              <div class="brand-card-title" data-i18n="verify.pasteTitle">Paste-to-cursor (Linux)</div>
+              <div class="brand-card-body" id="verify-paste-msg">
+                Detecting…
+              </div>
+              <!-- Hidden scratch textarea — the test-paste injects into this
+                   when the wizard window is focused. We read its value to
+                   prove the keystrokes actually landed. -->
+              <textarea id="verify-paste-scratch" aria-hidden="true"
+                style="position:absolute; left:-9999px; top:0; width:1px; height:1px; opacity:0;"></textarea>
+            </div>
+            <div id="verify-paste-status" style="font-size:24px; min-width:32px; text-align:center;">⏳</div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+            <button class="btn btn-primary" id="verify-paste-install-btn" onclick="runPasteInstall()" style="display:none;"
+              data-i18n="verify.installPaste">
+              Install paste tools
+            </button>
+            <button class="btn btn-primary" id="verify-paste-test-btn" onclick="runPasteTest()" style="display:none;"
+              data-i18n="verify.testPaste">
+              Test paste
+            </button>
+            <button class="btn btn-ghost" id="verify-paste-recheck-btn" onclick="runPasteDetect()"
+              data-i18n="verify.recheck">
+              Re-check
+            </button>
+          </div>
+        </div>
+
+        <!-- ACCESSIBILITY VERIFY CARD (macOS only — hidden on other platforms) -->
+        <div class="brand-card" id="verify-access-card" style="margin-bottom:16px; display:none;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="font-size:32px;">⌨️</div>
+            <div style="flex:1;">
+              <div class="brand-card-title" data-i18n="verify.accessTitle">Accessibility</div>
+              <div class="brand-card-body" id="verify-access-msg"
+                data-i18n="verify.accessDesc">
+                Required so Windy Word can paste your transcript right where your cursor is.
+              </div>
+            </div>
+            <div id="verify-access-status" style="font-size:24px; min-width:32px; text-align:center;">⏳</div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:14px;">
+            <button class="btn btn-primary" id="verify-access-btn" onclick="runAccessVerify()"
+              data-i18n="verify.testAccess">Verify Accessibility</button>
+            <button class="btn btn-ghost" id="verify-access-settings" style="display:none;"
+              onclick="window.wizardAPI.openPermSettings('accessibility')"
+              data-i18n="verify.openAccessSettings">Open Accessibility Settings</button>
+          </div>
+        </div>
+
+        <div class="install-fun-text" id="verify-hint" style="text-align:center;"
+          data-i18n="verify.autoRecheck">
+          We re-check automatically when you come back from System Settings.
+        </div>
+
+        <div style="display:flex; justify-content:space-between; margin-top:24px;">
+          <button class="btn btn-ghost" onclick="skipVerify()" data-i18n="verify.skip">Skip — finish anyway</button>
+          <button class="btn btn-primary" id="verify-finish-btn" disabled onclick="finishVerify()"
+            data-i18n="verify.finish">
+            Finish setup →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SCREEN 10: COMPLETE ═══ -->
     <div class="screen" id="screen-9">
       <div class="complete-screen">
         <div class="complete-strobe"></div>
         <div class="complete-title" data-i18n="complete.title">You're Ready! 🌪️</div>
         <div class="complete-models" id="complete-models"></div>
+
+        <!-- Provisioned-products status. Populated by loadProvisioningStatus()
+             which calls /api/v1/identity/me about 2s after the screen shows.
+             Hidden for offline / free-tier / skipped-signup flows. -->
+        <div id="complete-ecosystem" style="display:none; margin:16px auto; max-width:520px; background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:16px 20px;">
+          <div style="font-size:12px; font-weight:800; letter-spacing:1.5px; color:var(--text-dim); text-transform:uppercase; margin-bottom:10px;">Your Windy Ecosystem</div>
+          <div id="complete-ecosystem-rows" style="display:flex; flex-direction:column; gap:8px;">
+            <!-- Rows injected by JS: 📫 Mail, 💬 Chat, ☁️ Cloud -->
+          </div>
+        </div>
+
         <div class="complete-desc">
           The Green Strobe is waiting. Your voice creates worlds. Your keyboard is already packing its bags. 👋⌨️<br>
           Here are your shortcuts:
@@ -2843,10 +3054,38 @@
 
         <p class="complete-quote">"In the beginning was the Word. The words of your mouth create worlds." 🌪️</p>
 
+        <!-- Wave 8 Grandma Ribbon: opt-in to hatch a personal agent on first launch.
+             Default is ON — the ceremony is the "wow" moment of first run and
+             the fastest path from "installed" to "my AI just texted me." The
+             checkbox is a deliberate opt-OUT rather than an opt-in because the
+             friction of a second click kills the demo effect. -->
+        <div id="hatch-on-launch-card" style="max-width:520px;margin:16px auto;padding:16px 20px;background:linear-gradient(135deg, rgba(139,92,246,0.12), rgba(236,72,153,0.08));border:1px solid rgba(139,92,246,0.35);border-radius:14px;">
+          <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
+            <input type="checkbox" id="hatch-on-launch-toggle" checked style="margin-top:4px;accent-color:#8B5CF6;width:18px;height:18px;">
+            <div style="flex:1;">
+              <div style="font-size:15px;font-weight:700;color:#F8FAFC;margin-bottom:4px;">🪰 Hatch your agent on first launch</div>
+              <div style="font-size:13px;color:#94A3B8;line-height:1.45;">In 60 seconds, your own AI agent is born — with an email, a chat room, cloud storage, and a verifiable passport. No config.</div>
+            </div>
+          </label>
+        </div>
+
         <div class="btn-row" style="border-top:none; justify-content:center;">
-          <button class="btn btn-primary" style="padding:14px 40px; font-size:16px;" onclick="launchApp()"
+          <button class="btn btn-primary" style="padding:14px 40px; font-size:16px;" onclick="saveHatchPreference(); launchApp();"
             data-i18n="btn.launch">Launch Windy Pro 🎙️</button>
         </div>
+
+        <script>
+          // Persist the opt-in to localStorage so the main app picks it up
+          // on first run. The desktop renderer reads this in index.html and
+          // auto-starts the ceremony once on boot if set.
+          function saveHatchPreference() {
+            try {
+              var el = document.getElementById('hatch-on-launch-toggle');
+              if (!el) return;
+              localStorage.setItem('windy_hatch_on_launch', el.checked ? 'yes' : 'no');
+            } catch (e) { /* noop */ }
+          }
+        </script>
       </div>
     </div>
 
@@ -3105,26 +3344,100 @@
     const progressCallbacks = [];
 
     // ─── NAVIGATION ───
-    function goToScreen(n) {
-      document.querySelectorAll('.screen').forEach((s, i) => s.classList.toggle('active', i === n));
+    //
+    // P14 refactor: goToScreen now takes a stable string name OR a
+    // legacy integer index. The string path is canonical going forward;
+    // the integer path is kept temporarily so any unfound call site (or
+    // tests) keeps working. Both resolve to a single source of truth:
+    // SCREEN_ORDER, which lists screens in the order the wizard walks
+    // them. To insert/remove a screen, change THIS list — never the
+    // call sites.
+    //
+    // Why string names: previously the "active" screen was whichever
+    // .screen element was at index N in DOM order. Phase 8 had to
+    // bypass screen-2 (account) by intercepting Continue rather than
+    // deleting screen-2 markup, because deleting would shift every
+    // subsequent index and break a dozen goToScreen(N) calls. With
+    // string names, the position in DOM is decoupled from the name we
+    // navigate by — we can finally delete the account screen.
+    const SCREEN_ORDER = [
+      'welcome',    // 0
+      'hardware',   // 1
+      'languages',  // 2 (was 3)
+      'translate',  // 3 (was 4)
+      'hero',       // 4 (was 5)
+      'models',     // 5 (was 6)
+      'pairs',      // 6 (was 7)
+      'install',    // 7 (was 8)
+      'verify',     // 8 (was 9 — Phase 4 perm verification)
+      'complete',   // 9 (was 10)
+    ];
+    // Map screen name → actual element id. Most are screen-N where N
+    // matches the legacy integer index that owned the markup; verify
+    // and complete have non-numeric ids because they were inserted
+    // out of order historically.
+    const SCREEN_ELEMENT_ID = {
+      welcome:    'screen-0',
+      hardware:   'screen-1',
+      languages:  'screen-3',
+      translate:  'screen-4',
+      hero:       'screen-5',
+      models:     'screen-6',
+      pairs:      'screen-7',
+      install:    'screen-8',
+      verify:     'screen-verify',
+      complete:   'screen-9',
+    };
+
+    /**
+     * Resolve a goToScreen() argument to a canonical screen name.
+     * Accepts:
+     *   - a string name from SCREEN_ORDER
+     *   - a legacy integer index (kept for in-flight refactor; callers
+     *     should migrate to string names)
+     */
+    function resolveScreenName(arg) {
+      if (typeof arg === 'string' && SCREEN_ELEMENT_ID[arg]) return arg;
+      if (typeof arg === 'number' && SCREEN_ORDER[arg]) return SCREEN_ORDER[arg];
+      // Legacy fallthrough: integer index treated as DOM order.
+      // Should never trigger if all call sites migrated.
+      console.warn('[wizard] goToScreen unknown arg:', arg);
+      return null;
+    }
+
+    function goToScreen(arg) {
+      const name = resolveScreenName(arg);
+      if (!name) return;
+      const targetId = SCREEN_ELEMENT_ID[name];
+      // Toggle .active by element id rather than index — DOM order no
+      // longer determines which screen is "next".
+      document.querySelectorAll('.screen').forEach((s) => {
+        s.classList.toggle('active', s.id === targetId);
+      });
+      // Progress bar segments + step labels are still ordered. Map by
+      // the position of `name` in SCREEN_ORDER.
+      const idx = SCREEN_ORDER.indexOf(name);
       document.querySelectorAll('.progress-seg').forEach((s, i) => {
-        s.classList.toggle('done', i < n);
-        s.classList.toggle('active', i === n);
+        s.classList.toggle('done', i < idx);
+        s.classList.toggle('active', i === idx);
       });
       document.querySelectorAll('.step-label').forEach((s, i) => {
-        s.classList.toggle('done', i < n);
-        s.classList.toggle('active', i === n);
+        s.classList.toggle('done', i < idx);
+        s.classList.toggle('active', i === idx);
       });
-      currentScreen = n;
+      // currentScreen exposes the integer index for legacy callers
+      // (e.g. window-focus handlers that compare against a number).
+      currentScreen = idx;
 
-      if (n === 1 && !hardwareData) runHardwareScan();
-      if (n === 3) initLanguageScreen();
-      if (n === 4) { buildTranslateUpsell(); setTimeout(restoreTranslateSelection, 50); }
-      if (n === 5) buildEducationMatrix();
-      if (n === 6) { buildModelList(); updatePlanBanner(); updateTranslateAddonBanner(); buildSpecialistUpsellCard(); }
-      if (n === 7) initPairPickerScreen();
-      if (n === 8) startBrandRotations();
-      if (n !== 8) stopBrandRotations();
+      if (name === 'hardware' && !hardwareData) runHardwareScan();
+      if (name === 'languages') initLanguageScreen();
+      if (name === 'translate') { buildTranslateUpsell(); setTimeout(restoreTranslateSelection, 50); }
+      if (name === 'hero') buildEducationMatrix();
+      if (name === 'models') { buildModelList(); updatePlanBanner(); updateTranslateAddonBanner(); buildSpecialistUpsellCard(); }
+      if (name === 'pairs') initPairPickerScreen();
+      if (name === 'install') startBrandRotations();
+      if (name !== 'install') stopBrandRotations();
+      if (name === 'verify') initVerifyScreen();
     }
 
     // ─── SCREEN 1: HARDWARE SCAN ───
@@ -3325,6 +3638,33 @@
       } catch (e) {
         showAuthError('Could not create free account. Please try again.');
       }
+    }
+
+    /**
+     * Phase 8: bypass the account screen.
+     *
+     * Old flow: hardware → ACCOUNT → languages → translate → models → install.
+     * New flow: hardware → languages → translate → models → install.
+     *
+     * Account creation moves into the main app, shown as a one-time banner
+     * after the user's first successful transcription. Here we silently
+     * provision a free-tier account in the background so the rest of the
+     * wizard (which references userTier and accountManager.getToken()) keeps
+     * working unchanged. Screen 2's markup is left in place so screen
+     * indices used by goToScreen elsewhere don't shift.
+     */
+    async function continueFromHardware() {
+      try {
+        if (window.wizardAPI && window.wizardAPI.createFreeAccount) {
+          const r = await window.wizardAPI.createFreeAccount();
+          if (r && r.success) userTier = 'free';
+        }
+      } catch (e) {
+        // Non-fatal — wizard can still proceed; account creation will be
+        // re-offered after first transcription anyway.
+        console.warn('[wizard] silent free-account creation failed:', e);
+      }
+      goToScreen('languages');
     }
 
     // ─── SCREEN 3: MODEL PICKER ───
@@ -3580,6 +3920,55 @@
         selectedModels = new Set(packages.recommended);
       }
       buildSelectedChecklist();
+      renderHeroRecommendation();   // Phase 7 — hero card on top of advanced options
+    }
+
+    /**
+     * Phase 7: render the single "use this" hero card. Picks the smallest
+     * model in the recommended set so the hero pitch is honest about size,
+     * and shows the recommendation reason from WindyTune.
+     */
+    function renderHeroRecommendation() {
+      const hero = document.getElementById('hero-recommended');
+      if (!hero) return;
+      if (!recommendation || !recommendation.recommended || recommendation.recommended.length === 0) {
+        hero.style.display = 'none';
+        return;
+      }
+      // Pick the lead engine — use the first recommended that exists in the catalog.
+      const recId = recommendation.recommended[0];
+      const m = allModels.find(x => x.id === recId);
+      if (!m) { hero.style.display = 'none'; return; }
+      const sizeStr = m.sizeMB >= 1000 ? (m.sizeMB / 1000).toFixed(1) + ' GB' : m.sizeMB + ' MB';
+      const reason = recommendation.explanation || recommendation.reason || '';
+      const totalCount = recommendation.recommended.length;
+      const extras = totalCount > 1 ? ` (+ ${totalCount - 1} companion ${totalCount === 2 ? 'engine' : 'engines'})` : '';
+      document.getElementById('hero-rec-name').textContent = `${m.shortName || m.name} · ${sizeStr}${extras}`;
+      document.getElementById('hero-rec-detail').textContent = reason
+        || `Best fit for your ${hardwareData?.cpu?.cores || ''}-core ${hardwareData?.platform || ''} machine with ${hardwareData?.ram?.totalGB || '?'}GB RAM.`;
+      hero.style.display = '';
+    }
+
+    /**
+     * Phase 7: one-click "use this" — selects the recommended set and
+     * proceeds to install. Skips the 3-tier picker entirely for normies.
+     */
+    function acceptHeroRecommendation() {
+      if (!recommendation || !recommendation.recommended) return;
+      // Reuse the existing recommended-package code path so download size,
+      // pair handling, and tier gating stay consistent.
+      selectPackage('recommended');
+      // Honour the existing free-tier flow (which routes through pair picker
+      // for paid users).
+      proceedFromEngines();
+    }
+
+    function toggleAdvancedModelOptions() {
+      const adv = document.getElementById('model-advanced-options');
+      const btn = document.getElementById('btn-toggle-advanced');
+      const showing = adv.style.display !== 'none';
+      adv.style.display = showing ? 'none' : '';
+      btn.textContent = showing ? '⚙️ Show advanced options' : '⚙️ Hide advanced options';
     }
 
     function buildSelectedChecklist() {
@@ -4319,7 +4708,7 @@
 
     // ─── SCREEN 5: INSTALL (THE BRAND EXPERIENCE) ───
     async function startInstall() {
-      goToScreen(8);
+      goToScreen('install');
 
       // Activate progress bar glow
       document.querySelector('.install-overall-bar').classList.add('active-glow');
@@ -4377,7 +4766,10 @@
         dlList.appendChild(div);
       });
 
-      await window.wizardAPI.selectModels([...selectedModels]);
+      // Non-fatal: selectModels tells the main process what to download,
+      // but a failure here must not prevent the install from running.
+      try { await window.wizardAPI.selectModels([...selectedModels]); }
+      catch (e) { console.warn('[wizard] selectModels failed (continuing):', e); }
 
       // Track last logged model for log entries
       let lastLoggedModel = null;
@@ -4390,6 +4782,10 @@
         // Overall progress
         document.getElementById('install-fill').style.width = data.percent + '%';
         document.getElementById('install-percent').textContent = Math.round(data.percent) + '%';
+        // P10 a11y: update aria-valuenow on the progressbar alongside
+        // the width — screen readers announce the change.
+        const bar = document.getElementById('install-bar');
+        if (bar) bar.setAttribute('aria-valuenow', String(Math.round(data.percent)));
 
         if (data.eta) document.getElementById('install-eta').textContent = data.eta;
         if (data.message) document.getElementById('install-status').textContent = data.message;
@@ -4479,6 +4875,8 @@
       if (result.success) {
         document.getElementById('install-fill').style.width = '100%';
         document.getElementById('install-percent').textContent = '100%';
+        const bar = document.getElementById('install-bar');
+        if (bar) bar.setAttribute('aria-valuenow', '100');
         document.getElementById('install-status').textContent = '✅ Installation Complete!';
         document.getElementById('install-detail').textContent = 'Everything is ready. The Green Strobe awaits.';
         addLogEntry('✅ All models verified and ready!', 'success');
@@ -4497,12 +4895,290 @@
           document.getElementById('nxt-key-record').textContent = '⌘+Shift+Space';
         }
 
-        setTimeout(() => goToScreen(9), 1500);
+        // Phase 4: route through permission verification before celebrating.
+        // (Main's older flow went straight to screen 9 + loadProvisioningStatus
+        // after 2s; the verify screen supersedes that and will still surface
+        // provisioning status from within its own flow.)
+        setTimeout(() => goToScreen('verify'), 1500);
       } else {
         document.getElementById('install-status').textContent = '⚠️ Installation Failed';
         document.getElementById('install-detail').textContent = result.error || 'Unknown error. Please try again.';
         addLogEntry('❌ Installation failed: ' + (result.error || 'Unknown error'), 'active');
       }
+    }
+
+    // ─── PHASE 4: PERMISSION VERIFICATION SCREEN ───────────────────────────
+    //
+    // We don't trust "the user clicked Allow in System Settings". Two real
+    // tests verify both permissions actually work:
+    //   • Microphone — getUserMedia + AudioContext, capture 1s, compute RMS
+    //   • Accessibility (macOS only) — IPC to main, which probes via
+    //     `osascript ... keystroke ""`. If accessibility is denied, osascript
+    //     returns "1002: not allowed assistive access".
+    //
+    // The Finish button is disabled until both required permissions verify
+    // (or the user explicitly clicks Skip). When the user goes to System
+    // Settings and comes back, the wizard's window-focus event re-runs
+    // verification automatically.
+
+    let verifyState = { mic: 'pending', access: 'pending', paste: 'pending', skipped: false };
+
+    function initVerifyScreen() {
+      // macOS is the only platform that needs accessibility (osascript-based
+      // keystroke injection). On Linux/Windows the paste tool is verified
+      // separately (Phase 6) and accessibility-as-an-OS-permission doesn't apply.
+      const isMac = (hardwareData?.platform === 'darwin') || /Mac/.test(navigator.platform);
+      const isLinux = (hardwareData?.platform === 'linux') || /Linux/.test(navigator.platform);
+      document.getElementById('verify-access-card').style.display = isMac ? '' : 'none';
+      document.getElementById('verify-paste-card').style.display = isLinux ? '' : 'none';
+      // Mic always needs verification
+      verifyState = {
+        mic: 'pending',
+        access: isMac ? 'pending' : 'granted',
+        paste: isLinux ? 'pending' : 'granted',
+        skipped: false,
+      };
+      updateVerifyFinish();
+      if (isLinux) runPasteDetect();
+
+      // Auto-re-verify when user returns from System Settings.
+      // Only register the listener once per wizard session.
+      if (!window.__verifyFocusBound && window.wizardAPI?.onWindowFocus) {
+        window.__verifyFocusBound = true;
+        window.wizardAPI.onWindowFocus(() => {
+          if (currentScreen !== 9) return; // only re-check while on verify
+          if (verifyState.access !== 'granted' && hardwareData?.platform === 'darwin') {
+            runAccessVerify();
+          }
+        });
+      }
+
+      // Auto-run accessibility check on entry (mic needs an explicit click
+      // because getUserMedia triggers the OS permission dialog — must be a
+      // user gesture).
+      if (isMac) runAccessVerify();
+    }
+
+    function updateVerifyFinish() {
+      const requiredOk = verifyState.mic === 'granted'
+        && verifyState.access === 'granted'
+        && verifyState.paste === 'granted';
+      document.getElementById('verify-finish-btn').disabled = !requiredOk;
+    }
+
+    function setVerifyStatus(which, status, msg) {
+      verifyState[which] = status;
+      // which ∈ { 'mic', 'access', 'paste' } maps to verify-<which>-{card,status,msg,settings}
+      const statusEl = document.getElementById(`verify-${which}-status`);
+      const msgEl = document.getElementById(`verify-${which}-msg`);
+      const settingsBtn = document.getElementById(`verify-${which}-settings`);
+      const icon = { granted: '✅', denied: '❌', pending: '⏳', testing: '🎤', unknown: '❓', installing: '⚙️' }[status] || '⏳';
+      if (statusEl) statusEl.textContent = icon;
+      if (msg && msgEl) msgEl.innerHTML = msg;
+      if (settingsBtn) settingsBtn.style.display = (status === 'denied') ? '' : 'none';
+      updateVerifyFinish();
+    }
+
+    // ─── Linux paste tool detect / install / test ─────────────────────────
+    let pasteState = null;
+
+    async function runPasteDetect() {
+      setVerifyStatus('paste', 'testing', '🔍 Detecting installed paste tools…');
+      try {
+        const r = await window.wizardAPI.pasteDetect();
+        pasteState = r;
+        if (!r.applicable) { setVerifyStatus('paste', 'granted', 'Not required on this platform.'); return; }
+        const tools = r.tools || {};
+        const have = Object.entries(tools).filter(([, v]) => v).map(([k]) => k);
+        const missing = Object.entries(tools).filter(([, v]) => !v).map(([k]) => k);
+        const sessionInfo = `Session: <b>${r.session || 'unknown'}</b> · Distro: <b>${r.distro}</b>`;
+
+        // Visibility of action buttons
+        const installBtn = document.getElementById('verify-paste-install-btn');
+        const testBtn = document.getElementById('verify-paste-test-btn');
+
+        if (r.ready) {
+          setVerifyStatus('paste', 'granted',
+            `✅ All paste tools installed and ready.<br><span style="opacity:0.7">${sessionInfo}<br>Installed: ${have.join(', ') || 'none'}</span>`);
+          installBtn.style.display = 'none';
+          testBtn.style.display = '';
+        } else {
+          // Not ready — surface install button if pkexec is available
+          let detail = `${sessionInfo}<br>`;
+          if (missing.length) detail += `Missing: <b>${missing.join(', ')}</b><br>`;
+          if (r.isWayland && r.wayland) {
+            const w = r.wayland;
+            if (w.uinputAccess !== 'writable') detail += `⚠️ /dev/uinput not writable (need group=input + udev rule)<br>`;
+            if (!w.inInputGroup) detail += `⚠️ User not in <code>input</code> group (log out + back in after install)<br>`;
+            if (!w.ydotooldRunning) detail += `⚠️ ydotoold daemon not running<br>`;
+          }
+          setVerifyStatus('paste', 'denied', detail);
+          installBtn.style.display = r.canPkexecInstall ? '' : 'none';
+          testBtn.style.display = (have.length > 0) ? '' : 'none';
+          if (!r.canPkexecInstall) {
+            // Append a manual command they can run themselves
+            const msg = document.getElementById('verify-paste-msg');
+            msg.innerHTML += `<br><br>Manual install: <code>${(r.installCommands || ['(unknown distro)']).join(' && ')}</code>`;
+          }
+        }
+      } catch (e) {
+        setVerifyStatus('paste', 'unknown', `❌ Detection failed: ${e.message}`);
+      }
+    }
+
+    async function runPasteInstall() {
+      const btn = document.getElementById('verify-paste-install-btn');
+      btn.disabled = true;
+      setVerifyStatus('paste', 'installing', '⚙️ Running install via pkexec — please confirm the system password prompt that just appeared.');
+      try {
+        const r = await window.wizardAPI.pasteInstall();
+        if (r.ok) {
+          let extra = '';
+          if (r.requiresReLogin) extra = '<br>⚠️ <b>Log out and back in</b> for input-group membership to take effect.';
+          setVerifyStatus('paste', 'pending', `✅ Install completed.${extra}<br>Re-checking…`);
+          // Re-detect now (and the user can re-test)
+          await runPasteDetect();
+        } else {
+          setVerifyStatus('paste', 'denied', `❌ Install failed: ${r.error || 'unknown error'}`);
+        }
+      } catch (e) {
+        setVerifyStatus('paste', 'denied', `❌ Install error: ${e.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function runPasteTest() {
+      const scratch = document.getElementById('verify-paste-scratch');
+      const btn = document.getElementById('verify-paste-test-btn');
+      btn.disabled = true;
+      // Make scratch visible+focusable so xdotool/ydotool keystrokes land here.
+      // We move it on-screen briefly because some compositors won't deliver
+      // keystrokes to fully off-screen elements.
+      scratch.value = '';
+      scratch.style.left = '20px';
+      scratch.style.opacity = '0.01';
+      scratch.style.width = '300px';
+      scratch.style.height = '24px';
+      scratch.focus();
+      setVerifyStatus('paste', 'testing', '🎯 Injecting test keystroke into a scratch buffer…');
+      try {
+        // Small delay so the focus actually settles before xdotool fires.
+        await new Promise(r => setTimeout(r, 200));
+        const r = await window.wizardAPI.pasteTestInject();
+        // Wait for keystrokes to fully arrive
+        await new Promise(r => setTimeout(r, 600));
+        const got = scratch.value;
+        scratch.style.left = '-9999px';
+        scratch.style.opacity = '0';
+        scratch.style.width = '1px';
+        scratch.style.height = '1px';
+        if (r.ok && got.includes('Hello from Windy Word')) {
+          setVerifyStatus('paste', 'granted',
+            `✅ Test paste worked! Received: "${got.slice(0, 60)}"`);
+        } else if (r.ok) {
+          setVerifyStatus('paste', 'denied',
+            `⚠️ Inject command succeeded but no keystrokes arrived. The wizard window may not be focused, or the compositor blocked the inject. Got: "${got || '(empty)'}"`);
+        } else {
+          setVerifyStatus('paste', 'denied', `❌ Inject failed: ${r.error}`);
+        }
+      } catch (e) {
+        setVerifyStatus('paste', 'denied', `❌ Test failed: ${e.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function runMicVerify() {
+      const btn = document.getElementById('verify-mic-btn');
+      btn.disabled = true;
+      setVerifyStatus('mic', 'testing', '🎤 Listening for one second — please say something out loud!');
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Build an AnalyserNode and sample RMS amplitude over ~1 second
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        source.connect(analyser);
+        const buf = new Uint8Array(analyser.fftSize);
+        const meter = document.getElementById('verify-mic-meter');
+        let peakRms = 0;
+        const start = Date.now();
+        await new Promise((resolve) => {
+          function tick() {
+            analyser.getByteTimeDomainData(buf);
+            // RMS in [0,1] scale (128 is silence, 0/255 are extremes)
+            let sum = 0;
+            for (let i = 0; i < buf.length; i++) {
+              const v = (buf[i] - 128) / 128;
+              sum += v * v;
+            }
+            const rms = Math.sqrt(sum / buf.length);
+            peakRms = Math.max(peakRms, rms);
+            const displayed = Math.min(100, rms * 400);
+            meter.style.width = displayed + '%';
+            // P10 a11y: screen readers announce the meter value.
+            const outer = document.getElementById('verify-mic-meter-outer');
+            if (outer) outer.setAttribute('aria-valuenow', String(Math.round(displayed)));
+            if (Date.now() - start < 1100) requestAnimationFrame(tick);
+            else resolve();
+          }
+          tick();
+        });
+        try { ctx.close(); } catch (_) { }
+        // Threshold tuned for ambient room noise vs. spoken voice. Quiet
+        // typing or HVAC reads ~0.005–0.01; normal speech reads >0.05.
+        if (peakRms >= 0.02) {
+          setVerifyStatus('mic', 'granted',
+            `✅ Heard you loud and clear (peak ${(peakRms * 100).toFixed(1)}%). Mic works!`);
+        } else {
+          setVerifyStatus('mic', 'denied',
+            `⚠️ Audio captured but very quiet (peak ${(peakRms * 100).toFixed(2)}%). Is the mic muted, or is the wrong input device selected?`);
+        }
+      } catch (e) {
+        // User denied permission OR no mic device
+        const denied = /denied|NotAllowed/i.test(String(e?.message || e));
+        setVerifyStatus('mic', 'denied',
+          denied
+            ? '❌ Microphone access denied. Click "Open Mic Settings" to allow Windy Pro, then come back here.'
+            : `❌ Could not access microphone: ${String(e?.message || e).slice(0, 120)}`);
+      } finally {
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        btn.disabled = false;
+      }
+    }
+
+    async function runAccessVerify() {
+      const btn = document.getElementById('verify-access-btn');
+      btn.disabled = true;
+      setVerifyStatus('access', 'testing', '🔍 Probing System Events…');
+      try {
+        const r = await window.wizardAPI.verifyAccessibility();
+        if (r.status === 'granted') {
+          setVerifyStatus('access', 'granted',
+            '✅ Accessibility granted. Paste-to-cursor will work.');
+        } else if (r.status === 'denied') {
+          setVerifyStatus('access', 'denied',
+            '❌ Accessibility denied. Click "Open Accessibility Settings" → toggle Windy Pro on. We re-check automatically when you come back.');
+        } else {
+          setVerifyStatus('access', 'unknown',
+            `❓ Could not determine accessibility status: ${r.message || ''}`);
+        }
+      } catch (e) {
+        setVerifyStatus('access', 'unknown', `❌ Probe failed: ${e.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function skipVerify() {
+      verifyState.skipped = true;
+      goToScreen('complete');
+    }
+    function finishVerify() {
+      goToScreen('complete');
     }
 
     // ─── BRAND ROTATION (during download) ───
@@ -4923,7 +5599,7 @@
 
     function proceedFromLanguages() {
       if (userLanguages.length === 0) return;
-      goToScreen(4);
+      goToScreen('translate');
     }
 
     function updateLangContinueBtn() {
@@ -5646,8 +6322,8 @@
           window.wizardAPI.purchaseTranslate(`${plan}-${billing}-pending`);
         }
 
-        // Auto-proceed to Learn screen after brief delay
-        setTimeout(() => goToScreen(5), 2000);
+        // Auto-proceed to Learn (hero) screen after brief delay
+        setTimeout(() => goToScreen('hero'), 2000);
       }
     }
 
@@ -5765,12 +6441,12 @@
         // Free users skip pair picker — go directly to install
         startInstall();
       } else {
-        goToScreen(7);
+        goToScreen('pairs');
       }
     }
 
     /**
-     * Initialize the pair picker screen when navigating to Screen 7
+     * Initialize the pair picker screen when navigating to it
      */
     function initPairPickerScreen() {
       const catalog = window.PAIR_CATALOG || [];
@@ -5963,7 +6639,98 @@
       if (typeof window.wizardAPI !== 'undefined') {
         window.wizardAPI.purchaseTranslate('deferred');
       }
-      goToScreen(5);
+      goToScreen('hero');
+    }
+
+    // ─── PROVISIONING STATUS (Complete screen) ───
+    // Polls /api/v1/identity/me a couple of times to surface the real state
+    // of the user's Mailbox / Chat handle / Cloud quota as ecosystem
+    // provisioning settles. Silently hides the section for offline or
+    // free-tier signups — there's nothing to display.
+
+    function formatBytes(n) {
+      if (!n && n !== 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let i = 0;
+      let v = Number(n);
+      while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+      return `${v >= 10 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+    }
+
+    function renderEcosystemRow(icon, label, value, statusClass) {
+      // statusClass: 'ok' (green ✓), 'pending' (amber …), 'failed' (muted —)
+      const dot = statusClass === 'ok' ? '#10b981'
+                : statusClass === 'pending' ? '#f59e0b'
+                : '#6b7280';
+      const mark = statusClass === 'ok' ? '✓'
+                 : statusClass === 'pending' ? '…'
+                 : '—';
+      return `
+        <div style="display:flex; align-items:center; gap:12px; font-size:14px;">
+          <span style="font-size:18px; width:22px; text-align:center;">${icon}</span>
+          <span style="flex:1; color:var(--text);">${label}</span>
+          <span style="color:var(--text-dim); font-variant-numeric:tabular-nums;">${value}</span>
+          <span style="width:18px; height:18px; border-radius:50%; background:${dot}; color:white; font-size:11px; font-weight:700; display:inline-flex; align-items:center; justify-content:center;">${mark}</span>
+        </div>`;
+    }
+
+    function paintEcosystem(identity) {
+      const host = document.getElementById('complete-ecosystem');
+      const rows = document.getElementById('complete-ecosystem-rows');
+      if (!host || !rows) return;
+
+      const products = identity.products || [];
+      const byName = Object.fromEntries(products.map(p => [p.product, p]));
+      const mail = byName['windy_mail'];
+      const chat = byName['windy_chat'];
+      const chatHandle = identity.chatProfile?.matrix_user_id || chat?.external_id;
+      const emailLocalPart = (identity.identity?.email || '').split('@')[0];
+      const storageLimit = identity.identity?.storageLimit || 0;
+
+      const mailStatus = mail?.status === 'active' ? 'ok'
+                       : mail?.status === 'pending' ? 'pending'
+                       : 'failed';
+      const chatStatus = chatHandle ? 'ok' : (chat?.status === 'pending' ? 'pending' : 'failed');
+      const cloudStatus = storageLimit > 0 ? 'ok' : 'pending';
+
+      rows.innerHTML = [
+        renderEcosystemRow('📫', 'Mailbox',
+          mail?.status === 'active' && emailLocalPart ? `${emailLocalPart}@windy.mail`
+          : mail?.status === 'pending' ? 'Provisioning…'
+          : 'Unavailable', mailStatus),
+        renderEcosystemRow('💬', 'Chat handle',
+          chatHandle ? chatHandle
+          : chat?.status === 'pending' ? 'Provisioning…'
+          : 'Unavailable', chatStatus),
+        renderEcosystemRow('☁️', 'Cloud quota',
+          storageLimit > 0 ? `${formatBytes(storageLimit)} free`
+          : 'Provisioning…', cloudStatus),
+      ].join('');
+      host.style.display = 'block';
+    }
+
+    async function loadProvisioningStatus(retriesLeft = 2) {
+      if (typeof window.wizardAPI === 'undefined' || !window.wizardAPI.getIdentity) return;
+      let result;
+      try {
+        result = await window.wizardAPI.getIdentity();
+      } catch (e) {
+        result = { success: false, error: String(e && e.message || e) };
+      }
+      if (!result?.success || !result.identity) {
+        // offline / free-tier / not logged in — leave the section hidden
+        return;
+      }
+      paintEcosystem(result.identity);
+      // If anything is still pending, try once more after another 2s.
+      const identity = result.identity;
+      const products = identity.products || [];
+      const anyPending = products.some(p => p.status === 'pending')
+        || !identity.chatProfile
+        || !(identity.identity?.storageLimit > 0);
+      if (anyPending && retriesLeft > 0) {
+        setTimeout(() => loadProvisioningStatus(retriesLeft - 1), 2000);
+      }
     }
 
     // ─── LAUNCH ───

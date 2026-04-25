@@ -1096,10 +1096,11 @@ describe('Expired Token Rejection', () => {
   });
 
   it('should reject completely invalid JWT tokens', async () => {
+    // P2-3: malformed / unsigned tokens are 401 (RFC 6750), not 403.
     const res = await request(app)
       .get('/api/v1/oauth/userinfo')
       .set('Authorization', 'Bearer this.is.not.a.valid.jwt')
-      .expect(403);
+      .expect(401);
 
     expect(res.body.error).toBe('Invalid token');
   });

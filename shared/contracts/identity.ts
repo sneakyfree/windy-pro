@@ -174,7 +174,27 @@ export type IdentityAuditEvent =
   | 'revocation_cascade'
   | 'chat_login'
   | 'chat_login_failed'
-  | 'account_self_deleted';
+  | 'account_self_deleted'
+  // Wave 1 — PR1 (email verification) + PR2 (password reset) + PR3 (MFA)
+  | 'login_blocked'
+  | 'verification_email_sent'
+  | 'email_verified'
+  | 'password_reset_requested'
+  | 'password_reset_completed'
+  | 'mfa_setup_started'
+  | 'mfa_enabled'
+  | 'mfa_disabled'
+  | 'mfa_login_challenge'
+  | 'mfa_login_success'
+  | 'mfa_login_failed'
+  // Wave 1 — PR4 (webhook fan-out)
+  | 'webhook_delivered'
+  | 'webhook_failed'
+  | 'webhook_dead_lettered'
+  // Wave 8 — Grandma Ribbon (managed-credential broker + Pro-hosted hatch)
+  | 'broker_token_issue'
+  | 'broker_token_revoke'
+  | 'agent_hatch_complete';
 
 /** Audit log entry */
 export interface IdentityAuditEntry {

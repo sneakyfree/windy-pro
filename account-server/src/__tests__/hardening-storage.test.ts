@@ -440,10 +440,13 @@ describe('Storage Route Hardening', () => {
       .get("/api/v1/files?page=1&limit=10'; DROP TABLE files;--")
       .set('Authorization', `Bearer ${token}`);
 
-    // The Zod schema will reject the malformed limit (not a valid number)
-    // which causes a 500 from the try/catch, or the parameterized query handles it safely.
-    // The key assertion: we do NOT crash with an unhandled error, and files are intact.
-    expect([200, 500]).toContain(res.status);
+    // The Zod schema rejects the malformed limit (not a valid number).
+    // Wave 12 fix (B1): the route now returns 400 with structured error
+    // details instead of a generic 500. 200 remains valid if the schema
+    // ever coerces to a default rather than throwing. 500 is explicitly
+    // excluded — crashing on malformed input was the bug being fixed.
+    // The key assertion: we do NOT crash, and files are intact.
+    expect([200, 400]).toContain(res.status);
 
     // Verify the in-memory files store was not affected
     // (in a real DB, the table would not be dropped)

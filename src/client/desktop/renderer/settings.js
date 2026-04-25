@@ -575,6 +575,35 @@ class SettingsPanel {
         </div>
 
         <div class="settings-section">
+          <h3>🎛️ Bottom Panel</h3>
+          <p class="settings-hint" style="margin-bottom:8px;">Choose how each row behaves. Hidden = never show. Hover = appears only when mouse is near the bottom. Always = pinned open.</p>
+          <div class="setting-row">
+            <label>Playback bar</label>
+            <div class="visibility-segmented" data-panel="playback">
+              <button class="vis-opt" data-mode="always">Always</button>
+              <button class="vis-opt" data-mode="hover">Hover</button>
+              <button class="vis-opt" data-mode="hidden">Hidden</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>Export row</label>
+            <div class="visibility-segmented" data-panel="export">
+              <button class="vis-opt" data-mode="always">Always</button>
+              <button class="vis-opt" data-mode="hover">Hover</button>
+              <button class="vis-opt" data-mode="hidden">Hidden</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>Control bar</label>
+            <div class="visibility-segmented" data-panel="controls">
+              <button class="vis-opt" data-mode="always">Always</button>
+              <button class="vis-opt" data-mode="hover">Hover</button>
+              <button class="vis-opt" data-mode="hidden">Hidden</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
           <h3>📊 Analytics</h3>
           <div class="setting-row" title="Anonymous metrics: engine used, recording duration, batch vs live, language. Never transcript content.">
             <label for="analyticsEnabled">Help improve Windy Pro</label>
@@ -611,6 +640,22 @@ class SettingsPanel {
       const isMaxed = this.panel.classList.toggle('settings-maximized');
       const btn = this.panel.querySelector('#settingsMaximize');
       if (btn) { btn.textContent = isMaxed ? '⧉' : '⛶'; btn.title = isMaxed ? 'Restore' : 'Fullscreen'; }
+    });
+
+    // Bottom panel visibility controls (Always / Hover / Hidden per row)
+    this.panel.querySelectorAll('.visibility-segmented').forEach(group => {
+      const panelKey = group.dataset.panel;
+      const currentMode = localStorage.getItem('windy_panelVis_' + panelKey) || (panelKey === 'controls' ? 'always' : 'hover');
+      // Mark active button
+      group.querySelectorAll('.vis-opt').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === currentMode);
+        btn.addEventListener('click', () => {
+          const mode = btn.dataset.mode;
+          localStorage.setItem('windy_panelVis_' + panelKey, mode);
+          group.querySelectorAll('.vis-opt').forEach(b => b.classList.toggle('active', b === btn));
+          if (window.app?.applyPanelVisibility) window.app.applyPanelVisibility();
+        });
+      });
     });
 
     // Upgrade button

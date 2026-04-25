@@ -12,7 +12,7 @@ import WebSocket from 'ws';
 import jwt from 'jsonwebtoken';
 
 import { config } from './config';
-import { getDb, closeDb } from './db/schema';
+import { getDb, closeDb, closeDbAsync } from './db/schema';
 import { initializeJWKS, getJWKSDocument } from './jwks';
 import { startWALCheckpoint } from './db-maintenance';
 import { initRedis, closeRedis } from './redis';
@@ -29,9 +29,13 @@ import cloudRoutes from './routes/cloud';
 import identityRoutes from './routes/identity';
 import verificationRoutes from './routes/verification';
 import oauthRoutes, { seedEcosystemClients } from './routes/oauth';
+import deviceApprovalRoutes from './routes/device-approval';
+import passwordResetPageRoutes from './routes/password-reset-page';
 import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
 import flyRoutes from './routes/fly';
+import agentRoutes from './routes/agent';
+import webhooksEternitasRoutes from './routes/webhooks-eternitas';
 import { authenticateToken } from './middleware/auth';
 import { initErrorReporting, reportError } from './services/error-reporter';
 
@@ -40,12 +44,79 @@ initErrorReporting();
 
 const app = express();
 
-// ─── Middleware ───────────────────────────────────────────────
+// ─── Proxy trust ──────────────────────────────────────────────
+//
+// Required for rate limiting + `req.ip` to reflect the real client when
+// we're behind AWS ALB, CloudFront, nginx, etc. Without this, every
+// request looks like it comes from the load balancer's IP and the
+// per-IP rate-limit becomes a global cap shared across all users.
+//
+// `TRUST_PROXY` env var accepts anything Express understands:
+//   - "true" / "1"         → trust ALL proxies (fine behind a single LB)
+//   - an integer like "1"  → trust N hops
+//   - a CIDR list          → e.g. "10.0.0.0/8, 172.16.0.0/12"
+// Default in dev: `loopback` so localhost testing works. In production
+// we hard-fail instead of silently trusting the wrong thing — requiring
+// operator to set TRUST_PROXY with an explicit value.
+{
+    const raw = process.env.TRUST_PROXY;
+    if (raw && raw.length > 0) {
+        // Accept 'true'/'false', integers, or comma-separated strings.
+        const parsed = raw === 'true' ? true
+            : raw === 'false' ? false
+            : /^\d+$/.test(raw) ? parseInt(raw, 10)
+            : raw.includes(',') ? raw.split(',').map(s => s.trim())
+            : raw;
+        app.set('trust proxy', parsed);
+        console.log(`[server] trust proxy = ${JSON.stringify(parsed)}`);
+    } else if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+            '❌ TRUST_PROXY is required in production. Set it to the number of proxy hops ' +
+            '(e.g. "1" behind a single ALB) or an explicit CIDR list. ' +
+            'Without this, rate limits use the load-balancer IP instead of the real client IP.',
+        );
+    } else {
+        // Dev-only — trust the loopback so supertest / localhost works.
+        app.set('trust proxy', 'loopback');
+    }
+}
 
+// ─── CORS ─────────────────────────────────────────────────────
+//
+// In production, CORS_ALLOWED_ORIGINS MUST be set. A wildcard origin with
+// `credentials: true` creates a CSRF vector for any cookie-authed flow we
+// add later, and silently accepts tokens issued at one origin from every
+// other origin.
+if (process.env.NODE_ENV === 'production' && !process.env.CORS_ALLOWED_ORIGINS) {
+    throw new Error(
+        '❌ CORS_ALLOWED_ORIGINS is required in production. ' +
+        'Set it to a comma-separated list of allowed origins, e.g. ' +
+        '"https://windyword.ai,https://account.windyword.ai".',
+    );
+}
+
+// ─── RESEND_API_KEY fail-closed ────────────────────────────────
+//
+// Wave 14 P0 — smoke report 2026-04-19 found /auth/forgot-password
+// leaking reset tokens in the response body when services/mailer.ts
+// stubs delivery. The code-side fix gates the `_devToken` branch on
+// NODE_ENV !== 'production', but defence-in-depth: in production the
+// mailer MUST be able to actually send — otherwise password-reset
+// emails silently disappear while /forgot-password returns success.
+// Fail closed so an unconfigured prod deploy can't start.
+if (process.env.NODE_ENV === 'production' && !process.env.RESEND_API_KEY) {
+    throw new Error(
+        '❌ RESEND_API_KEY is required in production. ' +
+        'Without it, /auth/forgot-password + email verification stub ' +
+        'silently (reset tokens never reach users). Set RESEND_API_KEY ' +
+        'to an active Resend key, or rewire services/mailer.ts to another ' +
+        'provider before deploying to production.',
+    );
+}
 app.use(cors({
     origin: process.env.CORS_ALLOWED_ORIGINS
         ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim())
-        : true, // Allow all in development; set CORS_ALLOWED_ORIGINS in production
+        : true, // Dev-only: reflect whatever origin the browser presents.
     credentials: true,
 }));
 app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response-time ms'));
@@ -53,8 +124,48 @@ app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response
 // Stripe webhook needs raw body — must come BEFORE express.json()
 app.use('/api/v1/stripe', express.raw({ type: 'application/json' }), stripeRouter);
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false })); // Admin console HTML forms
+// Wave 13 — Eternitas firehose also needs raw body for HMAC verify,
+// so mount it before the global express.json() body parser (same
+// reason + same pattern as Stripe above).
+app.use('/webhooks', express.raw({ type: 'application/json', limit: '1mb' }), webhooksEternitasRoutes);
+
+// Cap request body at 100 KiB. Everything legitimate (register, verify,
+// login, webhook payloads) fits well under this. An oversized body throws
+// `PayloadTooLargeError` which the error handler below converts to 413.
+const JSON_BODY_LIMIT = '100kb';
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: false, limit: JSON_BODY_LIMIT })); // Admin console HTML forms
+
+// ─── Body-parser error handler ────────────────────────────────
+//
+// Wave 7 P1-4 + P1-5 — malformed JSON and oversized bodies previously
+// surfaced as 500 "Internal server error" because express.json()'s
+// SyntaxError / entity.too.large errors bubbled to the catch-all below.
+// This explicit handler runs BEFORE routes mount, so body-parser errors
+// return well-formed 4xx responses instead.
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err?.type === 'entity.too.large') {
+        return res.status(413).json({
+            error: 'Request body too large',
+            code: 'payload_too_large',
+            limit: JSON_BODY_LIMIT,
+        });
+    }
+    if (err instanceof SyntaxError && 'body' in err) {
+        return res.status(400).json({
+            error: 'Malformed JSON body',
+            code: 'invalid_json',
+        });
+    }
+    if (err?.type === 'entity.parse.failed') {
+        return res.status(400).json({
+            error: 'Could not parse request body',
+            code: 'invalid_body',
+        });
+    }
+    // Not a body-parser error — let the general handler below deal with it.
+    return next(err);
+});
 
 // ─── Static Website ──────────────────────────────────────────
 // Serve the Windy Pro landing page and web app from the web dist folder
@@ -103,15 +214,39 @@ app.use('/api/v1/identity/verify', verificationRoutes);
 // OAuth2 / SSO (Phase 5 — "Sign in with Windy")
 app.use('/api/v1/oauth', oauthRoutes);
 
+// Top-level device-code approval page (GET /device, POST /device/approve).
+// Mobile shows "Visit windyword.ai/device" — this is the operator UI.
+app.use('/', deviceApprovalRoutes);
+
+// P1-14: /reset-password page so the email link from forgot-password
+// actually lands on a working form instead of the SPA's 404 wildcard.
+app.use('/', passwordResetPageRoutes);
+
+// JWKS + OIDC-discovery rate limit — Wave 7 P1-7. Both endpoints are cheap
+// but unauthenticated. Public CDN fronts would normally absorb abuse; lacking
+// one, a naive loop hitting these at 10k rps can still fill the event loop.
+// 120/min per client is generous for legitimate JWKS clients (which cache for
+// 1 hour via our Cache-Control header) and enough to trip obvious abuse.
+const wellKnownLimiter = (() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { makeRateLimiter } = require('./services/rate-limiter');
+    return makeRateLimiter('well-known', {
+        windowMs: 60 * 1000,
+        max: process.env.NODE_ENV === 'test' ? 10000 : 120,
+        standardHeaders: true,
+        legacyHeaders: false,
+    });
+})();
+
 // JWKS endpoint (Phase 4 — public keys for RS256 token verification)
-app.get('/.well-known/jwks.json', (_req, res) => {
+app.get('/.well-known/jwks.json', wellKnownLimiter, (_req, res) => {
     const jwks = getJWKSDocument();
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.json(jwks);
 });
 
 // OIDC Discovery (Phase 5 — OpenID Connect provider metadata)
-app.get('/.well-known/openid-configuration', (req, res) => {
+app.get('/.well-known/openid-configuration', wellKnownLimiter, (req, res) => {
     const issuer = process.env.OIDC_ISSUER || `${req.protocol}://${req.get('host')}`;
     res.json({
         issuer,
@@ -175,6 +310,11 @@ app.use('/api/v1/cloud', cloudRoutes);
 // Fly agent proxy (ecosystem dashboard chat)
 app.use('/api/v1/fly', flyRoutes);
 
+// Wave 8 — Managed-credential broker + hatch-from-Pro endpoint.
+// HMAC-gated credentials/issue for S2S, Bearer-JWT /hatch that streams SSE.
+app.use('/api/v1/agent', agentRoutes);
+
+
 // Billing
 app.use('/api/v1/billing', billingRouter);
 
@@ -210,6 +350,44 @@ app.get('*', (req: express.Request, res: express.Response, next: express.NextFun
     if (fs.existsSync(spaIndexPath)) {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.sendFile(spaIndexPath);
+    } else if (req.path === '/' || req.path === '/index.html') {
+        // Wave 14 P0-2 — minimal landing stub. The SPA bundle is not
+        // included in the Phase 1 Docker image (the web builder stage
+        // was removed to keep the image lean; see account-server/
+        // Dockerfile). Without this stub, GET / falls through to
+        // Express's default 404 ("Cannot GET /") — the first thing a
+        // human visiting the domain saw. Keep the response tiny,
+        // link to the things that DO exist, and NEVER leak backend
+        // shape (no version, no uptime, no endpoint table).
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.status(200).send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Windy — windypro account API</title>
+  <style>
+    html,body{margin:0;padding:0;background:#0F1219;color:#E2E8F0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+    .card{max-width:540px;padding:40px 44px;text-align:center}
+    h1{margin:0 0 16px;font-size:28px;font-weight:700;color:#F8FAFC;letter-spacing:-0.01em}
+    p{margin:0 0 12px;font-size:15px;line-height:1.55;color:#94A3B8}
+    a{color:#8B5CF6;text-decoration:none}
+    a:hover{text-decoration:underline}
+    code{font-family:SFMono-Regular,Menlo,Monaco,Consolas,monospace;background:rgba(139,92,246,0.12);padding:2px 6px;border-radius:4px;font-size:13px;color:#CBD5E1}
+    .footer{margin-top:24px;font-size:12px;color:#64748B}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🌪️ Windy Word — account API</h1>
+    <p>This host serves the Windy ecosystem's identity and authentication API. There is no UI here yet.</p>
+    <p>If you meant to install the desktop app, visit <a href="https://windyword.ai">windyword.ai</a>.</p>
+    <p>If you are integrating with the API, start at <code>/.well-known/openid-configuration</code>.</p>
+    <p class="footer">Uptime + health at <code>/healthz</code>.</p>
+  </div>
+</body>
+</html>`);
     } else {
         next();
     }
@@ -335,6 +513,14 @@ const db = getDb();
 // Seed ecosystem OAuth clients (windy_chat, windy_mail, eternitas, windy_fly)
 seedEcosystemClients();
 
+// Wave 14 P1-3 — bootstrap an admin user if ADMIN_BOOTSTRAP_EMAIL +
+// ADMIN_BOOTSTRAP_PASSWORD are set and no admin exists yet. Phase 1
+// shipped dormant; this is how ops brings the admin console online.
+import { maybeBootstrapAdmin } from './services/admin-bootstrap';
+maybeBootstrapAdmin().catch(err => {
+    console.error('[admin-bootstrap] failed:', err?.message || err);
+});
+
 // Phase 4: Initialize RS256 key management (falls back to HS256 if unconfigured)
 initializeJWKS();
 
@@ -400,8 +586,16 @@ if (process.env.NODE_ENV !== 'test') {
     console.log('');
 
     // Start ecosystem provisioning retry worker
-    const { startRetryWorker } = require('./services/ecosystem-provisioner');
+    // P2-6: Start hourly cleanup of exhausted / orphaned pending_provisions rows.
+    const { startRetryWorker, startPendingCleanup } = require('./services/ecosystem-provisioner');
     startRetryWorker();
+    startPendingCleanup();
+
+    // PR4: Start identity webhook fan-out worker (polls webhook_deliveries every 30s)
+    // P1-10: Start hourly cleanup of terminal webhook_deliveries rows.
+    const { startWebhookWorker, startWebhookCleanup } = require('./services/webhook-bus');
+    startWebhookWorker();
+    startWebhookCleanup();
 
     // Register with Eternitas as a platform (idempotent — skips if already registered)
     const { registerWithEternitas } = require('./services/eternitas-register');
@@ -427,16 +621,20 @@ process.on('uncaughtException', (err: Error) => {
     process.exit(1);
 });
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-    closeRedis().catch(() => {});
-    closeDb();
+// Graceful shutdown — await the pool drain so in-flight registrations finish.
+// A 5 s hard deadline protects against a hung driver keeping the container alive.
+async function gracefulShutdown(signal: string): Promise<void> {
+    const deadline = setTimeout(() => {
+        console.error(`[${signal}] graceful shutdown timed out — forcing exit`);
+        process.exit(0);
+    }, 5000);
+    deadline.unref();
+    try { await closeRedis(); } catch { /* best-effort */ }
+    try { await closeDbAsync(); } catch { /* best-effort */ }
     process.exit(0);
-});
-process.on('SIGTERM', () => {
-    closeRedis().catch(() => {});
-    closeDb();
-    process.exit(0);
-});
+}
+
+process.on('SIGINT', () => { void gracefulShutdown('SIGINT'); });
+process.on('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
 
 export { app, server };

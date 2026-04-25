@@ -35,7 +35,7 @@ class TranslatePanel {
 
         this._build();
         this._bindEvents();
-        this._startHealthCheck();
+        // Health check starts on open(), not on construction (avoids CSP spam when panel is closed)
     }
 
     // ─── Build DOM ────────────────────────────────────────────────
@@ -180,6 +180,8 @@ class TranslatePanel {
         this.isOpen = true;
         this._loadLanguages();
         this._loadHistory();
+        // Start health check only when panel is open
+        if (!this._healthInterval) this._startHealthCheck();
     }
 
     close() {

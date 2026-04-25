@@ -11,6 +11,9 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 
+// Wave 7 P1-15 follow-up — register path exceeds 5s default under full-suite load
+jest.setTimeout(30000);
+
 // ─── Environment Setup (before importing app) ──────────────
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'smoke-test-secret';

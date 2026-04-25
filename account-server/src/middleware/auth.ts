@@ -162,7 +162,11 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
             res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
             return;
         }
-        res.status(403).json({ error: 'Invalid token' });
+        // P2-3: 401 (not 403) for malformed / unsigned / wrong-algo tokens.
+        // 403 = "authenticated but not authorized"; here we couldn't prove
+        // authentication at all, so the client should re-authenticate.
+        // This also matches RFC 6750 for invalid Bearer tokens.
+        res.status(401).json({ error: 'Invalid token', code: 'INVALID_TOKEN' });
     }
 }
 

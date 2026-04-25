@@ -41,6 +41,17 @@ export function closeDb(): void {
 }
 
 /**
+ * Graceful shutdown — awaits in-flight queries and then drains the pool.
+ * Prefer this over closeDb() in SIGTERM handlers so concurrent registrations
+ * don't get killed mid-write.
+ */
+export async function closeDbAsync(): Promise<void> {
+  if (db) {
+    await db.shutdownAsync();
+  }
+}
+
+/**
  * Get the underlying SQLite database for SQLite-specific operations
  * (backup, WAL checkpoint). Returns null if using PostgreSQL.
  */
@@ -500,5 +511,128 @@ function initSchema(db: DbAdapter): void {
       FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_pending_provisions_retry ON pending_provisions(next_retry_at);
+
+    -- OTP codes: hashed one-time codes for email verification + password reset.
+    -- code_hash = sha256(raw 6-digit code) — never store the raw code.
+    -- purpose: 'email_verification' | 'password_reset'
+    -- consumed_at NULL until used; non-null entries are kept for audit.
+    CREATE TABLE IF NOT EXISTS otp_codes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_otp_user_purpose ON otp_codes(user_id, purpose);
+    CREATE INDEX IF NOT EXISTS idx_otp_expires ON otp_codes(expires_at);
+
+    -- Webhook deliveries (PR4 — identity fan-out bus).
+    -- One row per (event, target). Worker polls WHERE delivered_at IS NULL
+    -- AND dead_lettered_at IS NULL AND next_attempt_at <= now.
+    -- Retry schedule: 0ms, 5s, 30s, 5m, 1h, 6h, 24h (7 attempts → dead letter).
+    CREATE TABLE IF NOT EXISTS webhook_deliveries (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      target TEXT NOT NULL,
+      target_url TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      signature TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at TEXT NOT NULL,
+      delivered_at TEXT,
+      dead_lettered_at TEXT,
+      last_error TEXT,
+      identity_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_webhook_due ON webhook_deliveries(next_attempt_at) WHERE delivered_at IS NULL AND dead_lettered_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_webhook_identity ON webhook_deliveries(identity_id);
+    CREATE INDEX IF NOT EXISTS idx_webhook_event ON webhook_deliveries(event_type);
+
+    -- MFA secrets: TOTP-based two-factor authentication.
+    -- totp_secret_encrypted = AES-256-GCM(base32_secret), keyed by MFA_ENCRYPTION_KEY env.
+    -- backup_codes_hash = JSON array of bcrypt hashes (consumed by setting to '' on use).
+    -- enabled_at NULL while setup is pending; set to a timestamp on verify-setup success.
+    CREATE TABLE IF NOT EXISTS mfa_secrets (
+      user_id TEXT PRIMARY KEY,
+      totp_secret_encrypted TEXT NOT NULL,
+      totp_secret_iv TEXT NOT NULL,
+      totp_secret_tag TEXT NOT NULL,
+      backup_codes_hash TEXT NOT NULL DEFAULT '[]',
+      enabled_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- ─── Wave 8: Managed-credential broker ─────────────────────
+    -- Broker tokens are short-lived provider credentials minted by
+    -- account-server and handed to agents running elsewhere (windy-agent).
+    -- token_hash = sha256(raw_token) — used for O(1) verify lookup.
+    -- token_prefix = first 12 chars of the raw token, kept in plaintext
+    -- for debug/audit only ("bk_live_ab…"). Raw token is never stored.
+    -- revocation list is implemented in broker_revocations below.
+    CREATE TABLE IF NOT EXISTS broker_tokens (
+      id TEXT PRIMARY KEY,
+      identity_id TEXT NOT NULL,
+      passport_number TEXT,                              -- nullable: owner passport at issue time
+      token_hash TEXT UNIQUE NOT NULL,                   -- sha256(raw token)
+      token_prefix TEXT NOT NULL,                        -- first 12 chars of raw token
+      scope TEXT NOT NULL DEFAULT 'llm:chat',             -- 'llm:chat' | 'llm:embed' | 'llm:*'
+      provider TEXT NOT NULL,                            -- 'gemini' | 'openai' | 'anthropic'
+      model TEXT NOT NULL,                               -- provider-specific model id
+      plan_tier TEXT NOT NULL DEFAULT 'free',
+      issued_at TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at TEXT NOT NULL,
+      usage_cap_tokens INTEGER NOT NULL DEFAULT 100000,   -- per-token lifetime cap
+      usage_tokens INTEGER NOT NULL DEFAULT 0,           -- running tally
+      status TEXT NOT NULL DEFAULT 'active',              -- 'active' | 'revoked' | 'exhausted'
+      revoked_at TEXT,
+      revoked_reason TEXT,
+      FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_broker_tokens_identity ON broker_tokens(identity_id);
+    CREATE INDEX IF NOT EXISTS idx_broker_tokens_hash ON broker_tokens(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_broker_tokens_passport ON broker_tokens(passport_number);
+    CREATE INDEX IF NOT EXISTS idx_broker_tokens_expires ON broker_tokens(expires_at);
+
+    -- Broker revocations — append-only record of revocation events.
+    -- reason_hash is bcrypt(revocation_reason) so support can confirm a
+    -- reason matches a known cause without reading plaintext notes back.
+    CREATE TABLE IF NOT EXISTS broker_revocations (
+      id TEXT PRIMARY KEY,
+      identity_id TEXT,                                  -- identity whose tokens are revoked
+      passport_number TEXT,                              -- and/or the passport whose tokens are revoked
+      token_hash TEXT,                                   -- optional: a specific token
+      reason_hash TEXT NOT NULL,                         -- bcrypt(reason) — never plaintext
+      cascade INTEGER NOT NULL DEFAULT 1,                -- 1 = cascade to all tokens for identity/passport
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_broker_revocations_identity ON broker_revocations(identity_id);
+    CREATE INDEX IF NOT EXISTS idx_broker_revocations_passport ON broker_revocations(passport_number);
+
+    -- Hatch sessions — idempotency + progress log for POST /agent/hatch.
+    -- One row per (windy_identity_id) hatch attempt. Streams reconnect here
+    -- to replay events if a client disconnects mid-ceremony.
+    CREATE TABLE IF NOT EXISTS hatch_sessions (
+      id TEXT PRIMARY KEY,
+      windy_identity_id TEXT NOT NULL,
+      bot_identity_id TEXT,
+      agent_name TEXT,
+      passport_number TEXT,
+      broker_token_id TEXT,
+      status TEXT NOT NULL DEFAULT 'running',             -- 'running' | 'complete' | 'failed'
+      last_event_seq INTEGER NOT NULL DEFAULT 0,
+      events TEXT NOT NULL DEFAULT '[]',                  -- JSON array of ceremony events (capped)
+      error TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      completed_at TEXT,
+      UNIQUE(windy_identity_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_hatch_sessions_identity ON hatch_sessions(windy_identity_id);
+    CREATE INDEX IF NOT EXISTS idx_hatch_sessions_status ON hatch_sessions(status);
   `);
 }

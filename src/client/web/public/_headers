@@ -1,0 +1,20 @@
+# Cloudflare Pages — security headers.
+# Applied to every response served by this project.
+#
+# CSP is intentionally NOT set here — a proper Content-Security-Policy
+# needs runtime testing against the full app (Resend emails, Matrix chat
+# client, Cloudflare Analytics, fonts.googleapis.com, etc). Tracked as a
+# Wave 14 polish followup. The other 5 headers are safe defaults.
+
+/*
+  # HSTS — force HTTPS, 1 year, include subdomains, eligible for preload.
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  # Block MIME-type sniffing — no browser guessing on Content-Type.
+  X-Content-Type-Options: nosniff
+  # Deny framing entirely — no clickjacking.
+  X-Frame-Options: DENY
+  # Send Referer only to same-origin or HTTPS cross-origin.
+  Referrer-Policy: strict-origin-when-cross-origin
+  # Deny every permission the app doesn't need. Microphone stays enabled
+  # because the Windy Word voice feature needs it on some routes.
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), payment=(), usb=(), fullscreen=(self)

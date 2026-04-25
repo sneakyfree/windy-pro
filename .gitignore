@@ -6,6 +6,7 @@ venv/
 .venv/
 *.egg-info/
 dist/
+dist-*/
 build/
 
 # Node
@@ -77,11 +78,23 @@ src/client/web/node_modules/
 .pytest_cache/
 htmlcov/
 .coverage
+coverage/
+account-server/coverage/
 
 # Antigravity brain
 .gemini/
 
 # Bundled dependencies (too large for git)
 bundled/
+bundled-portable/
+.bundle-cache/
 extraResources/
 services/*/node_modules
+
+# Local test state (per-machine)
+.test-clean-install-state
+
+# Playwright E2E artefacts (traces, screenshots, videos, HTML report)
+e2e-results/
+e2e-report/
+playwright-report/

@@ -16,16 +16,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      # account-server depends on @windy-pro/contracts via
+      # file:../shared/contracts. The contracts package itself depends on
+      # zod. With npm's file: protocol the contracts deps don't get
+      # installed unless we run npm ci inside that directory too.
+      - run: cd shared/contracts && npm ci
       - run: cd account-server && npm ci
       - run: cd account-server && npm test
       - run: cd account-server && npx tsc --noEmit
 
   # ── Python Backend Tests ──
+  # Python 3.10 was dropped from the matrix because the pinned numpy
+  # (>=2.3) requires Python 3.11+, and Windy Pro ships its own 3.11
+  # interpreter via python-build-standalone — the 3.10 lane wasn't
+  # reflecting any real user environment, just blocking CI.
+  # fail-fast disabled so a single version's failure doesn't cancel
+  # the others (we want signal from all supported lanes).
   test-backend:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.10', '3.11', '3.12']
+        python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -43,7 +55,7 @@ jobs:
         id: pytest
         continue-on-error: true
         run: |
-          python -m pytest tests/test_desktop_gaps.py tests/test_desktop_core_features.py -v --tb=short --timeout=30
+          python -m pytest tests/test_desktop_gaps.py tests/test_desktop_core_features.py tests/test_engine_health.py tests/test_engine_integration.py tests/test_protocol_validator.py -v --tb=short --timeout=60
       - name: Report pytest outcome
         if: steps.pytest.outcome == 'failure'
         run: |
@@ -77,6 +89,46 @@ jobs:
           node-version: '20'
       - run: npm ci
       - run: npm run build --if-present
+
+  # ── Installer Unit Tests ──
+  # Targets the safety-critical install path: the CleanSlate kill-guard
+  # (must never include the wizard's own pid), the bundled-assets layout
+  # detection (must work for both flat and legacy layouts), and the
+  # withTimeout helper (must surface labeled timeouts so a hung wizard
+  # never appears as a silent 0% spinner).
+  test-installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Guard against legacy venv resurrection
+        # See scripts/ci/check-no-legacy-venv.sh for context.
+        run: bash scripts/ci/check-no-legacy-venv.sh
+      - name: i18n coverage check (P3)
+        # Every data-i18n key in wizard.html must exist in every
+        # locale of wizard-i18n.json. See scripts/ci/check-i18n-coverage.sh
+        # and docs/I18N-AUDIT.md.
+        run: bash scripts/ci/check-i18n-coverage.sh
+      - name: Error-code ratchet
+        # P7: count of raw `throw new Error` in the install path
+        # must not increase. New code uses WindyError.from('WINDY-NNN').
+        # See scripts/ci/check-error-codes.sh + docs/ERRORS.md.
+        run: bash scripts/ci/check-error-codes.sh
+      - name: Run installer + security unit tests
+        # Includes SEC-PAIR-1 (path traversal) and SEC-WIZARD-1 (Stripe
+        # URL allowlist) regression pins. See docs/SECURITY-AUDIT-2026-04.md.
+        run: npx jest tests/installer-bundled-assets.test.js tests/installer-clean-slate.test.js tests/installer-wizard-logger.test.js tests/installer-errors.test.js tests/pair-download-manager.security.test.js tests/wizard-main.security.test.js tests/installer-windows-paths.test.js tests/installer-model-integrity.test.js tests/hardware-detect-disk.test.js --testEnvironment=node --ci
+      - name: Run renderer unit tests (P4)
+        # transcript-format (pure functions) + signup-banner (jsdom).
+        # Each new module extracted from app.js for testability adds
+        # coverage here. See tests/renderer-*.test.js.
+        run: npx jest tests/renderer-transcript-format.test.js tests/renderer-signup-banner.test.js tests/lib-timeout.test.js tests/crash-summary.test.js tests/chat-ipc.test.js tests/pair-ipc.test.js tests/video-ipc.test.js tests/settings-ipc.test.js --ci
+      - name: Run logger tests (P5)
+        # Structured JSON-lines + redaction + rotation.
+        run: npx jest tests/logger.test.js --forceExit --testTimeout=15000 --ci
 
   # ── Electron Release Builds (multi-platform, tag-triggered) ──
   build-electron:

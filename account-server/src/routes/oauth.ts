@@ -18,7 +18,7 @@ import express from 'express';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import rateLimit from 'express-rate-limit';
+import { makeRateLimiter } from '../services/rate-limiter';
 import { config } from '../config';
 import { getDb } from '../db/schema';
 import { authenticateToken, adminOnly, AuthRequest } from '../middleware/auth';
@@ -28,7 +28,7 @@ import { isRS256Available, getSigningKey } from '../jwks';
 const router = Router();
 
 // Rate limits for OAuth endpoints
-const oauthLimiter = rateLimit({
+const oauthLimiter = makeRateLimiter('oauth', {
   windowMs: 60 * 1000,
   max: 30,
   message: { error: 'Too many requests. Try again later.' },
@@ -36,7 +36,7 @@ const oauthLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-const tokenLimiter = rateLimit({
+const tokenLimiter = makeRateLimiter('oauth-token', {
   windowMs: 60 * 1000,
   max: 20,
   message: { error: 'Too many token requests. Try again later.' },
@@ -274,7 +274,20 @@ router.get('/authorize', authenticateToken, oauthLimiter, (req: Request, res: Re
       });
     }
 
-    // Consent required — return client info for consent UI
+    // Consent required. For browser requests (Accept: text/html), redirect
+    // straight to the rendered consent screen so the user lands on a page
+    // they can interact with. For API clients, return JSON describing what's
+    // needed so they can build their own UX.
+    const acceptsHtml = (req.headers.accept || '').toLowerCase().includes('text/html');
+    if (acceptsHtml) {
+      const consentUrl = new URL('/api/v1/oauth/consent', `${req.protocol}://${req.get('host')}`);
+      for (const k of ['client_id', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method'] as const) {
+        const v = req.query[k];
+        if (typeof v === 'string' && v.length > 0) consentUrl.searchParams.set(k, v);
+      }
+      return res.redirect(302, consentUrl.pathname + consentUrl.search);
+    }
+
     res.json({
       consent_required: true,
       client: {
@@ -285,6 +298,12 @@ router.get('/authorize', authenticateToken, oauthLimiter, (req: Request, res: Re
       requestedScopes,
       state: state || undefined,
       code_challenge: code_challenge || undefined,
+      consent_url: `/api/v1/oauth/consent?${new URLSearchParams({
+        client_id, redirect_uri,
+        ...(scope ? { scope } : {}),
+        ...(state ? { state } : {}),
+        ...(code_challenge ? { code_challenge } : {}),
+      }).toString()}`,
     });
   } catch (err: any) {
     console.error('[oauth] Authorization error:', err);
@@ -892,8 +911,8 @@ function formatScopeDescriptions(scopes: string[]): { scope: string; label: stri
     'profile': { label: 'Profile', description: 'Read your name and avatar' },
     'email': { label: 'Email', description: 'Read your email address' },
     'phone': { label: 'Phone', description: 'Read your phone number' },
-    'windy_pro:*': { label: 'Windy Pro', description: 'Full access to your Windy Pro account' },
-    'windy_pro:read': { label: 'Windy Pro (Read)', description: 'Read your Windy Pro data' },
+    'windy_pro:*': { label: 'Windy Word', description: 'Full access to your Windy Word account' },
+    'windy_pro:read': { label: 'Windy Word (Read)', description: 'Read your Windy Word data' },
     'windy_chat:*': { label: 'Windy Chat', description: 'Full access to your Windy Chat' },
     'windy_chat:read': { label: 'Windy Chat (Read)', description: 'Read your chat messages' },
     'windy_chat:write': { label: 'Windy Chat (Write)', description: 'Send chat messages on your behalf' },
@@ -1120,7 +1139,21 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
     products = rows.length > 0 ? rows.map(r => r.product) : ['windy_pro'];
   } catch { products = ['windy_pro']; }
 
-  const tokenPayload = {
+  // Fetch active Eternitas passport (if any). Included as the
+  // `eternitas_passport` JWT claim so consumers like windy-code's
+  // agentBusServer can verify passport-gated flows without a round-trip
+  // to the passport registry. Only active passports — revoked/suspended
+  // passports MUST NOT produce a claim (that would let a revoked bot
+  // continue to authenticate until the JWT expires).
+  let passportNumber: string | undefined;
+  try {
+    const row = db.prepare(
+      "SELECT passport_number FROM eternitas_passports WHERE identity_id = ? AND status = 'active' LIMIT 1",
+    ).get(identityId) as { passport_number: string } | undefined;
+    passportNumber = row?.passport_number;
+  } catch { /* table may not exist on first-run SQLite bootstrap */ }
+
+  const tokenPayload: Record<string, any> = {
     userId: identityId,
     windyIdentityId: user.windy_identity_id,
     email: user.email,
@@ -1133,6 +1166,7 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
     client_id: clientId,
     scope,
   };
+  if (passportNumber) tokenPayload.eternitas_passport = passportNumber;
 
   let accessToken: string;
   const signingKey = getSigningKey();
@@ -1181,11 +1215,20 @@ function generateUserCode(): string {
 //  SEED ECOSYSTEM CLIENTS
 // ═══════════════════════════════════════════
 
+// Note: client_ids use a mix of underscores and hyphens. Match whatever the
+// actual consumer sends — e.g. windy-code (hyphen) is how the VS Code fork
+// identifies itself in extensions/windy-ecosystem/src/signIn.ts. Don't
+// normalize here — the INSERT below stores the literal value.
 const ECOSYSTEM_CLIENTS = [
   { client_id: 'windy_chat', name: 'Windy Chat', scopes: ['windy_chat:*'] },
   { client_id: 'windy_mail', name: 'Windy Mail', scopes: ['windy_mail:*'] },
   { client_id: 'eternitas', name: 'Eternitas', scopes: ['eternitas:*'] },
   { client_id: 'windy_fly', name: 'Windy Fly', scopes: ['windy_fly:*'] },
+  { client_id: 'windy_pro_mobile', name: 'Windy Word Mobile', scopes: ['openid', 'profile', 'email', 'windy_pro:*', 'windy_mail:read'] },
+  // Windy Code — VS Code soft fork IDE. Uses OAuth device-code flow from
+  // extensions/windy-ecosystem/src/signIn.ts with exactly these scopes.
+  // Public client (no secret); no redirect_uris (device flow doesn't use them).
+  { client_id: 'windy-code', name: 'Windy Code', scopes: ['openid', 'profile', 'email', 'windy_code:*', 'windy_chat:*', 'windy_mail:*', 'windy_fly:*'] },
 ];
 
 /**

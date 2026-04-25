@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import archiver from 'archiver';
 import { getDb } from '../db/schema';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { logAuditEvent } from '../identity-service';
 import { validate } from '../middleware/validation';
 import {
     ChunkUploadRequestSchema,
@@ -322,6 +323,12 @@ router.delete('/bulk', authenticateToken, (req: Request, res: Response) => {
         }
 
         console.log(`🗑️  Bulk delete: ${deleted}/${ids.length} recordings`);
+        // P3-2: individual delete emits an audit event; bulk delete should too.
+        logAuditEvent('recordings_bulk_deleted' as any, userId, {
+            requested: ids.length,
+            deleted,
+            errorCount: errors.length,
+        });
         res.json({ deleted, errors });
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });
@@ -566,6 +573,17 @@ router.delete('/:id', authenticateToken, (req: Request, res: Response) => {
 // ─── POST /api/v1/recordings/upload ──────────────────────────
 
 router.post('/upload', authenticateToken, videoUpload.single('media'), validateFileMagicBytes(['audio', 'video']), (req: Request, res: Response) => {
+    // Wave 12 B3: reject empty/non-multipart bodies up front. The route
+    // relies on req.file from multer's videoUpload.single('media'). A
+    // client that POSTs `{}` as JSON passed auth but previously crashed
+    // on DB insert with a generic 500 because req.file was undefined.
+    if (!req.file) {
+        return res.status(400).json({
+            error: 'media file required',
+            code: 'missing_media',
+            hint: 'POST multipart/form-data with field name "media".',
+        });
+    }
     try {
         const db = getDb();
         const { duration_seconds, has_video, video_resolution, camera_source,

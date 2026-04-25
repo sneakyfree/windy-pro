@@ -17,30 +17,48 @@ const crashLogDir = process.platform === 'darwin'
     : _path.join(_os.homedir(), '.config', 'windy-pro');
 const crashLogPath = _path.join(crashLogDir, 'crash.log');
 
+// CR-006 (P15): allow-list redaction. The previous deny-list missed
+// anything other than Bearer/sk-/key_. Inverted: extract only known-
+// safe fields (message, code, name, top-N stack frames) and drop
+// everything else on the error object. Implementation in
+// src/client/desktop/lib/crash-summary.js (unit tested).
+const { safeErrorSummary: _safeErrorSummary } = require('./lib/crash-summary');
+
 function writeCrashLog(type, err) {
   try {
     const dir = _path.dirname(crashLogPath);
     if (!_fs.existsSync(dir)) _fs.mkdirSync(dir, { recursive: true });
-    // Redact API keys from error messages
-    let msg = String(err?.stack || err?.message || err);
-    msg = msg.replace(/Bearer\s+\S+/gi, 'Bearer ***REDACTED***');
-    msg = msg.replace(/sk-[a-zA-Z0-9]+/g, 'sk-***');
-    msg = msg.replace(/key[_-]?[a-zA-Z0-9]{10,}/gi, 'KEY_REDACTED');
-    const entry = `[${new Date().toISOString()}] ${type}: ${msg}\n`;
+    const entry = JSON.stringify({
+      ts: new Date().toISOString(),
+      type,
+      ..._safeErrorSummary(err),
+    }) + '\n';
     _fs.appendFileSync(crashLogPath, entry);
   } catch (_) { }
 }
 
 process.on('uncaughtException', (err) => {
   writeCrashLog('UncaughtException', err);
-  console.error('[CRASH]', err.message);
+  // CR-002: route the visible strings through safeErrorSummary so
+  // the console output + the user-facing dialog never show any
+  // attached fields (axios .response, etc.) — only the allow-listed
+  // name / message / code. Stack stays in the JSON crash log only.
+  const _summary = _safeErrorSummary(err);
+  console.error('[CRASH]', _summary.message || _summary.name || '(no details)');
+
+  // EPIPE / ECONNRESET from dead child processes (Python server) — handle gracefully
+  if (['EPIPE', 'ECONNRESET', 'ECONNREFUSED'].includes(_summary.code)) {
+    console.warn('[CRASH] Pipe/connection error (child process likely died) — recovering gracefully');
+    return; // Don't show crash dialog for pipe errors
+  }
+
   // Show friendly dialog on macOS (non-blocking)
   try {
     const { dialog } = require('electron');
     if (require('electron').app.isReady()) {
       dialog.showErrorBox(
         'Windy Pro encountered an error',
-        `Something went wrong. The error has been logged.\n\nDetails: ${err.message}\n\nLog: ${crashLogPath}`
+        `Something went wrong. The error has been logged.\n\nDetails: ${_summary.message || '(no details)'}\n\nLog: ${crashLogPath}`
       );
     }
   } catch (_) { /* dialog may not be available yet */ }
@@ -48,7 +66,13 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason) => {
   writeCrashLog('UnhandledRejection', reason);
-  console.error('[REJECTION]', String(reason));
+  // CR-002: avoid String(reason) which would call the object's
+  // toString — for most Errors that's safe (name + message) but
+  // a library could override toString to emit arbitrary fields.
+  // Use the crash-summary helper so the console fallback matches
+  // the redaction the crash log applies.
+  const _sum = _safeErrorSummary(reason);
+  console.error('[REJECTION]', _sum.message || _sum.name || '(no details)');
 });
 /**
  * Windy Pro - Electron Main Process
@@ -88,6 +112,10 @@ const fs = require('fs');
 const fsp = fs.promises;
 const os = require('os');
 const util = require('util');
+// CR-003: withTimeout for IPC handlers — bounds long-running awaits
+// so a hung upstream (Matrix, translate API, HF download) can't
+// leave the renderer waiting forever on an IPC reply.
+const { withTimeout } = require('./lib/timeout');
 const execFileAsync = util.promisify(execFile);
 // ═══ Lazy-loaded modules (deferred to speed up startup) ═══
 // These modules pull in heavy deps (matrix-js-sdk, stripe, better-sqlite3, electron-updater)
@@ -166,6 +194,8 @@ let miniTranslateWindow = null;
 let chatWindow = null;
 let tray = null;
 let isRecording = false;
+global._batchProcessing = false;  // Guards focus tracker during async batch transcription
+global._ourPids = new Set([process.pid]); // Our Electron process tree (main + helpers)
 let userHiddenWindow = false;  // Tracks if user intentionally hid everything via Ctrl+Shift+W
 let pythonProcess = null;
 let pythonRestartCount = 0;
@@ -273,7 +303,7 @@ function getStripe() {
 
 function getTierLimits(tier) {
   const tiers = {
-    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, storageMb: 500, batchMode: false, llmPolish: false, translation: false, tts: false, glossaries: false },
+    free: { maxEngines: 3, maxLanguages: 1, maxMinutes: 5, storageMb: 500, batchMode: true, llmPolish: false, translation: false, tts: false, glossaries: false },
     pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: 30, storageMb: 5120, batchMode: true, llmPolish: true, translation: false, tts: false, glossaries: false },
     translate: { maxEngines: 15, maxLanguages: 99, maxMinutes: 60, storageMb: 10240, batchMode: true, llmPolish: true, translation: true, tts: false, glossaries: false },
     translate_pro: { maxEngines: 15, maxLanguages: 99, maxMinutes: Infinity, storageMb: 25600, batchMode: true, llmPolish: true, translation: true, tts: true, glossaries: true }
@@ -441,11 +471,33 @@ function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
 function startPythonServer() {
   const serverConfig = store.get('server');
   const appDataDir = path.join(os.homedir(), '.windy-pro');
-  const venvPython = process.platform === 'win32'
+
+  // Resolution order (matches the bundle-don't-install architecture):
+  //   1. User-data venv (~/.windy-pro/venv) — created at first-run by wizard
+  //      from bundled wheels. Preferred because it's writable for future deps.
+  //   2. Packaged bundled Python (process.resourcesPath/bundled/python) —
+  //      safety net: if wizard didn't run yet (or failed), the engine can still
+  //      boot using bundled Python directly, no system Python needed.
+  //   3. System python3 — last-resort fallback for dev environments.
+  const userVenvPython = process.platform === 'win32'
     ? path.join(appDataDir, 'venv', 'Scripts', 'python.exe')
     : path.join(appDataDir, 'venv', 'bin', 'python');
+  const bundledPython = process.resourcesPath
+    ? (process.platform === 'win32'
+        ? path.join(process.resourcesPath, 'bundled', 'python', 'python.exe')
+        : path.join(process.resourcesPath, 'bundled', 'python', 'bin', 'python3'))
+    : null;
 
-  const pythonPath = fs.existsSync(venvPython) ? venvPython : 'python3';
+  let pythonPath;
+  if (fs.existsSync(userVenvPython)) {
+    pythonPath = userVenvPython;
+  } else if (bundledPython && fs.existsSync(bundledPython)) {
+    pythonPath = bundledPython;
+    console.info('[Python] Using bundled Python (wizard venv not yet created)');
+  } else {
+    pythonPath = 'python3';
+    console.warn('[Python] Falling back to system python3 — bundled assets not detected');
+  }
   const projectRoot = app.isPackaged
     ? process.resourcesPath
     : path.join(__dirname, '..', '..', '..');
@@ -563,9 +615,13 @@ function createWindow() {
     y: windowConfig.y,
 
     // Floating window properties
-    // macOS: 'floating' level = panel that does NOT steal keyboard focus (like a utility palette)
+    // macOS: 'floating' level = non-activating panel (like a utility palette).
+    //   focusable:false = window never becomes key window, so the cursor
+    //   stays blinking in the external app at all times during recording.
+    //   Mouse clicks still work — only keyboard focus is prevented.
     // Linux/Windows: plain alwaysOnTop works fine (xdotool handles focus restore for Linux)
     alwaysOnTop: appearance.alwaysOnTop,
+    focusable: process.platform !== 'darwin',  // Non-focusable on macOS only
     frame: false,           // Frameless for custom UI
     transparent: true,      // Allow CSS transparency for strobe effect
     resizable: true,
@@ -582,6 +638,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      webviewTag: true,
       preload: path.join(__dirname, 'preload.js'),
       autoplayPolicy: 'no-user-gesture-required'
     },
@@ -601,25 +658,60 @@ function createWindow() {
     mainWindow.setAlwaysOnTop(true, 'floating');
   }
 
-  // macOS: Intercept focus events during recording.
-  // When getUserMedia/AudioContext activate, Chromium steals focus to our window.
-  // We immediately give it back by blurring + reactivating the target app via PID.
-  // PID-based activation is critical — name-based 'tell app X to activate' fails
-  // when multiple Electron apps share the same process name.
+  // IPC: Temporarily make window focusable when user needs keyboard input
+  // (e.g. settings, typing in transcript). Call 'release-focus' when done.
+  ipcMain.on('request-focus', () => {
+    if (mainWindow && !mainWindow.isDestroyed() && process.platform === 'darwin') {
+      mainWindow.setFocusable(true);
+      mainWindow.focus();
+    }
+  });
+  ipcMain.on('release-focus', () => {
+    if (mainWindow && !mainWindow.isDestroyed() && process.platform === 'darwin') {
+      mainWindow.blur();
+      mainWindow.setFocusable(false);
+    }
+  });
+
+  // macOS: Non-focusable window means getUserMedia/AudioContext can't steal focus.
+  // The cursor stays blinking in the external app at all times.
+  // Fallback focus guard for edge cases (e.g. window temporarily set focusable for settings).
   if (process.platform === 'darwin') {
     mainWindow.on('focus', () => {
-      if (isRecording && global._focusGuardActive && global._lastFocusedPid) {
-        console.info(`[Focus-Guard] Window stole focus during recording — returning to "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
+      if (isRecording) {
+        console.info('[Focus-Guard] Window gained focus during recording — releasing immediately');
         mainWindow.blur();
-        const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
-        execFile('osascript', ['-e', script], { timeout: 2000 });
       }
     });
   }
-  console.info(`[Startup] ★ macOS focus-guard v4 active (floating + delayed focus-intercept)`);
+  console.info(`[Startup] ★ macOS non-activating panel mode (cursor stays in external app)`);
+
+  // ── macOS Accessibility permission: required for auto-paste (Cmd+V keystrokes) ──
+  if (process.platform === 'darwin') {
+    const { systemPreferences } = require('electron');
+    const hasAccess = systemPreferences.isTrustedAccessibilityClient(false);
+    if (!hasAccess) {
+      console.warn('[Startup] ⚠️ Accessibility permission NOT granted — auto-paste will not work');
+      console.warn('[Startup] Requesting Accessibility access…');
+      // This triggers the macOS dialog asking the user to grant access
+      systemPreferences.isTrustedAccessibilityClient(true);
+    } else {
+      console.info('[Startup] ✓ Accessibility permission granted');
+    }
+  }
 
   // Load the renderer
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+
+  // Wave 12 B4 — drain any deep-links that arrived before the window
+  // existed (cold-boot "open windychat://room/foo" is the common case).
+  mainWindow.webContents.once('did-finish-load', () => {
+    while (pendingDeepLinks.length > 0) {
+      const payload = pendingDeepLinks.shift();
+      try { mainWindow.webContents.send('windy:deep-link', payload); }
+      catch (e) { console.warn('[DeepLink] queued delivery failed:', e?.message || e); }
+    }
+  });
 
   // CSP Headers
   // SEC-L1: 'unsafe-inline' for style-src is an accepted risk in Electron desktop.
@@ -659,8 +751,11 @@ function createWindow() {
 
   // Forward renderer console messages to terminal for debugging
   mainWindow.webContents.on('console-message', (event, level, message) => {
-    // Only forward errors, not debug spam — prevents EPIPE on stdout
-    if (level >= 2) {  // 2 = warning, 3 = error
+    // In dev mode, forward all logs; otherwise only warnings/errors
+    // Filter out repetitive CSP noise regardless
+    if (message.includes('Content-Security-Policy')) return;
+    const minLevel = process.argv.includes('--dev') ? 0 : 2;
+    if (level >= minLevel) {
       try { console.log(`[Renderer] ${message}`); } catch (_) { }
     }
   });
@@ -704,7 +799,7 @@ function createTray() {
   const icon = createTrayIcon('idle', iconSize);
 
   tray = new Tray(icon);
-  tray.setToolTip('Windy Pro - Click to show');
+  tray.setToolTip('Windy Word - Click to show');
 
   updateTrayMenu();
 
@@ -776,7 +871,7 @@ function updateTrayMenu() {
     },
     { type: 'separator' },
     {
-      label: 'Quit Windy Pro',
+      label: 'Quit Windy Word',
       click: () => {
         app.isQuitting = true;
         app.quit();
@@ -836,7 +931,7 @@ function showAboutWindow() {
   .copyright { color: #475569; font-size: 11px; margin-top: 12px; }
 </style></head><body>
   <div class="logo">🌪️</div>
-  <h1>Windy Pro</h1>
+  <h1>Windy Word</h1>
   <div class="version">Version ${version}</div>
   <div class="built">Built by WindyPro Labs</div>
   <div class="tech">Electron ${electronVersion} · Node ${nodeVersion} · ${process.arch}</div>
@@ -873,7 +968,7 @@ function createMacOSMenu() {
       label: app.name,
       submenu: [
         {
-          label: 'About Windy Pro',
+          label: 'About Windy Word',
           click: () => showAboutWindow()
         },
         { type: 'separator' },
@@ -900,7 +995,7 @@ function createMacOSMenu() {
         { role: 'unhide' },
         { type: 'separator' },
         {
-          label: 'Quit Windy Pro',
+          label: 'Quit Windy Word',
           accelerator: 'Cmd+Q',
           click: () => {
             app.isQuitting = true;
@@ -991,7 +1086,7 @@ function createMacOSMenu() {
         },
         { type: 'separator' },
         {
-          label: 'Windy Pro Website',
+          label: 'Windy Word Website',
           click: () => shell.openExternal('https://windyword.ai')
         },
         {
@@ -1000,7 +1095,7 @@ function createMacOSMenu() {
         },
         { type: 'separator' },
         {
-          label: 'About Windy Pro',
+          label: 'About Windy Word',
           click: () => showAboutWindow()
         }
       ]
@@ -1305,157 +1400,34 @@ function createVideoWindow() {
   return videoWindow;
 }
 
-// Show video preview
-ipcMain.handle('show-video-preview', async () => {
-  if (videoDismissed) return { ok: false, dismissed: true };
-  const win = createVideoWindow();
-  win.show();
-  return { ok: true };
-});
-
-// Relay video frames from main renderer to video preview window
-ipcMain.on('video-frame-to-preview', (event, dataUrl) => {
-  if (videoWindow && !videoWindow.isDestroyed() && !videoWindow.webContents.isDestroyed()) {
-    videoWindow.webContents.send('video-frame', dataUrl);
-  }
-});
-
-// Relay recording state to video preview window
-ipcMain.on('recording-state-to-preview', (event, state) => {
-  if (videoWindow && !videoWindow.isDestroyed() && !videoWindow.webContents.isDestroyed()) {
-    videoWindow.webContents.send('recording-state', state);
-  }
-});
-
-// Hide video preview (only on close button or explicit dismiss)
-ipcMain.handle('hide-video-preview', async () => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    videoWindow.webContents.send('stop-camera');
-    videoWindow.hide();
-  }
-  return { ok: true };
-});
-
-// Resize video preview
-ipcMain.on('resize-video-preview', (event, w, h) => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    videoWindow.setSize(Math.round(w), Math.round(h));
-  }
-});
-
-// Resize + reposition (for corners that need position adjustment)
-ipcMain.on('resize-move-video-preview', (event, w, h, x, y) => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    const rw = Math.round(w);
-    const rh = Math.round(h);
-    if (x !== null && y !== null) {
-      videoWindow.setBounds({ x: Math.round(x), y: Math.round(y), width: rw, height: rh });
-    } else if (x !== null) {
-      const bounds = videoWindow.getBounds();
-      videoWindow.setBounds({ x: Math.round(x), y: bounds.y, width: rw, height: rh });
-    } else if (y !== null) {
-      const bounds = videoWindow.getBounds();
-      videoWindow.setBounds({ x: bounds.x, y: Math.round(y), width: rw, height: rh });
-    } else {
-      videoWindow.setSize(rw, rh);
-    }
-  }
-});
-
-// ═══ Main-process mouse polling for resize (bypasses Electron pointer capture limits) ═══
-let resizeInterval = null;
-ipcMain.on('start-resize-video', (event, corner, startScreenX, startScreenY, startW, startH, startWinX, startWinY) => {
-  if (resizeInterval) clearInterval(resizeInterval);
-  const { screen } = require('electron');
-  resizeInterval = setInterval(() => {
-    if (!videoWindow || videoWindow.isDestroyed()) { clearInterval(resizeInterval); resizeInterval = null; return; }
-    const cursor = screen.getCursorScreenPoint();
-    const dx = cursor.x - startScreenX;
-    let newW, newX, newY;
-    switch (corner) {
-      case 'br':
-        newW = Math.max(160, Math.min(800, startW + dx));
-        break;
-      case 'bl':
-        newW = Math.max(160, Math.min(800, startW - dx));
-        newX = startWinX + (startW - newW);
-        break;
-      case 'tr':
-        newW = Math.max(160, Math.min(800, startW + dx));
-        break;
-      case 'tl':
-        newW = Math.max(160, Math.min(800, startW - dx));
-        newX = startWinX + (startW - newW);
-        break;
-    }
-    const newH = Math.round(newW * 9 / 16);
-    if (corner === 'tr' || corner === 'tl') {
-      newY = startWinY + (startH - newH);
-    }
-    const rw = Math.round(newW);
-    const rh = Math.round(newH);
-    if (newX !== undefined && newY !== undefined) {
-      videoWindow.setBounds({ x: Math.round(newX), y: Math.round(newY), width: rw, height: rh });
-    } else if (newX !== undefined) {
-      const b = videoWindow.getBounds();
-      videoWindow.setBounds({ x: Math.round(newX), y: b.y, width: rw, height: rh });
-    } else if (newY !== undefined) {
-      const b = videoWindow.getBounds();
-      videoWindow.setBounds({ x: b.x, y: Math.round(newY), width: rw, height: rh });
-    } else {
-      videoWindow.setSize(rw, rh);
-    }
-    // Send size back to renderer for label
-    try { videoWindow.webContents.send('resize-feedback', rw, rh); } catch (_) { }
-  }, 16); // ~60fps
-});
-
-ipcMain.on('stop-resize-video', () => {
-  if (resizeInterval) { clearInterval(resizeInterval); resizeInterval = null; }
-});
-
-ipcMain.on('close-video-preview', () => {
-  videoDismissed = true; // Don't auto-show again until app restart
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    videoWindow.webContents.send('stop-camera');
-    videoWindow.hide();
-  }
-});
-
-// Minimize video preview
-ipcMain.on('minimize-video-preview', () => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    videoWindow.minimize();
-  }
-});
-
-// Toggle always-on-top for video preview (send to back / bring to front)
-ipcMain.handle('toggle-video-always-on-top', async () => {
-  if (videoWindow && !videoWindow.isDestroyed()) {
-    const isOnTop = videoWindow.isAlwaysOnTop();
-    videoWindow.setAlwaysOnTop(!isOnTop);
-    return !isOnTop;
-  }
-  return false;
+// CR-009c: 11 video-preview IPC handlers extracted to ./ui/video-ipc.js.
+// videoWindow + videoDismissed are main.js-scoped `let` globals —
+// passed via ref wrappers so the registrar can mutate them through
+// the getter/setter bridge.
+const { registerVideoIpc } = require('./ui/video-ipc');
+const _videoWindowRef = {
+  get current() { return videoWindow; },
+  set current(v) { videoWindow = v; },
+};
+const _videoDismissedRef = {
+  get current() { return videoDismissed; },
+  set current(v) { videoDismissed = v; },
+};
+registerVideoIpc({
+  ipcMain,
+  createVideoWindow,
+  videoWindowRef: _videoWindowRef,
+  videoDismissedRef: _videoDismissedRef,
+  screen: require('electron').screen,
 });
 
 // ═══════════════════════════════════════════
 //  FONT SIZE CONTROL
 // ═══════════════════════════════════════════
 
-ipcMain.handle('get-font-size', async () => {
-  return store.get('appearance.fontSize') || 100;
-});
-
-ipcMain.handle('set-font-size', async (event, percent) => {
-  const clamped = Math.max(70, Math.min(150, percent));
-  store.set('appearance.fontSize', clamped);
-  // Notify renderer
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('font-size-changed', clamped);
-  }
-  return clamped;
-});
+// CR-009 cont: font-size / settings / rebind-hotkey extracted to
+// ./ui/settings-ipc.js. Registered lower in the file where
+// registerHotkeys is in scope.
 
 // ═══════════════════════════════════════════
 //  MINI TRANSLATE WINDOW (floating quick-translate)
@@ -1508,9 +1480,19 @@ ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang
   try {
     const https = require('https');
     const token = store.get('license.cloudToken') || '';
+    // CR-003: input sanity — reject absurdly large payloads at the
+    // client before shipping them to the API. Server also validates
+    // (≤5000 chars via shared/contracts/TranslateTextRequestSchema),
+    // but this saves the round-trip on obvious abuse.
+    if (typeof text !== 'string' || text.length === 0) {
+      return { error: 'Empty text' };
+    }
+    if (text.length > 5000) {
+      return { error: 'Text too long (max 5000 chars)' };
+    }
     const postData = JSON.stringify({ text, sourceLang, targetLang });
 
-    return await new Promise((resolve, reject) => {
+    const reqPromise = new Promise((resolve) => {
       const req = https.request('https://windyword.ai/api/v1/translate/text', {
         method: 'POST',
         headers: {
@@ -1533,9 +1515,12 @@ ipcMain.handle('mini-translate-text', async (event, text, sourceLang, targetLang
       req.write(postData);
       req.end();
     });
+    // CR-003: 15s end-to-end bound. The server's p99 is under 3s;
+    // anything above is a dead connection or an outage.
+    return await withTimeout(reqPromise, 15_000, 'mini-translate-text');
   } catch (err) {
     console.error('[mini-translate-text] Error:', err.message);
-    return { error: err.message };
+    return { error: err.message, timedOut: !!err.timedOut };
   }
 });
 
@@ -1637,238 +1622,52 @@ function showChatWindow() {
 // Chat IPC — open from renderer
 ipcMain.on('open-windy-chat', () => showChatWindow());
 
+// Launch Windy Code desktop app
+ipcMain.handle('launch-windy-code', async () => {
+  const { shell } = require('electron');
+  const fs = require('fs');
+  // Known install locations
+  const paths = [
+    path.join(require('os').homedir(), 'VSCode-darwin-x64', 'Windy Code.app'),
+    '/Applications/Windy Code.app',
+    path.join(require('os').homedir(), 'Applications', 'Windy Code.app')
+  ];
+  for (const appPath of paths) {
+    if (fs.existsSync(appPath)) {
+      await shell.openPath(appPath);
+      return { launched: true, path: appPath };
+    }
+  }
+  return { launched: false };
+});
+
 // Chat IPC — Authentication
-ipcMain.handle('chat-login', async (event, userId, password) => {
-  try {
-    const client = getChatClient();
-    const result = await client.login(userId, password);
-    if (result.success) _setupChatForwarding(client);
-    return result;
-  } catch (err) {
-    console.error('[chat-login] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-register', async (event, username, password, displayName) => {
-  try {
-    const client = getChatClient();
-    const result = await client.register(username, password, displayName);
-    if (result.success) _setupChatForwarding(client);
-    return result;
-  } catch (err) {
-    console.error('[chat-register] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-logout', async () => {
-  try {
-    if (chatClient) return await chatClient.logout();
-    return { success: true };
-  } catch (err) {
-    console.error('[chat-logout] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-get-session', async () => {
-  try {
-    const client = getChatClient();
-    const result = await client.resumeSession();
-    if (result.success) _setupChatForwarding(client);
-    return result;
-  } catch (err) {
-    console.error('[chat-get-session] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Messaging (client handles translation metadata internally)
-ipcMain.handle('chat-send-message', async (event, roomId, text) => {
-  try {
-    // Validate inputs
-    if (typeof roomId !== 'string' || roomId.length > 500) return { error: 'Invalid room ID' };
-    if (typeof text !== 'string' || text.length === 0 || text.length > 65535) return { error: 'Message too long or empty' };
-    return await getChatClient().sendMessage(roomId, text);
-  } catch (err) {
-    console.error('[chat-send-message] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-get-messages', async (event, roomId, limit) => {
-  try {
-    return await getChatClient().getMessages(roomId, limit || 50);
-  } catch (err) {
-    console.error('[chat-get-messages] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-send-typing', async (event, roomId, isTyping) => {
-  try {
-    return await getChatClient().sendTyping(roomId, isTyping);
-  } catch (err) {
-    console.error('[chat-send-typing] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Cached messages (offline access)
-ipcMain.handle('chat-get-cached-messages', async (event, roomId) => {
-  try {
-    return await getChatClient().getCachedMessages(roomId);
-  } catch (err) {
-    console.error('[chat-get-cached-messages] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Contacts & Rooms
-ipcMain.handle('chat-get-contacts', async () => {
-  try {
-    return await getChatClient().getContacts();
-  } catch (err) {
-    console.error('[chat-get-contacts] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-create-dm', async (event, userId) => {
-  try {
-    return await getChatClient().createDM(userId);
-  } catch (err) {
-    console.error('[chat-create-dm] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-accept-invite', async (event, roomId) => {
-  try {
-    return await getChatClient().acceptInvite(roomId);
-  } catch (err) {
-    console.error('[chat-accept-invite] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-decline-invite', async (event, roomId) => {
-  try {
-    return await getChatClient().declineInvite(roomId);
-  } catch (err) {
-    console.error('[chat-decline-invite] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Encryption
-ipcMain.handle('chat-get-crypto-status', async () => {
-  try {
-    return chatClient ? await chatClient.getCryptoStatus() : { enabled: false, deviceId: null, syncState: null };
-  } catch (err) {
-    console.error('[chat-get-crypto-status] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Profile & Presence
-ipcMain.handle('chat-set-display-name', async (event, displayName) => {
-  try {
-    return await getChatClient().setDisplayName(displayName);
-  } catch (err) {
-    console.error('[chat-set-display-name] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-set-presence', async (event, status) => {
-  try {
-    return await getChatClient().setPresence(status);
-  } catch (err) {
-    console.error('[chat-set-presence] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-get-user-profile', async (event, userId) => {
-  try {
-    return await getChatClient().getUserProfile(userId);
-  } catch (err) {
-    console.error('[chat-get-user-profile] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-get-total-unread', async () => {
-  try {
-    return await getChatClient().getTotalUnread();
-  } catch (err) {
-    console.error('[chat-get-total-unread] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Settings
-ipcMain.handle('chat-get-settings', async () => {
-  try {
-    return {
-      homeserver: store.get('chat.homeserver', 'https://matrix.org'),
-      displayName: store.get('chat.displayName', ''),
-      language: store.get('chat.language', 'en'),
-      userId: store.get('chat.userId', '')
-    };
-  } catch (err) {
-    console.error('[chat-get-settings] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-set-settings', async (event, settings) => {
-  try {
-    if (settings.homeserver) {
-      // Validate homeserver URL before saving
-      try {
-        const parsed = new URL(settings.homeserver);
-        const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
-        if (parsed.protocol !== 'https:' && !isLocalhost) {
-          return { ok: false, error: 'Homeserver must use HTTPS (except localhost for development)' };
-        }
-      } catch (e) {
-        return { ok: false, error: 'Invalid homeserver URL' };
-      }
-      store.set('chat.homeserver', settings.homeserver);
-    }
-    if (settings.displayName) {
-      store.set('chat.displayName', settings.displayName);
-      try { getChatClient().setDisplayName(settings.displayName); } catch (e) { console.debug('[Chat] setDisplayName failed:', e.message); }
-    }
-    if (settings.language) store.set('chat.language', settings.language);
-    return { ok: true };
-  } catch (err) {
-    console.error('[chat-set-settings] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-// Chat IPC — Translation utilities
-ipcMain.handle('chat-get-user-language', async () => {
-  try {
-    return chatTranslator ? chatTranslator.getUserLanguage() : store.get('chat.language', 'en');
-  } catch (err) {
-    console.error('[chat-get-user-language] Error:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('chat-translate-text', async (event, text, srcLang, tgtLang) => {
-  try {
-    if (!chatTranslator) chatTranslator = new ChatTranslator(store);
-    return await chatTranslator.translate(text, srcLang, tgtLang);
-  } catch (err) {
-    console.error('[chat-translate-text] Error:', err.message);
-    return { error: err.message };
-  }
+// CR-009: 21 chat-* IPC handlers extracted to ./chat/ipc.js so the
+// main.js cold path stays manageable. The translatorRef wrapper
+// preserves the original lazy-instantiate-on-first-translate
+// semantics — chatTranslator is a module-level let that can be
+// null until the first chat-translate-text call.
+const { registerChatIpc } = require('./chat/ipc');
+const _chatTranslatorRef = {
+  get current() { return chatTranslator; },
+  set current(v) { chatTranslator = v; },
+};
+// CR-012: ChatTranslator lazy-required on first chat-translate-text
+// call. Keeps matrix-js-sdk + chat-translate out of the cold path
+// for users who never open the chat window.
+const _ChatTranslatorLazy = function ChatTranslatorLazy(store) {
+  const { ChatTranslator } = require('./chat/chat-translate');
+  return new ChatTranslator(store);
+};
+registerChatIpc({
+  ipcMain,
+  getChatClient,
+  getChatClientUnsafe: () => chatClient,
+  setupChatForwarding: _setupChatForwarding,
+  withTimeout,
+  store,
+  ChatTranslator: _ChatTranslatorLazy,
+  translatorRef: _chatTranslatorRef,
 });
 
 // Forward events from Matrix client → chat BrowserWindow
@@ -1899,7 +1698,7 @@ function _setupChatForwarding(client) {
 function _updateTrayUnread(count) {
   try {
     if (tray && !tray.isDestroyed()) {
-      tray.setToolTip(count > 0 ? `Windy Pro (${count} unread)` : 'Windy Pro');
+      tray.setToolTip(count > 0 ? `Windy Word (${count} unread)` : 'Windy Word');
     }
     // Set dock badge (macOS) or taskbar overlay (Windows)
     if (app.dock && typeof app.dock.setBadge === 'function') {
@@ -2079,86 +1878,15 @@ async function migrateUnencryptedModels() {
   }
 }
 
-ipcMain.handle('pair-catalog', async () => {
-  try {
-    const catalogPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'shared', 'pair-catalog.json')
-      : path.join(__dirname, '..', '..', '..', 'shared', 'pair-catalog.json');
-    return JSON.parse(await fsp.readFile(catalogPath, 'utf-8'));
-  } catch (err) {
-    console.error('[PairDL] Failed to load catalog:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('pair-bundles', async () => {
-  try {
-    const bundlesPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'shared', 'pair-bundles.json')
-      : path.join(__dirname, '..', '..', '..', 'shared', 'pair-bundles.json');
-    return JSON.parse(await fsp.readFile(bundlesPath, 'utf-8'));
-  } catch (err) {
-    console.error('[PairDL] Failed to load bundles:', err.message);
-    return { error: err.message };
-  }
-});
-
-ipcMain.handle('pair-download', async (event, pairId) => {
-  try {
-    const mgr = getPairDownloadManager();
-    const catalogPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'shared', 'pair-catalog.json')
-      : path.join(__dirname, '..', '..', '..', 'shared', 'pair-catalog.json');
-    const catalog = JSON.parse(await fsp.readFile(catalogPath, 'utf-8'));
-    return await mgr.downloadPair(pairId, catalog);
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-ipcMain.handle('pair-download-bundle', async (event, pairIds) => {
-  try {
-    const mgr = getPairDownloadManager();
-    const catalogPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'shared', 'pair-catalog.json')
-      : path.join(__dirname, '..', '..', '..', 'shared', 'pair-catalog.json');
-    const catalog = JSON.parse(await fsp.readFile(catalogPath, 'utf-8'));
-    return await mgr.downloadBundle(pairIds, catalog);
-  } catch (err) {
-    return { results: {}, error: err.message };
-  }
-});
-
-ipcMain.handle('pair-cancel', async (event, pairId) => {
-  try {
-    return getPairDownloadManager().cancelDownload(pairId);
-  } catch (err) {
-    return { cancelled: false, error: err.message };
-  }
-});
-
-ipcMain.handle('pair-delete', async (event, pairId) => {
-  try {
-    return await getPairDownloadManager().deletePair(pairId);
-  } catch (err) {
-    return { deleted: false, error: err.message };
-  }
-});
-
-ipcMain.handle('pair-list-downloaded', async () => {
-  try {
-    return getPairDownloadManager().getDownloadedPairs();
-  } catch (err) {
-    return [];
-  }
-});
-
-ipcMain.handle('pair-storage-info', async () => {
-  try {
-    return await getPairDownloadManager().getStorageInfo();
-  } catch (err) {
-    return { usedBytes: 0, availableBytes: 0, pairs: [], error: err.message };
-  }
+// CR-009b: 8 pair-* IPC handlers extracted to ./chat/pair-ipc.js.
+// Same registrar pattern as chat/ipc.js; deps object keeps main.js
+// the sole owner of the PairDownloadManager cache.
+const { registerPairIpc } = require('./chat/pair-ipc');
+registerPairIpc({
+  ipcMain,
+  app,
+  getPairDownloadManager,
+  withTimeout,
 });
 
 // ── Live Listen: speech translation for Quick Translate ──
@@ -2428,33 +2156,42 @@ function registerHotkeys() {
           savedWindowId = execFileSync('xdotool', ['getactivewindow'], { timeout: 500 }).toString().trim();
           if (!/^\d+$/.test(savedWindowId)) savedWindowId = null;
         }
-        // macOS: Take a FRESH PID snapshot RIGHT NOW at hotkey-press time.
-        // The 1s poller might have stale data if the user just clicked a new app.
-        // This synchronous query guarantees we capture the correct target.
+         // macOS: Take a FRESH PID snapshot RIGHT NOW at hotkey-press time.
+        // Use async execFile to avoid blocking — the 500ms tracker already
+        // has a recent PID, so this is just a refinement.
         if (process.platform === 'darwin') {
           try {
-            const ourPid = process.pid;
-            const result = execFileSync('osascript', ['-e',
-              'tell application "System Events"\n' +
-              '  set fp to first application process whose frontmost is true\n' +
-              '  return (name of fp) & "|" & (unix id of fp)\n' +
-              'end tell'
-            ], { timeout: 1000 }).toString().trim();
-            const sep = result.lastIndexOf('|');
-            if (sep > 0) {
-              const appName = result.substring(0, sep);
-              const appPid = parseInt(result.substring(sep + 1), 10);
-              if (appPid && appPid !== ourPid) {
-                global._lastFocusedApp = appName;
-                global._lastFocusedPid = appPid;
-              }
+            const { BrowserWindow } = require('electron');
+            const focusedWin = BrowserWindow.getFocusedWindow();
+            if (!focusedWin) {
+              // Our window is NOT focused — capture the frontmost app (non-blocking)
+              execFile('osascript', ['-e',
+                'tell application "System Events"\n' +
+                '  set fp to first application process whose frontmost is true\n' +
+                '  return (name of fp) & "|" & (unix id of fp)\n' +
+                'end tell'
+              ], { timeout: 1000 }, (err, stdout) => {
+                if (err) return;
+                const result = stdout.toString().trim();
+                const sep = result.lastIndexOf('|');
+                if (sep > 0) {
+                  const appName = result.substring(0, sep);
+                  const appPid = parseInt(result.substring(sep + 1), 10);
+                  if (appPid && !global._ourPids.has(appPid)) {
+                    global._lastFocusedApp = appName;
+                    global._lastFocusedPid = appPid;
+                    console.info(`[Focus] Target app (async snapshot): "${appName}" (pid ${appPid})`);
+                  }
+                }
+              });
+            } else {
+              console.info('[Focus] Hotkey with own window focused — using previously tracked target');
             }
-          } catch (_) { /* use last known tracker value */ }
-          console.info(`[Focus] Target app (fresh snapshot): "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
+          } catch (_) { /* use tracker value */ }
+          console.info(`[Focus] Target (tracker): "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
         }
       } catch (_) { }
 
-      // Disable focus guard during getUserMedia startup (re-enable after 1s)
       global._focusGuardActive = false;
     }
 
@@ -2462,9 +2199,7 @@ function registerHotkeys() {
 
     // Restore focus to the user's target app after a delay (only when STARTING)
     if (!isRecording) {
-      // Just STOPPED recording — clear saved target so tracker captures fresh next time
-      global._lastFocusedPid = null;
-      global._lastFocusedApp = null;
+      // Just STOPPED recording — auto-paste will query current frontmost app
       return;
     }
 
@@ -2477,22 +2212,8 @@ function registerHotkeys() {
       setTimeout(restore, 200);
       setTimeout(restore, 500);
       setTimeout(restore, 1000);
-    } else if (process.platform === 'darwin') {
-      // Enable focus guard after 1s — enough for getUserMedia to complete.
-      setTimeout(() => {
-        global._focusGuardActive = true;
-        console.info('[Focus-Guard] Armed (1s grace period elapsed)');
-        // Explicit restore in case focus was stolen during startup
-        if (global._lastFocusedPid && isRecording) {
-          const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
-          execFile('osascript', ['-e', script], { timeout: 2000 },
-            (err) => {
-              if (!err) console.info(`[Focus] Restored focus to "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
-            }
-          );
-        }
-      }, 1000);
     }
+    // macOS: No focus restore needed — window is non-focusable, cursor stays blinking
   });
   console.info(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
 
@@ -2506,17 +2227,29 @@ function registerHotkeys() {
   const pasteClipAccel = hotkeys.pasteClipboard || 'CommandOrControl+Shift+B';
   const regClipboard = globalShortcut.register(pasteClipAccel, () => {
     // Small delay to let modifier keys release, then simulate Ctrl+V
-    const { exec } = require('child_process');
-    if (process.platform === 'linux') {
-      // --clearmodifiers ensures held keys (Ctrl+Shift from hotkey) don't interfere
-      exec('sleep 0.1 && xdotool key --clearmodifiers ctrl+v', (err) => {
-        if (err) console.error('[Hotkey] Paste clipboard failed:', err.message);
-      });
-    } else if (process.platform === 'darwin') {
-      exec('sleep 0.1 && osascript -e \'tell application "System Events" to keystroke "v" using command down\'');
-    } else {
-      exec('powershell -command "Start-Sleep -Milliseconds 100; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(\'^v\')"');
-    }
+    // CR-005: replace `exec('sleep … && …')` with execFile + setTimeout.
+    // The literal strings were safe (no renderer input interpolated),
+    // but the `&&` shell pattern is easy to accidentally break. Also
+    // avoids spawning a shell just to sleep.
+    const { execFile } = require('child_process');
+    setTimeout(() => {
+      if (process.platform === 'linux') {
+        // --clearmodifiers ensures held keys (Ctrl+Shift from hotkey) don't interfere
+        execFile('xdotool', ['key', '--clearmodifiers', 'ctrl+v'], (err) => {
+          if (err) console.error('[Hotkey] Paste clipboard failed:', err.message);
+        });
+      } else if (process.platform === 'darwin') {
+        execFile('osascript', ['-e',
+          'tell application "System Events" to keystroke "v" using command down'],
+          (err) => { if (err) console.error('[Hotkey] Paste clipboard failed:', err.message); });
+      } else {
+        // Windows: SendKeys ^v — no shell escapes needed when we pass
+        // the script via -Command as a single argv element.
+        execFile('powershell', ['-NoProfile', '-Command',
+          "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^v')"
+        ], (err) => { if (err) console.error('[Hotkey] Paste clipboard failed:', err.message); });
+      }
+    }, 100);
   });
   console.info(`[Hotkey] Paste clipboard (${pasteClipAccel}): ${regClipboard ? 'OK' : 'FAILED'}`);
 
@@ -2583,31 +2316,8 @@ function sanitizeHotkeys() {
   if (fixed) store.set('hotkeys', hotkeys);
 }
 
-ipcMain.handle('rebind-hotkey', (event, key, accelerator) => {
-  try {
-    // Block reserved system shortcuts
-    if (RESERVED_SHORTCUTS.includes(accelerator)) {
-      return { ok: false, error: `${accelerator} is a reserved system shortcut` };
-    }
-
-    // Unregister all current shortcuts
-    globalShortcut.unregisterAll();
-
-    // Update the specific hotkey in store
-    const hotkeys = store.get('hotkeys');
-    hotkeys[key] = accelerator;
-    store.set('hotkeys', hotkeys);
-
-    // Re-register all shortcuts with updated config
-    registerHotkeys();
-
-    console.info(`[Hotkey] Rebound ${key} → ${accelerator}`);
-    return { ok: true, key, accelerator };
-  } catch (err) {
-    console.error(`[Hotkey] Rebind failed:`, err);
-    return { ok: false, error: err.message };
-  }
-});
+// rebind-hotkey extracted to ./ui/settings-ipc.js — registered
+// below once registerHotkeys is in scope.
 
 /**
  * Toggle recording state
@@ -2623,25 +2333,27 @@ function toggleRecording() {
 
   // Update tray icon color based on state
   if (tray) {
-    tray.setToolTip(isRecording ? 'Windy Pro - Recording...' : 'Windy Pro');
+    tray.setToolTip(isRecording ? 'Windy Word - Recording...' : 'Windy Word');
   }
 
-  // macOS: getUserMedia/AudioContext steal focus to Electron window.
-  // Restore focus AGGRESSIVELY so the cursor keeps blinking in the target app.
-  // getUserMedia steals focus once, AudioContext may steal again — we hammer it back.
-  if (isRecording && process.platform === 'darwin') {
-    const restoreFocusToTarget = () => {
-      if (global._lastFocusedPid && isRecording) {
-        const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
-        execFile('osascript', ['-e', script], { timeout: 2000 });
-      }
+  // macOS: getUserMedia/AudioContext in Chromium steal focus even with focusable:false.
+  // Restore focus to the tracked target app in rapid succession to keep the cursor blinking.
+  // The cursor may flicker for ~150ms but comes back immediately.
+  if (isRecording && process.platform === 'darwin' && global._lastFocusedPid) {
+    const targetPid = global._lastFocusedPid;
+    const targetApp = global._lastFocusedApp;
+    const restoreFocus = () => {
+      if (!isRecording) return;
+      execFile('osascript', ['-e',
+        `tell application "System Events" to set frontmost of (first application process whose unix id is ${targetPid}) to true`
+      ], { timeout: 1500 }, (err) => {
+        if (!err) console.info(`[Focus] ✓ Cursor restored to "${targetApp}" (pid ${targetPid})`);
+      });
     };
-    // Rapid-fire restores to keep cursor blinking through getUserMedia + AudioContext
-    setTimeout(restoreFocusToTarget, 200);
-    setTimeout(restoreFocusToTarget, 400);
-    setTimeout(restoreFocusToTarget, 600);
-    setTimeout(restoreFocusToTarget, 1000);
-    setTimeout(restoreFocusToTarget, 1500);
+    // Rapid-fire restores: getUserMedia steals at ~100ms, AudioContext may steal again at ~300ms
+    setTimeout(restoreFocus, 150);
+    setTimeout(restoreFocus, 400);
+    setTimeout(restoreFocus, 800);
   }
 }
 
@@ -2656,18 +2368,28 @@ function pasteTranscript() {
 
 // Get transcript and paste it via cursor injection
 ipcMain.on('transcript-for-paste', async (event, transcript) => {
-  if (transcript && transcript.trim()) {
+  // CR-004: ipcMain.on (not handle) doesn't propagate the rejection
+  // back to the renderer — async exceptions become process-level
+  // unhandledRejection events. Wrap the WHOLE body so any throw
+  // (mainWindow destroyed mid-flight, injector unavailable, etc.)
+  // becomes a logged error instead of crashing the dialog handler.
+  try {
+    if (!transcript || !transcript.trim()) return;
     safeSend('state-change', 'injecting');
     updateTrayIcon('injecting');
 
-    // macOS: Activate target app by PID to give it keyboard focus.
-    // DO NOT hide the window — that causes visual disappearance.
+    // macOS: Activate tracked target app by PID before injecting.
+    // Must actively restore focus because macOS may have shifted
+    // focus to an Electron helper during processing.
     if (process.platform === 'darwin' && global._lastFocusedPid) {
-      const script = `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`;
-      execFile('osascript', ['-e', script], { timeout: 2000 });
-      await new Promise(resolve => setTimeout(resolve, 300));
-    } else if (mainWindow && mainWindow.isVisible()) {
-      // Non-macOS fallback: hide briefly
+      try {
+        execFileSync('osascript', ['-e',
+          `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`
+        ], { timeout: 2000 });
+        console.info(`[Paste] Activated "${global._lastFocusedApp}" (pid ${global._lastFocusedPid})`);
+      } catch (_) { /* best-effort */ }
+      await new Promise(resolve => setTimeout(resolve, 200));
+    } else if (process.platform !== 'darwin' && mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
       mainWindow.hide();
       await new Promise(resolve => setTimeout(resolve, 200));
     }
@@ -2681,13 +2403,20 @@ ipcMain.on('transcript-for-paste', async (event, transcript) => {
 
     // Restore UI state (window is already visible on macOS)
     setTimeout(() => {
-      if (mainWindow && !mainWindow.isVisible()) {
-        mainWindow.showInactive();  // Show without taking focus (non-macOS)
-      }
-      const newState = isRecording ? 'listening' : 'idle';
-      safeSend('state-change', newState);
-      updateTrayIcon(newState);
+      try {
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+          mainWindow.showInactive();  // Show without taking focus (non-macOS)
+        }
+        const newState = isRecording ? 'listening' : 'idle';
+        safeSend('state-change', newState);
+        updateTrayIcon(newState);
+      } catch (e) { console.error('[transcript-for-paste] restore-state failed:', e.message); }
     }, 500);
+  } catch (e) {
+    // Last-line-of-defence: never let an async exception escape an
+    // ipcMain.on listener.
+    console.error('[transcript-for-paste] handler threw:', e?.message || e);
+    writeCrashLog('transcript-for-paste', e);
   }
 });
 
@@ -2702,52 +2431,23 @@ ipcMain.handle('check-injection-permissions', async () => {
 });
 
 // Update settings — accepts flat keys from renderer and routes to correct store namespace
-ipcMain.on('update-settings', (event, settings) => {
-  const appearanceKeys = ['alwaysOnTop', 'opacity'];
-  const serverKeys = ['host', 'port'];
-  const hotkeyKeys = ['toggleRecording', 'pasteTranscript', 'showHide'];
-
-  for (const [key, value] of Object.entries(settings)) {
-    if (appearanceKeys.includes(key)) {
-      store.set(`appearance.${key}`, key === 'opacity' ? value / 100 : value);
-      if (key === 'alwaysOnTop' && mainWindow) mainWindow.setAlwaysOnTop(value, process.platform === 'darwin' ? 'floating' : 'normal');
-      if (key === 'opacity' && mainWindow) mainWindow.setOpacity(value / 100);
-    } else if (serverKeys.includes(key)) {
-      store.set(`server.${key}`, value);
-    } else if (hotkeyKeys.includes(key)) {
-      store.set(`hotkeys.${key}`, value);
-      if (app.isReady()) {
-        globalShortcut.unregisterAll();
-        registerHotkeys();
-      }
-    } else if (key === 'cloudPassword') {
-      // SEC-C1: Encrypt cloud password via safeStorage — never store plaintext
-      if (value && safeStorage.isEncryptionAvailable()) {
-        const encrypted = safeStorage.encryptString(String(value));
-        store.set('engine.cloudPasswordEncrypted', encrypted.toString('base64'));
-      } else if (value) {
-        // Fallback: electron-store (still better than renderer localStorage)
-        store.set('engine.cloudPassword', value);
-      }
-      store.delete('engine.cloudPassword'); // Remove any old plaintext
-    } else {
-      // Engine settings (model, device, language, vibeEnabled, micDeviceId)
-      store.set(`engine.${key}`, value);
-    }
-  }
-});
-
-// Get app version from package.json
-ipcMain.handle('get-app-version', () => app.getVersion());
-
-// Get settings — returns flat keys for the renderer
-ipcMain.handle('get-settings', () => {
-  return {
-    ...store.get('appearance'),
-    ...store.get('server'),
-    ...store.get('engine', {}),
-    hotkeys: store.get('hotkeys')
-  };
+// CR-009 cont: update-settings / get-settings / get-app-version /
+// get-font-size / set-font-size / rebind-hotkey extracted to
+// ./ui/settings-ipc.js. registerHotkeys is defined above, so the
+// registrar can take a direct reference.
+const { registerSettingsIpc } = require('./ui/settings-ipc');
+const _mainWindowRefForSettings = {
+  get current() { return mainWindow; },
+};
+registerSettingsIpc({
+  ipcMain,
+  store,
+  app,
+  safeStorage,
+  globalShortcut,
+  registerHotkeys,
+  mainWindowRef: _mainWindowRefForSettings,
+  reservedShortcuts: RESERVED_SHORTCUTS,
 });
 
 // SEC-P0: Encrypted API key storage via safeStorage (replaces plaintext localStorage)
@@ -2956,7 +2656,7 @@ ipcMain.handle('open-external-url', async (event, url) => {
       const extWin = new BrowserWindow({
         width: 1100,
         height: 750,
-        title: 'Windy Pro — Browser',
+        title: 'Windy Word — Browser',
         autoHideMenuBar: true,
         webPreferences: {
           nodeIntegration: false,
@@ -3046,7 +2746,172 @@ ipcMain.handle('open-external-url', async (event, url) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// WindyTune Adaptive Model Tracker
+// ═══════════════════════════════════════════════════════════════════
+const _windyTuneHistory = [];          // Rolling window of last 10 transcription timings
+const WINDYTUNE_MODEL_LADDER = ['tiny', 'base', 'small', 'medium', 'large-v3']; // fastest → most accurate
+const WINDYTUNE_THRESHOLDS = {
+  DOWNGRADE_RATIO: 2.0,       // transcription_time / audio_duration > 2x → too slow
+  UPGRADE_RATIO: 0.3,         // ratio < 0.3 → model is fast enough to try bigger
+  CRITICAL_SECONDS: 30,       // single transcription > 30s → immediate downgrade
+  AUTO_DOWNGRADE_AFTER: 2,    // consecutive slow transcriptions before auto-switch
+  PROMPT_UPGRADE_AFTER: 3,    // consecutive fast transcriptions before suggesting upgrade
+};
+
+function _windyTuneRecord(elapsed, audioDuration, model) {
+  const ratio = elapsed / Math.max(audioDuration, 0.1);
+  _windyTuneHistory.push({ elapsed, audioDuration, ratio, model, ts: Date.now() });
+  // Keep last 10
+  if (_windyTuneHistory.length > 10) _windyTuneHistory.shift();
+
+  const isWindyTune = store.get('engine.engine') === 'windytune';
+  if (!isWindyTune) return; // Only adapt in WindyTune auto mode
+
+  const currentIdx = WINDYTUNE_MODEL_LADDER.indexOf(model);
+  if (currentIdx < 0) return; // Unknown model, skip
+
+  // ── Critical: single transcription > 30s → immediate downgrade ──
+  if (elapsed > WINDYTUNE_THRESHOLDS.CRITICAL_SECONDS && currentIdx > 0) {
+    const newModel = WINDYTUNE_MODEL_LADDER[currentIdx - 1];
+    console.warn(`[WindyTune] ⚡ CRITICAL: ${elapsed.toFixed(1)}s transcription → auto-switching ${model} → ${newModel}`);
+    _windyTuneSwitch(newModel, `Transcription took ${elapsed.toFixed(0)}s — switched to ${newModel} for speed`);
+    return;
+  }
+
+  // ── Auto-downgrade: 2+ consecutive slow (ratio > 2x) ──
+  const recentSlow = _windyTuneHistory.slice(-WINDYTUNE_THRESHOLDS.AUTO_DOWNGRADE_AFTER);
+  if (recentSlow.length >= WINDYTUNE_THRESHOLDS.AUTO_DOWNGRADE_AFTER &&
+      recentSlow.every(h => h.ratio > WINDYTUNE_THRESHOLDS.DOWNGRADE_RATIO) &&
+      currentIdx > 0) {
+    const newModel = WINDYTUNE_MODEL_LADDER[currentIdx - 1];
+    const avgRatio = (recentSlow.reduce((s, h) => s + h.ratio, 0) / recentSlow.length).toFixed(1);
+    console.warn(`[WindyTune] ⚡ Auto-downgrade: avg ratio ${avgRatio}x → switching ${model} → ${newModel}`);
+    _windyTuneSwitch(newModel, `WindyTune switched to ${newModel} for faster performance (avg ${avgRatio}x slower than real-time)`);
+    return;
+  }
+
+  // ── Suggest upgrade: 3+ consecutive fast (ratio < 0.3x) ──
+  const recentFast = _windyTuneHistory.slice(-WINDYTUNE_THRESHOLDS.PROMPT_UPGRADE_AFTER);
+  if (recentFast.length >= WINDYTUNE_THRESHOLDS.PROMPT_UPGRADE_AFTER &&
+      recentFast.every(h => h.ratio < WINDYTUNE_THRESHOLDS.UPGRADE_RATIO) &&
+      currentIdx < WINDYTUNE_MODEL_LADDER.length - 1) {
+    const suggestedModel = WINDYTUNE_MODEL_LADDER[currentIdx + 1];
+    const avgRatio = (recentFast.reduce((s, h) => s + h.ratio, 0) / recentFast.length).toFixed(2);
+    console.info(`[WindyTune] 🎯 Upgrade suggestion: avg ratio ${avgRatio}x → suggesting ${suggestedModel}`);
+    safeSend('windytune-suggest-upgrade', {
+      currentModel: model,
+      suggestedModel,
+      avgRatio,
+      message: `Your hardware can handle ${suggestedModel} for better accuracy`
+    });
+    // Don't auto-switch — wait for user confirmation
+  }
+}
+
+function _windyTuneSwitch(newModel, userMessage) {
+  const oldModel = store.get('engine.model');
+  store.set('engine.model', newModel);
+  console.info(`[WindyTune] Model switched: ${oldModel} → ${newModel}`);
+
+  // Notify renderer
+  safeSend('windytune-model-switched', {
+    oldModel, newModel, message: userMessage,
+    canUndo: true
+  });
+
+  // Send config update to the Python WS server to hot-reload the model
+  if (pythonProcess && !pythonProcess.killed) {
+    try {
+      const WebSocket = require('ws');
+      const serverConfig = store.get('server', { host: '127.0.0.1', port: 9876 });
+      const ws = new WebSocket(`ws://${serverConfig.host}:${serverConfig.port}`);
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ action: 'config', config: { model: newModel } }));
+        setTimeout(() => ws.close(), 5000); // Close after model reload
+      });
+      ws.on('error', () => { /* Server may be restarting */ });
+    } catch (_) { /* ws module may not be available */ }
+  }
+}
+
+// IPC: User accepts/rejects upgrade suggestion from renderer
+ipcMain.handle('windytune-accept-upgrade', async (event, newModel) => {
+  console.info(`[WindyTune] User accepted upgrade to ${newModel}`);
+  _windyTuneSwitch(newModel, `Upgraded to ${newModel} for improved accuracy`);
+  return { ok: true };
+});
+
+ipcMain.handle('windytune-undo-switch', async (event, oldModel) => {
+  console.info(`[WindyTune] User undid model switch → reverting to ${oldModel}`);
+  _windyTuneSwitch(oldModel, `Reverted to ${oldModel}`);
+  return { ok: true };
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// WS-routed batch transcription (fast path — model already loaded)
+// ═══════════════════════════════════════════════════════════════════
+async function _transcribeViaWS(wavPath) {
+  const WebSocket = require('ws');
+  const serverConfig = store.get('server', { host: '127.0.0.1', port: 9876 });
+  const wsUrl = `ws://${serverConfig.host}:${serverConfig.port}`;
+
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(wsUrl);
+    let responded = false;
+    const timeout = setTimeout(() => {
+      if (!responded) {
+        responded = true;
+        ws.close();
+        reject(new Error('WS transcription timeout (120s)'));
+      }
+    }, 120000); // 120s — covers up to ~4 min recordings on CPU
+
+    ws.on('open', async () => {
+      try {
+        // Send the command
+        ws.send(JSON.stringify({ action: 'transcribe_blob', language: 'en', format: 'wav' }));
+        // Send the audio data as binary
+        const audioData = await fsp.readFile(wavPath);
+        ws.send(audioData);
+      } catch (err) {
+        responded = true;
+        clearTimeout(timeout);
+        ws.close();
+        reject(err);
+      }
+    });
+
+    ws.on('message', (data) => {
+      if (responded) return;
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'transcribe_result') {
+          responded = true;
+          clearTimeout(timeout);
+          ws.close();
+          if (msg.error) {
+            reject(new Error(msg.error));
+          } else {
+            resolve(msg);
+          }
+        }
+      } catch (_) { /* non-JSON message */ }
+    });
+
+    ws.on('error', (err) => {
+      if (!responded) {
+        responded = true;
+        clearTimeout(timeout);
+        reject(err);
+      }
+    });
+  });
+}
+
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
+  console.info('[Batch Local] Starting transcription, audio size:', base64Audio?.length || 0, 'chars');
+  const batchStartTime = Date.now();
   const tmpDir = os.tmpdir();
   // SEC-M8: Use crypto.randomBytes for unpredictable temp filenames
   const tmpId = crypto.randomBytes(16).toString('hex');
@@ -3057,6 +2922,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     // Save base64 audio to temp file
     const buffer = Buffer.from(base64Audio, 'base64');
     await fsp.writeFile(webmPath, buffer);
+    console.info('[Batch Local] Saved webm:', webmPath, '— size:', buffer.length, 'bytes');
 
     // Find ffmpeg — check bundled location (.windy-pro), userData, then PATH
     const appDataDir = app.getPath('userData');
@@ -3074,11 +2940,61 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
         break;
       }
     }
+    console.info('[Batch Local] Using ffmpeg:', ffmpegBin);
 
     // P0-1: Convert to WAV using async execFile (non-blocking)
-    await execFileAsync(ffmpegBin, ['-y', '-i', webmPath, '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', wavPath], { timeout: 30000 });
+    // Lenient flags handle chunked webm from MediaRecorder timeslice
+    try {
+      await execFileAsync(ffmpegBin, [
+        '-hide_banner', '-y',
+        '-fflags', '+genpts+discardcorrupt',
+        '-err_detect', 'ignore_err',
+        '-f', 'webm', '-i', webmPath,
+        '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', wavPath
+      ], { timeout: 30000 });
+    } catch (ffmpegErr) {
+      // If ffmpeg fails with file input, try stdin pipe as fallback
+      console.warn('[Batch Local] FFmpeg file input failed, trying stdin pipe:', ffmpegErr.message?.slice(0, 100));
+      await new Promise((resolve, reject) => {
+        const { spawn } = require('child_process');
+        const proc = spawn(ffmpegBin, [
+          '-hide_banner', '-y',
+          '-fflags', '+genpts+discardcorrupt',
+          '-f', 'webm', '-i', 'pipe:0',
+          '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', wavPath
+        ]);
+        let err = '';
+        proc.stderr.on('data', (d) => { err += d.toString().slice(-300); });
+        proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg stdin exit ${code}: ${err.slice(-150)}`)));
+        proc.on('error', reject);
+        // Kill after 25s if still running
+        const killTimer = setTimeout(() => { try { proc.kill(); } catch(_){} reject(new Error('ffmpeg stdin timeout')); }, 25000);
+        proc.on('close', () => clearTimeout(killTimer));
+        proc.stdin.write(buffer);
+        proc.stdin.end();
+      });
+    }
+    console.info('[Batch Local] FFmpeg conversion done, wav:', wavPath);
 
-    // Find the Python venv — check multiple locations
+    // ─── PRIMARY: WS-routed transcription (fast path) ───
+    // Model is already loaded in the Python server — no cold start
+    const transcribeStartTime = Date.now();
+    try {
+      const wsResult = await _transcribeViaWS(wavPath);
+      const transcribeElapsed = ((Date.now() - transcribeStartTime) / 1000).toFixed(1);
+      const totalElapsed = ((Date.now() - batchStartTime) / 1000).toFixed(1);
+      console.info(`[Batch Local] ⏱ WS transcription: ${transcribeElapsed}s (total pipeline: ${totalElapsed}s)`);
+      console.info(`[Batch Local] 📊 Ratio: ${wsResult.ratio}x (${wsResult.elapsed_s}s transcribe / ${wsResult.audio_duration_s}s audio, model: ${wsResult.model})`);
+
+      // Record timing for WindyTune adaptive logic
+      _windyTuneRecord(wsResult.elapsed_s, wsResult.audio_duration_s, wsResult.model);
+
+      return wsResult.text || '';
+    } catch (wsErr) {
+      console.warn(`[Batch Local] WS path failed (${wsErr.message}), falling back to standalone Python`);
+    }
+
+    // ─── FALLBACK: Standalone Python process (cold load) ───
     const appRoot = path.resolve(__dirname, '..', '..', '..');
     const venvPaths = process.platform === 'win32'
       ? [
@@ -3093,10 +3009,9 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
         path.join(appDataDir, 'venv', 'bin', 'python3'),
         '/usr/bin/python3'
       ];
-    const pythonPath = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
+    const pythonPathLocal = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
+    console.info('[Batch Local] Using python (fallback):', pythonPathLocal);
 
-
-    // Run faster-whisper transcription via temp script
     const modelName = store.get('engine.model') || 'base';
     const localModelDir = path.join(os.homedir(), '.windy-pro', 'model', `faster-whisper-${modelName}`);
     let bundledModelDir = '';
@@ -3109,21 +3024,37 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     } else if (bundledModelDir && fs.existsSync(path.join(bundledModelDir, 'model.bin'))) {
       modelRef = `"${bundledModelDir.replace(/\\/g, '/')}"`;
     }
+    console.info('[Batch Local] Model ref:', modelRef, '(configured model:', modelName, ')');
     const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${tmpId}.py`);
     const scriptContent = [
+      'import time',
       'from faster_whisper import WhisperModel',
+      't0 = time.monotonic()',
       `model = WhisperModel(${modelRef}, device="cpu", compute_type="int8")`,
-      `segments, info = model.transcribe("${wavPath.replace(/\\/g, '/')}", language="en", beam_size=5, condition_on_previous_text=True, vad_filter=True, no_speech_threshold=0.6)`,
+      `segments, info = model.transcribe("${wavPath.replace(/\\/g, '/')}", language="en", beam_size=5, condition_on_previous_text=True, vad_filter=False, no_speech_threshold=0.3)`,
       'text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())',
-      'print(text)'
+      'elapsed = round(time.monotonic() - t0, 2)',
+      'print(text)',
+      'import sys; print(f"__TIMING__:{elapsed}", file=sys.stderr)'
     ].join('\n');
     await fsp.writeFile(scriptPath, scriptContent);
+    console.info('[Batch Local] Running Python transcription script (fallback)...');
 
-    // P0-1: Use async execFile for Python transcription (non-blocking)
-    const { stdout } = await execFileAsync(pythonPath, [scriptPath], {
+    const { stdout, stderr } = await execFileAsync(pythonPathLocal, [scriptPath], {
       timeout: 120000,
       maxBuffer: 10 * 1024 * 1024
     });
+
+    // Extract timing from stderr
+    const totalElapsed = ((Date.now() - batchStartTime) / 1000).toFixed(1);
+    let pyElapsed = 0;
+    if (stderr) {
+      const timingMatch = stderr.match(/__TIMING__:([\d.]+)/);
+      if (timingMatch) pyElapsed = parseFloat(timingMatch[1]);
+      const cleanStderr = stderr.replace(/__TIMING__:[\d.]+\n?/, '').trim();
+      if (cleanStderr) console.warn('[Batch Local] Python stderr:', cleanStderr.substring(0, 500));
+    }
+    console.info(`[Batch Local] ⏱ Standalone transcription: ${pyElapsed}s (total pipeline: ${totalElapsed}s)`);
 
     try { await fsp.unlink(scriptPath); } catch (_) { }
 
@@ -3148,44 +3079,74 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
     console.info(`[AutoPaste] Target: "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
 
     if (process.platform === 'darwin') {
-      // ── macOS auto-paste via PID ──
+      // ── macOS auto-paste: TRACKER-BASED PID activation ──
+      // The focus tracker continuously updates _lastFocusedPid during recording
+      // and LOCKS it during batch processing (transcription). So at paste time,
+      // _lastFocusedPid = the last app the user interacted with before the
+      // transcription started. This is the most reliable target.
+      //
+      // We MUST actively activate this app by PID before sending Cmd+V, because
+      // macOS may have shifted focus to an Electron helper process during batch
+      // processing, even with focusable:false on our window.
+
       const targetPid = global._lastFocusedPid;
       const targetApp = global._lastFocusedApp || 'unknown';
-      if (!targetPid) {
-        console.warn(`[AutoPaste] No target PID — text on clipboard, use Cmd+V manually`);
+
+      // ── Pre-flight: check Accessibility permission (required for keystrokes) ──
+      const { systemPreferences } = require('electron');
+      const hasAccess = systemPreferences.isTrustedAccessibilityClient(false);
+      if (!hasAccess) {
+        console.warn('[AutoPaste] Accessibility permission not granted — requesting...');
+        systemPreferences.isTrustedAccessibilityClient(true);
+        console.warn('[AutoPaste] Text on clipboard — use Cmd+V manually.');
         return false;
       }
 
-      // Activate the exact target process by PID and send Cmd+V.
-      // PID-based activation works even when multiple apps share the name "Electron".
-      // DO NOT drop alwaysOnTop or hide the window — our floating window stays visible.
-      const appleScript = `
-        tell application "System Events"
-          set frontmost of (first application process whose unix id is ${targetPid}) to true
-        end tell
-        delay 0.3
-        tell application "System Events"
-          keystroke "v" using command down
-        end tell
-      `;
-      await new Promise((resolve) => execFile(
-        'osascript', ['-e', appleScript],
-        { timeout: 8000 }, (err, stdout, stderr) => {
-          if (err) {
-            console.error(`[AutoPaste] Failed:`, err.message);
-            if (stderr) console.error(`[AutoPaste] stderr:`, stderr);
-          } else {
-            console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars to "${targetApp}" (pid ${targetPid})`);
-          }
-          resolve();
+      if (!targetPid) {
+        // No tracked target — just send Cmd+V to whatever is focused
+        console.warn('[AutoPaste] No tracked PID — sending Cmd+V to current focus');
+        await new Promise(r => setTimeout(r, 100));
+        try {
+          execFileSync('/usr/local/bin/cliclick', ['kd:cmd', 't:v', 'ku:cmd'], { timeout: 2000 });
+          console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars via cliclick (blind)`);
+          return true;
+        } catch (_) {
+          return false;
         }
-      ));
+      }
 
-      // After paste, clear the saved target so the tracker captures
-      // whatever the user clicks NEXT, not the app we just activated.
-      global._lastFocusedPid = null;
-      global._lastFocusedApp = null;
-      return true;
+      // Step 1: Activate the TRACKED target app by PID
+      console.info(`[AutoPaste] Activating tracked target: "${targetApp}" (pid ${targetPid})`);
+      try {
+        execFileSync('osascript', ['-e',
+          `tell application "System Events" to set frontmost of (first application process whose unix id is ${targetPid}) to true`
+        ], { timeout: 2000 });
+      } catch (focusErr) {
+        console.warn(`[AutoPaste] Activation failed: ${focusErr.message} — trying blind paste`);
+      }
+
+      // Step 2: Wait for focus to settle
+      await new Promise(r => setTimeout(r, 200));
+
+      // Step 3: Send Cmd+V
+      let pasteOk = false;
+      try {
+        execFileSync('/usr/local/bin/cliclick', ['kd:cmd', 't:v', 'ku:cmd'], { timeout: 2000 });
+        console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars to "${targetApp}" (pid ${targetPid}) via cliclick`);
+        pasteOk = true;
+      } catch (cliErr) {
+        console.warn(`[AutoPaste] cliclick failed: ${cliErr.message}`);
+        try {
+          execFileSync('osascript', ['-e',
+            `tell application "System Events" to key code 9 using command down`
+          ], { timeout: 3000 });
+          console.info(`[AutoPaste] ✓ Pasted ${text.trim().length} chars to "${targetApp}" (pid ${targetPid}) via osascript`);
+          pasteOk = true;
+        } catch (osErr) {
+          console.warn('[AutoPaste] Both methods failed — text on clipboard, use Cmd+V');
+        }
+      }
+      return pasteOk;
 
     } else if (process.platform === 'linux') {
       // ── Linux auto-paste (xdotool — proven working) ──
@@ -3412,13 +3373,8 @@ ipcMain.handle('delete-archive-entry', async (event, filePath) => {
   }
 });
 
-<<<<<<< HEAD
-// ── WindyCloud Storage helpers ──────────────────────────────
-const CLOUD_STORAGE_DEFAULT_URL = 'https://windypro.thewindstorm.uk/api/storage';
-=======
 // ── Windy Pro Cloud Storage helpers ──────────────────────────────
 const CLOUD_STORAGE_DEFAULT_URL = 'https://windyword.ai/api/storage';
->>>>>>> 677e1414521bd8746ee9ef10412308bbf67fad52
 
 async function getCloudStorageToken() {
   const engine = store.get('engine', {});
@@ -5199,12 +5155,67 @@ ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
   }
 });
 
+// ═══ Mic Access Focus Restore ═══
+// Renderer sends this IMMEDIATELY after getUserMedia succeeds.
+// getUserMedia steals macOS focus → this restores it to the target app.
+// Also fires a second restore 200ms later to catch AudioContext focus-steal.
+ipcMain.on('mic-access-granted', () => {
+  if (process.platform !== 'darwin' || !global._lastFocusedPid) return;
+  const targetPid = global._lastFocusedPid;
+  const targetApp = global._lastFocusedApp;
+  console.info(`[Focus] Mic access granted — restoring cursor to "${targetApp}" (pid ${targetPid})`);
+
+  const restore = (label) => {
+    execFile('osascript', ['-e',
+      `tell application "System Events" to set frontmost of (first application process whose unix id is ${targetPid}) to true`
+    ], { timeout: 1500 }, (err) => {
+      if (!err) console.info(`[Focus] ✓ Cursor restored [${label}] to "${targetApp}" (pid ${targetPid})`);
+    });
+  };
+
+  // Aggressive multi-pulse restore sequence:
+  // - 0ms: Immediate (catches the getUserMedia steal)
+  // - 150ms: Quick follow-up
+  // - 400ms: AudioContext creation often steals focus here
+  // - 800ms: Late AudioContext initialization catch
+  // - 1500ms: Final safety net - ensures caret blink resumes
+  // - 3000ms: Ultra-late catch for slow systems
+  restore('immediate');
+  setTimeout(() => restore('150ms'), 150);
+  setTimeout(() => restore('400ms'), 400);
+  setTimeout(() => restore('800ms'), 800);
+  setTimeout(() => restore('1500ms'), 1500);
+  setTimeout(() => restore('3000ms'), 3000);
+
+  // ── Sustained focus keep-alive during recording ──
+  // Every 5s, re-assert focus to keep the cursor blinking.
+  // Some macOS apps lose caret blink if another process touches focus.
+  if (global._focusKeepAlive) clearInterval(global._focusKeepAlive);
+  global._focusKeepAlive = setInterval(() => {
+    if (!isRecording && !global._batchProcessing) {
+      clearInterval(global._focusKeepAlive);
+      global._focusKeepAlive = null;
+      return;
+    }
+    restore('keepalive');
+  }, 5000);
+});
+
 // Batch transcription complete notification
 ipcMain.on('batch-complete', (event, { wordCount }) => {
+  // Sync main process state back to idle
+  isRecording = false;
+  global._batchProcessing = false; // Allow focus tracker to resume
+  // Stop sustained focus keep-alive
+  if (global._focusKeepAlive) {
+    clearInterval(global._focusKeepAlive);
+    global._focusKeepAlive = null;
+  }
   // Update tray icon back to idle
   updateTrayIcon('idle');
   updateMiniState('idle');
   updateTrayMenu();
+  if (tray) tray.setToolTip('Windy Word');
 
   // Show OS notification
   if (Notification.isSupported()) {
@@ -5225,6 +5236,8 @@ ipcMain.on('batch-complete', (event, { wordCount }) => {
 
 // Batch processing started — update tray to red
 ipcMain.on('batch-processing', () => {
+  isRecording = false; // Recording stopped, now processing
+  global._batchProcessing = true; // Freeze focus tracker during processing
   updateTrayIcon('error'); // red = processing
   updateMiniState('processing');
   if (tray) tray.setToolTip('Windy Pro — Processing transcription...');
@@ -5233,10 +5246,22 @@ ipcMain.on('batch-processing', () => {
 // Recording failed in renderer — sync main state back to idle
 ipcMain.on('recording-failed', () => {
   isRecording = false;
+  global._batchProcessing = false;
   updateTrayMenu();
   updateTrayIcon('idle');
   updateMiniState('idle');
   if (tray) tray.setToolTip('Windy Pro');
+});
+
+// Recording stopped via UI button (not hotkey) — sync main process state
+// Keep _lastFocusedPid alive for async batch processing + auto-paste
+ipcMain.on('recording-stopped', () => {
+  isRecording = false;
+  updateTrayMenu();
+  updateTrayIcon('idle');
+  updateMiniState('idle');
+  if (tray) tray.setToolTip('Windy Word');
+  console.info(`[Recording] Stopped via UI. PID preserved: "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
 });
 
 // Save file dialog
@@ -5387,20 +5412,40 @@ app.whenReady().then(async () => {
   _perfMark('Window + tray created');
 
   // ═══ macOS Continuous Focus Tracker (PID-based) ═══
-  // Polls frontmost app every 1s — tracks BOTH name and PID.
-  // Filters by PID (not name) so we only skip our OWN Electron process.
-  // This means other Electron apps (VS Code, Cursor, Antigravity, etc.) are
-  // correctly captured as valid paste targets.
-  // Pauses during recording to freeze the target.
+  // Polls frontmost app every 500ms — tracks BOTH name and PID.
+  // Window is non-focusable so we rarely capture ourselves, but we still
+  // filter our own process tree to be safe.
+  // KEEPS RUNNING during recording so user can move cursor freely.
+  // Only pauses during batch processing (transcription) to lock paste target.
   if (process.platform === 'darwin') {
     global._lastFocusedApp = null;
     global._lastFocusedPid = null;
     global._focusGuardActive = false;
     const ourPid = process.pid;
-    global._focusTrackerInterval = setInterval(() => {
-      // Don't update during recording — keep the target frozen
-      if (isRecording) return;
+
+    // Build set of our own PIDs (main + all Electron helper child processes)
+    const _refreshOurPids = () => {
       try {
+        const pgrepOut = execFileSync('pgrep', ['-P', String(ourPid)], { timeout: 500 }).toString().trim();
+        pgrepOut.split('\n').forEach(p => { const n = parseInt(p, 10); if (n) global._ourPids.add(n); });
+      } catch (_) { /* pgrep may fail if no children */ }
+    };
+    _refreshOurPids();
+    // Re-scan child PIDs every 30s (new helper processes can spawn)
+    setInterval(_refreshOurPids, 30000);
+
+    global._focusTrackerInterval = setInterval(() => {
+      // FREEZE during recording AND batch processing.
+      // The PID captured just before recording starts is the paste target.
+      // This is the proven approach — running the tracker during recording
+      // causes rogue processes (e.g. this coding assistant) to corrupt the target.
+      if (isRecording || global._batchProcessing) return;
+      try {
+        // Primary check: if any of OUR windows is focused, skip entirely.
+        const { BrowserWindow } = require('electron');
+        const focusedWin = BrowserWindow.getFocusedWindow();
+        if (focusedWin) return; // Our app is focused — don't capture self
+
         // Query both name and PID of the frontmost process
         const result = execFileSync('osascript', ['-e',
           'tell application "System Events"\n' +
@@ -5412,15 +5457,15 @@ app.whenReady().then(async () => {
         if (sep > 0) {
           const appName = result.substring(0, sep);
           const appPid = parseInt(result.substring(sep + 1), 10);
-          // Only skip our OWN process — allow all other apps including other Electron apps
-          if (appPid && appPid !== ourPid) {
+          // Skip our ENTIRE process tree (main + renderer + GPU + utility helpers)
+          if (appPid && !global._ourPids.has(appPid)) {
             global._lastFocusedApp = appName;
             global._lastFocusedPid = appPid;
           }
         }
       } catch (_) { /* osascript timeout — skip this tick */ }
-    }, 1000);
-    console.info(`[Focus] macOS PID-based focus tracker started (1s poll, our pid=${ourPid})`);
+    }, 500); // 500ms = 2x faster for more responsive cursor tracking
+    console.info(`[Focus] macOS PID-based focus tracker started (500ms poll, our pid=${ourPid}, tree pids=${[...global._ourPids].join(',')})`);
   }
 
   // macOS dark mode: forward system theme changes to renderer
@@ -5634,6 +5679,95 @@ app.on('will-quit', () => {
     globalShortcut.unregisterAll();
   }
 });
+// ═══════════════════════════════════════════════════════════════════
+// Wave 12 B4 — deep-link URL schemes
+// ═══════════════════════════════════════════════════════════════════
+//
+// Register the four ecosystem URL schemes so macOS / Windows / Linux
+// route `windypro://…`, `windychat://…`, `windyword://…`, `windyfly://…`
+// to this Electron app. Runtime registration via
+// setAsDefaultProtocolClient covers the dev `npm start` case where the
+// .app bundle's Info.plist has not yet been generated by
+// electron-builder; the build-time registration lives in package.json's
+// `build.protocols` array and lands in CFBundleURLTypes on packaged
+// macOS builds.
+//
+// Incoming links arrive on two different events depending on platform:
+//   - macOS: `open-url` when the app is already running, or from argv
+//            on cold-boot launch via "open windypro://…"
+//   - Linux/Windows: `second-instance` with the URL in the additional
+//                    argv array (because the OS launches a new process
+//                    that immediately loses to the single-instance lock)
+//
+// Both paths funnel into handleDeepLink() which parses the URL and
+// routes to the right renderer view. We deliberately DO NOT exec any
+// code from the URL — only read its scheme + path + query and send a
+// typed IPC to the renderer, which decides what to do with it.
+const WINDY_PROTOCOL_SCHEMES = ['windypro', 'windychat', 'windyword', 'windyfly'];
+for (const scheme of WINDY_PROTOCOL_SCHEMES) {
+  try {
+    // On dev (process.execPath === electron) Electron registers
+    // correctly when given the current argv[1] hint. On packaged
+    // builds the plist entry is authoritative and this call is a
+    // no-op. Failure is non-fatal — log and continue so a missing
+    // registration doesn't prevent the app from starting.
+    if (process.defaultApp && process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient(scheme, process.execPath, [path.resolve(process.argv[1])]);
+    } else {
+      app.setAsDefaultProtocolClient(scheme);
+    }
+  } catch (e) {
+    console.warn(`[DeepLink] setAsDefaultProtocolClient(${scheme}) failed:`, e?.message || e);
+  }
+}
+
+/**
+ * Parse and route an incoming deep-link URL to the correct renderer view.
+ * Safe to call with untrusted input — we only forward parsed fields to
+ * the renderer via a typed IPC, never shell-exec or navigate to the URL.
+ */
+function handleDeepLink(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return;
+  if (!WINDY_PROTOCOL_SCHEMES.some(s => rawUrl.startsWith(`${s}://`))) {
+    console.warn('[DeepLink] Unknown scheme, ignoring:', rawUrl.slice(0, 40));
+    return;
+  }
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch (e) {
+    console.warn('[DeepLink] Malformed URL, ignoring:', e?.message || e);
+    return;
+  }
+  const payload = {
+    scheme: parsed.protocol.replace(':', ''),   // 'windypro', 'windychat', ...
+    host:   parsed.hostname,                     // 'room', 'hatch', 'settings'…
+    path:   parsed.pathname,                     // everything after the host
+    query:  Object.fromEntries(parsed.searchParams.entries()),
+    url:    rawUrl,
+  };
+  console.info('[DeepLink] Routing', payload.scheme + '://' + payload.host + payload.path);
+
+  // Focus the main window so the user actually sees whatever the
+  // renderer does with the link.
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.webContents.send('windy:deep-link', payload);
+  } else {
+    // App is still booting — queue the link for delivery once the
+    // window is created. `createWindow()` drains this queue.
+    pendingDeepLinks.push(payload);
+  }
+}
+const pendingDeepLinks = [];
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
+
 // Prevent multiple instances (with stale lock cleanup)
 const gotLock = app.requestSingleInstanceLock();
 
@@ -6223,8 +6357,31 @@ if (!gotLock) {
   console.info('[Main] Another instance is running. Quitting.');
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    // Focus existing window
+  // Cold-boot case on Linux/Windows: the URL is in process.argv of the
+  // first instance too. Scan once now so the link is queued before the
+  // renderer loads; macOS uses open-url for this path and hits the
+  // handler directly, which also queues via handleDeepLink().
+  {
+    const coldBootLink = process.argv.find(a =>
+      typeof a === 'string' &&
+      WINDY_PROTOCOL_SCHEMES.some(s => a.startsWith(`${s}://`)),
+    );
+    if (coldBootLink) handleDeepLink(coldBootLink);
+  }
+
+  app.on('second-instance', (_event, argv) => {
+    // On Linux/Windows a "windypro://…" launch starts a second process
+    // that immediately loses the single-instance lock — the URL is
+    // handed to us here via argv. Scan for any of our schemes and
+    // route through the same deep-link pipeline as macOS's open-url.
+    const deepLink = (argv || []).find(a =>
+      typeof a === 'string' &&
+      WINDY_PROTOCOL_SCHEMES.some(s => a.startsWith(`${s}://`)),
+    );
+    if (deepLink) handleDeepLink(deepLink);
+
+    // Focus existing window (always — this is also the "already
+    // running, launch me again" path with no URL).
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();

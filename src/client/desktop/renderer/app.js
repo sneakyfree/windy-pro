@@ -478,26 +478,35 @@ class WindyApp {
       });
     }
 
-    // Controls collapse toggle — chevron is in the status bar
-    const collapsible = document.getElementById('controlsCollapsible');
+    // Controls pin/unpin toggle — chevron is in the status bar
+    // Pinned = entire bottom panel always visible; Unpinned = hover to reveal
+    const expandable = document.getElementById('bottomExpandable');
     const chevron = document.getElementById('controlsChevron');
     const miniRec = document.getElementById('miniRecordBtn');
-    if (chevron && collapsible) {
-      // Restore saved state
-      const saved = localStorage.getItem('windy_controlsCollapsed') === 'true';
-      if (saved) {
-        collapsible.classList.add('collapsed');
+    if (chevron && expandable) {
+      // Restore saved state (default: pinned/open for new users)
+      const isPinned = localStorage.getItem('windy_controlsPinned') !== 'false';
+      if (isPinned) {
+        expandable.classList.add('pinned');
+        chevron.classList.add('pinned');
+        chevron.textContent = '▾';
+        if (miniRec) miniRec.style.display = 'none';
+      } else {
         chevron.classList.add('collapsed');
+        chevron.textContent = '▸';
         if (miniRec) miniRec.style.display = '';
       }
 
       chevron.addEventListener('click', (e) => {
         e.stopPropagation();
-        const isCollapsed = collapsible.classList.toggle('collapsed');
-        chevron.classList.toggle('collapsed', isCollapsed);
-        chevron.setAttribute('aria-expanded', !isCollapsed);
-        if (miniRec) miniRec.style.display = isCollapsed ? '' : 'none';
-        localStorage.setItem('windy_controlsCollapsed', isCollapsed);
+        const nowPinned = !expandable.classList.contains('pinned');
+        expandable.classList.toggle('pinned', nowPinned);
+        chevron.classList.toggle('pinned', nowPinned);
+        chevron.classList.toggle('collapsed', !nowPinned);
+        chevron.textContent = nowPinned ? '▾' : '▸';
+        chevron.setAttribute('aria-expanded', nowPinned);
+        if (miniRec) miniRec.style.display = nowPinned ? 'none' : '';
+        localStorage.setItem('windy_controlsPinned', nowPinned);
       });
 
       // Keyboard activation for chevron (Enter/Space)
@@ -516,6 +525,30 @@ class WindyApp {
         });
       }
     }
+
+    // Apply saved bottom-panel visibility modes
+    this.applyPanelVisibility();
+  }
+
+  /**
+   * Apply per-bar visibility modes from localStorage.
+   * Each bar can be: "always" (pinned), "hover" (reveal on bottom hover), or "hidden".
+   */
+  applyPanelVisibility() {
+    const map = {
+      playback: document.getElementById('playbackSlot'),
+      export: document.getElementById('exportBar'),
+      controls: document.querySelector('.control-bar'),
+    };
+    const defaults = { playback: 'hover', export: 'hover', controls: 'always' };
+    Object.entries(map).forEach(([key, el]) => {
+      if (!el) return;
+      el.classList.remove('panel-vis-hidden', 'panel-vis-hover');
+      const mode = localStorage.getItem('windy_panelVis_' + key) || defaults[key];
+      if (mode === 'hidden') el.classList.add('panel-vis-hidden');
+      else if (mode === 'hover') el.classList.add('panel-vis-hover');
+      // 'always' = no class, uses default layout
+    });
   }
 
   /**
@@ -523,11 +556,21 @@ class WindyApp {
    */
   bindIPCEvents() {
     // Toggle recording from hotkey
-    window.windyAPI.onToggleRecording((isRecording) => {
-      // Mark as hotkey-triggered so toggleRecording skips the blip
-      // (AudioContext creation steals window focus on Linux)
+    window.windyAPI.onToggleRecording((shouldRecord) => {
+      // Use the main process isRecording as the command (source of truth)
+      // This prevents state desync between main and renderer
       this._hotkeyTriggered = true;
-      this.toggleRecording();
+      if (shouldRecord && !this.isRecording) {
+        // Main says START and renderer is idle → start
+        this.toggleRecording();
+      } else if (!shouldRecord && this.isRecording) {
+        // Main says STOP and renderer is recording → stop
+        this.toggleRecording();
+      } else {
+        // Already in sync — force resync main process if needed
+        console.debug('[Toggle] Already in sync, isRecording:', this.isRecording);
+      }
+      this._hotkeyTriggered = false;
     });
 
     // Request transcript for paste (global hotkey path)
@@ -583,6 +626,23 @@ class WindyApp {
     // ═══ Keyboard Shortcuts Modal ═══
     window.windyAPI.onShowKeyboardShortcuts?.(() => {
       this._showKeyboardShortcutsModal();
+    });
+
+    // ═══ WindyTune Adaptive Model Notifications ═══
+    window.windyAPI.onWindyTuneModelSwitched?.((data) => {
+      console.info(`[WindyTune] Model switched: ${data.oldModel} → ${data.newModel}`);
+      // Update model badge in status bar
+      const modelBadge = document.getElementById('modelBadge');
+      if (modelBadge) {
+        modelBadge.textContent = `WindyTune (${data.newModel})`;
+      }
+      // Show actionable toast with Undo option
+      this._showWindyTuneToast(`⚡ ${data.message}`, data.canUndo ? data.oldModel : null);
+    });
+
+    window.windyAPI.onWindyTuneSuggestUpgrade?.((data) => {
+      console.info(`[WindyTune] Upgrade suggested: ${data.currentModel} → ${data.suggestedModel}`);
+      this._showWindyTuneUpgradeToast(data);
     });
   }
 
@@ -843,6 +903,71 @@ class WindyApp {
       toast.classList.remove('visible');
       setTimeout(() => { toast.style.display = 'none'; }, 300);
     }
+  }
+
+  /**
+   * WindyTune: show model-switch toast with optional Undo button
+   */
+  _showWindyTuneToast(message, undoModel) {
+    const toast = document.getElementById('reconnectToast');
+    if (!toast) return;
+
+    if (undoModel) {
+      toast.innerHTML = `${message} <button id="windytuneUndo" style="margin-left:8px;padding:2px 10px;border-radius:4px;background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.3);cursor:pointer;font-size:12px">Undo</button>`;
+      toast.style.display = 'block';
+      toast.classList.add('visible');
+
+      const undoBtn = document.getElementById('windytuneUndo');
+      if (undoBtn) {
+        undoBtn.addEventListener('click', () => {
+          window.windyAPI.windytuneUndoSwitch?.(undoModel);
+          toast.classList.remove('visible');
+          setTimeout(() => { toast.style.display = 'none'; }, 300);
+        }, { once: true });
+      }
+    } else {
+      toast.textContent = message;
+      toast.style.display = 'block';
+      toast.classList.add('visible');
+    }
+
+    clearTimeout(this._reconnectToastTimer);
+    this._reconnectToastTimer = setTimeout(() => {
+      toast.classList.remove('visible');
+      setTimeout(() => { toast.style.display = 'none'; toast.innerHTML = ''; }, 300);
+    }, 8000);
+  }
+
+  /**
+   * WindyTune: show upgrade suggestion toast with Switch/Keep buttons
+   */
+  _showWindyTuneUpgradeToast(data) {
+    const toast = document.getElementById('reconnectToast');
+    if (!toast) return;
+
+    toast.innerHTML = `🎯 ${data.message} ` +
+      `<button id="windytuneAccept" style="margin-left:8px;padding:2px 10px;border-radius:4px;background:#00b894;color:#fff;border:none;cursor:pointer;font-size:12px">Switch Now</button>` +
+      `<button id="windytuneKeep" style="margin-left:4px;padding:2px 10px;border-radius:4px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);cursor:pointer;font-size:12px">Keep Current</button>`;
+    toast.style.display = 'block';
+    toast.classList.add('visible');
+
+    document.getElementById('windytuneAccept')?.addEventListener('click', () => {
+      window.windyAPI.windytuneAcceptUpgrade?.(data.suggestedModel);
+      toast.classList.remove('visible');
+      setTimeout(() => { toast.style.display = 'none'; toast.innerHTML = ''; }, 300);
+    }, { once: true });
+
+    document.getElementById('windytuneKeep')?.addEventListener('click', () => {
+      toast.classList.remove('visible');
+      setTimeout(() => { toast.style.display = 'none'; toast.innerHTML = ''; }, 300);
+    }, { once: true });
+
+    // Auto-dismiss after 15s (upgrade is not urgent)
+    clearTimeout(this._reconnectToastTimer);
+    this._reconnectToastTimer = setTimeout(() => {
+      toast.classList.remove('visible');
+      setTimeout(() => { toast.style.display = 'none'; toast.innerHTML = ''; }, 300);
+    }, 15000);
   }
 
   /**
@@ -1790,6 +1915,15 @@ class WindyApp {
    * Uses MediaRecorder for high-quality capture.
    */
   async startBatchRecording() {
+    console.error('[Batch] ▶ startBatchRecording() entered');
+
+    // ═══ INSTANT UI FEEDBACK ═══
+    // Show green strobe IMMEDIATELY — don't wait for getUserMedia/IPC.
+    // This eliminates the 1.5-2s perceived delay.
+    this.isRecording = true;
+    this.setState('listening');
+    this.transcriptContent.contentEditable = 'false';
+
     try {
       // 0. Feature gating — check tier limits
       let tierLimits = null;
@@ -1798,8 +1932,7 @@ class WindyApp {
           const tierInfo = await window.windyAPI.getCurrentTier();
           tierLimits = tierInfo?.limits;
           if (tierLimits && !tierLimits.batchMode) {
-            this.showReconnectToast('⚡ Batch mode requires Pro. Upgrade in Settings → Your Plan.');
-            // Fall through anyway — allow basic recording but with shorter limit
+            // Batch mode is now available on all tiers — no gate needed
           }
           // Override max recording with tier limit
           if (tierLimits?.maxMinutes) {
@@ -1828,6 +1961,13 @@ class WindyApp {
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
+      // ═══ FOCUS RESTORE ═══
+      // getUserMedia just stole focus from the target app.
+      // Tell main process to restore it NOW — cursor appears within ~100ms.
+      if (window.windyAPI?.restoreFocus) {
+        window.windyAPI.restoreFocus();
+      }
+
       // 2. Use MediaRecorder to capture full audio
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus' : 'audio/webm';
@@ -1838,7 +1978,8 @@ class WindyApp {
         if (e.data.size > 0) this._batchChunks.push(e.data);
       };
 
-      // 3. Record continuously (timeslice = 1000ms for smooth data flow)
+      // 3. Record continuously (timeslice = 1000ms for reliable data capture)
+      //    Without timeslice, Electron's MediaRecorder produces near-empty blobs
       this._batchRecorder.start(1000);
       this._batchStartTime = Date.now();
 
@@ -1994,12 +2135,9 @@ class WindyApp {
         console.warn('[Batch] Voice level monitor failed:', e.message);
       }
 
-      // 6. UI state
-      this.isRecording = true;
-      this.setState('listening');
+      // 6. UI state (already set at top for instant feedback)
       this._batchStream = stream;
       this.recordingStartedAt = new Date().toISOString();
-      this.transcriptContent.contentEditable = 'false';
 
       // Clear placeholder
       const placeholder = this.transcriptContent.querySelector('.placeholder');
@@ -2056,6 +2194,7 @@ class WindyApp {
    * Stop batch recording and send audio for processing.
    */
   async stopBatchRecording() {
+    console.error('[Batch] ⏹ stopBatchRecording() entered, recorder state:', this._batchRecorder?.state);
     // Clear timers
     clearTimeout(this._batchMaxTimer);
     clearTimeout(this._batchWarnTimer);
@@ -2088,9 +2227,17 @@ class WindyApp {
         }
 
         // Build audio blob
+        const chunkCount = this._batchChunks.length;
+        const chunkSizes = this._batchChunks.map(c => c.size);
         const audioBlob = new Blob(this._batchChunks, { type: this._batchRecorder.mimeType });
         this._batchChunks = [];
         this._lastBatchBlob = audioBlob;  // Save for audio playback
+        console.info(`[Batch] Audio blob: ${(audioBlob.size / 1024).toFixed(1)}KB from ${chunkCount} chunks (sizes: ${chunkSizes.map(s => (s/1024).toFixed(1)+'KB').join(', ')})`);
+
+        // Notify main process that recording stopped (keeps isRecording in sync for UI-button stops)
+        if (window.windyAPI?.notifyRecordingStopped) {
+          window.windyAPI.notifyRecordingStopped();
+        }
 
         // Build video blob if video was captured
         let videoBlob = null;
@@ -2214,11 +2361,11 @@ class WindyApp {
             result = await this._batchTranscribeLocal(audioBlob);
           }
 
-          // ═══ WindyTune: Auto-downgrade if batch took > 10s ═══
+          // ═══ WindyTune: Auto-downgrade if batch took > 30s ═══
           const batchDuration = (Date.now() - batchStartMs) / 1000;
           console.debug(`[Batch] Transcription completed in ${batchDuration.toFixed(1)}s`);
 
-          if (engine === 'windytune' && batchDuration > 10) {
+          if (engine === 'windytune' && batchDuration > 30) {
             const modelOrder = ['large-v3', 'turbo', 'medium.en', 'medium', 'small', 'base', 'tiny'];
             const currentModel = this._engineModelMap?.[engine] || localStorage.getItem('windy_model') || 'small';
             const idx = modelOrder.indexOf(currentModel);
@@ -2238,8 +2385,13 @@ class WindyApp {
         } catch (err) {
           console.error('[Batch] Transcription failed:', err);
           this.showReconnectToast(`⚠️ Processing failed: ${err.message}`);
+          // Clear the processing spinner from transcript area
+          this.transcriptContent.innerHTML = `<p style="color:#EF4444;text-align:center;padding:20px;">⚠️ Transcription failed<br><span style="font-size:12px;color:#888;">${err.message}</span></p>`;
           this.setState('error');
           setTimeout(() => this.setState('idle'), 3000);
+        } finally {
+          // Always clean up the processing effect interval
+          clearInterval(this._processEffectInterval);
         }
 
         resolve();
@@ -2448,7 +2600,15 @@ class WindyApp {
           if (!fxPasteMode || fxPasteMode === 'default' || fxPasteMode === 'silent') {
             this._playPasteBlip();
           }
-          await window.windyAPI.autoPasteText(text.trim());
+          const pasteResult = await window.windyAPI.autoPasteText(text.trim());
+          if (!pasteResult) {
+            // Paste failed (no target PID or target not reachable)
+            // Text is already archived and on clipboard — show toast and clear after brief delay
+            console.warn('[AutoPaste] Paste returned false — text on clipboard and archived. Use Cmd+V to paste.');
+            this.showReconnectToast('📋 Text copied to clipboard — use Cmd+V to paste');
+            // Still clear after 3s since text is archived and on clipboard
+            setTimeout(() => this.clearTranscript(), 3000);
+          }
           // Strand I: trigger paste effect with word count for dynamic scaling
           try { if (this.effectsEngine) this.effectsEngine.trigger('paste', { wordCount: text.trim().split(/\s+/).length }); } catch (_) { }
           // Only clear if "Clear after paste" is checked (stored in electron-store, not localStorage)
@@ -2464,6 +2624,7 @@ class WindyApp {
           }
         } catch (err) {
           console.warn('[AutoPaste] Failed, use Ctrl+Shift+V to paste manually');
+          this.showReconnectToast('📋 Text on clipboard — use Cmd+V to paste manually');
         }
       }, 500);
     }
@@ -2652,10 +2813,11 @@ class WindyApp {
       <audio controls src="${audioUrl}" preload="metadata" style="flex:1;height:28px;"></audio>
     `;
 
-    // Insert after transcript container
-    const container = document.getElementById('transcriptContainer');
-    if (container) {
-      container.parentNode.insertBefore(bar, container.nextSibling);
+    // Insert into the persistent playback slot
+    const slot = document.getElementById('playbackSlot');
+    if (slot) {
+      slot.innerHTML = '';
+      slot.appendChild(bar);
     }
   }
 
@@ -2663,45 +2825,14 @@ class WindyApp {
    * Show export buttons after batch transcription.
    */
   _showExportButtons(text) {
-    // Remove existing
-    const existing = document.getElementById('exportBar');
-    if (existing) existing.remove();
-
-    const bar = document.createElement('div');
-    bar.id = 'exportBar';
-    bar.className = 'export-bar';
-    const collapsed = localStorage.getItem('windy_exportCollapsed') === 'true';
-    bar.innerHTML = `
-      <div class="export-toggle" id="exportToggle" title="Toggle export options">
-        <span class="export-chevron ${collapsed ? '' : 'open'}">${collapsed ? '▸' : '▾'}</span> Export
-      </div>
-      <div class="export-buttons ${collapsed ? 'collapsed' : ''}" id="exportButtons">
-        <button class="export-btn" data-format="copy" title="Copy to clipboard">📋 Copy</button>
-        <button class="export-btn" data-format="txt" title="Save as plain text">📄 .txt</button>
-        <button class="export-btn" data-format="md" title="Save as Markdown">📝 .md</button>
-        <button class="export-btn" data-format="srt" title="Save as subtitles">📊 .srt</button>
-      </div>
-    `;
-
-    // Insert before control bar
-    const controlBar = document.querySelector('.control-bar');
-    if (controlBar) {
-      controlBar.parentNode.insertBefore(bar, controlBar);
-    }
-
-    // Toggle collapse
-    bar.querySelector('#exportToggle').addEventListener('click', () => {
-      const btns = bar.querySelector('#exportButtons');
-      const chev = bar.querySelector('.export-chevron');
-      const isCollapsed = btns.classList.toggle('collapsed');
-      chev.textContent = isCollapsed ? '▸' : '▾';
-      chev.classList.toggle('open', !isCollapsed);
-      localStorage.setItem('windy_exportCollapsed', isCollapsed);
-    });
-
-    // Bind click handlers
-    bar.querySelectorAll('.export-btn').forEach(btn => {
-      btn.addEventListener('click', () => this._exportTranscript(text, btn.dataset.format));
+    // Bind the always-present export buttons to the current transcript text
+    const container = document.getElementById('exportButtons');
+    if (!container) return;
+    container.querySelectorAll('.export-btn').forEach(btn => {
+      // Clone to remove old listeners
+      const fresh = btn.cloneNode(true);
+      fresh.addEventListener('click', () => this._exportTranscript(text, fresh.dataset.format));
+      btn.parentNode.replaceChild(fresh, btn);
     });
   }
 
@@ -2720,33 +2851,38 @@ class WindyApp {
       return;
     }
 
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    // Delegate to the pure transcript-format module (extracted in P4
+    // so the format helpers can be unit-tested without spinning up
+    // the renderer). Keep the WindyDateUtils preference for Markdown
+    // headers — module's default is plain toLocaleString.
+    const fmt = window.WindyTranscriptFormat;
     let content, defaultName, filters;
+    const now = new Date();
+    defaultName = fmt ? fmt.defaultFilenameFor(format, now)
+      : `transcript-${now.toISOString().slice(0, 19).replace(/:/g, '-')}.${format}`;
 
     if (format === 'txt') {
-      content = text;
-      defaultName = `transcript-${timestamp}.txt`;
+      content = fmt ? fmt.toTxt(text) : text;
       filters = [{ name: 'Text', extensions: ['txt'] }];
     } else if (format === 'md') {
-      const paragraphs = text.split(/\n+/).filter(p => p.trim());
-      content = `# Transcript — ${window.WindyDateUtils ? WindyDateUtils.formatFull(new Date()) : new Date().toLocaleString()}\n\n${paragraphs.map(p => p.trim()).join('\n\n')}\n`;
-      defaultName = `transcript-${timestamp}.md`;
+      // Allow WindyDateUtils to override the Markdown header timestamp
+      // when present (matches the pre-refactor wording).
+      if (fmt) {
+        if (window.WindyDateUtils) {
+          // Inline path mirrors fmt.toMd with the alternate stamp.
+          const safeText = typeof text === 'string' ? text : '';
+          const stamp = WindyDateUtils.formatFull(now);
+          const paragraphs = safeText.split(/\n+/).filter(p => p.trim());
+          content = `# Transcript — ${stamp}\n\n${paragraphs.map(p => p.trim()).join('\n\n')}\n`;
+        } else {
+          content = fmt.toMd(text, now);
+        }
+      } else {
+        content = `# Transcript — ${now.toLocaleString()}\n\n${text}\n`;
+      }
       filters = [{ name: 'Markdown', extensions: ['md'] }];
     } else if (format === 'srt') {
-      // Generate SRT from text — split into ~10s chunks
-      const words = text.split(/\s+/);
-      const chunkSize = 15; // words per subtitle
-      let srt = '';
-      for (let i = 0, idx = 1; i < words.length; i += chunkSize, idx++) {
-        const chunk = words.slice(i, i + chunkSize).join(' ');
-        const startSec = Math.floor(i / 2.5);
-        const endSec = Math.floor(Math.min(i + chunkSize, words.length) / 2.5);
-        const startTime = this._formatSrtTime(startSec);
-        const endTime = this._formatSrtTime(endSec);
-        srt += `${idx}\n${startTime} --> ${endTime}\n${chunk}\n\n`;
-      }
-      content = srt.trim();
-      defaultName = `transcript-${timestamp}.srt`;
+      content = fmt ? fmt.toSrt(text) : text;
       filters = [{ name: 'Subtitles', extensions: ['srt'] }];
     }
 
@@ -3216,12 +3352,16 @@ class WindyApp {
 
   toggleRecording() {
     // Debounce guard: ignore rapid toggles within 500ms
-    if (this._toggleLock) return;
+    if (this._toggleLock) {
+      console.error('[Toggle] BLOCKED by debounce lock');
+      return;
+    }
     this._toggleLock = true;
     setTimeout(() => { this._toggleLock = false; }, 500);
 
     const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine;
     const recordingMode = localStorage.getItem('windy_recordingMode') || 'batch';
+    console.error(`[Toggle] isRecording=${this.isRecording}, engine=${engine}, mode=${recordingMode}, state=${this.currentState}`);
 
     if (this.isRecording) {
       // Sound feedback: use default beeps only if effects engine is in default mode or unavailable
@@ -3585,6 +3725,11 @@ class WindyApp {
     // Always retain final segments for copy/paste reliability
     if (!msg.partial) {
       this.transcript.push(msg);
+      // Phase 8: account creation moved out of wizard. After the user's
+      // first successful transcription, surface a one-time "save your
+      // sessions to the cloud" banner. Only the first final segment ever
+      // triggers it; once dismissed (or accepted) it never reappears.
+      try { this.maybeShowSignupBanner(msg); } catch (e) { /* never break record flow */ }
     }
 
     // In strobe-only mode, suppress live rendering while recording/buffering
@@ -3630,6 +3775,22 @@ class WindyApp {
 
     // Auto-scroll to bottom
     this.transcriptScroll.scrollTop = this.transcriptScroll.scrollHeight;
+  }
+
+  /**
+   * Phase 8: post-first-transcription cloud-account upsell.
+   * Implementation moved to renderer/signup-banner.js so it can be
+   * unit-tested in jsdom and E2E-tested in Playwright without launching
+   * the full record/transcribe stack. This wrapper keeps the call site
+   * in addTranscriptSegment unchanged.
+   */
+  maybeShowSignupBanner(msg) {
+    // window.WindySignupBanner is loaded via index.html's <script> tag.
+    // If it's missing for any reason (preload race, packaging bug),
+    // fail silent — record flow is sacred.
+    if (typeof window.WindySignupBanner === 'function') {
+      window.WindySignupBanner(msg);
+    }
   }
 
   /**

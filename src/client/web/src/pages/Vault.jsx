@@ -134,7 +134,7 @@ export default function Vault() {
             <header className="dash-header">
                 <div className="dash-header-left">
                     <Link to="/" className="dash-logo">
-                        <span className="dash-logo-icon">🌪️</span> Windy Pro
+                        <span className="dash-logo-icon">🌪️</span> Windy Word
                     </Link>
                 </div>
                 <div className="dash-header-right">
@@ -198,7 +198,7 @@ export default function Vault() {
                     <div className="dash-empty">
                         <div className="dash-empty-icon">📝</div>
                         <h3>No transcripts yet</h3>
-                        <p>Start recording with Windy Pro desktop app and your transcripts will appear here.</p>
+                        <p>Start recording with Windy Word desktop app and your transcripts will appear here.</p>
                     </div>
                 ) : (
                     Object.entries(groups).map(([date, recs]) => (

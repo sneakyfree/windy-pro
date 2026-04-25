@@ -1,0 +1,172 @@
+#!/bin/bash
+# Wave 13 Phase 1 — cloud-init user-data template.
+#
+# Placeholders (replaced by scripts/wave13-render-user-data.sh at FIRE 2):
+#   __RDS_ENDPOINT__      : e.g. windy-pro-identity.xxxxx.us-east-1.rds.amazonaws.com
+#   __RDS_PASSWORD__      : 32-char generated at FIRE 1, injected here once,
+#                           lives on the instance afterwards.
+#   __REPO_REF__          : git ref to deploy (e.g. "wave13/phase1-aws-deploy"
+#                           until merged, then "main").
+#
+# This script runs as root on first boot. It:
+#   1. Installs docker, nginx, certbot.
+#   2. Generates ALL other secrets (JWT, webhook tokens, RS256 keypair)
+#      locally on the instance — secrets never touch the operator's shell
+#      except the one RDS password pre-shared via this template.
+#   3. Clones the repo and writes /opt/windy-pro/.env.production.
+#   4. Starts docker compose.
+#   5. Configures nginx HTTP-only (certbot flips to HTTPS at FIRE 5).
+#
+# Logs: /var/log/cloud-init-output.log on the instance.
+
+set -euxo pipefail
+
+# ─── System packages ─────────────────────────────────────────
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    docker.io docker-compose-v2 nginx certbot python3-certbot-nginx \
+    git jq unzip curl ca-certificates openssl postgresql-client-16
+
+systemctl enable --now docker
+
+# ─── Layout ──────────────────────────────────────────────────
+install -d -m 0755 /opt/windy-pro
+install -d -m 0700 /var/lib/windypro/keys
+install -d -m 0755 /var/lib/windypro/uploads /var/lib/windypro/backups
+install -d -m 0755 /var/www/certbot
+
+# ─── Clone the repo at the requested ref ─────────────────────
+if [ ! -d /opt/windy-pro/.git ]; then
+    git clone https://github.com/sneakyfree/windy-pro.git /opt/windy-pro
+fi
+cd /opt/windy-pro
+git fetch --all --tags --quiet
+git checkout __REPO_REF__
+git pull --ff-only || true
+
+# ─── Generate RS256 keypair (stays on instance) ──────────────
+if [ ! -f /var/lib/windypro/keys/private.pem ]; then
+    openssl genrsa -out /var/lib/windypro/keys/private.pem 4096
+    openssl rsa -in /var/lib/windypro/keys/private.pem -pubout -out /var/lib/windypro/keys/public.pem
+    chmod 600 /var/lib/windypro/keys/private.pem
+    chmod 644 /var/lib/windypro/keys/public.pem
+fi
+JWT_KEY_ID="windypro-prod-$(date +%Y-%m)"
+
+# ─── Generate all other secrets (stays on instance) ──────────
+gen32() { openssl rand -hex 32; }
+
+JWT_SECRET="$(gen32)"
+BROKER_HMAC_SECRET="$(gen32)"
+ETERNITAS_WEBHOOK_SECRET="$(gen32)"
+WINDYMAIL_SERVICE_TOKEN="$(gen32)"
+CHAT_SERVICE_TOKEN="$(gen32)"
+WINDY_CLOUD_SERVICE_TOKEN="$(gen32)"
+WINDY_AGENT_SERVICE_TOKEN="$(gen32)"
+
+# ─── Write .env.production ───────────────────────────────────
+# The RDS password is the only secret that arrived via user-data
+# from the operator — everything else was generated above and has
+# never left this instance.
+cat > /opt/windy-pro/.env.production <<ENV
+NODE_ENV=production
+PORT=8098
+TRUST_PROXY=1
+CORS_ALLOWED_ORIGINS=https://windypro.com,https://www.windypro.com,https://windyword.ai,https://api.windyword.ai
+
+# ─── RS256 / JWT ───
+JWT_SECRET=${JWT_SECRET}
+JWT_PRIVATE_KEY_PATH=/keys/private.pem
+JWT_PUBLIC_KEY_PATH=/keys/public.pem
+JWT_KEY_ID=${JWT_KEY_ID}
+OIDC_ISSUER=https://api.windyword.ai
+
+# ─── Database (RDS) ───
+# sslmode=require is non-negotiable on AWS RDS — pg_hba.conf rejects
+# plaintext connections with "no pg_hba.conf entry for host X, no
+# encryption". Appending to the URL is simpler than wiring PGSSLMODE.
+DATABASE_URL=postgres://windypro:__RDS_PASSWORD__@__RDS_ENDPOINT__:5432/windyproidentity?sslmode=require
+
+# ─── Broker + ecosystem secrets ───
+BROKER_HMAC_SECRET=${BROKER_HMAC_SECRET}
+ETERNITAS_WEBHOOK_SECRET=${ETERNITAS_WEBHOOK_SECRET}
+WINDYMAIL_SERVICE_TOKEN=${WINDYMAIL_SERVICE_TOKEN}
+CHAT_SERVICE_TOKEN=${CHAT_SERVICE_TOKEN}
+WINDY_CLOUD_SERVICE_TOKEN=${WINDY_CLOUD_SERVICE_TOKEN}
+WINDY_AGENT_SERVICE_TOKEN=${WINDY_AGENT_SERVICE_TOKEN}
+
+# ─── LLM provider keys (Grant fills in later) ───
+OPENAI_KEY=
+ANTHROPIC_KEY=
+GEMINI_KEY=
+
+# ─── R2 (Grant fills from Cloudflare token) ───
+R2_ACCOUNT_ID=193b347aedeaafe35de0b5a534b2d9aa
+R2_BUCKET=windypro-storage
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+
+# ─── Stripe (Grant wires later) ───
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+ENV
+
+chmod 600 /opt/windy-pro/.env.production
+
+# ─── nginx HTTP-only until certbot flips us ──────────────────
+install -m 0644 /opt/windy-pro/deploy/wave13/nginx-api.windyword.ai.conf \
+    /etc/nginx/sites-available/api.windyword.ai.conf
+# Comment out the 443 server block until certbot runs — nginx won't
+# start with a missing cert path.
+sed -i 's|^server {$|# WAVE13_SSL_GUARD server {|g; s|^# WAVE13_SSL_GUARD server {$|server {|' /etc/nginx/sites-available/api.windyword.ai.conf || true
+# Simpler: two-pass comment of the second server block — the ACME
+# + 80→443 redirect block stays live; the 443 block becomes inert
+# until certbot uncomments the cert paths.
+python3 - <<'PY'
+import re, pathlib
+p = pathlib.Path('/etc/nginx/sites-available/api.windyword.ai.conf')
+s = p.read_text()
+# Comment out only the second server block (the one listening on 443).
+parts = s.split('server {')
+if len(parts) >= 3:
+    # parts[0] = header comments, parts[1] = port-80 body (+next 'server {'),
+    # parts[2] = port-443 body (+trailing).
+    commented = 'server {' + parts[1] + '\n# === WAVE13: SSL block disabled until FIRE 5 runs certbot ===\n# server {' + parts[2].replace('\n', '\n# ')
+    p.write_text(parts[0] + commented)
+PY
+ln -sf /etc/nginx/sites-available/api.windyword.ai.conf \
+       /etc/nginx/sites-enabled/api.windyword.ai.conf
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl reload nginx
+
+# ─── Start account-server ────────────────────────────────────
+cd /opt/windy-pro/deploy/wave13
+docker compose -f docker-compose.aws.yml \
+    --env-file /opt/windy-pro/.env.production \
+    build
+docker compose -f docker-compose.aws.yml \
+    --env-file /opt/windy-pro/.env.production \
+    up -d
+
+# Chown the bind-mounted keys dir to the container's windy UID/GID.
+# The image's `adduser -S windy` in Dockerfile assigns UID 100 / GID
+# 101 by Alpine convention, but reading the container's own `id`
+# output is safer than hardcoding — it'll track Dockerfile changes.
+# Without this step /keys/private.pem is owned by root:root 0600 on
+# the host, the container's non-root windy user can't open it, and
+# JWKS falls back to HS256 with jwks=error in /health.
+sleep 8
+WINDY_UID=$(docker exec wave13-account-server-1 id -u 2>/dev/null || echo 100)
+WINDY_GID=$(docker exec wave13-account-server-1 id -g 2>/dev/null || echo 101)
+chown -R "$WINDY_UID:$WINDY_GID" /var/lib/windypro/keys
+chmod 750 /var/lib/windypro/keys
+chmod 640 /var/lib/windypro/keys/private.pem
+chmod 644 /var/lib/windypro/keys/public.pem
+docker compose -f docker-compose.aws.yml \
+    --env-file /opt/windy-pro/.env.production \
+    restart account-server
+
+# ─── Run Postgres migrations (account-server ships them) ─────
+# The image is already up; it runs initSchema on boot for fresh DBs,
+# so no manual step is strictly required. Keep a placeholder marker.
+echo "$(date -Iseconds) cloud-init complete" >> /var/log/windypro-bootstrap.log
