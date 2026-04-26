@@ -93,4 +93,8 @@ export const config = {
     // on the agent host to spin up the user's managed agent.
     WINDY_AGENT_URL: process.env.WINDY_AGENT_URL || 'http://localhost:3000',
     WINDY_AGENT_SERVICE_TOKEN: process.env.WINDY_AGENT_SERVICE_TOKEN || '',
+    // Cloud push notifications — Firebase Cloud Messaging
+    FCM_SERVER_KEY: process.env.FCM_SERVER_KEY || '',
+    // OCR — Google Cloud Vision API
+    GOOGLE_VISION_API_KEY: process.env.GOOGLE_VISION_API_KEY || '',
 } as const;

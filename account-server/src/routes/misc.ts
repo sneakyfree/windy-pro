@@ -255,15 +255,128 @@ router.get('/api/v1/rtc/signal', authenticateToken, (req: Request, res: Response
 
 // ─── POST /api/v1/ocr/translate ──────────────────────────────
 
-router.post('/api/v1/ocr/translate', optionalAuth, upload.single('image'), (req: Request, res: Response) => {
+router.post('/api/v1/ocr/translate', optionalAuth, upload.single('image'), async (req: Request, res: Response) => {
     try {
         const targetLanguage = req.body.targetLanguage || 'en';
+        const sourceLang = req.body.sourceLanguage || 'auto';
 
         console.log(`📷 OCR translate: target=${targetLanguage}`);
 
-        res.status(501).json({
-            error: 'Not implemented',
-            message: 'OCR translation requires a vision API backend. Configure OCR_API_KEY or GOOGLE_VISION_API_KEY.',
+        if (!req.file) {
+            return res.status(400).json({ error: 'Image file is required' });
+        }
+
+        const openaiKey = config.OPENAI_API_KEY;
+        const googleKey = process.env.GOOGLE_VISION_API_KEY;
+
+        // ── Strategy 1: OpenAI GPT-4o Vision ────────────────────
+        if (openaiKey) {
+            try {
+                const base64Image = req.file.buffer.toString('base64');
+                const mimeType = req.file.mimetype || 'image/png';
+
+                const prompt = targetLanguage === sourceLang || sourceLang === 'auto'
+                    ? 'Extract all text visible in this image. Return ONLY the extracted text, nothing else.'
+                    : `Extract all text visible in this image and translate it to ${targetLanguage}. Return the result as JSON: {"extractedText": "...", "translatedText": "..."}`;
+
+                const apiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${openaiKey}`,
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-4o-mini',
+                        messages: [{
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: prompt },
+                                { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } },
+                            ],
+                        }],
+                        max_tokens: 2048,
+                    }),
+                    signal: AbortSignal.timeout(30000),
+                });
+
+                if (apiRes.ok) {
+                    const data: any = await apiRes.json();
+                    const content = data.choices?.[0]?.message?.content?.trim() || '';
+
+                    // Try to parse structured JSON response
+                    let extractedText = content;
+                    let translatedText = content;
+                    try {
+                        const parsed = JSON.parse(content);
+                        if (parsed.extractedText) extractedText = parsed.extractedText;
+                        if (parsed.translatedText) translatedText = parsed.translatedText;
+                    } catch {
+                        // Plain text response — use as both
+                    }
+
+                    return res.json({
+                        extractedText,
+                        translatedText,
+                        sourceLanguage: sourceLang,
+                        targetLanguage,
+                        engine: 'openai-vision',
+                    });
+                } else {
+                    console.warn(`⚠️  OpenAI Vision API returned ${apiRes.status}`);
+                }
+            } catch (err: any) {
+                console.warn('⚠️  OpenAI Vision failed:', err.message);
+            }
+        }
+
+        // ── Strategy 2: Google Cloud Vision API ─────────────────
+        if (googleKey) {
+            try {
+                const base64Image = req.file.buffer.toString('base64');
+
+                const visionRes = await fetch(
+                    `https://vision.googleapis.com/v1/images:annotate?key=${googleKey}`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            requests: [{
+                                image: { content: base64Image },
+                                features: [{ type: 'TEXT_DETECTION' }],
+                            }],
+                        }),
+                        signal: AbortSignal.timeout(15000),
+                    },
+                );
+
+                if (visionRes.ok) {
+                    const visionData: any = await visionRes.json();
+                    const extractedText = visionData.responses?.[0]?.fullTextAnnotation?.text?.trim() || '';
+
+                    return res.json({
+                        extractedText,
+                        translatedText: extractedText, // Translation requires a separate step
+                        sourceLanguage: sourceLang,
+                        targetLanguage,
+                        engine: 'google-vision',
+                    });
+                } else {
+                    console.warn(`⚠️  Google Vision API returned ${visionRes.status}`);
+                }
+            } catch (err: any) {
+                console.warn('⚠️  Google Vision failed:', err.message);
+            }
+        }
+
+        // ── Fallback: dev stub ──────────────────────────────────
+        console.log(`📷 OCR translate (dev stub): no vision API configured`);
+        res.json({
+            extractedText: '[OCR stub — configure OPENAI_API_KEY or GOOGLE_VISION_API_KEY]',
+            translatedText: '[OCR stub — configure OPENAI_API_KEY or GOOGLE_VISION_API_KEY]',
+            sourceLanguage: sourceLang,
+            targetLanguage,
+            engine: 'stub',
+            stub: true,
         });
     } catch (err: any) {
         console.error('OCR translate error:', err);

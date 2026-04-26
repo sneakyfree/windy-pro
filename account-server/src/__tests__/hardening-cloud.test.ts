@@ -1,8 +1,11 @@
 /**
- * Hardening tests for cloud stub endpoints.
+ * Hardening tests for cloud endpoints.
  *
  * Covers: phone provisioning, phone release, push send,
  * and authentication enforcement on all cloud routes.
+ *
+ * Without Twilio / FCM credentials, endpoints return 200 with
+ * `stub: true` — verifying the dev-fallback path works.
  */
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
@@ -176,7 +179,7 @@ function generateTestAccessToken(userId = TEST_USER_ID): string {
 //  TEST SUITE
 // ═══════════════════════════════════════════
 
-describe('Cloud stub endpoint hardening', () => {
+describe('Cloud endpoint hardening', () => {
   let app: Express;
   let token: string;
 
@@ -186,6 +189,11 @@ describe('Cloud stub endpoint hardening', () => {
   });
 
   beforeEach(() => {
+    // Clear Twilio / FCM env vars so stub path is taken
+    delete process.env.TWILIO_ACCOUNT_SID;
+    delete process.env.TWILIO_AUTH_TOKEN;
+    delete process.env.FCM_SERVER_KEY;
+
     app = express();
     app.use(express.json());
     const cloudRoutes = require('../routes/cloud').default;
@@ -193,45 +201,48 @@ describe('Cloud stub endpoint hardening', () => {
   });
 
   // ─────────────────────────────────────────
-  //  1. POST /api/v1/cloud/phone/provision
+  //  1. POST /api/v1/cloud/phone/provision — stub path
   // ─────────────────────────────────────────
 
-  it('POST /api/v1/cloud/phone/provision → 501 Not Implemented', async () => {
+  it('POST /api/v1/cloud/phone/provision → 200 stub when no Twilio creds', async () => {
     const res = await request(app)
       .post('/api/v1/cloud/phone/provision')
       .set('Authorization', `Bearer ${token}`)
       .send({});
 
-    expect(res.status).toBe(501);
-    expect(res.body.error).toBe('Not implemented');
+    expect(res.status).toBe(200);
+    expect(res.body.stub).toBe(true);
+    expect(res.body.provisioned).toBe(false);
   });
 
   // ─────────────────────────────────────────
-  //  2. POST /api/v1/cloud/phone/release
+  //  2. POST /api/v1/cloud/phone/release — stub path
   // ─────────────────────────────────────────
 
-  it('POST /api/v1/cloud/phone/release → 501 Not Implemented', async () => {
+  it('POST /api/v1/cloud/phone/release → 200 stub when no Twilio creds', async () => {
     const res = await request(app)
       .post('/api/v1/cloud/phone/release')
       .set('Authorization', `Bearer ${token}`)
       .send({});
 
-    expect(res.status).toBe(501);
-    expect(res.body.error).toBe('Not implemented');
+    expect(res.status).toBe(200);
+    expect(res.body.stub).toBe(true);
+    expect(res.body.released).toBe(false);
   });
 
   // ─────────────────────────────────────────
-  //  3. POST /api/v1/cloud/push/send
+  //  3. POST /api/v1/cloud/push/send — stub path
   // ─────────────────────────────────────────
 
-  it('POST /api/v1/cloud/push/send → 501 Not Implemented', async () => {
+  it('POST /api/v1/cloud/push/send → 200 stub when no FCM creds', async () => {
     const res = await request(app)
       .post('/api/v1/cloud/push/send')
       .set('Authorization', `Bearer ${token}`)
-      .send({});
+      .send({ title: 'Test', body: 'Hello' });
 
-    expect(res.status).toBe(501);
-    expect(res.body.error).toBe('Not implemented');
+    expect(res.status).toBe(200);
+    expect(res.body.stub).toBe(true);
+    expect(res.body.sent).toBe(false);
   });
 
   // ─────────────────────────────────────────
