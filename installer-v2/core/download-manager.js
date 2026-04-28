@@ -89,18 +89,14 @@ const MODEL_REGISTRY = {
   'windy-lingua-arabic':  { hfRepo: 'WindyWord/listen-windy-lingua-arabic',  subfolder: 'safetensors', sizeMB: 2950, format: 'safetensors', lang: 'ar' },
 
   // ─── Lingua Specialists (CPU INT8) ───
-  // Note: only Hindi has a CT2 variant on WindyWord today. Spanish/Chinese/French/Arabic CT2
-  // builds are pending (we have GPU but not yet INT8 conversions for those four). Marked
-  // unavailable so the wizard can show "GPU only" in the UI rather than 404 the user.
-  'windy-lingua-hindi-ct2':   { hfRepo: 'WindyWord/listen-windy-lingua-hindi-ct2', subfolder: 'ct2-int8', sizeMB: 72,  format: 'ctranslate2', lang: 'hi' },
-  'windy-lingua-spanish-ct2': { hfRepo: null, subfolder: null, sizeMB: 235,  format: 'ctranslate2', lang: 'es', unavailable: true,
-                                unavailableNote: 'GPU variant available; CT2 INT8 build pending' },
-  'windy-lingua-chinese-ct2': { hfRepo: null, subfolder: null, sizeMB: 235,  format: 'ctranslate2', lang: 'zh', unavailable: true,
-                                unavailableNote: 'GPU variant available; CT2 INT8 build pending' },
-  'windy-lingua-french-ct2':  { hfRepo: null, subfolder: null, sizeMB: 735,  format: 'ctranslate2', lang: 'fr', unavailable: true,
-                                unavailableNote: 'GPU variant available; CT2 INT8 build pending' },
-  'windy-lingua-arabic-ct2':  { hfRepo: null, subfolder: null, sizeMB: 1481, format: 'ctranslate2', lang: 'ar', unavailable: true,
-                                unavailableNote: 'GPU variant available; CT2 INT8 build pending' },
+  // All 5 CT2 variants now live as separate WindyWord/listen-windy-lingua-{lang}-ct2 repos
+  // following our cross-org port pattern (CT2 INT8 sibling repo with ct2-int8/ subfolder).
+  // Built 2026-04-28 via ct2-transformers-converter from the GPU safetensors variants.
+  'windy-lingua-hindi-ct2':   { hfRepo: 'WindyWord/listen-windy-lingua-hindi-ct2',   subfolder: 'ct2-int8', sizeMB: 72,   format: 'ctranslate2', lang: 'hi' },
+  'windy-lingua-spanish-ct2': { hfRepo: 'WindyWord/listen-windy-lingua-spanish-ct2', subfolder: 'ct2-int8', sizeMB: 251,  format: 'ctranslate2', lang: 'es' },
+  'windy-lingua-chinese-ct2': { hfRepo: 'WindyWord/listen-windy-lingua-chinese-ct2', subfolder: 'ct2-int8', sizeMB: 251,  format: 'ctranslate2', lang: 'zh' },
+  'windy-lingua-french-ct2':  { hfRepo: 'WindyWord/listen-windy-lingua-french-ct2',  subfolder: 'ct2-int8', sizeMB: 775,  format: 'ctranslate2', lang: 'fr' },
+  'windy-lingua-arabic-ct2':  { hfRepo: 'WindyWord/listen-windy-lingua-arabic-ct2',  subfolder: 'ct2-int8', sizeMB: 1558, format: 'ctranslate2', lang: 'ar' },
 
   // ─── Pair Specialists (bidirectional, ISO codes) ───
   // Each WindyWord/translate-{pair} repo carries multiple variants; the wizard pulls `lora/`
