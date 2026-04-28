@@ -170,7 +170,7 @@ const INSTALL_STEP_MESSAGES = {
   },
   'download-model': {
     title: '🧠 Downloading Windy Pro Engine',
-    detail: 'Pulling your engine from WindyLabs on HuggingFace. This engine was fine-tuned by our team specifically for Windy Pro.',
+    detail: 'Pulling your engine from WindyWord on HuggingFace. This engine was fine-tuned by our team specifically for Windy Pro.',
     tip: 'Engines are optimized for local, private transcription. Nobody else has these configurations.'
   },
   'verify': {

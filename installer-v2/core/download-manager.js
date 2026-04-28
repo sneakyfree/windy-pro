@@ -1,21 +1,29 @@
 /**
  * Windy Pro v2.0 — Download Manager
- * 
+ *
  * Handles downloading models from HuggingFace with:
  * - Correct repo names from model_registry.json
  * - Resume support (range headers)
  * - Progress callbacks
  * - Integrity verification
  * - Automatic retry with exponential backoff
- * 
- * Model naming conventions (from Alpha/OC1):
- * - Voice engines: WindyLabs/windy-{name}[-ct2]
- * - Lingua specialists: WindyLabs/windy-lingua-{language}[-ct2]
- *   (full language names, NOT ISO codes: spanish, chinese, hindi, french, arabic)
- * - Pair specialists: WindyLabs/windy-pair-{src}-{tgt}
- *   (ISO codes: en-es, es-en, en-zh, zh-en, etc.)
- * - Translation engines: WindyLabs/windy-translate-{name}
- *   (note: underscore, not hyphen, for translate models)
+ * - Subfolder filtering (multi-variant repos)
+ *
+ * Model naming conventions (current — WindyWord org, post-2026-04-21 migration):
+ * - Voice engines:        WindyWord/listen-windy-{name} + subfolder safetensors|ct2-int8
+ * - Lingua specialists:   WindyWord/listen-windy-lingua-{language}[-ct2] + subfolder safetensors|ct2-int8
+ * - Pair specialists:     WindyWord/translate-{src}-{tgt} + subfolder lora|lora-ct2-int8
+ *
+ * Each entry's `subfolder` field tells the downloader to filter the repo's
+ * file list to only that subfolder, and to strip the prefix when writing
+ * locally so the model dir contains files at the top level (matching the
+ * old single-variant-per-repo layout the rest of the platform expects).
+ *
+ * Legacy (deprecated, not used here):
+ * - WindyLabs/* — empty org, never populated; original Dr. A typo. The
+ *   installer pointed at this for weeks before the WindyWord migration.
+ * - WindyProLabs/* — private staging org with 74 legacy models, replaced
+ *   by WindyWord/* between 2026-04-19 and 2026-04-21.
  */
 
 const https = require('https');
@@ -31,66 +39,88 @@ const RETRY_DELAY_MS = 2000;
 /**
  * Complete model registry with correct HuggingFace repo names.
  * This is the source of truth for download URLs.
+ *
+ * Each entry shape:
+ *   hfRepo:    'WindyWord/listen-windy-...' or 'WindyWord/translate-...'
+ *   subfolder: '<variant>'  (filters file list + strips prefix on local write)
+ *   sizeMB:    estimated total bytes for progress bar
+ *   format:    safetensors | ctranslate2 | pytorch
  */
 const MODEL_REGISTRY = {
-  // ─── Voice Engines (GPU) ───
-  'windy-nano': { hfRepo: 'WindyLabs/windy-nano', sizeMB: 77, format: 'safetensors' },
-  'windy-lite': { hfRepo: 'WindyLabs/windy-lite', sizeMB: 144, format: 'safetensors' },
-  'windy-core': { hfRepo: 'WindyLabs/windy-core', sizeMB: 466, format: 'safetensors' },
-  'windy-plus': { hfRepo: 'WindyLabs/windy-plus', sizeMB: 1462, format: 'safetensors' },
-  'windy-turbo': { hfRepo: 'WindyLabs/windy-turbo', sizeMB: 1548, format: 'safetensors' },
-  'windy-pro-engine': { hfRepo: 'WindyLabs/windy-pro-engine', sizeMB: 2949, format: 'safetensors' },
-  'windy-edge': { hfRepo: 'WindyLabs/windy-edge', sizeMB: 1448, format: 'safetensors' },
+  // ─── Voice Engines (GPU safetensors) ───
+  // All voice repos co-host safetensors/, ct2-int8/, onnx/, onnx-int8/ as subfolders.
+  'windy-nano':       { hfRepo: 'WindyWord/listen-windy-nano',       subfolder: 'safetensors', sizeMB: 77,   format: 'safetensors' },
+  'windy-lite':       { hfRepo: 'WindyWord/listen-windy-lite',       subfolder: 'safetensors', sizeMB: 144,  format: 'safetensors' },
+  'windy-core':       { hfRepo: 'WindyWord/listen-windy-core',       subfolder: 'safetensors', sizeMB: 466,  format: 'safetensors' },
+  'windy-plus':       { hfRepo: 'WindyWord/listen-windy-plus',       subfolder: 'safetensors', sizeMB: 1462, format: 'safetensors' },
+  'windy-turbo':      { hfRepo: 'WindyWord/listen-windy-turbo',      subfolder: 'safetensors', sizeMB: 1548, format: 'safetensors' },
+  'windy-pro-engine': { hfRepo: 'WindyWord/listen-windy-pro-engine', subfolder: 'safetensors', sizeMB: 2949, format: 'safetensors' },
+  'windy-edge':       { hfRepo: 'WindyWord/listen-windy-edge',       subfolder: 'safetensors', sizeMB: 1448, format: 'safetensors' },
 
   // ─── Voice Engines (CPU INT8 via CTranslate2) ───
-  'windy-nano-ct2': { hfRepo: 'WindyLabs/windy-nano-ct2', sizeMB: 38, format: 'ctranslate2' },
-  'windy-lite-ct2': { hfRepo: 'WindyLabs/windy-lite-ct2', sizeMB: 72, format: 'ctranslate2' },
-  'windy-core-ct2': { hfRepo: 'WindyLabs/windy-core-ct2', sizeMB: 234, format: 'ctranslate2' },
-  'windy-plus-ct2': { hfRepo: 'WindyLabs/windy-plus-ct2', sizeMB: 734, format: 'ctranslate2' },
-  'windy-turbo-ct2': { hfRepo: 'WindyLabs/windy-turbo-ct2', sizeMB: 777, format: 'ctranslate2' },
-  'windy-pro-engine-ct2': { hfRepo: 'WindyLabs/windy-pro-engine-ct2', sizeMB: 1481, format: 'ctranslate2' },
-  'windy-edge-ct2': { hfRepo: 'WindyLabs/windy-edge-ct2', sizeMB: 727, format: 'ctranslate2' },
+  // Same repo as the GPU sibling, just a different subfolder.
+  'windy-nano-ct2':       { hfRepo: 'WindyWord/listen-windy-nano',       subfolder: 'ct2-int8', sizeMB: 38,   format: 'ctranslate2' },
+  'windy-lite-ct2':       { hfRepo: 'WindyWord/listen-windy-lite',       subfolder: 'ct2-int8', sizeMB: 72,   format: 'ctranslate2' },
+  'windy-core-ct2':       { hfRepo: 'WindyWord/listen-windy-core',       subfolder: 'ct2-int8', sizeMB: 234,  format: 'ctranslate2' },
+  'windy-plus-ct2':       { hfRepo: 'WindyWord/listen-windy-plus',       subfolder: 'ct2-int8', sizeMB: 734,  format: 'ctranslate2' },
+  'windy-turbo-ct2':      { hfRepo: 'WindyWord/listen-windy-turbo',      subfolder: 'ct2-int8', sizeMB: 777,  format: 'ctranslate2' },
+  'windy-pro-engine-ct2': { hfRepo: 'WindyWord/listen-windy-pro-engine', subfolder: 'ct2-int8', sizeMB: 1481, format: 'ctranslate2' },
+  'windy-edge-ct2':       { hfRepo: 'WindyWord/listen-windy-edge',       subfolder: 'ct2-int8', sizeMB: 727,  format: 'ctranslate2' },
 
-  // ─── Distil-Whisper (CPU optimized — NOT recommended for wizard, high eval losses) ───
-  'windy-distil-small': { hfRepo: 'WindyLabs/windy-distil-small', sizeMB: 319, format: 'safetensors' },
-  'windy-distil-medium': { hfRepo: 'WindyLabs/windy-distil-medium', sizeMB: 754, format: 'safetensors' },
-  'windy-distil-large': { hfRepo: 'WindyLabs/windy-distil-large', sizeMB: 1445, format: 'safetensors' },
+  // ─── Distil-Whisper (separate repos, each with its own subfolder layout) ───
+  'windy-distil-small':  { hfRepo: 'WindyWord/listen-windy-distil-small',  subfolder: 'safetensors', sizeMB: 319,  format: 'safetensors' },
+  'windy-distil-medium': { hfRepo: 'WindyWord/listen-windy-distil-medium', subfolder: 'safetensors', sizeMB: 754,  format: 'safetensors' },
+  'windy-distil-large':  { hfRepo: 'WindyWord/listen-windy-distil-large',  subfolder: 'safetensors', sizeMB: 1445, format: 'safetensors' },
 
-  // ─── Translation Engines ───
-  'windy-translate-spark': { hfRepo: 'WindyLabs/windy-translate-spark', sizeMB: 929, format: 'safetensors' },
-  'windy-translate-standard': { hfRepo: 'WindyLabs/windy-translate-standard', sizeMB: 2371, format: 'safetensors' },
+  // ─── Translation Engines (DEPRECATED — replaced by per-pair WindyWord/translate-* models) ──
+  // The bundled "spark" and "standard" Marian translation packs from the WindyProLabs era are
+  // not maintained on WindyWord. Per-pair models (windy-pair-*) provide the same coverage with
+  // proper Grand Rounds v2 quality certifications. Wizard should not surface these any more.
+  'windy-translate-spark':    { hfRepo: null, subfolder: null, sizeMB: 929,  format: 'safetensors', deprecated: true,
+                                deprecationNote: 'Use individual windy-pair-* translations instead' },
+  'windy-translate-standard': { hfRepo: null, subfolder: null, sizeMB: 2371, format: 'safetensors', deprecated: true,
+                                deprecationNote: 'Use individual windy-pair-* translations instead' },
 
-  // ─── Lingua Specialists (GPU) — full language names ───
-  'windy-lingua-spanish': { hfRepo: 'WindyLabs/windy-lingua-spanish', sizeMB: 466, format: 'safetensors', lang: 'es' },
-  'windy-lingua-chinese': { hfRepo: 'WindyLabs/windy-lingua-chinese', sizeMB: 466, format: 'safetensors', lang: 'zh' },
-  'windy-lingua-hindi': { hfRepo: 'WindyLabs/windy-lingua-hindi', sizeMB: 144, format: 'safetensors', lang: 'hi' },
-  'windy-lingua-french': { hfRepo: 'WindyLabs/windy-lingua-french', sizeMB: 1462, format: 'safetensors', lang: 'fr' },
-  'windy-lingua-arabic': { hfRepo: 'WindyLabs/windy-lingua-arabic', sizeMB: 2950, format: 'safetensors', lang: 'ar' },
+  // ─── Lingua Specialists (GPU safetensors) ───
+  'windy-lingua-spanish': { hfRepo: 'WindyWord/listen-windy-lingua-spanish', subfolder: 'safetensors', sizeMB: 466,  format: 'safetensors', lang: 'es' },
+  'windy-lingua-chinese': { hfRepo: 'WindyWord/listen-windy-lingua-chinese', subfolder: 'safetensors', sizeMB: 466,  format: 'safetensors', lang: 'zh' },
+  'windy-lingua-hindi':   { hfRepo: 'WindyWord/listen-windy-lingua-hindi',   subfolder: 'safetensors', sizeMB: 144,  format: 'safetensors', lang: 'hi' },
+  'windy-lingua-french':  { hfRepo: 'WindyWord/listen-windy-lingua-french',  subfolder: 'safetensors', sizeMB: 1462, format: 'safetensors', lang: 'fr' },
+  'windy-lingua-arabic':  { hfRepo: 'WindyWord/listen-windy-lingua-arabic',  subfolder: 'safetensors', sizeMB: 2950, format: 'safetensors', lang: 'ar' },
 
   // ─── Lingua Specialists (CPU INT8) ───
-  'windy-lingua-spanish-ct2': { hfRepo: 'WindyLabs/windy-lingua-spanish-ct2', sizeMB: 235, format: 'ctranslate2', lang: 'es' },
-  'windy-lingua-chinese-ct2': { hfRepo: 'WindyLabs/windy-lingua-chinese-ct2', sizeMB: 235, format: 'ctranslate2', lang: 'zh' },
-  'windy-lingua-hindi-ct2': { hfRepo: 'WindyLabs/windy-lingua-hindi-ct2', sizeMB: 72, format: 'ctranslate2', lang: 'hi' },
-  'windy-lingua-french-ct2': { hfRepo: 'WindyLabs/windy-lingua-french-ct2', sizeMB: 735, format: 'ctranslate2', lang: 'fr' },
-  'windy-lingua-arabic-ct2': { hfRepo: 'WindyLabs/windy-lingua-arabic-ct2', sizeMB: 1481, format: 'ctranslate2', lang: 'ar' },
+  // Note: only Hindi has a CT2 variant on WindyWord today. Spanish/Chinese/French/Arabic CT2
+  // builds are pending (we have GPU but not yet INT8 conversions for those four). Marked
+  // unavailable so the wizard can show "GPU only" in the UI rather than 404 the user.
+  'windy-lingua-hindi-ct2':   { hfRepo: 'WindyWord/listen-windy-lingua-hindi-ct2', subfolder: 'ct2-int8', sizeMB: 72,  format: 'ctranslate2', lang: 'hi' },
+  'windy-lingua-spanish-ct2': { hfRepo: null, subfolder: null, sizeMB: 235,  format: 'ctranslate2', lang: 'es', unavailable: true,
+                                unavailableNote: 'GPU variant available; CT2 INT8 build pending' },
+  'windy-lingua-chinese-ct2': { hfRepo: null, subfolder: null, sizeMB: 235,  format: 'ctranslate2', lang: 'zh', unavailable: true,
+                                unavailableNote: 'GPU variant available; CT2 INT8 build pending' },
+  'windy-lingua-french-ct2':  { hfRepo: null, subfolder: null, sizeMB: 735,  format: 'ctranslate2', lang: 'fr', unavailable: true,
+                                unavailableNote: 'GPU variant available; CT2 INT8 build pending' },
+  'windy-lingua-arabic-ct2':  { hfRepo: null, subfolder: null, sizeMB: 1481, format: 'ctranslate2', lang: 'ar', unavailable: true,
+                                unavailableNote: 'GPU variant available; CT2 INT8 build pending' },
 
   // ─── Pair Specialists (bidirectional, ISO codes) ───
-  'windy-pair-en-es': { hfRepo: 'WindyLabs/windy-pair-en-es', sizeMB: 299, format: 'pytorch', pair: 'en-es' },
-  'windy-pair-es-en': { hfRepo: 'WindyLabs/windy-pair-es-en', sizeMB: 299, format: 'pytorch', pair: 'es-en' },
-  'windy-pair-en-zh': { hfRepo: 'WindyLabs/windy-pair-en-zh', sizeMB: 299, format: 'pytorch', pair: 'en-zh' },
-  'windy-pair-zh-en': { hfRepo: 'WindyLabs/windy-pair-zh-en', sizeMB: 299, format: 'pytorch', pair: 'zh-en' },
-  'windy-pair-en-fr': { hfRepo: 'WindyLabs/windy-pair-en-fr', sizeMB: 288, format: 'pytorch', pair: 'en-fr' },
-  'windy-pair-fr-en': { hfRepo: 'WindyLabs/windy-pair-fr-en', sizeMB: 288, format: 'pytorch', pair: 'fr-en' },
-  'windy-pair-en-de': { hfRepo: 'WindyLabs/windy-pair-en-de', sizeMB: 285, format: 'pytorch', pair: 'en-de' },
-  'windy-pair-de-en': { hfRepo: 'WindyLabs/windy-pair-de-en', sizeMB: 285, format: 'pytorch', pair: 'de-en' },
-  'windy-pair-en-ar': { hfRepo: 'WindyLabs/windy-pair-en-ar', sizeMB: 296, format: 'pytorch', pair: 'en-ar' },
-  'windy-pair-ar-en': { hfRepo: 'WindyLabs/windy-pair-ar-en', sizeMB: 296, format: 'pytorch', pair: 'ar-en' },
-  'windy-pair-en-hi': { hfRepo: 'WindyLabs/windy-pair-en-hi', sizeMB: 294, format: 'pytorch', pair: 'en-hi' },
-  'windy-pair-hi-en': { hfRepo: 'WindyLabs/windy-pair-hi-en', sizeMB: 292, format: 'pytorch', pair: 'hi-en' },
-  'windy-pair-en-pt': { hfRepo: 'WindyLabs/windy-pair-en-pt', sizeMB: 890, format: 'pytorch', pair: 'en-pt' },
-  'windy-pair-pt-en': { hfRepo: 'WindyLabs/windy-pair-pt-en', sizeMB: 299, format: 'pytorch', pair: 'pt-en' },
-  'windy-pair-en-ru': { hfRepo: 'WindyLabs/windy-pair-en-ru', sizeMB: 296, format: 'pytorch', pair: 'en-ru' },
-  'windy-pair-ru-en': { hfRepo: 'WindyLabs/windy-pair-ru-en', sizeMB: 296, format: 'pytorch', pair: 'ru-en' },
+  // Each WindyWord/translate-{pair} repo carries multiple variants; the wizard pulls `lora/`
+  // (proprietary baseline). For CPU users the platform should swap to `lora-ct2-int8/`.
+  'windy-pair-en-es': { hfRepo: 'WindyWord/translate-en-es', subfolder: 'lora', sizeMB: 299, format: 'pytorch', pair: 'en-es' },
+  'windy-pair-es-en': { hfRepo: 'WindyWord/translate-es-en', subfolder: 'lora', sizeMB: 299, format: 'pytorch', pair: 'es-en' },
+  'windy-pair-en-zh': { hfRepo: 'WindyWord/translate-en-zh', subfolder: 'lora', sizeMB: 299, format: 'pytorch', pair: 'en-zh' },
+  'windy-pair-zh-en': { hfRepo: 'WindyWord/translate-zh-en', subfolder: 'lora', sizeMB: 299, format: 'pytorch', pair: 'zh-en' },
+  'windy-pair-en-fr': { hfRepo: 'WindyWord/translate-en-fr', subfolder: 'lora', sizeMB: 288, format: 'pytorch', pair: 'en-fr' },
+  'windy-pair-fr-en': { hfRepo: 'WindyWord/translate-fr-en', subfolder: 'lora', sizeMB: 288, format: 'pytorch', pair: 'fr-en' },
+  'windy-pair-en-de': { hfRepo: 'WindyWord/translate-en-de', subfolder: 'lora', sizeMB: 285, format: 'pytorch', pair: 'en-de' },
+  'windy-pair-de-en': { hfRepo: 'WindyWord/translate-de-en', subfolder: 'lora', sizeMB: 285, format: 'pytorch', pair: 'de-en' },
+  'windy-pair-en-ar': { hfRepo: 'WindyWord/translate-en-ar', subfolder: 'lora', sizeMB: 296, format: 'pytorch', pair: 'en-ar' },
+  'windy-pair-ar-en': { hfRepo: 'WindyWord/translate-ar-en', subfolder: 'lora', sizeMB: 296, format: 'pytorch', pair: 'ar-en' },
+  'windy-pair-en-hi': { hfRepo: 'WindyWord/translate-en-hi', subfolder: 'lora', sizeMB: 294, format: 'pytorch', pair: 'en-hi' },
+  'windy-pair-hi-en': { hfRepo: 'WindyWord/translate-hi-en', subfolder: 'lora', sizeMB: 292, format: 'pytorch', pair: 'hi-en' },
+  'windy-pair-en-pt': { hfRepo: 'WindyWord/translate-en-pt', subfolder: 'lora', sizeMB: 890, format: 'pytorch', pair: 'en-pt' },
+  'windy-pair-pt-en': { hfRepo: 'WindyWord/translate-pt-en', subfolder: 'lora', sizeMB: 299, format: 'pytorch', pair: 'pt-en' },
+  'windy-pair-en-ru': { hfRepo: 'WindyWord/translate-en-ru', subfolder: 'lora', sizeMB: 296, format: 'pytorch', pair: 'en-ru' },
+  'windy-pair-ru-en': { hfRepo: 'WindyWord/translate-ru-en', subfolder: 'lora', sizeMB: 296, format: 'pytorch', pair: 'ru-en' },
 };
 
 class DownloadManager {
@@ -128,11 +158,13 @@ class DownloadManager {
   }
 
   /**
-   * Get models by category
+   * Get models by category. Skips deprecated and unavailable entries by default
+   * so the wizard doesn't surface them as installable options.
    */
-  getModelsByCategory(category) {
+  getModelsByCategory(category, { includeUnavailable = false } = {}) {
     return Object.entries(MODEL_REGISTRY)
       .filter(([id, info]) => {
+        if (!includeUnavailable && (info.deprecated || info.unavailable)) return false;
         if (category === 'voice-gpu') return id.startsWith('windy-') && !id.includes('lingua') && !id.includes('pair') && !id.includes('translate') && !id.includes('-ct2') && !id.includes('distil');
         if (category === 'voice-cpu') return id.includes('-ct2') && !id.includes('lingua') && !id.includes('pair');
         if (category === 'translation') return id.startsWith('windy-translate-');
@@ -171,6 +203,16 @@ class DownloadManager {
     const info = MODEL_REGISTRY[modelId];
     if (!info) throw new Error(`Unknown model: ${modelId}`);
 
+    if (info.deprecated) {
+      throw new Error(`Model ${modelId} is deprecated: ${info.deprecationNote || 'no longer available'}`);
+    }
+    if (info.unavailable) {
+      throw new Error(`Model ${modelId} is currently unavailable: ${info.unavailableNote || 'pending build'}`);
+    }
+    if (!info.hfRepo) {
+      throw new Error(`Model ${modelId} has no HuggingFace repo configured`);
+    }
+
     const modelDir = path.join(this.modelsDir, modelId);
 
     // Already downloaded?
@@ -185,12 +227,33 @@ class DownloadManager {
     // Check connectivity before attempting downloads
     await this._checkConnectivity();
 
-    this.onLog(`[DownloadManager] Downloading ${modelId} from ${info.hfRepo}...`);
+    const subfolderNote = info.subfolder ? ` (subfolder: ${info.subfolder})` : '';
+    this.onLog(`[DownloadManager] Downloading ${modelId} from ${info.hfRepo}${subfolderNote}...`);
 
     // Get file list from HuggingFace API
-    const files = await this._listRepoFiles(info.hfRepo);
+    let files = await this._listRepoFiles(info.hfRepo);
     if (files.length === 0) {
       throw new Error(`No files found in repo ${info.hfRepo}`);
+    }
+
+    // Filter by subfolder if specified — only files under that subfolder will be downloaded.
+    // Files are written to the local modelDir with the subfolder prefix STRIPPED so the
+    // local layout matches the legacy single-variant-per-repo expectation.
+    if (info.subfolder) {
+      const prefix = info.subfolder.replace(/\/$/, '') + '/';
+      files = files
+        .filter(f => f.rfilename.startsWith(prefix))
+        .map(f => ({
+          rfilename: f.rfilename,             // server-side path (with subfolder)
+          localName: f.rfilename.slice(prefix.length),  // local-side path (without)
+          size: f.size,
+        }));
+      if (files.length === 0) {
+        throw new Error(`Subfolder ${info.subfolder}/ not found in repo ${info.hfRepo}`);
+      }
+    } else {
+      // No subfolder: localName == rfilename
+      files = files.map(f => ({ rfilename: f.rfilename, localName: f.rfilename, size: f.size }));
     }
 
     // Download each file
@@ -208,7 +271,7 @@ class DownloadManager {
         throw new Error('Download cancelled by user');
       }
 
-      const destPath = path.join(modelDir, file.rfilename);
+      const destPath = path.join(modelDir, file.localName);
       const destDir = path.dirname(destPath);
       fs.mkdirSync(destDir, { recursive: true });
 
