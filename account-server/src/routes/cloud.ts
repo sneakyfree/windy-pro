@@ -177,7 +177,15 @@ router.post('/push/send', authenticateToken, async (req: Request, res: Response)
                 return res.status(502).json({ error: 'Push notification delivery failed' });
             }
 
-            const result = await fcmRes.json();
+            // FCM legacy v1 response shape: { success: number, failure: number,
+            // results: [{ message_id?: string, error?: string }, ...] }.
+            // .json() returns `unknown` in recent TS so we narrow to a minimal
+            // shape — these are the only fields we read.
+            const result = (await fcmRes.json()) as {
+                success?: number;
+                failure?: number;
+                results?: Array<{ message_id?: string; error?: string }>;
+            };
             console.log(`🔔 Push sent to user ${userId.slice(0, 8)}: ${title || '(no title)'}`);
 
             res.json({
