@@ -549,7 +549,7 @@ function startPythonServer() {
   ], {
     cwd: projectRoot,
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, PYTHONUNBUFFERED: '1' }
+    env: { ...process.env, PYTHONUNBUFFERED: '1', KMP_DUPLICATE_LIB_OK: 'TRUE' }
   });
 
   pythonProcess.stdout.on('data', (data) => {
@@ -3042,7 +3042,8 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
 
     const { stdout, stderr } = await execFileAsync(pythonPathLocal, [scriptPath], {
       timeout: 120000,
-      maxBuffer: 10 * 1024 * 1024
+      maxBuffer: 10 * 1024 * 1024,
+      env: { ...process.env, KMP_DUPLICATE_LIB_OK: 'TRUE' }
     });
 
     // Extract timing from stderr
