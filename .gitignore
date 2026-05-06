@@ -98,3 +98,8 @@ services/*/node_modules
 e2e-results/
 e2e-report/
 playwright-report/
+
+# Live deploy env files — never commit
+.env.production
+.env.production.bak.*
+deploy-prod/.env*
