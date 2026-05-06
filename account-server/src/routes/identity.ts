@@ -625,8 +625,13 @@ router.post('/agent/provision', authenticateToken, async (req: Request, res: Res
 
     const ownerEmail = owner_email || requestingUser.email;
 
-    // Resolve or create bot identity
-    const identityId = windy_identity_id || `bot-${crypto.randomUUID()}`;
+    // Resolve or create bot identity. The legacy fallback used `bot-${uuid}`
+    // here, but Postgres `users.windy_identity_id` is a UUID column and rejects
+    // any non-UUID-shaped string with `invalid input syntax for type uuid`.
+    // The "bot" tag is already carried on the INSERT below as
+    // `identity_type='bot'`, so the prefix was decorative — load-bearing only
+    // against the SQLite-only earlier schema. Plain UUID works in both.
+    const identityId = windy_identity_id || crypto.randomUUID();
     let botUser = db.prepare('SELECT id FROM users WHERE windy_identity_id = ?').get(identityId) as any;
 
     if (!botUser) {
