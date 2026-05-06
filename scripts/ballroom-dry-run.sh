@@ -228,6 +228,60 @@ else
     echo "  (skipping welcome-email log probe — pass --ssh to enable)"
 fi
 
+# ─── Gate 5: Mail JMAP send-path health (only with --ssh) ─────────
+# Probes Stalwart JMAP session discovery as welcome@windymail.ai using
+# the encrypted password Mail stores in accounts.jmap_token. If this
+# returns 200 with the urn:ietf:params:jmap:mail capability, every layer
+# of the P4 fix (Fernet decrypt, HKDF key derivation, per-account Basic
+# auth, docker-internal URL routing, primaryAccounts mail id) works.
+# Does NOT send a real email (would spam Resend on every run).
+if [ "$WANT_SSH" = 1 ]; then
+    GATE="5. Mail JMAP send-path Basic auth healthy"
+    # Stage the probe as a tempfile on the box, then docker exec — avoids
+    # the SSH+bash+python triple-quoting mess that was eating the script
+    # when inlined via `python -c`.
+    PROBE_LOCAL=$(mktemp -t mail-jmap-probe.XXXXXX.py)
+    cat > "$PROBE_LOCAL" <<'PROBE_PYEOF'
+import asyncio, sys
+sys.path.insert(0, '/app')
+from app.config import Settings
+from app.services.stalwart_password import basic_auth_header, decrypt_password
+from app.db import database as db
+import httpx
+
+async def main():
+    s = Settings()
+    await db.init_db(s.database_url)
+    row = await db.fetchone(
+        'SELECT email, jmap_token FROM accounts WHERE email = ?',
+        ('welcome@windymail.ai',),
+    )
+    if not row:
+        print('NO_WELCOME_ACCOUNT'); return
+    pw = decrypt_password(row['jmap_token'], s.jwt_secret)
+    auth = basic_auth_header(row['email'], pw)
+    base = (s.stalwart_jmap_url or s.stalwart_admin_url).rstrip('/')
+    async with httpx.AsyncClient(timeout=8, follow_redirects=True) as c:
+        r = await c.get(base + '/.well-known/jmap', headers={'Authorization': auth})
+        if r.status_code != 200:
+            print(f'BAD_STATUS_{r.status_code}'); return
+        body = r.json()
+        mail_id = (body.get('primaryAccounts') or {}).get('urn:ietf:params:jmap:mail')
+        print(f'OK mail_id={mail_id}' if mail_id else 'MISSING_MAIL_PRIMARY')
+
+asyncio.run(main())
+PROBE_PYEOF
+    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 -q "$PROBE_LOCAL" "$SSH_HOST:/tmp/mail-jmap-probe.py" 2>/dev/null
+    JMAP_PROBE=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$SSH_HOST" \
+        "sudo docker cp /tmp/mail-jmap-probe.py deploy-api-1:/tmp/mail-jmap-probe.py && sudo timeout 15 docker exec deploy-api-1 python /tmp/mail-jmap-probe.py 2>&1 | tail -1" 2>&1) || JMAP_PROBE="ssh-failed"
+    rm -f "$PROBE_LOCAL"
+    if [[ "$JMAP_PROBE" == OK* ]]; then
+        pass "$GATE — $JMAP_PROBE"
+    else
+        fail "$GATE" "$JMAP_PROBE"
+    fi
+fi
+
 # ─── Tally ────────────────────────────────────────────────────────
 T1=$(now_ms)
 DURATION=$(( (T1 - T0) / 1000 ))
