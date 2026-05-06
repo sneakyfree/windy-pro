@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import HatchCard from '../components/HatchCard'
+import VoiceButton from '../components/VoiceButton'
 import './Dashboard.css'
 import './Hatch.css'
 
@@ -369,6 +370,7 @@ export default function Dashboard() {
                     </div>
                 )}
             </main>
+            <VoiceButton token={getToken()} surface="dashboard" />
         </div>
     )
 }
