@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Clone Data Archive
+ * Windy Word — Clone Data Archive
  * Browse recording bundles, filter, bulk export, storage stats
  */
 

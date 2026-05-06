@@ -104,7 +104,7 @@
     },
     {
       "id": "windy-pro-engine",
-      "name": "Windy Pro Engine",
+      "name": "Windy Word Engine",
       "category": "voice",
       "variant": "gpu",
       "format": "safetensors",
@@ -235,7 +235,7 @@
     },
     {
       "id": "windy-pro-engine-ct2",
-      "name": "Windy Pro Engine (CPU INT8)",
+      "name": "Windy Word Engine (CPU INT8)",
       "category": "voice",
       "variant": "cpu-int8",
       "format": "ctranslate2",

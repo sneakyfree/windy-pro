@@ -1,5 +1,5 @@
 """
-Windy Pro - LoRA Fine-Tuning Pipeline
+Windy Word - LoRA Fine-Tuning Pipeline
 Full training pipeline for M2M-100 using PEFT (Parameter-Efficient Fine-Tuning).
 
 Usage:

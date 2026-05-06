@@ -1,5 +1,5 @@
 /**
- * Windy Pro - Settings Panel
+ * Windy Word - Settings Panel
  * Slide-in overlay for configuring transcription, hotkeys, and appearance.
  * DNA Strand: FEAT-065, FEAT-003
  */
@@ -203,14 +203,14 @@ class SettingsPanel {
               <option value="windy-edge">⚡ Windy Edge (1444 MB) — high-accuracy, professional grade</option>
               <option value="windy-plus">⚡ Windy Plus (1458 MB) — premium accuracy, production-grade</option>
               <option value="windy-turbo">⚡ Windy Turbo (1544 MB) — latest-gen, state-of-the-art</option>
-              <option value="windy-pro-engine">⚡ Windy Pro Engine (2945 MB) — ultra-fast large model</option>
+              <option value="windy-pro-engine">⚡ Windy Word Engine (2945 MB) — ultra-fast large model</option>
               <option value="windy-nano-cpu">🛡️ Windy Nano CPU (406 MB) — CPU-optimized, resource-constrained</option>
               <option value="windy-lite-cpu">🛡️ Windy Lite CPU (668 MB) — CPU-optimized, good balance</option>
               <option value="windy-core-cpu">🛡️ Windy Core CPU (1760 MB) — CPU-optimized, recommended for CPU</option>
               <option value="windy-edge-cpu">🛡️ Windy Edge CPU (3824 MB) — CPU-optimized, high accuracy</option>
               <option value="windy-plus-cpu">🛡️ Windy Plus CPU (4872 MB) — CPU-optimized, premium accuracy</option>
               <option value="windy-turbo-cpu">🛡️ Windy Turbo CPU (4200 MB) — CPU-optimized, state-of-the-art</option>
-              <option value="windy-pro-engine-cpu">🛡️ Windy Pro Engine CPU (9456 MB) — CPU-optimized, maximum performance</option>
+              <option value="windy-pro-engine-cpu">🛡️ Windy Word Engine CPU (9456 MB) — CPU-optimized, maximum performance</option>
             </select>
           </div>
           <p class="settings-hint" id="engineHint">Audio processed on your device. Nothing sent anywhere.</p>
@@ -243,7 +243,7 @@ class SettingsPanel {
           </div>
         </div>
 
-        <!-- Third-party API keys removed — Windy Pro uses proprietary engines only -->
+        <!-- Third-party API keys removed — Windy Word uses proprietary engines only -->
 
         <div class="settings-section" id="localModelSection">
           <h3>🎤 Transcription</h3>
@@ -261,7 +261,7 @@ class SettingsPanel {
               <option value="base">Windy Core (462MB — recommended, GPU ✅)</option>
               <option value="small">Windy Lite (140MB — lightweight, GPU ✅)</option>
               <option value="medium">Windy Edge (1444MB — high-accuracy, GPU ✅)</option>
-              <option value="large-v3">Windy Pro Engine (2945MB — ultra-fast large model, GPU ✅)</option>
+              <option value="large-v3">Windy Word Engine (2945MB — ultra-fast large model, GPU ✅)</option>
             </select>
           </div>
           <div class="setting-row">
@@ -290,7 +290,7 @@ class SettingsPanel {
               <option value="auto">Auto-detect</option>
             </select>
           </div>
-          <div class="setting-row" title="Identify different speakers in the transcript. Available with Cloud and Windy Pro Stream engines.">
+          <div class="setting-row" title="Identify different speakers in the transcript. Available with Cloud and Windy Word Stream engines.">
             <label for="diarizeEnabled">Identify speakers</label>
             <input type="checkbox" id="diarizeEnabled">
           </div>
@@ -349,14 +349,14 @@ class SettingsPanel {
             </div>
             <div class="hotkey-item-stacked hotkey-readonly">
               <span class="hotkey-label">🔍 Zoom (app window only)</span>
-              <span class="hotkey-desc">Click inside the app first — only zooms the Windy Pro window, not your desktop</span>
+              <span class="hotkey-desc">Click inside the app first — only zooms the Windy Word window, not your desktop</span>
               <span class="hotkey-fixed-btn">Ctrl + / −  ·  Ctrl+0 Reset</span>
             </div>
           </div>
           <button class="hotkey-reset-btn" id="hotkeyResetBtn">🔄 Reset All to Defaults</button>
           <details class="reserved-shortcuts-info">
             <summary>ℹ️ Why can't I use Ctrl+V, Ctrl+C, etc?</summary>
-            <p>These shortcuts are <b>system-wide</b> — used by every app for copy, paste, undo, etc. If Windy Pro hijacked them, you couldn't paste screenshots, copy text, or undo anywhere.</p>
+            <p>These shortcuts are <b>system-wide</b> — used by every app for copy, paste, undo, etc. If Windy Word hijacked them, you couldn't paste screenshots, copy text, or undo anywhere.</p>
             <p><b>Blocked shortcuts:</b></p>
             <div class="reserved-list">
               <span>Ctrl+V</span><span>Ctrl+C</span><span>Ctrl+X</span>
@@ -606,7 +606,7 @@ class SettingsPanel {
         <div class="settings-section">
           <h3>📊 Analytics</h3>
           <div class="setting-row" title="Anonymous metrics: engine used, recording duration, batch vs live, language. Never transcript content.">
-            <label for="analyticsEnabled">Help improve Windy Pro</label>
+            <label for="analyticsEnabled">Help improve Windy Word</label>
             <input type="checkbox" id="analyticsEnabled">
           </div>
           <p class="settings-hint">Sends anonymous usage stats (engine, duration, mode, language). Never transcript text.</p>
@@ -614,7 +614,7 @@ class SettingsPanel {
         
         <div class="settings-section">
           <h3>ℹ️ About</h3>
-          <p class="settings-about" id="aboutVersion">Windy Pro<br>Voice-to-text with the Green Strobe guarantee.</p>
+          <p class="settings-about" id="aboutVersion">Windy Word<br>Voice-to-text with the Green Strobe guarantee.</p>
           <button class="settings-btn" id="checkUpdatesBtn" style="margin-top:8px;">🔄 Check for Updates</button>
         </div>
       </div>
@@ -2627,7 +2627,7 @@ class SettingsPanel {
     if (window.windyAPI?.getAppVersion) {
       window.windyAPI.getAppVersion().then(v => {
         const el = this.panel.querySelector('#aboutVersion');
-        if (el) el.innerHTML = `Windy Pro v${v}<br>Voice-to-text with the Green Strobe guarantee.`;
+        if (el) el.innerHTML = `Windy Word v${v}<br>Voice-to-text with the Green Strobe guarantee.`;
       }).catch(() => { });
     }
 
@@ -2833,7 +2833,7 @@ class SettingsPanel {
     if (banner) {
       banner.style.display = 'block';
       const tierLabels = {
-        free: { name: 'Free', color: '#6B7280', hint: '2 engines included. 5-min local recordings. Upgrade to Windy Pro for all 15 engines, unlimited local recording, and cloud sessions.' },
+        free: { name: 'Free', color: '#6B7280', hint: '2 engines included. 5-min local recordings. Upgrade to Windy Word for all 15 engines, unlimited local recording, and cloud sessions.' },
         pro: { name: 'Pro', color: '#22C55E', hint: 'All 15 engines unlocked! Add Translate to get language-specialist engines for Spanish, French, and Hindi.' },
         translate: { name: 'Ultra', color: '#3B82F6', hint: 'All engines + language specialists unlocked. Upgrade to Windy Max for priority support.' },
         translate_pro: { name: 'Windy Max', color: '#8B5CF6', hint: 'All engines and features unlocked. You have the best plan! 👑' }

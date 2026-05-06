@@ -1,5 +1,5 @@
 """
-Windy Pro - Cloud API
+Windy Word - Cloud API
 FastAPI server for cloud-hosted transcription service.
 
 DNA Strand: A4 (Cloud Mode)

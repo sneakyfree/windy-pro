@@ -1,5 +1,5 @@
 """
-Windy Pro — Gap-Closure Regression Tests
+Windy Word — Gap-Closure Regression Tests
 
 Validates the P0 fixes:
   1. Version matches package.json
@@ -36,8 +36,8 @@ class TestVersionConsistency:
         """settings.js must NOT contain a hardcoded version string like v0.1.0."""
         settings_path = ROOT / "src" / "client" / "desktop" / "renderer" / "settings.js"
         content = settings_path.read_text()
-        # Should NOT have "Windy Pro v<digit>" hardcoded — should use dynamic lookup
-        assert not re.search(r'Windy Pro v\d+\.\d+\.\d+', content), \
+        # Should NOT have "Windy Word v<digit>" hardcoded — should use dynamic lookup
+        assert not re.search(r'Windy Word v\d+\.\d+\.\d+', content), \
             "settings.js still contains a hardcoded version string"
 
     def test_preload_exposes_version_api(self):

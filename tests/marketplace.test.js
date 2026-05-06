@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Marketplace & Download Manager Smoke Tests
+ * Windy Word — Marketplace & Download Manager Smoke Tests
  *
  * Tests the pair catalog, bundles, download manager, and marketplace panel.
  * Run: npx jest tests/test_marketplace.js --verbose

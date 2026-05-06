@@ -1,5 +1,5 @@
 """
-Windy Pro - CTranslate2 Quantizer
+Windy Word - CTranslate2 Quantizer
 Converts merged Whisper models to CTranslate2 INT8 format for CPU inference.
 
 Usage:
@@ -62,7 +62,7 @@ def quantize_model(input_dir: str, output_dir: str):
 
 def main():
     print("="*70)
-    print("Windy Pro - CTranslate2 Quantizer")
+    print("Windy Word - CTranslate2 Quantizer")
     print("Converting 7 models to INT8 for CPU inference")
     print("="*70)
 

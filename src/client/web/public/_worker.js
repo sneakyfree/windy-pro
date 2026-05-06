@@ -1,5 +1,5 @@
 /**
- * Cloudflare Pages single-file Worker — Windy Pro web SPA.
+ * Cloudflare Pages single-file Worker — Windy Word web SPA.
  *
  * Why this exists:
  *   The SPA's bundled fetch() calls all use relative paths like

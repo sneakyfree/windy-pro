@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Voice Clone Management
+ * Windy Word — Voice Clone Management
  * Feature 7: Record samples, upload, list clones, preview, delete, select active
  */
 

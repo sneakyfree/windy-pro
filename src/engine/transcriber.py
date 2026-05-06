@@ -1,5 +1,5 @@
 """
-Windy Pro - Streaming Transcription Engine
+Windy Word - Streaming Transcription Engine
 Based on faster-whisper with real-time partial token output.
 
 Core design principles:
@@ -462,7 +462,7 @@ class StreamingTranscriber:
 
 # Example usage and testing
 if __name__ == "__main__":
-    print("Windy Pro Transcription Engine")
+    print("Windy Word Transcription Engine")
     print("=" * 40)
     
     # Check dependencies

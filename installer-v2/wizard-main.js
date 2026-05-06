@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Installation Wizard (Main Process)
+ * Windy Word v2.0 — Installation Wizard (Main Process)
  * Electron main process that orchestrates the full install.
  * 
  * This is the shared core that all platform wizards use.
@@ -135,7 +135,7 @@ class InstallWizard {
         maximizable: true,
         center: true,
         frame: true,
-        title: 'Windy Pro — Setup',
+        title: 'Windy Word — Setup',
         backgroundColor: '#0A0E1A',
         webPreferences: {
           nodeIntegration: false,
@@ -318,7 +318,7 @@ class InstallWizard {
         wizardLog('Phase 0: about to call sendProgress(percent: 1)');
         this.sendProgress({
           percent: 1,
-          message: '🧹 Checking for prior Windy Pro installation...',
+          message: '🧹 Checking for prior Windy Word installation...',
           detail: 'Ensuring a clean start — removing any old files, processes, or configs'
         });
         wizardLog('Phase 0: sendProgress returned. Constructing CleanSlate...');
@@ -507,7 +507,7 @@ class InstallWizard {
         this.sendProgress({
           percent: 100,
           message: INSTALL_STEP_MESSAGES['complete']?.title || '🎉 Installation Complete!',
-          detail: INSTALL_STEP_MESSAGES['complete']?.detail || 'Windy Pro is ready to use.'
+          detail: INSTALL_STEP_MESSAGES['complete']?.detail || 'Windy Word is ready to use.'
         });
 
         // Write config.json to mark installation as complete
@@ -662,7 +662,7 @@ class InstallWizard {
      * non-zero with a message containing "1002" or "not allowed". Returns
      * { status: 'granted'|'denied'|'unknown', message }.
      *
-     * Why this is sufficient: the only thing Windy Pro needs Accessibility
+     * Why this is sufficient: the only thing Windy Word needs Accessibility
      * for is keystroke injection (paste-to-cursor). If System Events lets
      * us issue a keystroke at all, paste-to-cursor will work.
      */

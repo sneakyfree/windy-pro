@@ -3,7 +3,7 @@
  * 
  * Express.js API server that translates text using CTranslate2 + NLLB-200-600M.
  * Caches results in SQLite. Designed for Tier 2 languages (11-99) in the
- * Windy Pro two-tier i18n system.
+ * Windy Word two-tier i18n system.
  * 
  * Architecture:
  *   Express.js (HTTP, caching, rate-limit, CORS)

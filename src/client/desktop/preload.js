@@ -1,5 +1,5 @@
 /**
- * Windy Pro - Preload Script
+ * Windy Word - Preload Script
  * SEC-L7: APIs organized into namespaced groups to reduce audit surface.
  * All handlers use contextBridge.exposeInMainWorld for safe IPC.
  */

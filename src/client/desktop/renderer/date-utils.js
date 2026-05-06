@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Centralized Date/Time Utilities
+ * Windy Word — Centralized Date/Time Utilities
  *
  * All user-visible timestamps should use these helpers so the
  * user's timezone preference is respected everywhere.

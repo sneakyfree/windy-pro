@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Download Manager
+ * Windy Word v2.0 — Download Manager
  * 
  * Handles downloading models from HuggingFace with:
  * - Correct repo names from model_registry.json

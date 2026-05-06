@@ -75,7 +75,7 @@ const ERROR_CATALOG = Object.freeze({
     code: 'WINDY-011',
     title: 'Permission denied',
     user: 'Permission denied. Try running the installer with administrator/sudo privileges.',
-    fix: 'On macOS: drag Windy Pro to /Applications. On Linux: run with sudo. On Windows: right-click → Run as administrator.',
+    fix: 'On macOS: drag Windy Word to /Applications. On Linux: run with sudo. On Windows: right-click → Run as administrator.',
     docsAnchor: 'WINDY-011-permission-denied',
     matchers: ['EACCES', 'permission denied', 'EPERM'],
   },

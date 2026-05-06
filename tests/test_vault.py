@@ -1,5 +1,5 @@
 """
-Tests for Windy Pro Prompt Vault
+Tests for Windy Word Prompt Vault
 """
 
 import pytest
@@ -171,7 +171,7 @@ class TestExport:
         vault.save_segment(s1, "first segment", 0, 1, 0.9)
         
         md = vault.export_session(s1, 'md')
-        assert "# Windy Pro Transcript" in md
+        assert "# Windy Word Transcript" in md
         assert "first segment" in md
         assert "**[0:00]**" in md
     

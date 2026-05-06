@@ -1,5 +1,5 @@
 """
-Windy Pro - Audio Capture Module
+Windy Word - Audio Capture Module
 Captures audio from microphone and feeds to transcriber.
 """
 

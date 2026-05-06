@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Auto-Sync Receiver & Offline Queue
+ * Windy Word — Auto-Sync Receiver & Offline Queue
  * Polls cloud for new bundles, downloads automatically,
  * queues desktop uploads for retry, sync dashboard UI,
  * storage management, download progress + resume
@@ -239,7 +239,7 @@ class AutoSyncManager {
         <!-- Cloud Storage Usage Bar -->
         <div class="sync-storage-bar" style="margin:12px 0;padding:12px 16px;background:rgba(255,255,255,0.04);border-radius:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <span style="font-weight:600;font-size:13px;">☁️ Windy Pro Storage</span>
+            <span style="font-weight:600;font-size:13px;">☁️ Windy Word Storage</span>
             <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;background:rgba(0,200,100,0.15);color:#00cc66;">${tierLabel}</span>
           </div>
           <div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">

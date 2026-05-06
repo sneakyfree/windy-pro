@@ -1,5 +1,5 @@
 """
-Windy Pro - WebSocket Server
+Windy Word - WebSocket Server
 Bridges the Python transcription engine with the Electron client.
 
 Protocol:
@@ -36,7 +36,7 @@ SERVER_VERSION = "0.3.0"
 
 class WindyServer:
     """
-    WebSocket server for Windy Pro.
+    WebSocket server for Windy Word.
     
     Handles:
     - Audio streaming from Electron client
@@ -667,7 +667,7 @@ class WindyServer:
 
         # Start server with retry for port-in-use
         print(f"\n{'='*50}")
-        print(f"  Windy Pro Server v{SERVER_VERSION}")
+        print(f"  Windy Word Server v{SERVER_VERSION}")
         print(f"  ws://{self.host}:{self.port}")
         print(f"  Model: {config.model_size} | Device: {config.device}")
         print(f"{'='*50}\n")
@@ -894,7 +894,7 @@ async def main():
     """Run the server."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Windy Pro WebSocket Server")
+    parser = argparse.ArgumentParser(description="Windy Word WebSocket Server")
     parser.add_argument("--host", default=os.environ.get("WINDY_HOST", "127.0.0.1"), help="Host to bind to")
     parser.add_argument("--port", type=int, default=int(os.environ.get("WINDY_PORT", "9876")), help="Port to listen on")
     parser.add_argument("--model", default="base", help="Whisper model size")

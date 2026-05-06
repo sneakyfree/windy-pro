@@ -1,5 +1,5 @@
 /**
- * Windy Pro — In-App i18n System (G3)
+ * Windy Word — In-App i18n System (G3)
  * 
  * Two-tier translation architecture:
  * - Tier 1: Built-in strings for top 10 languages (shipped with the app)
@@ -106,7 +106,7 @@ const BUILT_IN = {
         'status.recording': 'Enregistrement',
         'status.idle': 'Inactif',
         'transcript.empty': 'Pas encore de transcriptions',
-        'transcript.emptyDesc': 'Commencez à enregistrer avec Windy Pro et vos transcriptions apparaîtront ici.',
+        'transcript.emptyDesc': 'Commencez à enregistrer avec Windy Word et vos transcriptions apparaîtront ici.',
         'transcript.words': 'mots',
         'pricing.free': 'Gratuit',
         'pricing.pro': 'Pro',
@@ -141,7 +141,7 @@ const BUILT_IN = {
         'status.recording': 'Aufnahme',
         'status.idle': 'Bereit',
         'transcript.empty': 'Noch keine Transkripte',
-        'transcript.emptyDesc': 'Starten Sie die Aufnahme mit Windy Pro und Ihre Transkripte erscheinen hier.',
+        'transcript.emptyDesc': 'Starten Sie die Aufnahme mit Windy Word und Ihre Transkripte erscheinen hier.',
         'transcript.words': 'Wörter',
         'pricing.free': 'Kostenlos',
         'pricing.pro': 'Pro',
@@ -176,7 +176,7 @@ const BUILT_IN = {
         'status.recording': '录音中',
         'status.idle': '待命',
         'transcript.empty': '暂无转录',
-        'transcript.emptyDesc': '使用 Windy Pro 开始录音，您的转录将显示在这里。',
+        'transcript.emptyDesc': '使用 Windy Word 开始录音，您的转录将显示在这里。',
         'transcript.words': '字',
         'pricing.free': '免费',
         'pricing.pro': '专业版',
@@ -211,7 +211,7 @@ const BUILT_IN = {
         'status.recording': '録音中',
         'status.idle': '待機中',
         'transcript.empty': '文字起こしはまだありません',
-        'transcript.emptyDesc': 'Windy Pro で録音を開始すると、文字起こしがここに表示されます。',
+        'transcript.emptyDesc': 'Windy Word で録音を開始すると、文字起こしがここに表示されます。',
         'transcript.words': '語',
         'pricing.free': '無料',
         'pricing.pro': 'プロ',
@@ -246,7 +246,7 @@ const BUILT_IN = {
         'status.recording': '녹음 중',
         'status.idle': '대기 중',
         'transcript.empty': '아직 전사가 없습니다',
-        'transcript.emptyDesc': 'Windy Pro 데스크톱 앱으로 녹음을 시작하면 전사가 여기에 나타납니다.',
+        'transcript.emptyDesc': 'Windy Word 데스크톱 앱으로 녹음을 시작하면 전사가 여기에 나타납니다.',
         'transcript.words': '단어',
         'pricing.free': '무료',
         'pricing.pro': '프로',
@@ -281,7 +281,7 @@ const BUILT_IN = {
         'status.recording': 'Gravando',
         'status.idle': 'Inativo',
         'transcript.empty': 'Nenhuma transcrição ainda',
-        'transcript.emptyDesc': 'Comece a gravar com o app Windy Pro e suas transcrições aparecerão aqui.',
+        'transcript.emptyDesc': 'Comece a gravar com o app Windy Word e suas transcrições aparecerão aqui.',
         'transcript.words': 'palavras',
         'pricing.free': 'Grátis',
         'pricing.pro': 'Pro',
@@ -316,7 +316,7 @@ const BUILT_IN = {
         'status.recording': 'रिकॉर्डिंग',
         'status.idle': 'निष्क्रिय',
         'transcript.empty': 'अभी तक कोई ट्रांसक्रिप्ट नहीं',
-        'transcript.emptyDesc': 'Windy Pro डेस्कटॉप ऐप से रिकॉर्डिंग शुरू करें और आपके ट्रांसक्रिप्ट यहां दिखाई देंगे।',
+        'transcript.emptyDesc': 'Windy Word डेस्कटॉप ऐप से रिकॉर्डिंग शुरू करें और आपके ट्रांसक्रिप्ट यहां दिखाई देंगे।',
         'transcript.words': 'शब्द',
         'pricing.free': 'मुफ्त',
         'pricing.pro': 'प्रो',
@@ -351,7 +351,7 @@ const BUILT_IN = {
         'status.recording': 'جارٍ التسجيل',
         'status.idle': 'خامل',
         'transcript.empty': 'لا توجد نصوص بعد',
-        'transcript.emptyDesc': 'ابدأ التسجيل باستخدام تطبيق Windy Pro وستظهر نصوصك هنا.',
+        'transcript.emptyDesc': 'ابدأ التسجيل باستخدام تطبيق Windy Word وستظهر نصوصك هنا.',
         'transcript.words': 'كلمات',
         'pricing.free': 'مجاني',
         'pricing.pro': 'احترافي',

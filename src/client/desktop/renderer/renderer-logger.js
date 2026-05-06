@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Structured Logger (Renderer / Browser)
+ * Windy Word — Structured Logger (Renderer / Browser)
  *
  * Browser-compatible version of the desktop logger for renderer process files.
  * Uses console.log with timestamps and auto-redaction.

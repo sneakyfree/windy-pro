@@ -1,5 +1,5 @@
 """
-Windy Pro - LoRA Adapter Merger
+Windy Word - LoRA Adapter Merger
 Merges LoRA adapters into base models to create standalone merged models.
 
 Usage:
@@ -75,7 +75,7 @@ def merge_lora_adapter(base_model_id: str, lora_path: str, output_dir: str):
 
 def main():
     print("="*70)
-    print("Windy Pro - LoRA Adapter Merger")
+    print("Windy Word - LoRA Adapter Merger")
     print("Merging 7 LoRA adapters into base models")
     print("="*70)
 

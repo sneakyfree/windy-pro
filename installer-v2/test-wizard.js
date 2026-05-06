@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Launch the Installation Wizard
+ * Windy Word v2.0 — Launch the Installation Wizard
  * 
  * Run modes:
  *   npx electron installer-v2/test-wizard.js           — Simulated (no real installs)
@@ -13,7 +13,7 @@ const { getAdapter, getPlatformName } = require('./adapters');
 const realMode = process.argv.includes('--real');
 
 app.whenReady().then(async () => {
-  console.log(`🌪️  Windy Pro v2.0 Installation Wizard`);
+  console.log(`🌪️  Windy Word v2.0 Installation Wizard`);
   console.log(`   Platform: ${getPlatformName()}`);
   console.log(`   Mode: ${realMode ? 'REAL INSTALL' : 'SIMULATION (use --real for actual install)'}`);
   console.log('');

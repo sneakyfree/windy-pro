@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Opus Codec Integration (A4.3)
+ * Windy Word — Opus Codec Integration (A4.3)
  * 
  * Handles Opus audio decoding/encoding for cloud transcription.
  * Opus is the preferred codec for WebSocket audio streaming due to

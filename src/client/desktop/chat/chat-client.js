@@ -10,7 +10,7 @@
  * 
  * Hardened: security, error handling, E2E encryption, offline resilience, reconnection
  * 
- * License: Proprietary (Windy Pro)
+ * License: Proprietary (Windy Word)
  * Matrix JS SDK: Apache 2.0
  */
 
@@ -146,7 +146,7 @@ class WindyChatClient extends EventEmitter {
         user: fullUserId,
         password: password,
         device_id: `windy-pro-${hostname}`,
-        initial_device_display_name: 'Windy Pro Desktop'
+        initial_device_display_name: 'Windy Word Desktop'
       });
 
       // SEC-04: Encrypt access token with safeStorage before storing
@@ -275,7 +275,7 @@ class WindyChatClient extends EventEmitter {
         username,
         password,
         auth: { type: 'm.login.dummy' },
-        initial_device_display_name: 'Windy Pro Desktop'
+        initial_device_display_name: 'Windy Word Desktop'
       });
 
       // Now login with the new account

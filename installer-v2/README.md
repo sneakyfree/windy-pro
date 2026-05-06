@@ -1,4 +1,4 @@
-# 🌪️ Windy Pro v2.0 — Installation Wizard
+# 🌪️ Windy Word v2.0 — Installation Wizard
 
 ## Architecture
 

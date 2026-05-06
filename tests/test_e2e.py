@@ -1,5 +1,5 @@
 """
-End-to-end integration tests for Windy Pro.
+End-to-end integration tests for Windy Word.
 Simulates real user flows by mocking IPC and testing state transitions.
 """
 import pytest

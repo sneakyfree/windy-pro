@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Linux Debian/Ubuntu Adapter (Rewritten)
+ * Windy Word v2.0 — Linux Debian/Ubuntu Adapter (Rewritten)
  * 
  * Covers: Debian, Ubuntu, Linux Mint, Pop!_OS, Elementary, Zorin, Kali, Raspbian
  * 
@@ -20,7 +20,7 @@ const VENV_DIR = path.join(APP_DIR, 'venv');
 const MODELS_DIR = path.join(APP_DIR, 'models');
 const BIN_DIR = path.join(APP_DIR, 'bin');
 
-// Complete list of EVERY package that Windy Pro could possibly need on Debian/Ubuntu
+// Complete list of EVERY package that Windy Word could possibly need on Debian/Ubuntu
 const APT_COCKTAIL = [
   // Python
   'python3', 'python3-pip', 'python3-venv', 'python3-dev',
@@ -239,7 +239,7 @@ class LinuxDebianAdapter {
     const iconPath = iconCandidates.find(p => fs.existsSync(p)) || 'windy-pro';
     fs.writeFileSync(path.join(desktopDir, 'windy-pro.desktop'), `[Desktop Entry]
 Type=Application
-Name=Windy Pro
+Name=Windy Word
 Comment=AI-powered speech recognition and translation
 Exec=${process.execPath}
 Icon=${iconPath}

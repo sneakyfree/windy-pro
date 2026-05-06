@@ -1,5 +1,5 @@
 """
-Windy Pro - Whisper STT LoRA Fine-Tuning Script
+Windy Word - Whisper STT LoRA Fine-Tuning Script
 Re-trains Whisper models with LoRA adapters for improved accuracy.
 
 Usage:
@@ -111,7 +111,7 @@ def train_whisper_lora(config: WhisperLoRAConfig):
     """Train Whisper with LoRA adapters."""
 
     print("="*60)
-    print("Windy Pro - Whisper LoRA Fine-Tuning")
+    print("Windy Word - Whisper LoRA Fine-Tuning")
     print("="*60)
     print(f"Model: {config.model_name}")
     print(f"Output: {config.output_dir}")

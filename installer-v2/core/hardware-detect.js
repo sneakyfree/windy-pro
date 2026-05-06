@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Hardware Detection
+ * Windy Word v2.0 — Hardware Detection
  * Detects everything: CPU, RAM, GPU (NVIDIA/AMD/Apple/Intel), VRAM, disk, battery,
  * OS version, architecture, network speed. Works on all platforms.
  */

@@ -1,5 +1,5 @@
 """
-Tests for Windy Pro Transcriber
+Tests for Windy Word Transcriber
 """
 
 import pytest

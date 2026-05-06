@@ -37,7 +37,7 @@ export async function registerWithEternitas(): Promise<void> {
         ...(config.ETERNITAS_API_KEY ? { 'Authorization': `Bearer ${config.ETERNITAS_API_KEY}` } : {}),
       },
       body: JSON.stringify({
-        name: 'Windy Pro',
+        name: 'Windy Word',
         webhook_url: webhookUrl,
         events: ['passport.revoked', 'passport.suspended', 'passport.reinstated', 'trust_updated'],
       }),

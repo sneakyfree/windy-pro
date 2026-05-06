@@ -1,5 +1,5 @@
 /**
- * Windy Pro Web Proxy
+ * Windy Word Web Proxy
  * Port 5173 — serves static frontend + proxies /api/* to account-server (8098)
  */
 const http = require('http');
@@ -87,4 +87,4 @@ server.on('upgrade', (req, socket, head) => {
   prx.end();
 });
 
-server.listen(PORT, () => console.log(`🌐 Windy Pro web proxy → http://localhost:${PORT} (api→${API_PORT})`));
+server.listen(PORT, () => console.log(`🌐 Windy Word web proxy → http://localhost:${PORT} (api→${API_PORT})`));

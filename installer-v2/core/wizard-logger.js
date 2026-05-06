@@ -2,7 +2,7 @@
  * wizard-logger.js
  *
  * Persistent file-based logger for the install wizard. Writes every line
- * to ~/Library/Logs/Windy Pro/wizard-install.log (or the platform equivalent)
+ * to ~/Library/Logs/Windy Word/wizard-install.log (or the platform equivalent)
  * with a timestamp, AND to console as a fallback.
  *
  * Why this exists:
@@ -17,7 +17,7 @@
  *   wizardLog('starting phase 0');
  *
  * Tail the log live (in a separate terminal):
- *   tail -f "$HOME/Library/Logs/Windy Pro/wizard-install.log"
+ *   tail -f "$HOME/Library/Logs/Windy Word/wizard-install.log"
  */
 
 const fs = require('fs');
@@ -26,10 +26,10 @@ const os = require('os');
 
 function getLogDir() {
   if (process.platform === 'darwin') {
-    return path.join(os.homedir(), 'Library', 'Logs', 'Windy Pro');
+    return path.join(os.homedir(), 'Library', 'Logs', 'Windy Word');
   }
   if (process.platform === 'win32') {
-    return path.join(os.homedir(), 'AppData', 'Local', 'Windy Pro', 'Logs');
+    return path.join(os.homedir(), 'AppData', 'Local', 'Windy Word', 'Logs');
   }
   // Linux (XDG-ish)
   return path.join(

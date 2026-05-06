@@ -1,5 +1,5 @@
 """
-Windy Pro - Translation Dataset Curator
+Windy Word - Translation Dataset Curator
 Downloads and preprocesses parallel corpora for M2M-100 fine-tuning.
 
 Sources (MIT/Apache/CC-BY licensed):

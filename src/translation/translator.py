@@ -1,5 +1,5 @@
 """
-Windy Pro - Translation Engine
+Windy Word - Translation Engine
 Core translation logic using Meta's M2M-100 model.
 """
 

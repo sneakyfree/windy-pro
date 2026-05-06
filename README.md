@@ -1,4 +1,4 @@
-# Windy Pro
+# Windy Word
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/sneakyfree/windy-pro/ci.yml?branch=main&style=flat-square)](https://github.com/sneakyfree/windy-pro/actions)
 [![Version](https://img.shields.io/badge/version-2.0.0-blue?style=flat-square)](RELEASE_NOTES.md)
@@ -16,7 +16,7 @@ Real-time speech transcription, translation, and digital clone training for desk
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                         Windy Pro Platform                             │
+│                         Windy Word Platform                            │
 ├──────────────────┬──────────────────┬──────────────────────────────────┤
 │   Desktop App    │    Web Portal    │       Mobile App                 │
 │   (Electron)     │   (React/Vite)   │   (React Native/Expo)           │
@@ -193,7 +193,7 @@ git push --tags
 ### Installer Details
 
 **Windows (NSIS)**
-- Supports custom install directory (default: `C:\Program Files\Windy Pro`)
+- Supports custom install directory (default: `C:\Program Files\Windy Word`)
 - Detects and kills running instances before upgrade
 - Adds Start Menu shortcut, uninstaller in Control Panel
 - Not code-signed (self-signed stub ready for future signing)
@@ -215,7 +215,7 @@ git push --tags
 | Issue | Platform | Workaround |
 |-------|----------|------------|
 | Windows Defender SmartScreen | Windows | Click "More info" → "Run anyway" |
-| "App is from an unidentified developer" | macOS | Right-click → Open, or: `xattr -dr com.apple.quarantine "/Applications/Windy Pro.app"` |
+| "App is from an unidentified developer" | macOS | Right-click → Open, or: `xattr -dr com.apple.quarantine "/Applications/Windy Word.app"` |
 | `--no-sandbox` required for AppImage | Linux | Launch with `--no-sandbox` flag, or install the `.deb` instead |
 | GPU rendering issues on older drivers | Linux | Set `LIBGL_ALWAYS_SOFTWARE=1` before launching |
 

@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Linux Fedora/RHEL Adapter (Rewritten)
+ * Windy Word v2.0 — Linux Fedora/RHEL Adapter (Rewritten)
  * 
  * Covers: Fedora, RHEL, CentOS, Rocky Linux, Alma Linux, Amazon Linux, Oracle Linux
  * Strategy: Bundled first, dnf second
@@ -143,7 +143,7 @@ class LinuxFedoraAdapter {
       fs.mkdirSync(desktopDir, { recursive: true });
       fs.writeFileSync(path.join(desktopDir, 'windy-pro.desktop'), `[Desktop Entry]
 Type=Application
-Name=Windy Pro
+Name=Windy Word
 Exec=${process.execPath} ${process.cwd()}
 Terminal=false
 Categories=Audio;Utility;

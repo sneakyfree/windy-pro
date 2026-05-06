@@ -1,5 +1,5 @@
 """
-Tests for Windy Pro Server — WebSocket Integration
+Tests for Windy Word Server — WebSocket Integration
 """
 
 import pytest

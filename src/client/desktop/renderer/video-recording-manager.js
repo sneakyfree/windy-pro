@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Video Recording with Webcam
+ * Windy Word — Video Recording with Webcam
  * Camera selection, live preview, simultaneous audio+video recording,
  * Clone training bundle output, synced subtitle playback
  */

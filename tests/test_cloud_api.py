@@ -1,5 +1,5 @@
 """
-Tests for Windy Pro Cloud API
+Tests for Windy Word Cloud API
 """
 
 import pytest

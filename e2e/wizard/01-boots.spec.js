@@ -17,7 +17,7 @@ test('wizard cold-boots and Screen 0 is active', async () => {
   try {
     // Title comes from wizard.html <title>; wizard-main.js's
     // BrowserWindow `title:` is overridden once the HTML loads.
-    expect(await w.page.title()).toMatch(/Windy Pro/);
+    expect(await w.page.title()).toMatch(/Windy Word/);
 
     // Screen 0 should be the only `.screen.active` after load.
     // Use locator + getAttribute (rather than CSS :checked) because the

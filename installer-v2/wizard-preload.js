@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Wizard Preload Bridge
+ * Windy Word v2.0 — Wizard Preload Bridge
  * Exposes safe IPC methods to the renderer
  */
 const { contextBridge, ipcRenderer } = require('electron');

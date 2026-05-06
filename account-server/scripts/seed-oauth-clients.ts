@@ -59,7 +59,7 @@ const FIRST_PARTY_CLIENTS: ClientSeed[] = [
   },
   {
     clientId: 'windy_pro_desktop',
-    name: 'Windy Pro Desktop',
+    name: 'Windy Word Desktop',
     redirectUris: ['windy-pro://auth/callback'],
     allowedScopes: ['windy_pro:*'],
     isFirstParty: true,
@@ -67,7 +67,7 @@ const FIRST_PARTY_CLIENTS: ClientSeed[] = [
   },
   {
     clientId: 'windy_pro_mobile',
-    name: 'Windy Pro Mobile',
+    name: 'Windy Word Mobile',
     redirectUris: ['windypro://auth/callback'],
     allowedScopes: ['windy_pro:*'],
     isFirstParty: true,

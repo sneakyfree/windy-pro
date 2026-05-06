@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Pair Download Manager (L1) + Encrypted Model Storage (L6)
+ * Windy Word — Pair Download Manager (L1) + Encrypted Model Storage (L6)
  *
  * Downloads translation-pair models from CDN, verifies SHA-256 checksums,
  * encrypts at rest with AES-256-GCM (HKDF-SHA256 key derivation), and

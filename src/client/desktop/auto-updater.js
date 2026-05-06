@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Auto-Updater (B1.1)
+ * Windy Word — Auto-Updater (B1.1)
  * 
  * Checks for updates on startup and periodically.
  * Uses a simple GitHub Releases/custom endpoint check pattern.
@@ -118,7 +118,7 @@ class AutoUpdater {
     _showUpdateDialog(update) {
         const options = {
             type: 'info',
-            title: 'Windy Pro Update Available',
+            title: 'Windy Word Update Available',
             message: `Version ${update.version} is available!`,
             detail: update.releaseNotes || 'Bug fixes and improvements.',
             buttons: ['Download & Install', 'Later'],

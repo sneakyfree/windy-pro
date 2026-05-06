@@ -1,5 +1,5 @@
 /**
- * Windy Pro — License Heartbeat Service (Layer 2)
+ * Windy Word — License Heartbeat Service (Layer 2)
  *
  * Validates the user's license at regular intervals to ensure models
  * are only accessible to active, paying users.

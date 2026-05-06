@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Privacy-First Analytics (H8)
+ * Windy Word — Privacy-First Analytics (H8)
  * 
  * Lightweight, self-hosted event tracking.
  * No third-party scripts, no cookies, no PII collected.

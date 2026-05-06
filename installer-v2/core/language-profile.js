@@ -1,5 +1,5 @@
 /**
- * Windy Pro Installer — Language Profiling Screen (F1)
+ * Windy Word Installer — Language Profiling Screen (F1)
  * 
  * Wizard step that detects the user's system language and lets them
  * choose their preferred transcription and UI languages.

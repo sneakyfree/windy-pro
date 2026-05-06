@@ -1,7 +1,7 @@
 {
     "name": "windy-translate-api",
     "version": "1.0.0",
-    "description": "Windy Pro Tier 2 dynamic translation API — CTranslate2 + NLLB-200-600M",
+    "description": "Windy Word Tier 2 dynamic translation API — CTranslate2 + NLLB-200-600M",
     "main": "server.js",
     "scripts": {
         "start": "node server.js",
@@ -18,6 +18,6 @@
     "engines": {
         "node": ">=18.0.0"
     },
-    "author": "Windy Pro Team",
+    "author": "Windy Word Team",
     "license": "MIT"
 }

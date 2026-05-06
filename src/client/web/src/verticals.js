@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Target Verticals Configuration (E5)
+ * Windy Word — Target Verticals Configuration (E5)
  * 
  * Industry-specific presets for transcription & translation.
  * Each vertical provides default settings, terminology boosts,

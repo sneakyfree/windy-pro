@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Linux Arch/Manjaro Adapter (Rewritten)
+ * Windy Word v2.0 — Linux Arch/Manjaro Adapter (Rewritten)
  * 
  * Covers: Arch Linux, Manjaro, EndeavourOS, Garuda, Artix
  * Strategy: Bundled first, pacman second
@@ -121,7 +121,7 @@ class LinuxArchAdapter {
       fs.mkdirSync(desktopDir, { recursive: true });
       fs.writeFileSync(path.join(desktopDir, 'windy-pro.desktop'), `[Desktop Entry]
 Type=Application
-Name=Windy Pro
+Name=Windy Word
 Exec=${process.execPath} ${process.cwd()}
 Terminal=false
 Categories=Audio;Utility;

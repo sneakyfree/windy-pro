@@ -1,5 +1,5 @@
 """
-Windy Pro — Premium Features Test Suite
+Windy Word — Premium Features Test Suite
 Structural tests: Conversation Mode, Document Translator,
 Translation Memory, Voice Clone Manager, Language Detection,
 IPC handlers, Preload bridges

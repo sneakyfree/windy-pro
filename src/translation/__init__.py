@@ -1,5 +1,5 @@
 """
-Windy Pro Translation Engine
+Windy Word Translation Engine
 Text-to-text translation powered by Meta's M2M-100.
 """
 

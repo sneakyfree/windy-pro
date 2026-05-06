@@ -1,5 +1,5 @@
 """
-Windy Pro - Local Prompt Vault
+Windy Word - Local Prompt Vault
 SQLite-based storage for transcription sessions and segments.
 
 DNA Strand: A4.4 (local mode) / FEAT-017
@@ -197,7 +197,7 @@ class PromptVault:
         segments = session.get('segments', [])
         
         if format == 'md':
-            lines = [f"# Windy Pro Transcript"]
+            lines = [f"# Windy Word Transcript"]
             lines.append(f"**Date:** {session['started_at']}")
             lines.append(f"**Duration:** {session.get('duration_s', 0):.0f}s")
             lines.append(f"**Words:** {session.get('word_count', 0)}")

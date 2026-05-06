@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Storage-Aware Engine Recommendations
+ * Windy Word v2.0 — Storage-Aware Engine Recommendations
  *
  * Detects available disk space and RAM, then:
  * 1. Auto-recommends engines based on storage/RAM thresholds

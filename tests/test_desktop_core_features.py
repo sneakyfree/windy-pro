@@ -1,5 +1,5 @@
 """
-Windy Pro Desktop Core Features — Structural Verification Tests
+Windy Word Desktop Core Features — Structural Verification Tests
 
 Verifies that the translation/favorites/history routes, bar-waveform,
 mini-translate files, updater 6h interval, and IPC handlers exist.

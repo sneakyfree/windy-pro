@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Upgrade Panel
+ * Windy Word — Upgrade Panel
  * Premium pricing cards with Stripe Checkout integration.
  * Slide-in panel matching History/Vault pattern.
  */
@@ -28,7 +28,7 @@ class UpgradePanel {
             },
             {
                 key: 'pro',
-                name: 'Windy Pro',
+                name: 'Windy Word',
                 price: '$4.99/mo',
                 period: 'annual',
                 monthlyPriceId: 'price_1T60GeBXIOBasDQi4aitcq8O',
@@ -553,7 +553,7 @@ class UpgradePanel {
     }
 
     _onPaymentSuccess(tier) {
-        const tierNames = { pro: 'Windy Pro', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
+        const tierNames = { pro: 'Windy Word', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
         const status = this.panel?.querySelector('#upgradeStatus');
         if (status) {
             status.innerHTML = `

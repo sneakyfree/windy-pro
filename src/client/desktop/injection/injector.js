@@ -1,5 +1,5 @@
 /**
- * Windy Pro - Cursor Injection Module
+ * Windy Word - Cursor Injection Module
  * 
  * Cross-platform text injection into active application:
  * 1. Copy text to system clipboard
@@ -117,7 +117,7 @@ class CursorInjector {
             exec(cmd, { timeout: 3000 }, (error) => {
                 if (error) {
                     if (error.message.includes('not allowed')) {
-                        reject(new Error('Accessibility permission required. Please enable Windy Pro in System Preferences > Privacy & Security > Accessibility.'));
+                        reject(new Error('Accessibility permission required. Please enable Windy Word in System Preferences > Privacy & Security > Accessibility.'));
                     } else {
                         reject(new Error(`macOS injection failed: ${error.message}`));
                     }
@@ -190,7 +190,7 @@ class CursorInjector {
                     granted: trusted,
                     message: trusted
                         ? 'Accessibility permission granted'
-                        : 'Accessibility permission required. Go to System Preferences > Privacy & Security > Accessibility and add Windy Pro.'
+                        : 'Accessibility permission required. Go to System Preferences > Privacy & Security > Accessibility and add Windy Word.'
                 };
             }
             case 'linux': {

@@ -1,5 +1,5 @@
 /**
- * Windy Pro - Mini Translate Preload
+ * Windy Word - Mini Translate Preload
  * Exposes close() and translate() IPC bridges for the floating quick-translate window.
  * SEC-01 fix: replaces nodeIntegration:true with safe contextBridge API.
  */

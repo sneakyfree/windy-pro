@@ -1,7 +1,7 @@
 /**
- * Windy Pro — Cloud Sync Module (H4)
+ * Windy Word — Cloud Sync Module (H4)
  *
- * Handles uploading recordings from the desktop app to the Windy Pro
+ * Handles uploading recordings from the desktop app to the Windy Word
  * account server. Integrates with the existing archive flow.
  *
  * Features:

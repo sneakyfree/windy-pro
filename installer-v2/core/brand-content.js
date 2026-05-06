@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Brand Experience Content
+ * Windy Word v2.0 — Brand Experience Content
  * Monikers, tips, quotes, feature cards — everything shown during download/install.
  * This is the captive audience content. Make them believers before the install finishes.
  */
@@ -12,13 +12,13 @@ const MONIKERS = [
   { emoji: '🟢', text: 'The Green Strobe Never Lies.', sub: 'If it\'s green, you\'re recording. Always. No guessing.' },
   { emoji: '🔒', text: 'Stay Local. Stay Private.', sub: 'Unlike competitors who upload your voice to the cloud — we don\'t.' },
   { emoji: '💊', text: 'Get Voice-Pilled.', sub: 'Once you try fully local voice-to-text, you can\'t go back.' },
-  { emoji: '🐕', text: '"Windy Pro make me go MoboLoco!"', sub: '406 MB engine on your phone. Runs anywhere, no GPU needed.' },
+  { emoji: '🐕', text: '"Windy Word make me go MoboLoco!"', sub: '406 MB engine on your phone. Runs anywhere, no GPU needed.' },
   { emoji: '💰', text: 'Pay Once. Use Forever.', sub: 'No subscription. No monthly fees. This is yours for life.' },
   { emoji: '🧬', text: 'Talk Today. Live Forever.', sub: 'Build your voice clone dataset automatically while you work.' },
   { emoji: '⌨️', text: 'Never Touch a Keyboard Again.', sub: 'Dictate everything. Paste anywhere. One hotkey.' },
   { emoji: '🌍', text: '99 Languages. Zero Internet.', sub: 'From Arabic to Yoruba — all processed locally on your device.' },
   { emoji: '✝️', text: 'By the Words of His Mouth, the Heavens Were Created.', sub: 'Your voice is the most powerful creation tool you own.' },
-  { emoji: '🎤', text: 'It Learns Your Voice.', sub: 'After 2 hours, Windy Pro knows you better than your best friend.' },
+  { emoji: '🎤', text: 'It Learns Your Voice.', sub: 'After 2 hours, Windy Word knows you better than your best friend.' },
   { emoji: '🧠', text: 'WindyTune: It Adapts So You Don\'t Have To.', sub: 'Auto-switches models based on your hardware, battery, and conditions.' },
   { emoji: '✈️', text: 'Airplane Mode? No Problem.', sub: '35,000 feet, no Wi-Fi, perfect transcription. Always.' },
   { emoji: '📱', text: 'One Download. A Partner for Life.', sub: '15 models. One mission. Your words, perfectly.' },
@@ -37,7 +37,7 @@ const FEATURE_CARDS = [
   },
   {
     title: '🧬 Soul File — Your Digital Legacy',
-    body: 'Every time you use Windy Pro, you\'re building a dataset of your voice — pitch, timbre, rhythm, accent, emotional range. After 50 hours, you have everything needed for a studio-grade voice clone. Imagine: a thousand years from now, your descendants hear YOUR voice.',
+    body: 'Every time you use Windy Word, you\'re building a dataset of your voice — pitch, timbre, rhythm, accent, emotional range. After 50 hours, you have everything needed for a studio-grade voice clone. Imagine: a thousand years from now, your descendants hear YOUR voice.',
     category: 'soul-file'
   },
   {
@@ -52,7 +52,7 @@ const FEATURE_CARDS = [
   },
   {
     title: '🎙️ Voice Fingerprinting — It Knows You',
-    body: 'After just 5 minutes, Windy Pro creates a mathematical fingerprint of your voice. After 2 hours, it can pick YOUR words out of a crowded party with music blaring and everyone talking. Your voice. In any crowd. Crystal clear.',
+    body: 'After just 5 minutes, Windy Word creates a mathematical fingerprint of your voice. After 2 hours, it can pick YOUR words out of a crowded party with music blaring and everyone talking. Your voice. In any crowd. Crystal clear.',
     category: 'technology'
   },
   {
@@ -67,7 +67,7 @@ const FEATURE_CARDS = [
   },
   {
     title: '💎 16 Proprietary Engines',
-    body: 'Developed by Windy Pro Labs. Fine-tuned by our engineers. Not available anywhere else. From a 73 MB GPU engine to a 9.5 GB CPU flagship — every engine is optimized, encrypted, and continually refined.',
+    body: 'Developed by Windy Word Labs. Fine-tuned by our engineers. Not available anywhere else. From a 73 MB GPU engine to a 9.5 GB CPU flagship — every engine is optimized, encrypted, and continually refined.',
     category: 'technology'
   },
   {
@@ -92,7 +92,7 @@ const FEATURE_CARDS = [
   },
   {
     title: '💳 Pricing That Respects You',
-    body: 'Free to start. Windy Pro: $99 lifetime or $49/yr or $4.99/mo. Windy Ultra: $199 lifetime or $79/yr or $8.99/mo. Windy Max: $299 lifetime or $149/yr or $14.99/mo. Pay once, own forever. No tricks.',
+    body: 'Free to start. Windy Word: $99 lifetime or $49/yr or $4.99/mo. Windy Ultra: $199 lifetime or $79/yr or $8.99/mo. Windy Max: $299 lifetime or $149/yr or $14.99/mo. Pay once, own forever. No tricks.',
     category: 'pricing'
   },
   {
@@ -106,7 +106,7 @@ const FEATURE_CARDS = [
  * Creation/divine quotes — interspersed for atmosphere
  */
 const CREATION_QUOTES = [
-  'And God said, "Let there be light." And there was Windy Pro.',
+  'And God said, "Let there be light." And there was Windy Word.',
   'In the beginning was the Word.',
   'By the words of His mouth, the heavens were created.',
   'Your voice is the most ancient and powerful tool of creation.',
@@ -150,12 +150,12 @@ const INSTALL_STEP_MESSAGES = {
   },
   'check-deps': {
     title: '🌪️ Preparing the Windy Ecosystem',
-    detail: 'Setting up everything Windy Pro needs to transform your voice into text. Prepare to get Windy, baby!',
+    detail: 'Setting up everything Windy Word needs to transform your voice into text. Prepare to get Windy, baby!',
     tip: 'We bundle everything. No chasing downloads. No terminal commands. That\'s Windy.'
   },
   'install-python': {
     title: '🌪️ Setting Up the Windy Engine Room',
-    detail: 'Building your private Windy voice processing environment. Everything stays inside Windy Pro — isolated, secure, yours.',
+    detail: 'Building your private Windy voice processing environment. Everything stays inside Windy Word — isolated, secure, yours.',
     tip: 'Your system stays clean. The Windy ecosystem lives in its own space.'
   },
   'install-ffmpeg': {
@@ -169,8 +169,8 @@ const INSTALL_STEP_MESSAGES = {
     tip: 'GPU + Windy Core = instant transcription. That\'s WINDY, baby! 🌪️'
   },
   'download-model': {
-    title: '🧠 Downloading Windy Pro Engine',
-    detail: 'Pulling your engine from WindyLabs on HuggingFace. This engine was fine-tuned by our team specifically for Windy Pro.',
+    title: '🧠 Downloading Windy Word Engine',
+    detail: 'Pulling your engine from WindyLabs on HuggingFace. This engine was fine-tuned by our team specifically for Windy Word.',
     tip: 'Engines are optimized for local, private transcription. Nobody else has these configurations.'
   },
   'verify': {
@@ -185,7 +185,7 @@ const INSTALL_STEP_MESSAGES = {
   },
   'complete': {
     title: '🌪️ You\'re Ready!',
-    detail: 'Windy Pro is installed and ready to go. The Green Strobe awaits.',
+    detail: 'Windy Word is installed and ready to go. The Green Strobe awaits.',
     tip: 'Press Ctrl+Shift+Space to start recording. The Green Strobe never lies.'
   }
 };

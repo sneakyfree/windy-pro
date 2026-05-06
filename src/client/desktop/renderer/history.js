@@ -1,5 +1,5 @@
 /**
- * Windy Pro — History Panel (slide-panel style)
+ * Windy Word — History Panel (slide-panel style)
  *
  * Full-height panel with date grouping, search, expand/collapse,
  * stats header, media indicators, audio playback, and lazy loading
@@ -798,7 +798,7 @@ class HistoryPanel {
         }
 
         if (format === 'md') {
-            let content = '# Windy Pro — Transcript History\n\n';
+            let content = '# Windy Word — Transcript History\n\n';
             content += `> Exported: ${window.WindyDateUtils ? WindyDateUtils.formatFull(new Date()) : new Date().toLocaleString()} · ${entries.length} recordings\n\n`;
             entries.forEach(item => {
                 const date = window.WindyDateUtils ? WindyDateUtils.formatFull(new Date(item.date)) : new Date(item.date).toLocaleString();
@@ -850,7 +850,7 @@ class HistoryPanel {
         const body = data.content.length > 1800
             ? data.content.substring(0, 1800) + '\n\n… (truncated — use Save to File for full export)'
             : data.content;
-        const subject = `Windy Pro Transcripts — ${window.WindyDateUtils ? WindyDateUtils.formatDateOnly(new Date()) : new Date().toLocaleDateString()}`;
+        const subject = `Windy Word Transcripts — ${window.WindyDateUtils ? WindyDateUtils.formatDateOnly(new Date()) : new Date().toLocaleDateString()}`;
         const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.windyAPI.openExternalUrl(mailto);
         this._showExportToast('📧 Opening email client…');

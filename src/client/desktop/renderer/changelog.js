@@ -1,5 +1,5 @@
 /**
- * Windy Pro — What's New Changelog Popup
+ * Windy Word — What's New Changelog Popup
  * Shows once per version on first launch after update.
  */
 class ChangelogPopup {
@@ -35,7 +35,7 @@ class ChangelogPopup {
             <span class="changelog-icon">🔧</span>
             <div>
               <strong>Multi-Engine Support</strong>
-              <p>Choose from 15 Windy Pro engines: Core (GPU), Edge (CPU), and Lingua (language specialists). Each with different strengths.</p>
+              <p>Choose from 15 Windy Word engines: Core (GPU), Edge (CPU), and Lingua (language specialists). Each with different strengths.</p>
             </div>
           </div>
           <div class="changelog-item">

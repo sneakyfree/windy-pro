@@ -22,7 +22,7 @@
   },
   "build": {
     "appId": "com.windypro.app",
-    "productName": "Windy Pro",
+    "productName": "Windy Word",
     "directories": {
       "output": "dist"
     },

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Windy Pro v2.0 — Test Model Generator
+ * Windy Word v2.0 — Test Model Generator
  * 
  * Creates placeholder .wpr model files in ./models/ for all 15 models.
  * Each file has:
@@ -126,7 +126,7 @@ function formatBytes(bytes) {
 // ─── Main ───
 
 console.log('');
-console.log('🌪️  Windy Pro v2.0 — Test Model Generator');
+console.log('🌪️  Windy Word v2.0 — Test Model Generator');
 console.log(`   Output: ${MODELS_DIR}`);
 console.log(`   Scale:  1/${SIZE_DIVISOR} of real sizes`);
 console.log('');

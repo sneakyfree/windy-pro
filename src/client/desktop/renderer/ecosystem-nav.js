@@ -477,7 +477,7 @@ class EcosystemNav {
     this.webviews[product] = { webview, toolbar, wrapper, loading };
   }
 
-  // #5: Inject Windy Pro auth token into embedded webviews for SSO
+  // #5: Inject Windy Word auth token into embedded webviews for SSO
   async injectAuth(webview) {
     try {
       if (window.windyAPI?.getAuthToken) {

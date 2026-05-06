@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Real-time Conversation Mode
+ * Windy Word — Real-time Conversation Mode
  * Split-pane live interpreter: Language A ↔ Language B
  * Two mic buttons, real-time transcription + translation between panes
  */

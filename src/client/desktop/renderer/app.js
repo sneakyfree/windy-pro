@@ -1,5 +1,5 @@
 /**
- * Windy Pro - Renderer Application
+ * Windy Word - Renderer Application
  * 
  * Handles:
  * - WebSocket connection to Python backend
@@ -656,25 +656,25 @@ class WindyApp {
     overlay.id = 'welcomeOverlay';
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
-    overlay.setAttribute('aria-label', 'Welcome to Windy Pro');
+    overlay.setAttribute('aria-label', 'Welcome to Windy Word');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);animation:fadeIn .3s ease';
     overlay.innerHTML = `
       <div style="background:#1e293b;border-radius:16px;padding:36px;max-width:460px;width:90%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.5);position:relative">
         <div id="welcomePanels">
           <div class="welcome-panel" data-step="0">
             <div style="font-size:56px;margin-bottom:16px">🌪️</div>
-            <h2 style="font-size:22px;color:#f1f5f9;margin-bottom:8px">Welcome to Windy Pro</h2>
+            <h2 style="font-size:22px;color:#f1f5f9;margin-bottom:8px">Welcome to Windy Word</h2>
             <p style="color:#94a3b8;font-size:14px;line-height:1.6">The most powerful voice-to-text app on the planet. Offline-first, privacy-focused, and blazingly fast.</p>
           </div>
           <div class="welcome-panel" data-step="1" style="display:none">
             <div style="font-size:56px;margin-bottom:16px">🎤</div>
             <h2 style="font-size:22px;color:#f1f5f9;margin-bottom:8px">How to Record</h2>
-            <p style="color:#94a3b8;font-size:14px;line-height:1.6">Click the <strong style="color:#22c55e">Record</strong> button or press <strong style="color:#60a5fa">Ctrl+Shift+Space</strong> to start recording. Speak naturally — Windy Pro transcribes as you go.</p>
+            <p style="color:#94a3b8;font-size:14px;line-height:1.6">Click the <strong style="color:#22c55e">Record</strong> button or press <strong style="color:#60a5fa">Ctrl+Shift+Space</strong> to start recording. Speak naturally — Windy Word transcribes as you go.</p>
           </div>
           <div class="welcome-panel" data-step="2" style="display:none">
             <div style="font-size:56px;margin-bottom:16px">🌐</div>
             <h2 style="font-size:22px;color:#f1f5f9;margin-bottom:8px">Choose Your Language</h2>
-            <p style="color:#94a3b8;font-size:14px;line-height:1.6">Windy Pro supports 100+ languages. Head to <strong style="color:#60a5fa">Settings</strong> to pick your preferred language and AI model.</p>
+            <p style="color:#94a3b8;font-size:14px;line-height:1.6">Windy Word supports 100+ languages. Head to <strong style="color:#60a5fa">Settings</strong> to pick your preferred language and AI model.</p>
           </div>
         </div>
         <div style="display:flex;justify-content:center;gap:8px;margin:20px 0 16px">

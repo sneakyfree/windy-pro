@@ -1,5 +1,5 @@
 """
-Tests for Windy Pro Vibe Toggle (Grammar Correction)
+Tests for Windy Word Vibe Toggle (Grammar Correction)
 """
 
 import pytest

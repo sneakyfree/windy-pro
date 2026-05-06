@@ -93,7 +93,7 @@ export interface ProvisionProductResponse {
  * JWT scope format: `product:permission`
  *
  * Examples:
- *   - `windy_pro:*` — full access to Windy Pro
+ *   - `windy_pro:*` — full access to Windy Word
  *   - `windy_chat:read` — read-only Windy Chat
  *   - `windy_chat:write` — write access to Windy Chat
  *   - `windy_mail:send` — send mail permission
