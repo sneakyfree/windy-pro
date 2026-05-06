@@ -617,6 +617,33 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
         });
     } catch { /* non-critical */ }
 
+    // ── Welcome email (fire-and-forget) ───────────────────────
+    // Sent from Pro via Resend (not via Mail's JMAP send, which is
+    // currently blocked by a Stalwart 0.16 auth incompatibility — see
+    // lockbox Phase 8d). Owner gets a "<Agent> is alive" email with
+    // the agent's passport, certificate, and inbox address. Non-fatal
+    // on failure — the hatch flow has already completed.
+    (async () => {
+        try {
+            const { sendMail, agentHatchedEmail } = await import('../services/mailer');
+            const certificateNo = `WF-${(passportNumber || '').replace(/-/g, '').slice(2, 10)}`;
+            const args = agentHatchedEmail({
+                agentName,
+                agentEmail,
+                passportNumber: passportNumber || '',
+                certificateNo,
+                ownerName: owner.name || owner.email.split('@')[0],
+            });
+            args.to = owner.email;
+            const result = await sendMail(args);
+            if (!result.success) {
+                console.warn(`[hatch] welcome email send failed for ${owner.email}: ${result.error}`);
+            }
+        } catch (err: any) {
+            console.warn('[hatch] welcome email dispatch threw:', err?.message || err);
+        }
+    })();
+
     clearInterval(heartbeat);
     res.end();
 });
