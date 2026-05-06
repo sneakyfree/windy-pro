@@ -2,7 +2,7 @@
  * Windy Chat — Translation Middleware
  * 
  * Hooks into the chat message pipeline to auto-translate messages
- * using Windy Pro's on-device translation engines. All translation
+ * using Windy Word's on-device translation engines. All translation
  * happens locally — nothing leaves the user's device.
  * 
  * Uses a persistent WebSocket connection to the Python server

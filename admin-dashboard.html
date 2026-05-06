@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Windy Pro — Super Admin Dashboard</title>
-    <meta name="description" content="Enterprise control panel for Windy Pro Cloud Storage">
+    <title>Windy Word — Super Admin Dashboard</title>
+    <meta name="description" content="Enterprise control panel for Windy Word Cloud Storage">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -1302,7 +1302,7 @@
     <!-- ═══════════════════════ LOGIN SCREEN ═══════════════════════ -->
     <div id="login-screen">
         <div class="login-box">
-            <h1>☁ Windy Pro</h1>
+            <h1>☁ Windy Word</h1>
             <p>Super Admin Dashboard</p>
             <div class="field">
                 <label>Email Address</label>
@@ -1327,7 +1327,7 @@
                     <path d="M2 17l10 5 10-5" stroke="var(--green)" opacity=".5" />
                     <path d="M2 12l10 5 10-5" stroke="var(--green)" opacity=".75" />
                 </svg>
-                Windy Pro Admin
+                Windy Word Admin
             </div>
             <nav id="main-nav"></nav>
             <div class="right">
@@ -1380,7 +1380,7 @@
         // ═══════════════════════ CONFIG ═══════════════════════
         const BASE_URL = localStorage.getItem('wp_base_url') || window.location.origin || 'http://192.168.4.126:8099';
         const TIERS = ['free', 'pro', 'translate', 'translate_pro'];
-        const TIER_LABELS = { free: 'Free', pro: 'Windy Pro', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
+        const TIER_LABELS = { free: 'Free', pro: 'Windy Word', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
         const TIER_LIMITS = { free: '500 MB', pro: '5 GB', translate: '10 GB', translate_pro: '25 GB' };
         const TIER_COLORS = { free: 'var(--text-dim)', pro: 'var(--blue)', translate: 'var(--purple)', translate_pro: 'var(--gold)' };
         const PAGES = ['overview', 'users', 'nodes', 'billing', 'audit', 'settings'];
@@ -2017,13 +2017,13 @@
                 const nodeRows = allNodes.map(n => `<tr><td>${escHtml(n.name || n.id)}</td><td>${n.status || '—'}</td><td>${escHtml(n.url || '')}</td></tr>`).join('');
                 const tierRows = Object.entries(s.usersByTier || {}).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
                 const recentRows = (audit.entries || []).slice(0, 10).map(e => `<tr><td>${fmtDate(e.timestamp)}</td><td>${escHtml(e.action || '')}</td><td>${escHtml(e.userId || '')}</td></tr>`).join('');
-                const html = `<!DOCTYPE html><html><head><title>Windy Pro Report — ${now}</title><style>body{font-family:Inter,system-ui,sans-serif;max-width:800px;margin:40px auto;color:#1e293b;font-size:13px}h1{color:#0f172a;border-bottom:2px solid #22C55E;padding-bottom:8px}h2{color:#334155;margin-top:24px;font-size:1rem}table{width:100%;border-collapse:collapse;margin:8px 0}th,td{padding:6px 10px;border:1px solid #e2e8f0;text-align:left;font-size:12px}th{background:#f8fafc;font-weight:600}.stat{display:inline-block;background:#f1f5f9;border-radius:8px;padding:12px 20px;margin:4px;text-align:center}.stat .v{font-size:1.4rem;font-weight:800;color:#0f172a}.stat .l{font-size:.7rem;color:#64748b;text-transform:uppercase}@media print{body{margin:20px}}</style></head><body>
-<h1>☁ Windy Pro — Admin Report</h1><p>Generated: ${now}</p>
+                const html = `<!DOCTYPE html><html><head><title>Windy Word Report — ${now}</title><style>body{font-family:Inter,system-ui,sans-serif;max-width:800px;margin:40px auto;color:#1e293b;font-size:13px}h1{color:#0f172a;border-bottom:2px solid #22C55E;padding-bottom:8px}h2{color:#334155;margin-top:24px;font-size:1rem}table{width:100%;border-collapse:collapse;margin:8px 0}th,td{padding:6px 10px;border:1px solid #e2e8f0;text-align:left;font-size:12px}th{background:#f8fafc;font-weight:600}.stat{display:inline-block;background:#f1f5f9;border-radius:8px;padding:12px 20px;margin:4px;text-align:center}.stat .v{font-size:1.4rem;font-weight:800;color:#0f172a}.stat .l{font-size:.7rem;color:#64748b;text-transform:uppercase}@media print{body{margin:20px}}</style></head><body>
+<h1>☁ Windy Word — Admin Report</h1><p>Generated: ${now}</p>
 <div><div class="stat"><div class="v">${s.totalUsers || 0}</div><div class="l">Users</div></div><div class="stat"><div class="v">${s.totalFiles || 0}</div><div class="l">Files</div></div><div class="stat"><div class="v">${s.totalStorageHuman || formatBytes(s.totalStorage)}</div><div class="l">Storage Used</div></div><div class="stat"><div class="v">${s.activeNodes || 0}/${s.totalNodes || 0}</div><div class="l">Nodes Online</div></div><div class="stat"><div class="v">${d.usedPercent || 0}%</div><div class="l">Disk Used</div></div></div>
 <h2>Storage Nodes</h2><table><tr><th>Node</th><th>Status</th><th>URL</th></tr>${nodeRows}</table>
 <h2>Users by Tier</h2><table><tr><th>Tier</th><th>Count</th></tr>${tierRows}</table>
 <h2>Recent Activity</h2><table><tr><th>Time</th><th>Action</th><th>User</th></tr>${recentRows}</table>
-<p style="margin-top:30px;color:#94a3b8;font-size:11px">Windy Pro Super Admin Dashboard · Report auto-generated</p></body></html>`;
+<p style="margin-top:30px;color:#94a3b8;font-size:11px">Windy Word Super Admin Dashboard · Report auto-generated</p></body></html>`;
                 const w = window.open('', '_blank');
                 w.document.write(html);
                 w.document.close();

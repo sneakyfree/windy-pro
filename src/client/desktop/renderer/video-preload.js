@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Video Preview Preload Script
+ * Windy Word — Video Preview Preload Script
  * Bridges IPC between main process and the video preview window.
  */
 

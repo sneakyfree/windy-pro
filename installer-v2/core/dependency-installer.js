@@ -1,8 +1,8 @@
 /**
- * Windy Pro v2.0 — Dependency Installer (Rewritten)
+ * Windy Word v2.0 — Dependency Installer (Rewritten)
  * 
  * Grant's Rule: "We need the total, complete, holistic cocktail so that
- * anything any hardware could possibly need to run Windy Pro is in that
+ * anything any hardware could possibly need to run Windy Word is in that
  * cocktail. Can you imagine grandma getting told to download an obscure
  * version of Python?"
  * 

@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Platform Adapter Auto-Selector
+ * Windy Word v2.0 — Platform Adapter Auto-Selector
  * Detects the current platform and returns the appropriate adapter.
  */
 

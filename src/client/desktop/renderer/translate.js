@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Real-time Speech Translation Panel
+ * Windy Word — Real-time Speech Translation Panel
  *
  * Features:
  * - Press-and-hold mic button with animated waveform
@@ -414,7 +414,7 @@ class TranslatePanel {
         } catch (localErr) {
             this._log.warn('_translateSpeech', `Whisper unavailable: ${localErr.message}`);
             this._sourceText.textContent = '⚠️ Translation unavailable';
-            this._targetText.textContent = 'Start the Windy Pro engine to enable speech translation.';
+            this._targetText.textContent = 'Start the Windy Word engine to enable speech translation.';
             return;
         }
 

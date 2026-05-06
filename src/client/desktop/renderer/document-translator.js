@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Document & Batch Translation
+ * Windy Word — Document & Batch Translation
  * Feature 2: Drag-drop PDF/DOCX/TXT → translate → output new file
  * Feature 3: Paste CSV/phrases → translate all → export CSV
  */

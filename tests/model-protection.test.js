@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Model Protection System Tests
+ * Windy Word — Model Protection System Tests
  *
  * Tests for Layer 1 (HKDF + WMOD encryption), Layer 2 (heartbeat/grace),
  * and migration of legacy models.

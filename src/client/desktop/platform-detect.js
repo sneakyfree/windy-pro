@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Platform Detection Module
+ * Windy Word — Platform Detection Module
  *
  * Detects the runtime environment once at startup and exports a frozen
  * configuration object that the rest of the app uses.  This is the ONLY

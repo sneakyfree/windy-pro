@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Widget Engine (Strand I1)
+ * Windy Word — Widget Engine (Strand I1)
  * 
  * Replaces the hardcoded tornado with a selectable widget system.
  * 6 stock widgets (SVG/CSS) + custom uploaded images.
@@ -92,7 +92,7 @@ class WidgetEngine {
     },
 
     logo: {
-      name: '🌀 Windy Pro Logo',
+      name: '🌀 Windy Word Logo',
       description: 'Professional brand mark',
       svg: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="32" cy="32" r="26" stroke="currentColor" stroke-width="2" opacity="0.3"/>

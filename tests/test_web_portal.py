@@ -1,5 +1,5 @@
 """
-Windy Pro Web Portal Phase 2 — Structural Verification Tests
+Windy Word Web Portal Phase 2 — Structural Verification Tests
 
 Verifies all new pages, routes, API endpoints, PWA files,
 and Landing page sections exist and are properly wired.

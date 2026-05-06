@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Windy Pro Engine WebSocket Protocol",
+  "title": "Windy Word Engine WebSocket Protocol",
   "description": "Source of truth for the shape of messages between the desktop renderer and src/engine/server.py. See docs/ENGINE-PROTOCOL.md for prose.",
   "$defs": {
     "baseClientMessage": {

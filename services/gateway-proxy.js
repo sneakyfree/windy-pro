@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Windy Pro API Gateway Proxy
+ * Windy Word API Gateway Proxy
  * Routes windyword.ai traffic to the correct backend service.
  * 
  * /api/storage/*  → localhost:8099 (cloud-storage service)
@@ -125,7 +125,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🌪️  Windy Pro API Gateway on http://localhost:${PORT}`);
+  console.log(`🌪️  Windy Word API Gateway on http://localhost:${PORT}`);
   console.log(`   /api/auth/*    → :8098 (account server)`);
   console.log(`   /api/storage/* → :8099 (cloud storage)`);
   console.log(`   /health        → gateway status`);

@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Model Download Server
+ * Windy Word v2.0 — Model Download Server
  * 
  * Serves .wpr model files with:
  * - JWT Bearer token authentication
@@ -294,7 +294,7 @@ app.listen(PORT, () => {
         : 0;
 
     console.log('');
-    console.log('🌪️  Windy Pro Model Server v2.0');
+    console.log('🌪️  Windy Word Model Server v2.0');
     console.log(`   Port:    http://localhost:${PORT}`);
     console.log(`   Models:  ${MODELS_DIR} (${modelCount} files)`);
     console.log(`   Log:     ${LOG_FILE}`);

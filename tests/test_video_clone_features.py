@@ -1,5 +1,5 @@
 """
-Windy Pro — Video Recording & Clone Training Test Suite
+Windy Word — Video Recording & Clone Training Test Suite
 Structural tests: Video Recording, Phone Camera Bridge, Clone Data Archive,
 Backend API routes, IPC handlers, Preload bridges
 """

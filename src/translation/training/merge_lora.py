@@ -1,5 +1,5 @@
 """
-Windy Pro - LoRA Merge and Export
+Windy Word - LoRA Merge and Export
 Merges LoRA adapter weights back into the base M2M-100 model.
 
 This creates a standalone model that can be used without PEFT.

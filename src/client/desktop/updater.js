@@ -1,5 +1,5 @@
 /**
- * Windy Pro - Auto Updater
+ * Windy Word - Auto Updater
  * Checks for updates on startup and prompts user to install.
  * 
  * Uses GitHub Releases as the update source.
@@ -40,7 +40,7 @@ class WindyUpdater {
             console.info(`[Updater] Update available: ${info.version}`);
             this.updateAvailable = true;
             // Non-intrusive toast — send to renderer
-            this._sendToast(`🔄 Windy Pro v${info.version} is downloading in the background…`);
+            this._sendToast(`🔄 Windy Word v${info.version} is downloading in the background…`);
         });
 
         autoUpdater.on('update-not-available', () => {
@@ -54,7 +54,7 @@ class WindyUpdater {
 
         autoUpdater.on('update-downloaded', (info) => {
             console.info(`[Updater] Update downloaded: ${info.version}`);
-            this._sendToast(`✅ Windy Pro v${info.version} is ready. Restart to update.`, true);
+            this._sendToast(`✅ Windy Word v${info.version} is ready. Restart to update.`, true);
         });
 
         autoUpdater.on('error', (error) => {
@@ -113,7 +113,7 @@ class WindyUpdater {
         const result = await dialog.showMessageBox(win, {
             type: 'info',
             title: 'Update Available',
-            message: `Windy Pro v${info.version} is available.`,
+            message: `Windy Word v${info.version} is available.`,
             detail: 'Would you like to download and install it?',
             buttons: ['Download', 'Later'],
             defaultId: 0,
@@ -133,7 +133,7 @@ class WindyUpdater {
         const result = await dialog.showMessageBox(win, {
             type: 'info',
             title: 'Update Ready',
-            message: `Windy Pro v${info.version} has been downloaded.`,
+            message: `Windy Word v${info.version} has been downloaded.`,
             detail: 'Restart now to apply the update?',
             buttons: ['Restart Now', 'Later'],
             defaultId: 0,

@@ -1,5 +1,5 @@
 /**
- * Windy Pro - Vault Panel (Transcript History Browser)
+ * Windy Word - Vault Panel (Transcript History Browser)
  * 
  * Slide-in panel for browsing, searching, and exporting
  * past transcription sessions from the local SQLite vault.

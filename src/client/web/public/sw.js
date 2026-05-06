@@ -1,4 +1,4 @@
-// Windy Pro — Service Worker for PWA offline shell v4
+// Windy Word — Service Worker for PWA offline shell v4
 const CACHE_NAME = 'windy-pro-v4';
 const STATIC_ASSETS = [
     '/',

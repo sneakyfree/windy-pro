@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Windy Pro - Live Demo
+Windy Word - Live Demo
 Captures from microphone and transcribes in real-time.
 
 Usage:
@@ -32,7 +32,7 @@ def state_indicator(state: TranscriptionState) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Windy Pro Live Demo")
+    parser = argparse.ArgumentParser(description="Windy Word Live Demo")
     parser.add_argument("--model", default="tiny", help="Model size (tiny/base/small/medium/large-v3)")
     parser.add_argument("--device", default="auto", help="Device (auto/cpu/cuda)")
     parser.add_argument("--language", default="en", help="Language code")

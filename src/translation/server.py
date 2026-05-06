@@ -1,5 +1,5 @@
 """
-Windy Pro - Translation WebSocket Server
+Windy Word - Translation WebSocket Server
 Serves M2M-100 translation on port 9877.
 
 Protocol:
@@ -31,7 +31,7 @@ SERVER_VERSION = "0.1.0"
 
 class TranslationServer:
     """
-    WebSocket server for Windy Pro Translation.
+    WebSocket server for Windy Word Translation.
 
     Handles:
     - Text-to-text translation requests
@@ -218,7 +218,7 @@ class TranslationServer:
 
         # Start server
         print(f"\n{'='*50}")
-        print(f"  Windy Pro Translation Server v{SERVER_VERSION}")
+        print(f"  Windy Word Translation Server v{SERVER_VERSION}")
         print(f"  ws://{self.host}:{self.port}")
         print(f"  Model: {model_display} | Device: {self.translator.device}")
         print(f"{'='*50}\n")
@@ -244,7 +244,7 @@ async def main():
     """Run the server."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Windy Pro Translation WebSocket Server")
+    parser = argparse.ArgumentParser(description="Windy Word Translation WebSocket Server")
     parser.add_argument("--host", default=os.environ.get("WINDY_TRANSLATION_HOST", "127.0.0.1"), help="Host to bind to")
     parser.add_argument("--port", type=int, default=int(os.environ.get("WINDY_TRANSLATION_PORT", "9877")), help="Port to listen on")
     parser.add_argument("--device", default="auto", help="Device (auto/cpu/cuda)")

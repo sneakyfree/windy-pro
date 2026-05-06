@@ -1,5 +1,5 @@
 """
-Windy Pro - Translation Test Client
+Windy Word - Translation Test Client
 Tests the translation WebSocket server with sample translations.
 """
 
@@ -218,7 +218,7 @@ async def main():
     """Main entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Windy Pro Translation Test Client")
+    parser = argparse.ArgumentParser(description="Windy Word Translation Test Client")
     parser.add_argument("--mode", choices=["basic", "pairs", "interactive"], default="basic",
                         help="Test mode (default: basic)")
     parser.add_argument("--host", default="127.0.0.1", help="Server host")

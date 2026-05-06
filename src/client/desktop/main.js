@@ -57,7 +57,7 @@ process.on('uncaughtException', (err) => {
     const { dialog } = require('electron');
     if (require('electron').app.isReady()) {
       dialog.showErrorBox(
-        'Windy Pro encountered an error',
+        'Windy Word encountered an error',
         `Something went wrong. The error has been logged.\n\nDetails: ${_summary.message || '(no details)'}\n\nLog: ${crashLogPath}`
       );
     }
@@ -75,7 +75,7 @@ process.on('unhandledRejection', (reason) => {
   console.error('[REJECTION]', _sum.message || _sum.name || '(no details)');
 });
 /**
- * Windy Pro - Electron Main Process
+ * Windy Word - Electron Main Process
  * 
  * Creates a floating, always-on-top window with:
  * - System tray integration
@@ -211,7 +211,7 @@ const MODEL_MANIFEST = {
     'windy-edge': { size: '1444MB', bytes: 1444 * 1024 * 1024, label: 'Windy Edge', desc: 'High-accuracy, professional grade' },
     'windy-plus': { size: '1458MB', bytes: 1458 * 1024 * 1024, label: 'Windy Plus', desc: 'Premium accuracy, production-grade' },
     'windy-turbo': { size: '1544MB', bytes: 1544 * 1024 * 1024, label: 'Windy Turbo', desc: 'Latest-gen, state-of-the-art' },
-    'windy-pro-engine': { size: '2945MB', bytes: 2945 * 1024 * 1024, label: 'Windy Pro Engine', desc: 'Ultra-fast large model, maximum speed' },
+    'windy-pro-engine': { size: '2945MB', bytes: 2945 * 1024 * 1024, label: 'Windy Word Engine', desc: 'Ultra-fast large model, maximum speed' },
     // CPU voice models
     'windy-nano-cpu': { size: '406MB', bytes: 406 * 1024 * 1024, label: 'Windy Nano (CPU)', desc: 'CPU-optimized, resource-constrained' },
     'windy-lite-cpu': { size: '668MB', bytes: 668 * 1024 * 1024, label: 'Windy Lite (CPU)', desc: 'CPU-optimized, good balance' },
@@ -219,7 +219,7 @@ const MODEL_MANIFEST = {
     'windy-edge-cpu': { size: '3824MB', bytes: 3824 * 1024 * 1024, label: 'Windy Edge (CPU)', desc: 'CPU-optimized, high accuracy' },
     'windy-plus-cpu': { size: '4872MB', bytes: 4872 * 1024 * 1024, label: 'Windy Plus (CPU)', desc: 'CPU-optimized, premium accuracy' },
     'windy-turbo-cpu': { size: '4200MB', bytes: 4200 * 1024 * 1024, label: 'Windy Turbo (CPU)', desc: 'CPU-optimized, state-of-the-art' },
-    'windy-pro-engine-cpu': { size: '9456MB', bytes: 9456 * 1024 * 1024, label: 'Windy Pro Engine (CPU)', desc: 'CPU-optimized, maximum performance' },
+    'windy-pro-engine-cpu': { size: '9456MB', bytes: 9456 * 1024 * 1024, label: 'Windy Word Engine (CPU)', desc: 'CPU-optimized, maximum performance' },
     // Translation models
     'windy-translate-spark': { size: '929MB', bytes: 929 * 1024 * 1024, label: 'Windy Translate Spark', desc: 'Fast multilingual, 100+ languages' },
     'windy-translate-standard': { size: '2371MB', bytes: 2371 * 1024 * 1024, label: 'Windy Translate Standard', desc: 'Higher quality than Spark, 100+ languages' }
@@ -437,7 +437,7 @@ function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
 
     if (mode === 'chunk' || mode === 'both') {
       const chunkPath = path.join(dayDir, `${timeKey}.md`);
-      const chunk = `# Windy Pro Dictation\n\n${meta}\n\n---\n\n${safeText}\n`;
+      const chunk = `# Windy Word Dictation\n\n${meta}\n\n---\n\n${safeText}\n`;
       fs.writeFileSync(chunkPath, chunk, 'utf-8');
       wrote.push(chunkPath);
     }
@@ -933,7 +933,7 @@ function showAboutWindow() {
   <div class="logo">🌪️</div>
   <h1>Windy Word</h1>
   <div class="version">Version ${version}</div>
-  <div class="built">Built by WindyPro Labs</div>
+  <div class="built">Built by Windy Word Labs</div>
   <div class="tech">Electron ${electronVersion} · Node ${nodeVersion} · ${process.arch}</div>
   <div class="links">
     <a onclick="window.postMessage({type:'open-url',url:'https://windyword.ai'})">Website</a>
@@ -941,7 +941,7 @@ function showAboutWindow() {
     <a onclick="window.postMessage({type:'open-url',url:'https://github.com/sneakyfree/windy-pro'})">GitHub</a>
   </div>
   <button class="close-btn" onclick="window.close()">Close</button>
-  <div class="copyright">&copy; 2026 WindyPro Labs. All rights reserved.</div>
+  <div class="copyright">&copy; 2026 Windy Word Labs. All rights reserved.</div>
 <script>window.addEventListener('message',(e)=>{if(e.data&&e.data.type==='open-url'){window.open(e.data.url);}});</script>
 </body></html>`;
 
@@ -1919,7 +1919,7 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     'windy-edge': { name: 'Windy Edge', size: '1444 MB', specialty: 'High-accuracy engine. Best for professional transcription.' },
     'windy-plus': { name: 'Windy Plus', size: '1458 MB', specialty: 'Premium STT with excellent accuracy. Production-grade.' },
     'windy-turbo': { name: 'Windy Turbo', size: '1544 MB', specialty: 'Latest-gen engine. State-of-the-art accuracy and robustness.' },
-    'windy-pro-engine': { name: 'Windy Pro Engine', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
+    'windy-pro-engine': { name: 'Windy Word Engine', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
 
     // Real CPU voice models from model_registry.json
     'windy-nano-cpu': { name: 'Windy Nano (CPU)', size: '406 MB', specialty: 'CPU-optimized Nano. Best for resource-constrained environments.' },
@@ -1928,7 +1928,7 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     'windy-edge-cpu': { name: 'Windy Edge (CPU)', size: '3824 MB', specialty: 'CPU-optimized Edge. High accuracy on CPU hardware.' },
     'windy-plus-cpu': { name: 'Windy Plus (CPU)', size: '4872 MB', specialty: 'CPU-optimized Plus. Premium accuracy without GPU.' },
     'windy-turbo-cpu': { name: 'Windy Turbo (CPU)', size: '4200 MB', specialty: 'CPU-optimized Turbo. State-of-the-art accuracy on CPU.' },
-    'windy-pro-engine-cpu': { name: 'Windy Pro Engine (CPU)', size: '9456 MB', specialty: 'CPU-optimized Pro. Maximum CPU performance.' },
+    'windy-pro-engine-cpu': { name: 'Windy Word Engine (CPU)', size: '9456 MB', specialty: 'CPU-optimized Pro. Maximum CPU performance.' },
 
     // Real Translation models from model_registry.json
     'windy-translate-spark': { name: 'Windy Translate Spark', size: '929 MB', specialty: 'Fast multilingual translation. 100+ languages. LoRA-enhanced for priority pairs.' },
@@ -1939,7 +1939,7 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     'base': { name: 'Windy Core', size: '462 MB', specialty: 'Core engine. Recommended for most use cases.' },
     'small': { name: 'Windy Lite', size: '140 MB', specialty: 'Lightweight engine with improved accuracy. Balanced speed/quality.' },
     'medium': { name: 'Windy Edge', size: '1444 MB', specialty: 'High-accuracy engine. Best for professional transcription.' },
-    'large-v3': { name: 'Windy Pro Engine', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
+    'large-v3': { name: 'Windy Word Engine', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
     'turbo': { name: 'Windy Turbo', size: '1544 MB', specialty: 'Latest-gen engine. State-of-the-art accuracy and robustness.' },
   };
   const mi = MODEL_INFO[engineId] || { name: engineId, size: '', specialty: '' };
@@ -3374,7 +3374,7 @@ ipcMain.handle('delete-archive-entry', async (event, filePath) => {
   }
 });
 
-// ── Windy Pro Cloud Storage helpers ──────────────────────────────
+// ── Windy Word Cloud Storage helpers ──────────────────────────────
 const CLOUD_STORAGE_DEFAULT_URL = 'https://windyword.ai/api/storage';
 
 async function getCloudStorageToken() {
@@ -3794,7 +3794,7 @@ ipcMain.handle('export-voice-clone', async () => {
 
     // Add README for voice cloning services
     archive.append([
-      '# Windy Pro — Voice Clone Export',
+      '# Windy Word — Voice Clone Export',
       '',
       `Exported: ${new Date().toISOString()}`,
       `Total audio files: ${audioCount}`,
@@ -3896,7 +3896,7 @@ ipcMain.handle('detect-hardware', async () => {
   // Engine recommendation
   if (result.gpu && result.gpu.vramMB >= 6000) {
     result.recommendedEngine = 'windy-pro-engine';
-    result.recommendation = `Your ${result.gpu.name} (${Math.round(result.gpu.vramMB / 1024)}GB VRAM) can run the best model. We recommend Windy Pro Engine for maximum accuracy.`;
+    result.recommendation = `Your ${result.gpu.name} (${Math.round(result.gpu.vramMB / 1024)}GB VRAM) can run the best model. We recommend Windy Word Engine for maximum accuracy.`;
   } else if (result.gpu && result.gpu.vramMB >= 2000) {
     result.recommendedEngine = 'windy-core';
     result.recommendation = `Your ${result.gpu.name} has ${Math.round(result.gpu.vramMB / 1024)}GB VRAM. We recommend Windy Core for a great balance of speed and quality.`;
@@ -3976,7 +3976,7 @@ ipcMain.handle('setup-autostart', async (event, enable) => {
           path.join(__dirname, '..', '..', '..', 'assets', 'icon.png'),
         ];
         const iconPath = iconCandidates.find(p => fs.existsSync(p)) || 'windy-pro';
-        const content = `[Desktop Entry]\nType=Application\nName=Windy Pro\nExec=${appPath}\nIcon=${iconPath}\nComment=Voice-to-text transcription\nX-GNOME-Autostart-enabled=true\nStartupNotify=false\n`;
+        const content = `[Desktop Entry]\nType=Application\nName=Windy Word\nExec=${appPath}\nIcon=${iconPath}\nComment=Voice-to-text transcription\nX-GNOME-Autostart-enabled=true\nStartupNotify=false\n`;
         fs.writeFileSync(desktopFile, content);
         return { ok: true };
       } else {
@@ -4050,7 +4050,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
       desc: 'Perfect for trying it out. Limited to 1 language, 3 engines, and 2-minute recordings.'
     },
     {
-      key: 'pro', name: 'Windy Pro', icon: '⚡',
+      key: 'pro', name: 'Windy Word', icon: '⚡',
       monthlyLabel: '$4.99', annualLabel: '$49', lifetimeLabel: '$99',
       period: 'annual', color: '#22C55E',
       desc: 'Unlock all 15 AI engines, 99 languages, 15-min recordings, batch processing, and AI-powered LLM polish.'
@@ -4665,7 +4665,7 @@ function showDownloadWizard(newTier) {
     return;
   }
 
-  const tierNames = { free: 'Free', pro: 'Windy Pro', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
+  const tierNames = { free: 'Free', pro: 'Windy Word', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
   const tierName = tierNames[newTier] || newTier;
 
   const totalBytes = toDownload.reduce((sum, m) => sum + (MODEL_MANIFEST.models[m]?.bytes || 0), 0);
@@ -5241,7 +5241,7 @@ ipcMain.on('batch-processing', () => {
   global._batchProcessing = true; // Freeze focus tracker during processing
   updateTrayIcon('error'); // red = processing
   updateMiniState('processing');
-  if (tray) tray.setToolTip('Windy Pro — Processing transcription...');
+  if (tray) tray.setToolTip('Windy Word — Processing transcription...');
 });
 
 // Recording failed in renderer — sync main state back to idle
@@ -5251,7 +5251,7 @@ ipcMain.on('recording-failed', () => {
   updateTrayMenu();
   updateTrayIcon('idle');
   updateMiniState('idle');
-  if (tray) tray.setToolTip('Windy Pro');
+  if (tray) tray.setToolTip('Windy Word');
 });
 
 // Recording stopped via UI button (not hotkey) — sync main process state

@@ -1,5 +1,5 @@
 /**
- * Windy Voice Input — Reusable voice-to-text component for any text input.
+ * Windy Word Input — Reusable voice-to-text component for any text input.
  *
  * Usage:
  *   addVoiceInput(document.getElementById('my-input'), { autoSend: false });

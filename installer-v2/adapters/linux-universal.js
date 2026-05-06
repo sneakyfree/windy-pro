@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Linux Universal Adapter (Rewritten)
+ * Windy Word v2.0 — Linux Universal Adapter (Rewritten)
  * 
  * Fallback for any Linux distro that doesn't match Debian/Fedora/Arch.
  * Uses bundled assets exclusively — no package manager assumptions.
@@ -163,7 +163,7 @@ class LinuxUniversalAdapter {
       fs.mkdirSync(desktopDir, { recursive: true });
       fs.writeFileSync(path.join(desktopDir, 'windy-pro.desktop'), `[Desktop Entry]
 Type=Application
-Name=Windy Pro
+Name=Windy Word
 Comment=AI-powered speech recognition and translation
 Exec=${process.execPath} ${process.cwd()}
 Terminal=false

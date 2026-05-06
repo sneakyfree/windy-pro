@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Translation Memory + Language Detection
+ * Windy Word — Translation Memory + Language Detection
  * Feature 4: Local SQLite cache for all translations — instant recall with confidence
  * Feature 6: Auto-detect input language (50+ languages) with confidence %
  */

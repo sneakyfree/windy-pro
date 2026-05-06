@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Account Server
+ * Windy Word — Account Server
  *
  * Express.js server providing user authentication, profile management,
  * device tracking, and JWT token lifecycle.
@@ -1315,7 +1315,7 @@ app.use((err, req, res, next) => {
 // Start
 // ═══════════════════════════════════════════════
 app.listen(PORT, () => {
-    console.log(`🔐 Windy Pro Account Server running on http://localhost:${PORT}`);
+    console.log(`🔐 Windy Word Account Server running on http://localhost:${PORT}`);
     console.log(`   Health: http://localhost:${PORT}/health`);
     console.log(`   Database: ${DB_PATH}`);
 });

@@ -1,6 +1,6 @@
 /**
- * Windy Pro v2.0 — Local Model Server (Development)
- * Serves real faster-whisper models as branded Windy Pro downloads.
+ * Windy Word v2.0 — Local Model Server (Development)
+ * Serves real faster-whisper models as branded Windy Word downloads.
  * Port 8099
  * 
  * Maps branded model IDs → real faster-whisper model directories:
@@ -115,7 +115,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log('');
-  console.log('📦 Windy Pro Model Server (Development)');
+  console.log('📦 Windy Word Model Server (Development)');
   console.log(`   Port: http://localhost:${PORT}`);
   console.log(`   Cache: ${HF_CACHE}`);
   console.log('');

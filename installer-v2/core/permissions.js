@@ -1,5 +1,5 @@
 /**
- * Windy Pro — OS Permission Requests
+ * Windy Word — OS Permission Requests
  * 
  * Handles platform-specific permission requests for:
  * - Microphone access (required for transcription)

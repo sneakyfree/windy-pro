@@ -1,5 +1,5 @@
 /**
- * Windy Pro — License Enforcement (E4)
+ * Windy Word — License Enforcement (E4)
  * 
  * Controls access to features based on license tier.
  * 

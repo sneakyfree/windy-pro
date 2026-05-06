@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Centralized API Configuration
+ * Windy Word — Centralized API Configuration
  *
  * Single source of truth for all API endpoints.
  * All renderer modules should import from here instead of hardcoding URLs.

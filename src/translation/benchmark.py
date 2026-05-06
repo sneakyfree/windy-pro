@@ -1,5 +1,5 @@
 """
-Windy Pro - Translation Benchmark
+Windy Word - Translation Benchmark
 Comprehensive benchmark of M2M-100 translation engine.
 
 Measures:
@@ -234,7 +234,7 @@ def generate_markdown_report(results: List[dict], initial_health: dict, final_he
     successful = [r for r in results if "error" not in r]
 
     report = []
-    report.append("# Windy Pro Translation Engine Benchmark Report")
+    report.append("# Windy Word Translation Engine Benchmark Report")
     report.append("")
     report.append(f"**Model:** M2M-100-418M")
     report.append(f"**Date:** {time.strftime('%Y-%m-%d %H:%M:%S')}")

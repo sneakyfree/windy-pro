@@ -1,5 +1,5 @@
 """
-Windy Pro — Final QA Test Suite
+Windy Word — Final QA Test Suite
 Comprehensive structural tests covering ALL features:
 Video Recording, Phone Camera Bridge, Auto-Sync,
 Premium Features, IPC Handlers, Preload Bridges,

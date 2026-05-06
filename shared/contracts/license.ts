@@ -116,7 +116,7 @@ export type CanonicalTier = 'free' | 'pro' | 'translate' | 'translate_pro' | 'en
 
 /** Maps product-specific tier strings to the canonical tier enum */
 export const TIER_MAPPING: Record<string, CanonicalTier> = {
-    // Windy Pro (desktop/server canonical names)
+    // Windy Word (desktop/server canonical names)
     'free': 'free',
     'pro': 'pro',
     'translate': 'translate',

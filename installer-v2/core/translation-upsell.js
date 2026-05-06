@@ -1,5 +1,5 @@
 /**
- * Windy Pro Installer — Translation Upsell Screen (F2)
+ * Windy Word Installer — Translation Upsell Screen (F2)
  * 
  * Wizard step shown after language profiling if the user selected
  * a non-English language. Presents the Translate tier upgrade.

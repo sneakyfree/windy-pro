@@ -1,7 +1,7 @@
 {
     "name": "windy-account-server",
     "version": "1.0.0",
-    "description": "Windy Pro Account Server — authentication, user management, device tracking",
+    "description": "Windy Word Account Server — authentication, user management, device tracking",
     "main": "server.js",
     "scripts": {
         "start": "node server.js",

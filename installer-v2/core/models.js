@@ -1,14 +1,14 @@
 /**
- * Windy Pro v2.0 — Engine Catalog
+ * Windy Word v2.0 — Engine Catalog
  * 16 proprietary engines in 2 families: GPU-Accelerated + CPU-Optimized
- * All engines developed by Windy Pro Labs. Fine-tuned, optimized, and secured.
+ * All engines developed by Windy Word Labs. Fine-tuned, optimized, and secured.
  *
  * USER-FACING NAMES: No "STT" in any displayed name
  * INTERNAL IDs: windy-{name} for code/downloads (NO STT in any ID)
  *
  * 7 ENGINE NAMES (GPU + CPU variants):
  * - Windy Nano, Windy Lite, Windy Core (FREE tier)
- * - Windy Edge, Windy Plus, Windy Turbo, Windy Pro (PAID tiers)
+ * - Windy Edge, Windy Plus, Windy Turbo, Windy Word (PAID tiers)
  *
  * 2 TRANSLATION ENGINES:
  * - Windy Translate Spark, Windy Translate Standard
@@ -50,7 +50,7 @@ const ENGINE_FAMILIES = {
 };
 
 /**
- * All 16 proprietary Windy Pro engines
+ * All 16 proprietary Windy Word engines
  * Sizes match MODEL_MANIFEST from Electron app main.js:134
  */
 const ENGINE_CATALOG = [
@@ -74,7 +74,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Quick dictation, real-time captions, speed-first workflows',
     tier: 'free',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    fineTuned: 'LoRA-optimized by Windy Word Labs',
     format: 'Safetensors',
     badge: '⚡ Fastest'
   },
@@ -97,7 +97,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Emails, casual notes, meetings, everyday dictation',
     tier: 'free',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    fineTuned: 'LoRA-optimized by Windy Word Labs',
     format: 'Safetensors'
   },
   {
@@ -119,7 +119,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Meetings, technical dictation, content creation, professional use',
     tier: 'free',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    fineTuned: 'LoRA-optimized by Windy Word Labs',
     format: 'Safetensors',
     badge: '⭐ Recommended'
   },
@@ -142,7 +142,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Professional meetings, multilingual content, broadcast quality',
     tier: 'pro',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    fineTuned: 'LoRA-optimized by Windy Word Labs',
     format: 'Safetensors'
   },
   {
@@ -164,7 +164,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Production workflows, legal, medical, technical documentation',
     tier: 'pro',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    fineTuned: 'LoRA-optimized by Windy Word Labs',
     format: 'Safetensors'
   },
   {
@@ -186,15 +186,15 @@ const ENGINE_CATALOG = [
     bestFor: 'Power users who want the best without compromises',
     tier: 'pro',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    fineTuned: 'LoRA-optimized by Windy Word Labs',
     format: 'Safetensors',
     badge: '🏆 Champion'
   },
   {
     id: 'windy-pro-engine',
     family: 'gpu',
-    name: 'Windy Pro',
-    displayName: 'Windy Pro',
+    name: 'Windy Word',
+    displayName: 'Windy Word',
     sizeMB: 2900,
     sizeDisplay: '2.9 GB',
     vramGB: 10,
@@ -209,7 +209,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Broadcast, legal, medical, multilingual professionals, maximum quality',
     tier: 'translate_pro',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'LoRA-optimized by Windy Pro Labs',
+    fineTuned: 'LoRA-optimized by Windy Word Labs',
     format: 'Safetensors',
     badge: '👑 Flagship'
   },
@@ -234,7 +234,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Older hardware, low-RAM devices, offline emergencies',
     tier: 'free',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    fineTuned: 'INT8 Quantized by Windy Word Labs',
     format: 'INT8 Quantized',
     badge: '📱 Mobile-Ready'
   },
@@ -257,7 +257,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Laptop users, coffee shop dictation, mobile workflows',
     tier: 'free',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    fineTuned: 'INT8 Quantized by Windy Word Labs',
     format: 'INT8 Quantized'
   },
   {
@@ -279,7 +279,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Laptops, desktops without GPU, everyday professional use',
     tier: 'free',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    fineTuned: 'INT8 Quantized by Windy Word Labs',
     format: 'INT8 Quantized',
     badge: '⭐ CPU Recommended'
   },
@@ -302,7 +302,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Professional CPU workflows, high-quality transcription',
     tier: 'pro',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    fineTuned: 'INT8 Quantized by Windy Word Labs',
     format: 'INT8 Quantized'
   },
   {
@@ -324,7 +324,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Production CPU workflows, legal, medical transcription',
     tier: 'pro',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    fineTuned: 'INT8 Quantized by Windy Word Labs',
     format: 'INT8 Quantized'
   },
   {
@@ -346,15 +346,15 @@ const ENGINE_CATALOG = [
     bestFor: 'Power CPU users who demand maximum quality',
     tier: 'pro',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    fineTuned: 'INT8 Quantized by Windy Word Labs',
     format: 'INT8 Quantized',
     badge: '🏆 CPU Champion'
   },
   {
     id: 'windy-pro-engine-cpu',
     family: 'cpu',
-    name: 'Windy Pro',
-    displayName: 'Windy Pro (CPU)',
+    name: 'Windy Word',
+    displayName: 'Windy Word (CPU)',
     sizeMB: 1481,
     sizeDisplay: '1.5 GB',
     vramGB: 0,
@@ -369,7 +369,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Broadcast, legal, medical on CPU hardware',
     tier: 'translate_pro',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'INT8 Quantized by Windy Pro Labs',
+    fineTuned: 'INT8 Quantized by Windy Word Labs',
     format: 'INT8 Quantized',
     badge: '👑 CPU Flagship'
   },
@@ -394,7 +394,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Quick translations, real-time conversation, travelers',
     tier: 'translate',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'Multilingual by Windy Pro Labs',
+    fineTuned: 'Multilingual by Windy Word Labs',
     format: 'Safetensors'
   },
   {
@@ -416,7 +416,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Professional translation, business meetings, documentation',
     tier: 'translate_pro',
     architecture: 'Proprietary encoder-decoder',
-    fineTuned: 'Multilingual by Windy Pro Labs',
+    fineTuned: 'Multilingual by Windy Word Labs',
     format: 'Safetensors',
     badge: '🌍 Pro Translation'
   },
@@ -442,7 +442,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Spanish speakers, Latin American business, travel to Spain/LATAM',
     tier: 'translate',
     architecture: 'OPUS-MT fine-tuned',
-    fineTuned: 'Specialist pair by Windy Pro Labs',
+    fineTuned: 'Specialist pair by Windy Word Labs',
     format: 'PyTorch',
     badge: '🇲🇽 Specialist'
   },
@@ -466,7 +466,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Mandarin speakers, China/Taiwan/Singapore business',
     tier: 'translate',
     architecture: 'OPUS-MT fine-tuned',
-    fineTuned: 'Specialist pair by Windy Pro Labs',
+    fineTuned: 'Specialist pair by Windy Word Labs',
     format: 'PyTorch',
     badge: '🇨🇳 Specialist'
   },
@@ -490,7 +490,7 @@ const ENGINE_CATALOG = [
     bestFor: 'French speakers, EU business, Francophone Africa',
     tier: 'translate',
     architecture: 'OPUS-MT fine-tuned',
-    fineTuned: 'Specialist pair by Windy Pro Labs',
+    fineTuned: 'Specialist pair by Windy Word Labs',
     format: 'PyTorch',
     badge: '🇫🇷 Specialist'
   },
@@ -514,7 +514,7 @@ const ENGINE_CATALOG = [
     bestFor: 'German speakers, DACH region business, engineering docs',
     tier: 'translate',
     architecture: 'OPUS-MT fine-tuned',
-    fineTuned: 'Specialist pair by Windy Pro Labs',
+    fineTuned: 'Specialist pair by Windy Word Labs',
     format: 'PyTorch',
     badge: '🇩🇪 Specialist'
   },
@@ -538,7 +538,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Arabic speakers, MENA region business, religious texts',
     tier: 'translate',
     architecture: 'OPUS-MT fine-tuned',
-    fineTuned: 'Specialist pair by Windy Pro Labs',
+    fineTuned: 'Specialist pair by Windy Word Labs',
     format: 'PyTorch',
     badge: '🇸🇦 Specialist'
   },
@@ -562,7 +562,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Hindi speakers, India business, Bollywood content',
     tier: 'translate',
     architecture: 'OPUS-MT fine-tuned',
-    fineTuned: 'Specialist pair by Windy Pro Labs',
+    fineTuned: 'Specialist pair by Windy Word Labs',
     format: 'PyTorch',
     badge: '🇮🇳 Specialist'
   },
@@ -586,7 +586,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Portuguese speakers, Brazil/Portugal business',
     tier: 'translate',
     architecture: 'OPUS-MT fine-tuned',
-    fineTuned: 'Specialist pair by Windy Pro Labs',
+    fineTuned: 'Specialist pair by Windy Word Labs',
     format: 'PyTorch',
     badge: '🇧🇷 Specialist'
   },
@@ -610,7 +610,7 @@ const ENGINE_CATALOG = [
     bestFor: 'Russian speakers, CIS region business, technical documentation',
     tier: 'translate',
     architecture: 'OPUS-MT fine-tuned',
-    fineTuned: 'Specialist pair by Windy Pro Labs',
+    fineTuned: 'Specialist pair by Windy Word Labs',
     format: 'PyTorch',
     badge: '🇷🇺 Specialist'
   }

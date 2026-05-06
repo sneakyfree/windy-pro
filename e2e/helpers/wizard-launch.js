@@ -82,9 +82,9 @@ async function launchWizard(opts = {}) {
  */
 function readWizardLog(tmpHome) {
   const candidates = [
-    path.join(tmpHome, 'Library', 'Logs', 'Windy Pro', 'wizard-install.log'),
+    path.join(tmpHome, 'Library', 'Logs', 'Windy Word', 'wizard-install.log'),
     path.join(tmpHome, '.local', 'state', 'windy-pro', 'logs', 'wizard-install.log'),
-    path.join(tmpHome, 'AppData', 'Local', 'Windy Pro', 'Logs', 'wizard-install.log'),
+    path.join(tmpHome, 'AppData', 'Local', 'Windy Word', 'Logs', 'wizard-install.log'),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return fs.readFileSync(p, 'utf-8');

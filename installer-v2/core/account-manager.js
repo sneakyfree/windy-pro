@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Account Manager
+ * Windy Word v2.0 — Account Manager
  * Handles user authentication, device registration (5-device limit),
  * license verification, and tier detection.
  * 

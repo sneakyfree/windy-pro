@@ -1,9 +1,9 @@
 /**
- * Windy Pro v2.0 — Bundled Assets Resolver
+ * Windy Word v2.0 — Bundled Assets Resolver
  * 
  * Grant's Rule: "We need the total, complete, holistic cocktail in our
  * installation wizard so that anything any hardware could possibly need
- * to run Windy Pro is in that cocktail."
+ * to run Windy Word is in that cocktail."
  * 
  * This module resolves bundled Python, ffmpeg, and model assets.
  * Bundled assets are the PRIMARY source. Internet downloads are FALLBACK only.

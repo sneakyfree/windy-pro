@@ -1,5 +1,5 @@
 /**
- * Windy Pro Audio Processor Worklet
+ * Windy Word Audio Processor Worklet
  * Replaces deprecated ScriptProcessorNode.
  * Converts Float32 audio samples to Int16 PCM and sends to main thread.
  *

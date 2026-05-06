@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Packaging Configuration (B4.6)
+ * Windy Word — Packaging Configuration (B4.6)
  * 
  * Electron Builder config for NSIS (Windows), DMG (macOS), and AppImage (Linux).
  * Import this from electron-builder or use via `npx electron-builder --config packaging.js`
@@ -7,7 +7,7 @@
 
 module.exports = {
     appId: 'com.windstorm.windypro',
-    productName: 'Windy Pro',
+    productName: 'Windy Word',
     copyright: 'Copyright © 2026 The Windstorm',
 
     // ── Output ──────────────────────────────────────
@@ -42,8 +42,8 @@ module.exports = {
         entitlements: 'build/entitlements.mac.plist',
         entitlementsInherit: 'build/entitlements.mac.plist',
         extendInfo: {
-            NSMicrophoneUsageDescription: 'Windy Pro needs microphone access for voice transcription.',
-            NSAccessibilityUsageDescription: 'Windy Pro uses accessibility to inject transcribed text at your cursor.'
+            NSMicrophoneUsageDescription: 'Windy Word needs microphone access for voice transcription.',
+            NSAccessibilityUsageDescription: 'Windy Word uses accessibility to inject transcribed text at your cursor.'
         }
     },
 
@@ -74,7 +74,7 @@ module.exports = {
         installerHeaderIcon: 'build/icon.ico',
         createDesktopShortcut: true,
         createStartMenuShortcut: true,
-        shortcutName: 'Windy Pro',
+        shortcutName: 'Windy Word',
         include: 'build/nsis-installer.nsh',
         perMachine: false,
         license: 'LICENSE'
@@ -91,7 +91,7 @@ module.exports = {
         category: 'Utility;AudioVideo',
         mimeTypes: ['audio/wav', 'audio/mp3', 'audio/ogg'],
         desktop: {
-            Name: 'Windy Pro',
+            Name: 'Windy Word',
             Comment: 'Voice to text, unlimited',
             Terminal: false
         }

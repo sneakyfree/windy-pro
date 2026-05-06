@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — Windows Platform Adapter
+ * Windy Word v2.0 — Windows Platform Adapter
  * 
  * KEY LESSON FROM v1: Never rely on system Python. Ever.
  * Uses Python embedded distribution — a standalone Python that

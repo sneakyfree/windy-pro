@@ -1,7 +1,7 @@
 {
     "name": "@windy-pro/contracts",
     "version": "1.0.0",
-    "description": "Shared type contracts for the Windy Pro ecosystem (server, desktop, mobile, web)",
+    "description": "Shared type contracts for the Windy Word ecosystem (server, desktop, mobile, web)",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {

@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Effects Engine (Strand I)
+ * Windy Word — Effects Engine (Strand I)
  * 
  * PURE OBSERVER: Listens to recording state events, never sends commands back.
  * COMPLETE ISOLATION: Own AudioContext (output-only), own CSS overlay layer.

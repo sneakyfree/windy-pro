@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Input Validation (Browser / Renderer)
+ * Windy Word — Input Validation (Browser / Renderer)
  *
  * Central validation module for all user input fields.
  * Every method returns { valid: boolean, error?: string } with

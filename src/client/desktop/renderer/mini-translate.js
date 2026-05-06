@@ -13,7 +13,7 @@ if (!miniAPI) {
       container.innerHTML = '<div style="padding:40px;text-align:center;color:#EF4444;">' +
         '<div style="font-size:32px;margin-bottom:12px;">⚠️</div>' +
         '<h2 style="margin-bottom:8px;">Quick Translate Unavailable</h2>' +
-        '<p style="color:#9CA3AF;">This window must be opened from within Windy Pro.</p></div>';
+        '<p style="color:#9CA3AF;">This window must be opened from within Windy Word.</p></div>';
     }
   });
   // Prevent the rest of the script from running

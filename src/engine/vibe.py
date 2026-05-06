@@ -1,5 +1,5 @@
 """
-Windy Pro - Vibe Toggle (Grammar Correction Post-Processing)
+Windy Word - Vibe Toggle (Grammar Correction Post-Processing)
 
 Optional post-processing that cleans up transcription output:
 - Fixes capitalization

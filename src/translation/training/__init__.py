@@ -1,5 +1,5 @@
 """
-Windy Pro - Translation Training Module
+Windy Word - Translation Training Module
 LoRA fine-tuning pipeline for M2M-100.
 
 Components:

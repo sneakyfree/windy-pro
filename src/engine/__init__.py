@@ -1,4 +1,4 @@
-"""Windy Pro Transcription Engine"""
+"""Windy Word Transcription Engine"""
 from .transcriber import (
     StreamingTranscriber,
     TranscriberConfig,

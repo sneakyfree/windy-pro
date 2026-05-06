@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Windy Pro — Cloud Load Test (G6)
+Windy Word — Cloud Load Test (G6)
 
 Tests concurrent WebSocket transcription sessions against the cloud API.
 Validates:

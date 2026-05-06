@@ -1,5 +1,5 @@
 """
-Windy Pro - Model Evaluation Pipeline
+Windy Word - Model Evaluation Pipeline
 Compare baseline M2M-100 vs fine-tuned LoRA model.
 
 Metrics:
@@ -388,7 +388,7 @@ class ModelEvaluator:
         report_file = output_path / "baseline_vs_finetuned.md"
 
         with open(report_file, 'w') as f:
-            f.write("# Windy Pro Translation - Model Comparison Report\n\n")
+            f.write("# Windy Word Translation - Model Comparison Report\n\n")
             f.write(f"**Test Set:** {results['baseline'].test_set}\n")
             f.write(f"**Language Pair:** {results['baseline'].language_pair}\n")
             f.write(f"**Samples:** {results['baseline'].num_samples:,}\n\n")

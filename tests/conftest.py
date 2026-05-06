@@ -1,5 +1,5 @@
 """
-Windy Pro Test Configuration
+Windy Word Test Configuration
 """
 
 import sys

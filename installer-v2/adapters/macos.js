@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — macOS Adapter (Rewritten)
+ * Windy Word v2.0 — macOS Adapter (Rewritten)
  * 
  * Strategy: Bundled first, Homebrew second, NEVER "please install manually"
  * 

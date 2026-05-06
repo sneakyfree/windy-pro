@@ -1,5 +1,5 @@
 """
-Windy Pro — Desktop Security & Hardening Verification Tests (Phase 3)
+Windy Word — Desktop Security & Hardening Verification Tests (Phase 3)
 
 Structural tests verifying all security fixes are present in:
   - main.js (IPC handlers, webPreferences, navigation guards)

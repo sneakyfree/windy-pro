@@ -1,5 +1,5 @@
 """
-Comprehensive tests for Windy Pro frontend features.
+Comprehensive tests for Windy Word frontend features.
 Tests cover: export formats, history management, settings persistence,
 SRT time formatting, language config, and batch lifecycle.
 """
@@ -434,7 +434,7 @@ class TestTrayMenu:
     def test_menu_items(self):
         """All expected menu items should be present."""
         items = ['Show Window', 'Start Recording', 'Paste Last Transcript',
-                 'Settings', 'Open Vault', 'History', 'Quit Windy Pro']
+                 'Settings', 'Open Vault', 'History', 'Quit Windy Word']
         assert len(items) == 7
 
     def test_recording_toggle_label(self):

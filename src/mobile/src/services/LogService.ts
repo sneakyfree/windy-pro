@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Structured Logger (Mobile / React Native)
+ * Windy Word — Structured Logger (Mobile / React Native)
  *
  * Persists logs to Documents/windy-pro.log with 5MB rotation.
  * Falls back to console-only if filesystem is unavailable.

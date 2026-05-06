@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Marketplace Panel (L2) — Hardened
+ * Windy Word — Marketplace Panel (L2) — Hardened
  *
  * Browsable pair catalog, bundles, downloads, and storage management.
  * Loaded as a deferred script in the main renderer window.

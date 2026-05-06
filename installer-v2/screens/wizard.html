@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Windy Pro — Installation Wizard</title>
+  <title>Windy Word — Installation Wizard</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
@@ -2001,7 +2001,7 @@
           <div class="tornado-glow"></div>
           <span class="tornado">🌪️</span>
         </div>
-        <h1><span data-i18n="welcome.title">Welcome to</span> <span data-i18n="welcome.titleBrand">Windy Pro</span></h1>
+        <h1><span data-i18n="welcome.title">Welcome to</span> <span data-i18n="welcome.titleBrand">Windy Word</span></h1>
         <p class="welcome-subtitle" data-i18n="welcome.quote">"In the beginning was the Word. The words of your mouth
           create worlds."</p>
       </div>
@@ -2041,7 +2041,7 @@
         <span class="wind-particle">🌪️</span>
         <span class="wind-particle">✨</span>
         <span class="quote-main">"And God said, Let there be light..."</span>
-        <span class="quote-sub">Then Bob said, "Let there be no more typing" — and there was Windy Pro. 🌪️</span>
+        <span class="quote-sub">Then Bob said, "Let there be no more typing" — and there was Windy Word. 🌪️</span>
       </div>
 
       <div class="btn-row">
@@ -2104,7 +2104,7 @@
 
     <!-- ═══ SCREEN 2: ACCOUNT ═══ -->
     <div class="screen" id="screen-2">
-      <h1 style="font-size:20px; margin-bottom:4px;" data-i18n="acct.title">🔑 Your Windy Pro Account</h1>
+      <h1 style="font-size:20px; margin-bottom:4px;" data-i18n="acct.title">🔑 Your Windy Word Account</h1>
       <p style="font-size:15px; color:var(--text-dim); margin-bottom:16px;">Sign in to activate your engines. One
         account, up to 5 devices.</p>
 
@@ -2127,7 +2127,7 @@
 
         <div class="account-option" id="opt-register" onclick="selectAccountOption('register')">
           <h3 data-i18n="acct.registerTitle">✨ Create Account</h3>
-          <p data-i18n="acct.registerDesc">New to Windy Pro? Start your journey.</p>
+          <p data-i18n="acct.registerDesc">New to Windy Word? Start your journey.</p>
           <div class="account-form" id="form-register">
             <input class="input-field" type="text" id="reg-name" placeholder="Full name"
               data-i18n-placeholder="acct.namePlaceholder">
@@ -2150,7 +2150,7 @@
 
       <div class="device-limit-notice">
         <span class="notice-icon">📱</span>
-        <span class="notice-text">Free tier: <strong>1 device</strong>. Upgrade to Windy Pro for 3 devices, Windy Ultra
+        <span class="notice-text">Free tier: <strong>1 device</strong>. Upgrade to Windy Word for 3 devices, Windy Ultra
           for 5, or Windy Max for <strong>10</strong> devices.</span>
       </div>
 
@@ -2371,7 +2371,7 @@
             </div>
           </div>
           <div style="font-size:11px; color:var(--text-muted); text-align:center; line-height:1.5;">
-            ✈️ No internet? No problem. <strong>Windy Pro translates 100% offline</strong> — airplane, jungle, mountain,
+            ✈️ No internet? No problem. <strong>Windy Word translates 100% offline</strong> — airplane, jungle, mountain,
             anywhere.
           </div>
         </div>
@@ -2428,7 +2428,7 @@
 
       <div class="model-header">
         <h1 data-i18n="learn.title">📖 Meet Your 15 Voice Engines</h1>
-        <p>Windy Pro ships 15 proprietary voice engines in 3 families. Here's how they work.</p>
+        <p>Windy Word ships 15 proprietary voice engines in 3 families. Here's how they work.</p>
       </div>
 
       <!-- Lighter vs Heavier -->
@@ -2836,7 +2836,7 @@
 
         <!-- Real-time install log -->
         <div class="install-log" id="install-log">
-          <div class="log-line">Initializing Windy Pro installer...</div>
+          <div class="log-line">Initializing Windy Word installer...</div>
         </div>
 
         <!-- Per-engine download list -->
@@ -3071,7 +3071,7 @@
 
         <div class="btn-row" style="border-top:none; justify-content:center;">
           <button class="btn btn-primary" style="padding:14px 40px; font-size:16px;" onclick="saveHatchPreference(); launchApp();"
-            data-i18n="btn.launch">Launch Windy Pro 🎙️</button>
+            data-i18n="btn.launch">Launch Windy Word 🎙️</button>
         </div>
 
         <script>
@@ -3159,7 +3159,7 @@
     let allModels = [];
     let selectedModels = new Set();
     // ═══ TIER GATING ═══
-    // Tier hierarchy: free < pro < translate < translate_pro (Free / Windy Pro / Windy Ultra / Windy Max)
+    // Tier hierarchy: free < pro < translate < translate_pro (Free / Windy Word / Windy Ultra / Windy Max)
     // Engines with tier > userTier show a lock icon and can't be selected
     let userTier = 'free'; // Default until account is created/logged in
     const TIER_RANK = { free: 0, pro: 1, translate: 2, translate_pro: 3 };
@@ -3178,7 +3178,7 @@
       { emoji: '🟢', text: 'The Green Strobe Never Lies.', sub: "If it's green, you're recording. Always." },
       { emoji: '🔒', text: 'Stay Local. Stay Private.', sub: "We don't upload your voice. Period." },
       { emoji: '💊', text: 'Get Voice-Pilled.', sub: "Once you try local voice-to-text, you can't go back." },
-      { emoji: '🐕', text: '"Windy Pro make me go MoboLoco!"', sub: '42 MB engine. Smaller than most selfies.' },
+      { emoji: '🐕', text: '"Windy Word make me go MoboLoco!"', sub: '42 MB engine. Smaller than most selfies.' },
       { emoji: '💰', text: 'Pay Once. Use Forever.', sub: 'No subscription. No monthly fees. Yours for life.' },
       { emoji: '🧬', text: 'Talk Today. Live Forever.', sub: 'Build your voice clone dataset while you work.' },
       { emoji: '⌨️', text: 'Never Touch a Keyboard Again.', sub: 'Dictate everything. Paste anywhere.' },
@@ -3191,16 +3191,16 @@
 
     const FEATURE_CARDS = [
       { title: '🌪️ WindyTune — Your Personal AI DJ', body: 'WindyTune monitors your hardware every 30 seconds — CPU temp, available RAM, GPU load, battery level. If your laptop throttles, it switches to a lighter engine seamlessly. Plug into power? Automatic upgrade. You never notice.' },
-      { title: '🧬 Soul File — Your Digital Legacy', body: "Every time you use Windy Pro, you're building a dataset of your voice — pitch, timbre, rhythm, accent, emotional range. After 50 hours: studio-grade voice clone ready. After 200 hours: full digital twin. A thousand years from now, your descendants hear YOUR voice." },
+      { title: '🧬 Soul File — Your Digital Legacy', body: "Every time you use Windy Word, you're building a dataset of your voice — pitch, timbre, rhythm, accent, emotional range. After 50 hours: studio-grade voice clone ready. After 200 hours: full digital twin. A thousand years from now, your descendants hear YOUR voice." },
       { title: '🌍 Windy Translate — The Love Story', body: "Paris. Evening. A café. He's American. She's French. He holds up his phone and speaks English. She reads French. She speaks French. He reads English. No internet. No cloud. Just two people connecting in any language." },
       { title: '☁️ WindyCloud — Your Privacy, Your Storage', body: "Your privacy is paramount! We never use your data for anything. Period. Free: 5 GB. Starter: 50 GB for $9/mo. Pro: 250 GB for $19/mo. Business: 1 TB for $49/mo. Store everything — documents, photos, files. Replace legacy cloud with something that respects you." },
-      { title: '🎙️ Voice Fingerprinting', body: "After 5 minutes, Windy Pro creates a mathematical fingerprint of your voice. After 2 hours, it can pick YOUR words out of a crowded party with music blaring. Your voice. In any crowd. Crystal clear." },
+      { title: '🎙️ Voice Fingerprinting', body: "After 5 minutes, Windy Word creates a mathematical fingerprint of your voice. After 2 hours, it can pick YOUR words out of a crowded party with music blaring. Your voice. In any crowd. Crystal clear." },
       { title: '📹 Build Your AI Avatar', body: "Turn on video archiving and your camera captures your face, expressions, mannerisms. Combined with your voice data, this becomes the foundation for a digital avatar twin. 5 hours: basic profile. 50 hours: studio-grade. ♾️: Your legacy, preserved forever." },
       { title: '🔒 Truly Private', body: "Every competitor sends your voice to the cloud. They 'promise' it's private. We don't promise — we engineered it. Your words never leave your device. Zero telemetry. Zero data collection. Even our cloud mode is end-to-end encrypted." },
       { title: '💎 15 Proprietary Engines', body: 'Developed in our lab. Fine-tuned by our engineers on dedicated GPU hardware. Not available anywhere else. Every engine is encrypted, fingerprinted to your account, and continually refined. These are OUR engines.' },
       { title: '🐕 MoboLoco — Go Local on Mobile', body: "42 megabytes. That's our smallest engine. Smaller than most selfies. Install it on your phone and forget it. It's always there. No internet required. The Green Strobe never lies — even on your phone." },
-      { title: '📊 Your Soul File Journey', body: "5 hours → Basic voice profile. 20 hours → Good clone quality. 50 hours → Excellent, studio-grade. 200 hours → Full digital twin. ♾️ → Your legacy, preserved forever. Some people download Windy Pro just for this." },
-      { title: '💳 Pricing That Respects You', body: "Free to start. Windy Pro: $99 lifetime or $49/yr. Windy Ultra: $199 lifetime or $79/yr. Windy Max: $299 lifetime or $149/yr. Pay once, own forever. No tricks." },
+      { title: '📊 Your Soul File Journey', body: "5 hours → Basic voice profile. 20 hours → Good clone quality. 50 hours → Excellent, studio-grade. 200 hours → Full digital twin. ♾️ → Your legacy, preserved forever. Some people download Windy Word just for this." },
+      { title: '💳 Pricing That Respects You', body: "Free to start. Windy Word: $99 lifetime or $49/yr. Windy Ultra: $199 lifetime or $79/yr. Windy Max: $299 lifetime or $149/yr. Pay once, own forever. No tricks." },
       { title: '🔐 Model Security', body: "Every engine is encrypted in our proprietary .wpr format. Fingerprinted to your account. Steganographically watermarked. If anyone tries to steal our engines, we trace it to the exact account. Our Terms of Service are very clear." },
       { title: '🐧 Linux? We Love Linux.', body: "Windows, macOS, AND Linux. Full feature parity. No compromises. No 'coming soon.' Linux users are loyal, vocal, and deserve great software. We're proud to have you." }
     ];
@@ -3234,12 +3234,12 @@
       'Making Big Tech jealous since 2026...',
       'This isn\'t a download — it\'s a declaration of independence. 🇺🇸',
       'One small install for your machine, one giant leap for your productivity.',
-      'Roses are red, violets are blue, your voice is awesome, and Windy Pro knows it too. 🌹',
+      'Roses are red, violets are blue, your voice is awesome, and Windy Word knows it too. 🌹',
       "That's WINDY, baby! 🌪️ Your voice, your rules.",
       'Windy Core. Windy Edge. Windy Lingua. All Windy. All yours.',
       "Other apps need the cloud. Windy doesn't need anyone. 💪",
       'Welcome to the Windy ecosystem. Population: you + 15 engines.',
-      "Windy Pro isn't an app. It's a movement. 🌪️",
+      "Windy Word isn't an app. It's a movement. 🌪️",
       'Your grandkids will hear your voice because of Windy. Think about that.',
       'The Windy Green Strobe: the most honest UI element ever made.'
     ];
@@ -3271,14 +3271,14 @@
             { id: 'core-pulse', family: 'core', name: 'Windy Core Pulse', shortName: 'Windy Pulse', sizeMB: 142, speed: '16x', description: 'Fast and reliable GPU transcription.', tier: 'pro' },
             { id: 'core-standard', family: 'core', name: 'Windy Core Standard', shortName: 'Windy Standard', sizeMB: 466, speed: '6x', description: 'The workhorse. Great accuracy on GPU.', tier: 'pro' },
             { id: 'core-global', family: 'core', name: 'Windy Core Global', shortName: 'Windy Global', sizeMB: 1500, speed: '2x', description: 'Multilingual powerhouse.', tier: 'pro' },
-            { id: 'core-pro', family: 'core', name: 'Windy Core Pro', shortName: 'Windy Pro', sizeMB: 1500, speed: '6x', description: 'Distilled flagship. English excellence at 6x speed.', tier: 'pro' },
+            { id: 'core-pro', family: 'core', name: 'Windy Core Pro', shortName: 'Windy Word', sizeMB: 1500, speed: '6x', description: 'Distilled flagship. English excellence at 6x speed.', tier: 'pro' },
             { id: 'core-turbo', family: 'core', name: 'Windy Core Turbo', shortName: 'Windy Turbo', sizeMB: 1600, speed: '4x', description: 'Near-Ultra quality at twice the speed.', tier: 'pro' },
             { id: 'core-ultra', family: 'core', name: 'Windy Core Ultra', shortName: 'Windy Ultra', sizeMB: 2900, speed: '1x', description: 'The flagship. Best accuracy in any language.', tier: 'translate_pro', badge: '👑 Flagship' },
             { id: 'edge-spark', family: 'edge', name: 'Windy Edge Spark', shortName: 'Windy Spark', sizeMB: 42, speed: '32x', description: 'Smallest engine. 42 MB. Fits any phone.', tier: 'free', badge: '📱 MoboLoco' },
             { id: 'edge-pulse', family: 'edge', name: 'Windy Edge Pulse', shortName: 'Windy Pulse', sizeMB: 78, speed: '16x', description: 'Phone-optimized. Fast and light.', tier: 'free' },
             { id: 'edge-standard', family: 'edge', name: 'Windy Edge Standard', shortName: 'Windy Standard', sizeMB: 168, speed: '6x', description: 'Best balance for laptops and phones.', tier: 'pro', badge: '⭐ Most Popular' },
             { id: 'edge-global', family: 'edge', name: 'Windy Edge Global', shortName: 'Windy Global', sizeMB: 515, speed: '2x', description: 'Multilingual on CPU. Great for travel.', tier: 'pro' },
-            { id: 'edge-pro', family: 'edge', name: 'Windy Edge Pro', shortName: 'Windy Pro', sizeMB: 515, speed: '4x', description: 'Distilled English excellence on CPU.', tier: 'pro' },
+            { id: 'edge-pro', family: 'edge', name: 'Windy Edge Pro', shortName: 'Windy Word', sizeMB: 515, speed: '4x', description: 'Distilled English excellence on CPU.', tier: 'pro' },
             { id: 'lingua-es', family: 'lingua', name: 'Windy Lingua Español', shortName: 'Windy Español', sizeMB: 500, speed: '4x', description: 'Purpose-built for Spanish. All dialects.', tier: 'pro' },
             { id: 'lingua-fr', family: 'lingua', name: 'Windy Lingua Français', shortName: 'Windy Français', sizeMB: 500, speed: '4x', description: 'Purpose-built for French. All dialects.', tier: 'pro' },
             { id: 'lingua-hi', family: 'lingua', name: 'Windy Lingua हिन्दी', shortName: 'Windy हिन्दी', sizeMB: 500, speed: '4x', description: 'Purpose-built for Hindi.', tier: 'pro' }
@@ -3337,7 +3337,7 @@
           }
           return { success: true, models };
         },
-        complete: async () => { alert('🌪️ Windy Pro would launch now!'); },
+        complete: async () => { alert('🌪️ Windy Word would launch now!'); },
         onProgress: (cb) => { progressCallbacks.push(cb); }
       };
     }
@@ -3502,7 +3502,7 @@
         const recNames = recommendation.recommended
           .map(id => { const m = allModels.find(x => x.id === id); return m ? (m.shortName || m.name) : id; })
           .join(', ');
-        const hypeText = `🎉 Congratulations! Windy Pro has world-class voice-to-text engines that can run beautifully on YOUR machine! Recommended for you: ${recNames}. Life's about to GET WINDY, BABY! 🌪️`;
+        const hypeText = `🎉 Congratulations! Windy Word has world-class voice-to-text engines that can run beautifully on YOUR machine! Recommended for you: ${recNames}. Life's about to GET WINDY, BABY! 🌪️`;
         document.getElementById('scan-summary-text').innerHTML = hypeText.replace(
           /GET WINDY, BABY!/,
           '<span style="color:var(--green);font-weight:800;font-size:17px;text-shadow:0 0 12px rgba(0,200,83,0.5)">GET WINDY, BABY! 🌪️</span>'
@@ -4231,7 +4231,7 @@
           showUpgrade: true
         },
         pro: {
-          badge: '⚡ Windy Pro',
+          badge: '⚡ Windy Word',
           desc: '🎉 Your plan includes: 3 devices · All 15 engines · 99 languages · 15-min recordings · Batch mode · LLM polish',
           showUpgrade: true
         },
@@ -4389,7 +4389,7 @@
             ⚡ Unlock Specialist Pairs — Upgrade Plan
           </button>
           <div style="font-size:11px; color:var(--text-muted); text-align:center; margin-top:8px;">
-            Available with Windy Pro, Ultra, or Max plans
+            Available with Windy Word, Ultra, or Max plans
           </div>
         </div>`;
     }
@@ -4407,7 +4407,7 @@
 
       const tierCards = [
         {
-          tier: 'pro', icon: '⚡', name: 'Windy Pro', color: '#22C55E',
+          tier: 'pro', icon: '⚡', name: 'Windy Word', color: '#22C55E',
           monthly: '$4.99/mo', annual: '$49/yr', lifetime: '$99',
           desc: '3 devices · All 15 engines · 99 languages',
           engines: ['📱 3 devices', 'All 15 engines', '99 languages', '15-min recordings', 'Batch mode + LLM polish'],
@@ -4542,7 +4542,7 @@
           buildAllEnginesPicker();
           buildSelectedChecklist();
           // Show confirmation with proper display name
-          const tierNames = { pro: 'Windy Pro', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
+          const tierNames = { pro: 'Windy Word', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
           const displayName = tierNames[tier] || tier;
           const toast = document.createElement('div');
           toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--green); color:var(--bg); padding:12px 24px; border-radius:10px; font-weight:700; font-size:14px; z-index:1001; animation:fadeInUp 0.3s;';
@@ -4595,7 +4595,7 @@
       // Update tier badge
       const tierBadgeEl = document.getElementById('picker-tier-badge');
       if (tierBadgeEl) {
-        const tierLabels = { free: '🆓 Free', pro: '⚡ Windy Pro', translate: '🚀 Windy Ultra', translate_pro: '👑 Windy Max' };
+        const tierLabels = { free: '🆓 Free', pro: '⚡ Windy Word', translate: '🚀 Windy Ultra', translate_pro: '👑 Windy Max' };
         tierBadgeEl.textContent = tierLabels[userTier] || '🆓 Free Plan';
       }
 
@@ -4880,7 +4880,7 @@
         document.getElementById('install-status').textContent = '✅ Installation Complete!';
         document.getElementById('install-detail').textContent = 'Everything is ready. The Green Strobe awaits.';
         addLogEntry('✅ All models verified and ready!', 'success');
-        addLogEntry('🌪️ Windy Pro is ready to launch!', 'success');
+        addLogEntry('🌪️ Windy Word is ready to launch!', 'success');
 
         // Build complete screen
         const completeTags = document.getElementById('complete-models');
@@ -5142,7 +5142,7 @@
         const denied = /denied|NotAllowed/i.test(String(e?.message || e));
         setVerifyStatus('mic', 'denied',
           denied
-            ? '❌ Microphone access denied. Click "Open Mic Settings" to allow Windy Pro, then come back here.'
+            ? '❌ Microphone access denied. Click "Open Mic Settings" to allow Windy Word, then come back here.'
             : `❌ Could not access microphone: ${String(e?.message || e).slice(0, 120)}`);
       } finally {
         if (stream) stream.getTracks().forEach(t => t.stop());
@@ -5161,7 +5161,7 @@
             '✅ Accessibility granted. Paste-to-cursor will work.');
         } else if (r.status === 'denied') {
           setVerifyStatus('access', 'denied',
-            '❌ Accessibility denied. Click "Open Accessibility Settings" → toggle Windy Pro on. We re-check automatically when you come back.');
+            '❌ Accessibility denied. Click "Open Accessibility Settings" → toggle Windy Word on. We re-check automatically when you come back.');
         } else {
           setVerifyStatus('access', 'unknown',
             `❓ Could not determine accessibility status: ${r.message || ''}`);
@@ -5988,7 +5988,7 @@
           <div style="font-size:14px; font-weight:700; color:var(--green); margin-bottom:4px;">🌪️ Why Windy Translate?</div>
           <div style="font-size:13px; color:var(--text-dim); line-height:1.6;">
             Other translators need Wi-Fi. Cloud servers. Monthly subscriptions. A separate device.<br>
-            <strong style="color:var(--green);">Windy Pro needs NOTHING.</strong> No internet. No signal. No problem.<br>
+            <strong style="color:var(--green);">Windy Word needs NOTHING.</strong> No internet. No signal. No problem.<br>
             Airplane at 35,000 feet? Remote village? Underground bunker? <em>Still translating.</em><br>
             <span style="font-size:14px; font-weight:800; color:var(--green);">That's WINDY, baby! 🌪️</span>
           </div>
@@ -6015,11 +6015,11 @@
           </div>
 
           <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;" id="translate-pricing-cards">
-            <!-- Windy Pro -->
+            <!-- Windy Word -->
             <div id="trans-plan-pro" class="trans-plan-card" onclick="selectTranslatePlan('pro')" style="background:var(--bg-card); border:2px solid var(--border); border-radius:12px; padding:16px 12px; text-align:center; cursor:pointer; transition:all 0.25s; position:relative;"
               onmouseenter="if(!this.classList.contains('trans-selected')){this.style.borderColor='#22C55E'; this.style.boxShadow='0 0 16px rgba(34,197,94,0.15)'}" onmouseleave="if(!this.classList.contains('trans-selected')){this.style.borderColor='var(--border)'; this.style.boxShadow='none'}">
               <div style="font-size:22px; margin-bottom:4px;">⚡</div>
-              <div style="font-size:15px; font-weight:800; color:#22C55E;">Windy Pro</div>
+              <div style="font-size:15px; font-weight:800; color:#22C55E;">Windy Word</div>
               <div class="trans-price" style="font-size:22px; font-weight:900; color:var(--text); margin:8px 0 2px;">$49<span style="font-size:12px; font-weight:400; color:var(--text-muted);">/yr</span></div>
               <div class="trans-price-label" style="font-size:11px; color:var(--text-muted); margin-bottom:10px;">per year</div>
               <div style="text-align:left; font-size:12px; color:var(--text-dim); line-height:1.7; padding:8px; background:rgba(255,255,255,0.03); border-radius:8px;">
@@ -6071,7 +6071,7 @@
 
           <div style="text-align:center; margin-top:10px; font-size:11px; color:var(--text-muted);">Annual saves ~50% vs monthly · Lifetime = own it forever · Secure Stripe checkout</div>
 
-          <!-- Windy Pro advantages (no competitor names) -->
+          <!-- Windy Word advantages (no competitor names) -->
           <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:12px; font-size:12px;">
             <div style="background:linear-gradient(135deg, rgba(34,197,94,0.06), rgba(34,197,94,0.02)); border-radius:8px; padding:10px; text-align:center; border:1px solid rgba(34,197,94,0.2);">
               <div style="font-size:16px; margin-bottom:2px;">✈️</div>
@@ -6123,7 +6123,7 @@
       translate: { monthly: '$8.99/mo', annual: '$79/yr', lifetime: '$199' },
       translate_pro: { monthly: '$14.99/mo', annual: '$149/yr', lifetime: '$299' }
     };
-    const TRANSLATE_PLAN_NAMES = { pro: 'Windy Pro', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
+    const TRANSLATE_PLAN_NAMES = { pro: 'Windy Word', translate: 'Windy Ultra', translate_pro: 'Windy Max' };
     const TRANSLATE_PLAN_COLORS = { pro: '#22C55E', translate: '#3B82F6', translate_pro: '#8B5CF6' };
 
     function switchTranslateBilling(mode) {
@@ -6424,7 +6424,7 @@
       translate_pro: 10
     };
     const PLAN_DISPLAY_NAMES = {
-      free: 'Free', pro: 'Windy Pro', translate: 'Windy Ultra', translate_pro: 'Windy Max'
+      free: 'Free', pro: 'Windy Word', translate: 'Windy Ultra', translate_pro: 'Windy Max'
     };
 
     // ─── SCREEN 7: PAIR PICKER STATE ───

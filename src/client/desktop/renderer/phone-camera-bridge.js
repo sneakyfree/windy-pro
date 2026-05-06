@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Phone-as-Camera (WebRTC Bridge)
+ * Windy Word — Phone-as-Camera (WebRTC Bridge)
  * Link phone camera via QR code, receive video stream via RTCPeerConnection,
  * switch front/back camera, connection quality indicator, LAN optimization
  */

@@ -1,5 +1,5 @@
 /**
- * Windy Pro v2.0 — WindyTune Recommendation & Auto-Switching Engine
+ * Windy Word v2.0 — WindyTune Recommendation & Auto-Switching Engine
  * "It Adapts So You Don't Have To." 🌪️
  *
  * THREE MODES:

@@ -368,7 +368,7 @@ class FirstRunExperience {
       </div>
     `;
 
-    this._addButton('Start Using Windy Pro', () => {
+    this._addButton('Start Using Windy Word', () => {
       localStorage.setItem('windy_first_run_complete', 'true');
       this._dismiss();
     });

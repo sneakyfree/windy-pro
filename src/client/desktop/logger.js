@@ -1,5 +1,5 @@
 /**
- * Windy Pro — Structured Logger (Desktop)
+ * Windy Word — Structured Logger (Desktop)
  *
  * Usage:
  *   const log = require('./logger')('ChatClient');
@@ -13,8 +13,8 @@
 
 // P5 — file sink + rotation + structured JSON lines.
 //
-// Writes a JSON-lines log file at ~/Library/Logs/Windy Pro/app.log
-// (macOS), ~/AppData/Local/Windy Pro/Logs/app.log (Windows), or
+// Writes a JSON-lines log file at ~/Library/Logs/Windy Word/app.log
+// (macOS), ~/AppData/Local/Windy Word/Logs/app.log (Windows), or
 // ~/.local/state/windy-pro/logs/app.log (Linux). Rotates at 10 MB,
 // keeps the last 5 generations (app.log, app.log.1, ... app.log.5).
 //
@@ -36,10 +36,10 @@ function resolveLogDir() {
   // Mirrors wizard-logger.getLogDir so support can find both files in
   // the same place.
   if (process.platform === 'darwin') {
-    return path.join(os.homedir(), 'Library', 'Logs', 'Windy Pro');
+    return path.join(os.homedir(), 'Library', 'Logs', 'Windy Word');
   }
   if (process.platform === 'win32') {
-    return path.join(os.homedir(), 'AppData', 'Local', 'Windy Pro', 'Logs');
+    return path.join(os.homedir(), 'AppData', 'Local', 'Windy Word', 'Logs');
   }
   return path.join(
     process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local', 'state'),
