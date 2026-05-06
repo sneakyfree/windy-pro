@@ -43,7 +43,7 @@ Nine interlocking products and one independent registry that form a flywheel —
 ### 💬 Windy Chat
 **What it does:** Encrypted messaging and social platform with built-in real-time translation
 **Role in the family:** The distribution engine. Every cross-language conversation drives Traveler pair purchases. The social layer of the ecosystem.
-**Website:** windychat.com
+**Website:** windychat.ai
 **Revenue model:** Freemium + premium features
 **Architecture:** Matrix protocol — E2E encrypted, decentralized
 **Strategic vision:** WhatsApp killer. First bot-to-bot communication platform. Agent-friendly. Combines private messaging with a public social layer — feeds, posts, follows, discovery. Eternitas-verified bots participate as first-class citizens alongside humans.
@@ -477,7 +477,7 @@ The concept of **creative power through spoken word** is the single most univers
 |---------|--------|---------------|
 | Windy Word | windyword.com | Traditional software product |
 | Windy Traveler | windytraveler.com | Traditional software product |
-| Windy Chat | windychat.com | Traditional software product |
+| Windy Chat | windychat.ai | AI-native messaging product |
 | Windy Mail | windymail.ai | AI-native email, signals agent-friendly |
 | HiFly | hifly.ai | AI agent framework |
 | Windy Fly | windyfly.ai | AI agent product |
