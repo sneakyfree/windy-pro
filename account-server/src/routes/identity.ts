@@ -625,15 +625,26 @@ router.post('/agent/provision', authenticateToken, async (req: Request, res: Res
 
     const ownerEmail = owner_email || requestingUser.email;
 
-    // Resolve or create bot identity
-    const identityId = windy_identity_id || `bot-${crypto.randomUUID()}`;
+    // Resolve or create bot identity. The legacy fallback used `bot-${uuid}`
+    // here, but Postgres `users.windy_identity_id` is a UUID column and rejects
+    // any non-UUID-shaped string with `invalid input syntax for type uuid`.
+    // The "bot" tag is already carried on the INSERT below as
+    // `identity_type='bot'`, so the prefix was decorative — load-bearing only
+    // against the SQLite-only earlier schema. Plain UUID works in both.
+    const identityId = windy_identity_id || crypto.randomUUID();
     let botUser = db.prepare('SELECT id FROM users WHERE windy_identity_id = ?').get(identityId) as any;
 
     if (!botUser) {
       const botId = crypto.randomUUID();
+      // password_hash is NOT NULL on the users table; bot users have no
+      // password to authenticate with, so we use a sentinel string matching
+      // the convention already in identity-service.ts (the
+      // passport.registered webhook handler). bcrypt.compare(anything,
+      // 'eternitas-managed') returns false — the sentinel isn't a valid
+      // bcrypt hash format, so no login path can authenticate as a bot.
       db.prepare(
-        `INSERT INTO users (id, email, name, display_name, tier, identity_type, windy_identity_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'free', 'bot', ?, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, name, display_name, password_hash, tier, identity_type, windy_identity_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'eternitas-managed', 'free', 'bot', ?, datetime('now'), datetime('now'))`,
       ).run(botId, `${agent_name.toLowerCase().replace(/\s+/g, '-')}@bot.windypro.com`, agent_name, agent_name, identityId);
       botUser = { id: botId };
     }
