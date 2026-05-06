@@ -44,18 +44,52 @@ const router = Router();
 
 // ─── Rate limits ─────────────────────────────────────────────
 // Broker issue: 120/min per IP (S2S traffic — generous but capped).
-// Hatch: 5/min per IP to prevent provisioning floods.
+//
+// Hatch: TWO-LAYER design (Sprint 1.5 — ballroom-scale onboarding).
+//   Layer 1 (pre-auth, per-IP): 500/min — DDoS shield. Generous enough
+//   that ~hundreds of grandmas behind one hotel-WiFi NAT can all hatch
+//   inside a 5-minute demo window without queueing.
+//   Layer 2 (post-auth, per-user): 5/min — abuse cap. One identity
+//   cannot spam-hatch even if their IP isn't shared. The legitimate
+//   case is ~1 hatch per user (idempotent), so 5/min is plenty of slack
+//   for retries.
+//
+// Why both: a single per-IP limit at ballroom-friendly width (e.g.
+// 500/min) would let one bad actor inside a shared NAT spam-hatch and
+// burn through quota. A single per-user limit can't be applied before
+// auth, leaving the auth code path itself open to anonymous DDoS.
+// Layered, each side does what it's best at.
 const issueLimiter = makeRateLimiter('broker-issue', {
     windowMs: 60 * 1000,
     max: process.env.NODE_ENV === 'test' ? 10_000 : 120,
     standardHeaders: true,
     legacyHeaders: false,
 });
-const hatchLimiter = makeRateLimiter('agent-hatch', {
+const hatchIpLimiter = makeRateLimiter('agent-hatch-ip', {
+    windowMs: 60 * 1000,
+    max: process.env.NODE_ENV === 'test' ? 10_000 : 500,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+// Exported for unit tests — keyed lookup must remain stable since
+// upstream limiter state lives in Redis under this key shape.
+export function hatchUserKey(req: any): string {
+    const userId = req?.user?.userId;
+    return typeof userId === 'string' && userId.length > 0
+        ? `user:${userId}`
+        : `ip:${req?.ip ?? 'unknown'}`;
+}
+
+const hatchUserLimiter = makeRateLimiter('agent-hatch-user', {
     windowMs: 60 * 1000,
     max: process.env.NODE_ENV === 'test' ? 10_000 : 5,
     standardHeaders: true,
     legacyHeaders: false,
+    // Key on the authenticated user's id (set by authenticateToken
+    // upstream of this limiter). If auth didn't run or didn't populate
+    // req.user, fall back to IP — strictly safer than a fall-through
+    // empty key, which would lump every unauth'd hit into one bucket.
+    keyGenerator: hatchUserKey,
 });
 
 // ─── POST /api/v1/agent/credentials/issue ────────────────────
@@ -195,7 +229,7 @@ async function fetchJson(url: string, init: RequestInit, timeoutMs = 15_000): Pr
 //
 // End-to-end agent hatch. Returns text/event-stream. Idempotent per
 // windy_identity_id — second call replays the existing session's events.
-router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res: Response) => {
+router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).user.userId;
     const db = getDb();
 
