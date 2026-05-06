@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════
-# Windy Pro — One-Shot Cloud Deploy for thewindstorm.uk
+# Windy Pro — One-Shot Cloud Deploy for windyword.ai
 # Run this on Veron 1 with sudo access.
 # ═══════════════════════════════════════════════════════
 set -euo pipefail

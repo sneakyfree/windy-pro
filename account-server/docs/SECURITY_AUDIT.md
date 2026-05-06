@@ -96,7 +96,7 @@ Verified patterns:
 **Before:** `app.use(cors())` — allows requests from any origin with no restrictions.
 
 **After:** CORS now respects `CORS_ALLOWED_ORIGINS` environment variable:
-- If set (e.g., `CORS_ALLOWED_ORIGINS=https://windypro.thewindstorm.uk,https://app.windypro.com`), only listed origins are allowed.
+- If set (e.g., `CORS_ALLOWED_ORIGINS=https://windyword.ai,https://windyword.ai`), only listed origins are allowed.
 - If unset, defaults to `true` (allow all) for development compatibility.
 - `credentials: true` is set to support cookie-based auth for the admin console.
 

@@ -41,7 +41,7 @@ The Electron desktop app connects to **two separate backend services**:
 | Admin | None | Full admin dashboard API |
 | Port | 8098 | 8099 |
 
-**Mobile app** (`windy-pro-mobile`) connects **only** to account-server at `windypro.thewindstorm.uk` (port 8098). It does **not** use cloud-storage.
+**Mobile app** (`windy-pro-mobile`) connects **only** to account-server at `windyword.ai` (port 8098). It does **not** use cloud-storage.
 
 ---
 
@@ -236,7 +236,7 @@ CREATE TABLE coupons (
 
 If the merge is deferred, these are critical fixes to make cloud-storage usable:
 
-1. **Fix the hardcoded IP** — Use `process.env.CLOUD_STORAGE_URL` or default to `https://windypro.thewindstorm.uk:8099`
+1. **Fix the hardcoded IP** — Use `process.env.CLOUD_STORAGE_URL` or default to `https://windyword.ai:8099`
 2. **Share JWT secret** — Both services must use the same `JWT_SECRET` env var so tokens work cross-service
 3. **Add rate limiting** — `express-rate-limit` on auth and upload endpoints
 4. **Add CORS origin restriction** — Currently allows all origins

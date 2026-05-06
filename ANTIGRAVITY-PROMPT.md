@@ -23,7 +23,7 @@ src/
 ## Current State
 - The app has multiple transcription engines: Local (faster-whisper), WindyPro Cloud, Deepgram, Groq, OpenAI
 - Local and Cloud engines stream audio in chunks and transcribe in real-time
-- Cloud server runs on Veron (RTX 5090, 32GB VRAM) at `wss://windypro.thewindstorm.uk`
+- Cloud server runs on Veron (RTX 5090, 32GB VRAM) at `wss://windyword.ai`
 - The real-time streaming quality is mediocre because Whisper is a batch model being forced into streaming mode
 - Users want Wispr-Flow-level quality: perfect sentences, punctuation, paragraph structure
 
@@ -309,7 +309,7 @@ In `app.js`, add:
 ```javascript
 async _batchTranscribeCloud(audioBlob) {
   const token = this.cloudToken || localStorage.getItem('windy_cloudToken');
-  const cloudUrl = (this.cloudUrl || localStorage.getItem('windy_cloudUrl') || 'https://windypro.thewindstorm.uk')
+  const cloudUrl = (this.cloudUrl || localStorage.getItem('windy_cloudUrl') || 'https://windyword.ai')
     .replace('wss://', 'https://');
   
   if (!token) {

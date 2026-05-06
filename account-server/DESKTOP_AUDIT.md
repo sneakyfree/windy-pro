@@ -253,7 +253,7 @@ Actually on review, the xdg-open path at L2806 passes `url` directly, and that `
 
 ### S4 -- `register-wizard-account` sends plaintext password over HTTPS (L3709)
 
-The handler sends `{ email, password, name }` over HTTPS to `windypro.thewindstorm.uk`. While HTTPS provides transport encryption, the password is stored encrypted locally via safeStorage but travels in plaintext inside the JSON body. This is standard practice for registration APIs but worth noting.
+The handler sends `{ email, password, name }` over HTTPS to `windyword.ai`. While HTTPS provides transport encryption, the password is stored encrypted locally via safeStorage but travels in plaintext inside the JSON body. This is standard practice for registration APIs but worth noting.
 
 **Severity:** Informational.
 

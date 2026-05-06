@@ -44,7 +44,7 @@ def client():
 def auth_headers(client):
     """Register a test user and return auth headers."""
     import uuid
-    email = f"authfix_{uuid.uuid4().hex[:8]}@windypro.com"
+    email = f"authfix_{uuid.uuid4().hex[:8]}@windyword.ai"
     res = client.post("/api/v1/auth/register", json={
         "email": email,
         "password": "testpass123",
@@ -81,7 +81,7 @@ class TestHealth:
 class TestAuth:
     def test_register(self, client):
         import uuid
-        email = f"test_{uuid.uuid4().hex[:8]}@windypro.com"
+        email = f"test_{uuid.uuid4().hex[:8]}@windyword.ai"
         res = client.post("/api/v1/auth/register", json={
             "email": email,
             "password": "securepass123",
@@ -94,7 +94,7 @@ class TestAuth:
 
     def test_register_duplicate(self, client):
         import uuid
-        email = f"dup_{uuid.uuid4().hex[:8]}@windypro.com"
+        email = f"dup_{uuid.uuid4().hex[:8]}@windyword.ai"
         client.post("/api/v1/auth/register", json={
             "email": email,
             "password": "pass123456",
@@ -109,7 +109,7 @@ class TestAuth:
 
     def test_login_success(self, client):
         import uuid
-        email = f"login_{uuid.uuid4().hex[:8]}@windypro.com"
+        email = f"login_{uuid.uuid4().hex[:8]}@windyword.ai"
         client.post("/api/v1/auth/register", json={
             "email": email,
             "password": "mypassword1",
@@ -124,7 +124,7 @@ class TestAuth:
 
     def test_login_wrong_password(self, client):
         import uuid
-        email = f"wrong_{uuid.uuid4().hex[:8]}@windypro.com"
+        email = f"wrong_{uuid.uuid4().hex[:8]}@windyword.ai"
         client.post("/api/v1/auth/register", json={
             "email": email,
             "password": "correctpass",

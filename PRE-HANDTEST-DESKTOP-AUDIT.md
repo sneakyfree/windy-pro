@@ -55,7 +55,7 @@ All screenshots saved to `tests/screenshots/`.
 | 6 | Wizard — Welcome | ✅ **FIXED** — Same CSS fix as #5. | **P2** | `wizard.html` CSS |
 | 7 | Wizard — Installing | ✅ **FIXED** — Same CSS fix as #5. | **P2** | `wizard.html` CSS |
 | 8 | `chat.html` | ✅ **FIXED (partial)** — `unsafe-inline` in `script-src` is required by 20+ `onclick=` handlers. Documented why. Refactoring all handlers to `addEventListener` is a future task. | **P1** | `chat.html:6-9` |
-| 9 | `chat.html` | ✅ **FIXED** — `connect-src` tightened from wildcard `https: wss:` to specific origins: `matrix.thewindstorm.uk`, `*.thewindstorm.uk`, `localhost`, `127.0.0.1`. | **P1** | `chat.html:9` |
+| 9 | `chat.html` | ✅ **FIXED** — `connect-src` tightened from wildcard `https: wss:` to specific origins: `chat.windychat.ai`, `*.windyword.ai`, `localhost`, `127.0.0.1`. | **P1** | `chat.html:9` |
 | 10 | Wizard — Engine Info | **"Choose My Engines" button clipped at bottom** — Button partially obscured by page edge. | **P2** | `wizard_engine_info_*.png` |
 | 11 | Wizard — Ready (scrolled) | ✅ **FIXED** — "WindyPro Cloud" → "Windy Pro Cloud". Fixed in wizard.html and brand-content.js. | **P2** | `wizard_ready_scrolled_*.png` |
 | 12 | Wizard — Languages | **Click target issue on "+ Add"** — Language add buttons required multiple clicks to register during testing. | **P2** | `wizard_languages_*.png` |

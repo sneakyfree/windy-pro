@@ -25,7 +25,7 @@ process.env.JWT_SECRET = 'forgot-prod-test-secret-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 process.env.DB_PATH = path.join(tmpDir, 'accounts.db');
 process.env.DATA_ROOT = tmpDir;
 process.env.TRUST_PROXY = '1';
-process.env.CORS_ALLOWED_ORIGINS = 'https://api.windyword.ai';
+process.env.CORS_ALLOWED_ORIGINS = 'https://account.windyword.ai';
 process.env.RESEND_API_KEY = 'resend-stub-for-test-xxxxxxxxxxxxxxxxxxx'; // satisfies fail-closed; mailer will still stub because the key is not real
 
 import request from 'supertest';

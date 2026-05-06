@@ -178,7 +178,7 @@ router.post('/api/v1/analytics', analyticsLimiter, validate(AnalyticsRequestSche
 router.get('/api/v1/updates/check', (_req: Request, res: Response) => {
     res.json({
         version: SERVER_VERSION,
-        url: `https://windypro.thewindstorm.uk/download/latest`,
+        url: `https://windyword.ai/download/latest`,
         releaseNotes: 'Bug fixes and performance improvements',
         required: false,
     });

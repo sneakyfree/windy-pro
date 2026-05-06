@@ -72,14 +72,14 @@ cat > /opt/windy-pro/.env.production <<ENV
 NODE_ENV=production
 PORT=8098
 TRUST_PROXY=1
-CORS_ALLOWED_ORIGINS=https://windypro.com,https://www.windypro.com,https://windyword.ai,https://api.windyword.ai
+CORS_ALLOWED_ORIGINS=https://windyword.ai,https://windyword.ai,https://windyword.ai,https://account.windyword.ai
 
 # ─── RS256 / JWT ───
 JWT_SECRET=${JWT_SECRET}
 JWT_PRIVATE_KEY_PATH=/keys/private.pem
 JWT_PUBLIC_KEY_PATH=/keys/public.pem
 JWT_KEY_ID=${JWT_KEY_ID}
-OIDC_ISSUER=https://api.windyword.ai
+OIDC_ISSUER=https://account.windyword.ai
 
 # ─── Database (RDS) ───
 # sslmode=require is non-negotiable on AWS RDS — pg_hba.conf rejects
@@ -114,17 +114,17 @@ ENV
 chmod 600 /opt/windy-pro/.env.production
 
 # ─── nginx HTTP-only until certbot flips us ──────────────────
-install -m 0644 /opt/windy-pro/deploy/wave13/nginx-api.windyword.ai.conf \
-    /etc/nginx/sites-available/api.windyword.ai.conf
+install -m 0644 /opt/windy-pro/deploy/wave13/nginx-account.windyword.ai.conf \
+    /etc/nginx/sites-available/account.windyword.ai.conf
 # Comment out the 443 server block until certbot runs — nginx won't
 # start with a missing cert path.
-sed -i 's|^server {$|# WAVE13_SSL_GUARD server {|g; s|^# WAVE13_SSL_GUARD server {$|server {|' /etc/nginx/sites-available/api.windyword.ai.conf || true
+sed -i 's|^server {$|# WAVE13_SSL_GUARD server {|g; s|^# WAVE13_SSL_GUARD server {$|server {|' /etc/nginx/sites-available/account.windyword.ai.conf || true
 # Simpler: two-pass comment of the second server block — the ACME
 # + 80→443 redirect block stays live; the 443 block becomes inert
 # until certbot uncomments the cert paths.
 python3 - <<'PY'
 import re, pathlib
-p = pathlib.Path('/etc/nginx/sites-available/api.windyword.ai.conf')
+p = pathlib.Path('/etc/nginx/sites-available/account.windyword.ai.conf')
 s = p.read_text()
 # Comment out only the second server block (the one listening on 443).
 parts = s.split('server {')
@@ -134,8 +134,8 @@ if len(parts) >= 3:
     commented = 'server {' + parts[1] + '\n# === WAVE13: SSL block disabled until FIRE 5 runs certbot ===\n# server {' + parts[2].replace('\n', '\n# ')
     p.write_text(parts[0] + commented)
 PY
-ln -sf /etc/nginx/sites-available/api.windyword.ai.conf \
-       /etc/nginx/sites-enabled/api.windyword.ai.conf
+ln -sf /etc/nginx/sites-available/account.windyword.ai.conf \
+       /etc/nginx/sites-enabled/account.windyword.ai.conf
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 

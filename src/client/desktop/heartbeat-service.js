@@ -35,7 +35,7 @@ const GRACE_PERIODS = {
 
 // Heartbeat endpoint — configurable via env for local testing
 const HEARTBEAT_URL = process.env.WINDY_HEARTBEAT_URL
-  || 'https://api.windyword.com/v1/license/heartbeat';
+  || 'https://account.windyword.ai/v1/license/heartbeat';
 
 class HeartbeatService {
   /**

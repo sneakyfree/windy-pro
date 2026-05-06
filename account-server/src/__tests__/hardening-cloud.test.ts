@@ -25,7 +25,7 @@ jest.mock('express-rate-limit', () => {
 // ═══════════════════════════════════════════
 
 const TEST_USER_ID = 'user-cloud-hardening-001';
-const TEST_USER_EMAIL = 'cloud-test@windypro.com';
+const TEST_USER_EMAIL = 'cloud-test@windyword.ai';
 
 const users = new Map<string, any>();
 const tokenBlacklist = new Set<string>();

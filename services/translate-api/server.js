@@ -29,7 +29,7 @@ const MODEL_PATH = process.env.MODEL_PATH || path.join(__dirname, 'models', 'nll
 const PYTHON_BIN = process.env.PYTHON_BIN || 'python3';
 const ALLOWED_ORIGINS = [
     'https://windyword.ai',
-    'https://windypro.thewindstorm.uk', // legacy — remove after full migration
+    'https://windyword.ai', // legacy — remove after full migration
     'http://localhost:3000',
     'http://localhost:5173',
     'file://'   // Electron wizard

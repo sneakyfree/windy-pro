@@ -148,7 +148,7 @@
 | Finding | Severity | Status (Apr 3) |
 |---------|----------|----------------|
 | Dual auth — users register twice | CRITICAL | **FIXED** — `services/cloud-storage/` removed. Routes merged into account-server (`/api/v1/files/*`). Legacy server CORS now configured with `CORS_ORIGINS` env var (no more wildcard). |
-| Hardcoded LAN IP `192.168.4.126:8099` | CRITICAL | **FIXED** — Replaced with `https://windypro.thewindstorm.uk/api/storage`. |
+| Hardcoded LAN IP `192.168.4.126:8099` | CRITICAL | **FIXED** — Replaced with `https://windyword.ai/api/storage`. |
 | Schema drift (JSON vs SQLite) | MAJOR | **FIXED** — Unified SQLite. |
 | No rate limiting on cloud storage | MAJOR | **FIXED** — Account-server has rate limiting. |
 

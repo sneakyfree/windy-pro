@@ -59,7 +59,7 @@ const ERROR_CATALOG = Object.freeze({
     code: 'WINDY-004',
     title: 'Download server error',
     user: 'A download server returned an error. Please try again later.',
-    fix: 'Wait, then retry. Check status.windyword.ai if it persists.',
+    fix: 'Wait, then retry. Check status.windyfly.ai if it persists.',
     docsAnchor: 'WINDY-004-download-server-error',
     matchers: ['HTTP 4', 'HTTP 5'],
   },

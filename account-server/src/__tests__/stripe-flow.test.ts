@@ -29,7 +29,7 @@ jest.mock('express-rate-limit', () => {
 // ═══════════════════════════════════════════
 
 const TEST_USER_ID = 'user-stripe-flow-001';
-const TEST_USER_EMAIL = 'stripe-flow@windypro.com';
+const TEST_USER_EMAIL = 'stripe-flow@windyword.ai';
 const JWT_SECRET = 'test-secret-stripe-flow';
 
 const users = new Map<string, any>();

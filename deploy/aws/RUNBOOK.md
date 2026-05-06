@@ -2,7 +2,7 @@
 
 **Audience:** operator with access to an AWS account and a machine that has (or can install) `aws` + `terraform` CLIs.
 
-**Goal:** get `api.windyword.ai` serving the account-server from ECS Fargate, backed by RDS Postgres + ElastiCache Redis, with all secrets in Secrets Manager.
+**Goal:** get `account.windyword.ai` serving the account-server from ECS Fargate, backed by RDS Postgres + ElastiCache Redis, with all secrets in Secrets Manager.
 
 **Time budget:** 40–60 minutes for a clean first run (RDS creation is the long pole at ~10 min).
 
@@ -218,7 +218,7 @@ terraform init       # Downloads providers + connects to s3 backend
 terraform plan -out=plan.tfplan \
   -var "container_image=$ACCT.dkr.ecr.$REGION.amazonaws.com/$REPO:v2.0.0"
 #  Review output carefully. Expect ~40 resources to be created.
-#  Confirm: aws_acm_certificate.api domain = api.windyword.ai
+#  Confirm: aws_acm_certificate.api domain = account.windyword.ai
 #           aws_db_instance.main = db.t4g.micro
 #           aws_elasticache_cluster.main = cache.t4g.micro
 #           aws_secretsmanager_secret.runtime created
@@ -231,7 +231,7 @@ terraform apply plan.tfplan
 After apply, Terraform prints outputs:
 
 ```
-api_url             = "https://api.windyword.ai"
+api_url             = "https://account.windyword.ai"
 alb_dns_name        = "windy-prod-account-server-alb-xxx.us-east-1.elb.amazonaws.com"
 db_endpoint         = "windy-prod-account-server-db.xxx.us-east-1.rds.amazonaws.com:5432"
 redis_endpoint      = "windy-prod-account-server-redis.xxx.cache.amazonaws.com"
@@ -329,7 +329,7 @@ Zero-downtime rotation is covered in `deploy/docs/webhook-env-vars.md` — rotat
 
 ## 7. DNS — Route 53 records
 
-`api.windyword.ai` is **automatic** — Terraform creates an A-alias pointing at the ALB.
+`account.windyword.ai` is **automatic** — Terraform creates an A-alias pointing at the ALB.
 
 Other records you may want to add manually (Terraform doesn't manage them since they're product-specific):
 
@@ -337,9 +337,9 @@ Other records you may want to add manually (Terraform doesn't manage them since 
 |---|---|---|
 | `windyword.ai` (apex) | Cloudflare Pages / S3 / wherever the marketing site is hosted | Marketing + `/device` approval page |
 | `account.windyword.ai` | Same as apex OR a separate web app | Web portal (Profile, Settings, Dashboard) if hosted separately from the API |
-| `api.windyword.ai` | ALB (handled by Terraform) | account-server REST + OIDC |
-| `chat.windyword.ai` | Synapse / Windy Chat ALB | Matrix homeserver |
-| `mail.windyword.ai` | Windy Mail ALB | Mail backend |
+| `account.windyword.ai` | ALB (handled by Terraform) | account-server REST + OIDC |
+| `chat.windychat.ai` | Synapse / Windy Chat ALB | Matrix homeserver |
+| `mail.windymail.ai` | Windy Mail ALB | Mail backend |
 | `*.windyword.ai` MX | Windy Mail MX gateway | Inbound email routing (if hosting mailboxes) |
 
 Example: point the apex at Cloudflare:
@@ -358,27 +358,27 @@ aws route53 change-resource-record-sets --hosted-zone-id $ZONE_ID \
 
 ```sh
 # 8.1  account-server health + version
-curl -sSf https://api.windyword.ai/health | jq .
+curl -sSf https://account.windyword.ai/health | jq .
 # Expect: {"status":"ok","service":"windy-pro-account-server","version":"2.0.0","database":"ok","uptime_seconds":...}
 
 # 8.2  JWKS (public keys for RS256 verification)
-curl -sSf https://api.windyword.ai/.well-known/jwks.json | jq .keys[0].kid
+curl -sSf https://account.windyword.ai/.well-known/jwks.json | jq .keys[0].kid
 # Expect: a key ID string (means JWKS was initialized successfully)
 
 # 8.3  OIDC discovery
-curl -sSf https://api.windyword.ai/.well-known/openid-configuration | jq .issuer
-# Expect: "https://api.windyword.ai"
+curl -sSf https://account.windyword.ai/.well-known/openid-configuration | jq .issuer
+# Expect: "https://account.windyword.ai"
 
 # 8.4  Register → should succeed and return a token
 TEST_EMAIL="smoke-$(date +%s)@example.com"
-REG=$(curl -sSf -X POST https://api.windyword.ai/api/v1/auth/register \
+REG=$(curl -sSf -X POST https://account.windyword.ai/api/v1/auth/register \
   -H 'Content-Type: application/json' \
   -d "{\"name\":\"Smoke Test\",\"email\":\"$TEST_EMAIL\",\"password\":\"SmokePass1\"}")
 echo "$REG" | jq '{userId, windyIdentityId, tier}'
 TOKEN=$(echo "$REG" | jq -r '.token')
 
 # 8.5  Identity hub returns the new user
-curl -sSf https://api.windyword.ai/api/v1/identity/me \
+curl -sSf https://account.windyword.ai/api/v1/identity/me \
   -H "Authorization: Bearer $TOKEN" | jq '{identity: .identity.email, products: .products | length}'
 
 # 8.6  Webhook deliveries — confirm fan-out fired for smoke test identity
@@ -388,7 +388,7 @@ aws logs tail "/ecs/windy-prod-account-server" --since 5m --filter-pattern "webh
 # If all 5 dead-lettered: receivers aren't reachable yet (check *_URL env vars).
 
 # 8.7  Clean up the smoke user
-curl -sSf -X DELETE https://api.windyword.ai/api/v1/auth/me \
+curl -sSf -X DELETE https://account.windyword.ai/api/v1/auth/me \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"password":"SmokePass1"}'

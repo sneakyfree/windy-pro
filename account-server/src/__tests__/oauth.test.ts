@@ -172,15 +172,15 @@ describe('OAuth2 Security', () => {
 
   describe('Redirect URI validation', () => {
     it('should reject redirect URIs not in the registered list', () => {
-      const allowedUris = ['https://app.windypro.com/callback', 'http://localhost:3000/callback'];
+      const allowedUris = ['https://windyword.ai/callback', 'http://localhost:3000/callback'];
       const requestedUri = 'https://evil.com/callback';
 
       expect(allowedUris.includes(requestedUri)).toBe(false);
     });
 
     it('should accept registered redirect URIs', () => {
-      const allowedUris = ['https://app.windypro.com/callback', 'http://localhost:3000/callback'];
-      const requestedUri = 'https://app.windypro.com/callback';
+      const allowedUris = ['https://windyword.ai/callback', 'http://localhost:3000/callback'];
+      const requestedUri = 'https://windyword.ai/callback';
 
       expect(allowedUris.includes(requestedUri)).toBe(true);
     });

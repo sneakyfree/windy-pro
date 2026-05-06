@@ -2,7 +2,7 @@ name: Deploy Web to Cloudflare Pages
 
 # Builds src/client/web/ (Windy Word webapp — React + Vite) and deploys
 # to the `windypro-webapp` Cloudflare Pages project, which is aliased to
-# app.windyword.ai.
+# windyword.ai.
 #
 # Deploy path uses scripts/cf-pages-deploy.py — a direct-upload script
 # against the Cloudflare API that sidesteps wrangler's version-specific

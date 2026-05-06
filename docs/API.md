@@ -1,6 +1,6 @@
 # Windy Pro — REST API Reference
 
-> Base URL: `https://windypro.thewindstorm.uk` (production) or `http://localhost:8098` (local)
+> Base URL: `https://windyword.ai` (production) or `http://localhost:8098` (local)
 
 ## Authentication
 

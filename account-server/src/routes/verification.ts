@@ -110,7 +110,7 @@ async function sendSmsOTP(phone: string, code: string): Promise<{ success: boole
 
 async function sendEmailOTP(email: string, code: string): Promise<{ success: boolean; stub?: boolean; error?: string }> {
   const apiKey = process.env.SENDGRID_API_KEY;
-  const fromEmail = process.env.SENDGRID_FROM_EMAIL || 'noreply@windypro.com';
+  const fromEmail = process.env.SENDGRID_FROM_EMAIL || 'noreply@windyword.ai';
 
   if (!apiKey) {
     const [user, domain] = email.split('@');

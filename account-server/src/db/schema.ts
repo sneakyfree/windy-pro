@@ -453,7 +453,7 @@ function initSchema(db: DbAdapter): void {
     CREATE TABLE IF NOT EXISTS chat_profiles (
       identity_id TEXT PRIMARY KEY,
       chat_user_id TEXT UNIQUE,                        -- Internal chat user ID
-      matrix_user_id TEXT UNIQUE,                      -- @windy_abc123:chat.windypro.com
+      matrix_user_id TEXT UNIQUE,                      -- @windy_abc123:chat.windychat.ai
       matrix_access_token TEXT,                        -- Encrypted Matrix access token
       matrix_device_id TEXT,
       display_name TEXT,

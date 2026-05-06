@@ -1,6 +1,6 @@
 # AWS deploy — account-server (Wave 4)
 
-Scaffolding for the production stack behind `api.windyword.ai`.
+Scaffolding for the production stack behind `account.windyword.ai`.
 
 **Status:** not yet applied. `terraform plan` was **not run from this machine** — Terraform and the AWS CLI aren't installed locally. Run `terraform init` + `terraform plan` on a machine with both tools configured before first apply.
 
@@ -11,8 +11,8 @@ Scaffolding for the production stack behind `api.windyword.ai`.
 | Layer | Resource |
 |---|---|
 | Network | VPC (10.60.0.0/16), 2 public + 2 private subnets across 2 AZs, 1 NAT gateway |
-| TLS | ACM cert for `api.windyword.ai`, DNS-validated via Route 53 |
-| Ingress | ALB (HTTPS:443, HTTP→HTTPS 301), Route 53 A-alias `api.windyword.ai → ALB` |
+| TLS | ACM cert for `account.windyword.ai`, DNS-validated via Route 53 |
+| Ingress | ALB (HTTPS:443, HTTP→HTTPS 301), Route 53 A-alias `account.windyword.ai → ALB` |
 | Compute | ECS Fargate cluster + service, 2 tasks (512 CPU / 1 GB each) in private subnets |
 | Database | RDS Postgres 16.4 (db.t4g.micro, single-AZ dev / Multi-AZ + deletion protection on `prod`) |
 | Cache | ElastiCache Redis 7.1 (cache.t4g.micro, single node) |
@@ -63,7 +63,7 @@ Expected first-apply time: **15–25 minutes** (RDS instance creation is the lon
 
 ### What to check during plan review
 
-- `aws_acm_certificate.api`: confirm the domain is `api.windyword.ai` (or whatever you set `api_subdomain` to).
+- `aws_acm_certificate.api`: confirm the domain is `account.windyword.ai` (or whatever you set `api_subdomain` to).
 - `aws_db_instance.main`: if `var.environment == "prod"`, `multi_az = true` and `deletion_protection = true` — don't apply to prod without confirming.
 - `aws_secretsmanager_secret_version.runtime.secret_string`: Terraform will include the generated secret values in the plan output — run `plan` on a machine without untrusted observers.
 - `desired_count = 2`: ALB health checks require both tasks healthy; plan will succeed but service may flap for ~2 min during first deploy while RDS finishes.
@@ -73,9 +73,9 @@ Expected first-apply time: **15–25 minutes** (RDS instance creation is the lon
 ## Post-apply smoke test
 
 ```sh
-curl -sSf https://api.windyword.ai/health | jq .
-curl -sSf https://api.windyword.ai/.well-known/jwks.json | jq .
-curl -sSf https://api.windyword.ai/.well-known/openid-configuration | jq .
+curl -sSf https://account.windyword.ai/health | jq .
+curl -sSf https://account.windyword.ai/.well-known/jwks.json | jq .
+curl -sSf https://account.windyword.ai/.well-known/openid-configuration | jq .
 ```
 
 All three should return 200 with well-formed JSON. If `/health` shows `"database":"error"` or `"jwks":"error"`, check CloudWatch logs at `/ecs/windy-prod-account-server`.

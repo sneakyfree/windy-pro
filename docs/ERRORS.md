@@ -81,7 +81,7 @@ model server is down.
 
 **Fix:**
 1. Retry — most server errors are transient.
-2. Check https://status.windyword.ai for known incidents.
+2. Check https://status.windyfly.ai for known incidents.
 3. If a specific engine consistently fails, swap to a different one
    in the wizard's "Show advanced options" section.
 

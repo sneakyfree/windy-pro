@@ -440,15 +440,15 @@ Lazy-provision a Matrix account on Synapse.
 {
   "success": true,
   "matrix": {
-    "matrixUserId": "@windy_name:chat.windypro.com",
+    "matrixUserId": "@windy_name:chat.windychat.ai",
     "accessToken": "syt_...",
     "deviceId": "ABCDEF",
-    "homeServer": "https://chat.windypro.com"
+    "homeServer": "https://chat.windychat.ai"
   },
   "secureStoreKeys": {
     "windy_matrix_token": "syt_...",
-    "windy_matrix_user": "@windy_name:chat.windypro.com",
-    "windy_matrix_server": "https://chat.windypro.com",
+    "windy_matrix_user": "@windy_name:chat.windychat.ai",
+    "windy_matrix_server": "https://chat.windychat.ai",
     "windy_matrix_device": "ABCDEF"
   }
 }
@@ -713,7 +713,7 @@ Register an OAuth2 client application.
 ```json
 {
   "name": "Windy Chat",
-  "redirectUris": ["https://chat.windypro.com/auth/callback"],
+  "redirectUris": ["https://chat.windychat.ai/auth/callback"],
   "allowedScopes": ["windy_chat:*"],
   "isFirstParty": true,
   "isPublic": false
@@ -863,8 +863,8 @@ Initiate Device Code flow (for CLI tools like `windy go`).
 {
   "device_code": "uuid",
   "user_code": "ABCD-EFGH",
-  "verification_uri": "https://windypro.thewindstorm.uk/api/v1/oauth/device/verify",
-  "verification_uri_complete": "https://windypro.thewindstorm.uk/api/v1/oauth/device/verify?user_code=ABCD-EFGH",
+  "verification_uri": "https://windyword.ai/api/v1/oauth/device/verify",
+  "verification_uri_complete": "https://windyword.ai/api/v1/oauth/device/verify?user_code=ABCD-EFGH",
   "expires_in": 900,
   "interval": 5
 }

@@ -398,7 +398,7 @@ archive.register(ipcMain, store, getArchiveFolder);
 **File:** `src/client/desktop/renderer/app.js`  
 **Related:** Footer status bar
 
-**Problem:** The renderer fetches `https://windypro.thewindstorm.uk/health` which fails due to CORS. The status bar shows "Connecting..." forever.
+**Problem:** The renderer fetches `https://windyword.ai/health` which fails due to CORS. The status bar shows "Connecting..." forever.
 
 **Fix — Option A: Add timeout + fallback status:**
 ```js
@@ -610,15 +610,15 @@ const tierData = getTierLimits(tier); // Already defined at line 220
 
 **Current code:**
 ```js
-success_url: 'https://windypro.thewindstorm.uk/payment-success?session_id={CHECKOUT_SESSION_ID}',
-cancel_url: 'https://windypro.thewindstorm.uk/payment-cancel',
+success_url: 'https://windyword.ai/payment-success?session_id={CHECKOUT_SESSION_ID}',
+cancel_url: 'https://windyword.ai/payment-cancel',
 ```
 
 **Fix:**
 ```js
-const STRIPE_SUCCESS_URL = process.env.STRIPE_SUCCESS_URL || 'https://windypro.thewindstorm.uk/payment-success?session_id={CHECKOUT_SESSION_ID}';
-const STRIPE_CANCEL_URL = process.env.STRIPE_CANCEL_URL || 'https://windypro.thewindstorm.uk/payment-cancel';
-const STRIPE_RETURN_URL = process.env.STRIPE_RETURN_URL || 'https://windypro.thewindstorm.uk/dashboard';
+const STRIPE_SUCCESS_URL = process.env.STRIPE_SUCCESS_URL || 'https://windyword.ai/payment-success?session_id={CHECKOUT_SESSION_ID}';
+const STRIPE_CANCEL_URL = process.env.STRIPE_CANCEL_URL || 'https://windyword.ai/payment-cancel';
+const STRIPE_RETURN_URL = process.env.STRIPE_RETURN_URL || 'https://windyword.ai/dashboard';
 ```
 
 ---
@@ -674,7 +674,7 @@ const STRIPE_RETURN_URL = process.env.STRIPE_RETURN_URL || 'https://windypro.the
 
 **Current code:**
 ```js
-const req = https.get('https://windypro.thewindstorm.uk/api/storage/files', { ...
+const req = https.get('https://windyword.ai/api/storage/files', { ...
 ```
 
 **Fix — Use the existing `CLOUD_STORAGE_DEFAULT_URL` constant (line 2579):**

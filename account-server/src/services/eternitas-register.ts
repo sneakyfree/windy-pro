@@ -21,7 +21,7 @@ export async function registerWithEternitas(): Promise<void> {
   }
 
   // Build the webhook URL
-  const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || 'https://account.windypro.com';
+  const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || 'https://account.windyword.ai';
   const webhookUrl = `${webhookBaseUrl}/api/v1/identity/webhooks/eternitas`;
 
   console.log(`[Eternitas] Registering Windy Pro as platform (webhook: ${webhookUrl})...`);

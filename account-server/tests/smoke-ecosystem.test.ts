@@ -24,7 +24,7 @@ import { app } from '../src/server';
 // ─── Shared State ──────────────────────────────────────────
 
 const ts = Date.now();
-const TEST_EMAIL = `smoketest+${ts}@test.windypro.com`;
+const TEST_EMAIL = `smoketest+${ts}@test.windyword.ai`;
 const TEST_PASSWORD = 'SmokeTest1!';
 const TEST_NAME = 'Smoke Test';
 

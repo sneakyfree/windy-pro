@@ -6,7 +6,7 @@
 
 ## PROMPT 1: Complete Website i18n Translations
 
-I'm building the Windy Pro website (windypro.thewindstorm.uk). We've added a language selector and i18n system. I need you to complete translations for additional languages in our i18n.json file.
+I'm building the Windy Pro website (windyword.ai). We've added a language selector and i18n system. I need you to complete translations for additional languages in our i18n.json file.
 
 The file lives at: `/home/sneakyfree/windy-pro/src/client/web/public/landing/i18n.json`
 AND must be copied to: `/home/sneakyfree/windy-pro/src/client/web/dist/landing/i18n.json`

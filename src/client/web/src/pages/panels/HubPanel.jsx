@@ -14,7 +14,7 @@ const PRODUCTS = [
         name: 'Windy Chat',
         description: 'Chat with people and agents',
         icon: '\uD83D\uDCAC',
-        href: 'https://windychat.com',
+        href: 'https://windychat.ai',
         internal: false,
     },
     {
