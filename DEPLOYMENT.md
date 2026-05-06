@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - **Docker** and **Docker Compose** installed
-- **Domain**: windypro.thewindstorm.uk pointed to your server
+- **Domain**: windyword.ai pointed to your server
 - **SSL Certificate**: via Let's Encrypt (certbot) or Cloudflare
 - **Environment Variables**: copy `.env.example` → `.env` and fill in all values
 
@@ -70,16 +70,16 @@ curl http://localhost:8098/health
 ```nginx
 server {
     listen 80;
-    server_name windypro.thewindstorm.uk;
+    server_name windyword.ai;
     return 301 https://$server_name$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name windypro.thewindstorm.uk;
+    server_name windyword.ai;
 
-    ssl_certificate /etc/letsencrypt/live/windypro.thewindstorm.uk/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/windypro.thewindstorm.uk/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/windyword.ai/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/windyword.ai/privkey.pem;
 
     # Frontend (SPA)
     location / {
@@ -126,7 +126,7 @@ server {
 sudo apt install certbot python3-certbot-nginx
 
 # Get certificate
-sudo certbot --nginx -d windypro.thewindstorm.uk
+sudo certbot --nginx -d windyword.ai
 
 # Auto-renewal (crontab)
 0 12 * * * /usr/bin/certbot renew --quiet
@@ -154,7 +154,7 @@ sqlite3 accounts.db ".backup accounts.db.backup"
 
 ```bash
 # Check service health
-curl https://windypro.thewindstorm.uk/health
+curl https://windyword.ai/health
 
 # View logs
 docker compose -f deploy/docker-compose.yml logs -f

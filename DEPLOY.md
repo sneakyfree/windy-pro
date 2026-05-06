@@ -27,7 +27,7 @@ Deploy Pro first. Deploy the rest against it.
 ```
                     ┌──────────────────┐
    (internet) ─────►│   Nginx TLS term │─────► account-server :8098
-                    │  windypro.com    │          │
+                    │  windyword.ai    │          │
                     └──────────────────┘          ├── POST /api/v1/auth/*        (signup/login)
                                                   ├── POST /api/v1/agent/hatch   (SSE ceremony)
                                                   ├── POST /api/v1/agent/credentials/issue (HMAC-signed broker)
@@ -59,7 +59,7 @@ short-lived `bk_live_*` values handed to an agent at hatch time.
 
 ### One-time account prep
 
-- Route 53 hosted zone for `windypro.com` — or a Cloudflare zone; both
+- Route 53 hosted zone for `windyword.ai` — or a Cloudflare zone; both
   work. Cloudflare is simpler if you want DDoS protection for free.
 - S3 bucket `windypro-backups` (versioning ON, lifecycle: 90 days →
   Glacier) for DB dumps.
@@ -157,8 +157,8 @@ template with safe dummy values is in `.env.production.example`.
 | `JWT_PRIVATE_KEY_PATH`        | Path inside the container to the RS256 private key PEM (see "First-time bootstrap"). |
 | `JWT_PUBLIC_KEY_PATH`         | Path to the RS256 public key PEM. Exposed through `/.well-known/jwks.json`. |
 | `JWT_KEY_ID`                  | `kid` claim for the JWKS entry. `windypro-prod-2026-04`. Rotate by incrementing the date. |
-| `OIDC_ISSUER`                 | Canonical issuer URL: `https://windypro.com`. |
-| `CORS_ALLOWED_ORIGINS`        | Comma-separated: `https://windypro.com,https://windyword.ai`. Hard-fail if unset in prod. |
+| `OIDC_ISSUER`                 | Canonical issuer URL: `https://windyword.ai`. |
+| `CORS_ALLOWED_ORIGINS`        | Comma-separated: `https://windyword.ai,https://windyword.ai`. Hard-fail if unset in prod. |
 | `TRUST_PROXY=1`               | Trust one hop (the Nginx in front). Hard-fail if unset in prod. |
 
 ### Infrastructure
@@ -176,7 +176,7 @@ template with safe dummy values is in `.env.production.example`.
 | Var                        | Where to get it |
 |----------------------------|-----------------|
 | `STRIPE_SECRET_KEY`        | Stripe Dashboard → Developers → API keys → Secret. |
-| `STRIPE_WEBHOOK_SECRET`    | Dashboard → Developers → Webhooks → endpoint for `https://windypro.com/api/v1/stripe`. |
+| `STRIPE_WEBHOOK_SECRET`    | Dashboard → Developers → Webhooks → endpoint for `https://windyword.ai/api/v1/stripe`. |
 | `STRIPE_PRO_PRICE_ID`      | Dashboard → Products → Windy Pro → Price ID. |
 | `STRIPE_TRANSLATE_PRICE_ID`, `STRIPE_TRANSLATE_PRO_PRICE_ID` | Same; one per SKU. |
 
@@ -188,7 +188,7 @@ template with safe dummy values is in `.env.production.example`.
 | `SMTP_PORT`         | `587`. |
 | `SMTP_USER`         | `apikey` for SendGrid, service key for Postmark. |
 | `SMTP_PASSWORD`     | The API key value. |
-| `SMTP_FROM`         | `no-reply@windypro.com`. DKIM + SPF records must match this domain. |
+| `SMTP_FROM`         | `noreply@windyword.ai`. DKIM + SPF records must match this domain. |
 
 ### LLM provider keys (managed-credential broker)
 
@@ -229,9 +229,9 @@ defaults below are what compose wires up.
 | `ETERNITAS_API_KEY`    | Platform API key from Eternitas (`et_plt_…`). |
 | `ETERNITAS_SERVICE_TOKEN` | Service-token issued by Eternitas for this install. |
 | `WINDYMAIL_API_URL`    | `https://api.windymail.ai`         |
-| `WINDY_CHAT_URL`       | `https://chat.windyword.ai`        |
-| `WINDY_CLOUD_URL`      | `https://cloud.windypro.com`        |
-| `WINDY_AGENT_URL`      | `https://fly.windypro.com`          |
+| `WINDY_CHAT_URL`       | `https://chat.windychat.ai`        |
+| `WINDY_CLOUD_URL`      | `https://cloud.windycloud.com`        |
+| `WINDY_AGENT_URL`      | `https://windyfly.ai`          |
 
 ### Twilio (optional — only if you're wiring SMS for agent hatch)
 
@@ -249,7 +249,7 @@ defaults below are what compose wires up.
 | `R2_ACCESS_KEY_ID`         | R2 → Manage API tokens → user token. |
 | `R2_SECRET_ACCESS_KEY`     | Paired secret. |
 | `R2_BUCKET`                | `windypro-uploads`. |
-| `R2_PUBLIC_URL`            | Custom domain you bind to the bucket for public reads, e.g. `https://cdn.windypro.com`. |
+| `R2_PUBLIC_URL`            | Custom domain you bind to the bucket for public reads, e.g. `https://cdn.windyword.ai`. |
 
 ### Observability (optional)
 
@@ -263,27 +263,27 @@ defaults below are what compose wires up.
 ## Domain + DNS
 
 We are **not** hosting mail locally. Mail lives on `windymail.ai`, a
-separate deployment. No MX records on `windypro.com` — only A/AAAA +
+separate deployment. No MX records on `windyword.ai` — only A/AAAA +
 TXT for DKIM/SPF so outbound mail (via SendGrid/SES) passes auth.
 
 ### Records to create
 
 | Host                        | Type  | Value                                            |
 |-----------------------------|-------|--------------------------------------------------|
-| `windypro.com.`             | A     | Elastic IP of the EC2                            |
-| `windypro.com.`             | AAAA  | IPv6 if you allocated one                        |
-| `www.windypro.com.`         | CNAME | `windypro.com.`                                  |
-| `account.windypro.com.`     | CNAME | `windypro.com.` (legacy alias; still in use)     |
-| `fly.windypro.com.`         | CNAME | Windy Agent host                                 |
-| `cloud.windypro.com.`       | CNAME | Windy Cloud host                                 |
-| `_acme-challenge.windypro.com.` | TXT | Temporary, written by certbot during issuance.  |
-| `windypro.com.`             | TXT   | `v=spf1 include:sendgrid.net -all`               |
-| `s1._domainkey.windypro.com.` | TXT | DKIM key from SendGrid.                          |
-| `_dmarc.windypro.com.`      | TXT   | `v=DMARC1; p=quarantine; rua=mailto:dmarc@windypro.com` |
+| `windyword.ai.`             | A     | Elastic IP of the EC2                            |
+| `windyword.ai.`             | AAAA  | IPv6 if you allocated one                        |
+| `windyword.ai.`         | CNAME | `windyword.ai.`                                  |
+| `account.windyword.ai.`     | CNAME | `windyword.ai.` (legacy alias; still in use)     |
+| `windyfly.ai.`         | CNAME | Windy Agent host                                 |
+| `cloud.windycloud.com.`       | CNAME | Windy Cloud host                                 |
+| `_acme-challenge.windyword.ai.` | TXT | Temporary, written by certbot during issuance.  |
+| `windyword.ai.`             | TXT   | `v=spf1 include:sendgrid.net -all`               |
+| `s1._domainkey.windyword.ai.` | TXT | DKIM key from SendGrid.                          |
+| `_dmarc.windyword.ai.`      | TXT   | `v=DMARC1; p=quarantine; rua=mailto:dmarc@windyword.ai` |
 
 **No MX records** — explicit. If you add an MX here, you'll split-brain
 with `windymail.ai` and mail delivery becomes undebuggable. Mail for
-`@windypro.com` addresses (if you run any) should be forwarded at the
+`@windyword.ai` addresses (if you run any) should be forwarded at the
 provider level to a Mail inbox.
 
 ---
@@ -298,7 +298,7 @@ provider level to a Mail inbox.
 # HTTP → HTTPS redirect + ACME challenge pass-through
 server {
     listen 80;
-    server_name windypro.com www.windypro.com;
+    server_name windyword.ai windyword.ai;
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
@@ -311,10 +311,10 @@ server {
 # TLS termination + reverse proxy to account-server
 server {
     listen 443 ssl http2;
-    server_name windypro.com www.windypro.com;
+    server_name windyword.ai windyword.ai;
 
-    ssl_certificate     /etc/letsencrypt/live/windypro.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/windypro.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/windyword.ai/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/windyword.ai/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers off;
 
@@ -368,8 +368,8 @@ server {
 sudo ln -s /etc/nginx/sites-available/windypro.conf /etc/nginx/sites-enabled/
 sudo mkdir -p /var/www/certbot
 sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d windypro.com -d www.windypro.com \
-    --non-interactive --agree-tos -m ops@windypro.com
+sudo certbot --nginx -d windyword.ai -d windyword.ai \
+    --non-interactive --agree-tos -m ops@windyword.ai
 ```
 
 Cert auto-renew via the certbot timer is on by default. Confirm:
@@ -407,7 +407,7 @@ JWT_KEY_ID=windypro-prod-2026-04
 
 The compose file bind-mounts `/var/lib/windypro/keys` → `/keys` in the
 container. After reloading the service, `GET
-https://windypro.com/.well-known/jwks.json` must return a JWKS object
+https://windyword.ai/.well-known/jwks.json` must return a JWKS object
 containing this `kid`. Sister services cache JWKS for 1 hour.
 
 ### 2. Apply database migrations
@@ -443,7 +443,7 @@ with `role='admin'` and a freshly generated `windy_identity_id`.
 ### 4. Seed integrity baseline
 
 ```bash
-curl -sS https://windypro.com/admin/integrity/baseline \
+curl -sS https://windyword.ai/admin/integrity/baseline \
      -H "Authorization: Bearer $ADMIN_JWT" \
      -X POST
 ```
@@ -458,7 +458,7 @@ curl -sS https://eternitas.com/platforms/register \
      -H "Content-Type: application/json" \
      -d '{
          "platform_key": "windy_pro_prod",
-         "webhook_url": "https://windypro.com/api/v1/identity/eternitas/webhook",
+         "webhook_url": "https://windyword.ai/api/v1/identity/eternitas/webhook",
          "events": ["passport.revoked", "passport.suspended", "passport.reinstated", "trust_updated"]
      }'
 ```
@@ -604,7 +604,7 @@ code path. The revocation record is append-only.
 
 ```bash
 # Run the full smoke suite
-BASE_URL=https://windypro.com ./scripts/smoke-test.sh
+BASE_URL=https://windyword.ai ./scripts/smoke-test.sh
 ```
 
 The script exits non-zero on any failure. It asserts:

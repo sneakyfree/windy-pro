@@ -68,7 +68,7 @@ Listed below, then the artifacts collected during the audit, then an honest stat
 
 - **What's broken:** `deploy/aws/account-server.tf` injects `JWT_SECRET` + `MFA_ENCRYPTION_KEY` into Secrets Manager but never sets `JWT_PRIVATE_KEY_PATH` or `JWKS_KEY_DIR`. On boot, `jwks.ts` falls through to HS256 fallback because `NODE_ENV === 'production'` is true so the dev auto-generation branch doesn't fire.
 - **Impact:** `/.well-known/jwks.json` returns `{keys:[]}` in prod. Every ecosystem consumer that does RS256 JWKS verification (`windy-code/agentBusServer.ts`, windy-chat, windy-mail) rejects every token. No one can log in to the ecosystem.
-- **Repro:** deploy the Terraform, curl `https://api.windyword.ai/.well-known/jwks.json` — empty.
+- **Repro:** deploy the Terraform, curl `https://account.windyword.ai/.well-known/jwks.json` — empty.
 - **Fix:** Either (a) mount an EFS volume at `/data/keys` and set `JWKS_KEY_DIR=/data/keys` in the task definition, or (b) store the private-key PEM as a Secrets Manager entry and write it to disk at container startup (init-container pattern), or (c) as a shortcut, set `JWT_PRIVATE_KEY_PATH` to a Secrets Manager SSM-synced file. `RUNBOOK.md` also needs to document this.
 - **Code ref:** `deploy/aws/account-server.tf` (env + volumes blocks); `account-server/src/jwks.ts:59-128` (what it expects).
 - **Effort:** 2-3 hours (Terraform + runbook + test with a fresh-cluster apply).

@@ -28,7 +28,7 @@ const FIRST_PARTY_CLIENTS: ClientSeed[] = [
   {
     clientId: 'windy_chat',
     name: 'Windy Chat',
-    redirectUris: ['https://windychat.com/auth/callback', 'https://chat.windypro.com/auth/callback'],
+    redirectUris: ['https://windychat.ai/auth/callback', 'https://chat.windychat.ai/auth/callback'],
     allowedScopes: ['windy_chat:*'],
     isFirstParty: true,
     isPublic: false,

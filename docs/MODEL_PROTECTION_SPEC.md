@@ -165,7 +165,7 @@ The desktop app pings the license server periodically to confirm the subscriptio
 ### Endpoint
 
 ```
-POST https://api.windyword.com/v1/license/heartbeat
+POST https://account.windyword.ai/v1/license/heartbeat
 Headers:
   Authorization: Bearer <licenseToken>
   X-Device-Fingerprint: <deviceHash>
@@ -211,7 +211,7 @@ Mobile uses RevenueCat (Apple/Google IAP). Desktop purchases go through **Stripe
 ### Webhook Handler
 
 ```
-POST https://api.windyword.com/webhooks/stripe
+POST https://account.windyword.ai/webhooks/stripe
 
 On refund:
 1. Look up license by Stripe customer ID

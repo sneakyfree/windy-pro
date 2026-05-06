@@ -23,7 +23,7 @@ jest.mock('express-rate-limit', () => {
 // ═══════════════════════════════════════════
 
 const TEST_USER_ID = 'user-billing-hardening-001';
-const TEST_USER_EMAIL = 'billing-test@windypro.com';
+const TEST_USER_EMAIL = 'billing-test@windyword.ai';
 
 const users = new Map<string, any>();
 const transactions = new Map<string, any>();

@@ -5,7 +5,7 @@
 # Prerequisites:
 #   - SSH access to VPS at 72.60.118.54
 #   - Docker installed on VPS
-#   - Domains pointed: chat.windyword.ai, cloud.windyfly.ai
+#   - Domains pointed: chat.windychat.ai, cloud.windycloud.com
 #
 # This script:
 #   1. Builds both dashboards locally
@@ -40,7 +40,7 @@ echo ""
 echo "Next steps:"
 echo "  1. scp -r $CHAT_DIR/web/dist/ $VPS:/opt/windy-chat-web/"
 echo "  2. scp -r $CLOUD_DIR/web/dist/ $VPS:/opt/windy-cloud-web/"
-echo "  3. Configure nginx on VPS for chat.windyword.ai and cloud.windyfly.ai"
-echo "  4. Run certbot for SSL: certbot --nginx -d chat.windyword.ai -d cloud.windyfly.ai"
+echo "  3. Configure nginx on VPS for chat.windychat.ai and cloud.windycloud.com"
+echo "  4. Run certbot for SSL: certbot --nginx -d chat.windychat.ai -d cloud.windycloud.com"
 echo ""
 echo "Once deployed, the Electron app tabs will automatically detect and load the dashboards."

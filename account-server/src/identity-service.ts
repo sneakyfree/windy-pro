@@ -136,7 +136,7 @@ export function getAuditLog(
  *   provisionProduct(userId, 'windy_pro');
  *
  *   // When user first opens Chat, provision chat:
- *   provisionProduct(userId, 'windy_chat', { matrixUserId: '@windy_abc:chat.windypro.com' });
+ *   provisionProduct(userId, 'windy_chat', { matrixUserId: '@windy_abc:chat.windychat.ai' });
  */
 export function provisionProduct(
   identityId: string,

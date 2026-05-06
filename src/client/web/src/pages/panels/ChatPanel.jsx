@@ -47,7 +47,7 @@ export default function ChatPanel({ apiFetch }) {
                 <p className="panel-empty">Chat messages will appear here when Windy Chat is online.</p>
             </div>
 
-            <a href="https://windychat.com" target="_blank" rel="noopener noreferrer" className="panel-btn" style={{ marginTop: '12px' }}>
+            <a href="https://windychat.ai" target="_blank" rel="noopener noreferrer" className="panel-btn" style={{ marginTop: '12px' }}>
                 Open Windy Chat
             </a>
         </div>

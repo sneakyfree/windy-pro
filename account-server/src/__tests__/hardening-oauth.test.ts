@@ -44,7 +44,7 @@ const oauthDeviceCodes: Record<string, any> = {};
 const TEST_USER_ID = 'user-hardening-001';
 const TEST_USER = {
   id: TEST_USER_ID,
-  email: 'hardening@windypro.com',
+  email: 'hardening@windyword.ai',
   tier: 'pro',
   role: 'admin',
   identity_type: 'human',

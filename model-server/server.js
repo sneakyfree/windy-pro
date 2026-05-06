@@ -74,7 +74,7 @@ app.use(cors({
     if (!origin) return callback(null, true); // Server-to-server, Electron
     const allowed = [
       'https://windyword.ai',
-      'https://windypro.thewindstorm.uk', // legacy — remove after full migration
+      'https://windyword.ai', // legacy — remove after full migration
       /^http:\/\/localhost(:\d+)?$/,
     ];
     if (allowed.some(o => o instanceof RegExp ? o.test(origin) : o === origin)) {

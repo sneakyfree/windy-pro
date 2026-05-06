@@ -92,7 +92,7 @@ describe('Identity Integration: Registration -> Login -> Scoped Token -> /me', (
   it('should complete full registration lifecycle', () => {
     // 1. Register user
     const userId = crypto.randomUUID();
-    const email = 'test@windypro.com';
+    const email = 'test@windyword.ai';
     const passwordHash = bcrypt.hashSync('Password1', 4);
 
     mockData.users.set(userId, {

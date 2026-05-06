@@ -54,7 +54,7 @@ Within ~4 seconds of the screen rendering:
   | Row | Expected text | Expected status dot |
   |---|---|---|
   | 📫 Mailbox | `<your-email-localpart>@windy.mail` (or `Provisioning…`) | green ✓ if Windy Mail receiver is up; amber `…` while pending; gray `—` if mail provisioning failed |
-  | 💬 Chat handle | A `@windy_xxx:chat.windypro.com`-style handle (or `Provisioning…`) | green ✓ once chat profile lands |
+  | 💬 Chat handle | A `@windy_xxx:chat.windychat.ai`-style handle (or `Provisioning…`) | green ✓ once chat profile lands |
   | ☁️ Cloud quota | `500.0 MB free` | green ✓ — set synchronously inside register, should never be `…` |
 
 - **Pass criteria:** all three rows show **either ✓ (green) or `…` (amber)** — never `—` (gray) unless the corresponding consumer service is genuinely offline.

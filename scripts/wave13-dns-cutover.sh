@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wave 13 Phase 1 — FIRE 3: replace api.windyword.ai with A → EIP.
+# Wave 13 Phase 1 — FIRE 3: replace account.windyword.ai with A → EIP.
 #
 # Safety design:
 #   1. Dry run by default (prints plan; no mutations).
@@ -27,7 +27,7 @@ MODE="${1:-}"
 : "${TARGET_EIP:?TARGET_EIP is required (the Elastic IP from FIRE 2)}"
 
 ZONE_NAME="windyword.ai"
-RECORD_NAME="api.windyword.ai"
+RECORD_NAME="account.windyword.ai"
 
 cfapi() {
     curl -sSfL -H "Authorization: Bearer ${CLOUDFLARE_DNS_TOKEN}" \

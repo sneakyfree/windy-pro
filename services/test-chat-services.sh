@@ -201,11 +201,11 @@ PUSH_REG=$(http_post -d '{"pushkey":"test-token-abc","userId":"user_123","platfo
 assert_json_field "Push registered" "$PUSH_REG" "success" "True"
 
 # Mute conversation
-MUTE_RESP=$(http_post -d '{"userId":"user_123","roomId":"!room:chat.windypro.com","duration":"1h"}' "${PUSH_URL}/api/v1/chat/push/mute")
+MUTE_RESP=$(http_post -d '{"userId":"user_123","roomId":"!room:chat.windychat.ai","duration":"1h"}' "${PUSH_URL}/api/v1/chat/push/mute")
 assert_json_field "Room muted" "$MUTE_RESP" "success" "True"
 
 # Unmute
-UNMUTE_RESP=$(http_post -d '{"userId":"user_123","roomId":"!room:chat.windypro.com"}' "${PUSH_URL}/api/v1/chat/push/unmute")
+UNMUTE_RESP=$(http_post -d '{"userId":"user_123","roomId":"!room:chat.windychat.ai"}' "${PUSH_URL}/api/v1/chat/push/unmute")
 assert_json_field "Room unmuted" "$UNMUTE_RESP" "success" "True"
 
 # Matrix push notify (no auth — server-to-server)

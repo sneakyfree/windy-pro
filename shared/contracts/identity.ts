@@ -308,7 +308,7 @@ export interface EternitasWebhookResponse {
 export interface ChatProfile {
   identityId: WindyIdentityId;
   chatUserId?: string;
-  matrixUserId?: string;         // @windy_abc123:chat.windypro.com
+  matrixUserId?: string;         // @windy_abc123:chat.windychat.ai
   displayName?: string;
   languages: string[];           // ISO 639-1 codes
   primaryLanguage: string;

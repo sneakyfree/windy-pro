@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const path = require('path');
 
 const BASE = 'http://localhost:8098';
-const TEST_EMAIL = `smoke-${Date.now()}@test.windypro.com`;
+const TEST_EMAIL = `smoke-${Date.now()}@test.windyword.ai`;
 const TEST_PASSWORD = 'SmokeTest!2026';
 const TEST_NAME = 'Smoke Tester';
 

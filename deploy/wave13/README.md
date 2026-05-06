@@ -1,7 +1,7 @@
 # Wave 13 Phase 1 — AWS deploy artifacts
 
 Everything under `deploy/wave13/` is the Phase 1 ribbon — the keystone
-account-server deployment on `api.windyword.ai`. Sister repos consume
+account-server deployment on `account.windyword.ai`. Sister repos consume
 this service's JWKS; they cannot deploy until this is live.
 
 ## Files
@@ -9,7 +9,7 @@ this service's JWKS; they cannot deploy until this is live.
 | File                                     | Purpose                                                                 |
 |------------------------------------------|-------------------------------------------------------------------------|
 | `docker-compose.aws.yml`                 | Lean compose: account-server + Redis. External RDS via `DATABASE_URL`.  |
-| `nginx-api.windyword.ai.conf`            | Host-side nginx: TLS term + SSE-safe proxy to :8098.                    |
+| `nginx-account.windyword.ai.conf`            | Host-side nginx: TLS term + SSE-safe proxy to :8098.                    |
 | `user-data.sh.tmpl`                      | Cloud-init bootstrap. Runs once on first boot.                          |
 
 ## Secret strategy
@@ -33,11 +33,11 @@ Each step is gated on an explicit "fire step N" from the operator:
    `windy-pro-identity`. ~15 min to `available`. Deletion protection ON.
 2. **FIRE 2 — EC2 + EIP**: allocate Elastic IP, render user-data with
    RDS endpoint + password, launch t3.small, attach EIP.
-3. **FIRE 3 — DNS**: replace `api.windyword.ai` CNAME with A record → EIP
+3. **FIRE 3 — DNS**: replace `account.windyword.ai` CNAME with A record → EIP
    (proxied=false for ACME). Wait until resolution propagates.
 4. **FIRE 4 — Lockbox**: read AWS secret into scoped env for whichever
    of steps 1/2 hadn't been run yet. Never echo plaintext.
-5. **FIRE 5 — certbot**: `certbot --nginx -d api.windyword.ai`. Issues
+5. **FIRE 5 — certbot**: `certbot --nginx -d account.windyword.ai`. Issues
    Let's Encrypt cert and uncomments the 443 server block.
 
 After each checkpoint: capture resource IDs (RDS endpoint, EIP, AMI,
@@ -60,7 +60,7 @@ instance ID, certificate fingerprint) for the morning briefing.
 ## Verify after FIRE 5
 
 ```bash
-BASE_URL=https://api.windyword.ai scripts/smoke-test.sh
+BASE_URL=https://account.windyword.ai scripts/smoke-test.sh
 ```
 
 The Wave 9 smoke script asserts:

@@ -20,7 +20,7 @@ class EcosystemNav {
       chat: {
         name: 'Windy Chat',
         icon: '💬',
-        url: 'https://chat.windyword.ai',
+        url: 'https://chat.windychat.ai',
         localUrl: 'http://localhost:3001',
         description: 'End-to-end encrypted messaging with auto-translation in 99 languages.',
         tagline: 'Talk to anyone, in any language — instantly.',
@@ -40,7 +40,7 @@ class EcosystemNav {
       cloud: {
         name: 'Windy Cloud',
         icon: '☁️',
-        url: 'https://cloud.windyfly.ai',
+        url: 'https://cloud.windycloud.com',
         localUrl: null,
         description: 'Your personal cloud — files, compute, servers, and billing in one dashboard.',
         tagline: 'Your data, your cloud, your rules.',
@@ -50,7 +50,7 @@ class EcosystemNav {
       clone: {
         name: 'Windy Clone',
         icon: '🧬',
-        url: 'https://windyclone.com',
+        url: 'https://windyclone.ai',
         localUrl: null,
         description: 'Turn your voice recordings into a digital twin that lives forever.',
         tagline: 'Your voice lives forever.',
@@ -555,8 +555,8 @@ class EcosystemNav {
 
       wrapper.querySelector('#ecoCodeDownload').addEventListener('click', () => {
         const api = window.windyAPI;
-        if (api?.openExternal) api.openExternal('https://windycode.ai');
-        else if (api?.openExternalUrl) api.openExternalUrl('https://windycode.ai');
+        if (api?.openExternal) api.openExternal('https://windycode.org');
+        else if (api?.openExternalUrl) api.openExternalUrl('https://windycode.org');
       });
     }
 

@@ -1,7 +1,7 @@
 # Windy Identity API Reference
 
 _Version: 1.0 (Phase 6)_
-_Base URL: `https://windypro.thewindstorm.uk`_
+_Base URL: `https://windyword.ai`_
 
 ---
 
@@ -50,11 +50,11 @@ Create a new account.
 **Rate limit:** 5/min
 
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/auth/register \
+curl -X POST https://windyword.ai/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Grant",
-    "email": "grant@windypro.com",
+    "email": "grant@windyword.ai",
     "password": "MyPass123",
     "deviceId": "device-uuid",
     "deviceName": "MacBook Pro",
@@ -67,7 +67,7 @@ curl -X POST https://windypro.thewindstorm.uk/api/v1/auth/register \
 {
   "userId": "uuid",
   "name": "Grant",
-  "email": "grant@windypro.com",
+  "email": "grant@windyword.ai",
   "tier": "free",
   "token": "eyJhbG...",
   "refreshToken": "uuid",
@@ -83,9 +83,9 @@ Authenticate and receive tokens.
 **Rate limit:** 5/min
 
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/auth/login \
+curl -X POST https://windyword.ai/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{ "email": "grant@windypro.com", "password": "MyPass123" }'
+  -d '{ "email": "grant@windyword.ai", "password": "MyPass123" }'
 ```
 
 **Response (200):** Same shape as register.
@@ -97,7 +97,7 @@ Exchange refresh token for new access token (rotation).
 **Auth:** None
 
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/auth/refresh \
+curl -X POST https://windyword.ai/api/v1/auth/refresh \
   -H "Content-Type: application/json" \
   -d '{ "refreshToken": "uuid", "deviceId": "device-uuid" }'
 ```
@@ -120,7 +120,7 @@ Invalidate tokens and blacklist current access token.
 **Auth:** Required (Bearer JWT)
 
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/auth/logout \
+curl -X POST https://windyword.ai/api/v1/auth/logout \
   -H "Authorization: Bearer eyJhbG..."
 ```
 
@@ -147,7 +147,7 @@ Extended identity info including products, scopes, chat profile, passport.
 **Auth:** Required
 
 ```bash
-curl https://windypro.thewindstorm.uk/api/v1/identity/me \
+curl https://windyword.ai/api/v1/identity/me \
   -H "Authorization: Bearer eyJhbG..."
 ```
 
@@ -156,7 +156,7 @@ curl https://windypro.thewindstorm.uk/api/v1/identity/me \
 {
   "identity": {
     "id": "uuid",
-    "email": "grant@windypro.com",
+    "email": "grant@windyword.ai",
     "name": "Grant",
     "tier": "pro",
     "identityType": "human",
@@ -170,7 +170,7 @@ curl https://windypro.thewindstorm.uk/api/v1/identity/me \
     { "id": "uuid", "product": "windy_chat", "status": "active" }
   ],
   "scopes": ["windy_pro:*", "windy_chat:read", "windy_chat:write"],
-  "chatProfile": { "matrixUserId": "@windy_grant:chat.windypro.com", "onboardingComplete": true }
+  "chatProfile": { "matrixUserId": "@windy_grant:chat.windychat.ai", "onboardingComplete": true }
 }
 ```
 
@@ -181,7 +181,7 @@ Update display name, language, avatar, phone.
 **Auth:** Required
 
 ```bash
-curl -X PATCH https://windypro.thewindstorm.uk/api/v1/identity/me \
+curl -X PATCH https://windyword.ai/api/v1/identity/me \
   -H "Authorization: Bearer eyJhbG..." \
   -H "Content-Type: application/json" \
   -d '{ "displayName": "Grant W.", "preferredLang": "en" }'
@@ -200,7 +200,7 @@ Provision a new product for the identity.
 **Auth:** Required
 
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/identity/products/provision \
+curl -X POST https://windyword.ai/api/v1/identity/products/provision \
   -H "Authorization: Bearer eyJhbG..." \
   -H "Content-Type: application/json" \
   -d '{ "product": "windy_chat" }'
@@ -231,7 +231,7 @@ Query audit log entries.
 **Auth:** Required (self or admin)
 
 ```bash
-curl "https://windypro.thewindstorm.uk/api/v1/identity/audit?limit=20&event=login" \
+curl "https://windyword.ai/api/v1/identity/audit?limit=20&event=login" \
   -H "Authorization: Bearer eyJhbG..."
 ```
 
@@ -260,7 +260,7 @@ Create a bot API key. Returns the raw key once.
 **Auth:** Required (admin or bot operator)
 
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/identity/api-keys \
+curl -X POST https://windyword.ai/api/v1/identity/api-keys \
   -H "Authorization: Bearer eyJhbG..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -329,10 +329,10 @@ Send a 6-digit OTP via SMS or email.
 **Rate limit:** 5/min, 10/hour per identifier
 
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/identity/verify/send \
+curl -X POST https://windyword.ai/api/v1/identity/verify/send \
   -H "Authorization: Bearer eyJhbG..." \
   -H "Content-Type: application/json" \
-  -d '{ "type": "email", "identifier": "grant@windypro.com" }'
+  -d '{ "type": "email", "identifier": "grant@windyword.ai" }'
 ```
 
 **Response (200):**
@@ -340,7 +340,7 @@ curl -X POST https://windypro.thewindstorm.uk/api/v1/identity/verify/send \
 {
   "success": true,
   "type": "email",
-  "identifier": "grant@windypro.com",
+  "identifier": "grant@windyword.ai",
   "message": "Verification code sent to your email",
   "expiresInSeconds": 600
 }
@@ -353,10 +353,10 @@ Validate OTP and mark identity as verified.
 **Auth:** Required
 
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/identity/verify/check \
+curl -X POST https://windyword.ai/api/v1/identity/verify/check \
   -H "Authorization: Bearer eyJhbG..." \
   -H "Content-Type: application/json" \
-  -d '{ "identifier": "grant@windypro.com", "code": "123456", "type": "email" }'
+  -d '{ "identifier": "grant@windyword.ai", "code": "123456", "type": "email" }'
 ```
 
 ### GET /api/v1/identity/verify/status
@@ -376,7 +376,7 @@ Register an OAuth2 client (admin only).
 **Auth:** Required (admin)
 
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/oauth/clients \
+curl -X POST https://windyword.ai/api/v1/oauth/clients \
   -H "Authorization: Bearer eyJhbG..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -445,7 +445,7 @@ Exchange code/credentials for tokens.
 
 **authorization_code:**
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/oauth/token \
+curl -X POST https://windyword.ai/api/v1/oauth/token \
   -H "Content-Type: application/json" \
   -d '{
     "grant_type": "authorization_code",
@@ -458,7 +458,7 @@ curl -X POST https://windypro.thewindstorm.uk/api/v1/oauth/token \
 
 **client_credentials:**
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/oauth/token \
+curl -X POST https://windyword.ai/api/v1/oauth/token \
   -H "Content-Type: application/json" \
   -d '{
     "grant_type": "client_credentials",
@@ -469,7 +469,7 @@ curl -X POST https://windypro.thewindstorm.uk/api/v1/oauth/token \
 
 **device_code:**
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/oauth/token \
+curl -X POST https://windyword.ai/api/v1/oauth/token \
   -H "Content-Type: application/json" \
   -d '{
     "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
@@ -498,7 +498,7 @@ Request a device code for CLI/headless auth.
 **Auth:** None
 
 ```bash
-curl -X POST https://windypro.thewindstorm.uk/api/v1/oauth/device \
+curl -X POST https://windyword.ai/api/v1/oauth/device \
   -H "Content-Type: application/json" \
   -d '{ "client_id": "windy_fly", "scope": "windy_fly:*" }'
 ```
@@ -508,8 +508,8 @@ curl -X POST https://windypro.thewindstorm.uk/api/v1/oauth/device \
 {
   "device_code": "hex-string",
   "user_code": "ABCD-1234",
-  "verification_uri": "https://windypro.thewindstorm.uk/device",
-  "verification_uri_complete": "https://windypro.thewindstorm.uk/device?code=ABCD-1234",
+  "verification_uri": "https://windyword.ai/device",
+  "verification_uri_complete": "https://windyword.ai/device?code=ABCD-1234",
   "expires_in": 900,
   "interval": 5
 }
@@ -532,7 +532,7 @@ OIDC UserInfo endpoint.
 {
   "sub": "user-uuid",
   "name": "Grant",
-  "email": "grant@windypro.com",
+  "email": "grant@windyword.ai",
   "email_verified": true,
   "preferred_username": "grant",
   "locale": "en",
@@ -565,12 +565,12 @@ OpenID Connect provider metadata.
 **Response (200):**
 ```json
 {
-  "issuer": "https://windypro.thewindstorm.uk",
-  "authorization_endpoint": "https://windypro.thewindstorm.uk/api/v1/oauth/authorize",
-  "token_endpoint": "https://windypro.thewindstorm.uk/api/v1/oauth/token",
-  "userinfo_endpoint": "https://windypro.thewindstorm.uk/api/v1/oauth/userinfo",
-  "jwks_uri": "https://windypro.thewindstorm.uk/.well-known/jwks.json",
-  "device_authorization_endpoint": "https://windypro.thewindstorm.uk/api/v1/oauth/device",
+  "issuer": "https://windyword.ai",
+  "authorization_endpoint": "https://windyword.ai/api/v1/oauth/authorize",
+  "token_endpoint": "https://windyword.ai/api/v1/oauth/token",
+  "userinfo_endpoint": "https://windyword.ai/api/v1/oauth/userinfo",
+  "jwks_uri": "https://windyword.ai/.well-known/jwks.json",
+  "device_authorization_endpoint": "https://windyword.ai/api/v1/oauth/device",
   "scopes_supported": ["openid", "profile", "email", "phone", "windy_pro:*", "windy_chat:read", "windy_chat:write", "windy_mail:read", "windy_mail:send", "windy_fly:*"],
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "client_credentials", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"],

@@ -234,7 +234,7 @@ export default function Dashboard() {
                     <div className="dash-ecosystem-grid">
                         {[
                             { key: 'windy_word', label: 'Windy Word', icon: '🎙️', href: '/transcribe' },
-                            { key: 'windy_chat', label: 'Windy Chat', icon: '💬', href: 'https://windychat.com' },
+                            { key: 'windy_chat', label: 'Windy Chat', icon: '💬', href: 'https://windychat.ai' },
                             { key: 'windy_mail', label: 'Windy Mail', icon: '📧', href: 'https://windymail.ai' },
                             { key: 'windy_cloud', label: 'Windy Cloud', icon: '☁️', href: '/vault' },
                             { key: 'windy_fly', label: 'Windy Fly', icon: '🤖', href: 'https://windyfly.ai' },

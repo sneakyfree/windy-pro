@@ -180,7 +180,7 @@ Industry vertical presets exist but are unused by any UI.
 | vite.config.js | `http://localhost:8098`, `http://localhost:8000`, `ws://localhost:8000` | Dev proxy config only. OK for development, but these are only used by `vite dev`. |
 | Landing.jsx line 522 | `https://apps.apple.com/app/windy-pro` | Placeholder App Store link. |
 | Landing.jsx line 527 | `https://play.google.com/store/apps/details?id=pro.windy.app` | Placeholder Play Store link. |
-| Landing.jsx line 539 | `https://windypro.thewindstorm.uk/download/latest/linux-install.sh` | Hardcoded domain. Should use relative path. |
+| Landing.jsx line 539 | `https://windyword.ai/download/latest/linux-install.sh` | Hardcoded domain. Should use relative path. |
 | Landing.jsx line 564 | `https://github.com/sneakyfree/windy-pro` | GitHub link. Fine if correct. |
 
 **No hardcoded `localhost` URLs in component source.** All API calls use relative paths (`/api/v1/...`).

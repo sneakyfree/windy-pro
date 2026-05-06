@@ -9,7 +9,7 @@
  *   silently break — the form submits, the user sees a hang or weird
  *   error, no signup ever lands.
  *
- *   This worker intercepts /api/v1/* on the same origin (app.windyword.ai),
+ *   This worker intercepts /api/v1/* on the same origin (windyword.ai),
  *   forwards them to the real account-server at account.windyword.ai
  *   while preserving method, headers, and body, and lets every other
  *   request fall through to the static asset bundle.
@@ -25,10 +25,10 @@
  *   - account.windyword.ai is the windy-pro account-server, deployed
  *     2026-05-05 to the windy-mail EC2 box (54.88.113.79). See lockbox.
  *   - account-server's CORS_ALLOWED_ORIGINS must include
- *     https://app.windyword.ai so direct-from-browser calls work too
+ *     https://windyword.ai so direct-from-browser calls work too
  *     (already configured 2026-05-05).
  *   - Tweak ACCOUNT_SERVER_ORIGIN below if the backend hostname ever
- *     changes (e.g. moves to account.windypro.com).
+ *     changes (e.g. moves to account.windyword.ai).
  */
 
 const ACCOUNT_SERVER_ORIGIN = 'https://account.windyword.ai';
@@ -44,7 +44,7 @@ export default {
       const target = ACCOUNT_SERVER_ORIGIN + url.pathname + url.search;
       const proxied = new Request(target, request);
       // Strip cookies the SPA never sends (none today, but cheap insurance
-      // against accidentally leaking app.windyword.ai cookies upstream).
+      // against accidentally leaking windyword.ai cookies upstream).
       proxied.headers.delete('cookie');
       // X-Forwarded-* so the upstream knows the original host (account-server
       // honors TRUST_PROXY=1 and reads these for rate-limit + IP attribution).

@@ -175,7 +175,7 @@ The QR code encodes a JSON payload:
 {
   "action": "windy-pro-camera-link",
   "token": "a1b2c3d4e5f6",
-  "server": "https://windypro.thewindstorm.uk",
+  "server": "https://windyword.ai",
   "version": 1
 }
 ```
@@ -183,7 +183,7 @@ The QR code encodes a JSON payload:
 ### QR Code URL Format
 
 ```
-windypro://camera-link?token=a1b2c3d4e5f6&server=https://windypro.thewindstorm.uk
+windypro://camera-link?token=a1b2c3d4e5f6&server=https://windyword.ai
 ```
 
 ### Manual Code

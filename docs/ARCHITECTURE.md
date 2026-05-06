@@ -9,8 +9,8 @@
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────────┐  │
 │  │  Desktop App  │    │  Mobile App  │    │    Web Portal             │  │
 │  │  (Electron)   │    │  (React      │    │   (React + Vite)         │  │
-│  │               │    │   Native)    │    │   windypro.              │  │
-│  │  • Speech UI  │    │  • Android   │    │   thewindstorm.uk        │  │
+│  │               │    │   Native)    │    │   windyword.ai           │  │
+│  │  • Speech UI  │    │  • Android   │    │                          │  │
 │  │  • Video Rec  │    │  • iOS       │    │                          │  │
 │  │  • WebRTC     │    │  • Recording │    │  • Dashboard             │  │
 │  │  • Clone Mgr  │    │  • Offline   │    │  • Admin Panel           │  │

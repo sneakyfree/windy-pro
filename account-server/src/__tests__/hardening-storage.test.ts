@@ -41,7 +41,7 @@ function resetStores() {
 
   users.set(TEST_USER_ID, {
     id: TEST_USER_ID,
-    email: 'test@windypro.com',
+    email: 'test@windyword.ai',
     tier: 'pro',
     role: 'user',
     identity_type: 'human',
@@ -52,7 +52,7 @@ function resetStores() {
 
   users.set(OTHER_USER_ID, {
     id: OTHER_USER_ID,
-    email: 'other@windypro.com',
+    email: 'other@windyword.ai',
     tier: 'pro',
     role: 'user',
     identity_type: 'human',

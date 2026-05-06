@@ -727,7 +727,7 @@ function createWindow() {
           "script-src 'self'; " +
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
           "font-src 'self' https://fonts.gstatic.com; " +
-          "connect-src 'self' ws://127.0.0.1:* wss://*.windyword.ai https://*.windyword.ai wss://*.thewindstorm.uk https://*.thewindstorm.uk https://api.groq.com https://api.openai.com https://api.deepgram.com wss://api.deepgram.com; " +
+          "connect-src 'self' ws://127.0.0.1:* wss://*.windyword.ai https://*.windyword.ai https://api.groq.com https://api.openai.com https://api.deepgram.com wss://api.deepgram.com; " +
           "img-src 'self' data:; " +
           "media-src 'self' blob: data:; " +
           "base-src 'self'; " +

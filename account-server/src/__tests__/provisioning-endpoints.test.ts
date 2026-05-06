@@ -374,7 +374,7 @@ describe('POST /api/v1/identity/agent/provision', () => {
       } as globalThis.Response)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ matrix_user_id: '@agent_ET-BOT-001:chat.windypro.com', dm_room_id: '!room:chat.windypro.com', access_token: 'tok' }),
+        json: async () => ({ matrix_user_id: '@agent_ET-BOT-001:chat.windychat.ai', dm_room_id: '!room:chat.windychat.ai', access_token: 'tok' }),
       } as globalThis.Response);
 
     const res = await request(app)
@@ -386,8 +386,8 @@ describe('POST /api/v1/identity/agent/provision', () => {
     expect(res.body.eternitas_provisioned).toBe(true);
     expect(res.body.passport_number).toBe('ET-BOT-001');
     expect(res.body.chat_provisioned).toBe(true);
-    expect(res.body.matrix_user_id).toBe('@agent_ET-BOT-001:chat.windypro.com');
-    expect(res.body.dm_room_id).toBe('!room:chat.windypro.com');
+    expect(res.body.matrix_user_id).toBe('@agent_ET-BOT-001:chat.windychat.ai');
+    expect(res.body.dm_room_id).toBe('!room:chat.windychat.ai');
   });
 
   test('returns 400 without agent_name', async () => {
@@ -431,7 +431,7 @@ describe('POST /api/v1/identity/ecosystem/provision-all', () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockImplementation(async (input: any) => {
       const url = typeof input === 'string' ? input : input.toString();
       if (url.includes('8101')) {
-        return { ok: true, json: async () => ({ matrix_user_id: '@provtest:chat.windypro.com' }) } as globalThis.Response;
+        return { ok: true, json: async () => ({ matrix_user_id: '@provtest:chat.windychat.ai' }) } as globalThis.Response;
       }
       if (url.includes('8200')) {
         return { ok: true, json: async () => ({ mail_address: 'provtest@windymail.ai' }) } as globalThis.Response;
@@ -446,7 +446,7 @@ describe('POST /api/v1/identity/ecosystem/provision-all', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.provisioned.windy_chat.provisioned).toBe(true);
-    expect(res.body.provisioned.windy_chat.matrix_user_id).toBe('@provtest:chat.windypro.com');
+    expect(res.body.provisioned.windy_chat.matrix_user_id).toBe('@provtest:chat.windychat.ai');
     expect(res.body.provisioned.windy_mail.provisioned).toBe(true);
     expect(res.body.provisioned.windy_mail.mail_address).toBe('provtest@windymail.ai');
     expect(res.body.provisioned.windy_cloud.provisioned).toBe(true);

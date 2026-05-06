@@ -820,7 +820,7 @@ Clicking "Upgrade" → in-app Stripe checkout → pays the difference → model 
 
 ## 12. WEBSITE CONTENT PLAN
 
-The current website (windypro.thewindstorm.uk) needs major new sections:
+The current website (windyword.ai) needs major new sections:
 
 ### New Page: "The Models"
 A beautiful, interactive comparison of all seven Windy models:

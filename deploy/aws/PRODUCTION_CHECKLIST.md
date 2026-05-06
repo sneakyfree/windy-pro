@@ -11,7 +11,7 @@ If anything is **red**, do not announce launch. Check `aws logs tail "/ecs/windy
 ```sh
 export AWS_PROFILE=windy-deployer
 export REGION=us-east-1
-export API=https://api.windyword.ai
+export API=https://account.windyword.ai
 export WEB=https://windyword.ai
 export CLUSTER=$(terraform -chdir=deploy/aws output -raw ecs_cluster_name)
 export SVC=$(terraform -chdir=deploy/aws output -raw ecs_service_name)
@@ -27,14 +27,14 @@ export ZONE_ID=$(aws route53 list-hosted-zones-by-name --dns-name windyword.ai -
 
 ```sh
 NS=$(aws route53 get-hosted-zone --id $ZONE_ID --query 'DelegationSet.NameServers[0]' --output text)
-dig +short api.windyword.ai @$NS
+dig +short account.windyword.ai @$NS
 ```
 **Expect:** an `A` record / CNAME pointing at the ALB DNS name (`*.us-east-1.elb.amazonaws.com`). Empty result = the Route 53 alias didn't get created — check `aws_route53_record.api` in state.
 
 ### ☐ 1.2 Public resolvers see it
 
 ```sh
-for r in 1.1.1.1 8.8.8.8 9.9.9.9; do echo "$r → $(dig +short api.windyword.ai @$r)"; done
+for r in 1.1.1.1 8.8.8.8 9.9.9.9; do echo "$r → $(dig +short account.windyword.ai @$r)"; done
 ```
 **Expect:** all three return the same A/CNAME within ~60s of apply. If empty, propagation is still in flight — wait, then retry. If still empty after 10 min, your registrar's NS records may not point at Route 53.
 
@@ -45,22 +45,22 @@ for r in 1.1.1.1 8.8.8.8 9.9.9.9; do echo "$r → $(dig +short api.windyword.ai 
 ### ☐ 2.1 Cert is valid and from ACM
 
 ```sh
-echo | openssl s_client -servername api.windyword.ai -connect api.windyword.ai:443 2>/dev/null \
+echo | openssl s_client -servername account.windyword.ai -connect account.windyword.ai:443 2>/dev/null \
   | openssl x509 -noout -subject -issuer -dates
 ```
-**Expect:** `subject=CN=api.windyword.ai`, `issuer=Amazon RSA 2048 M*`, and `notAfter` ≥ 60 days from now. ACM auto-renews 60 days before expiry.
+**Expect:** `subject=CN=account.windyword.ai`, `issuer=Amazon RSA 2048 M*`, and `notAfter` ≥ 60 days from now. ACM auto-renews 60 days before expiry.
 
 ### ☐ 2.2 HTTPS-only (HTTP redirects)
 
 ```sh
-curl -sI http://api.windyword.ai/health | head -3
+curl -sI http://account.windyword.ai/health | head -3
 ```
-**Expect:** `HTTP/1.1 301 Moved Permanently` and `Location: https://api.windyword.ai/health`.
+**Expect:** `HTTP/1.1 301 Moved Permanently` and `Location: https://account.windyword.ai/health`.
 
 ### ☐ 2.3 TLS 1.3 actually negotiated
 
 ```sh
-echo | openssl s_client -tls1_3 -connect api.windyword.ai:443 2>/dev/null | grep -E "Protocol|Cipher" | head -2
+echo | openssl s_client -tls1_3 -connect account.windyword.ai:443 2>/dev/null | grep -E "Protocol|Cipher" | head -2
 ```
 **Expect:** `Protocol  : TLSv1.3` and a modern cipher (`TLS_AES_*`).
 
@@ -117,7 +117,7 @@ curl -sI $API/.well-known/jwks.json | grep -i cache-control
 ```sh
 curl -sSf $API/.well-known/openid-configuration | jq '{issuer, token_endpoint, jwks_uri, device_authorization_endpoint}'
 ```
-**Expect:** `issuer` = `https://api.windyword.ai`, `jwks_uri` = `<issuer>/.well-known/jwks.json`. All endpoint URLs should be HTTPS and live under the same issuer.
+**Expect:** `issuer` = `https://account.windyword.ai`, `jwks_uri` = `<issuer>/.well-known/jwks.json`. All endpoint URLs should be HTTPS and live under the same issuer.
 
 ---
 
@@ -136,7 +136,7 @@ If `windyword.ai/device` is the user-facing URL (mobile shows the bare domain), 
 ```sh
 curl -sSI $WEB/device | head -3
 ```
-Note: this depends on your apex hosting setup. If the apex is on Cloudflare Pages and proxies `/device` to the API, you should see 200; otherwise this is N/A and `api.windyword.ai/device` is the canonical URL.
+Note: this depends on your apex hosting setup. If the apex is on Cloudflare Pages and proxies `/device` to the API, you should see 200; otherwise this is N/A and `account.windyword.ai/device` is the canonical URL.
 
 ---
 
@@ -422,10 +422,10 @@ end-to-end smoke script:
 
 ```sh
 ACCOUNT_SERVER_URL=$API \
-MAIL_URL=https://mail.windyword.ai \
-CHAT_URL=https://chat.windyword.ai \
-CLOUD_URL=https://cloud.windyword.ai \
-ETERNITAS_URL=https://eternitas.windyword.ai \
+MAIL_URL=https://mail.windymail.ai \
+CHAT_URL=https://chat.windychat.ai \
+CLOUD_URL=https://cloud.windycloud.com \
+ETERNITAS_URL=https://eternitas.ai \
 bash scripts/launch-smoke-test.sh
 ```
 

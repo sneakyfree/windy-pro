@@ -7,8 +7,6 @@ export default defineConfig({
     server: {
         port: 5173,
         allowedHosts: [
-            'windypro.thewindstorm.uk',
-            '.thewindstorm.uk',
             'windyword.ai',
             '.windyword.ai'
         ],

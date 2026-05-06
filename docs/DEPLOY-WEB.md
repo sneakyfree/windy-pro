@@ -1,12 +1,12 @@
 # Deploying the Windy Word webapp (`src/client/web/`)
 
-This doc is the runbook for the webapp that serves **`app.windyword.ai`**. For the backend (`api.windyword.ai`) or the marketing site (`windyword.ai` — a separate repo) see their respective runbooks.
+This doc is the runbook for the webapp that serves **`windyword.ai`**. For the backend (`account.windyword.ai`) or the marketing site (`windyword.ai` — a separate repo) see their respective runbooks.
 
 ## TL;DR
 
 - **Production deploys are automatic.** Merge a PR that touches `src/client/web/**` into `main` → GitHub Actions auto-deploys within ~3 minutes.
 - **Rollback:** revert the offending commit on `main` → auto-redeploys the prior state.
-- **Pre-launch gate (if needed later):** Cloudflare Access policy on `app.windyword.ai` — see `windyword-site/docs/PRE-LAUNCH-GATE.md` for the pattern.
+- **Pre-launch gate (if needed later):** Cloudflare Access policy on `windyword.ai` — see `windyword-site/docs/PRE-LAUNCH-GATE.md` for the pattern.
 - **Never deploy from a local laptop** unless the production automation is broken and you're using the same `scripts/cf-pages-deploy.py` with a lockbox-sourced token.
 
 ## Architecture
@@ -41,7 +41,7 @@ This doc is the runbook for the webapp that serves **`app.windyword.ai`**. For t
               ┌────────────────────────────────────────────────────────────────┐
               │  Cloudflare Pages: windypro-webapp                             │
               │    subdomain   windypro-webapp.pages.dev                       │
-              │    custom      app.windyword.ai (CNAME proxied through CF)     │
+              │    custom      windyword.ai (CNAME proxied through CF)     │
               │    deployment  immutable; one-click rollback via dashboard     │
               └────────────────────────────────────────────────────────────────┘
 ```
@@ -97,7 +97,7 @@ Merging to `main` triggers the workflow automatically. Expected timing:
 - Deploy script → ~30s for 50 files; ~2-3 min for 500 files
 - Cloudflare edge propagation → 10-60s
 
-Total: **~2-4 minutes from merge to live on `app.windyword.ai`.**
+Total: **~2-4 minutes from merge to live on `windyword.ai`.**
 
 ### Manual trigger (no code change)
 
@@ -169,9 +169,9 @@ The `Secret sanity check` step in `deploy-web.yml` now catches this with a fail-
 ### Build succeeds but site serves old content
 
 - DNS propagation can lag by up to a minute; wait
-- Cloudflare edge cache — `curl -sI https://app.windyword.ai/` and check `cf-cache-status`. If `HIT`, force a purge via dashboard (Caching → Configuration → Purge Cache)
+- Cloudflare edge cache — `curl -sI https://windyword.ai/` and check `cf-cache-status`. If `HIT`, force a purge via dashboard (Caching → Configuration → Purge Cache)
 - Browser cache — open in incognito
-- Verify the deployment's aliases include `app.windyword.ai` via Pages dashboard
+- Verify the deployment's aliases include `windyword.ai` via Pages dashboard
 
 ### SPA routes 404 on refresh (e.g. `/verify-email` reload)
 
@@ -183,7 +183,7 @@ The `Secret sanity check` step in `deploy-web.yml` now catches this with a fail-
 
 ## Staging environment (not yet implemented)
 
-When needed, create a second Pages project `windypro-webapp-staging` pointed at a `staging` branch of this repo, with custom domain `staging.windyword.ai`. The deploy script is branch-agnostic; add a parallel workflow that triggers on `push: branches: [staging]`.
+When needed, create a second Pages project `windypro-webapp-staging` pointed at a `staging` branch of this repo, with custom domain `account.windyword.ai`. The deploy script is branch-agnostic; add a parallel workflow that triggers on `push: branches: [staging]`.
 
 ## Followups (open)
 

@@ -39,7 +39,7 @@ const tokenBlacklist = new Set<string>();
 const TEST_USER_ID = 'user-001';
 const TEST_USER = {
   id: TEST_USER_ID,
-  email: 'test@windypro.com',
+  email: 'test@windyword.ai',
   tier: 'pro',
   role: 'admin',
   identity_type: 'human',

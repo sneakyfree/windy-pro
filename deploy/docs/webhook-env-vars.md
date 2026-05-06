@@ -60,15 +60,15 @@ done
 # ─── Webhook fan-out targets ─────────────────────────────────
 
 # Windy Mail
-WINDY_MAIL_URL=https://mail.windypro.com
+WINDY_MAIL_URL=https://mail.windymail.ai
 WINDY_MAIL_WEBHOOK_SECRET=REPLACE_WITH_openssl_rand_hex_32
 
 # Windy Chat
-WINDY_CHAT_URL=https://chat.windypro.com
+WINDY_CHAT_URL=https://chat.windychat.ai
 WINDY_CHAT_WEBHOOK_SECRET=REPLACE_WITH_openssl_rand_hex_32
 
 # Windy Cloud
-WINDY_CLOUD_URL=https://cloud.windypro.com
+WINDY_CLOUD_URL=https://cloud.windycloud.com
 WINDY_CLOUD_WEBHOOK_SECRET=REPLACE_WITH_openssl_rand_hex_32
 
 # Eternitas
@@ -76,7 +76,7 @@ ETERNITAS_URL=https://eternitas.ai
 ETERNITAS_WEBHOOK_SECRET=REPLACE_WITH_openssl_rand_hex_32
 
 # Windy Clone
-WINDY_CLONE_URL=https://clone.windypro.com
+WINDY_CLONE_URL=https://windyclone.ai
 WINDY_CLONE_WEBHOOK_SECRET=REPLACE_WITH_openssl_rand_hex_32
 ```
 

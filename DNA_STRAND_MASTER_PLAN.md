@@ -75,11 +75,11 @@ Windy Pro is one product in a family of nine (see `BRAND-ARCHITECTURE.md` for th
 
 - **Windy Word** (windyword.com) — the consumer-facing brand for Windy Pro's voice-to-text capability
 - **Windy Traveler** (windytraveler.com) — translation pair marketplace, monetized through Windy Pro
-- **Windy Chat** (windychat.com) — messaging + social platform (Strand K in this plan, separate mobile repo)
+- **Windy Chat** (windychat.ai) — messaging + social platform (Strand K in this plan, separate mobile repo)
 - **Windy Mail** (windymail.ai) — agent-friendly email for humans and bots (separate repo: `sneakyfree/windy-mail`)
 - **Windy Fly** (windyfly.ai) — AI agent born into the ecosystem (repo: `sneakyfree/windy-agent`)
 - **HiFly** (hifly.ai) — open-source agent framework (will fork from windy-agent)
-- **Windy Clone** (windyclone.com) — digital likeness / voice clone
+- **Windy Clone** (windyclone.ai) — digital likeness / voice clone
 - **Windy Cloud** (windycloud.com) — storage, sync, infrastructure backbone (Strand D in this plan)
 - **Eternitas** (eternitas.ai) — independent bot registry, separate entity (separate repo: `sneakyfree/eternitas`)
 
@@ -90,7 +90,7 @@ Infrastructure decisions in this repo (especially Strands D and K) should accoun
 ```
 USER JOURNEY — 60 SECONDS TO FLOW STATE
 
-1. User visits windypro.com
+1. User visits windyword.ai
 2. Clicks "Download" or "Try Cloud"
 3. DOWNLOAD PATH:
    └─ Installer detects hardware (GPU? RAM? CPU?)
@@ -3154,7 +3154,7 @@ CODONS:
 │   │   └── Coturn TURN server (NAT traversal for VoIP — K5)
 │   │
 │   ├── K1.1.2 Homeserver Configuration (homeserver.yaml) 🔲
-│   │   ├── server_name: chat.windypro.com
+│   │   ├── server_name: chat.windychat.ai
 │   │   ├── enable_registration: false (custom registration only — K2)
 │   │   ├── max_upload_size_mbs: 100 (for media sharing — K4)
 │   │   ├── federation: disabled initially (Windy-users-only network)
@@ -3171,8 +3171,8 @@ CODONS:
 │   │   └── Links Matrix user ID to Windy Pro account ID
 │   │
 │   ├── K1.1.4 DNS & SSL 🔲
-│   │   ├── A record: chat.windypro.com → server IP
-│   │   ├── SRV record: _matrix._tcp.windypro.com (federation discovery)
+│   │   ├── A record: chat.windychat.ai → server IP
+│   │   ├── SRV record: _matrix._tcp.windyword.ai (federation discovery)
 │   │   ├── .well-known/matrix/server — federation endpoint
 │   │   ├── .well-known/matrix/client — client endpoint
 │   │   └── Let's Encrypt wildcard cert via certbot
@@ -3193,7 +3193,7 @@ CODONS:
 │   │   ├── Uniqueness enforced across Windy network
 │   │   ├── Format: "Grant Whitmer" or "grant_w" (user's choice)
 │   │   ├── Backed by Matrix display_name field
-│   │   └── Matrix ID (@windy_abc123:chat.windypro.com) hidden from UI
+│   │   └── Matrix ID (@windy_abc123:chat.windychat.ai) hidden from UI
 │   │
 │   ├── K1.2.2 Avatar System 🔲
 │   │   ├── Profile photo upload (crop, resize, compress)
@@ -3410,7 +3410,7 @@ CODONS:
 │   └── K3.2.2 Invite Non-Users 🔲
 │       ├── Send SMS invite: "Grant invited you to Windy Chat!"
 │       ├── Send email invite with download link
-│       ├── Deep link: windypro.com/chat/join?ref=grant_id
+│       ├── Deep link: windyword.ai/chat/join?ref=grant_id
 │       ├── Referral tracking for growth metrics
 │       └── Limit: 20 invites per day (anti-spam)
 │
@@ -3664,7 +3664,7 @@ CODONS:
 │       ├── Chat sidebar during call
 │       ├── Screen sharing (one at a time)
 │       ├── Record call (local recording, not cloud)
-│       └── Meeting link: windypro.com/call/room_id (web-joinable)
+│       └── Meeting link: windyword.ai/call/room_id (web-joinable)
 │
 ├── K5.4 Real-Time Translated Subtitles (KILLER FEATURE) 🔲
 │   │
@@ -3750,7 +3750,7 @@ CODONS:
 │   │   ├── Client registers pusher: POST /_matrix/client/v3/pushers/set
 │   │   ├── Pusher data: { pushkey, app_id, app_display_name, device_display_name }
 │   │   ├── kind: "http" (Synapse sends HTTP to our push gateway)
-│   │   └── data.url: "https://push.windypro.com/_matrix/push/v1/notify"
+│   │   └── data.url: "https://push.windyword.ai/_matrix/push/v1/notify"
 │   │
 │   └── K6.1.3 Notification Content 🔲
 │       ├── Title: sender display name

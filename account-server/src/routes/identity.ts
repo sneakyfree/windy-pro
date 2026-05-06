@@ -634,7 +634,7 @@ router.post('/agent/provision', authenticateToken, async (req: Request, res: Res
       db.prepare(
         `INSERT INTO users (id, email, name, display_name, tier, identity_type, windy_identity_id, created_at, updated_at)
          VALUES (?, ?, ?, ?, 'free', 'bot', ?, datetime('now'), datetime('now'))`,
-      ).run(botId, `${agent_name.toLowerCase().replace(/\s+/g, '-')}@bot.windypro.com`, agent_name, agent_name, identityId);
+      ).run(botId, `${agent_name.toLowerCase().replace(/\s+/g, '-')}@bot.windyword.ai`, agent_name, agent_name, identityId);
       botUser = { id: botId };
     }
 

@@ -2,7 +2,7 @@
 # smoke-test.sh — post-deploy smoke test for a running Windy Pro instance.
 #
 # Usage:
-#   BASE_URL=https://windypro.com ./scripts/smoke-test.sh
+#   BASE_URL=https://windyword.ai ./scripts/smoke-test.sh
 #   BASE_URL=http://localhost:8098 ./scripts/smoke-test.sh   # dev
 #
 # Exits 0 if every check passes, non-zero on first failure. Each check

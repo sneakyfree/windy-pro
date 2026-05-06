@@ -3,8 +3,8 @@
 #
 # This file stands up the identity hub on AWS:
 #   - VPC (2 AZ, public + private subnets, NAT for ECS egress)
-#   - ACM cert on api.windyword.ai (DNS-validated)
-#   - Route 53 records for api.windyword.ai → ALB
+#   - ACM cert on account.windyword.ai (DNS-validated)
+#   - Route 53 records for account.windyword.ai → ALB
 #   - ALB (HTTPS) → ECS Fargate service running the account-server image
 #   - RDS Postgres (production DATABASE_URL)
 #   - ElastiCache Redis (production REDIS_URL — token blacklist, rate limits)

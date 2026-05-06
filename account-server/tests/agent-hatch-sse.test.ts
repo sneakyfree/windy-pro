@@ -96,8 +96,8 @@ describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
             if (url.includes('chat.test') && url.includes('/api/v1/onboarding/agent')) {
                 calls.chat = body;
                 return { ok: true, status: 200, json: async () => ({
-                    matrix_user_id: '@noras-agent:chat.windypro.com',
-                    dm_room_id: '!dm:chat.windypro.com',
+                    matrix_user_id: '@noras-agent:chat.windychat.ai',
+                    dm_room_id: '!dm:chat.windychat.ai',
                 }) };
             }
             if (url.includes('windymail') || url.includes('mail') && url.includes('identity/created')) {
