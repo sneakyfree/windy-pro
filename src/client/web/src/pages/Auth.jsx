@@ -225,12 +225,16 @@ export default function Auth() {
                         <div style={{ flex: 1, height: '1px', background: '#334155' }} />
                     </div>
                     <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                        <button type="button" disabled title="Google OAuth coming soon" style={{
-                            flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #334155',
-                            background: '#1E293B', color: '#475569', cursor: 'not-allowed', fontSize: '14px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            opacity: 0.5
-                        }}>🔵 Google <span style={{ fontSize: '10px' }}>soon</span></button>
+                        <button
+                            type="button"
+                            onClick={() => { window.location.href = '/api/v1/auth/oauth/google/start' }}
+                            title="Continue with Google"
+                            style={{
+                                flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #334155',
+                                background: '#1E293B', color: '#E2E8F0', cursor: 'pointer', fontSize: '14px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            }}
+                        >🔵 Google</button>
                         <button type="button" disabled title="GitHub OAuth coming soon" style={{
                             flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #334155',
                             background: '#1E293B', color: '#475569', cursor: 'not-allowed', fontSize: '14px',
