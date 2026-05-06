@@ -34,6 +34,7 @@ import passwordResetPageRoutes from './routes/password-reset-page';
 import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
 import flyRoutes from './routes/fly';
+import voiceRoutes from './routes/voice';
 import agentRoutes from './routes/agent';
 import webhooksEternitasRoutes from './routes/webhooks-eternitas';
 import { authenticateToken } from './middleware/auth';
@@ -309,6 +310,11 @@ app.use('/api/v1/cloud', cloudRoutes);
 
 // Fly agent proxy (ecosystem dashboard chat)
 app.use('/api/v1/fly', flyRoutes);
+
+// Voice command plane — POST /dispatch + GET /tasks/:id/events SSE.
+// The keystone of "voice as the unifying input modality" — every Windy
+// surface mounts the same <VoiceButton/> and posts here.
+app.use('/api/v1/voice', voiceRoutes);
 
 // Wave 8 — Managed-credential broker + hatch-from-Pro endpoint.
 // HMAC-gated credentials/issue for S2S, Bearer-JWT /hatch that streams SSE.
