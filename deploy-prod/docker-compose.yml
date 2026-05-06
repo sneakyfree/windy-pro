@@ -1,0 +1,97 @@
+# Windy Pro account-server — production stack
+# Deployed at /opt/windy-pro/deploy-prod/ on 54.88.113.79
+# Talks to the public internet via the existing Caddy in /opt/windy-mail/deploy/
+# (which proxies https://account.windyword.ai → pro-account-server:8098).
+#
+# Service-name prefix is `pro-` so we don't collide with the windy-mail
+# stack on the same docker network (which has `postgres`, `redis`,
+# `api`, etc.).
+
+services:
+  pro-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+    environment:
+      POSTGRES_DB: windy_pro
+      POSTGRES_USER: windy_pro
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    volumes:
+      - pro-pg-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U windy_pro -d windy_pro"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pro-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - pro-redis-data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pro-account-server:
+    build:
+      context: ../
+      dockerfile: account-server/Dockerfile
+    image: windy-pro-account-server:local
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    env_file:
+      - .env.production
+    volumes:
+      - pro-account-keys:/keys
+      - pro-account-uploads:/app/data/uploads
+    depends_on:
+      pro-postgres:
+        condition: service_healthy
+      pro-redis:
+        condition: service_healthy
+    networks:
+      - backend
+    # Bind to host loopback only — public access is via Caddy on the
+    # same backend network, no need to expose a port to the world.
+    ports:
+      - "127.0.0.1:8098:8098"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8098/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  pro-pg-data:
+  pro-redis-data:
+  pro-account-keys:
+  pro-account-uploads:
+
+# Reuse the existing deploy_backend network created by /opt/windy-mail/deploy.
+# Caddy lives there and will proxy account.windyword.ai → pro-account-server:8098.
+networks:
+  backend:
+    external: true
+    name: deploy_backend
