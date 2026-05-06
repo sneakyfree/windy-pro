@@ -24,6 +24,12 @@ services:
       - SYNAPSE_URL=http://synapse:8008
       - SYNAPSE_REGISTRATION_SECRET=${SYNAPSE_REGISTRATION_SECRET}
       - SYNAPSE_SERVER_NAME=${SYNAPSE_SERVER_NAME:-chat.windypro.com}
+      # "Sign in with Google" — set GOOGLE_OAUTH_* in .env.production. If the
+      # triplet is unset, /api/v1/auth/oauth/google/* returns 503 cleanly.
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID:-}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      - GOOGLE_OAUTH_REDIRECT_URI=${GOOGLE_OAUTH_REDIRECT_URI:-}
+      - GOOGLE_OAUTH_POST_LOGIN_REDIRECT=${GOOGLE_OAUTH_POST_LOGIN_REDIRECT:-}
     volumes:
       - keys:/keys
       - uploads:/data/uploads

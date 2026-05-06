@@ -85,6 +85,52 @@ export function verificationEmail(code: string): SendMailArgs {
   };
 }
 
+export interface AgentHatchedDetails {
+  agentName: string;
+  agentEmail: string | null;
+  passportNumber: string;
+  certificateNo: string;
+  ownerName: string;
+  flyUrl?: string;
+}
+
+export function agentHatchedEmail(d: AgentHatchedDetails): SendMailArgs {
+  const greetName = d.ownerName.split(' ')[0] || 'there';
+  const inboxLine = d.agentEmail
+    ? `<p style="color:#555;font-size:15px;margin:8px 0;">Email: <code style="background:#f0f0f5;padding:4px 10px;border-radius:6px;">${d.agentEmail}</code></p>`
+    : '';
+  const inboxText = d.agentEmail ? `\nEmail: ${d.agentEmail}` : '';
+  const flyBlock = d.flyUrl
+    ? `<p style="margin:24px 0 0 0;"><a href="${d.flyUrl}" style="display:inline-block;padding:14px 28px;background:#1a1a2e;color:#fff;border-radius:10px;text-decoration:none;font-weight:600;">Meet ${d.agentName}</a></p>`
+    : '';
+  const flyTextLine = d.flyUrl ? `\n\nMeet ${d.agentName}: ${d.flyUrl}` : '';
+  return {
+    to: '',
+    subject: `${d.agentName} is alive`,
+    text:
+      `Hi ${greetName},\n\n` +
+      `${d.agentName} just hatched. Your agent is alive and ready to work for you.\n\n` +
+      `Passport: ${d.passportNumber}\n` +
+      `Birth certificate: ${d.certificateNo}${inboxText}${flyTextLine}\n\n` +
+      `Every email and chat your agent sends carries its Eternitas passport, so the people it talks to know it's a verified agent acting on your behalf.\n\n` +
+      `— Windy`,
+    html:
+      `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;padding:40px 20px;">` +
+      `  <h2 style="color:#1a1a2e;margin:0 0 8px 0;">Windy</h2>` +
+      `  <p style="color:#1a1a2e;font-size:22px;font-weight:700;margin:24px 0 8px 0;">${d.agentName} is alive</p>` +
+      `  <p style="color:#555;font-size:16px;margin:0 0 16px 0;">Hi ${greetName} — your agent just hatched. It's ready to work for you.</p>` +
+      `  <div style="background:#f9f9fc;border-radius:12px;padding:20px;margin:20px 0;">` +
+      `    <p style="color:#555;font-size:15px;margin:0 0 8px 0;">Passport: <code style="background:#f0f0f5;padding:4px 10px;border-radius:6px;">${d.passportNumber}</code></p>` +
+      `    <p style="color:#555;font-size:15px;margin:8px 0;">Certificate: <code style="background:#f0f0f5;padding:4px 10px;border-radius:6px;">${d.certificateNo}</code></p>` +
+      `    ${inboxLine}` +
+      `  </div>` +
+      `  <p style="color:#888;font-size:14px;margin:0;">Every email and chat your agent sends carries its Eternitas passport, so the people it talks to know it's a verified agent acting on your behalf.</p>` +
+      `  ${flyBlock}` +
+      `  <p style="color:#aaa;font-size:12px;margin-top:40px;">— Windy</p>` +
+      `</div>`,
+  };
+}
+
 export function passwordResetEmail(token: string, resetUrlBase?: string): SendMailArgs {
   const link = resetUrlBase ? `${resetUrlBase}?token=${encodeURIComponent(token)}` : null;
   const linkLine = link ? `\n\nClick to reset: ${link}` : '';
