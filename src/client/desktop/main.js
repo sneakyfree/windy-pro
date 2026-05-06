@@ -4268,7 +4268,7 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
   try {
     const checkoutWin = new BrowserWindow({
       width: 1140, height: 780, x: 100, y: 60,
-      title: 'Choose Your Plan — Windy Pro',
+      title: 'Choose Your Plan — Windy Word',
       autoHideMenuBar: true,
       // SEC-M11: Disable DevTools in packaged builds
       webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, javascript: true, partition: 'persist:checkout', devTools: !app.isPackaged }
@@ -6280,7 +6280,7 @@ ipcMain.handle('upload-bundle-to-cloud', async (event, bundleData) => {
 ipcMain.handle('show-sync-notification', async (event, message) => {
   const { Notification } = require('electron');
   if (Notification.isSupported()) {
-    new Notification({ title: 'Windy Pro Sync', body: message, icon: undefined }).show();
+    new Notification({ title: 'Windy Word Sync', body: message, icon: undefined }).show();
   }
   return { success: true };
 });

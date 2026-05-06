@@ -1,10 +1,10 @@
 {
   "name": "windy-pro",
   "version": "1.6.1",
-  "description": "Voice-to-text desktop app powered by the Windy Pro Engine",
+  "description": "Windy Word — voice-to-text desktop app for the Windy ecosystem",
   "main": "src/client/desktop/main.js",
   "author": {
-    "name": "Windy Pro",
+    "name": "Windy Word",
     "email": "dev@windyword.ai"
   },
   "license": "MIT",
@@ -77,13 +77,13 @@
         ]
       }
     ],
-    "productName": "Windy Pro",
+    "productName": "Windy Word",
     "directories": {
       "output": "dist"
     },
     "protocols": [
       {
-        "name": "Windy Pro Deep Links",
+        "name": "Windy Word Deep Links",
         "schemes": [
           "windypro",
           "windychat",
@@ -124,8 +124,8 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Windy Pro needs microphone access for voice-to-text transcription.",
-        "NSCameraUsageDescription": "Windy Pro needs camera access for the video preview feature."
+        "NSMicrophoneUsageDescription": "Windy Word needs microphone access for voice-to-text transcription.",
+        "NSCameraUsageDescription": "Windy Word needs camera access for the video preview feature."
       }
     },
     "win": {
@@ -143,10 +143,10 @@
       ],
       "icon": "assets/icon.png",
       "category": "Utility",
-      "maintainer": "Windy Pro <dev@windyword.ai>",
+      "maintainer": "Windy Word <dev@windyword.ai>",
       "executableName": "windy-pro",
       "desktop": {
-        "Name": "Windy Pro",
+        "Name": "Windy Word",
         "Comment": "Voice-to-text transcription",
         "Terminal": "false",
         "Type": "Application",
