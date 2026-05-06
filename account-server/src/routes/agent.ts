@@ -625,7 +625,6 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
     // on failure — the hatch flow has already completed.
     (async () => {
         try {
-            console.log(`[hatch] welcome email IIFE start for ${owner.email}`);
             const { sendMail, agentHatchedEmail } = await import('../services/mailer');
             const certificateNo = `WF-${(passportNumber || '').replace(/-/g, '').slice(2, 10)}`;
             const args = agentHatchedEmail({
@@ -636,10 +635,10 @@ router.post('/hatch', hatchLimiter, authenticateToken, async (req: Request, res:
                 ownerName: owner.name || owner.email.split('@')[0],
             });
             args.to = owner.email;
-            console.log(`[hatch] welcome email about to send to=${args.to} subject="${args.subject}"`);
             const result = await sendMail(args);
-            console.log(`[hatch] welcome email send result:`, result);
-            if (!result.success) {
+            if (result.success) {
+                console.log(`[hatch] welcome email sent to=${args.to} subject="${args.subject}"`);
+            } else {
                 console.warn(`[hatch] welcome email send failed for ${owner.email}: ${result.error}`);
             }
         } catch (err: any) {
