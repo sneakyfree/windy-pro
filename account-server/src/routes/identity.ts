@@ -636,9 +636,15 @@ router.post('/agent/provision', authenticateToken, async (req: Request, res: Res
 
     if (!botUser) {
       const botId = crypto.randomUUID();
+      // password_hash is NOT NULL on the users table; bot users have no
+      // password to authenticate with, so we use a sentinel string matching
+      // the convention already in identity-service.ts (the
+      // passport.registered webhook handler). bcrypt.compare(anything,
+      // 'eternitas-managed') returns false — the sentinel isn't a valid
+      // bcrypt hash format, so no login path can authenticate as a bot.
       db.prepare(
-        `INSERT INTO users (id, email, name, display_name, tier, identity_type, windy_identity_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'free', 'bot', ?, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, name, display_name, password_hash, tier, identity_type, windy_identity_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'eternitas-managed', 'free', 'bot', ?, datetime('now'), datetime('now'))`,
       ).run(botId, `${agent_name.toLowerCase().replace(/\s+/g, '-')}@bot.windypro.com`, agent_name, agent_name, identityId);
       botUser = { id: botId };
     }
