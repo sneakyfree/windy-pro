@@ -145,7 +145,7 @@ async function issueAndSendVerificationCode(
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-function generateTokens(user: { id: string; email: string; tier: string }, deviceId?: string) {
+export function generateTokens(user: { id: string; email: string; tier: string }, deviceId?: string) {
     // Phase 10.1: Build scoped identity token payload
     const db = getDb();
 

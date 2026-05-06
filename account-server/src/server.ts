@@ -29,6 +29,7 @@ import cloudRoutes from './routes/cloud';
 import identityRoutes from './routes/identity';
 import verificationRoutes from './routes/verification';
 import oauthRoutes, { seedEcosystemClients } from './routes/oauth';
+import googleOauthRoutes from './routes/google-oauth';
 import deviceApprovalRoutes from './routes/device-approval';
 import passwordResetPageRoutes from './routes/password-reset-page';
 import adminConsoleRoutes from './routes/admin-console';
@@ -214,6 +215,9 @@ app.use('/api/v1/identity/verify', verificationRoutes);
 
 // OAuth2 / SSO (Phase 5 — "Sign in with Windy")
 app.use('/api/v1/oauth', oauthRoutes);
+// "Sign in with Google" — consumer-side, distinct from /api/v1/oauth which
+// makes Windy itself an OAuth provider.
+app.use('/api/v1/auth/oauth/google', googleOauthRoutes);
 
 // Top-level device-code approval page (GET /device, POST /device/approve).
 // Mobile shows "Visit windyword.ai/device" — this is the operator UI.

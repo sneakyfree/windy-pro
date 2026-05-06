@@ -97,4 +97,11 @@ export const config = {
     FCM_SERVER_KEY: process.env.FCM_SERVER_KEY || '',
     // OCR — Google Cloud Vision API
     GOOGLE_VISION_API_KEY: process.env.GOOGLE_VISION_API_KEY || '',
+    // "Sign in with Google" — consumer-side OAuth credentials for the
+    // windy-word-oauth GCP project. See lockbox: "Windy Word OAuth (Web)".
+    // When unset the /api/v1/auth/oauth/google/* routes return 503.
+    GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
+    GOOGLE_OAUTH_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+    GOOGLE_OAUTH_REDIRECT_URI: process.env.GOOGLE_OAUTH_REDIRECT_URI || '',
+    GOOGLE_OAUTH_POST_LOGIN_REDIRECT: process.env.GOOGLE_OAUTH_POST_LOGIN_REDIRECT || '',
 } as const;
