@@ -20,9 +20,15 @@ export async function registerWithEternitas(): Promise<void> {
     return;
   }
 
-  // Build the webhook URL
-  const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || 'https://account.windypro.com';
+  // Build the webhook URL.  account.windyword.ai is the canonical brand
+  // hostname for Pro's account-server (windypro.com is a thewindstorm.uk-era
+  // legacy default and would silently misregister against a host we don't
+  // own anymore).
+  const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || 'https://account.windyword.ai';
   const webhookUrl = `${webhookBaseUrl}/api/v1/identity/webhooks/eternitas`;
+  // Eternitas's POST /platforms/register marks contact_email as required;
+  // if app_settings is wiped on a fresh box the call would 422 without it.
+  const contactEmail = process.env.PLATFORM_CONTACT_EMAIL || 'support@windyword.ai';
 
   console.log(`[Eternitas] Registering Windy Pro as platform (webhook: ${webhookUrl})...`);
 
@@ -38,6 +44,7 @@ export async function registerWithEternitas(): Promise<void> {
       },
       body: JSON.stringify({
         name: 'Windy Pro',
+        contact_email: contactEmail,
         webhook_url: webhookUrl,
         events: ['passport.revoked', 'passport.suspended', 'passport.reinstated', 'trust_updated'],
       }),
