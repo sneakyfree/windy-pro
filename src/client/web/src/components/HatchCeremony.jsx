@@ -171,6 +171,52 @@ export default function HatchCeremony({ token, onDone }) {
         })
     }, [status, certificate])
 
+    // Audible "alive" cue. The ballroom-demo narrative is "500 grandmas hear
+    // 'Fly is alive!' echo through the room" — every device's speakers fire
+    // simultaneously a few seconds after hatch completes. Browsers gate
+    // speechSynthesis on a recent user gesture; the user's click that
+    // started the hatch counts in most browsers, so this should fire
+    // unprompted. If autoplay policy drops the utterance silently, the
+    // visual ceremony still tells the user their helper is ready, so this
+    // is purely additive — no error path needed.
+    //
+    // Also gated on a localStorage flag the user (or QA) can flip off via
+    // `localStorage.setItem('windy_hatch_audio', '0')` — useful for muting
+    // during dev work or for users who'd rather not surprise their office.
+    useEffect(() => {
+        if (status !== 'complete') return
+        // Inline failure check — `hasFailedStep` itself is computed below,
+        // so we recompute the same predicate here rather than reorder the
+        // function body.
+        const anyFailed = Object.values(steps || {}).some((s) => s?.status === 'failed')
+        if (anyFailed) return
+        if (typeof window === 'undefined') return
+        try {
+            if (window.localStorage?.getItem('windy_hatch_audio') === '0') return
+            const synth = window.speechSynthesis
+            if (!synth || typeof synth.speak !== 'function') return
+            // Cancel any in-flight utterance (e.g. a Windy Word read-aloud
+            // session) so the alive cue isn't queued behind a paragraph.
+            synth.cancel()
+            const agentName = certificate?.agent_name || 'Your agent'
+            const utter = new SpeechSynthesisUtterance(`${agentName} is alive!`)
+            utter.rate = 1.0
+            utter.pitch = 1.05
+            utter.volume = 1.0
+            // Pick the first English voice available; default voice often
+            // sounds robotic on macOS/Chrome. Voice list loads async on
+            // some browsers — tolerate empty.
+            const voices = synth.getVoices?.() || []
+            const enVoice = voices.find((v) => /^en[-_]/.test(v.lang) && /female|samantha|kate/i.test(v.name))
+                || voices.find((v) => /^en[-_]/.test(v.lang))
+            if (enVoice) utter.voice = enVoice
+            synth.speak(utter)
+        } catch {
+            // Speech API blew up — never propagate; the visual ceremony
+            // is the source of truth that the hatch succeeded.
+        }
+    }, [status, steps, certificate])
+
     // Detect any failed step — the whole ceremony is retriable as a unit
     // (per scoping doc: no per-step retry in MVP).
     const hasFailedStep = useMemo(
