@@ -161,8 +161,13 @@ class CursorInjector {
 
     async injectLinuxWayland() {
         return new Promise((resolve, reject) => {
-            // ydotool uses keycodes: 29=Ctrl, 47=V
-            exec('ydotool key 29:1 47:1 47:0 29:0', { timeout: 3000 }, (error) => {
+            // Terminals require Ctrl+Shift+V (plain Ctrl+V is literal-quote-next-char).
+            // 29=KEY_LEFTCTRL, 42=KEY_LEFTSHIFT, 47=KEY_V.
+            // Pin YDOTOOL_SOCKET so the client talks to the daemon Windy started,
+            // not whatever a system unit may have spawned on a different path.
+            const ydoSocket = process.env.YDOTOOL_SOCKET || `/tmp/ydotool-${process.getuid?.() ?? 1000}.socket`;
+            const env = { ...process.env, YDOTOOL_SOCKET: ydoSocket };
+            exec('ydotool key 29:1 42:1 47:1 47:0 42:0 29:0', { timeout: 3000, env }, (error) => {
                 if (error) {
                     if (error.message.includes('not found') || error.message.includes('No such file')) {
                         reject(new Error('ydotool is required for Wayland text injection.\n\nInstall options:\n  • Ubuntu 23.04+/Debian 13+: sudo apt install ydotool\n  • Fedora: sudo dnf install ydotool\n  • Arch: sudo pacman -S ydotool\n  • Build from source: https://github.com/ReimuNotMoe/ydotool\n\nNote: The ydotoold daemon must be running (sudo systemctl enable --now ydotool).'));

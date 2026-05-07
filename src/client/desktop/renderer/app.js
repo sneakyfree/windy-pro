@@ -58,6 +58,18 @@ class WindyApp {
     this.audioProcessor = null;
     this.audioSource = null;
 
+    // ═══ Mic pre-warming (Wayland focus protection) ═══
+    // On Wayland+GNOME, a fresh getUserMedia() call activates Chromium's audio
+    // device through XWayland, which Mutter sees as a focus request and
+    // transfers keyboard focus to the Electron window — stealing the cursor
+    // from the user's target app. By acquiring a MediaStream once at boot
+    // and reusing it for every recording, we eliminate that focus steal.
+    // The user's terminal cursor keeps blinking through the entire record cycle.
+    // AudioContext is pre-warmed for the same reason (creation can also leak focus).
+    this._prewarmedStream = null;
+    this._prewarmedAudioCtx = null;
+    this._prewarmedAnalyser = null;
+
     // DOM Elements
     this.stateIndicator = document.getElementById('stateIndicator');
     this.stateGlow = document.getElementById('stateGlow');
@@ -301,6 +313,10 @@ class WindyApp {
       const firstRun = new FirstRunExperience(this);
       firstRun.show();
     }
+
+    // Mic pre-warm (Linux/Wayland focus protection). Fire-and-forget — failure
+    // is non-fatal; the recording path falls back to fresh getUserMedia.
+    this._prewarmMic();
   }
 
   /**
@@ -1907,6 +1923,45 @@ class WindyApp {
   }
 
   // ═══════════════════════════════════════════════
+  //  Mic pre-warming (Wayland focus protection)
+  // ═══════════════════════════════════════════════
+
+  async _prewarmMic() {
+    // Linux only. macOS uses _lastFocusedPid + osascript to recover focus;
+    // Windows doesn't have this problem. On Linux (Wayland especially), the
+    // first getUserMedia steals focus through XWayland → Mutter and there is
+    // no API to give it back. So we acquire the stream once and never let go.
+    if (window.windyAPI?.platform !== 'linux') return;
+    if (this._prewarmedStream && this._prewarmedStream.active) return;
+    try {
+      const audioConstraints = {
+        channelCount: 1,
+        sampleRate: 16000,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      };
+      this._prewarmedStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+
+      // Pre-warm the AudioContext + analyser pipeline too. CLAUDE.md flags
+      // AudioContext creation as a separate focus-steal source on Wayland.
+      // Creating it once at boot and reusing it across recordings sidesteps that.
+      this._prewarmedAudioCtx = new AudioContext();
+      const source = this._prewarmedAudioCtx.createMediaStreamSource(this._prewarmedStream);
+      this._prewarmedAnalyser = this._prewarmedAudioCtx.createAnalyser();
+      this._prewarmedAnalyser.fftSize = 256;
+      source.connect(this._prewarmedAnalyser);
+
+      console.warn('[PreWarm] Mic + AudioContext cached at boot — Wayland focus protection active');
+    } catch (e) {
+      console.warn('[PreWarm] Failed to pre-warm (will fall back to fresh getUserMedia):', e.message);
+      this._prewarmedStream = null;
+      this._prewarmedAudioCtx = null;
+      this._prewarmedAnalyser = null;
+    }
+  }
+
+  // ═══════════════════════════════════════════════
   //  Batch Mode Recording
   // ═══════════════════════════════════════════════
 
@@ -1959,12 +2014,24 @@ class WindyApp {
           audioConstraints.deviceId = { exact: settings.micDeviceId };
         }
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      // Reuse the pre-warmed stream when possible (Linux/Wayland focus
+      // protection). Fall back to fresh getUserMedia if no cache exists or
+      // the user picked a non-default mic device.
+      let stream;
+      let usingPrewarmed = false;
+      const wantsCustomDevice = !!audioConstraints.deviceId;
+      if (this._prewarmedStream && this._prewarmedStream.active && !wantsCustomDevice) {
+        stream = this._prewarmedStream;
+        usingPrewarmed = true;
+      } else {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      }
 
       // ═══ FOCUS RESTORE ═══
       // getUserMedia just stole focus from the target app.
       // Tell main process to restore it NOW — cursor appears within ~100ms.
-      if (window.windyAPI?.restoreFocus) {
+      // (No-op on Wayland when usingPrewarmed=true: nothing to restore.)
+      if (!usingPrewarmed && window.windyAPI?.restoreFocus) {
         window.windyAPI.restoreFocus();
       }
 
@@ -2098,11 +2165,18 @@ class WindyApp {
 
       // 5b. Voice level monitoring for mini widget strobe
       try {
-        this._batchAudioCtx = new AudioContext();
-        const source = this._batchAudioCtx.createMediaStreamSource(stream);
-        this._batchAnalyser = this._batchAudioCtx.createAnalyser();
-        this._batchAnalyser.fftSize = 256;
-        source.connect(this._batchAnalyser);
+        // Reuse the pre-warmed AudioContext when its source is the same stream.
+        // Creating a fresh AudioContext on Wayland triggers another focus steal.
+        if (usingPrewarmed && this._prewarmedAudioCtx && this._prewarmedAnalyser) {
+          this._batchAudioCtx = this._prewarmedAudioCtx;
+          this._batchAnalyser = this._prewarmedAnalyser;
+        } else {
+          this._batchAudioCtx = new AudioContext();
+          const source = this._batchAudioCtx.createMediaStreamSource(stream);
+          this._batchAnalyser = this._batchAudioCtx.createAnalyser();
+          this._batchAnalyser.fftSize = 256;
+          source.connect(this._batchAnalyser);
+        }
         const dataArray = new Uint8Array(this._batchAnalyser.frequencyBinCount);
 
         const timeDomainData = new Uint8Array(this._batchAnalyser.fftSize);
@@ -2136,7 +2210,9 @@ class WindyApp {
       }
 
       // 6. UI state (already set at top for instant feedback)
-      this._batchStream = stream;
+      // Only "own" the stream for cleanup if we acquired it this call.
+      // Pre-warmed streams persist across recordings — don't stop their tracks.
+      this._batchStream = usingPrewarmed ? null : stream;
       this.recordingStartedAt = new Date().toISOString();
 
       // Clear placeholder
@@ -2205,7 +2281,11 @@ class WindyApp {
       this._voiceLevelInterval = null;
     }
     if (this._batchAudioCtx) {
-      try { this._batchAudioCtx.close(); } catch (_) { }
+      // Don't close the pre-warmed AudioContext — it persists across recordings
+      // to avoid a focus-stealing recreation on Wayland.
+      if (this._batchAudioCtx !== this._prewarmedAudioCtx) {
+        try { this._batchAudioCtx.close(); } catch (_) { }
+      }
       this._batchAudioCtx = null;
       this._batchAnalyser = null;
     }
@@ -2931,7 +3011,13 @@ class WindyApp {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Reuse pre-warmed stream when available (Linux/Wayland focus protection).
+      let stream;
+      if (this._prewarmedStream && this._prewarmedStream.active) {
+        stream = this._prewarmedStream;
+      } else {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
       this._apiAudioChunks = [];
       this._streamingText = '';
       this.isRecording = true;
