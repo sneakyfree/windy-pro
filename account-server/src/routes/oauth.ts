@@ -1154,7 +1154,12 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
   } catch { /* table may not exist on first-run SQLite bootstrap */ }
 
   const tokenPayload: Record<string, any> = {
+    // Standard JWT subject claim — RFC 7519. Mirrors auth.ts; required
+    // by every ecosystem service that consumes Pro JWTs.
+    sub: identityId,
     userId: identityId,
+    // Both naming conventions emitted for cross-service compatibility.
+    windy_identity_id: user.windy_identity_id,
     windyIdentityId: user.windy_identity_id,
     email: user.email,
     tier: user.tier,

@@ -193,10 +193,19 @@ export function generateTokens(user: { id: string; email: string; tier: string }
 
     // Phase 4: Sign with RS256 if available, HS256 fallback
     const tokenPayload: Record<string, any> = {
+        // Standard JWT subject claim — RFC 7519. Required by every
+        // ecosystem service that consumes this token (windy-chat
+        // unified-login at provision.js:702-706 fails 401 if absent).
+        sub: user.id,
         userId: user.id,
         email: user.email,
         tier: user.tier,
         accountId: user.id,
+        // Snake-case companion to windyIdentityId — chat/mail/cloud
+        // services standardised on the snake-case form (provision.js:708).
+        // Both are emitted for backwards-compat with any consumer that
+        // already reads camelCase; future cleanup may drop camelCase.
+        windy_identity_id: windyIdentityId,
         windyIdentityId,
         // Phase 10.1: Unified Identity fields
         type: identityType,
