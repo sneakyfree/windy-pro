@@ -239,31 +239,58 @@ export default function Dashboard() {
                             source-of-truth row, not four. Tracked: ADR-008
                             companion in kit-army-config/docs.                       */}
                         {[
+                            // In-product surfaces (SPA panels / pages) — preferred where they exist,
+                            // because authed user lands directly in the working UI instead of a
+                            // marketing apex that can be broken or a JSON-only API host.
                             { key: 'windy_word', label: 'Windy Word', icon: '🎙️', href: '/transcribe' },
-                            { key: 'windy_chat', label: 'Windy Chat', icon: '💬', href: 'https://chat.windychat.ai' },
-                            { key: 'windy_mail', label: 'Windy Mail', icon: '📧', href: 'https://windymail.ai' },
+                            { key: 'windy_chat', label: 'Windy Chat', icon: '💬', href: '/app/chat' },
+                            { key: 'windy_mail', label: 'Windy Mail', icon: '📧', href: '/app/mail' },
                             { key: 'windy_cloud', label: 'Windy Cloud', icon: '☁️', href: '/vault' },
                             { key: 'windy_fly', label: 'Windy Fly', icon: '🪰', href: '/app/fly' },
                             { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: '/soul-file' },
                             { key: 'windy_traveler', label: 'Windy Traveler', icon: '🌍', href: '/translate' },
-                            { key: 'windy_text', label: 'Windy Text', icon: '📱', href: 'https://windytext.com' },
-                            { key: 'windy_call', label: 'Windy Call', icon: '📞', href: 'https://windycall.com' },
+                            // Marketing / external sites (still navigable, broken CTAs tracked
+                            // separately in docs/ballroom-blockers-2026-05-08.md).
                             { key: 'windy_code', label: 'Windy Code', icon: '💻', href: 'https://windycode.org' },
-                            { key: 'windy_mobile', label: 'Windy Mobile', icon: '📲', href: 'https://app.windyword.ai/mobile' },
                             { key: 'eternitas', label: 'Eternitas', icon: '🛡️', href: 'https://eternitas.ai' },
+                            // Surfaces without a working destination yet — render as
+                            // non-clickable "Coming soon" chips rather than dead links.
+                            // Domains are owned (CF zones) but no site is deployed; mobile
+                            // route at /mobile doesn't exist. Will become real links as each
+                            // surface lands. See ballroom-blockers doc for tracking.
+                            { key: 'windy_text', label: 'Windy Text', icon: '📱', comingSoon: true },
+                            { key: 'windy_call', label: 'Windy Call', icon: '📞', comingSoon: true },
+                            { key: 'windy_mobile', label: 'Windy Mobile', icon: '📲', comingSoon: true },
                         ].map(p => {
                             const product = ecosystem.products?.[p.key] || {}
-                            const status = product.status || 'not_provisioned'
+                            const status = p.comingSoon ? 'coming_soon' : (product.status || 'not_provisioned')
                             const badgeClass = status === 'active' ? 'eco-active'
                                 : status === 'pending' ? 'eco-pending'
                                 : status === 'upgrade_required' ? 'eco-upgrade'
                                 : status === 'available' ? 'eco-available'
+                                : status === 'coming_soon' ? 'eco-pending'
                                 : 'eco-inactive'
                             const badgeLabel = status === 'active' ? 'Active'
                                 : status === 'pending' ? 'Pending'
                                 : status === 'upgrade_required' ? 'Upgrade'
                                 : status === 'available' ? 'Available'
+                                : status === 'coming_soon' ? 'Coming Soon'
                                 : 'Not Active'
+                            // Coming-soon tiles render as dimmed, non-clickable cards.
+                            if (p.comingSoon) {
+                                return (
+                                    <div
+                                        key={p.key}
+                                        className="dash-eco-card"
+                                        style={{ opacity: 0.55, cursor: 'default' }}
+                                        title={`${p.label} — coming soon`}
+                                    >
+                                        <span className="dash-eco-icon">{p.icon}</span>
+                                        <span className="dash-eco-label">{p.label}</span>
+                                        <span className={`dash-eco-badge ${badgeClass}`}>{badgeLabel}</span>
+                                    </div>
+                                )
+                            }
                             const isExternal = p.href.startsWith('http')
                             return (
                                 <a
