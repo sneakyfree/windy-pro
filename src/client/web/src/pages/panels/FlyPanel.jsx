@@ -7,12 +7,19 @@ export default function FlyPanel({ apiFetch, user }) {
     const [input, setInput] = useState('')
     const [sending, setSending] = useState(false)
     const [agentStatus, setAgentStatus] = useState(null)
+    // null while loading, true if /api/health on the gateway is reachable, false otherwise.
+    // Distinct from agentStatus.status === 'active', which only confirms the user has
+    // a hatched windy_fly product record — it does NOT confirm a runtime is connected.
+    const [runtimeOnline, setRuntimeOnline] = useState(null)
     const messagesEnd = useRef(null)
 
     useEffect(() => {
         apiFetch('/identity/ecosystem-status').then(data => {
             if (data?.products?.windy_fly) setAgentStatus(data.products.windy_fly)
         }).catch(() => {})
+        apiFetch('/fly/runtime-status').then(data => {
+            setRuntimeOnline(!!data?.runtime_online)
+        }).catch(() => setRuntimeOnline(false))
     }, [apiFetch])
 
     useEffect(() => {
@@ -50,23 +57,47 @@ export default function FlyPanel({ apiFetch, user }) {
                 </div>
             </div>
 
-            {/* Agent status card */}
-            <div className="panel-card">
-                <div className="panel-card-title">Agent Status</div>
-                <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-                    <div className="panel-stat">
-                        <span className="panel-stat-value">{agentStatus?.status === 'active' ? 'Online' : 'Offline'}</span>
+            {/* Agent status card — 3-state honest UI.
+                Provisioned-but-runtime-offline used to show 'Online' (a lie); now shows
+                'Hatched — runtime offline' so the user knows where the gap is.        */}
+            {(() => {
+                const provisioned = agentStatus?.status === 'active'
+                let valueLabel, badgeLabel, badgeClass, helperText
+                if (!provisioned) {
+                    valueLabel = 'Not hatched'
+                    badgeLabel = agentStatus?.status || 'not provisioned'
+                    badgeClass = 'badge-offline'
+                    helperText = "You haven't hatched an agent yet. Visit /app/fly to start the ceremony."
+                } else if (runtimeOnline === true) {
+                    valueLabel = 'Online'
+                    badgeLabel = 'active'
+                    badgeClass = 'badge-active'
+                    helperText = 'Agent is running and accepting messages.'
+                } else if (runtimeOnline === false) {
+                    valueLabel = 'Hatched — runtime offline'
+                    badgeLabel = 'runtime offline'
+                    badgeClass = 'badge-offline'
+                    helperText = "Your agent is hatched but no runtime is connected. Install Windy Pro on your computer and sign in, or run `pip install windyfly && windy go` on a machine you own to bring the runtime online."
+                } else {
+                    // runtimeOnline still loading
+                    valueLabel = 'Checking…'
+                    badgeLabel = 'probing runtime'
+                    badgeClass = 'badge-offline'
+                    helperText = 'Checking if your agent runtime is reachable…'
+                }
+                return (
+                    <div className="panel-card">
+                        <div className="panel-card-title">Agent Status</div>
+                        <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                            <div className="panel-stat">
+                                <span className="panel-stat-value">{valueLabel}</span>
+                            </div>
+                            <span className={`panel-badge ${badgeClass}`}>{badgeLabel}</span>
+                        </div>
+                        <p style={{ fontSize: '13px', color: '#64748B', marginTop: '8px' }}>{helperText}</p>
                     </div>
-                    <span className={`panel-badge ${agentStatus?.status === 'active' ? 'badge-active' : 'badge-offline'}`}>
-                        {agentStatus?.status || 'not provisioned'}
-                    </span>
-                </div>
-                <p style={{ fontSize: '13px', color: '#64748B', marginTop: '8px' }}>
-                    {agentStatus?.status === 'active'
-                        ? 'Agent is running and accepting messages.'
-                        : "Agent is offline. Start it with 'windy start' on your computer, or hatch a new one at windyfly.ai."}
-                </p>
-            </div>
+                )
+            })()}
 
             {/* Quick commands */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
