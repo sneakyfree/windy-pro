@@ -103,3 +103,5 @@ playwright-report/
 .env.production
 .env.production.bak.*
 deploy-prod/.env*
+account-server/accounts.db
+account-server/*.db

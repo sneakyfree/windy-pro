@@ -8,8 +8,7 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import http from 'http';
-import WebSocket from 'ws';
-import jwt from 'jsonwebtoken';
+import { setupTranscribeStreamWS } from './services/transcribe-stream';
 
 import { config } from './config';
 import { getDb, closeDb, closeDbAsync } from './db/schema';
@@ -414,106 +413,11 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 const server = http.createServer(app);
 
-const wss = new WebSocket.Server({ server, path: '/ws/transcribe' });
-
-wss.on('connection', (ws: WebSocket) => {
-    let authenticated = false;
-    let wsConfig = { language: 'en', engine: 'cloud-standard' };
-    let chunkCount = 0;
-
-    console.log('🎙️  WS transcribe: client connected');
-
-    ws.send(JSON.stringify({ type: 'ack' }));
-
-    // SEC-H1: Close connection if no auth within 10 seconds
-    const authTimeout = setTimeout(() => {
-        if (!authenticated) {
-            ws.send(JSON.stringify({ type: 'error', message: 'Authentication timeout' }));
-            ws.close(4001, 'Authentication timeout');
-        }
-    }, 10000);
-
-    ws.on('message', (data: Buffer | ArrayBuffer | string) => {
-        // Binary audio chunk
-        if (Buffer.isBuffer(data) || data instanceof ArrayBuffer) {
-            // SEC-H1: Reject binary data until authenticated
-            if (!authenticated) {
-                ws.send(JSON.stringify({ type: 'error', message: 'Authentication required before sending audio' }));
-                return;
-            }
-            chunkCount++;
-            if (chunkCount % 10 === 0) {
-                ws.send(JSON.stringify({
-                    type: 'transcript',
-                    text: `[Transcription chunk ${chunkCount}]`,
-                    partial: true,
-                    confidence: 0.92,
-                    startTime: (chunkCount - 10) * 0.1,
-                    endTime: chunkCount * 0.1,
-                    language: wsConfig.language,
-                }));
-            }
-            return;
-        }
-
-        // Text message (JSON)
-        try {
-            const msg = JSON.parse(data.toString());
-
-            switch (msg.type) {
-                case 'auth':
-                    if (msg.token) {
-                        try {
-                            // SEC-H5: Explicit algorithm whitelist
-                            jwt.verify(msg.token, config.JWT_SECRET, { algorithms: ['HS256'] });
-                            authenticated = true;
-                            clearTimeout(authTimeout);
-                        } catch {
-                            authenticated = false;
-                        }
-                    }
-                    ws.send(JSON.stringify({ type: 'ack', authenticated }));
-                    break;
-
-                case 'config':
-                    // SEC-H1: Reject config before auth
-                    if (!authenticated) {
-                        ws.send(JSON.stringify({ type: 'error', message: 'Authentication required' }));
-                        return;
-                    }
-                    wsConfig.language = msg.language || wsConfig.language;
-                    wsConfig.engine = msg.engine || wsConfig.engine;
-                    ws.send(JSON.stringify({ type: 'state', state: 'listening' }));
-                    console.log(`🎙️  WS config: language=${wsConfig.language}, engine=${wsConfig.engine}`);
-                    break;
-
-                case 'stop':
-                    ws.send(JSON.stringify({
-                        type: 'transcript',
-                        text: `[Final transcription — ${chunkCount} audio chunks processed]`,
-                        partial: false,
-                        confidence: 0.95,
-                        startTime: 0,
-                        endTime: chunkCount * 0.1,
-                        language: wsConfig.language,
-                    }));
-                    console.log(`🎙️  WS transcribe: stopped after ${chunkCount} chunks`);
-                    ws.close();
-                    break;
-
-                default:
-                    ws.send(JSON.stringify({ type: 'error', message: `Unknown message type: ${msg.type}` }));
-            }
-        } catch {
-            ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON' }));
-        }
-    });
-
-    ws.on('close', () => {
-        clearTimeout(authTimeout);
-        console.log(`🎙️  WS transcribe: client disconnected (${chunkCount} chunks)`);
-    });
-});
+// /ws/transcribe — AWS Transcribe Streaming proxy (ADR-009 M1).
+// Replaces the prior placeholder handler that emitted fake `[chunk N]`
+// events. Implementation lives in services/transcribe-stream.ts so the
+// AWS SDK + audio-stream bridge is independently testable + readable.
+setupTranscribeStreamWS(server);
 
 // ─── Start ───────────────────────────────────────────────────
 
