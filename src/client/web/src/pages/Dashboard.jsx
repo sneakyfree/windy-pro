@@ -261,6 +261,10 @@ export default function Dashboard() {
                             { key: 'windy_text', label: 'Windy Text', icon: '📱', comingSoon: true },
                             { key: 'windy_call', label: 'Windy Call', icon: '📞', comingSoon: true },
                             { key: 'windy_mobile', label: 'Windy Mobile', icon: '📲', comingSoon: true },
+                            // Windy Mind — Platform 12, locked 2026-05-08 per ADR-010 §2.
+                            // BYOM intelligence layer at windymind.ai. Sunday brainstorm
+                            // pending; placeholder until then.
+                            { key: 'windy_mind', label: 'Windy Mind', icon: '🧠', comingSoon: true },
                         ].map(p => {
                             const product = ecosystem.products?.[p.key] || {}
                             const status = p.comingSoon ? 'coming_soon' : (product.status || 'not_provisioned')

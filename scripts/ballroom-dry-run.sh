@@ -9,7 +9,7 @@
 #                                            asserts each lands and the
 #                                            ones the demo cares about
 #                                            land with status=ok
-#   3. Bundle hash check on app.windyword.ai
+#   3. Bundle hash check on windyword.ai
 #                                          → confirms the SPA serving
 #                                            the TTS "<Agent> is alive!"
 #                                            useEffect is the live one
@@ -43,7 +43,7 @@ set -u
 
 # ─── Config ────────────────────────────────────────────────────────
 ACCOUNT_BASE="${BALLROOM_ACCOUNT_BASE:-https://account.windyword.ai}"
-APP_BASE="${BALLROOM_APP_BASE:-https://app.windyword.ai}"
+APP_BASE="${BALLROOM_APP_BASE:-https://windyword.ai}"
 SSH_HOST="${BALLROOM_SSH_HOST:-ubuntu@54.88.113.79}"
 SSH_KEY="${BALLROOM_SSH_KEY:-$HOME/windy-prod-key.pem}"
 PRO_CONTAINER="${BALLROOM_PRO_CONTAINER:-deploy-prod-pro-account-server-1}"
@@ -97,7 +97,7 @@ echo "  test owner: $TEST_OWNER_EMAIL"
 echo
 
 # ─── Gate 1: SPA bundle is live and contains the TTS wiring ───────
-GATE="1. SPA bundle (app.windyword.ai)"
+GATE="1. SPA bundle (windyword.ai)"
 SPA_HTML=$(curl -s --max-time 10 "$APP_BASE/" 2>&1) || true
 BUNDLE_PATH=$(echo "$SPA_HTML" | grep -oE '/assets/index-[A-Za-z0-9]+\.js' | head -1)
 if [ -z "$BUNDLE_PATH" ]; then

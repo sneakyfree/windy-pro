@@ -21,9 +21,9 @@ export async function registerWithEternitas(): Promise<void> {
   }
 
   // Build the webhook URL.  account.windyword.ai is the canonical brand
-  // hostname for Pro's account-server (windypro.com is a thewindstorm.uk-era
-  // legacy default and would silently misregister against a host we don't
-  // own anymore).
+  // hostname for Pro's account-server (the legacy default from the
+  // thewindstorm.uk era would silently misregister against a host we
+  // don't own anymore).
   const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || 'https://account.windyword.ai';
   const webhookUrl = `${webhookBaseUrl}/api/v1/identity/webhooks/eternitas`;
   // Eternitas's POST /platforms/register marks contact_email as required;
