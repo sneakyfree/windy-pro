@@ -265,6 +265,12 @@ export default function Dashboard() {
                             // BYOM intelligence layer at windymind.ai. Sunday brainstorm
                             // pending; placeholder until then.
                             { key: 'windy_mind', label: 'Windy Mind', icon: '🧠', comingSoon: true },
+                            // Windy Search — Platform 13, promoted 2026-05-08.
+                            // Agent web-access toolkit at windysearch.com. V1 service
+                            // deployed (api.windysearch.com); SPA panel and Chrome extension
+                            // are V2/V3. Tile is consumer-visible because the trajectory
+                            // (Chrome ext → browser fork) lands user-facing surfaces.
+                            { key: 'windy_search', label: 'Windy Search', icon: '🔍', comingSoon: true },
                         ].map(p => {
                             const product = ecosystem.products?.[p.key] || {}
                             const status = p.comingSoon ? 'coming_soon' : (product.status || 'not_provisioned')
