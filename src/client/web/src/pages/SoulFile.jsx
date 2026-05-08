@@ -148,10 +148,11 @@ export default function SoulFile() {
                                 </div>
                             ))}
                         </div>
-                        <button style={{
+                        <Link to="/transcribe?mode=clone" style={{
+                            display: 'inline-block', textDecoration: 'none',
                             background: '#22C55E', color: '#000', border: 'none', padding: '12px 32px',
                             borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer'
-                        }}>🎙️ Start Clone Capture</button>
+                        }}>🎙️ Start Clone Capture</Link>
                     </div>
                 ) : (
                     recordings.map(r => (
