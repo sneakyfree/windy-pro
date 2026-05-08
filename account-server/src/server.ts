@@ -34,6 +34,7 @@ import passwordResetPageRoutes from './routes/password-reset-page';
 import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
 import flyRoutes from './routes/fly';
+import mindRoutes from './routes/mind';
 import voiceRoutes from './routes/voice';
 import agentRoutes from './routes/agent';
 import webhooksEternitasRoutes from './routes/webhooks-eternitas';
@@ -313,6 +314,11 @@ app.use('/api/v1/cloud', cloudRoutes);
 
 // Fly agent proxy (ecosystem dashboard chat)
 app.use('/api/v1/fly', flyRoutes);
+
+// Windy Mind V1 — multi-model LLM broker (ADR-010 §8 BYOM via Mind).
+// Single chokepoint: every Windy product calls /api/v1/mind/chat instead
+// of going direct to Anthropic/Groq/etc. Per Mind V1 design doc.
+app.use('/api/v1/mind', mindRoutes);
 
 // Voice command plane — POST /dispatch + GET /tasks/:id/events SSE.
 // The keystone of "voice as the unifying input modality" — every Windy
