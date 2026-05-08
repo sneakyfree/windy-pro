@@ -234,15 +234,16 @@ describe('Cloud endpoint hardening', () => {
   //  3. POST /api/v1/cloud/push/send — stub path
   // ─────────────────────────────────────────
 
-  it('POST /api/v1/cloud/push/send → 200 stub when no FCM creds', async () => {
+  it('POST /api/v1/cloud/push/send → 501 with migration pointer', async () => {
     const res = await request(app)
       .post('/api/v1/cloud/push/send')
       .set('Authorization', `Bearer ${token}`)
       .send({ title: 'Test', body: 'Hello' });
 
-    expect(res.status).toBe(200);
-    expect(res.body.stub).toBe(true);
-    expect(res.body.sent).toBe(false);
+    // Push sending moved to chat push-gateway per ADR-006.
+    expect(res.status).toBe(501);
+    expect(res.body.error).toBe('Not Implemented');
+    expect(res.body.moved_to).toMatch(/push-gateway/);
   });
 
   // ─────────────────────────────────────────

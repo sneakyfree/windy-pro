@@ -126,82 +126,25 @@ router.post('/phone/release', authenticateToken, async (req: Request, res: Respo
 
 // ─── POST /api/v1/cloud/push/send ───────────────────────────
 //
-// Send a push notification. Uses FCM HTTP v1 API when FCM_SERVER_KEY
-// is configured, otherwise returns a dev stub.
+// RETIRED — push sending lives at the chat push-gateway now.
 //
-router.post('/push/send', authenticateToken, async (req: Request, res: Response) => {
-    try {
-        const userId = (req as AuthRequest).user.userId;
-        const { token, title, body, data } = req.body || {};
-
-        const fcmKey = process.env.FCM_SERVER_KEY;
-
-        if (!fcmKey) {
-            console.log(`[cloud] Push send (dev stub) for user ${userId.slice(0, 8)}: ${title || '(no title)'}`);
-            return res.json({
-                sent: false,
-                stub: true,
-                message: 'Push notifications not configured. Set FCM_SERVER_KEY.',
-            });
-        }
-
-        if (!token) {
-            return res.status(400).json({ error: 'Device push token is required' });
-        }
-        if (!title && !body) {
-            return res.status(400).json({ error: 'At least one of title or body is required' });
-        }
-
-        try {
-            const payload: any = {
-                to: token,
-                notification: {},
-            };
-            if (title) payload.notification.title = title;
-            if (body) payload.notification.body = body;
-            if (data && typeof data === 'object') payload.data = data;
-
-            const fcmRes = await fetch('https://fcm.googleapis.com/fcm/send', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `key=${fcmKey}`,
-                },
-                body: JSON.stringify(payload),
-                signal: AbortSignal.timeout(10000),
-            });
-
-            if (!fcmRes.ok) {
-                const errText = await fcmRes.text();
-                console.warn(`[cloud] FCM returned ${fcmRes.status}: ${errText}`);
-                return res.status(502).json({ error: 'Push notification delivery failed' });
-            }
-
-            // FCM legacy v1 response shape: { success: number, failure: number,
-            // results: [{ message_id?: string, error?: string }, ...] }.
-            // .json() returns `unknown` in recent TS so we narrow to a minimal
-            // shape — these are the only fields we read.
-            const result = (await fcmRes.json()) as {
-                success?: number;
-                failure?: number;
-                results?: Array<{ message_id?: string; error?: string }>;
-            };
-            console.log(`🔔 Push sent to user ${userId.slice(0, 8)}: ${title || '(no title)'}`);
-
-            res.json({
-                sent: true,
-                success: result.success || 0,
-                failure: result.failure || 0,
-                messageId: result.results?.[0]?.message_id || null,
-            });
-        } catch (err: any) {
-            console.error('[cloud] FCM send error:', err.message);
-            res.status(502).json({ error: 'Push notification delivery failed' });
-        }
-    } catch (err: any) {
-        console.error('[cloud] Push send error:', err);
-        res.status(500).json({ error: 'Push notification failed' });
-    }
+// This route used to call FCM's legacy HTTP API directly (sunset
+// by Google on 2024-06-20). Per ADR-006, push registration moved
+// to the chat-side push-gateway (chat.windychat.ai); push SENDING
+// belongs there too via the cross-service push bus
+// (POST /api/v1/push/notify, see services/push-gateway/server.js
+// in sneakyfree/windy-chat).
+//
+// Kept as 501 Not Implemented so any straggling client gets a
+// clear migration signal. GAP_ANALYSIS.md (line 46) already
+// described this as the desired state — the actual code lagged.
+//
+router.post('/push/send', authenticateToken, (_req: Request, res: Response) => {
+    res.status(501).json({
+        error: 'Not Implemented',
+        moved_to: 'chat push-gateway POST /api/v1/push/notify',
+        message: 'Push notification sending moved to the chat push-gateway per ADR-006. Publish to the cross-service push bus instead of calling account-server directly.',
+    });
 });
 
 export default router;
