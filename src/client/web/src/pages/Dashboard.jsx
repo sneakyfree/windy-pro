@@ -232,14 +232,24 @@ export default function Dashboard() {
                 <div className="dash-ecosystem">
                     <h3 className="dash-ecosystem-title">Windy Ecosystem</h3>
                     <div className="dash-ecosystem-grid">
+                        {/* TODO(arch): this list is duplicated across SPA / mobile /
+                            account-server. Next iteration: extract to a shared
+                            registry (likely shared/ecosystem-products.ts re-exported
+                            via @windy-pro/contracts) so a new product gets one
+                            source-of-truth row, not four. Tracked: ADR-008
+                            companion in kit-army-config/docs.                       */}
                         {[
                             { key: 'windy_word', label: 'Windy Word', icon: '🎙️', href: '/transcribe' },
-                            { key: 'windy_chat', label: 'Windy Chat', icon: '💬', href: 'https://windychat.ai' },
+                            { key: 'windy_chat', label: 'Windy Chat', icon: '💬', href: 'https://chat.windychat.ai' },
                             { key: 'windy_mail', label: 'Windy Mail', icon: '📧', href: 'https://windymail.ai' },
                             { key: 'windy_cloud', label: 'Windy Cloud', icon: '☁️', href: '/vault' },
-                            { key: 'windy_fly', label: 'Windy Fly', icon: '🤖', href: 'https://windyfly.ai' },
+                            { key: 'windy_fly', label: 'Windy Fly', icon: '🪰', href: '/app/fly' },
                             { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: '/soul-file' },
                             { key: 'windy_traveler', label: 'Windy Traveler', icon: '🌍', href: '/translate' },
+                            { key: 'windy_text', label: 'Windy Text', icon: '📱', href: 'https://windytext.com' },
+                            { key: 'windy_call', label: 'Windy Call', icon: '📞', href: 'https://windycall.com' },
+                            { key: 'windy_code', label: 'Windy Code', icon: '💻', href: 'https://windycode.org' },
+                            { key: 'windy_mobile', label: 'Windy Mobile', icon: '📲', href: 'https://app.windyword.ai/mobile' },
                             { key: 'eternitas', label: 'Eternitas', icon: '🛡️', href: 'https://eternitas.ai' },
                         ].map(p => {
                             const product = ecosystem.products?.[p.key] || {}
