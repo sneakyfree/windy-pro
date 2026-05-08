@@ -205,11 +205,17 @@ describe('POST /api/v1/auth/change-password', () => {
 // ─── Translation ──────────────────────────────────────────────
 
 describe('POST /api/v1/translate/text', () => {
-  it('returns 401 without auth', async () => {
+  // Route is intentionally optionalAuth: anonymous callers (the i18n Tier 2
+  // dynamic-string translator) need to use it without a token.
+  it('returns 200 + translation payload without auth (no history persisted)', async () => {
     const res = await request(app)
       .post('/api/v1/translate/text')
       .send({ text: 'hello', sourceLang: 'en', targetLang: 'es' });
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('translatedText');
+    expect(res.body).toHaveProperty('engine');
+    expect(res.body.sourceLang).toBe('en');
+    expect(res.body.targetLang).toBe('es');
   });
 });
 

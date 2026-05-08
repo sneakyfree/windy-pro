@@ -222,15 +222,24 @@ router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (
 
         const confidence = Math.round((engine !== 'stub' ? 0.92 + Math.random() * 0.06 : 0.88 + Math.random() * 0.10) * 100) / 100;
         const translationId = uuidv4();
+        const userId = (req as AuthRequest).user?.userId;
 
-        stmts.insertTranslation.run(
-            translationId, (req as AuthRequest).user?.userId || 'anonymous',
-            sourceLang, targetLang,
-            text, translatedText,
-            confidence, 'text'
-        );
+        // Persist history only for authenticated users. The translations.user_id
+        // column has a FK to users(id) and a NOT NULL constraint; passing
+        // 'anonymous' triggers SQLITE_CONSTRAINT_FOREIGNKEY (test env) and
+        // invalid-UUID rejection on Postgres (prod), turning a successful
+        // translation into a 500. Anonymous callers still get the translated
+        // payload back, just with no row in the history table.
+        if (userId) {
+            stmts.insertTranslation.run(
+                translationId, userId,
+                sourceLang, targetLang,
+                text, translatedText,
+                confidence, 'text'
+            );
+        }
 
-        console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${((req as AuthRequest).user?.userId || 'anonymous').slice(0, 8)} (engine: ${engine})`);
+        console.log(`📝 Text translation: ${sourceLang}→${targetLang} for user ${userId ? userId.slice(0, 8) : 'anonymous'} (engine: ${engine})`);
 
         res.json({
             id: translationId,
