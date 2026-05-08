@@ -173,7 +173,20 @@ for ln in lines:
         "agent_name": (d.get("data") or {}).get("agent_name"),
     })
 
-required_ok = ["eternitas.registered", "mail.provisioned", "birth_certificate.ready", "hatch.complete"]
+# Every event the ballroom audience visibly depends on. chat.provisioned +
+# cloud.provisioned + phone.assigned were missing from this list pre-2026-05-08;
+# their absence let a 3-layer prod regression in chat agent provisioning ship
+# unnoticed for weeks (PR #90 + WINDY_CHAT_URL/CHAT_SERVICE_TOKEN env vars).
+# See kit-army-config docs/ballroom-smoke-2026-05-08.md for the full incident.
+required_ok = [
+    "eternitas.registered",
+    "mail.provisioned",
+    "chat.provisioned",
+    "cloud.provisioned",
+    "phone.assigned",
+    "birth_certificate.ready",
+    "hatch.complete",
+]
 seen = {e["type"]: e for e in events}
 
 passport = next((e["passport"] for e in events if e["passport"]), None)
