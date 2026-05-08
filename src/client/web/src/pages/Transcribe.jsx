@@ -21,11 +21,22 @@ export default function Transcribe() {
     const transcriptRef = useRef(null)
     const authTimeoutRef = useRef(null)
 
-    // Connect to cloud WebSocket (first-message auth)
+    // Connect to cloud WebSocket (first-message auth).
+    //
+    // The SPA host (windyword.ai / cloudflare-pages.dev) is static
+    // and cannot proxy WebSocket upgrades. Target account-server
+    // directly — it is the canonical WS host for transcribe + future
+    // streaming surfaces. ADR-009 M1.
     const connect = useCallback(() => {
         const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
         const token = localStorage.getItem('windy_token')
-        const ws = new WebSocket(`${protocol}://${window.location.host}/ws/transcribe`)
+        // In dev (Vite), window.location.host is localhost:5173 — keep that
+        // path so the local mock or local account-server hits the same
+        // origin. In prod, hardcode account.windyword.ai.
+        const wsHost = (window.location.hostname === 'localhost' || window.location.hostname.endsWith('.local'))
+            ? window.location.host
+            : 'account.windyword.ai'
+        const ws = new WebSocket(`${protocol}://${wsHost}/ws/transcribe`)
 
         ws.onopen = () => {
             // Send auth as first message (token never in URL)
