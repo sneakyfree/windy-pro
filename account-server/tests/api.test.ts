@@ -300,10 +300,15 @@ describe('POST /api/v1/analytics', () => {
 // ─── Updates Check ────────────────────────────────────────────
 
 describe('GET /api/v1/updates/check', () => {
-  it('returns 501 not implemented', async () => {
+  // Public route — implemented since 2026-Q1, returns the latest version
+  // payload the desktop auto-updater consumes. (Test was authored before
+  // the implementation landed and asserted 501; aligning to current
+  // contract here so test-account-server stops carrying the residual red.)
+  it('returns the latest update manifest', async () => {
     const res = await request(app).get('/api/v1/updates/check');
-    expect(res.status).toBe(501);
-    expect(res.body.error).toBe('Not implemented');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('version');
+    expect(res.body).toHaveProperty('url');
   });
 });
 
