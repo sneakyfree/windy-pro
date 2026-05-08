@@ -78,7 +78,7 @@ services:
       - APNS_KEY_PATH=${APNS_KEY_PATH:-}
       - APNS_KEY_ID=${APNS_KEY_ID:-}
       - APNS_TEAM_ID=${APNS_TEAM_ID:-}
-      - APNS_BUNDLE_ID=${APNS_BUNDLE_ID:-com.windypro.chat}
+      - APNS_BUNDLE_ID=${APNS_BUNDLE_ID:-}
     volumes:
       - ../services/chat-push-gateway:/app:ro
     restart: unless-stopped
