@@ -1,7 +1,26 @@
 /**
- * Windy Mind V1 — shared types for the multi-model broker.
+ * ⚠️  HISTORICAL WIRE-PROTOCOL SPIKE — NOT THE CANONICAL V1 (per ADR-013, 2026-05-10).
  *
- * Per `kit-army-config/docs/windy-mind-v1-design-2026-05-08.md`:
+ * The canonical V1 of Windy Mind is being rebuilt in Python + FastAPI at
+ * `~/windy-mind/api/`. This Node.js broker is preserved as historical
+ * reference — it proved the OpenAI-compatible request shape, OAuth flow
+ * for Anthropic Max-sub quota, Groq adapter, and provider fallback chain.
+ * Those lessons carry forward to the Python rebuild.
+ *
+ * Internal Windy products that still call this broker should migrate to
+ * `https://api.windymind.ai/v1/chat` once the Python V1 ships. This
+ * Node.js code will be deprecated (return 301 redirect) and eventually
+ * deleted.
+ *
+ * See:
+ * - kit-army-config/docs/adr-013-marathon-stack-2026-05-10.md
+ * - kit-army-config/docs/windy-mind-master-plan-2026-05-10.md
+ * - kit-army-config/docs/windy-mind-v1-design-2026-05-08.md
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ *
+ * Windy Mind V1 — shared types for the multi-model broker (HISTORICAL).
+ *
  * V1 supports 6 models across 5 providers. The broker normalizes the
  * OpenAI-compatible chat-completions shape to provider-specific calls.
  *
