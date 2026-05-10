@@ -114,7 +114,7 @@ describe('translate-mind broker behavior contract', () => {
         // Verify the mock is in place
         const res = await fetch('http://placeholder', { method: 'POST' });
         expect(res.ok).toBe(true);
-        const data = await res.json();
+        const data = await res.json() as { choices: Array<{ message: { content: string } }>; model: string };
         expect(data.choices[0].message.content).toBe('Hola mundo');
         expect(data.model).toBe('llama-3.3-70b-versatile');
     });
