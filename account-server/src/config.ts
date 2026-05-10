@@ -42,6 +42,17 @@ export const config = {
     DB_PATH: process.env.DB_PATH || path.join(__dirname, '..', 'accounts.db'),
     GROQ_API_KEY: process.env.GROQ_API_KEY || '',
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+    // Windy Mind — BYOM intelligence layer per ADR-010 §8. When set, the
+    // translate routes attempt to route LLM calls through Mind first
+    // (validates the BYOM invariant + generates audit_log rows + applies
+    // EI-tier rate limits). Direct Groq/OpenAI remain as fallback when
+    // Mind is unavailable or when the caller is anonymous (Mind requires
+    // a Pro JWT or Eternitas EPT). Default points at staging.
+    MIND_API_URL: process.env.MIND_API_URL || 'https://api.windymind.ai',
+    // When true, anonymous translate/text callers ALSO route through Mind
+    // using a service token. Default false; enable once Mind has BYOK +
+    // service-token support (Mind master plan M3.x).
+    MIND_FORCE_FOR_ANONYMOUS: process.env.MIND_FORCE_FOR_ANONYMOUS === 'true',
     // File storage
     DATA_ROOT,
     UPLOADS_PATH,
