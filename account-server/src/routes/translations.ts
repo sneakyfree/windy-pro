@@ -20,6 +20,69 @@ const router = Router();
 const stmts = getStatements();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+// ─── Windy Mind broker helper (ADR-010 §8 BYOM invariant) ────
+//
+// Routes translate's LLM chat-completion step through api.windymind.ai/v1/chat
+// when:
+//   - MIND_API_URL is configured (default: https://api.windymind.ai)
+//   - The caller has a valid Pro JWT in req.headers.authorization
+//
+// Mind's broker handles routing to the actual provider (Groq Llama by default
+// for the model name we pass), applies EI-tier rate limits, writes audit_log
+// rows, and returns OpenAI-compatible response. Existing GROQ_API_KEY remains
+// in account-server .env as fallback when Mind is unavailable.
+//
+// Returns translated text on success, null on any failure (caller falls back
+// to direct Groq/OpenAI per existing code paths). NEVER throws.
+//
+// Per Mind master plan §1 — Mind accepts windy-pro JWT (RS256, JWKS at
+// account.windyword.ai) OR Eternitas EPT (ES256). Dispatch by typ header.
+async function tryMindBroker(args: {
+    text: string;
+    prompt: string;
+    userJwt: string;
+}): Promise<{ translatedText: string; modelUsed: string } | null> {
+    try {
+        const res = await fetch(`${config.MIND_API_URL}/v1/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${args.userJwt}`,
+            },
+            body: JSON.stringify({
+                // llama-3.3-70b-versatile is the Groq SKU per Mind master plan
+                // §1 V1 model lineup. Cheapest path; same provider as direct.
+                model: 'llama-3.3-70b-versatile',
+                messages: [{ role: 'user', content: args.prompt }],
+                temperature: 0.3,
+                max_tokens: 2048,
+            }),
+            signal: AbortSignal.timeout(10000),
+        });
+
+        if (!res.ok) {
+            // Mind broker non-200; caller falls back to direct.
+            // SEC-H7: don't log response body (may contain provider-side detail).
+            console.warn(`⚠️  Mind broker returned ${res.status}; falling back to direct`);
+            return null;
+        }
+
+        const data: any = await res.json();
+        const translatedText = data.choices?.[0]?.message?.content?.trim();
+        if (!translatedText) return null;
+
+        // Mind echoes back the model actually used (may differ from requested
+        // if broker fell back internally — Sonnet → Llama chain). We log this
+        // so audit_log on windy-pro side stays correlated with Mind's.
+        const modelUsed = data.model || 'mind:llama-3.3-70b-versatile';
+        return { translatedText, modelUsed };
+    } catch (err: any) {
+        // Network error, timeout, or DNS failure — fall back to direct.
+        console.warn(`⚠️  Mind broker call failed (${err.message}); falling back to direct`);
+        return null;
+    }
+}
+
 const SUPPORTED_LANGUAGES: Language[] = [
     { code: 'en', name: 'English' },
     { code: 'es', name: 'Spanish' },
@@ -95,18 +158,33 @@ router.post('/speech', authenticateToken, upload.single('audio'), validate(Speec
             return res.status(422).json({ error: 'No speech detected in audio' });
         }
 
-        // Step 2: Translate transcribed text
+        // Step 2: Translate transcribed text — try Mind broker first (BYOM
+        // invariant per ADR-010 §8). /speech is always authenticated so the
+        // user JWT is always available. Fall back to direct provider if Mind
+        // unavailable.
         const langName = (code: string) => (SUPPORTED_LANGUAGES.find(l => l.code === code) || { name: code }).name;
         let translatedText: string;
-        let engine = isGroq ? 'groq' : 'openai';
+        let engine: string = isGroq ? 'groq' : 'openai';
+        const prompt = `Translate the following text from ${langName(sourceLang)} to ${langName(targetLang)}. Return ONLY the translated text, nothing else.\n\n${transcribedText}`;
+
+        const speechUserJwt = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+        let mindTranslated: string | undefined;
+        if (speechUserJwt && config.MIND_API_URL) {
+            const mindResult = await tryMindBroker({ text: transcribedText, prompt, userJwt: speechUserJwt });
+            if (mindResult) {
+                mindTranslated = mindResult.translatedText;
+                engine = `mind:${mindResult.modelUsed}`;
+            }
+        }
 
         const chatUrl = isGroq
             ? 'https://api.groq.com/openai/v1/chat/completions'
             : 'https://api.openai.com/v1/chat/completions';
         const chatModel = isGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
-        const prompt = `Translate the following text from ${langName(sourceLang)} to ${langName(targetLang)}. Return ONLY the translated text, nothing else.\n\n${transcribedText}`;
 
-        const chatRes = await fetch(chatUrl, {
+        // If Mind answered, skip the direct call entirely; otherwise hit the
+        // existing direct path. Either way translatedText ends up set.
+        const chatRes = mindTranslated ? null : await fetch(chatUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -121,7 +199,9 @@ router.post('/speech', authenticateToken, upload.single('audio'), validate(Speec
             signal: AbortSignal.timeout(10000),
         });
 
-        if (chatRes.ok) {
+        if (mindTranslated) {
+            translatedText = mindTranslated;
+        } else if (chatRes && chatRes.ok) {
             const chatData: any = await chatRes.json();
             translatedText = chatData.choices?.[0]?.message?.content?.trim() || `[${targetLang}] ${transcribedText}`;
         } else {
@@ -171,12 +251,31 @@ router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (
         let translatedText: string | undefined;
         let engine = 'stub';
         const langName = (code: string) => (SUPPORTED_LANGUAGES.find(l => l.code === code) || { name: code }).name;
+        const prompt = `Translate the following text from ${langName(sourceLang)} to ${langName(targetLang)}. Return ONLY the translated text, nothing else.\n\n${text}`;
 
-        // Try real translation via Groq or OpenAI
+        // ──── BYOM via Windy Mind (preferred path when authenticated) ────
+        // Per ADR-010 §8: internal Windy products should route LLM calls through
+        // Mind, not direct providers. Currently authenticated users only (Mind
+        // requires Pro JWT). Anonymous callers fall through to direct-provider
+        // logic below (per MIND_FORCE_FOR_ANONYMOUS flag; default off).
+        const userId = (req as AuthRequest).user?.userId;
+        const userJwt = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+        const isAuthed = !!userId && !!userJwt;
+
+        if (isAuthed && config.MIND_API_URL) {
+            const mindResult = await tryMindBroker({ text, prompt, userJwt });
+            if (mindResult) {
+                translatedText = mindResult.translatedText;
+                engine = `mind:${mindResult.modelUsed}`;
+                console.log(`📝 AI Translation (${engine}): ${sourceLang}→${targetLang}`);
+            }
+        }
+
+        // ──── Direct-provider fallback (existing logic; runs when Mind didn't answer) ────
         const groqKey = config.GROQ_API_KEY;
         const openaiKey = config.OPENAI_API_KEY;
 
-        if (groqKey || openaiKey) {
+        if (!translatedText && (groqKey || openaiKey)) {
             try {
                 const isGroq = !!groqKey;
                 const apiUrl = isGroq
@@ -184,8 +283,6 @@ router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (
                     : 'https://api.openai.com/v1/chat/completions';
                 const apiKey = groqKey || openaiKey;
                 const model = isGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
-
-                const prompt = `Translate the following text from ${langName(sourceLang)} to ${langName(targetLang)}. Return ONLY the translated text, nothing else.\n\n${text}`;
 
                 const apiRes = await fetch(apiUrl, {
                     method: 'POST',
@@ -220,9 +317,11 @@ router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (
             translatedText = `[${targetLang}] ${text}`;
         }
 
-        const confidence = Math.round((engine !== 'stub' ? 0.92 + Math.random() * 0.06 : 0.88 + Math.random() * 0.10) * 100) / 100;
+        // engine is 'mind:*' (Mind broker) or 'groq' / 'openai' / 'stub' (direct/fallback)
+        const isAiEngine = engine !== 'stub';
+        const confidence = Math.round((isAiEngine ? 0.92 + Math.random() * 0.06 : 0.88 + Math.random() * 0.10) * 100) / 100;
         const translationId = uuidv4();
-        const userId = (req as AuthRequest).user?.userId;
+        // userId already extracted above for Mind broker auth check
 
         // Persist history only for authenticated users. The translations.user_id
         // column has a FK to users(id) and a NOT NULL constraint; passing
