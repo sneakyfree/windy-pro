@@ -46,7 +46,7 @@ const PRODUCTS = [
         name: 'Eternitas',
         description: "Your agent's passport",
         icon: '\uD83E\uDEA8',
-        href: 'https://eternitas.ai',
+        href: 'https://app.eternitas.ai',
         internal: false,
     },
 ]
