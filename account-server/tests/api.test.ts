@@ -45,6 +45,57 @@ describe('GET /health', () => {
   });
 });
 
+// ─── MF1: /version (deployment identity) ────────────────────────
+// See ~/kit-army-config/docs/marathon-foundations-program-2026-05-11.md §MF1.
+
+describe('GET /version', () => {
+  it('returns 200 with the MF1 contract shape', async () => {
+    const res = await request(app).get('/version');
+    expect(res.status).toBe(200);
+    expect(res.body.service).toBe('windy-pro-account');
+    expect(typeof res.body.version).toBe('string');
+    expect(res.body.version.length).toBeGreaterThan(0);
+    expect(typeof res.body.started_at).toBe('string');
+    // commit_sha + build_timestamp may be null in dev; both fields must exist.
+    expect(res.body).toHaveProperty('commit_sha');
+    expect(res.body).toHaveProperty('commit_sha_short');
+    expect(res.body).toHaveProperty('build_timestamp');
+    expect(res.body).toHaveProperty('environment');
+  });
+
+  it('reflects COMMIT_SHA + BUILD_TIMESTAMP env vars when set', async () => {
+    const prevSha = process.env.COMMIT_SHA;
+    const prevBuildTs = process.env.BUILD_TIMESTAMP;
+    process.env.COMMIT_SHA = 'abc1234567890abcdef1234567890abcdef12345';
+    process.env.BUILD_TIMESTAMP = '2026-05-11T12:00:00Z';
+
+    const res = await request(app).get('/version');
+    expect(res.body.commit_sha).toBe('abc1234567890abcdef1234567890abcdef12345');
+    expect(res.body.commit_sha_short).toBe('abc1234');
+    expect(res.body.build_timestamp).toBe('2026-05-11T12:00:00Z');
+
+    if (prevSha === undefined) delete process.env.COMMIT_SHA;
+    else process.env.COMMIT_SHA = prevSha;
+    if (prevBuildTs === undefined) delete process.env.BUILD_TIMESTAMP;
+    else process.env.BUILD_TIMESTAMP = prevBuildTs;
+  });
+
+  it('returns null for unset env vars (loud miss-config signal)', async () => {
+    const prevSha = process.env.COMMIT_SHA;
+    const prevBuildTs = process.env.BUILD_TIMESTAMP;
+    delete process.env.COMMIT_SHA;
+    delete process.env.BUILD_TIMESTAMP;
+
+    const res = await request(app).get('/version');
+    expect(res.body.commit_sha).toBeNull();
+    expect(res.body.commit_sha_short).toBeNull();
+    expect(res.body.build_timestamp).toBeNull();
+
+    if (prevSha !== undefined) process.env.COMMIT_SHA = prevSha;
+    if (prevBuildTs !== undefined) process.env.BUILD_TIMESTAMP = prevBuildTs;
+  });
+});
+
 // ─── Auth: Registration ───────────────────────────────────────
 
 describe('POST /api/v1/auth/register', () => {

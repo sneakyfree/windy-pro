@@ -165,6 +165,33 @@ router.get(['/health', '/healthz', '/api/v1/health'], async (_req: Request, res:
     }
 });
 
+// ─── GET /version (MF1 — deployment identity) ─────────────────
+//
+// Separate from /health on purpose:
+//   - /health is for orchestrators (liveness/readiness probes)
+//   - /version is for deployment verification (provenance)
+//   - /version MUST NOT depend on DB — process-level fact, safe to
+//     call during incidents
+//
+// Consumer: kit-army-config deployed-state cron polls /version every
+// 30 minutes and writes docs/deployed-state.json. See
+// ~/kit-army-config/docs/marathon-foundations-program-2026-05-11.md §MF1.
+
+const VERSION_STARTED_AT: string = new Date().toISOString();
+
+router.get('/version', (_req: Request, res: Response) => {
+    const commitSha = process.env.COMMIT_SHA || null;
+    res.json({
+        service: 'windy-pro-account',
+        version: SERVER_VERSION,
+        commit_sha: commitSha,
+        commit_sha_short: commitSha ? commitSha.slice(0, 7) : null,
+        build_timestamp: process.env.BUILD_TIMESTAMP || null,
+        started_at: VERSION_STARTED_AT,
+        environment: process.env.ENVIRONMENT || process.env.NODE_ENV || 'unknown',
+    });
+});
+
 // ─── POST /api/v1/analytics ──────────────────────────────────
 
 router.post('/api/v1/analytics', analyticsLimiter, validate(AnalyticsRequestSchema), (req: Request, res: Response) => {
