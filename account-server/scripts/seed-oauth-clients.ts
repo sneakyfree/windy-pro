@@ -52,7 +52,7 @@ const FIRST_PARTY_CLIENTS: ClientSeed[] = [
   {
     clientId: 'eternitas',
     name: 'Eternitas',
-    redirectUris: ['https://eternitas.ai/auth/callback'],
+    redirectUris: ['https://app.eternitas.ai/auth/callback'],
     allowedScopes: ['eternitas:verify', 'eternitas:register'],
     isFirstParty: true,
     isPublic: false,

@@ -2102,64 +2102,15 @@
       </div>
     </div>
 
-    <!-- ═══ SCREEN 2: ACCOUNT ═══ -->
-    <div class="screen" id="screen-2">
-      <h1 style="font-size:20px; margin-bottom:4px;" data-i18n="acct.title">🔑 Your Windy Word Account</h1>
-      <p style="font-size:15px; color:var(--text-dim); margin-bottom:16px;">Sign in to activate your engines. One
-        account, up to 5 devices.</p>
-
-      <div class="auth-error" id="auth-error"></div>
-      <div class="auth-success" id="auth-success"></div>
-
-      <div class="account-section">
-        <div class="account-option" id="opt-login" onclick="selectAccountOption('login')">
-          <h3 data-i18n="acct.loginTitle">🔓 Sign In</h3>
-          <p data-i18n="acct.loginDesc">Already have an account? Welcome back.</p>
-          <div class="account-form" id="form-login">
-            <input class="input-field" type="email" id="login-email" placeholder="Email address"
-              data-i18n-placeholder="acct.emailPlaceholder">
-            <input class="input-field" type="password" id="login-password" placeholder="Password"
-              data-i18n-placeholder="acct.passwordPlaceholder">
-            <button class="auth-btn" id="btn-login" onclick="event.stopPropagation(); handleLogin()"
-              data-i18n="acct.loginBtn">Sign In →</button>
-          </div>
-        </div>
-
-        <div class="account-option" id="opt-register" onclick="selectAccountOption('register')">
-          <h3 data-i18n="acct.registerTitle">✨ Create Account</h3>
-          <p data-i18n="acct.registerDesc">New to Windy Word? Start your journey.</p>
-          <div class="account-form" id="form-register">
-            <input class="input-field" type="text" id="reg-name" placeholder="Full name"
-              data-i18n-placeholder="acct.namePlaceholder">
-            <input class="input-field" type="email" id="reg-email" placeholder="Email address"
-              data-i18n-placeholder="acct.emailPlaceholder">
-            <input class="input-field" type="password" id="reg-password" placeholder="Create password"
-              data-i18n-placeholder="acct.createPasswordPlaceholder">
-            <input class="input-field" type="password" id="reg-password-confirm" placeholder="Confirm password"
-              data-i18n-placeholder="acct.confirmPasswordPlaceholder">
-            <button class="auth-btn" id="btn-register" onclick="event.stopPropagation(); handleRegister()">Create
-              Account →</button>
-          </div>
-        </div>
-
-        <div class="account-option" id="opt-skip" onclick="selectAccountOption('skip'); handleFreeAccount()">
-          <h3 data-i18n="acct.skipTitle">⏭️ Try Free Tier</h3>
-          <p data-i18n="acct.skipDesc">Get started with 2 free engines. Create an account later.</p>
-        </div>
-      </div>
-
-      <div class="device-limit-notice">
-        <span class="notice-icon">📱</span>
-        <span class="notice-text">Free tier: <strong>1 device</strong>. Upgrade to Windy Word for 3 devices, Windy Ultra
-          for 5, or Windy Max for <strong>10</strong> devices.</span>
-      </div>
-
-      <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goToScreen(1)" data-i18n="btn.back">← Back</button>
-        <button class="btn btn-primary" id="btn-to-models" disabled onclick="goToScreen(3)"
-          data-i18n="btn.continue">Continue →</button>
-      </div>
-    </div>
+    <!-- ═══ SCREEN 2: ACCOUNT (deleted per Phase 8 + P14) ═══
+      The account screen was bypassed by Phase 8 (continueFromHardware →
+      goToScreen('languages')) and intentionally removed in P14, freeing
+      goToScreen to operate on string names rather than DOM index.
+      Tests in 02-screen-flow.spec.js assert `#screen-2` no longer exists.
+      Dead JS handlers (selectAccountOption, handleLogin, handleRegister,
+      handleFreeAccount, .auth-error/.auth-success CSS) are retained for
+      now — they're unreachable but not yet pruned to keep this fix
+      narrow. See windy-pro#104. -->
 
     <!-- ═══ SCREEN 3: YOUR LANGUAGES ═══ -->
     <div class="screen" id="screen-3">
@@ -6350,8 +6301,13 @@
 
     // ─── WIZARD i18n ───
     // Reads ?lang= URL param, loads wizard-i18n.json, applies to [data-i18n] elements
+    // Note: `wizardLang` is already declared at the top of this script (line 3100)
+    // by the earlier initWizardI18n() system. Re-declaring with `let` here was a
+    // duplicate-binding SyntaxError that silently dropped this entire <script>
+    // block — and with it goToScreen, runHardwareScan, every onclick handler. The
+    // 12 wizard E2E tests timed out at `waitForFunction` for an active screen
+    // because the JS that wires up navigation never ran. See windy-pro#104.
     let wizardI18nStrings = {};
-    let wizardLang = 'en';
 
     async function applyI18n(lang) {
       if (!lang || lang === 'en') return; // English is the inline default

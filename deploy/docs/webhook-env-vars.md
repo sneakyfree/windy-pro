@@ -72,7 +72,7 @@ WINDY_CLOUD_URL=https://cloud.windycloud.com
 WINDY_CLOUD_WEBHOOK_SECRET=REPLACE_WITH_openssl_rand_hex_32
 
 # Eternitas
-ETERNITAS_URL=https://eternitas.ai
+ETERNITAS_URL=https://api.eternitas.ai
 ETERNITAS_WEBHOOK_SECRET=REPLACE_WITH_openssl_rand_hex_32
 
 # Windy Clone

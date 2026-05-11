@@ -425,7 +425,7 @@ ACCOUNT_SERVER_URL=$API \
 MAIL_URL=https://mail.windymail.ai \
 CHAT_URL=https://chat.windychat.ai \
 CLOUD_URL=https://cloud.windycloud.com \
-ETERNITAS_URL=https://eternitas.ai \
+ETERNITAS_URL=https://api.eternitas.ai \
 bash scripts/launch-smoke-test.sh
 ```
 

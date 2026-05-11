@@ -60,7 +60,7 @@ export default function PassportPanel({ apiFetch }) {
                         You don't have an Eternitas passport yet. Passports are issued when you
                         hatch an AI agent through Windy Fly.
                     </p>
-                    <a href="https://eternitas.ai" target="_blank" rel="noopener noreferrer" className="panel-btn" style={{ marginTop: '12px' }}>
+                    <a href="https://app.eternitas.ai" target="_blank" rel="noopener noreferrer" className="panel-btn" style={{ marginTop: '12px' }}>
                         Learn about Eternitas
                     </a>
                 </div>
