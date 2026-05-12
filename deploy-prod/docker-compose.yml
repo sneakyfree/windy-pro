@@ -53,6 +53,10 @@ services:
     build:
       context: ../
       dockerfile: account-server/Dockerfile
+      args:
+        # MF1 deployment-identity; surfaced via GET /version
+        COMMIT_SHA: ${COMMIT_SHA:-}
+        BUILD_TIMESTAMP: ${BUILD_TIMESTAMP:-}
     image: windy-pro-account-server:local
     restart: unless-stopped
     deploy:
