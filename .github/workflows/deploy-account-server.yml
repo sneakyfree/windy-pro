@@ -1,0 +1,76 @@
+name: Deploy account-server
+
+# Marathon Foundation #13 — auto-deploy the account-server (Express API
+# behind https://account.windyword.ai) to the shared EC2 on every push
+# to main that touches account-server or shared contracts.
+#
+# Sister workflow to deploy-web.yml (which deploys src/client/web/ to
+# Cloudflare Pages). This one handles the API tier.
+#
+# Pattern: lightweight in-place rebuild. The prod compose at
+# /opt/windy-pro/deploy-prod/docker-compose.yml on EC2 (hand-curated,
+# NOT in repo) gets build.args plumbed via this PR; the Dockerfile gets
+# ARG/ENV so the build can bake commit_sha into the image. The workflow
+# exports fresh env vars on every deploy.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "account-server/**"
+      - "shared/contracts/**"
+      - ".github/workflows/deploy-account-server.yml"
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - name: Check auto-deploy is configured
+        id: check
+        env:
+          HAS_HOST: ${{ secrets.DEPLOY_HOST != '' }}
+          HAS_USER: ${{ secrets.DEPLOY_USER != '' }}
+          HAS_KEY:  ${{ secrets.DEPLOY_KEY != '' }}
+        run: |
+          if [[ "$HAS_HOST" == "true" && "$HAS_USER" == "true" && "$HAS_KEY" == "true" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Auto-deploy secrets configured; will deploy this commit."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::DEPLOY_HOST/USER/KEY not configured; auto-deploy skipped."
+          fi
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
+    steps:
+      - name: Deploy to shared EC2 + verify /version
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          envs: GITHUB_SHA
+          script: |
+            set -euo pipefail
+            cd /opt/windy-pro
+            sudo git fetch origin main --quiet
+            sudo git reset --hard origin/main
+            cd deploy-prod
+            export COMMIT_SHA="${GITHUB_SHA}"
+            export BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            sudo -E docker compose --env-file .env.production build pro-account-server
+            sudo -E docker compose --env-file .env.production up -d --no-deps pro-account-server
+            sleep 10
+            HOST_PORT=$(sudo docker port deploy-prod-pro-account-server-1 | head -1 | awk -F: '{print $NF}')
+            DEPLOYED_SHA=$(curl -s "http://localhost:$HOST_PORT/version" | python3 -c "import sys,json; print(json.load(sys.stdin).get('commit_sha',''))")
+            if [[ "$DEPLOYED_SHA" == "$COMMIT_SHA" ]]; then
+              echo "✅ Deploy verified: /version shows ${DEPLOYED_SHA:0:7}"
+            else
+              echo "❌ Verification failed: /version shows '$DEPLOYED_SHA', expected '$COMMIT_SHA'"
+              exit 1
+            fi

@@ -70,6 +70,13 @@ RUN mkdir -p /app/data/uploads /keys && chown -R windy:windy /app /keys
 
 USER windy
 
+# Deployment-identity build args, surfaced via GET /version (MF1).
+# Empty defaults so local dev builds still succeed.
+ARG COMMIT_SHA=""
+ARG BUILD_TIMESTAMP=""
+ENV COMMIT_SHA=$COMMIT_SHA
+ENV BUILD_TIMESTAMP=$BUILD_TIMESTAMP
+
 # Environment defaults
 ENV NODE_ENV=production
 ENV PORT=8098
