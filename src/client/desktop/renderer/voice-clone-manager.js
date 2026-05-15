@@ -3,7 +3,7 @@
  * Feature 7: Record samples, upload, list clones, preview, delete, select active.
  *
  * Word→Clone wire (ADR-045 Phase 2): each clone can be submitted to Windy
- * Clone (api.windyclone.com) for ElevenLabs training. The cloud_order_id
+ * Clone (api.windyclone.ai) for ElevenLabs training. The cloud_order_id
  * lives on the local clone record; we poll for status every 20s while it
  * is non-terminal so the UI surfaces progress without manual reload.
  */

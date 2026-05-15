@@ -6260,7 +6260,7 @@ ipcMain.handle('upload-voice-clone-file', async (event, name) => {
 // ElevenLabs training. The clone metadata holds cloud_order_id + cloud_status
 // so the UI can poll until ready. Override target via WINDY_CLONE_API_URL.
 
-const CLONE_API_DEFAULT_URL = 'https://api.windyclone.com';
+const CLONE_API_DEFAULT_URL = 'https://api.windyclone.ai';
 
 ipcMain.handle('submit-voice-clone-to-cloud', async (event, cloneId) => {
   try {
