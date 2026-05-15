@@ -1,3 +1,4 @@
+# adr-046-exempt: deploy/docker-compose.yml is the primary local-dev compose and declares the project name; this ecosystem variant is layered on for integration testing only.
 # Unified Ecosystem Docker Compose — for LOCAL integration testing.
 # NOT for production. Starts the core account-server and expects other
 # services (Eternitas, Chat, Mail, Cloud) to be running separately.

@@ -1,5 +1,8 @@
 # Run from repo root: docker compose -f deploy/docker-compose.yml up
 # Requires: deploy/.env (copy from deploy/.env.example)
+#
+# Explicit project name per ADR-046 (compose project naming discipline).
+name: windypro-dev
 
 services:
   # ── Web Frontend (Vite built static files served by Nginx) ──

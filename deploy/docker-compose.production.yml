@@ -1,3 +1,4 @@
+# adr-046-exempt: vestigial production compose — live prod uses /opt/windy-pro/deploy-prod/ per feedback_windy_pro_deploy_layout memory. Activate to `name: windypro-prod` if this path is revived.
 # Windy Pro — Production Docker Compose
 # Usage: docker compose -f docker-compose.production.yml --env-file .env.production up -d
 #
