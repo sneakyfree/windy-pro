@@ -1,3 +1,4 @@
+# adr-046-exempt: chat microservices addon — superseded by windy-chat repo (chat.windychat.ai is the live deploy). Activate if this path is revived.
 ##
 ## Windy Chat — Docker Compose (K Services)
 ##

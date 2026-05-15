@@ -1,3 +1,4 @@
+# adr-046-exempt: alternate prod path — live prod uses /opt/windy-pro/deploy-prod/ per feedback_windy_pro_deploy_layout memory. Activate to `name: windypro-account-server-prod` if this path is revived.
 # Windy Pro Account Server — Production Docker Compose
 #
 # Usage:

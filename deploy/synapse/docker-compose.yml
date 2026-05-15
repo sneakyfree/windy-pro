@@ -1,5 +1,6 @@
 version: '3.8'
 
+# adr-046-exempt: Synapse dev stack — superseded by windy-chat repo (Synapse moved out of windy-pro). Activate if this path is revived.
 services:
   # ── Synapse Matrix Homeserver ──
   synapse:

@@ -1,3 +1,4 @@
+# adr-046-exempt: Wave 13 Phase 1 historical AWS stack — not currently active. Activate to `name: windypro-wave13-aws` if Wave 13 deploy path is revived.
 # Wave 13 Phase 1 — Windy Pro account-server on AWS
 #
 # Differs from deploy/docker-compose.production.yml in two ways:
