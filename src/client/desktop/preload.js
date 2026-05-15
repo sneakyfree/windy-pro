@@ -217,6 +217,10 @@ contextBridge.exposeInMainWorld('windyAPI', {
   setActiveVoiceClone: (id) => ipcRenderer.invoke('set-active-voice-clone', id),
   previewVoiceClone: (id) => ipcRenderer.invoke('preview-voice-clone', id),
   uploadVoiceCloneFile: (name) => ipcRenderer.invoke('upload-voice-clone-file', name),
+  // Word→Clone wire (ADR-045 Phase 2) — submit a local recording to Windy Clone for
+  // ElevenLabs training, then poll for status until ready or failed.
+  submitVoiceCloneToCloud: (id) => ipcRenderer.invoke('submit-voice-clone-to-cloud', id),
+  getCloudCloneOrderStatus: (orderId) => ipcRenderer.invoke('get-cloud-clone-order-status', orderId),
 
   // ═══ Document Translation ══════════════════════════════════════
   extractDocumentText: (base64, ext) => ipcRenderer.invoke('extract-document-text', base64, ext),

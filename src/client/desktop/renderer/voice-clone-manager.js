@@ -1,7 +1,15 @@
 /**
  * Windy Word — Voice Clone Management
- * Feature 7: Record samples, upload, list clones, preview, delete, select active
+ * Feature 7: Record samples, upload, list clones, preview, delete, select active.
+ *
+ * Word→Clone wire (ADR-045 Phase 2): each clone can be submitted to Windy
+ * Clone (api.windyclone.com) for ElevenLabs training. The cloud_order_id
+ * lives on the local clone record; we poll for status every 20s while it
+ * is non-terminal so the UI surfaces progress without manual reload.
  */
+
+const CLOUD_STATUS_TERMINAL = new Set(['completed', 'failed', 'cancelled']);
+const CLOUD_POLL_INTERVAL_MS = 20_000;
 
 class VoiceCloneManager {
     constructor() {
@@ -13,6 +21,7 @@ class VoiceCloneManager {
         this.isRecording = false;
         this.recordingDuration = 0;
         this.recordTimer = null;
+        this._cloudPollTimer = null;
     }
 
     async render(container) {
@@ -49,14 +58,13 @@ class VoiceCloneManager {
           </div>
         </div>
 
-        <!-- Coming Soon Banner -->
-        <div class="vc-coming-soon" style="background:rgba(163,230,53,0.08); border:1px solid rgba(163,230,53,0.2); border-radius:12px; padding:16px; margin:16px 0;">
-          <p style="color:#A3E635; font-weight:700; margin:0 0 6px 0;">🧬 Windy Clone — Coming Soon</p>
+        <!-- Windy Clone integration -->
+        <div class="vc-cloud-info" style="background:rgba(163,230,53,0.08); border:1px solid rgba(163,230,53,0.2); border-radius:12px; padding:16px; margin:16px 0;">
+          <p style="color:#A3E635; font-weight:700; margin:0 0 6px 0;">Windy Clone — submit for training</p>
           <p style="color:#9CA3AF; font-size:13px; margin:0;">
-            Voice clone training is not yet available in-app. Your recordings are being
-            archived automatically. Export your voice data package anytime using the
-            Clone Data Archive, and use it with ElevenLabs, PlayHT, or any voice
-            cloning service.
+            Record at least 30 seconds of clear audio, then click "Submit to Windy Clone"
+            on the clone card below. Windy Clone trains a voice model via ElevenLabs and
+            surfaces it back here when ready (usually 1–3 minutes).
           </p>
         </div>
 
@@ -64,15 +72,17 @@ class VoiceCloneManager {
         <div class="vc-section">
           <h3>Your Voice Clones (${this.clones.length})</h3>
           <div class="vc-clone-list" id="vc-clone-list">
-            ${this.clones.length === 0 ? '<p class="vc-empty">Voice clones will appear here once Windy Clone launches. Your recordings are being saved automatically.</p>' :
+            ${this.clones.length === 0 ? '<p class="vc-empty">Your voice clones will appear here once you record or upload a sample.</p>' :
                 this.clones.map(clone => `
                 <div class="vc-clone-card ${clone.id === this.activeCloneId ? 'vc-active' : ''}" data-id="${clone.id}">
                   <div class="vc-clone-info">
                     <span class="vc-clone-name">${clone.name || 'Unnamed Clone'}</span>
                     <span class="vc-clone-meta">${clone.duration || '?'}s sample · Created ${window.WindyDateUtils ? WindyDateUtils.formatDateOnly(new Date(clone.created_at || Date.now())) : new Date(clone.created_at || Date.now()).toLocaleDateString()}</span>
-                    <span class="vc-clone-status">${clone.status === 'ready' ? '✅ Ready' : clone.status === 'processing' ? '⏳ Processing' : '❌ ' + (clone.status || 'Unknown')}</span>
+                    <span class="vc-clone-status">${this.renderLocalStatus(clone)}</span>
+                    ${this.renderCloudStatus(clone)}
                   </div>
                   <div class="vc-clone-actions">
+                    ${!clone.cloud_order_id ? `<button class="vc-action-btn vc-submit-cloud" data-id="${clone.id}" title="Submit to Windy Clone">Submit</button>` : ''}
                     <button class="vc-action-btn vc-preview" data-id="${clone.id}" title="Preview">▶️</button>
                     <button class="vc-action-btn vc-activate" data-id="${clone.id}" title="${clone.id === this.activeCloneId ? 'Active' : 'Set Active'}">
                       ${clone.id === this.activeCloneId ? '⭐' : '☆'}
@@ -103,11 +113,87 @@ class VoiceCloneManager {
     `;
 
         this.bindEvents(container);
+        this.schedulePolling(container);
+    }
+
+    renderLocalStatus(clone) {
+        if (clone.status === 'ready') return '✅ Local';
+        if (clone.status === 'processing') return '⏳ Processing';
+        return '❌ ' + (clone.status || 'Unknown');
+    }
+
+    renderCloudStatus(clone) {
+        if (!clone.cloud_order_id) {
+            return '<span class="vc-cloud-badge vc-cloud-not-submitted">Not submitted</span>';
+        }
+        const status = clone.cloud_status || 'pending';
+        const progress = clone.cloud_progress != null ? ` ${clone.cloud_progress}%` : '';
+        const label = {
+            pending: '⏳ Queued',
+            uploading: '⏳ Uploading',
+            training: '⏳ Training' + progress,
+            completed: '✅ Ready in Windy Clone',
+            failed: '❌ Failed',
+            cancelled: 'Cancelled',
+            awaiting_upstream: '⏳ Awaiting upstream',
+        }[status] || `⏳ ${status}`;
+        const errMsg = clone.cloud_error_message
+            ? `<span class="vc-cloud-error" title="${this._escape(clone.cloud_error_message)}"> · why?</span>`
+            : '';
+        return `<span class="vc-cloud-badge vc-cloud-${status}">${label}${errMsg}</span>`;
+    }
+
+    _escape(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    schedulePolling(container) {
+        // Always clear; we may have stopped polling because the last
+        // outstanding order finished.
+        if (this._cloudPollTimer) {
+            clearInterval(this._cloudPollTimer);
+            this._cloudPollTimer = null;
+        }
+        const pending = this.clones.filter(
+            c => c.cloud_order_id && !CLOUD_STATUS_TERMINAL.has(c.cloud_status || 'pending')
+        );
+        if (pending.length === 0) return;
+
+        this._cloudPollTimer = setInterval(async () => {
+            let anyChanged = false;
+            for (const clone of this.clones) {
+                if (!clone.cloud_order_id) continue;
+                if (CLOUD_STATUS_TERMINAL.has(clone.cloud_status || 'pending')) continue;
+                try {
+                    const res = await window.windyAPI.getCloudCloneOrderStatus(clone.cloud_order_id);
+                    if (res?.ok && res.status && res.status !== clone.cloud_status) {
+                        clone.cloud_status = res.status;
+                        clone.cloud_progress = res.progress;
+                        clone.cloud_error_message = res.error_message || null;
+                        anyChanged = true;
+                    }
+                } catch (err) {
+                    this._log.warn && this._log.warn('poll', err);
+                }
+            }
+            if (anyChanged) this.render(container);
+        }, CLOUD_POLL_INTERVAL_MS);
     }
 
     bindEvents(container) {
-        // Close
-        document.getElementById('vc-close').addEventListener('click', () => container.innerHTML = '');
+        // Close — clear the poll timer too so a closed panel doesn't keep
+        // hitting the Clone API in the background.
+        document.getElementById('vc-close').addEventListener('click', () => {
+            if (this._cloudPollTimer) {
+                clearInterval(this._cloudPollTimer);
+                this._cloudPollTimer = null;
+            }
+            container.innerHTML = '';
+        });
 
         // Record toggle
         document.getElementById('vc-record-btn').addEventListener('click', () => {
@@ -157,6 +243,35 @@ class VoiceCloneManager {
                     await window.windyAPI.deleteVoiceClone(btn.dataset.id);
                     this.clones = this.clones.filter(c => c.id !== btn.dataset.id);
                 } catch { /* delete failed */ }
+                this.render(container);
+            });
+        });
+
+        // Submit-to-cloud (ADR-045 Phase 2)
+        container.querySelectorAll('.vc-submit-cloud').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                btn.textContent = 'Submitting…';
+                try {
+                    const res = await window.windyAPI.submitVoiceCloneToCloud(btn.dataset.id);
+                    if (res?.ok) {
+                        const clone = this.clones.find(c => c.id === btn.dataset.id);
+                        if (clone) {
+                            clone.cloud_order_id = res.order_id;
+                            clone.cloud_status = res.status || 'pending';
+                            clone.cloud_submitted_at = new Date().toISOString();
+                        }
+                    } else {
+                        alert(`Submit failed: ${res?.error || 'unknown error'}`);
+                        btn.disabled = false;
+                        btn.textContent = 'Submit';
+                    }
+                } catch (err) {
+                    this._log.error('submitCloud', err);
+                    alert('Submit failed. See logs.');
+                    btn.disabled = false;
+                    btn.textContent = 'Submit';
+                }
                 this.render(container);
             });
         });

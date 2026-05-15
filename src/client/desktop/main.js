@@ -6255,6 +6255,143 @@ ipcMain.handle('upload-voice-clone-file', async (event, name) => {
   return { success: true, clone };
 });
 
+// ─── Word→Clone wire (ADR-045 Phase 2) ───
+// Submit a locally-recorded clone to Windy Clone's POST /api/v1/orders for
+// ElevenLabs training. The clone metadata holds cloud_order_id + cloud_status
+// so the UI can poll until ready. Override target via WINDY_CLONE_API_URL.
+
+const CLONE_API_DEFAULT_URL = 'https://api.windyclone.com';
+
+ipcMain.handle('submit-voice-clone-to-cloud', async (event, cloneId) => {
+  try {
+    const data = loadVoiceClones();
+    const clone = data.clones.find(c => c.id === cloneId);
+    if (!clone || !clone.audioPath || !fs.existsSync(clone.audioPath)) {
+      return { ok: false, error: 'Clone audio not found.' };
+    }
+    if (clone.cloud_order_id) {
+      return {
+        ok: false,
+        error: 'Already submitted to Windy Clone.',
+        cloud_order_id: clone.cloud_order_id,
+      };
+    }
+    const token = store.get('auth.token', '') || store.get('auth.storageToken', '');
+    if (!token) return { ok: false, error: 'Sign in to your Windy account first.' };
+
+    const audioBytes = fs.readFileSync(clone.audioPath);
+    const audioBase64 = audioBytes.toString('base64');
+    const cloneApiUrl = process.env.WINDY_CLONE_API_URL || CLONE_API_DEFAULT_URL;
+    const postData = JSON.stringify({
+      provider_id: 'elevenlabs',
+      clone_type: 'voice',
+      audio_base64: audioBase64,
+      audio_duration_seconds: clone.duration || null,
+      sample_name: clone.name || null,
+    });
+    const url = new URL(`${cloneApiUrl}/api/v1/orders`);
+    const https = require('https');
+    const result = await new Promise((resolve) => {
+      const req = https.request({
+        method: 'POST',
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+        timeout: 30000,
+      }, (res) => {
+        let body = '';
+        res.on('data', c => body += c);
+        res.on('end', () => {
+          let parsed = null;
+          try { parsed = JSON.parse(body); } catch { /* non-JSON response */ }
+          resolve({ statusCode: res.statusCode, body: parsed });
+        });
+      });
+      req.on('error', err => resolve({ statusCode: 0, body: { detail: err.message } }));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({ statusCode: 0, body: { detail: 'Request timed out' } });
+      });
+      req.write(postData);
+      req.end();
+    });
+
+    if (result.statusCode === 200 && result.body?.order_id) {
+      clone.cloud_order_id = result.body.order_id;
+      clone.cloud_status = result.body.status || 'pending';
+      clone.cloud_submitted_at = new Date().toISOString();
+      saveVoiceClones(data);
+      return { ok: true, order_id: result.body.order_id, status: clone.cloud_status };
+    }
+    return {
+      ok: false,
+      error: result.body?.detail || `Windy Clone returned HTTP ${result.statusCode}.`,
+      statusCode: result.statusCode,
+    };
+  } catch (err) {
+    console.error('[VC] submit-to-cloud error:', err && err.message);
+    return { ok: false, error: err && err.message };
+  }
+});
+
+ipcMain.handle('get-cloud-clone-order-status', async (event, orderId) => {
+  try {
+    const token = store.get('auth.token', '') || store.get('auth.storageToken', '');
+    if (!token) return { ok: false, error: 'Not signed in.' };
+    const cloneApiUrl = process.env.WINDY_CLONE_API_URL || CLONE_API_DEFAULT_URL;
+    const url = new URL(`${cloneApiUrl}/api/v1/orders/${encodeURIComponent(orderId)}`);
+    const https = require('https');
+    const result = await new Promise((resolve) => {
+      const req = https.get({
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        headers: { 'Authorization': `Bearer ${token}` },
+        timeout: 10000,
+      }, (res) => {
+        let body = '';
+        res.on('data', c => body += c);
+        res.on('end', () => {
+          let parsed = null;
+          try { parsed = JSON.parse(body); } catch { /* non-JSON */ }
+          resolve({ statusCode: res.statusCode, body: parsed });
+        });
+      });
+      req.on('error', () => resolve({ statusCode: 0 }));
+      req.on('timeout', () => { req.destroy(); resolve({ statusCode: 0 }); });
+    });
+    if (result.statusCode === 200 && result.body) {
+      // Mirror the latest status onto the local clone row so subsequent
+      // loads of the manager show fresh state without re-polling.
+      const data = loadVoiceClones();
+      const clone = data.clones.find(c => c.cloud_order_id === orderId);
+      if (clone) {
+        clone.cloud_status = result.body.status;
+        clone.cloud_progress = result.body.progress;
+        clone.cloud_error_message = result.body.error_message || null;
+        if (result.body.status === 'completed' || result.body.status === 'failed') {
+          clone.cloud_completed_at = new Date().toISOString();
+        }
+        saveVoiceClones(data);
+      }
+      return {
+        ok: true,
+        status: result.body.status,
+        progress: result.body.progress,
+        error_message: result.body.error_message || null,
+      };
+    }
+    return { ok: false, statusCode: result.statusCode };
+  } catch (err) {
+    return { ok: false, error: err && err.message };
+  }
+});
+
 // ─── Document Text Extraction ───
 ipcMain.handle('extract-document-text', async (event, base64, ext) => {
   try {
