@@ -45,6 +45,7 @@
   },
   "build": {
     "appId": "pro.windy.app",
+    "afterPack": "scripts/macos/afterpack-sign-bundled.cjs",
     "extraResources": [
       {
         "from": "src/engine",
@@ -119,8 +120,8 @@
       "icon": "assets/icon.icns",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "identity": null,
-      "notarize": false,
+      "identity": "Developer ID Application: Grant Whitmer (VXZ434QL89)",
+      "notarize": true,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
