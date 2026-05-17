@@ -252,7 +252,9 @@ export default function Dashboard() {
                             // Marketing / external sites (still navigable, broken CTAs tracked
                             // separately in docs/ballroom-blockers-2026-05-08.md).
                             { key: 'windy_code', label: 'Windy Code', icon: '💻', href: 'https://windycode.org' },
-                            { key: 'eternitas', label: 'Eternitas', icon: '🛡️', href: 'https://app.eternitas.ai' },
+                            // Eternitas: in-product Passport panel, not the external app
+                            // host (app.eternitas.ai was NXDOMAIN as of 2026-05-17).
+                            { key: 'eternitas', label: 'Eternitas', icon: '🛡️', href: '/app/passport' },
                             // Surfaces without a working destination yet — render as
                             // non-clickable "Coming soon" chips rather than dead links.
                             // Domains are owned (CF zones) but no site is deployed; mobile

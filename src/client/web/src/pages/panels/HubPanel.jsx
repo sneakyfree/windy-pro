@@ -42,12 +42,15 @@ const PRODUCTS = [
         internal: false,
     },
     {
+        // Eternitas: in-product Passport panel rather than the external app
+        // host (app.eternitas.ai was NXDOMAIN as of 2026-05-17). Keeps the
+        // authed user inside the working UI.
         key: 'eternitas',
         name: 'Eternitas',
         description: "Your agent's passport",
         icon: '\uD83E\uDEA8',
-        href: 'https://app.eternitas.ai',
-        internal: false,
+        href: '/app/passport',
+        internal: true,
     },
 ]
 
