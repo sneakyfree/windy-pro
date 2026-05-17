@@ -4,7 +4,6 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { makeRateLimiter } from '../services/rate-limiter';
-import http from 'http';
 import { getDb } from '../db/schema';
 import { config } from '../config';
 import { isRS256Available } from '../jwks';
@@ -67,25 +66,25 @@ let cachedHealth: HealthResult | null = null;
 let cacheExpiry = 0;
 
 /**
- * Probe a service's /health endpoint with a 3-second timeout.
+ * Probe a service's health endpoint with a 3-second timeout.
  * Returns "ok" on any 2xx response, "unreachable" otherwise.
+ *
+ * Uses native fetch (Node 18+) so http:// + https:// URLs both work —
+ * the previous http.get(url) silently failed on https:// URLs, which is
+ * how every sister service showed "unreachable" in prod even though
+ * they were all live (curl -s -o /dev/null -w '%{http_code}' returned
+ * 200 for all four).
+ *
+ * `healthPath` defaults to /health; chat overrides to the Synapse
+ * versions endpoint because Matrix homeservers don't expose /health
+ * (they return 404 there).
  */
-function checkService(baseUrl: string): Promise<string> {
+function checkService(baseUrl: string, healthPath: string = '/health'): Promise<string> {
     if (!baseUrl) return Promise.resolve('unreachable');
-    const url = baseUrl.replace(/\/+$/, '') + '/health';
-    return new Promise((resolve) => {
-        try {
-            const req = http.get(url, { timeout: 3000 }, (res) => {
-                // Consume the response body to free resources
-                res.resume();
-                resolve(res.statusCode && res.statusCode >= 200 && res.statusCode < 300 ? 'ok' : 'error');
-            });
-            req.on('error', () => resolve('unreachable'));
-            req.on('timeout', () => { req.destroy(); resolve('unreachable'); });
-        } catch {
-            resolve('unreachable');
-        }
-    });
+    const url = baseUrl.replace(/\/+$/, '') + healthPath;
+    return fetch(url, { method: 'GET', signal: AbortSignal.timeout(3000) })
+        .then((res) => (res.status >= 200 && res.status < 300 ? 'ok' : 'error'))
+        .catch(() => 'unreachable');
 }
 
 async function buildHealthResult(): Promise<HealthResult> {
@@ -102,8 +101,10 @@ async function buildHealthResult(): Promise<HealthResult> {
     const jwksStatus = isRS256Available() ? 'ok' : 'error';
 
     // 3. Ecosystem service checks (parallel, 3s timeout each)
+    //    chat = Matrix homeserver, probe /_matrix/client/versions (Synapse
+    //    doesn't expose /health). The rest expose /health and return 200.
     const [windyChat, windyMail, windyCloud, eternitas] = await Promise.all([
-        checkService(config.WINDY_CHAT_URL),
+        checkService(config.WINDY_CHAT_URL, '/_matrix/client/versions'),
         checkService(config.WINDY_MAIL_URL),
         checkService(config.WINDY_CLOUD_URL),
         checkService(config.ETERNITAS_URL),
