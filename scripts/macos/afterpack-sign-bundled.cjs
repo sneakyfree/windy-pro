@@ -40,7 +40,10 @@ module.exports = async function afterPack(context) {
       ...process.env,
       CODESIGN_IDENTITY: process.env.CODESIGN_IDENTITY,
       ENTITLEMENTS_PLIST: entitlements,
-      PRODUCT_SHORT: 'Windy Pro', // matches the helper-app filename prefix in the bundle
+      // PRODUCT_SHORT must match productName in package.json (used by helper-app
+      // filenames inside the bundle). Hard-coded to "Windy Pro" was a stale
+      // value from before the Pro/Word brand split; fixed 2026-05-17.
+      PRODUCT_SHORT: context.packager.appInfo.productName,
     },
   });
 

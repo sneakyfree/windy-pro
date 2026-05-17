@@ -120,7 +120,7 @@
       "icon": "assets/icon.icns",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "identity": "Developer ID Application: Grant Whitmer (VXZ434QL89)",
+      "identity": null,
       "notarize": true,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",

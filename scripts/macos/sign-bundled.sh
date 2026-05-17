@@ -22,7 +22,7 @@ set -euo pipefail
 APP="${1:?must pass path to .app}"
 IDENT="${CODESIGN_IDENTITY:?must set CODESIGN_IDENTITY env var}"
 ENT="${ENTITLEMENTS_PLIST:?must set ENTITLEMENTS_PLIST env var}"
-PRODUCT_SHORT="${PRODUCT_SHORT:-Windy Pro}"  # bundle's helper-app prefix
+PRODUCT_SHORT="${PRODUCT_SHORT:-Windy Word}"  # bundle's helper-app prefix (matches productName)
 
 echo "[sign-bundled] app=$APP"
 echo "[sign-bundled] identity=$IDENT"
@@ -37,17 +37,28 @@ if [ -d "$APP/Contents/Resources/bundled" ]; then
     -print0 | xargs -0 -n1 -I{} codesign --force --options runtime --timestamp --sign "$IDENT" "{}" 2>/dev/null
 fi
 
-# --- 2. Electron Framework Libraries + Squirrel ShipIt (--deep misses these) ---
+# --- 2. Electron Framework Libraries + Helpers + Squirrel ShipIt (--deep misses these) ---
+# 2026-05-17: chrome_crashpad_handler added — Electron 28 ships it under
+# Frameworks/Electron Framework.framework/Versions/A/Helpers/. Not auto-signed
+# by electron-builder; blocks framework reseal with "code object is not signed
+# at all" if missed. Catch-all `find Helpers` covers any future additions.
 echo "[sign-bundled] 2/6 sign Electron + Squirrel internals"
 for f in \
   "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/libEGL.dylib" \
   "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/libGLESv2.dylib" \
   "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/libffmpeg.dylib" \
   "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/libvk_swiftshader.dylib" \
+  "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Helpers/chrome_crashpad_handler" \
   "$APP/Contents/Frameworks/Squirrel.framework/Versions/A/Resources/ShipIt"
 do
   [ -e "$f" ] && codesign --force --options runtime --timestamp --sign "$IDENT" "$f" 2>/dev/null
 done
+# Catch-all: sign any other executable in Electron Framework Helpers/.
+if [ -d "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Helpers" ]; then
+  find "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Helpers" \
+    -type f -perm -u+x \
+    -print0 | xargs -0 -n1 -I{} codesign --force --options runtime --timestamp --sign "$IDENT" "{}" 2>/dev/null || true
+fi
 
 # --- 3. Wheel internals: extract, sign every .so/.dylib, rezip ---
 WHEELS_DIR="$APP/Contents/Resources/bundled/wheels"
@@ -74,8 +85,12 @@ fi
 
 # --- 4. Re-seal frameworks (their CodeResources now reference our newly signed internals) ---
 echo "[sign-bundled] 4/6 reseal frameworks"
-for fw in "$APP/Contents/Frameworks/Electron Framework.framework" \
-          "$APP/Contents/Frameworks/Squirrel.framework"; do
+# Sign EVERY .framework under Contents/Frameworks — Squirrel pulls in
+# Mantle.framework + ReactiveObjC.framework as separate top-level frameworks
+# that are not auto-signed by electron-builder and block outer .app reseal
+# with "code object is not signed at all". Iterate over the whole dir so
+# future Electron / Squirrel dep additions don't surprise us.
+for fw in "$APP/Contents/Frameworks/"*.framework; do
   [ -d "$fw" ] && codesign --force --options runtime --timestamp --sign "$IDENT" "$fw" 2>/dev/null
 done
 
