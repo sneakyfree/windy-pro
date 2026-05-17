@@ -13,8 +13,11 @@ export default defineConfig({
         proxy: {
             '/api/v1': 'http://localhost:8098',
             '/api': 'http://localhost:8000',
+            // /ws goes to account-server (8098), same host as /api/v1. Was
+            // 8000 (Python engine), which doesn't serve the transcribe WS — it
+            // produced an infinite "Reconnecting…" loop on /transcribe.
             '/ws': {
-                target: 'ws://localhost:8000',
+                target: 'ws://localhost:8098',
                 ws: true
             }
         }
