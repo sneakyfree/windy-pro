@@ -104,6 +104,18 @@ export const config = {
     // on the agent host to spin up the user's managed agent.
     WINDY_AGENT_URL: process.env.WINDY_AGENT_URL || 'http://localhost:3000',
     WINDY_AGENT_SERVICE_TOKEN: process.env.WINDY_AGENT_SERVICE_TOKEN || '',
+    // Windy Search — canonical web-search egress per master plan §2 V1
+    // hard gate (all 10 Windy products must call api.windysearch.com
+    // rather than direct Brave / Google APIs). V1 status is preemptive:
+    // account-server has no current web-search callsite, but pre-wiring
+    // the client means any future web-grounding surface (citation-
+    // augmented translate, admin-console research, agent-host search
+    // proxy) defaults through Search rather than re-implementing
+    // bridges inline. Both vars must be set for the client to
+    // instantiate; absent either, callers fall back to "search
+    // unavailable" rather than crashing boot.
+    WINDY_SEARCH_BASE_URL: process.env.WINDY_SEARCH_BASE_URL || 'https://api.windysearch.com',
+    WINDY_SEARCH_EPT: process.env.WINDY_SEARCH_EPT || '',
     // OCR — Google Cloud Vision API
     GOOGLE_VISION_API_KEY: process.env.GOOGLE_VISION_API_KEY || '',
     // "Sign in with Google" — consumer-side OAuth credentials for the
