@@ -95,9 +95,9 @@
     ],
     "publish": [
       {
-        "provider": "github",
-        "owner": "sneakyfree",
-        "repo": "windy-pro"
+        "provider": "generic",
+        "url": "https://downloads.windyword.ai",
+        "channel": "latest"
       }
     ],
     "files": [
