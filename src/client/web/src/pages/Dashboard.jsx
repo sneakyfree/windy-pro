@@ -186,8 +186,12 @@ export default function Dashboard() {
                 </div>
             </header>
 
-            {/* Hatch hero card — ballroom-blocker ribbon entry point */}
-            <HatchCard />
+            {/* Hatch hero card — ballroom-blocker ribbon entry point.
+                ADR-050: HatchCard derives hatched state from the API
+                (ecosystem.products.windy_fly.status) rather than
+                localStorage, closing the stale-cache trap surfaced
+                2026-05-19. localStorage stays as first-paint fallback. */}
+            <HatchCard ecosystem={ecosystem} />
 
             {/* Stats Bar */}
             {stats && (
