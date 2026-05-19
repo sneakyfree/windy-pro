@@ -145,7 +145,12 @@ export async function provisionAgent(
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                ...(config.ETERNITAS_API_KEY ? { 'Authorization': `Bearer ${config.ETERNITAS_API_KEY}` } : {}),
+                // Eternitas platform auth is X-API-Key, NOT Authorization: Bearer.
+                // The Bearer scheme is reserved for Operator JWTs (admin endpoints);
+                // platform-authenticated routes (bots/*, ei/*, ept-mint) read X-API-Key
+                // per src/eternitas/middleware/auth.py:get_current_platform.
+                // Misdetected as "invalid token" 2026-05-19 — diagnosed by direct curl.
+                ...(config.ETERNITAS_API_KEY ? { 'X-API-Key': config.ETERNITAS_API_KEY } : {}),
                 ...(config.ETERNITAS_SERVICE_TOKEN ? { 'X-Service-Token': config.ETERNITAS_SERVICE_TOKEN } : {}),
             },
             body: JSON.stringify({

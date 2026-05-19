@@ -357,7 +357,10 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
     emit({ type: 'eternitas.registering', status: 'pending', label: 'Registering passport with Eternitas…' });
     try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (config.ETERNITAS_API_KEY) headers['Authorization'] = `Bearer ${config.ETERNITAS_API_KEY}`;
+        // Eternitas platform auth is X-API-Key, NOT Authorization: Bearer.
+        // Bearer is reserved for Operator JWTs; platform routes read X-API-Key.
+        // See src/eternitas/middleware/auth.py:get_current_platform.
+        if (config.ETERNITAS_API_KEY) headers['X-API-Key'] = config.ETERNITAS_API_KEY;
         if (config.ETERNITAS_SERVICE_TOKEN) headers['X-Service-Token'] = config.ETERNITAS_SERVICE_TOKEN;
 
         const result = await fetchJson(`${config.ETERNITAS_URL}/api/v1/bots/auto-hatch`, {
