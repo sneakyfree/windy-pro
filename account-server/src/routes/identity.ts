@@ -1325,10 +1325,22 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
       products: {
         windy_word: { status: 'active', tier: user.tier },
         windy_chat: {
-          provisioned: chatProduct?.status === 'active',
+          // Matrix user_id (external_id) is the canonical signal that a
+          // user has a working Chat account. The provisioner inserts a
+          // row with status='pending' at signup (auth.ts:339,
+          // google-oauth.ts:225, ecosystem-provisioner.ts:98), and then
+          // flips it to 'active' WITH external_id set when the Matrix
+          // webhook responds. If the webhook fails silently, the row
+          // stays 'pending' forever — but if external_id is ever set,
+          // the Matrix account exists and Chat works for that user.
+          // ADR-026 §1 SoT: derive from the credential (external_id)
+          // rather than the status cache that can get stuck.
+          provisioned: chatProduct?.status === 'active' || !!chatProduct?.external_id,
           health: healthOf(chatHealth),
           ...(chatProduct?.external_id ? { matrix_user_id: chatProduct.external_id } : {}),
-          ...(chatProduct ? { status: chatProduct.status } : { status: 'not_provisioned' }),
+          status: chatProduct?.external_id
+            ? 'active'
+            : (chatProduct ? chatProduct.status : 'not_provisioned'),
         },
         windy_mail: {
           // Passport existence implies mailbox: per ADR-024 (Windy Mail =
