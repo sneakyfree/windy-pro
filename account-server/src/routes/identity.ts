@@ -1274,9 +1274,26 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
     const db = getDb();
     const userId = (req as AuthRequest).user.userId;
 
-    const products = db.prepare(
-      'SELECT product, status, external_id, metadata FROM product_accounts WHERE identity_id = ?',
-    ).all(userId) as { product: string; status: string; external_id: string; metadata: string }[];
+    // ADR-050: query both direct-holder rows (identity_id = user) AND
+    // operator-relationship rows (operator_identity_id = user). The latter
+    // surfaces bot-held products (Mail, Eternitas) on the operator's
+    // dashboard. Each (product) appears at most once per user under the
+    // UNIQUE(identity_id, product) constraint — but it can appear once as
+    // identity_id-row AND once as operator-row, so we dedupe by product
+    // with direct-holder taking precedence.
+    const allRows = db.prepare(
+      'SELECT product, status, external_id, metadata, identity_id, operator_identity_id FROM product_accounts WHERE identity_id = ? OR operator_identity_id = ?',
+    ).all(userId, userId) as { product: string; status: string; external_id: string; metadata: string; identity_id: string; operator_identity_id: string | null }[];
+    // Dedupe: prefer the direct-holder row over the operator-relationship
+    // row when both exist for the same product.
+    const productMap = new Map<string, typeof allRows[0]>();
+    for (const row of allRows) {
+      const existing = productMap.get(row.product);
+      if (!existing || row.identity_id === userId) {
+        productMap.set(row.product, row);
+      }
+    }
+    const products = Array.from(productMap.values());
 
     const user = db.prepare(
       'SELECT email, name, display_name, tier, storage_used, storage_limit, windy_identity_id FROM users WHERE id = ?',

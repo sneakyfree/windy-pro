@@ -181,6 +181,11 @@ CREATE TABLE IF NOT EXISTS token_blacklist (
 CREATE TABLE IF NOT EXISTS product_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     identity_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- operator_identity_id: when identity_id is a bot whose operator is a
+    -- human, this column points at the human. NULL for human-direct products
+    -- (Cloud, Word, etc.) and for operator-of-agent products (Fly) where the
+    -- operator IS the direct holder. See ADR-050 for the 3-category taxonomy.
+    operator_identity_id UUID REFERENCES users(id) ON DELETE SET NULL,
     product TEXT NOT NULL,
     external_id TEXT,
     status TEXT NOT NULL DEFAULT 'active',
@@ -190,6 +195,7 @@ CREATE TABLE IF NOT EXISTS product_accounts (
 );
 CREATE INDEX IF NOT EXISTS idx_product_accounts_identity ON product_accounts(identity_id);
 CREATE INDEX IF NOT EXISTS idx_product_accounts_product ON product_accounts(product);
+CREATE INDEX IF NOT EXISTS idx_product_accounts_operator ON product_accounts(operator_identity_id) WHERE operator_identity_id IS NOT NULL;
 
 -- ─── Identity Scopes ────────────────────────────────────────────
 

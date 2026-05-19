@@ -182,9 +182,11 @@ export async function provisionAgent(
              VALUES (?, ?, ?, 'active', ?, datetime('now'))`,
         ).run(crypto.randomUUID(), botUserId, passportNumber, ownerUserId);
 
+        // ADR-050: eternitas is a Category 2 (bot-held) product. The passport
+        // belongs to the bot, but the operator is the human. Populate both.
         db.prepare(
-            "UPDATE product_accounts SET status = 'active', external_id = ? WHERE identity_id = ? AND product = 'eternitas'",
-        ).run(passportNumber, botUserId);
+            "UPDATE product_accounts SET status = 'active', external_id = ?, operator_identity_id = ? WHERE identity_id = ? AND product = 'eternitas'",
+        ).run(passportNumber, ownerUserId, botUserId);
 
         result.eternitas = 'ok';
         result.passport_number = passportNumber;
@@ -227,12 +229,14 @@ export async function provisionAgent(
         result.matrix_user_id = chatData.matrix_user_id;
         result.dm_room_id = chatData.dm_room_id;
 
-        // Update product_accounts for chat
+        // Update product_accounts for chat.
+        // ADR-050: windy_chat is Category 2 (chat handle belongs to bot).
+        // identity_id = bot, operator_identity_id = human operator.
         db.prepare(
-            `INSERT OR REPLACE INTO product_accounts (id, identity_id, product, status, external_id, metadata, provisioned_at)
-             VALUES (?, ?, 'windy_chat', 'active', ?, ?, datetime('now'))`,
+            `INSERT OR REPLACE INTO product_accounts (id, identity_id, operator_identity_id, product, status, external_id, metadata, provisioned_at)
+             VALUES (?, ?, ?, 'windy_chat', 'active', ?, ?, datetime('now'))`,
         ).run(
-            crypto.randomUUID(), botUserId, chatData.matrix_user_id,
+            crypto.randomUUID(), botUserId, ownerUserId, chatData.matrix_user_id,
             JSON.stringify({ dm_room_id: chatData.dm_room_id, passport_number: passportNumber }),
         );
 

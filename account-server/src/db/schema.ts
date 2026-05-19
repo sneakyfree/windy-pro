@@ -261,6 +261,11 @@ function initSchema(db: DbAdapter): void {
     "ALTER TABLE users ADD COLUMN preferred_lang TEXT DEFAULT 'en'",         // ISO 639-1 language code
     "ALTER TABLE users ADD COLUMN last_login_at TEXT",                       // Tracks login recency
     "ALTER TABLE users ADD COLUMN windy_identity_id TEXT",                   // Universal cross-product identity UUID
+
+    // ─── ADR-050: product_accounts operator_identity_id ───
+    // Adds the operator-relationship column to existing local-dev SQLite DBs.
+    // For Postgres prod, see migrations/003-product-accounts-operator-identity-2026-05-19.sql.
+    "ALTER TABLE product_accounts ADD COLUMN operator_identity_id TEXT",
   ];
 
   for (const sql of migrations) {
@@ -294,16 +299,22 @@ function initSchema(db: DbAdapter): void {
     CREATE TABLE IF NOT EXISTS product_accounts (
       id TEXT PRIMARY KEY,
       identity_id TEXT NOT NULL,
+      -- operator_identity_id: when identity_id is a bot whose operator is a
+      -- human, this points at the human. NULL for human-direct + operator-of-
+      -- agent products. See ADR-050 for the 3-category taxonomy.
+      operator_identity_id TEXT,
       product TEXT NOT NULL,                          -- 'windy_pro' | 'windy_chat' | 'windy_mail' | 'windy_fly'
       external_id TEXT,                               -- Matrix user ID, email address, etc.
       status TEXT NOT NULL DEFAULT 'active',           -- 'active' | 'suspended' | 'pending' | 'deprovisioned'
       provisioned_at TEXT NOT NULL DEFAULT (datetime('now')),
       metadata TEXT NOT NULL DEFAULT '{}',             -- Product-specific JSON (tier, config, etc.)
       FOREIGN KEY (identity_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (operator_identity_id) REFERENCES users(id) ON DELETE SET NULL,
       UNIQUE(identity_id, product)
     );
     CREATE INDEX IF NOT EXISTS idx_product_accounts_identity ON product_accounts(identity_id);
     CREATE INDEX IF NOT EXISTS idx_product_accounts_product ON product_accounts(product);
+    CREATE INDEX IF NOT EXISTS idx_product_accounts_operator ON product_accounts(operator_identity_id);
 
     -- Identity scopes: JWT scopes granted to each identity
     -- Enables per-product access control (e.g., windy_pro:read, windy_chat:write)
