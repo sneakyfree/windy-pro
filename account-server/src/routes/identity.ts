@@ -1325,16 +1325,40 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
       products: {
         windy_word: { status: 'active', tier: user.tier },
         windy_chat: {
-          provisioned: chatProduct?.status === 'active',
+          // Matrix user_id (external_id) is the canonical signal that a
+          // user has a working Chat account. The provisioner inserts a
+          // row with status='pending' at signup (auth.ts:339,
+          // google-oauth.ts:225, ecosystem-provisioner.ts:98), and then
+          // flips it to 'active' WITH external_id set when the Matrix
+          // webhook responds. If the webhook fails silently, the row
+          // stays 'pending' forever — but if external_id is ever set,
+          // the Matrix account exists and Chat works for that user.
+          // ADR-026 §1 SoT: derive from the credential (external_id)
+          // rather than the status cache that can get stuck.
+          provisioned: chatProduct?.status === 'active' || !!chatProduct?.external_id,
           health: healthOf(chatHealth),
           ...(chatProduct?.external_id ? { matrix_user_id: chatProduct.external_id } : {}),
-          ...(chatProduct ? { status: chatProduct.status } : { status: 'not_provisioned' }),
+          status: chatProduct?.external_id
+            ? 'active'
+            : (chatProduct ? chatProduct.status : 'not_provisioned'),
         },
         windy_mail: {
-          provisioned: mailProduct?.status === 'active',
+          // Passport existence implies mailbox: per ADR-024 (Windy Mail =
+          // async comms kernel), the hatch ceremony provisions a passport
+          // and a mailbox atomically. Trusting that invariant avoids a
+          // 50-300ms per-dashboard-load admin probe against Mail (and the
+          // brittle dependency it would introduce). ADR-026 §1 SoT — derive
+          // from the credential, not the denormalized cache row that the
+          // hatch ceremony may not have written for historic users.
+          // The `external_id` (mail address) when present is still surfaced
+          // from product_accounts because the canonical localpart isn't
+          // computable from passport alone.
+          provisioned: !!passport || mailProduct?.status === 'active',
           health: healthOf(mailHealth),
           ...(mailProduct?.external_id ? { address: mailProduct.external_id } : {}),
-          ...(mailProduct ? { status: mailProduct.status } : { status: 'not_provisioned' }),
+          status: passport
+            ? 'active'
+            : (mailProduct ? mailProduct.status : 'not_provisioned'),
         },
         windy_cloud: {
           provisioned: true,
@@ -1367,20 +1391,39 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
         },
         windy_fly: (() => {
           const flyProduct = findProduct('windy_fly');
-          if (!flyProduct) return { status: 'not_provisioned', provisioned: false };
-          // Parse metadata for agent details (set by provisionAgent)
-          let meta: any = {};
-          try { meta = JSON.parse(flyProduct.metadata || '{}'); } catch {}
-          return {
-            status: flyProduct.status,
-            provisioned: flyProduct.status === 'active',
-            matrix_user_id: flyProduct.external_id || meta.matrix_user_id,
-            agent_name: meta.agent_name,
-            passport_number: meta.passport_number,
-            room_id: meta.dm_room_id,
-          };
+          if (flyProduct) {
+            // Existing path: an agent has been hatched and its product row
+            // was written. Surface agent metadata + active state.
+            let meta: any = {};
+            try { meta = JSON.parse(flyProduct.metadata || '{}'); } catch {}
+            return {
+              status: flyProduct.status,
+              provisioned: flyProduct.status === 'active',
+              matrix_user_id: flyProduct.external_id || meta.matrix_user_id,
+              agent_name: meta.agent_name,
+              passport_number: meta.passport_number,
+              room_id: meta.dm_room_id,
+            };
+          }
+          // No agent row yet — but if the user has an Eternitas passport,
+          // they already hold the credentials needed to spawn one via
+          // `pip install windyfly && windy go`. Surface as 'available'
+          // (consistent with windy_clone's hardcoded 'available' pattern
+          // for free-tier consumer access). ADR-026 SoT — derive from the
+          // credential, not the cache row that the hatch ceremony may not
+          // have written for historic users.
+          if (passport) {
+            return { status: 'available', provisioned: false };
+          }
+          return { status: 'not_provisioned', provisioned: false };
         })(),
         windy_clone: { status: 'available', provisioned: false, progress: 0 },
+        // Windy Code — free download per ADR-049 ("Free download + local
+        // use; Mind routing requires Pro to unlock all 15 buffet models").
+        // The base IDE is available to every signed-in user. Pro-tier
+        // gating happens inside the app at the Mind routing layer, not
+        // here at the dashboard-tile layer.
+        windy_code: { status: 'available', provisioned: false },
         windy_traveler: { status: user.tier !== 'free' ? 'active' : 'upgrade_required', provisioned: user.tier !== 'free' },
       },
     });
