@@ -509,6 +509,21 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
                 }),
             });
             agentEmail = mailResult.data?.email || null;
+            // ADR-050: windy_mail is Category 2 (mailbox belongs to bot).
+            // identity_id = bot, operator_identity_id = human operator,
+            // external_id = mailbox address. This is the first time the
+            // hatch flow writes a product_accounts row for mail — previously
+            // the row was missing entirely, which is why the dashboard
+            // Mail tile fell through to 'not_provisioned'.
+            if (mailResult.ok && agentEmail) {
+                db.prepare(
+                    `INSERT OR REPLACE INTO product_accounts (id, identity_id, operator_identity_id, product, status, external_id, metadata, provisioned_at)
+                     VALUES (?, ?, ?, 'windy_mail', 'active', ?, ?, datetime('now'))`,
+                ).run(
+                    crypto.randomUUID(), botUserId, userId, agentEmail,
+                    JSON.stringify({ passport_number: passportNumber, agent_name: agentName }),
+                );
+            }
             emit({
                 type: 'mail.provisioned',
                 status: mailResult.ok ? 'ok' : 'failed',
@@ -542,11 +557,13 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
         if (chatResult.ok) {
             matrixUserId = chatResult.data?.matrix_user_id || null;
             dmRoomId = chatResult.data?.dm_room_id || null;
+            // ADR-050: windy_chat is Category 2 (chat handle belongs to bot).
+            // identity_id = bot, operator_identity_id = human operator.
             db.prepare(
-                `INSERT OR REPLACE INTO product_accounts (id, identity_id, product, status, external_id, metadata, provisioned_at)
-                 VALUES (?, ?, 'windy_chat', 'active', ?, ?, datetime('now'))`,
+                `INSERT OR REPLACE INTO product_accounts (id, identity_id, operator_identity_id, product, status, external_id, metadata, provisioned_at)
+                 VALUES (?, ?, ?, 'windy_chat', 'active', ?, ?, datetime('now'))`,
             ).run(
-                crypto.randomUUID(), botUserId, matrixUserId,
+                crypto.randomUUID(), botUserId, userId, matrixUserId,
                 JSON.stringify({ dm_room_id: dmRoomId, passport_number: passportNumber }),
             );
             db.prepare(
