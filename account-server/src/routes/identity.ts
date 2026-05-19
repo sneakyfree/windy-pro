@@ -1331,10 +1331,22 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
           ...(chatProduct ? { status: chatProduct.status } : { status: 'not_provisioned' }),
         },
         windy_mail: {
-          provisioned: mailProduct?.status === 'active',
+          // Passport existence implies mailbox: per ADR-024 (Windy Mail =
+          // async comms kernel), the hatch ceremony provisions a passport
+          // and a mailbox atomically. Trusting that invariant avoids a
+          // 50-300ms per-dashboard-load admin probe against Mail (and the
+          // brittle dependency it would introduce). ADR-026 §1 SoT — derive
+          // from the credential, not the denormalized cache row that the
+          // hatch ceremony may not have written for historic users.
+          // The `external_id` (mail address) when present is still surfaced
+          // from product_accounts because the canonical localpart isn't
+          // computable from passport alone.
+          provisioned: !!passport || mailProduct?.status === 'active',
           health: healthOf(mailHealth),
           ...(mailProduct?.external_id ? { address: mailProduct.external_id } : {}),
-          ...(mailProduct ? { status: mailProduct.status } : { status: 'not_provisioned' }),
+          status: passport
+            ? 'active'
+            : (mailProduct ? mailProduct.status : 'not_provisioned'),
         },
         windy_cloud: {
           provisioned: true,
