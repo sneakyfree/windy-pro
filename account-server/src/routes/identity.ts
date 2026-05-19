@@ -1369,6 +1369,12 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
           };
         })(),
         windy_clone: { status: 'available', provisioned: false, progress: 0 },
+        // Windy Code — free download per ADR-049 ("Free download + local
+        // use; Mind routing requires Pro to unlock all 15 buffet models").
+        // The base IDE is available to every signed-in user. Pro-tier
+        // gating happens inside the app at the Mind routing layer, not
+        // here at the dashboard-tile layer.
+        windy_code: { status: 'available', provisioned: false },
         windy_traveler: { status: user.tier !== 'free' ? 'active' : 'upgrade_required', provisioned: user.tier !== 'free' },
       },
     });
