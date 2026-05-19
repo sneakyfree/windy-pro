@@ -1345,13 +1345,25 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
           storage_limit: user.storage_limit || 500 * 1024 * 1024,
         },
         eternitas: {
-          provisioned: eternitasProduct?.status === 'active',
+          // Passport existence is the source of truth — a minted passport
+          // means Eternitas is active for this user, regardless of whether
+          // the `product_accounts.eternitas` row was written. The hatch
+          // ceremony may race the dashboard read, and historic users
+          // (passport minted before product_accounts plumbing existed)
+          // would otherwise show "Not Active" despite having a valid
+          // passport. ADR-026 Eternitas-SoT invariant: trust state is
+          // derived from the credential, not a denormalized cache.
+          // Falls back to product_accounts.status only if no passport yet
+          // (in-flight provisioning).
+          provisioned: !!passport || eternitasProduct?.status === 'active',
           health: healthOf(eternitasHealth),
           ...(passport ? {
             passport: passport.passport_number,
             trust_score: passport.trust_score != null ? Math.round(passport.trust_score * 100) : null,
           } : {}),
-          ...(eternitasProduct ? { status: eternitasProduct.status } : { status: 'not_provisioned' }),
+          status: passport
+            ? 'active'
+            : (eternitasProduct ? eternitasProduct.status : 'not_provisioned'),
         },
         windy_fly: (() => {
           const flyProduct = findProduct('windy_fly');
