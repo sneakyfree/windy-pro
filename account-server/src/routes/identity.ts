@@ -1312,10 +1312,27 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
     const mailProduct = findProduct('windy_mail');
     const eternitasProduct = findProduct('eternitas');
 
-    // Fetch Eternitas passport if provisioned (include trust_score)
+    // Fetch Eternitas passport — by direct identity OR by operator relationship.
+    //
+    // In this ecosystem, humans OPERATE agents; agents HOLD passports. A user
+    // who hatched a Windy Fly agent owns a passport indirectly: the passport
+    // row has `identity_id = bot.id` and `operator_identity_id = human.id`.
+    // PR #124 only checked identity_id, which legitimately returned no rows
+    // for human callers — surfacing "Eternitas: NOT ACTIVE" on their dashboard
+    // tile despite having a fully-provisioned agent with a valid passport.
+    //
+    // Surfaced 2026-05-19 when Grant successfully hatched his agent
+    // (ET26-55EN-PRW2) but his Eternitas + Mail tiles stayed at "Not Active"
+    // because the passport row was keyed to the bot's user_id. The dashboard
+    // SoT should describe "what does this user operate" — including agents'
+    // passports — not just "what does this user directly hold."
+    //
+    // ORDER BY prefers a direct identity passport over an operator-of passport
+    // when both exist (rare; future-proofing for users who get their own
+    // passport in addition to operating bots).
     const passport = db.prepare(
-      'SELECT passport_number, trust_score FROM eternitas_passports WHERE identity_id = ?',
-    ).get(userId) as { passport_number: string; trust_score: number | null } | undefined;
+      'SELECT passport_number, trust_score FROM eternitas_passports WHERE identity_id = ? OR operator_identity_id = ? ORDER BY (identity_id = ?) DESC LIMIT 1',
+    ).get(userId, userId, userId) as { passport_number: string; trust_score: number | null } | undefined;
 
     res.json({
       windy_identity_id: user.windy_identity_id || userId,
