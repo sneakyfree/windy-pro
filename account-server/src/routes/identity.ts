@@ -1424,6 +1424,16 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
         // gating happens inside the app at the Mind routing layer, not
         // here at the dashboard-tile layer.
         windy_code: { status: 'available', provisioned: false },
+        // Windy Mind — BYOM intelligence kernel (ADR-022). Public API at
+        // api.windymind.ai is live for any signed-in user with a Windy
+        // JWT; the dashboard tile links to windymind.ai (Dashboard.jsx).
+        // Pro-tier unlocks the full 15-model buffet per ADR-049.
+        windy_mind: { status: 'available', provisioned: false },
+        // Windy Search — agent web-access toolkit (ADR-014). Public API
+        // at api.windysearch.com is live; the dashboard tile links to
+        // windysearch.com. EI-tier rate limits scale with user reputation
+        // per ADR-014 §3.
+        windy_search: { status: 'available', provisioned: false },
         windy_traveler: { status: user.tier !== 'free' ? 'active' : 'upgrade_required', provisioned: user.tier !== 'free' },
       },
     });

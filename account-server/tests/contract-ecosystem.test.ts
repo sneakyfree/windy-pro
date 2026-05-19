@@ -215,7 +215,7 @@ describe('Contract 4: Ecosystem status response shape', () => {
 
         // All products present
         const p = res.body.products;
-        const requiredProducts = ['windy_word', 'windy_chat', 'windy_mail', 'windy_cloud', 'windy_fly', 'windy_clone', 'windy_code', 'windy_traveler', 'eternitas'];
+        const requiredProducts = ['windy_word', 'windy_chat', 'windy_mail', 'windy_cloud', 'windy_fly', 'windy_clone', 'windy_code', 'windy_mind', 'windy_search', 'windy_traveler', 'eternitas'];
         for (const name of requiredProducts) {
             expect(p).toHaveProperty(name);
             expect(typeof p[name].status).toBe('string');
