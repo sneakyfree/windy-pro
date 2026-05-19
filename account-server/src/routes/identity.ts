@@ -1355,18 +1355,31 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
         },
         windy_fly: (() => {
           const flyProduct = findProduct('windy_fly');
-          if (!flyProduct) return { status: 'not_provisioned', provisioned: false };
-          // Parse metadata for agent details (set by provisionAgent)
-          let meta: any = {};
-          try { meta = JSON.parse(flyProduct.metadata || '{}'); } catch {}
-          return {
-            status: flyProduct.status,
-            provisioned: flyProduct.status === 'active',
-            matrix_user_id: flyProduct.external_id || meta.matrix_user_id,
-            agent_name: meta.agent_name,
-            passport_number: meta.passport_number,
-            room_id: meta.dm_room_id,
-          };
+          if (flyProduct) {
+            // Existing path: an agent has been hatched and its product row
+            // was written. Surface agent metadata + active state.
+            let meta: any = {};
+            try { meta = JSON.parse(flyProduct.metadata || '{}'); } catch {}
+            return {
+              status: flyProduct.status,
+              provisioned: flyProduct.status === 'active',
+              matrix_user_id: flyProduct.external_id || meta.matrix_user_id,
+              agent_name: meta.agent_name,
+              passport_number: meta.passport_number,
+              room_id: meta.dm_room_id,
+            };
+          }
+          // No agent row yet — but if the user has an Eternitas passport,
+          // they already hold the credentials needed to spawn one via
+          // `pip install windyfly && windy go`. Surface as 'available'
+          // (consistent with windy_clone's hardcoded 'available' pattern
+          // for free-tier consumer access). ADR-026 SoT — derive from the
+          // credential, not the cache row that the hatch ceremony may not
+          // have written for historic users.
+          if (passport) {
+            return { status: 'available', provisioned: false };
+          }
+          return { status: 'not_provisioned', provisioned: false };
         })(),
         windy_clone: { status: 'available', provisioned: false, progress: 0 },
         // Windy Code — free download per ADR-049 ("Free download + local
