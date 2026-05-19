@@ -1284,12 +1284,30 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
     const allRows = db.prepare(
       'SELECT product, status, external_id, metadata, identity_id, operator_identity_id FROM product_accounts WHERE identity_id = ? OR operator_identity_id = ?',
     ).all(userId, userId) as { product: string; status: string; external_id: string; metadata: string; identity_id: string; operator_identity_id: string | null }[];
-    // Dedupe: prefer the direct-holder row over the operator-relationship
-    // row when both exist for the same product.
+    // Dedupe: prefer the ACTIVE row over inactive (pending/suspended/etc.).
+    // Direct-holder is the tiebreaker when both rows have the same status.
+    //
+    // Surfaced 2026-05-19 by Grant's Chat tile: his OAuth signup created a
+    // pending direct-holder row that never got Matrix-side provision, while
+    // his bot's chat row (operator-relationship) IS active with a real
+    // matrix_user_id. The prior "direct always wins" rule hid the bot's
+    // active row behind the pending direct row, leaving the tile stuck on
+    // PENDING despite chat being effectively usable via the operator's
+    // agent. Active-preferred is the truer "is this product usable to
+    // this user" semantic.
     const productMap = new Map<string, typeof allRows[0]>();
     for (const row of allRows) {
       const existing = productMap.get(row.product);
-      if (!existing || row.identity_id === userId) {
+      if (!existing) {
+        productMap.set(row.product, row);
+        continue;
+      }
+      const rowActive = row.status === 'active';
+      const existingActive = existing.status === 'active';
+      if (rowActive && !existingActive) {
+        productMap.set(row.product, row);
+      } else if (rowActive === existingActive && row.identity_id === userId) {
+        // Tie: prefer direct-holder
         productMap.set(row.product, row);
       }
     }
