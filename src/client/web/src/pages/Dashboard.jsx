@@ -263,16 +263,17 @@ export default function Dashboard() {
                             { key: 'windy_text', label: 'Windy Text', icon: '📱', comingSoon: true },
                             { key: 'windy_call', label: 'Windy Call', icon: '📞', comingSoon: true },
                             { key: 'windy_mobile', label: 'Windy Mobile', icon: '📲', comingSoon: true },
-                            // Windy Mind — Platform 12, locked 2026-05-08 per ADR-010 §2.
-                            // BYOM intelligence layer at windymind.ai. Sunday brainstorm
-                            // pending; placeholder until then.
-                            { key: 'windy_mind', label: 'Windy Mind', icon: '🧠', comingSoon: true },
-                            // Windy Search — Platform 13, promoted 2026-05-08.
-                            // Agent web-access toolkit at windysearch.com. V1 service
-                            // deployed (api.windysearch.com); SPA panel and Chrome extension
-                            // are V2/V3. Tile is consumer-visible because the trajectory
-                            // (Chrome ext → browser fork) lands user-facing surfaces.
-                            { key: 'windy_search', label: 'Windy Search', icon: '🔍', comingSoon: true },
+                            // Windy Mind — Platform 12 per ADR-010 §2. BYOM intelligence
+                            // layer. windymind.ai serves a Developer Preview Live landing
+                            // page (9 providers, 15+ models) as of 2026-05-19. Tile is now
+                            // a real link; the dimmed "Coming Soon" rendering was retired
+                            // once the destination surface was honest about state.
+                            { key: 'windy_mind', label: 'Windy Mind', icon: '🧠', href: 'https://windymind.ai' },
+                            // Windy Search — Platform 13. Agent web-access toolkit;
+                            // api.windysearch.com is live (Phase 1); windysearch.com apex
+                            // serves a Developer Preview Live landing page as of 2026-05-19.
+                            // Phase 2 Chrome extension + Phase 3 browser fork still pending.
+                            { key: 'windy_search', label: 'Windy Search', icon: '🔍', href: 'https://windysearch.com' },
                         ].map(p => {
                             const product = ecosystem.products?.[p.key] || {}
                             const status = p.comingSoon ? 'coming_soon' : (product.status || 'not_provisioned')
