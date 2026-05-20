@@ -14,7 +14,11 @@ const PRODUCTS = [
         name: 'Windy Chat',
         description: 'Chat with people and agents',
         icon: '\uD83D\uDCAC',
-        href: 'https://windychat.ai',
+        // Logged-in ecosystem users go straight to the chat client at
+        // /app, not the marketing root (the marketing site is the
+        // gateway-drug surface for first-touch discovery, not for
+        // return users who already have credentials).
+        href: 'https://windychat.ai/app',
         internal: false,
     },
     {
