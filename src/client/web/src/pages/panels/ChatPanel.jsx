@@ -88,7 +88,38 @@ export default function ChatPanel({ apiFetch }) {
                 <p className="panel-empty">Chat messages will appear here when Windy Chat is online.</p>
             </div>
 
-            <a href="https://app.windychat.ai" target="_blank" rel="noopener noreferrer" className="panel-btn" style={{ marginTop: '12px' }}>
+            <a
+                href="https://app.windychat.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="panel-btn"
+                style={{ marginTop: '12px' }}
+                onClick={(e) => {
+                    // SSO handoff — append the current Pro JWT as a
+                    // URL fragment so the chat app can skip its login
+                    // screen and exchange directly for a Matrix
+                    // access_token. The fragment never leaves the
+                    // browser; the chat app strips it from history on
+                    // arrival. Tactical bridge until the proper OAuth
+                    // endpoint on account.windyword.ai/oauth/authorize
+                    // lands; remove the onClick once OAuth is live.
+                    try {
+                        const jwt = localStorage.getItem('windy_token')
+                        if (jwt) {
+                            e.preventDefault()
+                            window.open(
+                                `https://app.windychat.ai/#token=${encodeURIComponent(jwt)}`,
+                                '_blank',
+                                'noopener,noreferrer'
+                            )
+                        }
+                    } catch {
+                        // Fall through to the default href if anything
+                        // goes wrong — better to land on the login page
+                        // than to fail the click.
+                    }
+                }}
+            >
                 Open Windy Chat
             </a>
         </div>
