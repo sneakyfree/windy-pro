@@ -786,6 +786,36 @@ function createWindow() {
     }
   });
 
+  // HTML5 video fullscreen — bridge the Chromium <video> fullscreen button to
+  // the BrowserWindow. Without this the video element enters :fullscreen but
+  // the BrowserWindow stays small, so nothing visibly changes when the user
+  // clicks the fullscreen button in the History view (recording playback).
+  //
+  // macOS quirk: the main window has `focusable: false` (to avoid stealing
+  // focus from the user's external app during the recording/paste flow).
+  // The standard setFullScreen() uses native macOS fullscreen which requires
+  // the window to become key, and refuses on a non-focusable window. The
+  // setSimpleFullScreen() API uses the pre-Lion "fill the screen, stay in
+  // current space" mode which works regardless of focusable state — the
+  // right tool for in-app video playback.
+  function enterContentFullscreen() {
+    try {
+      if (process.platform === 'darwin') mainWindow.setSimpleFullScreen(true);
+      else mainWindow.setFullScreen(true);
+    } catch (e) { console.warn('[fullscreen] enter failed:', e.message); }
+  }
+  function leaveContentFullscreen() {
+    try {
+      if (process.platform === 'darwin') mainWindow.setSimpleFullScreen(false);
+      else mainWindow.setFullScreen(false);
+    } catch (e) { console.warn('[fullscreen] leave failed:', e.message); }
+  }
+  mainWindow.webContents.on('enter-html-full-screen', enterContentFullscreen);
+  mainWindow.webContents.on('leave-html-full-screen', leaveContentFullscreen);
+  // Esc-out from the renderer side (when the user presses Esc while a <video>
+  // is in :fullscreen) also fires leave-html-full-screen, so the handler
+  // above covers it. No keyboard shortcut needed here.
+
   // Save window position on move/resize
   mainWindow.on('move', saveWindowBounds);
   mainWindow.on('resize', saveWindowBounds);
