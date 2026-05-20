@@ -2476,6 +2476,119 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true }));
         return;
       }
+      // ── Voice-clone surface ─────────────────────────────────────────────
+      // Wraps the same JSON-DB + filesystem state the renderer drives via
+      // IPC (loadVoiceClones / saveVoiceClones / loadBundlesManifest at
+      // ~line 6836+). All paths are user-config-scoped to vcAudioDir or
+      // bundlesDir so traversal is bounded.
+
+      // GET /voice-clones — list clones + activeId.
+      if (req.method === 'GET' && pathname === '/voice-clones') {
+        const data = loadVoiceClones();
+        res.writeHead(200, { 'content-type': 'application/json' });
+        // Strip audio paths (they're filesystem-local) — replace with
+        // booleans about presence. Agents that need audio call /preview.
+        const safeClones = data.clones.map(({ audioPath, ...rest }) => ({
+          ...rest,
+          hasAudio: !!(audioPath && fs.existsSync(audioPath)),
+        }));
+        res.end(JSON.stringify({ count: safeClones.length, activeId: data.activeId, clones: safeClones }, null, 2));
+        return;
+      }
+      // GET /voice-clones/active — return the active clone (or null).
+      if (req.method === 'GET' && pathname === '/voice-clones/active') {
+        const data = loadVoiceClones();
+        const active = data.activeId ? data.clones.find(c => c.id === data.activeId) : null;
+        res.writeHead(200, { 'content-type': 'application/json' });
+        if (!active) { res.end(JSON.stringify({ active: null })); return; }
+        const { audioPath, ...safe } = active;
+        res.end(JSON.stringify({ active: { ...safe, hasAudio: !!(audioPath && fs.existsSync(audioPath)) } }, null, 2));
+        return;
+      }
+      // POST /voice-clones/active body={id: string | null} — set active.
+      // Pass null to deactivate. Validates id refers to an existing clone.
+      if (req.method === 'POST' && pathname === '/voice-clones/active') {
+        const body = await readJsonBody(req);
+        const id = body.id;  // null is valid
+        const data = loadVoiceClones();
+        if (id !== null && id !== undefined) {
+          if (!data.clones.find(c => c.id === id)) {
+            res.writeHead(404, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: `no voice clone with id ${id}` }));
+            return;
+          }
+        }
+        data.activeId = id === undefined ? null : id;
+        saveVoiceClones(data);
+        console.info(`[AgentCtrl] voice-clones.activeId = ${JSON.stringify(data.activeId)}`);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, activeId: data.activeId }));
+        return;
+      }
+      // POST /voice-clones/delete body={id: string} — delete clone + audio.
+      if (req.method === 'POST' && pathname === '/voice-clones/delete') {
+        const body = await readJsonBody(req);
+        if (!body.id) { res.writeHead(400); res.end('id required'); return; }
+        const data = loadVoiceClones();
+        const clone = data.clones.find(c => c.id === body.id);
+        if (!clone) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `no voice clone with id ${body.id}` }));
+          return;
+        }
+        if (clone.audioPath && fs.existsSync(clone.audioPath)) {
+          const resolved = path.resolve(clone.audioPath);
+          if (resolved.startsWith(path.resolve(vcAudioDir))) {
+            try { fs.unlinkSync(resolved); } catch (_) {}
+          }
+        }
+        data.clones = data.clones.filter(c => c.id !== body.id);
+        if (data.activeId === body.id) data.activeId = null;
+        saveVoiceClones(data);
+        console.info(`[AgentCtrl] voice-clones.delete id=${body.id} name="${clone.name}"`);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, deletedId: body.id, deletedName: clone.name }));
+        return;
+      }
+      // POST /voice-clones/preview body={id, metadataOnly?:bool} — return
+      // clone metadata + (unless metadataOnly) base64 audio. Audio can be
+      // several MB; the metadataOnly path keeps responses small.
+      if (req.method === 'POST' && pathname === '/voice-clones/preview') {
+        const body = await readJsonBody(req);
+        if (!body.id) { res.writeHead(400); res.end('id required'); return; }
+        const data = loadVoiceClones();
+        const clone = data.clones.find(c => c.id === body.id);
+        if (!clone) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `no voice clone with id ${body.id}` }));
+          return;
+        }
+        const { audioPath, ...safe } = clone;
+        const exists = audioPath && fs.existsSync(audioPath);
+        const out = { ok: true, clone: { ...safe, hasAudio: !!exists } };
+        if (!body.metadataOnly && exists) {
+          const buf = fs.readFileSync(audioPath);
+          out.audioBase64 = buf.toString('base64');
+          out.audioSizeBytes = buf.length;
+          out.mimeType = audioPath.endsWith('.webm') ? 'audio/webm' : audioPath.endsWith('.wav') ? 'audio/wav' : audioPath.endsWith('.mp3') ? 'audio/mpeg' : 'audio/octet-stream';
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(out, null, 2));
+        return;
+      }
+      // GET /clone-bundles — list training-bundle catalog (audio/video that
+      // can be used to train a voice clone). Read-only — bundle deletion is
+      // a UI-driven flow (delete-clone-bundle IPC handler).
+      if (req.method === 'GET' && pathname === '/clone-bundles') {
+        const manifest = loadBundlesManifest();
+        const safe = (manifest.bundles || []).map(({ file_path, ...rest }) => ({
+          ...rest,
+          fileExists: !!(file_path && fs.existsSync(file_path)),
+        }));
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ count: safe.length, bundles: safe }, null, 2));
+        return;
+      }
       // POST /paste/inject-test — real end-to-end paste injection test.
       // Spawns a focusable Tk capture target, temporarily flips Mutter's
       // focus-new-windows policy to 'strict' so the window auto-grabs
