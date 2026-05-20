@@ -6575,6 +6575,17 @@ ipcMain.on('maximize-window', () => {
 ipcMain.on('unmaximize-window', () => {
   if (mainWindow) mainWindow.unmaximize();
 });
+// Custom video-expand fullscreen — paired with the History panel's expand
+// button (history.js). On macOS uses setSimpleFullScreen so it works with the
+// non-focusable main window without disturbing the recording focus invariant.
+ipcMain.on('set-video-fullscreen', (event, on) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    if (process.platform === 'darwin') mainWindow.setSimpleFullScreen(!!on);
+    else mainWindow.setFullScreen(!!on);
+  } catch (e) { console.warn('[set-video-fullscreen]', e.message); }
+});
+
 ipcMain.handle('is-maximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false;
 });

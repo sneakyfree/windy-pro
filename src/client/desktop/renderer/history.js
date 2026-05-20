@@ -404,12 +404,52 @@ class HistoryPanel {
 
             container.innerHTML = `
     <div class="video-player-wrapper">
-      <span class="video-label">🎬 Recording</span>
+      <div class="video-label-row">
+        <span class="video-label">🎬 Recording</span>
+        <button type="button" class="video-expand-btn" id="historyVideoExpand" title="Expand video to fill window" aria-label="Expand video">⛶</button>
+      </div>
       <video controls preload="metadata" class="history-video-el">
         <source src="${this._activeVideoUrl}" type="${result.mimeType || 'video/webm'}">
         Your browser does not support video playback.
       </video>
     </div>`;
+            // Custom expand toggle. Native HTML5 fullscreen is unreliable here because
+            // the History panel uses transform: translateX(...) for its slide-in
+            // animation — a non-none transform on an ancestor is a long-standing
+            // Chromium quirk that silently breaks the Fullscreen API for descendants.
+            // CSS-class-based expansion sidesteps the API entirely.
+            const wrapper = container.querySelector('.video-player-wrapper');
+            const expandBtn = container.querySelector('#historyVideoExpand');
+            const setExpanded = (on) => {
+                if (!wrapper) return;
+                wrapper.classList.toggle('expanded', on);
+                document.body.classList.toggle('video-expanded-active', on);
+                if (expandBtn) {
+                    expandBtn.textContent = on ? '⤢' : '⛶';
+                    expandBtn.title = on ? 'Exit expanded view (Esc)' : 'Expand video to fill window';
+                }
+                // Pair the in-window expansion with OS-level fullscreen so the
+                // video fills the actual screen, not just the BrowserWindow.
+                // No-op if the API isn't exposed (older preload, web fallback).
+                try { window.windyAPI?.setVideoFullscreen?.(on); } catch (_) { /* best-effort */ }
+            };
+            if (expandBtn) {
+                expandBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    setExpanded(!wrapper.classList.contains('expanded'));
+                });
+            }
+            // Esc key exits expanded view. Scoped to document so it works even if
+            // focus is on the video element. Removed when the video container is
+            // replaced or the History panel closes.
+            const escHandler = (e) => {
+                if (e.key === 'Escape' && wrapper.classList.contains('expanded')) {
+                    e.stopPropagation();
+                    setExpanded(false);
+                }
+            };
+            document.addEventListener('keydown', escHandler, true);
+            this._videoEscHandler = escHandler;
         } catch (err) {
             console.warn('[History] Video load error:', err.message);
             container.innerHTML = '<div class="audio-error">Video load error</div>';
