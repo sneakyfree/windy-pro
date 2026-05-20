@@ -1,6 +1,4 @@
-# adr-046-exempt: pending deploy-prod-collision-migration maintenance window
-# (see ~/kit-army-config/docs/deploy-prod-collision-migration-runbook-2026-05-15.md).
-# After migration, replace this exemption with `name: windypro-prod` per ADR-046.
+name: windypro-prod
 # Windy Pro account-server — production stack
 # Deployed at /opt/windy-pro/deploy-prod/ on 54.88.113.79
 # Talks to the public internet via the existing Caddy in /opt/windy-mail/deploy/
