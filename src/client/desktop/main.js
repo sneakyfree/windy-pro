@@ -130,6 +130,7 @@ const { withTimeout } = require('./lib/timeout');
 const pasteStrategies = require('./strategies/paste-strategies');
 const installer = require('./install/installer');
 const settingsCatalog = require('./settings/catalog');
+const doctor = require('./doctor/diagnose');
 const execFileAsync = util.promisify(execFile);
 // ═══ Lazy-loaded modules (deferred to speed up startup) ═══
 // These modules pull in heavy deps (matrix-js-sdk, stripe, better-sqlite3, electron-updater)
@@ -2475,6 +2476,35 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true }));
         return;
       }
+      // POST /install/start — fire-and-poll install. Returns {jobId} immediately;
+      // the caller polls /install/status?jobId=X. Body: {tool, dryRun?}.
+      if (req.method === 'POST' && pathname === '/install/start') {
+        const body = await readJsonBody(req);
+        if (!body.tool || typeof body.tool !== 'string') {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'tool (string) required' }));
+          return;
+        }
+        const job = installer.installAsync(body.tool, PLATFORM, { dryRun: !!body.dryRun });
+        res.writeHead(202, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(job, null, 2));
+        return;
+      }
+      // GET /install/status?jobId=X — return current state of an async install job.
+      if (req.method === 'GET' && pathname === '/install/status') {
+        const jobId = urlObj.searchParams.get('jobId');
+        if (!jobId) { res.writeHead(400); res.end('jobId query param required'); return; }
+        const status = installer.getInstallStatus(jobId);
+        res.writeHead(status.status === 'unknown' ? 404 : 200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(status, null, 2));
+        return;
+      }
+      // GET /install/jobs — list all current jobs (running + recently completed).
+      if (req.method === 'GET' && pathname === '/install/jobs') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ jobs: installer.listJobs() }, null, 2));
+        return;
+      }
       // GET /settings/catalog — list curated agent-discoverable settings.
       // Each entry includes type, description, allowed values, current
       // value (from the live store), and side-effect notes.
@@ -2501,6 +2531,30 @@ function startWaylandControlServer() {
         }
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ ...entry, currentValue: store.get(p) }, null, 2));
+        return;
+      }
+      // GET /doctor/diagnose — run the local diagnostic check battery.
+      // Each finding includes a status (ok/warning/error/not_applicable),
+      // severity, what was found, and (for non-ok findings) an actionable
+      // remediation step that often references a specific MCP tool call.
+      // No system mutation — pure read.
+      if (req.method === 'GET' && pathname === '/doctor/diagnose') {
+        const report = await doctor.runDiagnostics(PLATFORM);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(report, null, 2));
+        return;
+      }
+      // GET /doctor/checks — list the catalog of available checks
+      // (without running them). Useful for agent introspection.
+      if (req.method === 'GET' && pathname === '/doctor/checks') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          checks: doctor.CHECKS.map((c) => ({
+            name: c.name,
+            description: c.description,
+            appliesToCurrentPlatform: c.appliesTo ? c.appliesTo(PLATFORM) : true,
+          })),
+        }, null, 2));
         return;
       }
       // POST /settings/set — validate body.value against the catalog entry

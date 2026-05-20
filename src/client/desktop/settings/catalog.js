@@ -173,6 +173,53 @@ const CATALOG = {
     restartRequired: false,
   },
 
+  // ── Archive (extended) ──────────────────────────────────────────────────
+  'engine.archiveLocalEnabled': {
+    type: 'boolean',
+    description: 'Whether the local archive path receives copies (separate from cloud archive). Lets users keep audio/video locally for voice clone training even with archiveMode="cloud".',
+    default: true,
+    restartRequired: false,
+  },
+  'engine.archiveRouteToday': {
+    type: 'enum',
+    enum: ['local', 'cloud', 'both'],
+    description: 'Override archiveMode for today\'s session — useful when triaging an upload-bandwidth-constrained recording day.',
+    default: 'local',
+    restartRequired: false,
+  },
+  'engine.pasteClipboard': {
+    type: 'accelerator',
+    description: 'Alternative accelerator binding for the paste-clipboard action (distinct from hotkeys.pasteClipboard which is the canonical registration). Kept for backward compatibility with older configs.',
+    default: 'CommandOrControl+Shift+P',
+    restartRequired: false,
+  },
+
+  // ── Window geometry ─────────────────────────────────────────────────────
+  'window.x': {
+    type: 'number',
+    description: 'Main window x position in screen pixels. Persisted across launches.',
+    restartRequired: false,
+  },
+  'window.y': {
+    type: 'number',
+    description: 'Main window y position in screen pixels.',
+    restartRequired: false,
+  },
+  'window.width': {
+    type: 'number',
+    min: 200,
+    max: 4000,
+    description: 'Main window width in pixels.',
+    restartRequired: false,
+  },
+  'window.height': {
+    type: 'number',
+    min: 200,
+    max: 4000,
+    description: 'Main window height in pixels.',
+    restartRequired: false,
+  },
+
   // ── Server / connectivity ───────────────────────────────────────────────
   'server.host': {
     type: 'string',
@@ -204,6 +251,36 @@ const CATALOG = {
   'license.modelsLocked': {
     type: 'boolean',
     description: 'Whether premium models (medium, large-v3) are locked behind a paid tier on this install.',
+    sensitivity: 'readonly',
+  },
+  'license.purchasedAt': {
+    type: 'string',
+    description: 'ISO timestamp of when the license was purchased. Empty string if never purchased.',
+    sensitivity: 'readonly',
+  },
+  'license.expiresAt': {
+    type: 'string',
+    description: 'ISO timestamp of license expiry. Null for non-expiring tiers (free, lifetime).',
+    sensitivity: 'readonly',
+  },
+  'license.stripeSessionId': {
+    type: 'string',
+    description: 'Stripe checkout session id from the original purchase. For support cross-reference.',
+    sensitivity: 'readonly',
+  },
+  'wizard.completed': {
+    type: 'boolean',
+    description: 'Whether the first-run setup wizard has completed. Internal state — managed by the wizard flow.',
+    sensitivity: 'readonly',
+  },
+  'hasSeenWelcome': {
+    type: 'boolean',
+    description: 'Whether the user has dismissed the initial welcome screen. Internal state.',
+    sensitivity: 'readonly',
+  },
+  'lastUpdateCheck': {
+    type: 'number',
+    description: 'Unix milliseconds of the last electron-updater check. Internal state.',
     sensitivity: 'readonly',
   },
 };

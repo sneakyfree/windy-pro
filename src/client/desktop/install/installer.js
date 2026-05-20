@@ -14,43 +14,120 @@ const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
 
-// Per-tool metadata. `binary` is what we look up on PATH to decide
-// "already installed" — most packages share a name with their primary
-// binary, but wl-clipboard's package provides `wl-copy` + `wl-paste`
-// (no binary named wl-clipboard).
+// Per-tool metadata. Cross-platform: each tool declares which OSes it
+// supports + how to install it on each. `binary` is what we look up on
+// PATH to decide "already installed" — most packages share a name with
+// their primary binary, but wl-clipboard's package provides `wl-copy` +
+// `wl-paste` (no binary named wl-clipboard).
+//
+// `install.<os>.<package-manager>` is the package name for that OS+PM
+// combo. `null` (or missing key) means the tool isn't installable on
+// that OS — the agent gets a friendly "not supported on this platform"
+// response.
 const TOOL_WHITELIST = {
   wtype: {
     binary: 'wtype',
     description: 'Wayland-native keystroke injection. Promotes paste to instant on Wayland-native targets.',
-    pkg: { fedora: 'wtype', rhel: 'wtype', centos: 'wtype', debian: 'wtype', ubuntu: 'wtype', pop: 'wtype', arch: 'wtype', manjaro: 'wtype' },
+    install: {
+      linux: { fedora: 'wtype', rhel: 'wtype', centos: 'wtype', debian: 'wtype', ubuntu: 'wtype', pop: 'wtype', arch: 'wtype', manjaro: 'wtype' },
+      // No Wayland on macOS / Windows — wtype is Linux-only.
+    },
   },
   ydotool: {
     binary: 'ydotool',
     description: 'Wayland keystroke injection via /dev/uinput. Universal Wayland keystroke fallback.',
-    pkg: { fedora: 'ydotool', rhel: 'ydotool', centos: 'ydotool', debian: 'ydotool', ubuntu: 'ydotool', pop: 'ydotool', arch: 'ydotool', manjaro: 'ydotool' },
+    install: {
+      linux: { fedora: 'ydotool', rhel: 'ydotool', centos: 'ydotool', debian: 'ydotool', ubuntu: 'ydotool', pop: 'ydotool', arch: 'ydotool', manjaro: 'ydotool' },
+    },
   },
   'wl-clipboard': {
     binary: 'wl-copy',
     description: 'Wayland clipboard utilities (wl-copy, wl-paste). Required for clipboard-write strategies on Wayland.',
-    pkg: { fedora: 'wl-clipboard', rhel: 'wl-clipboard', centos: 'wl-clipboard', debian: 'wl-clipboard', ubuntu: 'wl-clipboard', pop: 'wl-clipboard', arch: 'wl-clipboard', manjaro: 'wl-clipboard' },
+    install: {
+      linux: { fedora: 'wl-clipboard', rhel: 'wl-clipboard', centos: 'wl-clipboard', debian: 'wl-clipboard', ubuntu: 'wl-clipboard', pop: 'wl-clipboard', arch: 'wl-clipboard', manjaro: 'wl-clipboard' },
+    },
   },
   xdotool: {
     binary: 'xdotool',
     description: 'X11 keystroke injection. Used for XWayland focus restoration and X11-session paste.',
-    pkg: { fedora: 'xdotool', rhel: 'xdotool', centos: 'xdotool', debian: 'xdotool', ubuntu: 'xdotool', pop: 'xdotool', arch: 'xdotool', manjaro: 'xdotool' },
+    install: {
+      linux: { fedora: 'xdotool', rhel: 'xdotool', centos: 'xdotool', debian: 'xdotool', ubuntu: 'xdotool', pop: 'xdotool', arch: 'xdotool', manjaro: 'xdotool' },
+    },
+  },
+  cliclick: {
+    binary: 'cliclick',
+    description: 'macOS fast paste via Cmd+V simulation. ~2-3× faster than the default osascript path.',
+    install: {
+      darwin: { brew: 'cliclick' },
+    },
+  },
+  ffmpeg: {
+    binary: 'ffmpeg',
+    description: 'Audio/video re-encoding. Used by future paste-history export + voice-clone training-data prep features.',
+    install: {
+      linux: { fedora: 'ffmpeg', rhel: 'ffmpeg', centos: 'ffmpeg', debian: 'ffmpeg', ubuntu: 'ffmpeg', pop: 'ffmpeg', arch: 'ffmpeg', manjaro: 'ffmpeg' },
+      darwin: { brew: 'ffmpeg' },
+      win32: { winget: 'Gyan.FFmpeg' },
+    },
   },
 };
 
-const DISTRO_INSTALL = {
-  fedora: (pkg) => ['pkexec', ['dnf', 'install', '-y', pkg]],
-  rhel: (pkg) => ['pkexec', ['dnf', 'install', '-y', pkg]],
-  centos: (pkg) => ['pkexec', ['dnf', 'install', '-y', pkg]],
-  debian: (pkg) => ['pkexec', ['apt-get', 'install', '-y', pkg]],
-  ubuntu: (pkg) => ['pkexec', ['apt-get', 'install', '-y', pkg]],
-  pop: (pkg) => ['pkexec', ['apt-get', 'install', '-y', pkg]],
-  arch: (pkg) => ['pkexec', ['pacman', '-S', '--noconfirm', pkg]],
-  manjaro: (pkg) => ['pkexec', ['pacman', '-S', '--noconfirm', pkg]],
+// Build install-command builders per (os, package-manager) combo.
+//
+// Linux: pkexec wraps the distro install command. Pairs with the polkit
+//   rule at /etc/polkit-1/rules.d/49-windy-install-deps.rules which
+//   auto-approves the whitelist for grantwhitmer — without the rule the
+//   user sees a polkit prompt (still works, just not zero-touch).
+//
+// macOS: brew installs to user-scope, no sudo needed (brew is itself
+//   user-installed under /opt/homebrew or /usr/local/Homebrew). The
+//   first `brew install` after a long gap can hit a brew update which
+//   may take a minute or two; the 5-min sync timeout handles it.
+//
+// Windows: winget handles UAC internally — the elevation prompt fires
+//   only if the package itself needs admin rights. --silent suppresses
+//   per-package prompts; the two --accept flags handle EULA / source
+//   confirmations that would otherwise hang the spawn.
+const OS_INSTALL = {
+  linux: {
+    fedora: (pkg) => ['pkexec', ['dnf', 'install', '-y', pkg]],
+    rhel: (pkg) => ['pkexec', ['dnf', 'install', '-y', pkg]],
+    centos: (pkg) => ['pkexec', ['dnf', 'install', '-y', pkg]],
+    debian: (pkg) => ['pkexec', ['apt-get', 'install', '-y', pkg]],
+    ubuntu: (pkg) => ['pkexec', ['apt-get', 'install', '-y', pkg]],
+    pop: (pkg) => ['pkexec', ['apt-get', 'install', '-y', pkg]],
+    arch: (pkg) => ['pkexec', ['pacman', '-S', '--noconfirm', pkg]],
+    manjaro: (pkg) => ['pkexec', ['pacman', '-S', '--noconfirm', pkg]],
+  },
+  darwin: {
+    brew: (pkg) => ['brew', ['install', pkg]],
+  },
+  win32: {
+    winget: (pkg) => ['winget', ['install', '--silent', '--accept-source-agreements', '--accept-package-agreements', pkg]],
+  },
 };
+
+// Pick the package-manager key for the running platform. On Linux this is
+// the distro id from PLATFORM.distro. On macOS/Windows there is only one
+// supported PM so the choice is trivial.
+function packageManagerFor(platform) {
+  if (platform.isLinux) return platform.distro;
+  if (platform.isMac) return 'brew';
+  if (platform.isWindows) return 'winget';
+  return null;
+}
+
+// What's installable for this (tool, platform) combo? Returns the package
+// name or null if the tool isn't supported on this OS or this distro.
+function packageNameFor(tool, platform) {
+  const meta = TOOL_WHITELIST[tool];
+  if (!meta) return null;
+  const osKey = platform.isLinux ? 'linux' : platform.isMac ? 'darwin' : platform.isWindows ? 'win32' : null;
+  const osInstall = meta.install?.[osKey];
+  if (!osInstall) return null;
+  const pm = packageManagerFor(platform);
+  return osInstall[pm] || null;
+}
 
 const INSTALL_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_CAPTURED_BYTES = 16 * 1024;
@@ -83,31 +160,38 @@ async function isInstalled(tool) {
 }
 
 function listInstallable(platform) {
-  if (!platform.isLinux) {
+  const osKey = platform.isLinux ? 'linux' : platform.isMac ? 'darwin' : platform.isWindows ? 'win32' : null;
+  if (!osKey || !OS_INSTALL[osKey]) {
     return {
       supported: false,
-      reason: `install_dependency only supports Linux in v0. On ${platform.os}, install paste-related tools manually: 'brew install wtype' (macOS — wtype is Wayland-only so usually unneeded), or via winget on Windows.`,
+      reason: `install_dependency does not yet support OS "${platform.os}". Supported: linux, darwin, win32.`,
       tools: [],
     };
   }
-  const distroBuilder = DISTRO_INSTALL[platform.distro];
-  if (!distroBuilder) {
+  const pm = packageManagerFor(platform);
+  const pmBuilder = OS_INSTALL[osKey][pm];
+  if (!pmBuilder) {
+    const supported = Object.keys(OS_INSTALL[osKey]).join(', ');
     return {
       supported: false,
-      reason: `Unsupported distro: ${platform.distro}. Supported: ${Object.keys(DISTRO_INSTALL).join(', ')}.`,
+      reason: `Unsupported ${osKey} package manager: ${pm}. Supported on ${osKey}: ${supported}.`,
       tools: [],
     };
   }
-  const tools = Object.entries(TOOL_WHITELIST).map(([name, meta]) => {
-    const [cmd, args] = distroBuilder(meta.pkg[platform.distro] || name);
-    return {
+  const tools = [];
+  for (const [name, meta] of Object.entries(TOOL_WHITELIST)) {
+    const pkg = packageNameFor(name, platform);
+    if (!pkg) continue;  // tool not supported on this OS
+    const [cmd, args] = pmBuilder(pkg);
+    tools.push({
       name,
       description: meta.description,
-      packageName: meta.pkg[platform.distro] || name,
+      packageName: pkg,
+      packageManager: pm,
       installCommand: [cmd, ...args].join(' '),
-    };
-  });
-  return { supported: true, distro: platform.distro, tools };
+    });
+  }
+  return { supported: true, os: osKey, packageManager: pm, distro: platform.isLinux ? platform.distro : undefined, tools };
 }
 
 async function install(tool, platform, opts = {}) {
@@ -117,14 +201,22 @@ async function install(tool, platform, opts = {}) {
     recordAudit(err);
     return err;
   }
-  if (!platform.isLinux) {
-    const err = { ok: false, tool, error: `install_dependency only supports Linux in v0; this machine is ${platform.os}` };
+  const osKey = platform.isLinux ? 'linux' : platform.isMac ? 'darwin' : platform.isWindows ? 'win32' : null;
+  if (!osKey || !OS_INSTALL[osKey]) {
+    const err = { ok: false, tool, error: `OS "${platform.os}" not supported by install_dependency` };
     recordAudit(err);
     return err;
   }
-  const distroBuilder = DISTRO_INSTALL[platform.distro];
-  if (!distroBuilder) {
-    const err = { ok: false, tool, error: `Unsupported distro: ${platform.distro}` };
+  const pkg = packageNameFor(tool, platform);
+  if (!pkg) {
+    const err = { ok: false, tool, error: `Tool "${tool}" is not installable on ${osKey}/${platform.distro || platform.os} via the whitelist.` };
+    recordAudit(err);
+    return err;
+  }
+  const pm = packageManagerFor(platform);
+  const pmBuilder = OS_INSTALL[osKey][pm];
+  if (!pmBuilder) {
+    const err = { ok: false, tool, error: `No install command for ${osKey}/${pm}` };
     recordAudit(err);
     return err;
   }
@@ -135,8 +227,7 @@ async function install(tool, platform, opts = {}) {
     return result;
   }
 
-  const pkg = meta.pkg[platform.distro] || tool;
-  const [cmd, args] = distroBuilder(pkg);
+  const [cmd, args] = pmBuilder(pkg);
   const command = [cmd, ...args].join(' ');
 
   if (opts.dryRun) {
@@ -202,4 +293,64 @@ async function install(tool, platform, opts = {}) {
   });
 }
 
-module.exports = { TOOL_WHITELIST, listInstallable, install, getAuditLog, clearAuditLog };
+// ── Async install with status polling ──────────────────────────────────
+//
+// For long-running installs (anything more than a few seconds), the
+// caller may prefer to fire-and-poll rather than block. installAsync()
+// returns immediately with a jobId; the caller checks getInstallStatus(jobId)
+// until status === 'completed'.
+//
+// Job lifecycle:
+//   created  → background install spawned, status = "running"
+//   running  → pkexec/etc in flight
+//   completed → status = "completed", `result` populated with the same
+//               shape install() returns synchronously
+//
+// In-memory only. Restart clears jobs. FIFO-evicts beyond 50 entries.
+const _jobs = new Map();
+let _nextJobId = 1;
+const JOB_BUFFER_LIMIT = 50;
+
+function _evictOldJobs() {
+  while (_jobs.size > JOB_BUFFER_LIMIT) {
+    const oldestKey = _jobs.keys().next().value;
+    _jobs.delete(oldestKey);
+  }
+}
+
+function installAsync(tool, platform, opts = {}) {
+  const jobId = `install-${_nextJobId++}-${Date.now()}`;
+  const job = {
+    jobId,
+    tool,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+    completedAt: null,
+    result: null,
+  };
+  _jobs.set(jobId, job);
+  _evictOldJobs();
+  // Run the install in the background. We deliberately don't await this.
+  install(tool, platform, opts).then((result) => {
+    job.result = result;
+    job.status = 'completed';
+    job.completedAt = new Date().toISOString();
+  }).catch((e) => {
+    job.result = { ok: false, tool, error: `installAsync caught: ${e.message}` };
+    job.status = 'completed';
+    job.completedAt = new Date().toISOString();
+  });
+  return { jobId, status: 'running', tool, hint: 'Poll GET /install/status?jobId=' + jobId };
+}
+
+function getInstallStatus(jobId) {
+  const job = _jobs.get(jobId);
+  if (!job) return { jobId, status: 'unknown', error: 'job not found (may have been FIFO-evicted or never existed)' };
+  return job;
+}
+
+function listJobs() {
+  return Array.from(_jobs.values());
+}
+
+module.exports = { TOOL_WHITELIST, listInstallable, install, installAsync, getInstallStatus, listJobs, getAuditLog, clearAuditLog };
