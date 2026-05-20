@@ -20,6 +20,8 @@ const ACCELERATOR = /^(?:(?:CommandOrControl|Control|Ctrl|Cmd|Command|Alt|Shift|
 
 // type: enum, boolean, number, string, accelerator, filepath, array
 // sensitivity: writable (default) | readonly
+// tags: optional array of capability tags an agent can filter on
+//        (e.g. 'voice-clone', 'archive', 'paste', 'hotkey', 'ui', 'lifecycle')
 const CATALOG = {
   // ── Transcription engine ────────────────────────────────────────────────
   'engine.model': {
@@ -29,6 +31,7 @@ const CATALOG = {
     default: 'small',
     sideEffect: 'Hot-reloads the running Python engine over WebSocket. No app restart.',
     restartRequired: false,
+    tags: ['transcription'],
   },
   'engine.engine': {
     type: 'enum',
@@ -51,34 +54,39 @@ const CATALOG = {
   },
   'engine.autoArchive': {
     type: 'boolean',
-    description: 'Automatically archive every transcript to disk + cloud (per archiveMode).',
+    description: 'Automatically archive every transcript to disk + cloud (per archiveMode). Master switch for voice-clone training-data accumulation — when off, no audio is retained for downstream voice-clone ingestion.',
     default: true,
     restartRequired: false,
+    tags: ['archive', 'voice-clone'],
   },
   'engine.archiveMode': {
     type: 'enum',
     enum: ['local', 'cloud', 'both', 'off'],
-    description: 'Where archived transcripts go. "off" disables archiving even if autoArchive=true.',
+    description: 'Where archived transcripts go. "off" disables archiving even if autoArchive=true. "local" or "both" required for InstaBio voice-clone ingestion (it polls the local archiveFolder).',
     default: 'both',
     restartRequired: false,
+    tags: ['archive', 'voice-clone'],
   },
   'engine.archiveFolder': {
     type: 'filepath',
-    description: 'Local directory for archived transcripts (audio/video/text). Must be writable.',
+    description: 'Local directory for archived transcripts (audio/video/text). Must be writable. This is the source location InstaBio reads for voice-clone training data — see project_instabio_voice_clone_data memory for the ingestion contract (audio dirs without DB rows are deliberately retained).',
     restartRequired: false,
+    tags: ['archive', 'voice-clone'],
   },
   'engine.saveVideo': {
     type: 'boolean',
-    description: 'Record video from the webcam during transcription (in addition to audio).',
+    description: 'Record video from the webcam during transcription (in addition to audio). Affects Windy Clone training data, not voice-only clone.',
     default: true,
     restartRequired: false,
+    tags: ['archive', 'voice-clone'],
   },
   'engine.audioQuality': {
     type: 'enum',
     enum: ['lossless', 'high', 'medium', 'low'],
-    description: 'Audio encoding quality for archived recordings.',
+    description: 'Audio encoding quality for archived recordings. Voice-clone training works best with "lossless" or "high"; lower qualities cut clone fidelity meaningfully.',
     default: 'lossless',
     restartRequired: false,
+    tags: ['archive', 'voice-clone'],
   },
   'engine.videoQuality': {
     type: 'enum',
@@ -86,18 +94,21 @@ const CATALOG = {
     description: 'Video resolution for archived recordings.',
     default: '720p',
     restartRequired: false,
+    tags: ['archive'],
   },
   'engine.vibeEnabled': {
     type: 'boolean',
-    description: 'Enable "vibe" — Windy Word\'s mood/tone analysis on each transcript.',
+    description: 'Enable "vibe" — Windy Word\'s mood/tone analysis on each transcript. Affects post-processing of transcripts before they\'re archived for voice-clone training.',
     default: true,
     restartRequired: false,
+    tags: ['transcription', 'voice-clone'],
   },
   'engine.diarize': {
     type: 'boolean',
-    description: 'Speaker diarization — segment transcripts by speaker.',
+    description: 'Speaker diarization — segment transcripts by speaker. Voice-clone training benefits from diarization (cleaner per-speaker audio) but works without it.',
     default: true,
     restartRequired: false,
+    tags: ['transcription', 'voice-clone'],
   },
   'engine.micDeviceId': {
     type: 'string',
@@ -176,9 +187,10 @@ const CATALOG = {
   // ── Archive (extended) ──────────────────────────────────────────────────
   'engine.archiveLocalEnabled': {
     type: 'boolean',
-    description: 'Whether the local archive path receives copies (separate from cloud archive). Lets users keep audio/video locally for voice clone training even with archiveMode="cloud".',
+    description: 'Whether the local archive path receives copies (separate from cloud archive). Required for InstaBio voice-clone ingestion which polls the local archiveFolder. Lets users keep training audio locally even when archiveMode="cloud".',
     default: true,
     restartRequired: false,
+    tags: ['archive', 'voice-clone'],
   },
   'engine.archiveRouteToday': {
     type: 'enum',
@@ -282,6 +294,71 @@ const CATALOG = {
     type: 'number',
     description: 'Unix milliseconds of the last electron-updater check. Internal state.',
     sensitivity: 'readonly',
+    tags: ['lifecycle'],
+  },
+
+  // ── Video preview window geometry ───────────────────────────────────────
+  'videoWindow.x': {
+    type: 'number',
+    description: 'Video preview window x position. Persisted across launches.',
+    restartRequired: false,
+    tags: ['ui', 'geometry'],
+  },
+  'videoWindow.y': {
+    type: 'number',
+    description: 'Video preview window y position.',
+    restartRequired: false,
+    tags: ['ui', 'geometry'],
+  },
+  'videoWindow.width': {
+    type: 'number',
+    min: 100,
+    max: 2000,
+    description: 'Video preview window width in pixels.',
+    restartRequired: false,
+    tags: ['ui', 'geometry'],
+  },
+  'videoWindow.height': {
+    type: 'number',
+    min: 100,
+    max: 2000,
+    description: 'Video preview window height in pixels.',
+    restartRequired: false,
+    tags: ['ui', 'geometry'],
+  },
+
+  // ── Tornado mini-widget position ────────────────────────────────────────
+  'tornadoX': {
+    type: 'number',
+    description: 'Tornado mini-widget x position (the small recording-state indicator that shows when the main window is hidden).',
+    restartRequired: false,
+    tags: ['ui', 'geometry'],
+  },
+  'tornadoY': {
+    type: 'number',
+    description: 'Tornado mini-widget y position.',
+    restartRequired: false,
+    tags: ['ui', 'geometry'],
+  },
+
+  // ── Lifecycle / wizard state (readonly) ─────────────────────────────────
+  'wizard.currentStep': {
+    type: 'number',
+    description: 'Index of the most-recently-completed wizard step (99 = wizard fully complete). Internal state — managed by the wizard flow.',
+    sensitivity: 'readonly',
+    tags: ['lifecycle'],
+  },
+  'wizard.completedSteps': {
+    type: 'array',
+    description: 'Array of wizard step ids that have been completed. Internal state.',
+    sensitivity: 'readonly',
+    tags: ['lifecycle'],
+  },
+  'heartbeat.graceStartTime': {
+    type: 'number',
+    description: 'Unix milliseconds when the license heartbeat grace period began (for offline-tolerance). Internal state.',
+    sensitivity: 'readonly',
+    tags: ['lifecycle', 'license'],
   },
 };
 
@@ -329,8 +406,12 @@ function validate(path, value) {
 // Build a list-friendly view of the catalog (without validator functions
 // or other non-serializable internals — currently catalog is plain data so
 // JSON.stringify works fine, but this gives a stable shape).
-function listCatalog() {
-  return Object.entries(CATALOG).map(([path, entry]) => ({
+function listCatalog(opts = {}) {
+  let entries = Object.entries(CATALOG);
+  if (opts.tag) {
+    entries = entries.filter(([, e]) => Array.isArray(e.tags) && e.tags.includes(opts.tag));
+  }
+  return entries.map(([path, entry]) => ({
     path,
     type: entry.type,
     description: entry.description,
@@ -339,9 +420,18 @@ function listCatalog() {
     ...(entry.max !== undefined ? { max: entry.max } : {}),
     ...(entry.default !== undefined ? { default: entry.default } : {}),
     ...(entry.sideEffect ? { sideEffect: entry.sideEffect } : {}),
+    ...(entry.tags ? { tags: entry.tags } : {}),
     restartRequired: !!entry.restartRequired,
     sensitivity: entry.sensitivity || 'writable',
   }));
+}
+
+function allTags() {
+  const tags = new Set();
+  for (const e of Object.values(CATALOG)) {
+    if (Array.isArray(e.tags)) e.tags.forEach((t) => tags.add(t));
+  }
+  return [...tags].sort();
 }
 
 function describe(path) {
@@ -355,4 +445,4 @@ function describe(path) {
   };
 }
 
-module.exports = { CATALOG, validate, listCatalog, describe };
+module.exports = { CATALOG, validate, listCatalog, describe, allTags };

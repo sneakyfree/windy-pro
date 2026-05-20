@@ -2476,6 +2476,76 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true }));
         return;
       }
+      // POST /paste/inject-test — real end-to-end paste injection test.
+      // Spawns a focusable Tk capture target, temporarily flips Mutter's
+      // focus-new-windows policy to 'strict' so the window auto-grabs
+      // keyboard focus, fires the requested paste strategy, captures what
+      // landed, and returns {ok, captured, expected, match, strategy,
+      // attempts}. Body: {strategy, text?, captureSeconds?}.
+      //
+      // Real test — actually injects keystrokes. Safe because the target is
+      // a spawned scratchpad, not the user's active window.
+      if (req.method === 'POST' && pathname === '/paste/inject-test') {
+        const body = await readJsonBody(req);
+        const strategy = body.strategy || 'ydotool_type';
+        const text = body.text || `WINDY-INJECT-${Date.now()}`;
+        const captureSeconds = Math.min(30, Math.max(3, parseInt(body.captureSeconds || 6, 10)));
+        const outfile = path.join(os.tmpdir(), `wpaste-inject-${process.pid}-${Date.now()}.txt`);
+        const targetScript = path.join(__dirname, 'stress', 'capture-target.py');
+
+        // Flip focus policy + remember the original
+        let originalPolicy = null;
+        if (PLATFORM.isWayland && PLATFORM.isGnome && PLATFORM.hasGsettings) {
+          try {
+            originalPolicy = execSync("gsettings get org.gnome.desktop.wm.preferences focus-new-windows", { timeout: 2000 }).toString().trim();
+            execSync("gsettings set org.gnome.desktop.wm.preferences focus-new-windows 'strict'", { timeout: 2000 });
+          } catch (_) { /* best-effort */ }
+        }
+
+        let captured = '';
+        let captureError = null;
+        try {
+          // Spawn the Tk capture target
+          const tkProc = spawn('python3', [targetScript, outfile, String(captureSeconds)], { stdio: 'ignore' });
+          // Wait for Tk to fully map + focus
+          await new Promise((r) => setTimeout(r, 1500));
+
+          // Verify the target window grabbed focus (best-effort diagnostic)
+          let focusedName = '';
+          try { focusedName = execSync('xdotool getactivewindow getwindowname', { timeout: 1000 }).toString().trim(); } catch (_) { }
+
+          // Fire the paste
+          const pasteResult = await pasteStrategies.autoExecute(text, [strategy]);
+
+          // Wait for the Tk capture to complete + write the outfile
+          await new Promise((r) => {
+            tkProc.on('close', () => r());
+            setTimeout(r, (captureSeconds + 2) * 1000);
+          });
+
+          try { captured = fs.readFileSync(outfile, 'utf8'); } catch (e) { captureError = `outfile read failed: ${e.message}`; }
+          try { fs.unlinkSync(outfile); } catch (_) { }
+
+          const match = captured === text;
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({
+            ok: pasteResult.ok && match,
+            strategy,
+            expected: text,
+            captured,
+            capturedLength: captured.length,
+            match,
+            focusedWindowDuringSpawn: focusedName,
+            pasteResult,
+            captureError,
+          }, null, 2));
+        } finally {
+          if (originalPolicy) {
+            try { execSync(`gsettings set org.gnome.desktop.wm.preferences focus-new-windows ${originalPolicy}`, { timeout: 2000 }); } catch (_) { }
+          }
+        }
+        return;
+      }
       // POST /install/start — fire-and-poll install. Returns {jobId} immediately;
       // the caller polls /install/status?jobId=X. Body: {tool, dryRun?}.
       if (req.method === 'POST' && pathname === '/install/start') {
@@ -2507,14 +2577,22 @@ function startWaylandControlServer() {
       }
       // GET /settings/catalog — list curated agent-discoverable settings.
       // Each entry includes type, description, allowed values, current
-      // value (from the live store), and side-effect notes.
+      // value (from the live store), side-effect notes, and tags.
+      // Optional ?tag=X filter narrows to entries with that tag (e.g.
+      // ?tag=voice-clone returns just the voice-clone-relevant settings).
       if (req.method === 'GET' && pathname === '/settings/catalog') {
-        const catalog = settingsCatalog.listCatalog().map(e => ({
+        const tag = urlObj.searchParams.get('tag') || undefined;
+        const catalog = settingsCatalog.listCatalog({ tag }).map(e => ({
           ...e,
           currentValue: store.get(e.path),
         }));
         res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ count: catalog.length, settings: catalog }, null, 2));
+        res.end(JSON.stringify({
+          count: catalog.length,
+          ...(tag ? { tag } : {}),
+          availableTags: settingsCatalog.allTags(),
+          settings: catalog,
+        }, null, 2));
         return;
       }
       // GET /settings/describe?path=engine.model — single catalog entry +
@@ -2537,14 +2615,18 @@ function startWaylandControlServer() {
       // context and route to the windy-fix-me cloud-relay for LLM-augmented
       // remediation. Body shape: { sharedSecret? } — sharedSecret is forwarded
       // as the X-Windy-Fix-Me-Key header if the worker is configured to
-      // require it. The local findings are gathered server-side so the agent
-      // doesn't have to round-trip them.
+      // require it. Falls back to env var WINDY_FIX_ME_KEY if the body omits
+      // it, so agents calling cloud_diagnose with no args still authenticate
+      // when the operator has the secret configured machine-wide. The local
+      // findings are gathered server-side so the agent doesn't round-trip
+      // them.
       if (req.method === 'POST' && pathname === '/doctor/cloud-diagnose') {
         const reqBody = await readJsonBody(req).catch(() => ({}));
         const localReport = await doctor.runDiagnostics(PLATFORM);
         const relayUrl = process.env.WINDY_FIX_ME_URL || 'https://windy-fix-me.windyword.workers.dev/diagnose';
+        const sharedSecret = reqBody?.sharedSecret || process.env.WINDY_FIX_ME_KEY;
         const headers = { 'content-type': 'application/json' };
-        if (reqBody?.sharedSecret) headers['x-windy-fix-me-key'] = reqBody.sharedSecret;
+        if (sharedSecret) headers['x-windy-fix-me-key'] = sharedSecret;
         try {
           const upstream = await fetch(relayUrl, {
             method: 'POST',
