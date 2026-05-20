@@ -3376,6 +3376,93 @@ function startWaylandControlServer() {
         }
         return;
       }
+      // POST /install/polkit-rule body={enable: bool}
+      // Install or remove the polkit auto-approve rule that lets
+      // install_dependency run without prompts. Triggers ONE pkexec
+      // prompt for this call; thereafter all whitelisted installs are
+      // silent. The rule uses `subject.active` so it's portable across
+      // fleet machines (any logged-in user, not hardcoded grantwhitmer).
+      //
+      // Linux only — macOS/Windows return 501.
+      if (req.method === 'POST' && pathname === '/install/polkit-rule') {
+        if (!PLATFORM.isLinux) {
+          res.writeHead(501, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `polkit is Linux-only; this machine is ${process.platform}` }));
+          return;
+        }
+        const body = await readJsonBody(req);
+        if (typeof body.enable !== 'boolean') {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'enable (boolean) required' }));
+          return;
+        }
+        const rulePath = '/etc/polkit-1/rules.d/49-windy-install-deps.rules';
+        const ruleContent = `// Windy Word — auto-approve pkexec for the install_dependency whitelist.
+// Installed by the agent control surface's POST /install/polkit-rule
+// endpoint. Uses subject.active so any logged-in fleet user gets the
+// pass-through; doesn't hardcode a specific account.
+polkit.addRule(function(action, subject) {
+    if (action.id !== "org.freedesktop.policykit.exec") return;
+    if (!subject.active) return;
+    var cmd = action.lookup("command_line") || "";
+    var allowed = /^\\/usr\\/bin\\/(dnf|apt-get|pacman)\\s+(install|-S)(\\s+(-y|--noconfirm))?\\s+(wtype|ydotool|wl-clipboard|xdotool|ffmpeg)\\s*$/;
+    if (allowed.test(cmd)) {
+        return polkit.Result.YES;
+    }
+});
+`;
+        try {
+          if (body.enable) {
+            // Write to /tmp first, then pkexec install to the system path.
+            // Two-step keeps pkexec call simple (no nested sh -c).
+            const tmpPath = path.join(os.tmpdir(), `windy-polkit-rule-${process.pid}-${Date.now()}.rules`);
+            fs.writeFileSync(tmpPath, ruleContent);
+            try {
+              // pkexec install -o root -g root -m 644 SRC DST is a single
+              // policykit.exec action (matches the action.id our rule
+              // returns YES for, except we haven't installed yet — so the
+              // user sees a prompt this one time).
+              await execFileAsync('pkexec', ['install', '-o', 'root', '-g', 'root', '-m', '644', tmpPath, rulePath], { timeout: 60000 });
+            } finally {
+              try { fs.unlinkSync(tmpPath); } catch (_) {}
+            }
+            console.info(`[AgentCtrl] polkit rule installed at ${rulePath}`);
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({
+              ok: true,
+              action: 'installed',
+              path: rulePath,
+              hint: 'Subsequent install_dependency calls for whitelisted tools will be prompt-free.',
+            }));
+            return;
+          } else {
+            // Remove via pkexec rm. May fail if the rule doesn't exist —
+            // surface that as not-an-error.
+            try {
+              await execFileAsync('pkexec', ['rm', '-f', rulePath], { timeout: 30000 });
+            } catch (e) {
+              // pkexec exit codes: 126 = user cancel, 127 = auth failed
+              if (e.code === 126) {
+                res.writeHead(200, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ ok: false, action: 'removal-cancelled', userCancelled: true }));
+                return;
+              }
+              throw e;
+            }
+            console.info(`[AgentCtrl] polkit rule removed from ${rulePath}`);
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, action: 'removed', path: rulePath }));
+            return;
+          }
+        } catch (e) {
+          const userMsg = e.code === 126 ? 'User cancelled the polkit prompt — rule not installed.'
+            : e.code === 127 ? 'polkit authentication failed.'
+            : `polkit setup failed: ${e.message}`;
+          res.writeHead(422, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: userMsg, exitCode: e.code }));
+        }
+        return;
+      }
       // POST /install/start — fire-and-poll install. Returns {jobId} immediately;
       // the caller polls /install/status?jobId=X. Body: {tool, dryRun?}.
       if (req.method === 'POST' && pathname === '/install/start') {
