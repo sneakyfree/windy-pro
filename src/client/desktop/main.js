@@ -2552,104 +2552,98 @@ function startWaylandControlServer() {
         return;
       }
 
-      // ── Sound-effects discovery (v1.2.0, read-only) ────────────────────
-      // Sound state lives in renderer-side localStorage (windy_effects /
-      // windy_sfxVolume / windy_customSounds — NOT the main electron-store
-      // the catalog wraps). These endpoints bridge via webContents.execute-
-      // JavaScript on mainWindow. WRITE path is deliberately not exposed
-      // yet — it needs a renderer-side IPC bridge that also notifies the
-      // EffectsEngine to re-apply settings. Documented as Phase 2.
-      async function _readRendererLocalStorage(key) {
+      // ── Sound-effects + widget customization (v1.3.0) ──────────────────
+      // Renderer state (effects-engine, widget-engine, localStorage) is
+      // reachable via the agent IPC bridge — main.js sends 'agent:request'
+      // {requestId, op, args}; renderer dispatches in app.js's
+      // initAgentBridge() and replies on 'agent:reply'. One helper + many
+      // thin endpoints.
+      async function _callAgentBridge(op, args = {}, timeoutMs = 3000) {
         if (!mainWindow || mainWindow.isDestroyed()) {
           return { ok: false, error: 'main window not available — Windy Word UI may be closed' };
         }
-        // Skip the isLoading() guard — Windy Word has lazy content that keeps
-        // isLoading=true even when localStorage is fully readable. Rely on the
-        // Promise.race timeout to catch genuine hangs.
-        try {
-          // Hard 3s timeout race in case executeJavaScript hangs (renderer
-          // unresponsive, no devtools attached to handle the eval, etc.).
-          const raw = await Promise.race([
-            mainWindow.webContents.executeJavaScript(`localStorage.getItem(${JSON.stringify(key)})`, true),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('executeJavaScript timed out after 3s')), 3000)),
-          ]);
-          if (raw === null || raw === undefined) return { ok: true, value: null };
-          if (typeof raw !== 'string') return { ok: true, value: raw };
-          try { return { ok: true, value: JSON.parse(raw) }; }
-          catch { return { ok: true, value: raw }; }
-        } catch (e) {
-          return { ok: false, error: e.message };
-        }
+        const requestId = `bridge_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        return new Promise((resolve) => {
+          const handler = (_e, msg) => {
+            if (msg?.requestId !== requestId) return;
+            ipcMain.removeListener('agent:reply', handler);
+            clearTimeout(timer);
+            resolve(msg);
+          };
+          const timer = setTimeout(() => {
+            ipcMain.removeListener('agent:reply', handler);
+            resolve({ ok: false, error: `agent bridge timed out after ${timeoutMs}ms (renderer dispatcher may not be armed yet)` });
+          }, timeoutMs);
+          ipcMain.on('agent:reply', handler);
+          try {
+            mainWindow.webContents.send('agent:request', { requestId, op, args });
+          } catch (e) {
+            clearTimeout(timer);
+            ipcMain.removeListener('agent:reply', handler);
+            resolve({ ok: false, error: `webContents.send failed: ${e.message}` });
+          }
+        });
       }
 
-      // GET /sound-effects/state — current per-hook config + active pack +
-      // master SFX volume. Reads renderer localStorage windy_effects +
-      // windy_sfxVolume + windy_customSounds.
+      // GET /sound-effects/state — full effects state via bridge.
       if (req.method === 'GET' && pathname === '/sound-effects/state') {
-        const [effects, sfxVol, customSounds] = await Promise.all([
-          _readRendererLocalStorage('windy_effects'),
-          _readRendererLocalStorage('windy_sfxVolume'),
-          _readRendererLocalStorage('windy_customSounds'),
-        ]);
-        res.writeHead(200, { 'content-type': 'application/json' });
+        const result = await _callAgentBridge('get_effects_state');
+        res.writeHead(result.ok ? 200 : 503, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
+        return;
+      }
+      // GET /sound-effects/packs — EffectsEngine pack catalog via bridge.
+      if (req.method === 'GET' && pathname === '/sound-effects/packs') {
+        const result = await _callAgentBridge('list_effect_packs');
+        const count = Array.isArray(result.packs) ? result.packs.length : 0;
+        res.writeHead(result.ok ? 200 : 503, { 'content-type': 'application/json' });
         res.end(JSON.stringify({
-          ok: true,
-          effects: effects.value,                     // { mode, activePack, hookPoints: {start,during,...}, favorites, ... }
-          sfxMasterVolume: sfxVol.value !== null ? parseInt(sfxVol.value, 10) : 70,
-          customSounds: customSounds.value || {},
+          ...result, count,
           hookStages: ['start', 'during', 'stop', 'process', 'warning', 'paste'],
-          rendererReadable: effects.ok && sfxVol.ok,
-          rendererError: effects.error || sfxVol.error || customSounds.error,
-          writePath: 'not yet exposed — sound state is renderer-side localStorage; agent-driven writes need a renderer-side IPC bridge (Phase 2)',
         }, null, 2));
         return;
       }
-      // GET /sound-effects/packs — list the EffectsEngine pack catalog.
-      // Reads via executeJavaScript on the renderer's window.effects (if
-      // exposed) or falls back to a hardcoded snapshot of the built-in
-      // synthesized packs (silent, classic-beep, soft-chime, etc.).
-      if (req.method === 'GET' && pathname === '/sound-effects/packs') {
-        if (!mainWindow || mainWindow.isDestroyed()) {
-          res.writeHead(503, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'main window not available' }));
-          return;
-        }
-        // Skip isLoading() — Windy Word's lazy content keeps it true.
-        try {
-          // Try to query the live renderer EffectsEngine via window.effects
-          // (which the renderer exposes for the Settings UI). Fall back to
-          // a static snapshot if the global isn't set. 3s timeout race.
-          const packs = await Promise.race([
-            mainWindow.webContents.executeJavaScript(`
-            (function() {
-              try {
-                const eng = (window.effects || window.fx || window.effectsEngine);
-                if (eng && typeof eng.getPackList === 'function') {
-                  return JSON.stringify({ source: 'live', packs: eng.getPackList() });
-                }
-              } catch (e) {}
-              return JSON.stringify({ source: 'unavailable', packs: [] });
-            })()
-          `, true),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('executeJavaScript timed out after 3s')), 3000)),
-          ]);
-          let parsed;
-          try { parsed = JSON.parse(packs); } catch { parsed = { source: 'parse-failed', packs: [], raw: packs }; }
-          res.writeHead(200, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({
-            ok: true,
-            source: parsed.source,
-            count: parsed.packs.length,
-            packs: parsed.packs,
-            hookStages: ['start', 'during', 'stop', 'process', 'warning', 'paste'],
-            note: parsed.source === 'unavailable'
-              ? 'Renderer does not expose the EffectsEngine globally — pack list unavailable. Phase 2 wiring needed.'
-              : undefined,
-          }, null, 2));
-        } catch (e) {
-          res.writeHead(500, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: e.message }));
-        }
+      // POST /sound-effects/hook body={hook, enabled?, volume?}
+      if (req.method === 'POST' && pathname === '/sound-effects/hook') {
+        const body = await readJsonBody(req);
+        if (!body.hook) { res.writeHead(400); res.end('hook required'); return; }
+        const result = await _callAgentBridge('set_hook', body);
+        res.writeHead(result.ok ? 200 : 422, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
+        return;
+      }
+      // POST /sound-effects/active-pack body={packId}
+      if (req.method === 'POST' && pathname === '/sound-effects/active-pack') {
+        const body = await readJsonBody(req);
+        if (!body.packId) { res.writeHead(400); res.end('packId required'); return; }
+        const result = await _callAgentBridge('set_active_pack', body);
+        res.writeHead(result.ok ? 200 : 422, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
+        return;
+      }
+      // POST /sound-effects/master-volume body={volume:0-100}
+      if (req.method === 'POST' && pathname === '/sound-effects/master-volume') {
+        const body = await readJsonBody(req);
+        if (typeof body.volume !== 'number') { res.writeHead(400); res.end('volume (0-100 number) required'); return; }
+        const result = await _callAgentBridge('set_master_sfx_volume', body);
+        res.writeHead(result.ok ? 200 : 422, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
+        return;
+      }
+      // POST /sound-effects/mode body={mode}
+      if (req.method === 'POST' && pathname === '/sound-effects/mode') {
+        const body = await readJsonBody(req);
+        if (!body.mode) { res.writeHead(400); res.end('mode required'); return; }
+        const result = await _callAgentBridge('set_effect_mode', body);
+        res.writeHead(result.ok ? 200 : 422, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
+        return;
+      }
+      // GET /widget/state — widget runtime + persisted state via bridge.
+      if (req.method === 'GET' && pathname === '/widget/state') {
+        const result = await _callAgentBridge('get_widget_state');
+        res.writeHead(result.ok ? 200 : 503, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
         return;
       }
 

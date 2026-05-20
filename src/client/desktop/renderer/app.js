@@ -133,6 +133,7 @@ class WindyApp {
     window._translatePanel = this.translatePanel; // Expose for inline TTS onclick
     this.bindEvents();
     this.bindIPCEvents();
+    this.initAgentBridge();
 
     // ── Offline Detection (global) ──
     this.isOffline = !navigator.onLine;
@@ -317,6 +318,130 @@ class WindyApp {
     // Mic pre-warm (Linux/Wayland focus protection). Fire-and-forget — failure
     // is non-fatal; the recording path falls back to fresh getUserMedia.
     this._prewarmMic();
+  }
+
+  // ── Agent bridge (v1.3.0+) ──────────────────────────────────────────
+  // Wires renderer-side state (effects-engine, localStorage, widget-engine)
+  // to the HTTP agent control plane in main.js. Main sends a request on
+  // 'agent:request' with {requestId, op, args}; this dispatcher routes by
+  // op and replies on 'agent:reply' with {requestId, ok, ...result}.
+  //
+  // Op vocabulary:
+  //   get_effects_state       → effects + master vol + custom sounds + packs
+  //   list_effect_packs       → built-in pack catalog
+  //   set_hook                → {hook, enabled?, volume?} per-stage write
+  //   set_active_pack         → {packId} switch sound pack
+  //   set_master_sfx_volume   → {volume:0-100} master volume + persist
+  //   set_effect_mode         → {mode} silent/classic/surprise/custom/pack
+  //   get_widget_state        → widget runtime + persisted state
+  initAgentBridge() {
+    if (!window.agentBridge?.onRequest) return;
+    const reply = (requestId, result) => window.agentBridge.sendReply({ requestId, ...result });
+    const validHooks = ['start', 'during', 'stop', 'process', 'warning', 'paste'];
+    window.agentBridge.onRequest((req) => {
+      const { requestId, op, args = {} } = req || {};
+      if (!requestId) return;
+      try {
+        const fx = this.effectsEngine;
+        switch (op) {
+          case 'get_effects_state': {
+            if (!fx) return reply(requestId, { ok: false, error: 'EffectsEngine not initialized' });
+            let customSounds = {};
+            try { customSounds = JSON.parse(localStorage.getItem('windy_customSounds') || '{}'); } catch (_) {}
+            return reply(requestId, {
+              ok: true,
+              state: {
+                mode: fx._mode,
+                activePackId: fx._activePack?.id || fx._activePackId || null,
+                activePackName: fx._activePack?.name || null,
+                hookPoints: fx._hookPoints,
+                favorites: fx._favorites || [],
+                surpriseCategory: fx._surpriseCategory,
+                dynamicScaling: fx._dynamicScaling,
+                sfxMasterVolume: parseInt(localStorage.getItem('windy_sfxVolume') || '70', 10),
+                customSounds,
+                hookStages: validHooks,
+              },
+            });
+          }
+          case 'list_effect_packs': {
+            if (!fx?.getPackList) return reply(requestId, { ok: false, error: 'EffectsEngine.getPackList unavailable' });
+            return reply(requestId, {
+              ok: true,
+              packs: fx.getPackList(),
+              activePackId: fx._activePack?.id || fx._activePackId || null,
+            });
+          }
+          case 'set_hook': {
+            if (!fx) return reply(requestId, { ok: false, error: 'EffectsEngine not initialized' });
+            const { hook, enabled, volume } = args;
+            if (!validHooks.includes(hook)) {
+              return reply(requestId, { ok: false, error: `invalid hook "${hook}"; must be one of ${validHooks.join(', ')}` });
+            }
+            if (typeof enabled === 'boolean') fx.setHookEnabled(hook, enabled);
+            if (typeof volume === 'number') fx.setHookVolume(hook, Math.max(0, Math.min(100, volume)));
+            return reply(requestId, {
+              ok: true,
+              hook,
+              enabled: fx._hookPoints[hook]?.enabled,
+              volume: fx._hookPoints[hook]?.volume,
+            });
+          }
+          case 'set_active_pack': {
+            if (!fx) return reply(requestId, { ok: false, error: 'EffectsEngine not initialized' });
+            const { packId } = args;
+            if (!fx._packs?.[packId]) {
+              return reply(requestId, { ok: false, error: `unknown pack "${packId}"`, available: Object.keys(fx._packs || {}) });
+            }
+            if (typeof fx.setActivePack === 'function') {
+              fx.setActivePack(packId);
+            } else {
+              fx._activePack = fx._packs[packId];
+              fx._activePackId = packId;
+              fx._saveSettings?.();
+            }
+            return reply(requestId, {
+              ok: true,
+              activePackId: packId,
+              activePackName: fx._packs[packId].name,
+            });
+          }
+          case 'set_master_sfx_volume': {
+            const v = Math.max(0, Math.min(100, parseInt(args.volume, 10)));
+            if (!Number.isFinite(v)) return reply(requestId, { ok: false, error: 'volume (number 0-100) required' });
+            localStorage.setItem('windy_sfxVolume', String(v));
+            fx?.sound?.setMasterVolume?.(v / 100);
+            return reply(requestId, { ok: true, masterVolume: v });
+          }
+          case 'set_effect_mode': {
+            if (!fx) return reply(requestId, { ok: false, error: 'EffectsEngine not initialized' });
+            const validModes = ['silent', 'classic', 'surprise', 'custom', 'pack'];
+            if (!validModes.includes(args.mode)) {
+              return reply(requestId, { ok: false, error: `invalid mode "${args.mode}"; must be one of ${validModes.join(', ')}` });
+            }
+            fx._mode = args.mode;
+            fx._saveSettings?.();
+            return reply(requestId, { ok: true, mode: args.mode });
+          }
+          case 'get_widget_state': {
+            const we = this.widgetEngine || null;
+            return reply(requestId, {
+              ok: true,
+              state: {
+                widgetEnginePresent: !!we,
+                widgetVisible: we?._visible !== undefined ? we._visible : null,
+                tornadoSizeLS: localStorage.getItem('windy_tornadoSize'),
+              },
+            });
+          }
+          default:
+            return reply(requestId, { ok: false, error: `unknown op: ${op}` });
+        }
+      } catch (e) {
+        return reply(requestId, { ok: false, error: e.message });
+      }
+    });
+    console.info('[AgentBridge] renderer-side dispatcher armed');
   }
 
   /**

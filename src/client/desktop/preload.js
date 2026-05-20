@@ -19,6 +19,10 @@ const ALLOWED_RECEIVE_CHANNELS = new Set([
   // Wave 12 B4 — inbound deep-link payload from main.js handleDeepLink().
   // Renderer listens via windyAPI.onDeepLink(cb).
   'windy:deep-link',
+  // Agent control plane (v1.3.0+) — main process sends 'agent:request' with
+  // {requestId, op, args}; renderer dispatches in app.js initAgentBridge() and
+  // replies on 'agent:reply'.
+  'agent:request',
 ]);
 
 function safeOn(channel, callback) {
@@ -272,4 +276,19 @@ contextBridge.exposeInMainWorld('windyAPI', {
   onDeepgramProxyMessage: (callback) => { ipcRenderer.removeAllListeners('deepgram-proxy-message'); safeOn('deepgram-proxy-message', (_e, data) => callback(data)); },
   onDeepgramProxyError: (callback) => { ipcRenderer.removeAllListeners('deepgram-proxy-error'); safeOn('deepgram-proxy-error', (_e, msg) => callback(msg)); },
   onDeepgramProxyClose: (callback) => { ipcRenderer.removeAllListeners('deepgram-proxy-close'); safeOn('deepgram-proxy-close', () => callback()); },
+});
+
+// ═══ Agent bridge (v1.3.0+) ════════════════════════════════════════
+// Two-channel IPC for the HTTP agent control surface in main.js. Main
+// process sends a request on 'agent:request' with {requestId, op, args};
+// renderer handler dispatches by op, sends reply on 'agent:reply' with
+// {requestId, ok, ...result}. Op vocabulary is documented in the
+// renderer's agent-bridge initialization (app.js initAgentBridge).
+contextBridge.exposeInMainWorld('agentBridge', {
+  onRequest: (callback) => {
+    safeOn('agent:request', (event, payload) => callback(payload));
+  },
+  sendReply: (payload) => {
+    ipcRenderer.send('agent:reply', payload);
+  },
 });
