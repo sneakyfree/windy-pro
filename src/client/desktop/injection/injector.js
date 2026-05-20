@@ -55,7 +55,7 @@ class CursorInjector {
                     await this.injectMacOS();
                     break;
                 case 'linux':
-                    await this.injectLinux();
+                    await this.injectLinux(text);
                     break;
                 default:
                     throw new Error(`Unsupported platform: ${this.platform}`);
@@ -131,11 +131,11 @@ class CursorInjector {
     /**
      * Linux: Simulate Ctrl+V using xdotool (X11) or ydotool (Wayland)
      */
-    async injectLinux() {
+    async injectLinux(text) {
         const sessionType = process.env.XDG_SESSION_TYPE || 'x11';
 
         if (sessionType === 'wayland') {
-            return this.injectLinuxWayland();
+            return this.injectLinuxWayland(text);
         } else {
             return this.injectLinuxX11();
         }
@@ -159,26 +159,31 @@ class CursorInjector {
         });
     }
 
-    async injectLinuxWayland() {
-        return new Promise((resolve, reject) => {
-            // Terminals require Ctrl+Shift+V (plain Ctrl+V is literal-quote-next-char).
-            // 29=KEY_LEFTCTRL, 42=KEY_LEFTSHIFT, 47=KEY_V.
-            // Pin YDOTOOL_SOCKET so the client talks to the daemon Windy started,
-            // not whatever a system unit may have spawned on a different path.
-            const ydoSocket = process.env.YDOTOOL_SOCKET || `/tmp/ydotool-${process.getuid?.() ?? 1000}.socket`;
-            const env = { ...process.env, YDOTOOL_SOCKET: ydoSocket };
-            exec('ydotool key 29:1 42:1 47:1 47:0 42:0 29:0', { timeout: 3000, env }, (error) => {
-                if (error) {
-                    if (error.message.includes('not found') || error.message.includes('No such file')) {
-                        reject(new Error('ydotool is required for Wayland text injection.\n\nInstall options:\n  • Ubuntu 23.04+/Debian 13+: sudo apt install ydotool\n  • Fedora: sudo dnf install ydotool\n  • Arch: sudo pacman -S ydotool\n  • Build from source: https://github.com/ReimuNotMoe/ydotool\n\nNote: The ydotoold daemon must be running (sudo systemctl enable --now ydotool).'));
-                    } else {
-                        reject(new Error(`Linux Wayland injection failed: ${error.message}`));
-                    }
-                } else {
-                    resolve();
-                }
-            });
-        });
+    async injectLinuxWayland(text) {
+        // Delegate to the paste-strategy registry. The registry handles:
+        //   - hotkey collision detection (don't fire Ctrl+Shift+V if it's
+        //     the user's own pasteTranscript hotkey — Mutter would intercept)
+        //   - target-type detection (Wayland-native vs XWayland)
+        //   - strategy fallback chain
+        // This keeps both the IPC paste path and the manual hotkey path
+        // using the same well-tested logic.
+        const pasteStrategies = require('../strategies/paste-strategies');
+        // Best-effort: read the user's hotkey config so collision detection
+        // works. We can't import electron-store here, but the global
+        // process.env.WINDY_HOTKEYS_JSON is set by main.js at startup if
+        // available; otherwise we conservatively assume collision (safer).
+        let hotkeysCfg = null;
+        try { hotkeysCfg = JSON.parse(process.env.WINDY_HOTKEYS_JSON || '{}'); } catch (_) { }
+        // Conservative default: if we don't know the hotkey config, assume
+        // collision so we never fire a self-intercepting keystroke from this path.
+        if (!hotkeysCfg || !hotkeysCfg.pasteTranscript) {
+            hotkeysCfg = { pasteTranscript: 'CommandOrControl+Shift+V' };
+        }
+        const chain = pasteStrategies.defaultFallbackChain(hotkeysCfg);
+        const result = await pasteStrategies.autoExecute(text || '', chain);
+        if (!result.ok) {
+            throw new Error(`Linux Wayland injection failed (tried: ${result.tried.map(t => t.strategy).join(', ')})`);
+        }
     }
 
     /**

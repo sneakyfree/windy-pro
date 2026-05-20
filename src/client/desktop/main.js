@@ -127,6 +127,7 @@ const util = require('util');
 // so a hung upstream (Matrix, translate API, HF download) can't
 // leave the renderer waiting forever on an IPC reply.
 const { withTimeout } = require('./lib/timeout');
+const pasteStrategies = require('./strategies/paste-strategies');
 const execFileAsync = util.promisify(execFile);
 // ═══ Lazy-loaded modules (deferred to speed up startup) ═══
 // These modules pull in heavy deps (matrix-js-sdk, stripe, better-sqlite3, electron-updater)
@@ -173,6 +174,13 @@ const store = new Store({
     appearance: {
       alwaysOnTop: true,
       opacity: 1.0
+    },
+    // Paste strategy registry — see src/client/desktop/strategies/paste-strategies.js
+    // 'auto' = run defaultFallbackChain() in priority order; specific name = use that strategy only
+    // fallbackChain: ordered list of strategy names to try if active fails (empty = use defaults)
+    paste: {
+      strategy: 'auto',
+      fallbackChain: []
     },
     engine: {
       model: 'base',
@@ -630,14 +638,15 @@ function createWindow() {
     //   focusable:false = window never becomes key window, so the cursor
     //   stays blinking in the external app at all times during recording.
     //   Mouse clicks still work — only keyboard focus is prevented.
-    // Linux Wayland: alwaysOnTop is a focus magnet under Mutter — any renderer
-    //   activity in an alwaysOnTop window can pull keyboard focus. Force it
-    //   off so the user's terminal cursor keeps blinking during recording.
+    // Linux Wayland: setFocusable(false) (applied during toggleRecording) is
+    //   the real defense against XWayland focus theft; honoring the user's
+    //   alwaysOnTop preference at creation time does not generate the X11
+    //   property-change events that runtime toggling does, so it's safe.
     // Linux X11/Windows: plain alwaysOnTop works fine.
-    alwaysOnTop: PLATFORM.isWayland ? false : appearance.alwaysOnTop,
+    alwaysOnTop: appearance.alwaysOnTop,
     focusable: process.platform !== 'darwin',  // Non-focusable on macOS only
-    frame: false,           // Frameless for custom UI
-    transparent: true,      // Allow CSS transparency for strobe effect
+    frame: true,            // Framed so user can see/cycle the window (temp Linux tweak)
+    transparent: false,     // Opaque so empty page isn't invisible (temp Linux tweak)
     resizable: true,
     minimizable: true,
     maximizable: true,
@@ -658,7 +667,7 @@ function createWindow() {
     },
 
     // Visual
-    backgroundColor: '#00000000',  // Transparent
+    backgroundColor: '#0B0F1A',  // Opaque dark (temp Linux tweak)
     hasShadow: true,
     opacity: appearance.opacity,
 
@@ -975,7 +984,13 @@ function showAboutWindow() {
  * Required for standard Cmd+Q, Cmd+H, Cmd+M, and Edit menu shortcuts
  */
 function createMacOSMenu() {
-  if (process.platform !== 'darwin') return;
+  // Linux/Windows: suppress Electron's auto-generated File/Edit/View/Window/Help
+  // menu — it duplicates nothing useful (all real commands are in the custom
+  // title bar + tray menu) and exposes Reload/DevTools footguns to end users.
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null);
+    return;
+  }
 
   const template = [
     {
@@ -2163,7 +2178,9 @@ let _waylandControlServer = null;
 let _savedWaylandFocusTarget = null;  // Forward-compat slot (for Scope C focus restore)
 
 function startWaylandControlServer() {
-  if (!PLATFORM.isWayland) return;
+  // NOTE: originally Wayland-only for GNOME keybindings. Now the control server
+  // also serves the agent-control surface (paste strategies, settings) so we
+  // start it on ALL platforms — agents need it on macOS/Windows/X11 too.
   const http = require('http');
   const actionHandlers = {
     'toggle-recording': () => toggleRecording(),
@@ -2178,7 +2195,20 @@ function startWaylandControlServer() {
     'quick-translate': () => showMiniTranslateWindow(),
   };
 
-  _waylandControlServer = http.createServer((req, res) => {
+  // Helper: read JSON body from request
+  async function readJsonBody(req) {
+    return new Promise((resolve, reject) => {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try { resolve(body ? JSON.parse(body) : {}); }
+        catch (e) { reject(e); }
+      });
+      req.on('error', reject);
+    });
+  }
+
+  _waylandControlServer = http.createServer(async (req, res) => {
     // Only accept from localhost
     const remote = req.socket.remoteAddress;
     if (remote !== '127.0.0.1' && remote !== '::1' && remote !== '::ffff:127.0.0.1') {
@@ -2186,7 +2216,230 @@ function startWaylandControlServer() {
       return;
     }
     const urlObj = new URL(req.url, 'http://localhost');
-    const action = urlObj.pathname.replace(/^\//, '');
+    const pathname = urlObj.pathname;
+
+    // ── Agent-control endpoints (paste strategy registry) ──
+    try {
+      // GET /paste/strategies — list all strategies with capability metadata
+      if (req.method === 'GET' && pathname === '/paste/strategies') {
+        const all = pasteStrategies.listStrategies();
+        const available = await pasteStrategies.detectAvailable();
+        const enriched = all.map(s => ({ ...s, availableOnThisMachine: available.includes(s.name) }));
+        const hotkeysCfg = store.get('hotkeys');
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          strategies: enriched,
+          defaultChain: pasteStrategies.defaultFallbackChain(hotkeysCfg),
+          hotkeyCollisionDetected: pasteStrategies.defaultFallbackChain(hotkeysCfg)[0] === 'wtype' && pasteStrategies.defaultFallbackChain(hotkeysCfg)[1] === 'ydotool_type',
+        }, null, 2));
+        return;
+      }
+      // GET /paste/active — currently selected strategy + chain
+      if (req.method === 'GET' && pathname === '/paste/active') {
+        const cfg = store.get('paste') || { strategy: 'auto', fallbackChain: [] };
+        const hotkeysCfg = store.get('hotkeys');
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          strategy: cfg.strategy,
+          fallbackChain: cfg.fallbackChain,
+          resolvedChain: cfg.strategy === 'auto'
+            ? (cfg.fallbackChain.length > 0 ? cfg.fallbackChain : pasteStrategies.defaultFallbackChain(hotkeysCfg))
+            : [cfg.strategy, ...(cfg.fallbackChain || [])],
+        }, null, 2));
+        return;
+      }
+      // POST /paste/select — set the active strategy. body: {strategy, fallbackChain?}
+      if (req.method === 'POST' && pathname === '/paste/select') {
+        const body = await readJsonBody(req);
+        if (!body.strategy) { res.writeHead(400); res.end('strategy required'); return; }
+        const s = pasteStrategies.getStrategy(body.strategy);
+        if (!s && body.strategy !== 'auto') { res.writeHead(400); res.end(`unknown strategy: ${body.strategy}`); return; }
+        store.set('paste.strategy', body.strategy);
+        if (Array.isArray(body.fallbackChain)) {
+          store.set('paste.fallbackChain', body.fallbackChain);
+        }
+        console.info(`[AgentCtrl] paste.strategy set to "${body.strategy}"`);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, strategy: body.strategy }));
+        return;
+      }
+      // POST /paste/test — try a strategy with a dummy paste. body: {strategy}
+      // WARNING: injects test text into the focused window.
+      if (req.method === 'POST' && pathname === '/paste/test') {
+        const body = await readJsonBody(req);
+        if (!body.strategy) { res.writeHead(400); res.end('strategy required'); return; }
+        const result = await pasteStrategies.testStrategy(body.strategy);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result));
+        return;
+      }
+      // POST /paste/auto — try all candidates in priority order, return winner.
+      // body: {candidates?: string[], text?: string}  (text defaults to "wtest")
+      if (req.method === 'POST' && pathname === '/paste/auto') {
+        const body = await readJsonBody(req);
+        const candidates = body.candidates || pasteStrategies.defaultFallbackChain(store.get('hotkeys'));
+        const result = await pasteStrategies.autoExecute(body.text || 'wtest', candidates);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result));
+        return;
+      }
+      // GET /config — return full electron-store contents
+      if (req.method === 'GET' && pathname === '/config') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(store.store, null, 2));
+        return;
+      }
+      // POST /config — patch the config. body: {path: 'a.b.c', value: …} or {patch: {…}}
+      if (req.method === 'POST' && pathname === '/config') {
+        const body = await readJsonBody(req);
+        if (body.path && body.value !== undefined) {
+          store.set(body.path, body.value);
+          console.info(`[AgentCtrl] config set ${body.path} = ${JSON.stringify(body.value)}`);
+        } else if (body.patch && typeof body.patch === 'object') {
+          for (const [k, v] of Object.entries(body.patch)) store.set(k, v);
+          console.info(`[AgentCtrl] config patched: ${Object.keys(body.patch).join(', ')}`);
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      // GET /paste/history — last N paste attempts with full diagnostic data.
+      // Use ?limit=N (default 20). Each entry has timestamp, length, hash (not
+      // the actual text), strategy chain attempted, winner, target type.
+      if (req.method === 'GET' && pathname === '/paste/history') {
+        const limit = parseInt(urlObj.searchParams.get('limit') || '20', 10);
+        const history = pasteStrategies.getHistory(limit);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ count: history.length, history }, null, 2));
+        return;
+      }
+      // POST /paste/history/clear — reset the buffer (useful for stress tests)
+      if (req.method === 'POST' && pathname === '/paste/history/clear') {
+        pasteStrategies.clearHistory();
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      // GET /paste/target — what xdotool sees for the focused window
+      // (xwayland / wayland-native / unknown) — useful for agents to verify
+      // their assumptions about the user's environment.
+      if (req.method === 'GET' && pathname === '/paste/target') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ targetType: pasteStrategies.detectTargetType() }));
+        return;
+      }
+      // GET /hotkeys — list all keyboard shortcuts with defaults + current bindings
+      if (req.method === 'GET' && pathname === '/hotkeys') {
+        const hotkeys = store.get('hotkeys') || {};
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          bindings: hotkeys,
+          available: ['toggleRecording', 'pasteTranscript', 'pasteClipboard', 'showHide', 'quickTranslate'],
+          reserved: ['CommandOrControl+V', 'CommandOrControl+C', 'CommandOrControl+X', 'CommandOrControl+Z',
+                     'CommandOrControl+A', 'CommandOrControl+S', 'CommandOrControl+F', 'CommandOrControl+P',
+                     'CommandOrControl+N', 'CommandOrControl+W', 'CommandOrControl+T', 'CommandOrControl+Q',
+                     'Alt+F4'],
+        }, null, 2));
+        return;
+      }
+      // POST /hotkeys — rebind. body: {key: 'toggleRecording', accelerator: 'Ctrl+Shift+Space'}
+      if (req.method === 'POST' && pathname === '/hotkeys') {
+        const body = await readJsonBody(req);
+        if (!body.key || !body.accelerator) { res.writeHead(400); res.end('key + accelerator required'); return; }
+        store.set(`hotkeys.${body.key}`, body.accelerator);
+        try {
+          globalShortcut.unregisterAll();
+          registerHotkeys();
+        } catch (e) { console.warn('[AgentCtrl] hotkey re-register failed:', e.message); }
+        console.info(`[AgentCtrl] hotkeys.${body.key} = ${body.accelerator}`);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, key: body.key, accelerator: body.accelerator }));
+        return;
+      }
+      // GET /models — list available transcription models + current selection
+      if (req.method === 'GET' && pathname === '/models') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          current: store.get('engine.model'),
+          engine: store.get('engine.engine'),
+          ladder: WINDYTUNE_MODEL_LADDER,
+          available: [
+            { id: 'tiny',     size_mb: 73,   speed: 'fastest',  accuracy: 'basic' },
+            { id: 'base',     size_mb: 462,  speed: 'fast',     accuracy: 'good' },
+            { id: 'small',    size_mb: 140,  speed: 'medium',   accuracy: 'better' },
+            { id: 'medium',   size_mb: 1444, speed: 'slow',     accuracy: 'high' },
+            { id: 'large-v3', size_mb: 2945, speed: 'slowest',  accuracy: 'best' },
+          ],
+        }, null, 2));
+        return;
+      }
+      // POST /models — select a model. body: {model: 'small'}
+      if (req.method === 'POST' && pathname === '/models') {
+        const body = await readJsonBody(req);
+        if (!body.model) { res.writeHead(400); res.end('model required'); return; }
+        if (!WINDYTUNE_MODEL_LADDER.includes(body.model)) {
+          res.writeHead(400); res.end(`unknown model: ${body.model}`); return;
+        }
+        store.set('engine.model', body.model);
+        console.info(`[AgentCtrl] engine.model set to "${body.model}"`);
+        // Hot-reload the Python engine if running
+        if (pythonProcess && !pythonProcess.killed) {
+          try {
+            const WebSocket = require('ws');
+            const cfg = store.get('server', { host: '127.0.0.1', port: 9876 });
+            const ws = new WebSocket(`ws://${cfg.host}:${cfg.port}`);
+            ws.on('open', () => {
+              ws.send(JSON.stringify({ action: 'config', config: { model: body.model } }));
+              setTimeout(() => ws.close(), 5000);
+            });
+            ws.on('error', () => { });
+          } catch (_) { }
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, model: body.model }));
+        return;
+      }
+      // GET /windytune/state — current model, history of timings, ladder, thresholds
+      // Agents use this to see if auto-tune is actively switching models.
+      if (req.method === 'GET' && pathname === '/windytune/state') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          enabled: store.get('engine.engine') === 'windytune',
+          currentModel: store.get('engine.model'),
+          ladder: WINDYTUNE_MODEL_LADDER,
+          thresholds: WINDYTUNE_THRESHOLDS,
+          historyCount: _windyTuneHistory.length,
+          history: _windyTuneHistory.slice(),
+          recentAvgRatio: _windyTuneHistory.length > 0
+            ? +(_windyTuneHistory.reduce((s, h) => s + h.ratio, 0) / _windyTuneHistory.length).toFixed(2)
+            : null,
+        }, null, 2));
+        return;
+      }
+      // GET /platform — environment info for agents
+      if (req.method === 'GET' && pathname === '/platform') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          os: process.platform,
+          arch: process.arch,
+          distro: PLATFORM.distro,
+          distroVersion: PLATFORM.distroVersion,
+          displayServer: PLATFORM.displayServer,
+          desktop: PLATFORM.desktop,
+          hasXdotool: PLATFORM.hasXdotool,
+          hasYdotool: PLATFORM.hasYdotool,
+        }, null, 2));
+        return;
+      }
+    } catch (e) {
+      console.error('[WaylandCtrl] handler error:', e);
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+      return;
+    }
+
+    // ── Legacy action handlers (GNOME keybindings) ──
+    const action = pathname.replace(/^\//, '');
     const focusWin = urlObj.searchParams.get('focuswin');
     if (focusWin && focusWin !== '0' && focusWin !== '') {
       _savedWaylandFocusTarget = focusWin;
@@ -3328,36 +3581,63 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
   if (!text || !text.trim()) return false;
 
   try {
-    const { clipboard } = require('electron');
     const trimmed = text.trim();
-    clipboard.writeText(trimmed);
-    console.info(`[AutoPaste] Text on clipboard: ${trimmed.length} chars`);
-    console.info(`[AutoPaste] Target: "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
+    const pasteConfig = store.get('paste') || { strategy: 'auto', fallbackChain: [] };
+    console.info(`[AutoPaste] Text length: ${trimmed.length} chars, config.strategy=${pasteConfig.strategy}`);
 
-    // Wayland: also write to the Wayland clipboard via wl-copy.
-    // Electron's clipboard.writeText() only writes to the X11 clipboard (via
-    // XWayland). Wayland-native apps (terminals, GNOME apps) read from the
-    // Wayland clipboard, which won't have the text unless we set it explicitly.
-    if (PLATFORM.isWayland) {
+    // ── macOS PID activation (load-bearing focus prep) ──
+    // Move focus to the tracked target app BEFORE paste fires. Without this,
+    // macOS may have shifted focus to an Electron helper during transcription.
+    if (process.platform === 'darwin' && global._lastFocusedPid) {
+      console.info(`[AutoPaste] Activating tracked target: "${global._lastFocusedApp || 'unknown'}" (pid ${global._lastFocusedPid})`);
       try {
-        const wlProc = spawn('wl-copy', [], {
-          env: { ...process.env, WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY || 'wayland-0', XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}` },
-          stdio: ['pipe', 'ignore', 'ignore'],
-          timeout: 3000,
-        });
-        wlProc.stdin.write(trimmed);
-        wlProc.stdin.end();
-        await new Promise((resolve) => {
-          wlProc.on('close', resolve);
-          setTimeout(resolve, 1000);
-        });
-        console.info('[AutoPaste] Wayland clipboard set via wl-copy');
+        execFileSync('osascript', ['-e',
+          `tell application "System Events" to set frontmost of (first application process whose unix id is ${global._lastFocusedPid}) to true`
+        ], { timeout: 2000 });
+        await new Promise(r => setTimeout(r, 200));
       } catch (e) {
-        console.warn('[AutoPaste] wl-copy failed:', e.message);
+        console.warn(`[AutoPaste] Activation failed: ${e.message} — trying blind paste`);
+      }
+
+      // ── Accessibility permission check (macOS only) ──
+      const { systemPreferences } = require('electron');
+      if (!systemPreferences.isTrustedAccessibilityClient(false)) {
+        console.warn('[AutoPaste] Accessibility permission not granted — requesting...');
+        systemPreferences.isTrustedAccessibilityClient(true);
+        return false;
       }
     }
 
-    if (process.platform === 'darwin') {
+    // ── Run strategy chain via registry ──
+    // 'auto' uses defaultFallbackChain() for the current platform, passing
+    // the user's hotkey config so colliding strategies (e.g. Ctrl+Shift+V
+    // keystroke when user's own pasteTranscript hotkey is the same) get
+    // demoted to last-resort instead of silently failing.
+    // Specific strategy name runs that one, falls through to config.fallbackChain on failure.
+    let chain;
+    if (pasteConfig.strategy === 'auto') {
+      chain = (pasteConfig.fallbackChain && pasteConfig.fallbackChain.length > 0)
+        ? pasteConfig.fallbackChain
+        : pasteStrategies.defaultFallbackChain(store.get('hotkeys'));
+    } else {
+      chain = [pasteConfig.strategy, ...(pasteConfig.fallbackChain || [])];
+    }
+    console.info(`[AutoPaste] Strategy chain: ${chain.join(' → ')}`);
+
+    const result = await pasteStrategies.autoExecute(trimmed, chain);
+
+    if (result.ok) {
+      console.info(`[AutoPaste] ✓ "${result.strategy}" succeeded (${trimmed.length} chars)`);
+    } else {
+      console.warn('[AutoPaste] All strategies failed:');
+      for (const t of result.tried) {
+        console.warn(`  - ${t.strategy}: ${t.ok ? 'OK' : t.error || 'failed'}`);
+      }
+    }
+    return result.ok;
+
+    // ── Legacy paths below (preserved for reference; never reached) ──
+    if (false && process.platform === 'darwin') {
       // ── macOS auto-paste: TRACKER-BASED PID activation ──
       // The focus tracker continuously updates _lastFocusedPid during recording
       // and LOCKS it during batch processing (transcription). So at paste time,
@@ -3429,26 +3709,86 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
 
     } else if (process.platform === 'linux') {
       // ── Linux auto-paste ──
-      // Wayland: use ydotool (kernel-level /dev/uinput injection — reaches
-      // Wayland-native apps; xdotool cannot). Ctrl+Shift+V is the universal
-      // paste shortcut: terminals require it, GUI apps accept it.
-      // X11: xdotool is the standard, with opacity-hide for focus management.
+      // Wayland: type the text directly via ydotool (bypass clipboard). The
+      // Wayland clipboard is fragile under Mutter + 3rd-party clipboard
+      // managers (GPaste, copyq) and frequently wedges; even when it works,
+      // Wayland-native apps don't read X11 clipboard, so Ctrl+Shift+V on a
+      // broken Wayland clipboard pastes nothing. Direct typing goes
+      // /dev/uinput → kernel → Mutter → focused app, completely independent
+      // of clipboard state. Slower for long text (~5ms/char) but rock-solid.
+      // Falls back to Ctrl+Shift+V if typing fails (daemon dead, etc.).
+      // X11: xdotool with opacity-hide for focus management.
       if (PLATFORM.isWayland) {
-        // No window manipulation on Wayland — setOpacity/setAlwaysOnTop
-        // generate X11 events that Mutter reacts to and may steal focus.
-        const ydoSocket = _ydotoolSocket || '';
-        const ydoEnv = ydoSocket ? `YDOTOOL_SOCKET=${ydoSocket} ` : '';
-        const pasteSuccess = await new Promise((resolve) => {
-          // Ctrl+Shift+V: 29=KEY_LEFTCTRL, 42=KEY_LEFTSHIFT, 47=KEY_V
-          exec(`${ydoEnv}ydotool key 29:1 42:1 47:1 47:0 42:0 29:0`, { timeout: 3000 }, (err) => {
-            if (!err) return resolve(true);
-            console.warn('[AutoPaste] ydotool failed, trying xdotool fallback:', err.message);
-            // xdotool fallback (works for XWayland apps; fails on Wayland-native)
-            exec('xdotool key --clearmodifiers ctrl+shift+v', { timeout: 3000 }, (err2) => {
-              if (!err2) return resolve(true);
-              exec('xdotool key --clearmodifiers ctrl+v', { timeout: 3000 }, (err3) => resolve(!err3));
-            });
+        const ydoSocket = _ydotoolSocket || `/tmp/ydotool-${process.getuid?.() ?? 1000}.socket`;
+        const ydoEnv = { ...process.env, YDOTOOL_SOCKET: ydoSocket };
+
+        // STRATEGY: detect target type and pick the fastest working path.
+        //   XWayland target (xdotool sees a window name): clipboard + Ctrl+Shift+V — INSTANT
+        //   Wayland-native target (xdotool sees nothing): ydotool type at max speed
+        // Why this split: X11 clipboard works reliably (Electron's writeText set it
+        // already), and XWayland apps read X11 clipboard. So Ctrl+Shift+V on those
+        // is instant. Wayland-native apps read the Wayland clipboard, which is
+        // fragile/broken on some Mutter versions — for those we type the text
+        // directly (~1ms/char with -d 0 -H 0).
+        let targetIsXWayland = false;
+        try {
+          const winName = execFileSync('xdotool', ['getactivewindow', 'getwindowname'],
+            { timeout: 500, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+          targetIsXWayland = winName.length > 0;
+          console.info(`[AutoPaste] Target window: "${winName}" → ${targetIsXWayland ? 'XWayland' : 'Wayland-native'}`);
+        } catch (_) {
+          console.info('[AutoPaste] xdotool unavailable, assuming Wayland-native target');
+        }
+
+        if (targetIsXWayland) {
+          // PATH A: clipboard already set by Electron writeText. Fire Ctrl+Shift+V — instant.
+          const pasteSuccess = await new Promise((resolve) => {
+            execFile('ydotool', ['key', '29:1', '42:1', '47:1', '47:0', '42:0', '29:0'],
+              { env: ydoEnv, timeout: 3000 }, (err) => {
+                if (!err) return resolve(true);
+                console.warn('[AutoPaste] ydotool key failed, trying xdotool:', err.message);
+                exec('xdotool key --clearmodifiers ctrl+shift+v', { timeout: 3000 }, (err2) => {
+                  if (!err2) return resolve(true);
+                  exec('xdotool key --clearmodifiers ctrl+v', { timeout: 3000 }, (err3) => resolve(!err3));
+                });
+              });
           });
+          if (pasteSuccess) {
+            console.info(`[AutoPaste] ✓ Pasted ${trimmed.length} chars via Ctrl+Shift+V (XWayland)`);
+            return true;
+          }
+          // Fall through to typing if keystroke fails
+        }
+
+        // PATH B: type the text directly via ydotool at maximum speed.
+        // -d 0: zero delay between keys. -H 0: zero hold time per key.
+        // Approximately 1-5ms per char on typical hardware (limited by /dev/uinput).
+        const typeTimeout = Math.min(300000, Math.max(30000, trimmed.length * 30));
+        const typeOk = await new Promise((resolve) => {
+          execFile('ydotool', ['type', '-d', '0', '-H', '0', '--', trimmed],
+            { env: ydoEnv, timeout: typeTimeout }, (err, stdout, stderr) => {
+              if (err) {
+                console.warn('[AutoPaste] ydotool type failed:', err.message, stderr || '');
+                resolve(false);
+              } else {
+                console.info(`[AutoPaste] ✓ Typed ${trimmed.length} chars via ydotool (max-speed)`);
+                resolve(true);
+              }
+            });
+        });
+        if (typeOk) return true;
+
+        // Last-resort fallback: clipboard + keystroke combo
+        console.warn('[AutoPaste] Typing failed, last-resort clipboard+keystroke');
+        const pasteSuccess = await new Promise((resolve) => {
+          execFile('ydotool', ['key', '29:1', '42:1', '47:1', '47:0', '42:0', '29:0'],
+            { env: ydoEnv, timeout: 3000 }, (err) => {
+              if (!err) return resolve(true);
+              exec('xdotool key --clearmodifiers ctrl+shift+v', { timeout: 3000 }, (err2) => {
+                if (!err2) return resolve(true);
+                exec('xdotool key --clearmodifiers ctrl+v', { timeout: 3000 }, (err3) => resolve(!err3));
+              });
+            });
         });
         if (!pasteSuccess) {
           console.warn('[AutoPaste] Paste injection failed on Wayland — text remains on clipboard');
