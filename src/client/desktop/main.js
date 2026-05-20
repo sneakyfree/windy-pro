@@ -2476,6 +2476,119 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true }));
         return;
       }
+      // ── Misc utilities (v0.10.0) ───────────────────────────────────────
+      // GET /hardware — system info (RAM, CPU, GPU, disk free, platform/arch).
+      // Pure read, no system mutation. Useful for Doctor + model selection.
+      if (req.method === 'GET' && pathname === '/hardware') {
+        const result = {
+          totalRAM: Math.round(os.totalmem() / (1024 * 1024 * 1024)),
+          freeRAM: Math.round(os.freemem() / (1024 * 1024 * 1024)),
+          cpuModel: os.cpus()[0]?.model || 'Unknown',
+          cpuCores: os.cpus().length,
+          platform: process.platform,
+          arch: process.arch,
+          gpu: null,
+          diskFreeGB: null,
+        };
+        if (process.platform === 'darwin' && process.arch === 'arm64') {
+          result.gpu = { name: 'Apple Silicon (Metal/MPS)', vramMB: 0, type: 'mps' };
+        } else if (process.platform !== 'darwin') {
+          try {
+            const gpuInfo = execFileSync('nvidia-smi', ['--query-gpu=name,memory.total', '--format=csv,noheader,nounits'], { timeout: 5000 }).toString().trim();
+            if (gpuInfo) {
+              const [name, vramMB] = gpuInfo.split(', ');
+              result.gpu = { name: name.trim(), vramMB: parseInt(vramMB) || 0, type: 'cuda' };
+            }
+          } catch (_) { /* no nvidia GPU */ }
+        }
+        try {
+          if (process.platform !== 'win32') {
+            const out = execFileSync('df', ['-BG', os.homedir()], { timeout: 3000 }).toString();
+            const lines = out.trim().split('\n');
+            if (lines.length >= 2) {
+              const cols = lines[1].split(/\s+/);
+              if (cols.length >= 4) result.diskFreeGB = parseInt(cols[3]) || null;
+            }
+          }
+        } catch (_) { /* best-effort */ }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
+        return;
+      }
+      // POST /autostart body={enable: bool} — toggle app autostart on boot.
+      // Linux: writes/removes ~/.config/autostart/windy-pro.desktop.
+      // macOS: writes/removes LaunchAgent plist (handled by the existing IPC).
+      // Returns the resulting state so agents can verify.
+      if (req.method === 'POST' && pathname === '/autostart') {
+        const body = await readJsonBody(req);
+        if (typeof body.enable !== 'boolean') {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'enable (boolean) required' }));
+          return;
+        }
+        try {
+          if (process.platform === 'linux') {
+            const autostartDir = path.join(os.homedir(), '.config', 'autostart');
+            const desktopFile = path.join(autostartDir, 'windy-pro.desktop');
+            if (body.enable) {
+              if (!fs.existsSync(autostartDir)) fs.mkdirSync(autostartDir, { recursive: true });
+              const appPath = process.execPath;
+              const iconCandidates = [
+                path.join(path.dirname(appPath), 'resources', 'app', 'assets', 'icon.png'),
+                path.join(path.dirname(appPath), 'resources', 'assets', 'icon.png'),
+                path.join(__dirname, '..', '..', '..', 'assets', 'icon.png'),
+              ];
+              const iconPath = iconCandidates.find(p => fs.existsSync(p)) || 'windy-pro';
+              fs.writeFileSync(desktopFile, `[Desktop Entry]\nType=Application\nName=Windy Word\nExec=${appPath}\nIcon=${iconPath}\nComment=Voice-to-text transcription\nX-GNOME-Autostart-enabled=true\nStartupNotify=false\n`);
+            } else if (fs.existsSync(desktopFile)) {
+              fs.unlinkSync(desktopFile);
+            }
+            const currentlyEnabled = fs.existsSync(desktopFile);
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, platform: 'linux', enabled: currentlyEnabled, desktopFile }));
+            return;
+          }
+          if (process.platform === 'darwin') {
+            app.setLoginItemSettings({ openAtLogin: body.enable });
+            const s = app.getLoginItemSettings();
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, platform: 'darwin', enabled: s.openAtLogin }));
+            return;
+          }
+          if (process.platform === 'win32') {
+            app.setLoginItemSettings({ openAtLogin: body.enable, path: process.execPath });
+            const s = app.getLoginItemSettings();
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, platform: 'win32', enabled: s.openAtLogin }));
+            return;
+          }
+          res.writeHead(501, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `unsupported platform: ${process.platform}` }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+      // GET /autostart — return current autostart status without changing it.
+      if (req.method === 'GET' && pathname === '/autostart') {
+        try {
+          if (process.platform === 'linux') {
+            const desktopFile = path.join(os.homedir(), '.config', 'autostart', 'windy-pro.desktop');
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ platform: 'linux', enabled: fs.existsSync(desktopFile), desktopFile }));
+            return;
+          }
+          const s = app.getLoginItemSettings();
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ platform: process.platform, enabled: s.openAtLogin }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
       // ── Translation (v0.9.0) ───────────────────────────────────────────
       // POST /translate body={text, sourceLang?, targetLang}. Tries the
       // translation-memory cache first; on miss, falls through to the same
