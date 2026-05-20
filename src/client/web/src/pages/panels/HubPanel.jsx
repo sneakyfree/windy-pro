@@ -20,6 +20,10 @@ const PRODUCTS = [
         // first-touch discovery, not for return users with credentials).
         href: 'https://app.windychat.ai',
         internal: false,
+        // Tactical SSO handoff \u2014 append the current Pro JWT as a URL
+        // fragment so the chat app can skip its login screen. Bridge
+        // until account.windyword.ai/oauth/authorize is built.
+        ssoHandoff: true,
     },
     {
         key: 'windy_mail',
@@ -226,12 +230,37 @@ export default function HubPanel({ apiFetch }) {
                             )
                         }
 
+                        const onClickHandler = product.ssoHandoff
+                            ? (e) => {
+                                // SSO handoff — append Pro JWT as URL fragment
+                                // so the target app can skip its login screen.
+                                // Fragment never leaves the browser; the target
+                                // strips it from history on arrival.
+                                try {
+                                    const jwt = localStorage.getItem('windy_token')
+                                    if (jwt) {
+                                        e.preventDefault()
+                                        window.open(
+                                            `${product.href}/#token=${encodeURIComponent(jwt)}`,
+                                            '_blank',
+                                            'noopener,noreferrer'
+                                        )
+                                    }
+                                } catch {
+                                    // Fall through to the default href on any
+                                    // error — better to land on login than to
+                                    // fail the click.
+                                }
+                            }
+                            : undefined
+
                         return (
                             <a
                                 key={product.key}
                                 href={product.href}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={onClickHandler}
                                 style={{ textDecoration: 'none', color: 'inherit' }}
                             >
                                 {cardContent}
