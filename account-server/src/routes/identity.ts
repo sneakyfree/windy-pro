@@ -157,6 +157,75 @@ router.get('/products', authenticateToken, (req: Request, res: Response) => {
   res.json({ products });
 });
 
+// ─── GET /api/v1/identity/owns-passport/:passport ─────────────
+//
+// Ownership check backing the Mind runtime claim API (ADR-051 Phase A.2).
+// Returns whether the JWT-bearer identity is authorized to claim or
+// heartbeat the runtime slot for the given Eternitas passport.
+//
+// Per ADR-050, every passport-bearing agent has a `product_accounts`
+// row with product='eternitas' and external_id=<passport-id>. The
+// row's identity_id is the BOT; operator_identity_id is the human
+// who operates that bot. Two relations qualify as "owns":
+//
+//   1. self      — the JWT identity IS the bot itself
+//   2. operator  — the JWT identity is the bot's human operator
+//
+// Both collapse to: (identity_id = ? OR operator_identity_id = ?)
+// scoped to the single row identified by the passport string.
+//
+// Cached client-side (Mind) for 5min per the A.2 spec; the server
+// itself stays stateless to keep invalidation simple.
+router.get('/owns-passport/:passport', authenticateToken, (req: Request, res: Response) => {
+  try {
+    const userId = (req as AuthRequest).user.userId;
+    const passport = req.params.passport;
+
+    // Loose format check — defends against absurdly malformed inputs
+    // and keeps the 400-vs-200 boundary tidy. Real passport validation
+    // lives in Eternitas; parameterized queries handle injection.
+    if (
+      !passport ||
+      typeof passport !== 'string' ||
+      passport.length > 64 ||
+      !/^ET[0-9]{2}-[A-Z0-9-]{1,60}$/i.test(passport)
+    ) {
+      return res.status(400).json({
+        error: 'Invalid passport format. Expected ET<YY>-XXXX-XXXX.',
+      });
+    }
+
+    const db = getDb();
+    const row = db.prepare(`
+      SELECT identity_id, operator_identity_id
+      FROM product_accounts
+      WHERE product = 'eternitas'
+        AND external_id = ?
+        AND (identity_id = ? OR operator_identity_id = ?)
+      LIMIT 1
+    `).get(passport, userId, userId) as
+      | { identity_id: string; operator_identity_id: string | null }
+      | undefined;
+
+    if (!row) {
+      return res.json({
+        owned: false,
+        passport,
+        identity_id: userId,
+      });
+    }
+
+    res.json({
+      owned: true,
+      passport,
+      identity_id: userId,
+      relation: row.identity_id === userId ? 'self' : 'operator',
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Ownership lookup failed' });
+  }
+});
+
 // ─── POST /api/v1/identity/products/provision ────────────────
 
 router.post('/products/provision', authenticateToken, (req: Request, res: Response) => {
