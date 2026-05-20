@@ -533,6 +533,68 @@ router.post('/chat/provision', authenticateToken, async (req: Request, res: Resp
           hint: 'Is the Synapse homeserver running?',
         });
       }
+    } else if (config.WINDY_CHAT_URL && process.env.WINDY_CHAT_WEBHOOK_SECRET) {
+      // Production fallback: Synapse admin is bound to the chat EC2's
+      // internal network and not reachable from this host. Delegate the
+      // Matrix-side registration to chat-onboarding's `identity/created`
+      // webhook — it holds the local Synapse secret and is idempotent.
+      // We do NOT receive an access_token back (the webhook doesn't expose
+      // one), so the Pro-side chat_profile is recorded with a NULL token;
+      // SSO into the chat web client mints a fresh device session on
+      // first login.
+      try {
+        const user2 = db.prepare(
+          'SELECT email, windy_identity_id FROM users WHERE id = ?',
+        ).get(userId) as { email: string; windy_identity_id: string } | undefined;
+        if (!user2?.windy_identity_id) {
+          throw new Error('User missing windy_identity_id');
+        }
+        const payload = {
+          event: 'identity.created',
+          windy_identity_id: user2.windy_identity_id,
+          email: user2.email,
+          display_name: displayName,
+          tier: 'free',
+        };
+        const body = JSON.stringify(payload);
+        const signature = 'sha256=' + crypto
+          .createHmac('sha256', process.env.WINDY_CHAT_WEBHOOK_SECRET)
+          .update(body)
+          .digest('hex');
+        const hookRes = await fetch(
+          `${config.WINDY_CHAT_URL.replace(/\/$/, '')}/api/v1/webhooks/identity/created`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Windy-Signature': signature,
+            },
+            body,
+            signal: AbortSignal.timeout(15000),
+          },
+        );
+        if (!hookRes.ok) {
+          const errBody = await hookRes.text().catch(() => '');
+          throw new Error(`chat webhook returned ${hookRes.status}: ${errBody.slice(0, 200)}`);
+        }
+        const hookData = await hookRes.json() as { matrix_user_id?: string; display_name?: string };
+        if (!hookData.matrix_user_id) {
+          throw new Error('chat webhook returned no matrix_user_id');
+        }
+        matrixCredentials = {
+          matrixUserId: hookData.matrix_user_id,
+          // Webhook never returns an access_token; first SSO mints one
+          accessToken: '',
+          deviceId: '',
+          homeServer: SYNAPSE_SERVER_NAME,
+        };
+      } catch (err: any) {
+        console.error('[identity] chat-webhook provisioning failed:', err.message);
+        return res.status(502).json({
+          error: 'Failed to provision Matrix account via chat webhook',
+          detail: err.message,
+        });
+      }
     } else if (process.env.NODE_ENV !== 'production' && process.env.ALLOW_CHAT_STUB === 'true') {
       // Dev-only stub — explicitly opted in via ALLOW_CHAT_STUB=true AND non-production
       // NODE_ENV. Previously this branch ran any time SYNAPSE_REGISTRATION_SECRET was
@@ -545,10 +607,10 @@ router.post('/chat/provision', authenticateToken, async (req: Request, res: Resp
         homeServer: SYNAPSE_SERVER_NAME,
       };
     } else {
-      console.error('[identity] SYNAPSE_REGISTRATION_SECRET not configured; refusing to stub chat provisioning');
+      console.error('[identity] No chat provisioning path configured; set SYNAPSE_REGISTRATION_SECRET or WINDY_CHAT_WEBHOOK_SECRET');
       return res.status(503).json({
         error: 'Chat provisioning unavailable',
-        hint: 'SYNAPSE_REGISTRATION_SECRET must be set. For local dev, also set NODE_ENV!=production and ALLOW_CHAT_STUB=true.',
+        hint: 'Set SYNAPSE_REGISTRATION_SECRET (direct path) OR WINDY_CHAT_WEBHOOK_SECRET + WINDY_CHAT_URL (chat-webhook delegate). For local dev, also set NODE_ENV!=production and ALLOW_CHAT_STUB=true.',
       });
     }
 
