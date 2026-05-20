@@ -2544,7 +2544,11 @@ function startWaylandControlServer() {
         const localReport = await doctor.runDiagnostics(PLATFORM);
         const relayUrl = process.env.WINDY_FIX_ME_URL || 'https://windy-fix-me.windyword.workers.dev/diagnose';
         const headers = { 'content-type': 'application/json' };
-        if (reqBody?.sharedSecret) headers['x-windy-fix-me-key'] = reqBody.sharedSecret;
+        // Header source precedence: explicit body arg > process env > none. The
+        // env path lets each machine keep WINDY_FIX_ME_KEY in its shell init so
+        // agents don't have to know the secret to call cloud_diagnose.
+        const sharedSecret = reqBody?.sharedSecret || process.env.WINDY_FIX_ME_KEY;
+        if (sharedSecret) headers['x-windy-fix-me-key'] = sharedSecret;
         try {
           const upstream = await fetch(relayUrl, {
             method: 'POST',
