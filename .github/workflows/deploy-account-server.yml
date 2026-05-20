@@ -63,8 +63,14 @@ jobs:
             cd deploy-prod
             export COMMIT_SHA="${GITHUB_SHA}"
             export BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            sudo -E docker compose --env-file .env.production build pro-account-server
-            sudo -E docker compose --env-file .env.production up -d --no-deps pro-account-server
+            # Use explicit -p windypro-prod so docker compose creates
+            # / recreates the windypro-prod-pro-account-server-1
+            # container, NOT a deploy-prod-pro-account-server-1 one
+            # (which would collide with the running healthy container
+            # on port 8098 — see PR #135 + the deploy-prod compose
+            # project name collision migration of 2026-05-20).
+            sudo -E docker compose -p windypro-prod --env-file .env.production build pro-account-server
+            sudo -E docker compose -p windypro-prod --env-file .env.production up -d --no-deps pro-account-server
             sleep 10
             HOST_PORT=$(sudo docker port windypro-prod-pro-account-server-1 | head -1 | awk -F: '{print $NF}')
             DEPLOYED_SHA=$(curl -s "http://localhost:$HOST_PORT/version" | python3 -c "import sys,json; print(json.load(sys.stdin).get('commit_sha',''))")
