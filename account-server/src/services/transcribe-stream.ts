@@ -29,12 +29,12 @@
  */
 import http from 'http';
 import WebSocket from 'ws';
-import jwt from 'jsonwebtoken';
 import {
     TranscribeStreamingClient,
     StartStreamTranscriptionCommand,
 } from '@aws-sdk/client-transcribe-streaming';
 import { config } from '../config';
+import { verifyToken } from '../middleware/auth';
 
 // Map ISO-639-1 codes the SPA sends to AWS Transcribe Streaming language
 // codes. Default to en-US. Expand as we validate quality per language —
@@ -164,9 +164,14 @@ export function setupTranscribeStreamWS(server: http.Server): void {
 
                 switch (msg.type) {
                     case 'auth':
+                        // Use the production verifyToken helper (RS256 first
+                        // via JWKS, then HS256 fallback). Prior HS256-only
+                        // verification silently rejected RS256 tokens from
+                        // production-signed JWTs — surfaced 2026-05-19 as the
+                        // /transcribe "Authentication failed" red dot.
                         if (msg.token) {
                             try {
-                                jwt.verify(msg.token, config.JWT_SECRET, { algorithms: ['HS256'] });
+                                verifyToken(msg.token);
                                 state.authenticated = true;
                                 clearTimeout(authTimeout);
                             } catch {
