@@ -128,6 +128,7 @@ const util = require('util');
 // leave the renderer waiting forever on an IPC reply.
 const { withTimeout } = require('./lib/timeout');
 const pasteStrategies = require('./strategies/paste-strategies');
+const installer = require('./install/installer');
 const execFileAsync = util.promisify(execFile);
 // ═══ Lazy-loaded modules (deferred to speed up startup) ═══
 // These modules pull in heavy deps (matrix-js-sdk, stripe, better-sqlite3, electron-updater)
@@ -2429,6 +2430,48 @@ function startWaylandControlServer() {
           hasXdotool: PLATFORM.hasXdotool,
           hasYdotool: PLATFORM.hasYdotool,
         }, null, 2));
+        return;
+      }
+      // GET /install/capabilities — what whitelisted tools the agent can
+      // install on this machine + the resolved install command per tool.
+      // Always safe to call (no system mutation).
+      if (req.method === 'GET' && pathname === '/install/capabilities') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(installer.listInstallable(PLATFORM), null, 2));
+        return;
+      }
+      // POST /install — install a whitelisted tool via the distro package
+      // manager wrapped in pkexec. Triggers a polkit GUI prompt that the
+      // user must approve. Body: {tool: string, dryRun?: boolean}.
+      // Returns the full audit record (command, exit code, stdout/stderr,
+      // elapsed ms, whether the tool is now on PATH).
+      if (req.method === 'POST' && pathname === '/install') {
+        const body = await readJsonBody(req);
+        if (!body.tool || typeof body.tool !== 'string') {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'tool (string) required' }));
+          return;
+        }
+        console.info(`[AgentCtrl] install requested: ${body.tool}${body.dryRun ? ' (dry-run)' : ''}`);
+        const result = await installer.install(body.tool, PLATFORM, { dryRun: !!body.dryRun });
+        res.writeHead(result.ok ? 200 : 422, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
+        return;
+      }
+      // GET /install/history — recent install attempts (in-memory audit log).
+      // Resets at app restart. Useful for agents diagnosing why a paste
+      // strategy is still missing after a recent install attempt.
+      if (req.method === 'GET' && pathname === '/install/history') {
+        const limit = parseInt(urlObj.searchParams.get('limit') || '20', 10);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ history: installer.getAuditLog(limit) }, null, 2));
+        return;
+      }
+      // POST /install/history/clear — wipe the in-memory audit log.
+      if (req.method === 'POST' && pathname === '/install/history/clear') {
+        installer.clearAuditLog();
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
         return;
       }
     } catch (e) {
