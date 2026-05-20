@@ -2533,6 +2533,56 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ...entry, currentValue: store.get(p) }, null, 2));
         return;
       }
+      // POST /doctor/cloud-diagnose — bundle local doctor findings + platform
+      // context and route to the windy-fix-me cloud-relay for LLM-augmented
+      // remediation. Body shape: { sharedSecret? } — sharedSecret is forwarded
+      // as the X-Windy-Fix-Me-Key header if the worker is configured to
+      // require it. The local findings are gathered server-side so the agent
+      // doesn't have to round-trip them.
+      if (req.method === 'POST' && pathname === '/doctor/cloud-diagnose') {
+        const reqBody = await readJsonBody(req).catch(() => ({}));
+        const localReport = await doctor.runDiagnostics(PLATFORM);
+        const relayUrl = process.env.WINDY_FIX_ME_URL || 'https://windy-fix-me.windyword.workers.dev/diagnose';
+        const headers = { 'content-type': 'application/json' };
+        if (reqBody?.sharedSecret) headers['x-windy-fix-me-key'] = reqBody.sharedSecret;
+        try {
+          const upstream = await fetch(relayUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              findings: localReport.findings,
+              platform: {
+                os: process.platform,
+                arch: process.arch,
+                distro: PLATFORM.distro,
+                distroVersion: PLATFORM.distroVersion,
+                displayServer: PLATFORM.displayServer,
+                desktop: PLATFORM.desktop,
+              },
+              productVersion: app.getVersion(),
+            }),
+          });
+          const upstreamBody = await upstream.text();
+          let upstreamJson;
+          try { upstreamJson = JSON.parse(upstreamBody); } catch { upstreamJson = { raw: upstreamBody }; }
+          res.writeHead(upstream.ok ? 200 : 502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({
+            ok: upstream.ok,
+            local: localReport,
+            cloud: upstreamJson,
+            relayUrl,
+          }, null, 2));
+        } catch (e) {
+          res.writeHead(502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({
+            ok: false,
+            local: localReport,
+            error: `cloud relay unreachable: ${e.message}`,
+            relayUrl,
+          }, null, 2));
+        }
+        return;
+      }
       // GET /doctor/diagnose — run the local diagnostic check battery.
       // Each finding includes a status (ok/warning/error/not_applicable),
       // severity, what was found, and (for non-ok findings) an actionable
