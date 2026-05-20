@@ -221,17 +221,24 @@ async function install(tool, platform, opts = {}) {
     return err;
   }
 
-  if (await isInstalled(tool)) {
-    const result = { ok: true, tool, alreadyInstalled: true };
+  // Compute the install command up-front so dryRun and the alreadyInstalled
+  // short-circuit can both surface it. An agent calling dryRun wants to learn
+  // "what would this run" — answering "alreadyInstalled, no command for you"
+  // is unhelpful, especially when the agent is comparing platforms or building
+  // a runbook. Include the alreadyInstalled flag in dryRun too so the agent
+  // also learns the install is a no-op on this machine.
+  const [cmd, args] = pmBuilder(pkg);
+  const command = [cmd, ...args].join(' ');
+  const alreadyInstalled = await isInstalled(tool);
+
+  if (opts.dryRun) {
+    const result = { ok: true, tool, dryRun: true, command, package: pkg, alreadyInstalled };
     recordAudit(result);
     return result;
   }
 
-  const [cmd, args] = pmBuilder(pkg);
-  const command = [cmd, ...args].join(' ');
-
-  if (opts.dryRun) {
-    const result = { ok: true, tool, dryRun: true, command, package: pkg };
+  if (alreadyInstalled) {
+    const result = { ok: true, tool, alreadyInstalled: true, command, package: pkg };
     recordAudit(result);
     return result;
   }
