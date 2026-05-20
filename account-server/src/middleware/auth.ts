@@ -35,8 +35,12 @@ export interface AuthRequest extends Request {
  * Phase 4: Multi-algorithm support for migration. Tokens signed with RS256
  * include a `kid` header that maps to a JWKS public key. Old HS256 tokens
  * have no `kid` and fall back to symmetric verification.
+ *
+ * Exported so non-Express auth surfaces (e.g., the /ws/transcribe WebSocket
+ * handler in services/transcribe-stream.ts) can use the same multi-algorithm
+ * verification logic instead of duplicating it with HS256-only.
  */
-function verifyToken(token: string): AuthUser {
+export function verifyToken(token: string): AuthUser {
     // If RS256 is available, try RS256 first
     if (isRS256Available()) {
         try {
