@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   maximize: () => ipcRenderer.send('maximize-window'),
   unmaximize: () => ipcRenderer.send('unmaximize-window'),
   isMaximized: () => ipcRenderer.invoke('is-maximized'),
+  setVideoFullscreen: (on) => ipcRenderer.send('set-video-fullscreen', !!on),
   platform: process.platform,
 
   // ═══ Settings ══════════════════════════════════════════════════

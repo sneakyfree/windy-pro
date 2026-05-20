@@ -753,49 +753,49 @@ router.post('/agent/provision', authenticateToken, async (req: Request, res: Res
 });
 
 // GET /api/v1/identity/chat/profile — Get chat profile
+//
+// Returns the HUMAN caller's own chat profile. If the caller operates an
+// agent whose chat handle is active, that agent's MXID is reported on the
+// side as `operated_agents[]` — NEVER folded into `profile.matrix_user_id`,
+// which would conflate the human with their bot. The Chat panel renders
+// `profile.matrix_user_id`, so the prior operator-fallback caused the
+// dashboard to display the agent's MXID as if it were the user's own
+// (and put the panel in "Active" state, hiding the Activate Chat button
+// the user needs to provision their own Matrix account).
 router.get('/chat/profile', authenticateToken, (req: Request, res: Response) => {
   const userId = (req as AuthRequest).user.userId;
   const profile = getChatProfile(userId);
-  if (profile) {
-    // Never expose the Matrix access token in a GET
-    const { matrix_access_token, ...safeProfile } = profile;
-    return res.json({ profile: safeProfile, provisioned: !!profile.onboarding_complete });
-  }
 
-  // ADR-050 operator-aware fallback: if the user has no direct chat
-  // profile (e.g., OAuth signup never triggered Matrix provision) but
-  // OPERATES an agent whose chat handle IS active, surface that as the
-  // effective chat profile. Matches the dashboard tile behavior
-  // (PR #131 active-preferred dedup) so the panel and tile agree.
-  // The matrix_user_id lives in product_accounts.windy_chat.external_id
-  // written by the hatch ceremony.
+  // Sidecar: which agents does this human operate that have a live chat
+  // handle? Surfaced so UIs that want to show "your agents on chat" can
+  // render that section, but kept SEPARATE from the human's own profile.
+  let operatedAgents: Array<{ matrix_user_id: string; bot_identity_id: string }> = [];
   try {
     const db = getDb();
-    const operated = db.prepare(
+    operatedAgents = db.prepare(
       `SELECT external_id AS matrix_user_id, identity_id AS bot_identity_id
          FROM product_accounts
         WHERE product = 'windy_chat'
           AND status = 'active'
           AND operator_identity_id = ?
-        LIMIT 1`,
-    ).get(userId) as { matrix_user_id?: string; bot_identity_id?: string } | undefined;
-
-    if (operated && operated.matrix_user_id) {
-      return res.json({
-        profile: {
-          matrix_user_id: operated.matrix_user_id,
-          via_operator: true,
-          bot_identity_id: operated.bot_identity_id,
-        },
-        provisioned: true,
-      });
-    }
-  } catch (err) {
+          AND external_id IS NOT NULL`,
+    ).all(userId) as Array<{ matrix_user_id: string; bot_identity_id: string }>;
+  } catch {
     // operator_identity_id column may not exist on very old DBs; fall
-    // through to "not provisioned" gracefully rather than throwing
+    // through to "no operated agents" gracefully rather than throwing
   }
 
-  res.json({ profile: null, provisioned: false });
+  if (profile) {
+    // Never expose the Matrix access token in a GET
+    const { matrix_access_token, ...safeProfile } = profile;
+    return res.json({
+      profile: safeProfile,
+      provisioned: !!profile.onboarding_complete,
+      operated_agents: operatedAgents,
+    });
+  }
+
+  res.json({ profile: null, provisioned: false, operated_agents: operatedAgents });
 });
 
 // ─── Phase 3: Bot API Key Endpoints ───────────────────────────

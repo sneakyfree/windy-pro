@@ -2372,6 +2372,85 @@ body.light-mode .sfx-master-controls {
   background: #000;
 }
 
+/* Native HTML5 fullscreen button is hidden — the History panel's
+   transform:translateX(...) ancestor breaks the Fullscreen API in Chromium
+   (silent no-op). The custom .video-expand-btn below replaces it. */
+.history-video-el::-webkit-media-controls-fullscreen-button {
+  display: none;
+}
+
+.video-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.video-expand-btn {
+  background: transparent;
+  border: 1px solid var(--bg-tertiary, #21262d);
+  color: var(--text-secondary, #8b949e);
+  width: 26px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.video-expand-btn:hover {
+  background: var(--bg-tertiary, #21262d);
+  color: var(--text-primary, #c9d1d9);
+}
+
+/* Expanded state — fills the History panel (which fills the BrowserWindow).
+   Paired with windyAPI.setVideoFullscreen(true) so the BrowserWindow itself
+   goes setSimpleFullScreen → end result is video at full screen size. */
+.video-player-wrapper.expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #000;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.video-player-wrapper.expanded .video-label-row {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10000;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 4px;
+  border-radius: 4px;
+}
+.video-player-wrapper.expanded .video-label {
+  display: none;
+}
+.video-player-wrapper.expanded .video-expand-btn {
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+  width: 32px;
+  height: 28px;
+  font-size: 16px;
+}
+.video-player-wrapper.expanded .history-video-el {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  border-radius: 0;
+  object-fit: contain;
+}
+
 /* ═══ Word Count (RP-04) ═══ */
 
 .word-count {
