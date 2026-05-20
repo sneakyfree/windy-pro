@@ -14,20 +14,28 @@ const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
 
+// Per-tool metadata. `binary` is what we look up on PATH to decide
+// "already installed" — most packages share a name with their primary
+// binary, but wl-clipboard's package provides `wl-copy` + `wl-paste`
+// (no binary named wl-clipboard).
 const TOOL_WHITELIST = {
   wtype: {
+    binary: 'wtype',
     description: 'Wayland-native keystroke injection. Promotes paste to instant on Wayland-native targets.',
     pkg: { fedora: 'wtype', rhel: 'wtype', centos: 'wtype', debian: 'wtype', ubuntu: 'wtype', pop: 'wtype', arch: 'wtype', manjaro: 'wtype' },
   },
   ydotool: {
+    binary: 'ydotool',
     description: 'Wayland keystroke injection via /dev/uinput. Universal Wayland keystroke fallback.',
     pkg: { fedora: 'ydotool', rhel: 'ydotool', centos: 'ydotool', debian: 'ydotool', ubuntu: 'ydotool', pop: 'ydotool', arch: 'ydotool', manjaro: 'ydotool' },
   },
   'wl-clipboard': {
+    binary: 'wl-copy',
     description: 'Wayland clipboard utilities (wl-copy, wl-paste). Required for clipboard-write strategies on Wayland.',
     pkg: { fedora: 'wl-clipboard', rhel: 'wl-clipboard', centos: 'wl-clipboard', debian: 'wl-clipboard', ubuntu: 'wl-clipboard', pop: 'wl-clipboard', arch: 'wl-clipboard', manjaro: 'wl-clipboard' },
   },
   xdotool: {
+    binary: 'xdotool',
     description: 'X11 keystroke injection. Used for XWayland focus restoration and X11-session paste.',
     pkg: { fedora: 'xdotool', rhel: 'xdotool', centos: 'xdotool', debian: 'xdotool', ubuntu: 'xdotool', pop: 'xdotool', arch: 'xdotool', manjaro: 'xdotool' },
   },
@@ -64,8 +72,10 @@ function clearAuditLog() {
 }
 
 async function isInstalled(tool) {
+  const meta = TOOL_WHITELIST[tool];
+  const binary = meta?.binary || tool;
   try {
-    await execFileAsync('which', [tool], { timeout: 1500 });
+    await execFileAsync('which', [binary], { timeout: 1500 });
     return true;
   } catch {
     return false;
@@ -172,7 +182,7 @@ async function install(tool, platform, opts = {}) {
       else if (code === 127) userMessage = 'polkit authentication failed (wrong password or no rights).';
       else if (signal === 'SIGKILL') userMessage = `Install timed out after ${INSTALL_TIMEOUT_MS / 1000}s and was killed.`;
 
-      const nowInstalled = code === 0 ? await isInstalled(tool) : false;
+      const nowInstalled = await isInstalled(tool);
       const result = {
         ok: code === 0 && nowInstalled,
         tool,
