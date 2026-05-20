@@ -2552,6 +2552,107 @@ function startWaylandControlServer() {
         return;
       }
 
+      // ── Sound-effects discovery (v1.2.0, read-only) ────────────────────
+      // Sound state lives in renderer-side localStorage (windy_effects /
+      // windy_sfxVolume / windy_customSounds — NOT the main electron-store
+      // the catalog wraps). These endpoints bridge via webContents.execute-
+      // JavaScript on mainWindow. WRITE path is deliberately not exposed
+      // yet — it needs a renderer-side IPC bridge that also notifies the
+      // EffectsEngine to re-apply settings. Documented as Phase 2.
+      async function _readRendererLocalStorage(key) {
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          return { ok: false, error: 'main window not available — Windy Word UI may be closed' };
+        }
+        // Skip the isLoading() guard — Windy Word has lazy content that keeps
+        // isLoading=true even when localStorage is fully readable. Rely on the
+        // Promise.race timeout to catch genuine hangs.
+        try {
+          // Hard 3s timeout race in case executeJavaScript hangs (renderer
+          // unresponsive, no devtools attached to handle the eval, etc.).
+          const raw = await Promise.race([
+            mainWindow.webContents.executeJavaScript(`localStorage.getItem(${JSON.stringify(key)})`, true),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('executeJavaScript timed out after 3s')), 3000)),
+          ]);
+          if (raw === null || raw === undefined) return { ok: true, value: null };
+          if (typeof raw !== 'string') return { ok: true, value: raw };
+          try { return { ok: true, value: JSON.parse(raw) }; }
+          catch { return { ok: true, value: raw }; }
+        } catch (e) {
+          return { ok: false, error: e.message };
+        }
+      }
+
+      // GET /sound-effects/state — current per-hook config + active pack +
+      // master SFX volume. Reads renderer localStorage windy_effects +
+      // windy_sfxVolume + windy_customSounds.
+      if (req.method === 'GET' && pathname === '/sound-effects/state') {
+        const [effects, sfxVol, customSounds] = await Promise.all([
+          _readRendererLocalStorage('windy_effects'),
+          _readRendererLocalStorage('windy_sfxVolume'),
+          _readRendererLocalStorage('windy_customSounds'),
+        ]);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          ok: true,
+          effects: effects.value,                     // { mode, activePack, hookPoints: {start,during,...}, favorites, ... }
+          sfxMasterVolume: sfxVol.value !== null ? parseInt(sfxVol.value, 10) : 70,
+          customSounds: customSounds.value || {},
+          hookStages: ['start', 'during', 'stop', 'process', 'warning', 'paste'],
+          rendererReadable: effects.ok && sfxVol.ok,
+          rendererError: effects.error || sfxVol.error || customSounds.error,
+          writePath: 'not yet exposed — sound state is renderer-side localStorage; agent-driven writes need a renderer-side IPC bridge (Phase 2)',
+        }, null, 2));
+        return;
+      }
+      // GET /sound-effects/packs — list the EffectsEngine pack catalog.
+      // Reads via executeJavaScript on the renderer's window.effects (if
+      // exposed) or falls back to a hardcoded snapshot of the built-in
+      // synthesized packs (silent, classic-beep, soft-chime, etc.).
+      if (req.method === 'GET' && pathname === '/sound-effects/packs') {
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          res.writeHead(503, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'main window not available' }));
+          return;
+        }
+        // Skip isLoading() — Windy Word's lazy content keeps it true.
+        try {
+          // Try to query the live renderer EffectsEngine via window.effects
+          // (which the renderer exposes for the Settings UI). Fall back to
+          // a static snapshot if the global isn't set. 3s timeout race.
+          const packs = await Promise.race([
+            mainWindow.webContents.executeJavaScript(`
+            (function() {
+              try {
+                const eng = (window.effects || window.fx || window.effectsEngine);
+                if (eng && typeof eng.getPackList === 'function') {
+                  return JSON.stringify({ source: 'live', packs: eng.getPackList() });
+                }
+              } catch (e) {}
+              return JSON.stringify({ source: 'unavailable', packs: [] });
+            })()
+          `, true),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('executeJavaScript timed out after 3s')), 3000)),
+          ]);
+          let parsed;
+          try { parsed = JSON.parse(packs); } catch { parsed = { source: 'parse-failed', packs: [], raw: packs }; }
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({
+            ok: true,
+            source: parsed.source,
+            count: parsed.packs.length,
+            packs: parsed.packs,
+            hookStages: ['start', 'during', 'stop', 'process', 'warning', 'paste'],
+            note: parsed.source === 'unavailable'
+              ? 'Renderer does not expose the EffectsEngine globally — pack list unavailable. Phase 2 wiring needed.'
+              : undefined,
+          }, null, 2));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
       // ── Misc utilities (v0.10.0) ───────────────────────────────────────
       // GET /hardware — system info (RAM, CPU, GPU, disk free, platform/arch).
       // Pure read, no system mutation. Useful for Doctor + model selection.

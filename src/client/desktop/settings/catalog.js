@@ -327,18 +327,40 @@ const CATALOG = {
     tags: ['ui', 'geometry'],
   },
 
-  // ── Tornado mini-widget position ────────────────────────────────────────
+  // ── Tornado mini-widget position + customization ────────────────────
   'tornadoX': {
     type: 'number',
     description: 'Tornado mini-widget x position (the small recording-state indicator that shows when the main window is hidden).',
     restartRequired: false,
-    tags: ['ui', 'geometry'],
+    tags: ['ui', 'geometry', 'widget'],
   },
   'tornadoY': {
     type: 'number',
     description: 'Tornado mini-widget y position.',
     restartRequired: false,
-    tags: ['ui', 'geometry'],
+    tags: ['ui', 'geometry', 'widget'],
+  },
+  'tornadoSize': {
+    type: 'number',
+    min: 30,
+    max: 200,
+    description: 'Tornado mini-widget diameter in pixels. Default 56. Larger sizes are more visible but cover more screen.',
+    default: 56,
+    restartRequired: false,
+    tags: ['ui', 'widget'],
+  },
+  'widgetSettings': {
+    type: 'array',
+    description: 'Mini-widget appearance + behavior settings object (size, alwaysOnTop, click-through, theme variants). Free-form — agents writing this should describe_setting first to see the current shape.',
+    restartRequired: false,
+    tags: ['ui', 'widget'],
+  },
+  'widgetData': {
+    type: 'array',
+    description: 'Mini-widget runtime data (last-displayed transcript fragments, indicator state). Internal — agents normally do not need to write this.',
+    restartRequired: false,
+    sensitivity: 'readonly',
+    tags: ['ui', 'widget', 'lifecycle'],
   },
 
   // ── Lifecycle / wizard state (readonly) ─────────────────────────────────
