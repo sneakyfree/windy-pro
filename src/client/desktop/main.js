@@ -2476,6 +2476,247 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true }));
         return;
       }
+      // ── Translation (v0.9.0) ───────────────────────────────────────────
+      // POST /translate body={text, sourceLang?, targetLang}. Tries the
+      // translation-memory cache first; on miss, falls through to the same
+      // Groq/OpenAI path the renderer uses. Stores the result in TM so
+      // subsequent calls are free + instant.
+      if (req.method === 'POST' && pathname === '/translate') {
+        const body = await readJsonBody(req);
+        if (!body.text || !body.targetLang) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'text and targetLang required' }));
+          return;
+        }
+        const srcLang = body.sourceLang || 'auto';
+        const tgtLang = body.targetLang;
+        // TM lookup first (only when sourceLang is concrete — "auto" key
+        // would never match anything stored under a specific source)
+        let fromCache = false;
+        if (srcLang !== 'auto') {
+          try {
+            const db = getTMDb && getTMDb();
+            if (db) {
+              const row = db.prepare('SELECT target FROM translations WHERE source = ? AND source_lang = ? AND target_lang = ?')
+                .get(body.text.substring(0, 500), srcLang, tgtLang);
+              if (row && row.target) {
+                res.writeHead(200, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, translation: row.target, fromCache: true, sourceLang: srcLang, targetLang: tgtLang }));
+                return;
+              }
+            }
+          } catch (_) { /* fall through to API */ }
+        }
+        // Cache miss — call into the same translate-text logic by directly
+        // invoking translateViaAI which is the function the IPC handler
+        // also uses. If it's not in scope here, fall back to building the
+        // request inline.
+        try {
+          const result = (typeof translateViaAI === 'function')
+            ? await translateViaAI(body.text, srcLang, tgtLang)
+            : null;
+          if (result && result.ok) {
+            // Store in TM (only when sourceLang is concrete)
+            if (srcLang !== 'auto') {
+              try {
+                const db = getTMDb && getTMDb();
+                if (db) {
+                  db.prepare('INSERT OR IGNORE INTO translations (source, target, source_lang, target_lang) VALUES (?, ?, ?, ?)')
+                    .run(body.text.substring(0, 500), (result.translatedText || '').substring(0, 2000), srcLang, tgtLang);
+                }
+              } catch (_) { }
+            }
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({
+              ok: true, translation: result.translatedText, fromCache: false,
+              sourceLang: srcLang, targetLang: tgtLang,
+              engine: result.engine, confidence: result.confidence,
+            }));
+            return;
+          }
+          res.writeHead(502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'translation upstream failed', detail: result }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+      // POST /translation-memory/lookup body={text, sourceLang, targetLang}
+      if (req.method === 'POST' && pathname === '/translation-memory/lookup') {
+        const body = await readJsonBody(req);
+        if (!body.text || !body.sourceLang || !body.targetLang) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'text, sourceLang, targetLang required' }));
+          return;
+        }
+        try {
+          const db = getTMDb && getTMDb();
+          if (!db) {
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'TM DB unavailable', match: null }));
+            return;
+          }
+          const row = db.prepare('SELECT target AS translation, hits FROM translations WHERE source = ? AND source_lang = ? AND target_lang = ?')
+            .get(body.text.substring(0, 500), body.sourceLang, body.targetLang);
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, match: row || null }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+      // POST /translation-memory/save body={source, target, sourceLang, targetLang}
+      if (req.method === 'POST' && pathname === '/translation-memory/save') {
+        const body = await readJsonBody(req);
+        if (!body.source || !body.target || !body.sourceLang || !body.targetLang) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'source, target, sourceLang, targetLang required' }));
+          return;
+        }
+        try {
+          const db = getTMDb && getTMDb();
+          if (!db) { res.writeHead(500); res.end('TM DB unavailable'); return; }
+          const existing = db.prepare('SELECT id FROM translations WHERE source = ? AND source_lang = ? AND target_lang = ?')
+            .get(body.source.substring(0, 500), body.sourceLang, body.targetLang);
+          if (existing) {
+            db.prepare('UPDATE translations SET target = ?, hits = hits + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+              .run(body.target.substring(0, 2000), existing.id);
+          } else {
+            db.prepare('INSERT INTO translations (source, target, source_lang, target_lang) VALUES (?, ?, ?, ?)')
+              .run(body.source.substring(0, 500), body.target.substring(0, 2000), body.sourceLang, body.targetLang);
+          }
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, updated: !!existing }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+      // GET /translation-memory/stats
+      if (req.method === 'GET' && pathname === '/translation-memory/stats') {
+        try {
+          const db = getTMDb && getTMDb();
+          if (!db) {
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ totalEntries: 0, topPairs: [], recentEntries: [] }));
+            return;
+          }
+          const total = db.prepare('SELECT COUNT(*) as count FROM translations').get().count;
+          const topPairs = db.prepare('SELECT source_lang, target_lang, COUNT(*) as count FROM translations GROUP BY source_lang, target_lang ORDER BY count DESC LIMIT 10').all();
+          const recent = db.prepare('SELECT source, target, source_lang AS sourceLang, target_lang AS targetLang, hits, created_at FROM translations ORDER BY updated_at DESC LIMIT 50').all();
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ totalEntries: total, topPairs, recentEntries: recent }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+      }
+      // POST /translation-memory/clear — wipe the TM.
+      if (req.method === 'POST' && pathname === '/translation-memory/clear') {
+        try {
+          const db = getTMDb && getTMDb();
+          if (db) db.prepare('DELETE FROM translations').run();
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+        } catch (e) {
+          res.writeHead(500); res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
+      // ── Documents (v0.9.0) ─────────────────────────────────────────────
+      // POST /docs/extract body={path, maxBytes?} — path-based document
+      // text extraction. Supports txt/md/html/csv (plain), pdf (regex
+      // scrape), docx (xml-strip). 5MB cap by default. Returns plain text.
+      if (req.method === 'POST' && pathname === '/docs/extract') {
+        const body = await readJsonBody(req);
+        if (!body.path) { res.writeHead(400); res.end('path required'); return; }
+        const maxBytes = Math.min(20 * 1024 * 1024, Math.max(1024, body.maxBytes || 5 * 1024 * 1024));
+        let resolvedPath;
+        try { resolvedPath = path.resolve(body.path); } catch (e) {
+          res.writeHead(400); res.end(JSON.stringify({ ok: false, error: `bad path: ${e.message}` })); return;
+        }
+        if (!fs.existsSync(resolvedPath)) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `file not found: ${resolvedPath}` }));
+          return;
+        }
+        const stat = fs.statSync(resolvedPath);
+        if (stat.size > maxBytes) {
+          res.writeHead(413, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `file too large (${stat.size} bytes; limit ${maxBytes}). Pass maxBytes to override (up to 20MB).` }));
+          return;
+        }
+        const buf = fs.readFileSync(resolvedPath);
+        const ext = path.extname(resolvedPath).toLowerCase().replace(/^\./, '');
+        let text = '';
+        try {
+          if (ext === 'txt' || ext === 'md' || ext === 'csv') text = buf.toString('utf8');
+          else if (ext === 'html' || ext === 'htm') text = buf.toString('utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          else if (ext === 'pdf') {
+            const str = buf.toString('latin1');
+            const parts = [];
+            const regex = /\(([^)]+)\)/g;
+            let m; while ((m = regex.exec(str)) !== null) {
+              if (m[1].length > 2 && /[a-zA-Z]/.test(m[1])) parts.push(m[1]);
+            }
+            text = parts.join(' ') || '[PDF text extraction yielded nothing — regex scrape failed; agent should fall back to OCR]';
+          } else if (ext === 'docx') {
+            try {
+              const AdmZip = require('adm-zip');
+              const zip = new AdmZip(buf);
+              const docXml = zip.readAsText('word/document.xml');
+              text = docXml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            } catch (e) { text = `[DOCX extraction failed: ${e.message}]`; }
+          } else {
+            res.writeHead(415, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: `unsupported extension ".${ext}"`, supported: ['txt', 'md', 'csv', 'html', 'pdf', 'docx'] }));
+            return;
+          }
+        } catch (e) {
+          res.writeHead(500); res.end(JSON.stringify({ ok: false, error: e.message })); return;
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, path: resolvedPath, ext, sizeBytes: stat.size, textLength: text.length, text }, null, 2));
+        return;
+      }
+      // POST /docs/save body={path, content, overwrite?:bool}
+      // Path-based text-file write. Default: refuse to overwrite existing
+      // files unless overwrite=true. Returns the resolved path and bytes
+      // written.
+      if (req.method === 'POST' && pathname === '/docs/save') {
+        const body = await readJsonBody(req);
+        if (!body.path || body.content === undefined) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'path and content required' }));
+          return;
+        }
+        let resolvedPath;
+        try { resolvedPath = path.resolve(body.path); } catch (e) {
+          res.writeHead(400); res.end(JSON.stringify({ ok: false, error: `bad path: ${e.message}` })); return;
+        }
+        if (fs.existsSync(resolvedPath) && !body.overwrite) {
+          res.writeHead(409, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'file exists; pass overwrite=true to replace', existingSizeBytes: fs.statSync(resolvedPath).size }));
+          return;
+        }
+        try {
+          ensureDir(path.dirname(resolvedPath));
+          const data = typeof body.content === 'string' ? body.content : JSON.stringify(body.content, null, 2);
+          fs.writeFileSync(resolvedPath, data, 'utf8');
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, path: resolvedPath, bytesWritten: Buffer.byteLength(data, 'utf8') }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
       // ── Archive surface (v0.8.0) ────────────────────────────────────────
       // Wraps the existing archive on-disk format but exposes opaque ids
       // instead of filesystem paths. Helpers _agentArchiveScan +
@@ -6152,7 +6393,9 @@ ipcMain.handle('show-download-wizard', async (event, tier) => {
 });
 
 // ═══ Text Translation via AI (Groq/OpenAI) ═══
-ipcMain.handle('translate-text', async (event, text, sourceLang, targetLang) => {
+// Extracted to a named function so the HTTP control surface (/translate) can
+// call the same path the IPC handler uses without duplicating the API logic.
+async function translateViaAI(text, sourceLang, targetLang) {
   if (!text || !targetLang) return { ok: false, error: 'Missing text or target language' };
 
   const LANG_NAMES = {
@@ -6164,38 +6407,26 @@ ipcMain.handle('translate-text', async (event, text, sourceLang, targetLang) => 
   const srcName = LANG_NAMES[sourceLang] || sourceLang;
   const tgtName = LANG_NAMES[targetLang] || targetLang;
 
-  // Try Groq first, then OpenAI
   const groqKey = store.get('engine.groqApiKey', '') || process.env.GROQ_API_KEY || '';
   const openaiKey = store.get('engine.openaiApiKey', '') || process.env.OPENAI_API_KEY || '';
-
   const apiKey = groqKey || openaiKey;
   if (!apiKey) {
     return { ok: false, error: 'No AI API key configured. Add a Groq or OpenAI API key in Settings → Transcription Engine.' };
   }
-
   const isGroq = !!groqKey;
-  const apiUrl = isGroq
-    ? 'https://api.groq.com/openai/v1/chat/completions'
-    : 'https://api.openai.com/v1/chat/completions';
+  const apiUrl = isGroq ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
   const model = isGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
-
   const prompt = `Translate the following text from ${srcName} to ${tgtName}. Return ONLY the translated text, nothing else.\n\n${text}`;
 
   try {
     const https = require('https');
     const url = new URL(apiUrl);
     const postData = JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
-      max_tokens: 2048,
+      model, messages: [{ role: 'user', content: prompt }], temperature: 0.3, max_tokens: 2048,
     });
-
     const result = await new Promise((resolve, reject) => {
       const req = https.request({
-        hostname: url.hostname,
-        path: url.pathname,
-        method: 'POST',
+        hostname: url.hostname, path: url.pathname, method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
@@ -6210,12 +6441,8 @@ ipcMain.handle('translate-text', async (event, text, sourceLang, targetLang) => 
               const json = JSON.parse(data);
               const translated = json.choices?.[0]?.message?.content?.trim();
               resolve({ ok: true, translatedText: translated, engine: isGroq ? 'groq' : 'openai', confidence: 0.95 });
-            } catch (e) {
-              reject(new Error('Failed to parse AI response'));
-            }
-          } else {
-            reject(new Error(`AI API returned ${res.statusCode}: ${data.substring(0, 200)}`));
-          }
+            } catch (e) { reject(new Error('Failed to parse AI response')); }
+          } else { reject(new Error(`AI API returned ${res.statusCode}: ${data.substring(0, 200)}`)); }
         });
       });
       req.on('error', reject);
@@ -6223,13 +6450,16 @@ ipcMain.handle('translate-text', async (event, text, sourceLang, targetLang) => 
       req.write(postData);
       req.end();
     });
-
     console.info(`🌐 Text translation (${result.engine}): ${srcName}→${tgtName}`);
     return result;
   } catch (err) {
     console.error('[Translate] AI text translation failed:', err.message);
     return { ok: false, error: err.message };
   }
+}
+
+ipcMain.handle('translate-text', async (event, text, sourceLang, targetLang) => {
+  return translateViaAI(text, sourceLang, targetLang);
 });
 
 // ═══ Offline Translation via Local Pair Model ═══
