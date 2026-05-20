@@ -2476,6 +2476,156 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true }));
         return;
       }
+      // ── Archive surface (v0.8.0) ────────────────────────────────────────
+      // Wraps the existing archive on-disk format but exposes opaque ids
+      // instead of filesystem paths. Helpers _agentArchiveScan +
+      // _agentResolveArchiveId live near the IPC handlers.
+
+      // GET /archive — list all entries (text + metadata, no media bytes).
+      // Supports ?limit=N to cap the result set (default 200, max 1000).
+      if (req.method === 'GET' && pathname === '/archive') {
+        const limit = Math.min(1000, Math.max(1, parseInt(urlObj.searchParams.get('limit') || '200', 10)));
+        const all = _agentArchiveScan();
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ count: all.length, limit, entries: all.slice(0, limit) }, null, 2));
+        return;
+      }
+      // GET /archive/stats — cached aggregate stats (30s TTL on the cache).
+      // Returns: totalFiles, totalSizeMB, days, audioHours, videoHours,
+      // totalWords, totalSessions, totalChars.
+      if (req.method === 'GET' && pathname === '/archive/stats') {
+        try {
+          const archiveRoot = getArchiveFolder();
+          try { await fsp.access(archiveRoot); } catch {
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0 }));
+            return;
+          }
+          if (_archiveStatsCache && Date.now() - _archiveStatsCacheTime < ARCHIVE_STATS_CACHE_TTL) {
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ...(_archiveStatsCache), cached: true, cacheAgeSec: Math.round((Date.now() - _archiveStatsCacheTime) / 1000) }, null, 2));
+            return;
+          }
+          // Inline scan (mirrors the IPC handler but without the cache write since this is a separate channel).
+          let totalFiles = 0, totalSize = 0; const days = new Set();
+          let audioBytes = 0, videoBytes = 0, totalWords = 0, totalSessions = 0, totalChars = 0;
+          const items = await fsp.readdir(archiveRoot);
+          for (const item of items) {
+            const itemPath = path.join(archiveRoot, item);
+            const stat = await fsp.stat(itemPath);
+            if (!stat.isDirectory()) continue;
+            days.add(item);
+            const files = await fsp.readdir(itemPath);
+            for (const file of files) {
+              totalFiles++;
+              try {
+                const fStat = await fsp.stat(path.join(itemPath, file));
+                totalSize += fStat.size;
+                if (file.endsWith('.webm') && file.includes('-video')) videoBytes += fStat.size;
+                else if (file.endsWith('.webm') || file.endsWith('.wav')) audioBytes += fStat.size;
+                else if (file.endsWith('.md') && file !== `${item}.md`) {
+                  totalSessions++;
+                  try {
+                    const content = await fsp.readFile(path.join(itemPath, file), 'utf-8');
+                    const textLines = content.split('\n').filter(l => !l.startsWith('#') && !l.startsWith('**') && l.trim() !== '---' && l.trim() !== '');
+                    const text = textLines.join(' ').trim();
+                    totalWords += text.split(/\s+/).filter(Boolean).length;
+                    totalChars += text.length;
+                  } catch (_) {}
+                }
+              } catch (_) {}
+            }
+          }
+          const result = {
+            totalFiles,
+            totalSizeMB: Math.round(totalSize / (1024 * 1024) * 10) / 10,
+            days: days.size,
+            audioHours: Math.round((audioBytes / 1024 / 16) / 3600 * 100) / 100,
+            videoHours: Math.round((videoBytes / 1024 / 100) / 3600 * 100) / 100,
+            totalWords, totalSessions, totalChars,
+            cached: false,
+          };
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(result, null, 2));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+      }
+      // POST /archive/read body={id, mediaType:"audio"|"video", metadataOnly?}
+      // Returns the entry's metadata plus (unless metadataOnly) base64 of the
+      // requested media stream. Path-confined to the archive root.
+      if (req.method === 'POST' && pathname === '/archive/read') {
+        const body = await readJsonBody(req);
+        if (!body.id) { res.writeHead(400); res.end('id required'); return; }
+        const mediaType = body.mediaType === 'video' ? 'video' : 'audio';
+        const resolved = _agentResolveArchiveId(body.id);
+        if (!resolved) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `no archive entry with id ${body.id}` }));
+          return;
+        }
+        const mediaPath = mediaType === 'video' ? resolved.videoPath : resolved.audioPath;
+        if (!mediaPath || !fs.existsSync(mediaPath)) {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, id: body.id, mediaType, present: false, mdPath: undefined }));
+          return;
+        }
+        const out = { ok: true, id: body.id, mediaType, present: true, mimeType: mediaType === 'video' ? 'video/webm' : 'audio/webm' };
+        if (!body.metadataOnly) {
+          const buf = fs.readFileSync(mediaPath);
+          out.audioSizeBytes = buf.length;
+          out.base64 = buf.toString('base64');
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(out, null, 2));
+        return;
+      }
+      // POST /archive/delete body={id} — tear down archive entry + media.
+      // Confined to the archive folder via _agentResolveArchiveId's path
+      // resolution + the explicit startsWith check below.
+      if (req.method === 'POST' && pathname === '/archive/delete') {
+        const body = await readJsonBody(req);
+        if (!body.id) { res.writeHead(400); res.end('id required'); return; }
+        const resolved = _agentResolveArchiveId(body.id);
+        if (!resolved) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `no archive entry with id ${body.id}` }));
+          return;
+        }
+        const safeRoot = path.resolve(resolved.archiveDir);
+        const deleted = [];
+        for (const p of [resolved.mdPath, resolved.audioPath, resolved.videoPath]) {
+          if (!p) continue;
+          const real = path.resolve(p);
+          if (!real.startsWith(safeRoot)) continue;
+          if (fs.existsSync(real)) {
+            try { fs.unlinkSync(real); deleted.push(path.basename(real)); } catch (_) {}
+          }
+        }
+        // Invalidate stats cache since totals just changed.
+        _archiveStatsCache = null;
+        console.info(`[AgentCtrl] archive.delete id=${body.id} files=${deleted.join(',')}`);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, id: body.id, deletedFiles: deleted }));
+        return;
+      }
+      // POST /archive/open-folder — pop the archive directory in the OS
+      // file manager. Side-effect on the user's desktop; safe to call.
+      if (req.method === 'POST' && pathname === '/archive/open-folder') {
+        const archiveRoot = getArchiveFolder();
+        try {
+          require('electron').shell.openPath(archiveRoot);
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, path: archiveRoot }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
       // ── Voice-clone surface ─────────────────────────────────────────────
       // Wraps the same JSON-DB + filesystem state the renderer drives via
       // IPC (loadVoiceClones / saveVoiceClones / loadBundlesManifest at
@@ -4739,6 +4889,112 @@ ipcMain.handle('get-archive-stats', async () => {
     return { totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0, error: err.message };
   }
 });
+
+// ═══ Agent-facing archive helpers ═══════════════════════════════════════
+// Wraps the same get-archive-history + delete-archive-entry +
+// read-archive-audio + read-archive-video on-disk format, but exposes
+// opaque ids instead of filesystem paths (so agents can't smuggle paths
+// into other endpoints). Used by HTTP endpoints in startWaylandControlServer.
+//
+// Entry id format: "arc:{YYYY-MM-DD}:{HHMMSS}.md"
+// Resolves to {archiveRoot}/{YYYY-MM-DD}/{HHMMSS}.md
+
+function _agentArchiveScan() {
+  const configuredDir = store.get('engine.archiveFolder');
+  const defaultDir = path.join(os.homedir(), 'Documents', 'WindyProArchive');
+  const dirsToScan = [configuredDir || defaultDir];
+  if (configuredDir && configuredDir !== defaultDir && fs.existsSync(defaultDir)) {
+    dirsToScan.push(defaultDir);
+  }
+  const entries = [];
+  const seenIds = new Set();
+
+  for (const archiveDir of dirsToScan) {
+    if (!fs.existsSync(archiveDir)) continue;
+    let dateDirs;
+    try { dateDirs = fs.readdirSync(archiveDir).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)); } catch { continue; }
+    for (const dateDir of dateDirs.sort().reverse()) {
+      const dirPath = path.join(archiveDir, dateDir);
+      let allFiles;
+      try {
+        if (!fs.statSync(dirPath).isDirectory()) continue;
+        allFiles = fs.readdirSync(dirPath);
+      } catch { continue; }
+      const mdFiles = allFiles.filter(f => f.endsWith('.md') && f !== `${dateDir}.md`).sort().reverse();
+      const audioFiles = allFiles.filter(f => f.endsWith('.webm') && !f.includes('-video'));
+      const videoFiles = allFiles.filter(f => f.endsWith('.webm') && f.includes('-video'));
+
+      for (const file of mdFiles) {
+        const id = `arc:${dateDir}:${file}`;
+        if (seenIds.has(id)) continue;
+        seenIds.add(id);
+        const filePath = path.join(dirPath, file);
+        let text = '', wordCount = 0, engine = 'local', dateStr = '';
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const lines = content.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (line.startsWith('# ')) continue;
+            const isMeta = (line.startsWith('**') && line.includes(':')) || /^(Start|End|Words|Engine|Time|Date|Duration):\s/.test(line);
+            if (isMeta) {
+              const wm = line.match(/Words:\s*(\d+)/); if (wm) wordCount = parseInt(wm[1]);
+              const dm = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/); if (dm && !dateStr) dateStr = dm[1];
+              const em = line.match(/Engine:\s*(\w+)/); if (em) engine = em[1].toLowerCase();
+              continue;
+            }
+            if (line === '---' || line.trim() === '') continue;
+            text = lines.slice(i).join('\n').trim();
+            break;
+          }
+        } catch (_) { continue; }
+        if (!dateStr) {
+          const base = file.replace('.md', '');
+          if (/^\d{6}$/.test(base)) dateStr = `${dateDir}T${base.substring(0,2)}:${base.substring(2,4)}:${base.substring(4,6)}`;
+        }
+        if (!wordCount && text) wordCount = text.split(/\s+/).filter(Boolean).length;
+        const base = file.replace('.md', '');
+        const hasAudio = audioFiles.some(f => f.startsWith(base) && !f.includes('-video'));
+        const hasVideo = videoFiles.some(f => f.startsWith(base));
+        entries.push({ id, date: dateStr, text, wordCount, engine, hasAudio, hasVideo });
+      }
+    }
+  }
+  return entries;
+}
+
+function _agentResolveArchiveId(id) {
+  // Returns { mdPath, audioPath, videoPath, dateDir, base } or null.
+  // Strict parse: id must be "arc:YYYY-MM-DD:HHMMSS.md"
+  const m = id && typeof id === 'string' && id.match(/^arc:(\d{4}-\d{2}-\d{2}):(\d{6}\.md)$/);
+  if (!m) return null;
+  const [, dateDir, mdName] = m;
+  const base = mdName.replace('.md', '');
+
+  // Try each archive dir until we find the entry — same dual-scan logic as scan
+  const configuredDir = store.get('engine.archiveFolder');
+  const defaultDir = path.join(os.homedir(), 'Documents', 'WindyProArchive');
+  const dirsToTry = [configuredDir || defaultDir];
+  if (configuredDir && configuredDir !== defaultDir && fs.existsSync(defaultDir)) {
+    dirsToTry.push(defaultDir);
+  }
+  for (const archiveDir of dirsToTry) {
+    const dirPath = path.join(archiveDir, dateDir);
+    const mdPath = path.join(dirPath, mdName);
+    if (!fs.existsSync(mdPath)) continue;
+    // Find best-matching media by timestamp prefix
+    let audioPath = null, videoPath = null;
+    try {
+      const files = fs.readdirSync(dirPath);
+      const audio = files.find(f => f.startsWith(base) && f.endsWith('.webm') && !f.includes('-video'));
+      const video = files.find(f => f.startsWith(base) && f.endsWith('.webm') && f.includes('-video'));
+      if (audio) audioPath = path.join(dirPath, audio);
+      if (video) videoPath = path.join(dirPath, video);
+    } catch (_) {}
+    return { mdPath, audioPath, videoPath, dateDir, base, archiveDir };
+  }
+  return null;
+}
 
 ipcMain.handle('export-soul-file', async () => {
   try {
