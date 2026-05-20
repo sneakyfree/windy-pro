@@ -2476,6 +2476,52 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true }));
         return;
       }
+      // ── Transcribe arbitrary audio file (v0.11.0) ─────────────────────
+      // POST /transcribe-file body={path, language?:"en"}. Reads any
+      // audio file (wav/mp3/m4a/ogg/flac/webm), runs the same
+      // ffmpeg → WebSocket-Python pipeline batch-transcribe-local uses,
+      // returns {ok, transcript, transcribeMs, audioDurationSec,
+      // modelUsed, ratio}.
+      //
+      // 60s ffmpeg ceiling + 120s WS ceiling (inside _transcribeAudioFile).
+      // Designed for individual files; agents that want bulk processing
+      // should loop over a directory and call this per file.
+      if (req.method === 'POST' && pathname === '/transcribe-file') {
+        const body = await readJsonBody(req);
+        if (!body.path) { res.writeHead(400); res.end('path required'); return; }
+        let resolvedPath;
+        try { resolvedPath = path.resolve(body.path); } catch (e) {
+          res.writeHead(400); res.end(JSON.stringify({ ok: false, error: `bad path: ${e.message}` })); return;
+        }
+        if (!fs.existsSync(resolvedPath)) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `file not found: ${resolvedPath}` }));
+          return;
+        }
+        const stat = fs.statSync(resolvedPath);
+        const sizeMB = stat.size / (1024 * 1024);
+        if (sizeMB > 500) {
+          res.writeHead(413, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `file too large (${sizeMB.toFixed(1)}MB); cap is 500MB`, sizeBytes: stat.size }));
+          return;
+        }
+        try {
+          const start = Date.now();
+          const result = await _transcribeAudioFile(resolvedPath, { language: body.language });
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({
+            ...result,
+            path: resolvedPath,
+            sizeBytes: stat.size,
+            totalElapsedMs: Date.now() - start,
+          }, null, 2));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message, path: resolvedPath }));
+        }
+        return;
+      }
+
       // ── Misc utilities (v0.10.0) ───────────────────────────────────────
       // GET /hardware — system info (RAM, CPU, GPU, disk free, platform/arch).
       // Pure read, no system mutation. Useful for Doctor + model selection.
@@ -4348,6 +4394,65 @@ async function _transcribeViaWS(wavPath) {
       }
     });
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Path-based audio transcription (agent control surface)
+// ═══════════════════════════════════════════════════════════════════
+// Shared helper: transcribe any audio file at `audioPath` via ffmpeg →
+// WebSocket-routed Python engine. Format auto-detection via ffmpeg's
+// probe (drops the -f webm flag the legacy IPC uses) so .wav, .mp3,
+// .m4a, .ogg, .flac, .webm etc. all work.
+//
+// Returns the same shape the IPC handler returns (text or full WS
+// result depending on caller).
+async function _transcribeAudioFile(audioPath, opts = {}) {
+  const tmpDir = os.tmpdir();
+  const tmpId = crypto.randomBytes(16).toString('hex');
+  const wavPath = path.join(tmpDir, `windy-agent-batch-${tmpId}.wav`);
+
+  // Locate ffmpeg using the same search list the legacy IPC uses
+  const appDataDir = app.getPath('userData');
+  const homeDataDir = path.join(os.homedir(), '.windy-pro');
+  const ffmpegExeName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+  let ffmpegBin = 'ffmpeg';
+  for (const fp of [
+    path.join(homeDataDir, 'ffmpeg', ffmpegExeName),
+    path.join(appDataDir, 'ffmpeg', ffmpegExeName),
+    path.join(path.dirname(process.execPath), ffmpegExeName),
+  ]) {
+    if (fs.existsSync(fp)) { ffmpegBin = fp; break; }
+  }
+
+  try {
+    await execFileAsync(ffmpegBin, [
+      '-hide_banner', '-y',
+      '-fflags', '+genpts+discardcorrupt',
+      '-err_detect', 'ignore_err',
+      '-i', audioPath,                              // auto-detect input format
+      '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le', wavPath
+    ], { timeout: 60000 });
+
+    const wsStart = Date.now();
+    const wsResult = await _transcribeViaWS(wavPath);
+    const transcribeMs = Date.now() - wsStart;
+
+    if (typeof _windyTuneRecord === 'function') {
+      try { _windyTuneRecord(wsResult.elapsed_s, wsResult.audio_duration_s, wsResult.model); } catch (_) {}
+    }
+
+    return {
+      ok: true,
+      transcript: wsResult.text || '',
+      transcribeMs,
+      audioDurationSec: wsResult.audio_duration_s,
+      modelUsed: wsResult.model,
+      ratio: wsResult.ratio,
+      via: 'ws',
+    };
+  } finally {
+    try { fs.unlinkSync(wavPath); } catch (_) {}
+  }
 }
 
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
