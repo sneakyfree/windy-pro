@@ -159,6 +159,10 @@ export default function HatchCeremony({ token, onDone }) {
     }, [])
 
     // On hatch.complete, persist to localStorage so HatchCard flips state.
+    // Also fire a window event so the Dashboard ecosystem grid (and any
+    // other listener) refetches /identity/ecosystem-status — otherwise the
+    // grid stays at NOT_ACTIVE until the next mount, which contradicts the
+    // banner that just flipped to "Your helper is ready".
     useEffect(() => {
         if (status !== 'complete') return
         const dmRoomId = certificate?.chat?.dm_room_id || null
@@ -169,6 +173,11 @@ export default function HatchCeremony({ token, onDone }) {
             agent_name: certificate?.agent_name || null,
             certificate: certificate || null,
         })
+        try {
+            window.dispatchEvent(new CustomEvent('windy:hatch-complete', {
+                detail: { passport_number: certificate?.passport_number || null },
+            }))
+        } catch { /* CustomEvent unsupported in ancient browsers — noop */ }
     }, [status, certificate])
 
     // Audible "alive" cue. The ballroom-demo narrative is "500 grandmas hear

@@ -32,6 +32,9 @@ export async function sendMail(args: SendMailArgs): Promise<SendMailResult> {
   if (!apiKey) {
     const [u, d] = args.to.split('@');
     console.log(`[mailer] STUB to=${u?.[0] || '?'}***@${d || '?'} subject="${args.subject}" — set RESEND_API_KEY to actually send`);
+    // Dev convenience: also dump the text body so 6-digit OTP codes /
+    // password-reset tokens are visible without needing a real mail relay.
+    console.log(`[mailer] STUB body (dev-only):\n${args.text}\n[mailer] STUB body end`);
     return { success: true, stub: true };
   }
 

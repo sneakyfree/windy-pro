@@ -46,8 +46,13 @@ const PRODUCTS = [
         name: 'Eternitas',
         description: "Your agent's passport",
         icon: '\uD83E\uDEA8',
-        href: 'https://app.eternitas.ai',
-        internal: false,
+        // app.eternitas.ai doesn't exist (DNS_PROBE_FINISHED_NXDOMAIN). The
+        // local /app/passport view is the user-facing surface; the apex
+        // (eternitas.ai) is the marketing site (Cloudflare-Access gated) but
+        // routing the in-product tile to a sign-in wall is worse UX than
+        // landing on the local view. Switch when the public app ships.
+        href: '/app/passport',
+        internal: true,
     },
 ]
 
@@ -247,24 +252,36 @@ export default function HubPanel({ apiFetch }) {
                 fontSize: '13px',
                 color: '#94A3B8',
             }}>
-                <div>
-                    <span style={{ color: '#22C55E', fontWeight: '700', marginRight: '6px' }}>
-                        {Object.values(statuses).filter(s => s.status === 'active' || s.status === 'healthy').length}
-                    </span>
-                    Active
-                </div>
-                <div>
-                    <span style={{ color: '#EAB308', fontWeight: '700', marginRight: '6px' }}>
-                        {Object.values(statuses).filter(s => s.status === 'pending').length}
-                    </span>
-                    Pending
-                </div>
-                <div>
-                    <span style={{ color: '#64748B', fontWeight: '700', marginRight: '6px' }}>
-                        {PRODUCTS.length - Object.keys(statuses).length}
-                    </span>
-                    Not provisioned
-                </div>
+                {/* Counts are bounded against PRODUCTS so the math can't go negative.
+                   Previously `PRODUCTS.length - Object.keys(statuses).length` produced
+                   "-2 Not provisioned" when the backend returned status rows for keys
+                   that PRODUCTS doesn't render. We now filter `statuses` to keys that
+                   actually appear in PRODUCTS, then partition into active/pending/other. */}
+                {(() => {
+                    const productKeys = PRODUCTS.map(p => p.key)
+                    const active = productKeys.filter(k => {
+                        const s = statuses[k]
+                        return s && (s.status === 'active' || s.status === 'healthy')
+                    }).length
+                    const pending = productKeys.filter(k => statuses[k]?.status === 'pending').length
+                    const notProvisioned = PRODUCTS.length - active - pending
+                    return (
+                        <>
+                            <div>
+                                <span style={{ color: '#22C55E', fontWeight: '700', marginRight: '6px' }}>{active}</span>
+                                Active
+                            </div>
+                            <div>
+                                <span style={{ color: '#EAB308', fontWeight: '700', marginRight: '6px' }}>{pending}</span>
+                                Pending
+                            </div>
+                            <div>
+                                <span style={{ color: '#64748B', fontWeight: '700', marginRight: '6px' }}>{Math.max(0, notProvisioned)}</span>
+                                Not provisioned
+                            </div>
+                        </>
+                    )
+                })()}
             </div>
         </div>
     )

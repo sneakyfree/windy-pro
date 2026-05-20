@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 
 export default function FlyPanel({ apiFetch, user }) {
-    const [messages, setMessages] = useState([
-        { role: 'agent', text: "Hi! I'm your Windy Fly agent. I was just born and I'm ready to help. What would you like to do?" }
-    ])
+    // Chat history starts EMPTY. The greeting was previously hardcoded as
+    // "Hi! I'm your Windy Fly agent. I was just born and I'm ready to help"
+    // — which appeared regardless of whether the user had actually hatched
+    // an agent, contradicting the Agent Status card right above it. State
+    // is now single-sourced from agentStatus + runtimeOnline; the welcome
+    // message renders inside the chat box only when the agent is ALIVE.
+    const [messages, setMessages] = useState([])
     const [input, setInput] = useState('')
     const [sending, setSending] = useState(false)
     const [agentStatus, setAgentStatus] = useState(null)
@@ -57,9 +61,9 @@ export default function FlyPanel({ apiFetch, user }) {
                 </div>
             </div>
 
-            {/* Agent status card — 3-state honest UI.
-                Provisioned-but-runtime-offline used to show 'Online' (a lie); now shows
-                'Hatched — runtime offline' so the user knows where the gap is.        */}
+            {/* Agent status card — 4-state honest UI, single-sourced.
+                Every other view of agent state on this page derives from these two
+                signals so the page can't disagree with itself. */}
             {(() => {
                 const provisioned = agentStatus?.status === 'active'
                 let valueLabel, badgeLabel, badgeClass, helperText
@@ -67,7 +71,10 @@ export default function FlyPanel({ apiFetch, user }) {
                     valueLabel = 'Not hatched'
                     badgeLabel = agentStatus?.status || 'not provisioned'
                     badgeClass = 'badge-offline'
-                    helperText = "You haven't hatched an agent yet. Visit /app/fly to start the ceremony."
+                    // Fixed: was "Visit /app/fly to start the ceremony" (self-
+                    // referential — you're already on /app/fly). Hatch ceremony
+                    // route is /hatch, kicked off from the dashboard banner.
+                    helperText = "You haven't hatched an agent yet. Click 'Hatch' on the dashboard to start the ceremony."
                 } else if (runtimeOnline === true) {
                     valueLabel = 'Online'
                     badgeLabel = 'active'
@@ -111,29 +118,81 @@ export default function FlyPanel({ apiFetch, user }) {
                 ))}
             </div>
 
-            {/* Chat box */}
-            <div className="chat-box">
-                <div className="chat-messages">
-                    {messages.map((msg, i) => (
-                        <div key={i} className={`chat-msg chat-msg-${msg.role}`}>
-                            {msg.text}
+            {/* Chat box — empty state + input disabled state derive from the same
+                agentStatus + runtimeOnline used above, so the page can't show
+                "Not hatched" in the status card and "I was just born" in the chat
+                at the same time (the prior bug). */}
+            {(() => {
+                const provisioned = agentStatus?.status === 'active'
+                const alive = provisioned && runtimeOnline === true
+                const probing = provisioned && runtimeOnline === null
+                let placeholder, inputDisabled, emptyState
+                if (!provisioned) {
+                    placeholder = 'Hatch an agent first to start chatting'
+                    inputDisabled = true
+                    emptyState = (
+                        <div className="chat-empty">
+                            <div className="chat-empty-icon">🪰</div>
+                            <div className="chat-empty-title">No agent yet</div>
+                            <div className="chat-empty-text">Click 'Hatch' on your dashboard to bring your agent to life.</div>
                         </div>
-                    ))}
-                    <div ref={messagesEnd} />
-                </div>
-                <form className="chat-input-row" onSubmit={sendMessage}>
-                    <input
-                        className="chat-input"
-                        value={input}
-                        onChange={e => setInput(e.target.value)}
-                        placeholder="Message your agent..."
-                        disabled={sending}
-                    />
-                    <button type="submit" className="chat-send" disabled={sending || !input.trim()}>
-                        {sending ? '...' : 'Send'}
-                    </button>
-                </form>
-            </div>
+                    )
+                } else if (probing) {
+                    placeholder = 'Checking agent runtime…'
+                    inputDisabled = true
+                    emptyState = (
+                        <div className="chat-empty">
+                            <div className="chat-empty-icon">⏳</div>
+                            <div className="chat-empty-title">Connecting to your agent…</div>
+                            <div className="chat-empty-text">One sec — probing the runtime.</div>
+                        </div>
+                    )
+                } else if (!alive) {
+                    placeholder = 'Agent runtime offline'
+                    inputDisabled = true
+                    emptyState = (
+                        <div className="chat-empty">
+                            <div className="chat-empty-icon">💤</div>
+                            <div className="chat-empty-title">Your agent is asleep</div>
+                            <div className="chat-empty-text">Bring a runtime online and your agent will pick up where it left off.</div>
+                        </div>
+                    )
+                } else {
+                    placeholder = 'Message your agent…'
+                    inputDisabled = sending
+                    emptyState = (
+                        <div className="chat-empty">
+                            <div className="chat-empty-icon">👋</div>
+                            <div className="chat-empty-title">Your agent is ready</div>
+                            <div className="chat-empty-text">Say hi or pick a /command above.</div>
+                        </div>
+                    )
+                }
+                return (
+                    <div className="chat-box">
+                        <div className="chat-messages">
+                            {messages.length === 0 ? emptyState : messages.map((msg, i) => (
+                                <div key={i} className={`chat-msg chat-msg-${msg.role}`}>
+                                    {msg.text}
+                                </div>
+                            ))}
+                            <div ref={messagesEnd} />
+                        </div>
+                        <form className="chat-input-row" onSubmit={sendMessage}>
+                            <input
+                                className="chat-input"
+                                value={input}
+                                onChange={e => setInput(e.target.value)}
+                                placeholder={placeholder}
+                                disabled={inputDisabled}
+                            />
+                            <button type="submit" className="chat-send" disabled={inputDisabled || !input.trim()}>
+                                {sending ? '...' : 'Send'}
+                            </button>
+                        </form>
+                    </div>
+                )
+            })()}
         </div>
     )
 }

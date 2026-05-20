@@ -2,12 +2,35 @@ import { useState, useEffect } from 'react'
 
 export default function ChatPanel({ apiFetch }) {
     const [chatProfile, setChatProfile] = useState(null)
+    // Activate button used to fire-and-forget with no UI feedback \u2014 failed
+    // POSTs silently no-op'd, leaving the user clicking a dead button. Now
+    // tracks activating + error state so the button can show "Activating\u2026"
+    // and surface a clear error on failure.
+    const [activating, setActivating] = useState(false)
+    const [activateError, setActivateError] = useState(null)
 
     useEffect(() => {
         apiFetch('/identity/chat/profile').then(d => {
             if (d) setChatProfile(d)
         }).catch(() => {})
     }, [apiFetch])
+
+    async function activate() {
+        if (activating) return
+        setActivating(true)
+        setActivateError(null)
+        try {
+            const d = await apiFetch('/identity/chat/provision', { method: 'POST', body: '{}' })
+            if (d?.success) {
+                window.location.reload()
+                return
+            }
+            setActivateError(d?.error || 'Provisioning returned no success flag \u2014 server may have rejected the request silently.')
+        } catch (e) {
+            setActivateError(e?.message || 'Could not reach the provisioning endpoint. Is the backend running?')
+        }
+        setActivating(false)
+    }
 
     return (
         <div className="panel">
@@ -33,11 +56,14 @@ export default function ChatPanel({ apiFetch }) {
                         <p style={{ color: '#94A3B8', fontSize: '14px' }}>Chat account not yet provisioned.</p>
                         <button
                             className="panel-btn"
-                            onClick={() => {
-                                apiFetch('/identity/chat/provision', { method: 'POST', body: '{}' })
-                                    .then(d => { if (d?.success) window.location.reload() })
-                            }}
-                        >Activate Chat</button>
+                            onClick={activate}
+                            disabled={activating}
+                        >{activating ? 'Activating\u2026' : 'Activate Chat'}</button>
+                        {activateError && (
+                            <p style={{ color: '#ef4444', fontSize: '13px', marginTop: '10px' }}>
+                                \u274c {activateError}
+                            </p>
+                        )}
                     </div>
                 )}
             </div>

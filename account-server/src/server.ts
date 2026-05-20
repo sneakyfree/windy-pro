@@ -8,7 +8,10 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import http from 'http';
+import os from 'os';
+import * as si from 'systeminformation';
 import { setupTranscribeStreamWS } from './services/transcribe-stream';
+import { authenticateToken } from './middleware/auth';
 
 import { config } from './config';
 import { getDb, closeDb, closeDbAsync } from './db/schema';
@@ -344,6 +347,111 @@ app.post('/api/v1/webhooks/identity/created', express.json(), (req, res) => {
         windy_identity_id: windy_identity_id || null,
         message: 'Identity creation webhook acknowledged. Use POST /api/v1/identity/provision-all to provision products.',
     });
+});
+
+// ─── /api/v1/system-info — machine vitals for the Control Panel dashboard ──
+// Returns the host machine's live CPU / RAM / load / disk / network / procs
+// via the `systeminformation` package (cross-platform; macOS uses vm_stat
+// for proper memory accounting, etc.).
+//
+// v1 (2026-05-16) used `os.freemem()` directly, which on macOS only counts
+// PHYSICALLY-free pages (ignoring inactive + file cache). Result: RAM
+// always showed ~98% used on macOS, even when the machine had plenty of
+// reclaimable memory. v2 uses si.mem().available which is the truthful
+// "what apps could grab right now" figure.
+//
+// MUST be registered BEFORE the JSON 404 catch-all below — Express matches
+// in order, and `app.use('/api/', ...)` would otherwise swallow this.
+app.get('/api/v1/system-info', authenticateToken, async (_req: express.Request, res: express.Response) => {
+    try {
+        // Run all probes in parallel — each one shells out / reads /proc so
+        // serial would add ~200ms latency. Parallel keeps the endpoint snappy.
+        const [cpuInfo, currentLoad, mem, fsSize, networkStats, processes] = await Promise.all([
+            si.cpu(),
+            si.currentLoad(),
+            si.mem(),
+            si.fsSize().catch(() => [] as Array<{size: number; used: number; available: number; use: number; mount: string; fs: string}>),
+            si.networkStats().catch(() => [] as Array<{iface: string; rx_sec: number; tx_sec: number}>),
+            si.processes().catch(() => ({ all: 0, running: 0 })),
+        ]);
+
+        // Pick the root filesystem (or first available)
+        const rootFs = fsSize.find((f) => f.mount === '/') || fsSize[0];
+
+        // Sum network throughput across all non-loopback interfaces
+        const totalRxSec = networkStats.reduce((sum: number, n) => sum + (n.rx_sec || 0), 0);
+        const totalTxSec = networkStats.reduce((sum: number, n) => sum + (n.tx_sec || 0), 0);
+
+        // memory.available is the truthful "reclaimable" figure on every OS;
+        // memory.used is wired+active+cache which IS what /proc counts but
+        // overstates pressure on macOS. We report both so the frontend can
+        // pick the right one per use case — default to (total - available)
+        // for the "real" used %.
+        const realUsedBytes = mem.total - mem.available;
+        const realUsedPct = mem.total > 0 ? (realUsedBytes / mem.total) * 100 : 0;
+
+        res.json({
+            host: {
+                hostname: os.hostname(),
+                platform: os.platform(),
+                release: os.release(),
+                arch: os.arch(),
+                uptime_seconds: Math.round(os.uptime()),
+            },
+            cpu: {
+                model: cpuInfo.brand || cpuInfo.manufacturer || 'unknown',
+                cores: cpuInfo.cores,
+                physical_cores: cpuInfo.physicalCores,
+                speed_ghz: cpuInfo.speed,
+                // currentLoad is INSTANTANEOUS (diffed across samples), not
+                // since-boot. cpus_load is per-core; currentLoad is overall.
+                core_utilization_pct: currentLoad.cpus.map((c) => Math.round(c.load * 10) / 10),
+                avg_utilization_pct: Math.round(currentLoad.currentLoad * 10) / 10,
+                user_pct: Math.round(currentLoad.currentLoadUser * 10) / 10,
+                system_pct: Math.round(currentLoad.currentLoadSystem * 10) / 10,
+                idle_pct: Math.round(currentLoad.currentLoadIdle * 10) / 10,
+            },
+            memory: {
+                total_bytes: mem.total,
+                free_bytes: mem.free,
+                used_bytes: mem.used,            // includes caches (overstates pressure on macOS)
+                available_bytes: mem.available,  // truthful "what apps could grab"
+                active_bytes: mem.active,         // really-in-use
+                used_pct: realUsedPct,            // = (total - available) / total — the honest number
+                cache_bytes: (mem.buffcache || 0),
+                swap_total_bytes: mem.swaptotal,
+                swap_used_bytes: mem.swapused,
+            },
+            disk: rootFs ? {
+                mount: rootFs.mount,
+                fs: rootFs.fs,
+                total_bytes: rootFs.size,
+                used_bytes: rootFs.used,
+                available_bytes: rootFs.available,
+                used_pct: Math.round(rootFs.use * 10) / 10,
+            } : null,
+            network: {
+                interfaces: networkStats.map((n) => ({
+                    name: n.iface,
+                    rx_bytes_per_sec: n.rx_sec,
+                    tx_bytes_per_sec: n.tx_sec,
+                })),
+                total_rx_bytes_per_sec: totalRxSec,
+                total_tx_bytes_per_sec: totalTxSec,
+            },
+            processes: {
+                all: processes.all,
+                running: processes.running,
+                blocked: (processes as { blocked?: number }).blocked || 0,
+                sleeping: (processes as { sleeping?: number }).sleeping || 0,
+            },
+            load: os.loadavg(), // [1m, 5m, 15m]
+            sampled_at: new Date().toISOString(),
+        });
+    } catch (e: unknown) {
+        const err = e as Error;
+        res.status(500).json({ error: 'system-info probe failed', message: err.message || String(e) });
+    }
 });
 
 // ─── JSON 404 for unmatched API routes ──────────────────────

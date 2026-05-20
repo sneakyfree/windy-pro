@@ -115,10 +115,30 @@ export default function Dashboard() {
         }).catch(err => console.warn('API error:', err.message))
     }, [])
 
+    // Ecosystem-status fetch — runs on mount AND on every window focus + on
+    // a 'windy:hatch-complete' event. Fixes the stale-grid-after-hatch bug:
+    // previously the grid loaded once on mount and never refreshed, so after
+    // a successful hatch the tiles still showed NOT_ACTIVE even though the
+    // banner already said "Your helper is ready". Now the grid re-fetches
+    // when the user returns to the tab (e.g. after navigating from /hatch
+    // back to /dashboard) or when the ceremony explicitly fires the event.
     useEffect(() => {
-        apiFetch('/identity/ecosystem-status').then(data => {
-            if (data?.products) setEcosystem(data)
-        }).catch(() => {})
+        let cancelled = false
+        function fetchEco() {
+            apiFetch('/identity/ecosystem-status').then(data => {
+                if (!cancelled && data?.products) setEcosystem(data)
+            }).catch(() => {})
+        }
+        fetchEco()
+        function onFocus() { fetchEco() }
+        function onHatchComplete() { fetchEco() }
+        window.addEventListener('focus', onFocus)
+        window.addEventListener('windy:hatch-complete', onHatchComplete)
+        return () => {
+            cancelled = true
+            window.removeEventListener('focus', onFocus)
+            window.removeEventListener('windy:hatch-complete', onHatchComplete)
+        }
     }, [])
 
     const handleExpand = async (id) => {
@@ -249,10 +269,19 @@ export default function Dashboard() {
                             { key: 'windy_fly', label: 'Windy Fly', icon: '🪰', href: '/app/fly' },
                             { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: '/soul-file' },
                             { key: 'windy_traveler', label: 'Windy Traveler', icon: '🌍', href: '/translate' },
+                            // Control Panel — system-vitals dashboards in the spirit of the
+                            // kit-army agent machines' Echo HQ / Alpha Control Panel UIs. v1
+                            // ships with two view styles; more views can be added later.
+                            { key: 'control_panel', label: 'Control Panel', icon: '🖥️', href: '/control-panel', alwaysActive: true },
                             // Marketing / external sites (still navigable, broken CTAs tracked
                             // separately in docs/ballroom-blockers-2026-05-08.md).
                             { key: 'windy_code', label: 'Windy Code', icon: '💻', href: 'https://windycode.org' },
-                            { key: 'eternitas', label: 'Eternitas', icon: '🛡️', href: 'https://app.eternitas.ai' },
+                            // Eternitas tile points to the local /app/passport view because
+                            // app.eternitas.ai isn't registered (verified 2026-05-16 — returns
+                            // DNS_PROBE_FINISHED_NXDOMAIN). The local view shows the user's
+                            // passport details + clearance level + EI score; production
+                            // Eternitas UI doesn't exist as a user-facing app yet.
+                            { key: 'eternitas', label: 'Eternitas', icon: '🛡️', href: '/app/passport' },
                             // Surfaces without a working destination yet — render as
                             // non-clickable "Coming soon" chips rather than dead links.
                             // Domains are owned (CF zones) but no site is deployed; mobile
@@ -273,7 +302,9 @@ export default function Dashboard() {
                             { key: 'windy_search', label: 'Windy Search', icon: '🔍', comingSoon: true },
                         ].map(p => {
                             const product = ecosystem.products?.[p.key] || {}
-                            const status = p.comingSoon ? 'coming_soon' : (product.status || 'not_provisioned')
+                            const status = p.comingSoon ? 'coming_soon'
+                                : p.alwaysActive ? 'active'
+                                : (product.status || 'not_provisioned')
                             const badgeClass = status === 'active' ? 'eco-active'
                                 : status === 'pending' ? 'eco-pending'
                                 : status === 'upgrade_required' ? 'eco-upgrade'

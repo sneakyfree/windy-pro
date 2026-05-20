@@ -21,11 +21,33 @@ export default function HatchCard() {
     const agentName = saved?.agent_name
     const dmRoomId = saved?.dm_room_id
 
+    // Condition each claim on the actual provisioned artifact so the banner
+    // doesn't over-claim when a hatch was partial (e.g. Eternitas failed —
+    // no passport_number was saved, so don't claim "an identity" exists).
+    const hasIdentity = !!saved?.passport_number
+    const hasChat = !!dmRoomId
+    const hasEmail = !!(saved?.agent_email || saved?.email)
+    const claims = []
+    if (hasEmail) claims.push('an email')
+    if (hasChat) claims.push('a chat room')
+    if (hasIdentity) claims.push('an identity')
+
+    function joinClaims(list) {
+        if (list.length === 0) return ''
+        if (list.length === 1) return list[0]
+        if (list.length === 2) return `${list[0]} and ${list[1]}`
+        return `${list.slice(0, -1).join(', ')}, and ${list[list.length - 1]}`
+    }
+
     const title = alreadyHatched ? 'Your helper is ready' : 'Hatch Your Helper'
     const sub = alreadyHatched
-        ? agentName
-            ? `Say hi to ${agentName} — it already has an email, a chat room, and an identity.`
-            : 'Say hi — it already has an email, a chat room, and an identity.'
+        ? (claims.length > 0
+            ? (agentName
+                ? `Say hi to ${agentName} — it already has ${joinClaims(claims)}.`
+                : `Say hi — it already has ${joinClaims(claims)}.`)
+            : (agentName
+                ? `Say hi to ${agentName}. Some pieces are still provisioning — check the dashboard tiles below.`
+                : 'Say hi. Some pieces are still provisioning — check the dashboard tiles below.'))
         : 'In about 30 seconds, your own AI helper is ready. No setup. No fiddling.'
     const cta = alreadyHatched ? 'Open' : 'Hatch'
 
