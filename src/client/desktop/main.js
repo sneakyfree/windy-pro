@@ -129,6 +129,7 @@ const util = require('util');
 const { withTimeout } = require('./lib/timeout');
 const pasteStrategies = require('./strategies/paste-strategies');
 const installer = require('./install/installer');
+const settingsCatalog = require('./settings/catalog');
 const execFileAsync = util.promisify(execFile);
 // ═══ Lazy-loaded modules (deferred to speed up startup) ═══
 // These modules pull in heavy deps (matrix-js-sdk, stripe, better-sqlite3, electron-updater)
@@ -2472,6 +2473,93 @@ function startWaylandControlServer() {
         installer.clearAuditLog();
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      // GET /settings/catalog — list curated agent-discoverable settings.
+      // Each entry includes type, description, allowed values, current
+      // value (from the live store), and side-effect notes.
+      if (req.method === 'GET' && pathname === '/settings/catalog') {
+        const catalog = settingsCatalog.listCatalog().map(e => ({
+          ...e,
+          currentValue: store.get(e.path),
+        }));
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ count: catalog.length, settings: catalog }, null, 2));
+        return;
+      }
+      // GET /settings/describe?path=engine.model — single catalog entry +
+      // current value. 404 if path isn't in the catalog (use get_config for
+      // paths outside).
+      if (req.method === 'GET' && pathname === '/settings/describe') {
+        const p = urlObj.searchParams.get('path');
+        if (!p) { res.writeHead(400); res.end('path query param required'); return; }
+        const entry = settingsCatalog.describe(p);
+        if (!entry) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: `not in catalog: ${p}`, hint: 'Use list_settings to discover catalog paths, or get_config for the full unvalidated tree.' }));
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ...entry, currentValue: store.get(p) }, null, 2));
+        return;
+      }
+      // POST /settings/set — validate body.value against the catalog entry
+      // for body.path, then apply. Triggers known side effects:
+      //   hotkeys.*       → unregister + registerHotkeys()
+      //   engine.model    → WebSocket hot-reload to Python engine
+      // Settings outside the catalog are rejected — use /config for those.
+      if (req.method === 'POST' && pathname === '/settings/set') {
+        const body = await readJsonBody(req);
+        if (!body || typeof body.path !== 'string' || !('value' in body)) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'body must be {path: string, value: any}' }));
+          return;
+        }
+        const validationError = settingsCatalog.validate(body.path, body.value);
+        if (validationError) {
+          res.writeHead(422, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, path: body.path, error: validationError }));
+          return;
+        }
+        const previous = store.get(body.path);
+        store.set(body.path, body.value);
+        console.info(`[AgentCtrl] settings.set ${body.path} = ${JSON.stringify(body.value)} (was ${JSON.stringify(previous)})`);
+
+        const sideEffects = [];
+        if (body.path.startsWith('hotkeys.')) {
+          try {
+            globalShortcut.unregisterAll();
+            registerHotkeys();
+            sideEffects.push('global shortcuts re-registered');
+          } catch (e) {
+            sideEffects.push(`hotkey re-register failed: ${e.message}`);
+          }
+        }
+        if (body.path === 'engine.model' && pythonProcess && !pythonProcess.killed) {
+          try {
+            const WebSocket = require('ws');
+            const cfg = store.get('server', { host: '127.0.0.1', port: 9876 });
+            const ws = new WebSocket(`ws://${cfg.host}:${cfg.port}`);
+            ws.on('open', () => {
+              ws.send(JSON.stringify({ action: 'config', config: { model: body.value } }));
+              setTimeout(() => ws.close(), 5000);
+            });
+            ws.on('error', () => { });
+            sideEffects.push('python engine hot-reload sent');
+          } catch (e) {
+            sideEffects.push(`engine hot-reload failed: ${e.message}`);
+          }
+        }
+        const entry = settingsCatalog.describe(body.path);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          ok: true,
+          path: body.path,
+          previousValue: previous,
+          currentValue: body.value,
+          sideEffects,
+          restartRequired: entry?.restartRequired || false,
+        }, null, 2));
         return;
       }
     } catch (e) {
