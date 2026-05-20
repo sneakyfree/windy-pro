@@ -3026,6 +3026,173 @@ function startWaylandControlServer() {
         return;
       }
 
+      // POST /voice-clones/create body={name, sourcePath, durationSec?}
+      // Path-based voice-clone creation. Copies the source audio file into
+      // vcAudioDir under a fresh UUID, registers it in the JSON DB, returns
+      // the new clone. Source path must exist and be readable; the copy is
+      // confined to vcAudioDir.
+      if (req.method === 'POST' && pathname === '/voice-clones/create') {
+        const body = await readJsonBody(req);
+        if (!body.name || !body.sourcePath) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'name and sourcePath required' }));
+          return;
+        }
+        let sourceResolved;
+        try { sourceResolved = path.resolve(body.sourcePath); } catch (e) {
+          res.writeHead(400); res.end(JSON.stringify({ ok: false, error: `bad sourcePath: ${e.message}` })); return;
+        }
+        if (!fs.existsSync(sourceResolved)) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `source file not found: ${sourceResolved}` }));
+          return;
+        }
+        const ext = path.extname(sourceResolved).toLowerCase();
+        const allowed = ['.webm', '.wav', '.mp3', '.ogg', '.m4a', '.flac'];
+        if (!allowed.includes(ext)) {
+          res.writeHead(415, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `unsupported audio extension "${ext}"`, supported: allowed }));
+          return;
+        }
+        try {
+          ensureDir(vcAudioDir);
+          const id = require('crypto').randomUUID();
+          const destPath = path.join(vcAudioDir, `${id}${ext}`);
+          fs.copyFileSync(sourceResolved, destPath);
+          const data = loadVoiceClones();
+          const clone = {
+            id, name: body.name,
+            duration: typeof body.durationSec === 'number' ? body.durationSec : null,
+            audioPath: destPath,
+            status: 'ready',
+            created_at: new Date().toISOString(),
+          };
+          data.clones.push(clone);
+          saveVoiceClones(data);
+          console.info(`[AgentCtrl] voice-clones.create id=${id} name="${body.name}" from=${sourceResolved}`);
+          const { audioPath, ...safe } = clone;
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, clone: { ...safe, hasAudio: true }, copiedSizeBytes: fs.statSync(destPath).size }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+      // POST /voice-clones/cloud-order-status body={orderId}
+      // Queries Windy Clone for the status of a previously-submitted cloud
+      // clone training order. Requires auth.token in the store; returns a
+      // clean "not signed in" error if missing.
+      if (req.method === 'POST' && pathname === '/voice-clones/cloud-order-status') {
+        const body = await readJsonBody(req);
+        if (!body.orderId) { res.writeHead(400); res.end('orderId required'); return; }
+        const token = store.get('auth.token', '') || store.get('auth.storageToken', '');
+        if (!token) {
+          res.writeHead(401, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Not signed in to Windy account — auth.token missing.' }));
+          return;
+        }
+        const cloneApiUrl = process.env.WINDY_CLONE_API_URL || (typeof CLONE_API_DEFAULT_URL !== 'undefined' ? CLONE_API_DEFAULT_URL : 'https://api.windyclone.ai');
+        try {
+          const upstream = await fetch(`${cloneApiUrl}/api/v1/orders/${encodeURIComponent(body.orderId)}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          const upstreamBody = await upstream.text();
+          let parsed;
+          try { parsed = JSON.parse(upstreamBody); } catch { parsed = { raw: upstreamBody.slice(0, 500) }; }
+          res.writeHead(upstream.ok ? 200 : 502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: upstream.ok, orderId: body.orderId, status: upstream.status, body: parsed }));
+        } catch (e) {
+          res.writeHead(502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
+      // ── Soul file export (v0.12.0) ─────────────────────────────────────
+      // POST /soul-file/export body={outputPath, overwrite?:bool}
+      // Zips the entire archive (audio + video + transcripts + manifest)
+      // to the given path. Path-based variant of the dialog-based
+      // export-soul-file IPC. Forma Animae artifact — the user's
+      // exportable "soul" for use with the Windy Clone digital-twin
+      // pipeline. Refuses to overwrite unless overwrite=true.
+      if (req.method === 'POST' && pathname === '/soul-file/export') {
+        const body = await readJsonBody(req);
+        if (!body.outputPath) { res.writeHead(400); res.end('outputPath required'); return; }
+        let outPath;
+        try { outPath = path.resolve(body.outputPath); } catch (e) {
+          res.writeHead(400); res.end(JSON.stringify({ ok: false, error: `bad outputPath: ${e.message}` })); return;
+        }
+        if (fs.existsSync(outPath) && !body.overwrite) {
+          res.writeHead(409, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'file exists; pass overwrite=true to replace', existingSizeBytes: fs.statSync(outPath).size }));
+          return;
+        }
+        const archiveRoot = getArchiveFolder();
+        if (!fs.existsSync(archiveRoot)) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `archive root does not exist: ${archiveRoot}` }));
+          return;
+        }
+        try {
+          ensureDir(path.dirname(outPath));
+          const archiver = require('archiver');
+          const output = fs.createWriteStream(outPath);
+          const archive = archiver('zip', { zlib: { level: 6 } });
+          archive.pipe(output);
+
+          let totalFiles = 0, audioFiles = 0, videoFiles = 0, transcriptFiles = 0, totalWords = 0, totalChars = 0;
+          const days = [];
+          const items = fs.readdirSync(archiveRoot).sort();
+          for (const item of items) {
+            const itemPath = path.join(archiveRoot, item);
+            if (!fs.statSync(itemPath).isDirectory()) continue;
+            days.push(item);
+            const files = fs.readdirSync(itemPath);
+            for (const file of files) {
+              const filePath = path.join(itemPath, file);
+              archive.file(filePath, { name: `${item}/${file}` });
+              totalFiles++;
+              if (file.endsWith('.webm') && file.includes('-video')) videoFiles++;
+              else if (file.endsWith('.webm') || file.endsWith('.wav')) audioFiles++;
+              else if (file.endsWith('.md')) {
+                transcriptFiles++;
+                try {
+                  const content = fs.readFileSync(filePath, 'utf-8');
+                  const textLines = content.split('\n').filter(l => !l.startsWith('#') && !l.startsWith('**') && l.trim() !== '---' && l.trim() !== '');
+                  const text = textLines.join(' ').trim();
+                  totalWords += text.split(/\s+/).filter(Boolean).length;
+                  totalChars += text.length;
+                } catch (_) {}
+              }
+            }
+          }
+          const manifest = {
+            version: '1.0',
+            exportDate: new Date().toISOString(),
+            appVersion: app.getVersion() || '1.6.1',
+            via: 'agent-control-surface',
+            stats: {
+              totalFiles, audioFiles, videoFiles, transcriptFiles,
+              totalWords, totalChars,
+              days: days.length,
+              dateRange: days.length ? { first: days[0], last: days[days.length - 1] } : null,
+            },
+          };
+          archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
+          await archive.finalize();
+          await new Promise((resolve, reject) => { output.on('close', resolve); output.on('error', reject); });
+          const sizeMB = Math.round(fs.statSync(outPath).size / (1024 * 1024) * 10) / 10;
+          console.info(`[AgentCtrl] soul-file exported to ${outPath} (${sizeMB}MB, ${totalFiles} files)`);
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, outputPath: outPath, sizeMB, stats: manifest.stats }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
       // ── Voice-clone surface ─────────────────────────────────────────────
       // Wraps the same JSON-DB + filesystem state the renderer drives via
       // IPC (loadVoiceClones / saveVoiceClones / loadBundlesManifest at
