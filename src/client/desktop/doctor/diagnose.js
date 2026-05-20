@@ -195,6 +195,86 @@ const CHECKS = [
       };
     },
   },
+  // ── macOS ────────────────────────────────────────────────────────────
+  {
+    name: 'homebrew_installed',
+    description: 'Homebrew is the macOS package manager install_dependency uses to add cliclick and ffmpeg. Without it, no automated install path on macOS.',
+    appliesTo: (p) => p.isMac,
+    async run() {
+      const ok = await hasBinary('brew');
+      if (ok) return { status: 'ok', severity: 'info', finding: 'brew is on PATH — install_dependency works on macOS.' };
+      return {
+        status: 'warning',
+        severity: 'medium',
+        finding: 'Homebrew is not installed — install_dependency cannot install cliclick or ffmpeg on this Mac.',
+        remediation: 'Install Homebrew from https://brew.sh (one-line shell installer). After that, install_dependency works without further setup.',
+      };
+    },
+  },
+  {
+    name: 'cliclick_installed',
+    description: 'cliclick is the fast macOS paste backend used by the cliclick_t_v paste strategy (~2-3× faster than the default osascript Cmd+V).',
+    appliesTo: (p) => p.isMac,
+    async run() {
+      const ok = await hasBinary('cliclick');
+      if (ok) return { status: 'ok', severity: 'info', finding: 'cliclick is on PATH — fast paste strategy enabled.' };
+      return {
+        status: 'warning',
+        severity: 'low',
+        finding: 'cliclick is not installed — paste falls back to slower osascript Cmd+V.',
+        remediation: 'Call install_dependency({tool: "cliclick"}) — brew install runs in user-scope (~10-30s, no sudo).',
+      };
+    },
+  },
+  {
+    name: 'accessibility_permission_granted',
+    description: 'macOS Accessibility permission lets Windy Word inject Cmd+V (or cliclick) keystrokes into the focused app after recording. Without it, the recording transcribes but nothing pastes — silent no-op from the user\'s perspective.',
+    appliesTo: (p) => p.isMac,
+    async run() {
+      try {
+        const { systemPreferences } = require('electron');
+        // false → check status without prompting (prompting requires a user gesture)
+        const trusted = systemPreferences.isTrustedAccessibilityClient(false);
+        if (trusted) return { status: 'ok', severity: 'info', finding: 'This Electron process is a trusted Accessibility client — keystroke paste works.' };
+        return {
+          status: 'error',
+          severity: 'critical',
+          finding: 'Accessibility permission is NOT granted. Recordings will transcribe but paste will silently no-op — the most common "Windy Word looks broken" failure on macOS.',
+          remediation: 'Open System Settings → Privacy & Security → Accessibility and enable Windy Word (in dev: enable Electron). Accessibility cannot be granted programmatically on macOS — this requires a user click.',
+        };
+      } catch (e) {
+        return { status: 'warning', severity: 'low', finding: `Could not check Accessibility status: ${e.message}` };
+      }
+    },
+  },
+  {
+    name: 'microphone_permission_granted',
+    description: 'macOS Microphone permission is required for getUserMedia to return an audio stream. Without it, recording fails immediately and silently.',
+    appliesTo: (p) => p.isMac,
+    async run() {
+      try {
+        const { systemPreferences } = require('electron');
+        const status = systemPreferences.getMediaAccessStatus('microphone');
+        if (status === 'granted') return { status: 'ok', severity: 'info', finding: 'Microphone access granted.' };
+        if (status === 'not-determined') {
+          return {
+            status: 'warning',
+            severity: 'medium',
+            finding: 'Microphone permission has not been requested yet — the first recording will trigger the system prompt.',
+            remediation: 'Start a recording (toggle_recording) to surface the macOS permission prompt, then approve. After that the status becomes "granted" and stays that way.',
+          };
+        }
+        return {
+          status: 'error',
+          severity: 'critical',
+          finding: `Microphone access status is "${status}" — recordings will fail to capture audio.`,
+          remediation: 'Open System Settings → Privacy & Security → Microphone and enable Windy Word. Microphone cannot be granted programmatically on macOS — this requires a user click.',
+        };
+      } catch (e) {
+        return { status: 'warning', severity: 'low', finding: `Could not check Microphone status: ${e.message}` };
+      }
+    },
+  },
   {
     name: 'mutter_hotkey_collision',
     description: 'On Wayland+GNOME, Mutter intercepts Ctrl+Shift+V for Windy Word\'s own pasteTranscript GNOME custom keybinding before forwarded keystrokes can reach the focused window. The paste-strategy registry auto-detects this and demotes the colliding strategies.',
