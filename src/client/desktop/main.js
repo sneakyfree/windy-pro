@@ -3756,6 +3756,69 @@ function startWaylandControlServer() {
         return;
       }
 
+      // ── Pause / resume other audio (the music-ducking grandma win) ───
+      // When grandma starts recording while Spotify is playing, the music
+      // ruins her transcript. These two routes let the agent pause
+      // playback before recording and resume it after. Best-effort per
+      // platform — failures surface in the per-app `attempts` array but
+      // the overall response is still ok:true if at least one method
+      // succeeded.
+      //   macOS:   AppleScript to Music + Spotify (guarded by "is running")
+      //   Windows: SendKeys MEDIA_PLAY_PAUSE (toggle — works for the
+      //            common record-then-resume flow; calling pause twice in
+      //            a row would re-start playback, which is the platform
+      //            limit, not a bug here)
+      //   Linux:   playerctl pause / play (MPRIS — covers Spotify, VLC,
+      //            most browsers, etc.; needs `apt install playerctl`)
+      if (req.method === 'POST' && (pathname === '/audio/pause-others' || pathname === '/audio/resume-others')) {
+        const action = pathname === '/audio/pause-others' ? 'pause' : 'play';
+        const attempts = [];
+        try {
+          if (process.platform === 'darwin') {
+            for (const app of ['Music', 'Spotify']) {
+              try {
+                const script = `tell application "${app}" to if it is running then ${action}`;
+                await execFileAsync('osascript', ['-e', script], { timeout: 5000 });
+                attempts.push({ app, ok: true });
+              } catch (e) {
+                attempts.push({ app, ok: false, error: e.message });
+              }
+            }
+          } else if (process.platform === 'win32') {
+            // Windows has only a single VK_MEDIA_PLAY_PAUSE toggle key
+            // surfaced through SendKeys; both pause and resume send the
+            // same toggle. This is intentional — the toggle matches the
+            // record-then-resume flow grandma actually uses.
+            try {
+              await execFileAsync('powershell', [
+                '-NoProfile', '-WindowStyle', 'Hidden', '-Command',
+                'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait("{MEDIA_PLAY_PAUSE}")',
+              ], { timeout: 5000 });
+              attempts.push({ app: 'system-media-key', ok: true, note: 'VK_MEDIA_PLAY_PAUSE toggle' });
+            } catch (e) {
+              attempts.push({ app: 'system-media-key', ok: false, error: e.message });
+            }
+          } else if (process.platform === 'linux') {
+            try {
+              await execFileAsync('playerctl', [action], { timeout: 5000 });
+              attempts.push({ app: 'playerctl', ok: true });
+            } catch (e) {
+              const hint = e.code === 'ENOENT' ? 'playerctl is not installed — apt install playerctl (Debian/Ubuntu) or dnf install playerctl (Fedora)' : undefined;
+              attempts.push({ app: 'playerctl', ok: false, error: e.message, hint });
+            }
+          } else {
+            attempts.push({ app: 'unknown-platform', ok: false, error: `unsupported platform: ${process.platform}` });
+          }
+          const ok = attempts.some(a => a.ok);
+          res.writeHead(ok ? 200 : 500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok, action, platform: process.platform, attempts }, null, 2));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message, platform: process.platform, attempts }));
+        }
+        return;
+      }
+
       if (req.method === 'POST' && pathname === '/archive/bulk-export-text') {
         // Bulk-export transcript text for multiple archive entries.
         // body={ids:[], targetDir, format? "md"|"txt"|"json"}
