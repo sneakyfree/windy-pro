@@ -116,6 +116,14 @@ const CATALOG = {
     default: 'default',
     restartRequired: false,
   },
+  'engine.language': {
+    type: 'string',
+    description: 'Whisper transcription language. ISO 639-1 code (e.g. "en", "es", "fr", "ja", "zh", "ar", "hi", "de", "pt", "ko", "ru", "it", "nl", "pl", "tr", "sv", "vi", "th") — or "auto" to let Whisper detect per-utterance. Hot-swappable; the live Python engine reconfigures over WebSocket without app restart.',
+    default: 'en',
+    sideEffect: 'Hot-reloads the running Python engine over WebSocket — sends {action:"config", config:{language: <value>}} to the bundled transcription engine. No app restart.',
+    restartRequired: false,
+    tags: ['transcription'],
+  },
 
   // ── Paste ───────────────────────────────────────────────────────────────
   'paste.strategy': {
