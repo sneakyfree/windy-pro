@@ -2649,14 +2649,22 @@ function startWaylandControlServer() {
         return;
       }
       if (req.method === 'GET' && pathname === '/recording/state') {
-        // Recording-flow state observability. isRecording is the main-process
-        // truth. The renderer broadcasts richer substates via 'state-change'
-        // (idle/listening/processing/injecting/error) but those aren't
-        // currently cached in main — for now we return the boolean + a few
-        // adjacent signals an agent needs to decide "is it safe to act now".
+        // Recording-flow state observability. The RENDERER is the source of
+        // truth for isRecording — the agentBridge `start_recording` flow
+        // (Wave W5) only updates renderer state, while main's `isRecording`
+        // variable is only toggled by the legacy GNOME-keybinding path. We
+        // bridge through to the renderer so agents always see real state.
+        // Fall back to main's variable if the bridge is unavailable
+        // (renderer destroyed or not yet armed).
+        const bridge = await _callAgentBridge('get_recording_status');
+        const rendererTruth = bridge.ok ? !!bridge.isRecording : null;
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({
-          isRecording,
+          isRecording: rendererTruth !== null ? rendererTruth : isRecording,
+          source: rendererTruth !== null ? 'renderer' : 'main-fallback',
+          currentState: bridge.ok ? bridge.currentState : null,
+          engine: bridge.ok ? bridge.engine : null,
+          mode: bridge.ok ? bridge.mode : null,
           pythonEngineRunning: !!(pythonProcess && !pythonProcess.killed),
           // last paste attempt is available via /paste/history; surface count here
           // so an agent can detect whether activity has happened since last poll.
