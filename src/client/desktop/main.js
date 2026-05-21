@@ -2847,6 +2847,42 @@ function startWaylandControlServer() {
         return;
       }
 
+      // ── Recording lifecycle + audio devices (Wave W5) ─────────────────
+      // Agent recording verbs. The renderer's toggleRecording() owns the
+      // mode/engine dispatch (batch / api / stream) and the Wayland
+      // setFocusable discipline, so we bridge through it rather than
+      // poking media APIs from main. GET /recording/state is exposed
+      // separately (Wave W1) for state polling.
+
+      // POST /recording/start — begin recording (mode-aware).
+      // Idempotent: returns ok with alreadyRecording=true if already capturing.
+      if (req.method === 'POST' && pathname === '/recording/start') {
+        const result = await _callAgentBridge('start_recording');
+        res.writeHead(result.ok ? 200 : 503, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
+        return;
+      }
+      // POST /recording/stop — end the current recording (triggers the
+      // transcription + paste pipeline against the focused window).
+      // Idempotent: returns ok with alreadyStopped=true if nothing is recording.
+      if (req.method === 'POST' && pathname === '/recording/stop') {
+        const result = await _callAgentBridge('stop_recording');
+        res.writeHead(result.ok ? 200 : 503, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
+        return;
+      }
+      // GET /audio/devices — enumerate microphones via the renderer's
+      // MediaDevices API. Returns each device with deviceId / label /
+      // isCurrent plus the currently-selected micDeviceId. Labels are
+      // hidden until mic permission has been granted at least once —
+      // the response carries a hint when that is the case.
+      if (req.method === 'GET' && pathname === '/audio/devices') {
+        const result = await _callAgentBridge('list_audio_devices');
+        res.writeHead(result.ok ? 200 : 503, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
+        return;
+      }
+
       // ── Misc utilities (v0.10.0) ───────────────────────────────────────
       // GET /hardware — system info (RAM, CPU, GPU, disk free, platform/arch).
       // Pure read, no system mutation. Useful for Doctor + model selection.
