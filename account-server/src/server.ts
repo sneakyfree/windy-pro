@@ -37,6 +37,8 @@ import flyRoutes from './routes/fly';
 import mindRoutes from './routes/mind';
 import voiceRoutes from './routes/voice';
 import agentRoutes from './routes/agent';
+import vitalsRoutes from './routes/vitals';
+import meFleetRoutes from './routes/me-fleet';
 import webhooksEternitasRoutes from './routes/webhooks-eternitas';
 import { authenticateToken } from './middleware/auth';
 import { initErrorReporting, reportError } from './services/error-reporter';
@@ -329,6 +331,11 @@ app.use('/api/v1/voice', voiceRoutes);
 // HMAC-gated credentials/issue for S2S, Bearer-JWT /hatch that streams SSE.
 app.use('/api/v1/agent', agentRoutes);
 
+
+// Control Panel — Vitals + Fleet (WD-31 M-D; ADR-054). Vitals returns
+// this SERVER's host vitals; Fleet returns the user's windy_fly agents.
+app.use('/api/v1/vitals', vitalsRoutes);
+app.use('/api/v1/me/fleet', meFleetRoutes);
 
 // Billing
 app.use('/api/v1/billing', billingRouter);
