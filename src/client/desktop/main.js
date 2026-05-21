@@ -3579,6 +3579,108 @@ function startWaylandControlServer() {
         }
         return;
       }
+      // ── TTS — the agent talks back ────────────────────────────────────
+      // Three routes that wrap the `say` npm (cross-platform OS TTS):
+      // mac uses /usr/bin/say, Windows uses System.Speech.Synthesis, Linux
+      // uses festival/espeak (whichever is installed). This closes the
+      // half-conversation gap — until now grandma talks to the app, but
+      // the app never talks back. With these the agent can read a
+      // transcript aloud, confirm an action, or have a hands-free
+      // conversation while she's washing dishes.
+
+      // POST /tts/speak body={text, voice?, rate?, interrupt?}
+      // Returns 200 immediately after starting playback (does NOT block
+      // for the full duration). Default interrupt:true cancels any
+      // currently-playing TTS first so a new utterance always wins.
+      if (req.method === 'POST' && pathname === '/tts/speak') {
+        const body = await readJsonBody(req);
+        const text = String(body?.text || '').trim();
+        if (!text) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'body.text required' }));
+          return;
+        }
+        if (text.length > 5000) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `text too long (${text.length} chars; max 5000). Break long messages into chunks.` }));
+          return;
+        }
+        const voice = (typeof body?.voice === 'string' && body.voice) ? body.voice : null;
+        const rate = (typeof body?.rate === 'number' && Number.isFinite(body.rate)) ? body.rate : null;
+        const interrupt = body?.interrupt !== false;
+        try {
+          const say = require('say');
+          if (interrupt) { try { say.stop(); } catch { /* nothing playing */ } }
+          // say.speak callback fires when audio completes; we don't block on it.
+          say.speak(text, voice, rate, (err) => {
+            if (err) console.warn('[tts/speak] playback failed:', err.message || err);
+          });
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, length: text.length, voice, rate, interrupted: interrupt }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message, platform: process.platform, hint: process.platform === 'linux' ? 'Linux needs festival or espeak installed (apt install festival OR apt install espeak)' : undefined }));
+        }
+        return;
+      }
+
+      // POST /tts/stop — silence any in-flight TTS playback. Safe to call
+      // when nothing is playing.
+      if (req.method === 'POST' && pathname === '/tts/stop') {
+        try {
+          const say = require('say');
+          say.stop();
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
+      // GET /tts/voices — list installed system TTS voices. Returns
+      // platform-specific names (mac: "Samantha", "Daniel"; win: "Microsoft
+      // David Desktop"). Pass one of these as `voice` to /tts/speak to
+      // change the speaker.
+      //
+      // The `say` npm 0.16 stubs getVoices() on darwin (throws — even the
+      // error message is mislabeled "say.export()"). We shell out to
+      // /usr/bin/say -v ? directly on macOS and parse the columnar output:
+      //   Albert              en_US    # I have a frog in my throat...
+      //   Alice               it_IT    # Salve, mi chiamo Alice...
+      // Linux + Windows still use the say npm path since festival /
+      // System.Speech.Synthesis enumeration through say.getInstalledVoices
+      // works there.
+      if (req.method === 'GET' && pathname === '/tts/voices') {
+        try {
+          if (process.platform === 'darwin') {
+            const { stdout } = await execFileAsync('say', ['-v', '?'], { timeout: 5000 });
+            const voices = stdout.split('\n')
+              .map(line => line.replace(/\s+$/, ''))
+              .filter(Boolean)
+              .map(line => {
+                const m = line.match(/^(.+?)\s{2,}([a-z]{2,3}[_-][A-Z]{2,3})(?:\s+#\s+(.*))?$/);
+                if (!m) return { raw: line };
+                return { name: m[1].trim(), locale: m[2], sample: m[3] || null };
+              });
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, voices, platform: 'darwin' }));
+            return;
+          }
+          const say = require('say');
+          const voices = await new Promise((resolve, reject) => {
+            say.getInstalledVoices((err, vs) => err ? reject(err) : resolve(vs || []));
+          });
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, voices, platform: process.platform }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message, platform: process.platform }));
+        }
+        return;
+      }
+
       if (req.method === 'POST' && pathname === '/archive/bulk-export-text') {
         // Bulk-export transcript text for multiple archive entries.
         // body={ids:[], targetDir, format? "md"|"txt"|"json"}
