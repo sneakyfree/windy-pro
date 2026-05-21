@@ -6,6 +6,31 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+    # CI hygiene: skip the full CI matrix for PRs that only touch
+    # documentation, markdown, the marketing-site assets, or community
+    # files. Nothing to lint/test/build, and burning ~$0.50 of Linux
+    # Actions minutes per typo-fix PR adds up. Pushes to `main` still
+    # run everything as a backstop.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'site/**'
+      - 'LICENSE'
+      - 'CHANGELOG.md'
+      - 'CONTRIBUTING.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'SECURITY.md'
+      - '.github/ISSUE_TEMPLATE/**'
+
+# Cancel in-flight runs for the same PR / branch when a new commit arrives.
+# Without this, rapid pushes (e.g. addressing review feedback in 3 quick
+# commits) trigger 3 parallel full runs and you pay for all of them — the
+# first 2 get superseded but still cost minutes. cancel-in-progress is
+# gated to pull_request so pushes to `main` (merged + verified work)
+# always complete and produce a deploy artifact.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ── Account Server: Type Check + Tests ──
