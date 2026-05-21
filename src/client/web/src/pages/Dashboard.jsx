@@ -121,6 +121,29 @@ export default function Dashboard() {
         }).catch(() => {})
     }, [])
 
+    // Track per-tile "connecting" state so the Connect-Now badge can show
+    // a spinner while a provision call is in flight. Keyed by product key.
+    const [provisioning, setProvisioning] = useState({})
+
+    const handleProvision = useCallback(async (productKey, provisionPath, event) => {
+        // Tile is wrapped in an <a> link; intercept before navigation.
+        if (event) {
+            event.preventDefault()
+            event.stopPropagation()
+        }
+        setProvisioning(p => ({ ...p, [productKey]: true }))
+        try {
+            const result = await apiFetch(provisionPath, { method: 'POST', body: '{}' })
+            if (result && !result._error) {
+                // Refresh ecosystem so the badge flips to Active immediately.
+                const fresh = await apiFetch('/identity/ecosystem-status')
+                if (fresh?.products) setEcosystem(fresh)
+            }
+        } finally {
+            setProvisioning(p => ({ ...p, [productKey]: false }))
+        }
+    }, [])
+
     const handleExpand = async (id) => {
         if (expanded === id) { setExpanded(null); setExpandedData(null); return }
         setExpanded(id)
@@ -246,9 +269,14 @@ export default function Dashboard() {
                             // In-product surfaces (SPA panels / pages) — preferred where they exist,
                             // because authed user lands directly in the working UI instead of a
                             // marketing apex that can be broken or a JSON-only API host.
+                            //
+                            // `provisionPath` (optional) — if a tile shows status "not_active"
+                            // and a provisionPath is set, an inline Connect-Now button appears
+                            // that POSTs to that endpoint and refreshes ecosystem-status. Lets
+                            // users light up a product without leaving the dashboard.
                             { key: 'windy_word', label: 'Windy Word', icon: '🎙️', href: '/transcribe' },
-                            { key: 'windy_chat', label: 'Windy Chat', icon: '💬', href: '/app/chat' },
-                            { key: 'windy_mail', label: 'Windy Mail', icon: '📧', href: '/app/mail' },
+                            { key: 'windy_chat', label: 'Windy Chat', icon: '💬', href: '/app/chat', provisionPath: '/identity/chat/provision' },
+                            { key: 'windy_mail', label: 'Windy Mail', icon: '📧', href: '/app/mail', provisionPath: '/identity/mail/provision' },
                             { key: 'windy_cloud', label: 'Windy Cloud', icon: '☁️', href: '/vault' },
                             { key: 'windy_fly', label: 'Windy Fly', icon: '🪰', href: '/app/fly' },
                             { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: '/soul-file' },
@@ -309,6 +337,13 @@ export default function Dashboard() {
                                 )
                             }
                             const isExternal = p.href.startsWith('http')
+                            // Show a Connect-Now button on tiles where the product has
+                            // a provision endpoint AND the user hasn't activated it yet.
+                            // Click stops propagation so the surrounding <a> doesn't
+                            // navigate before the provision call completes.
+                            const showConnect = p.provisionPath
+                                && (status === 'not_provisioned' || status === 'pending' || status === 'available')
+                            const isConnecting = provisioning[p.key]
                             return (
                                 <a
                                     key={p.key}
@@ -318,7 +353,20 @@ export default function Dashboard() {
                                 >
                                     <span className="dash-eco-icon">{p.icon}</span>
                                     <span className="dash-eco-label">{p.label}</span>
-                                    <span className={`dash-eco-badge ${badgeClass}`}>{badgeLabel}</span>
+                                    {showConnect ? (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => handleProvision(p.key, p.provisionPath, e)}
+                                            disabled={isConnecting}
+                                            className={`dash-eco-badge eco-available`}
+                                            style={{ cursor: 'pointer', border: 'none', opacity: isConnecting ? 0.6 : 1 }}
+                                            title={`Connect ${p.label} now`}
+                                        >
+                                            {isConnecting ? 'Connecting…' : '⚡ Connect'}
+                                        </button>
+                                    ) : (
+                                        <span className={`dash-eco-badge ${badgeClass}`}>{badgeLabel}</span>
+                                    )}
                                 </a>
                             )
                         })}
