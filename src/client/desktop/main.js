@@ -3429,6 +3429,144 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true, requested: ids.length, succeeded: okCount, results }, null, 2));
         return;
       }
+      // ── Lifecycle + finishing surfaces (Wave W4 + W2 cont'd) ──────────
+      // App lifecycle, window controls, notifications, and bulk archive
+      // text export. Each is small and idempotent where it makes sense.
+      if (req.method === 'POST' && pathname === '/recording/cancel') {
+        // Cancel an in-flight recording without saving the result. Mirrors
+        // what a user does by pressing the hotkey mid-recording: stops, but
+        // does NOT trigger transcription or paste. Safe to call when idle —
+        // returns ok:true with wasRecording:false.
+        const wasRecording = isRecording;
+        if (isRecording) {
+          safeSend('toggle-recording', false);
+          isRecording = false;
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, wasRecording }));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/app/restart') {
+        // Relaunch the app. Returns 200 first, then schedules the exit on
+        // the next tick so the HTTP response actually makes it back to the
+        // caller before the process dies.
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, action: 'restart', scheduledMs: 250 }));
+        setTimeout(() => {
+          try { app.relaunch(); app.exit(0); } catch (e) { console.warn('[restart]', e.message); }
+        }, 250);
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/app/quit') {
+        // Quit cleanly. Same delayed-exit pattern. Agent should warn the
+        // user; this is destructive.
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, action: 'quit', scheduledMs: 250 }));
+        setTimeout(() => { try { app.quit(); } catch (_) {} }, 250);
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/window/always-on-top') {
+        // Toggle alwaysOnTop on the live window + persist via catalog.
+        const body = await readJsonBody(req);
+        const on = !!body?.on;
+        store.set('appearance.alwaysOnTop', on);
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setAlwaysOnTop(on);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, alwaysOnTop: on }));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/window/opacity') {
+        // Set window opacity (0.1-1.0). Live update + persist.
+        const body = await readJsonBody(req);
+        const value = Number(body?.value);
+        if (!isFinite(value) || value < 0.1 || value > 1.0) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'body.value must be a number in [0.1, 1.0]' }));
+          return;
+        }
+        store.set('appearance.opacity', value);
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setOpacity(value);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, opacity: value }));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/notifications/send') {
+        // Show an OS-native notification.
+        const body = await readJsonBody(req);
+        const title = String(body?.title || '').slice(0, 200);
+        const message = String(body?.body || '').slice(0, 1000);
+        if (!title) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'body.title required' }));
+          return;
+        }
+        if (!Notification.isSupported()) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'OS notifications not supported on this platform' }));
+          return;
+        }
+        try {
+          const n = new Notification({ title, body: message, silent: !!body?.silent });
+          n.show();
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, title, body: message }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/archive/bulk-export-text') {
+        // Bulk-export transcript text for multiple archive entries.
+        // body={ids:[], targetDir, format? "md"|"txt"|"json"}
+        const body = await readJsonBody(req);
+        const ids = Array.isArray(body?.ids) ? body.ids : null;
+        const targetDir = typeof body?.targetDir === 'string' ? body.targetDir : '';
+        const format = (body?.format || 'md').toLowerCase();
+        if (!ids || ids.length === 0 || !targetDir) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'body must be {ids: [..], targetDir: "/...", format?: "md"|"txt"|"json"}' }));
+          return;
+        }
+        if (!['md', 'txt', 'json'].includes(format)) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'format must be md, txt, or json' }));
+          return;
+        }
+        try { fs.mkdirSync(targetDir, { recursive: true }); }
+        catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `cannot create targetDir: ${e.message}` }));
+          return;
+        }
+        const all = _agentArchiveScan();
+        const byId = new Map(all.map(e => [e.id, e]));
+        const results = [];
+        for (const id of ids) {
+          const entry = byId.get(id);
+          if (!entry) { results.push({ id, ok: false, error: 'not found' }); continue; }
+          // Strip the source .md so we don't end up with double extensions
+          // (e.g. arc_2026-05-20_161516.md.md). The id format is fixed:
+          // "arc:YYYY-MM-DD:HHMMSS.md".
+          const safeName = id.replace(/\.md$/, '').replace(/[^a-zA-Z0-9._-]/g, '_');
+          const outPath = path.join(targetDir, `${safeName}.${format}`);
+          let content;
+          if (format === 'json') content = JSON.stringify(entry, null, 2);
+          else if (format === 'txt') content = entry.text || '';
+          else content = `# ${entry.date || id}\n\nWords: ${entry.wordCount}\nEngine: ${entry.engine}\n\n---\n\n${entry.text || ''}\n`;
+          try {
+            fs.writeFileSync(outPath, content, 'utf8');
+            results.push({ id, ok: true, path: outPath, bytes: Buffer.byteLength(content, 'utf8') });
+          } catch (e) {
+            results.push({ id, ok: false, error: e.message });
+          }
+        }
+        const okCount = results.filter(r => r.ok).length;
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, requested: ids.length, succeeded: okCount, targetDir, format, results }, null, 2));
+        return;
+      }
+
       // POST /archive/delete body={id} — tear down archive entry + media.
       // Confined to the archive folder via _agentResolveArchiveId's path
       // resolution + the explicit startsWith check below.
