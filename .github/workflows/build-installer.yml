@@ -16,6 +16,27 @@ on:
   pull_request:
     branches:
       - main
+    # CI hygiene: only build installers (macOS arm64 + macOS x64 + macOS 13 +
+    # Ubuntu + Windows runners — macOS bills at $0.08/min vs Linux $0.008/min,
+    # so this matrix is the bulk of monthly Actions spend) when a PR actually
+    # touches installer / desktop / Python-engine code. Skipping for SPA-,
+    # account-server-, docs-, and skill-only PRs cuts the typical PR cost
+    # from ~$5.76 to ~$0.50 without losing coverage — pushes to `main` still
+    # run the full matrix, so a regression that slips through a path-filtered
+    # PR gets caught at merge-to-main time before any release tag.
+    paths:
+      - 'src/client/desktop/**'
+      - 'src/engine/**'
+      - 'scripts/installer/**'
+      - 'scripts/build-bundle.sh'
+      - 'scripts/build-bundle.ps1'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'requirements.txt'
+      - 'electron-builder.yml'
+      - 'electron-builder.config.js'
+      - 'wizard/**'
+      - '.github/workflows/build-installer.yml'
   workflow_dispatch: {}
 
 # Cancel in-flight runs for the same branch when a new push arrives —
