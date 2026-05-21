@@ -183,6 +183,59 @@ const CATALOG = {
     default: 1.0,
     restartRequired: false,
   },
+  'appearance.theme': {
+    type: 'enum',
+    enum: ['dark', 'light', 'auto'],
+    description: 'UI color theme. "dark" / "light" force one mode; "auto" follows the OS appearance. Renderer applies the light-theme body class and persists to localStorage (windy_theme).',
+    default: 'dark',
+    sideEffect: 'Renderer applies light-theme body class + writes localStorage.windy_theme on the next IPC tick.',
+    restartRequired: false,
+    tags: ['ui'],
+  },
+
+  // ── Analytics / telemetry ────────────────────────────────────────────────
+  'analytics.enabled': {
+    type: 'boolean',
+    description: 'Help-improve-Windy-Word opt-in for anonymous usage stats (engine, duration, mode, language — never transcript content). Off by default. Renderer reads localStorage.windy_analytics.',
+    default: false,
+    sideEffect: 'Renderer writes localStorage.windy_analytics on the next IPC tick.',
+    restartRequired: false,
+    tags: ['ui'],
+  },
+
+  // ── Bottom panel visibility ──────────────────────────────────────────────
+  // Each row (playback / export / control) independently controls how it
+  // appears in the main app: "always" pins it open, "hover" reveals it when
+  // the cursor approaches the bottom edge, "hidden" never shows it. Renderer
+  // reads localStorage.windy_panelVis_<key> with key in {playback, export,
+  // controls} — note the legacy "controls" plural for the third one.
+  'bottomPanel.playback': {
+    type: 'enum',
+    enum: ['always', 'hover', 'hidden'],
+    description: 'Visibility mode for the playback-bar row in the main app. "hover" (default) reveals it when the cursor is near the bottom; "always" pins it open; "hidden" never shows it.',
+    default: 'hover',
+    sideEffect: 'Renderer toggles panel-vis-hidden / panel-vis-hover classes and persists to localStorage.windy_panelVis_playback.',
+    restartRequired: false,
+    tags: ['ui'],
+  },
+  'bottomPanel.export': {
+    type: 'enum',
+    enum: ['always', 'hover', 'hidden'],
+    description: 'Visibility mode for the export-row in the main app. "hover" (default) reveals it when the cursor is near the bottom; "always" pins it open; "hidden" never shows it.',
+    default: 'hover',
+    sideEffect: 'Renderer toggles panel-vis-* classes and persists to localStorage.windy_panelVis_export.',
+    restartRequired: false,
+    tags: ['ui'],
+  },
+  'bottomPanel.control': {
+    type: 'enum',
+    enum: ['always', 'hover', 'hidden'],
+    description: 'Visibility mode for the control-bar row in the main app. "always" (default) keeps it pinned open; "hover" reveals it on bottom-edge hover; "hidden" never shows it. Note: persists to localStorage.windy_panelVis_controls (legacy plural).',
+    default: 'always',
+    sideEffect: 'Renderer toggles panel-vis-* classes and persists to localStorage.windy_panelVis_controls.',
+    restartRequired: false,
+    tags: ['ui'],
+  },
 
   // ── Archive (extended) ──────────────────────────────────────────────────
   'engine.archiveLocalEnabled': {

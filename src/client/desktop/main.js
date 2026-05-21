@@ -3763,6 +3763,26 @@ polkit.addRule(function(action, subject) {
             sideEffects.push(`hotkey re-register failed: ${e.message}`);
           }
         }
+        // Settings whose state lives in renderer localStorage (theme, analytics
+        // opt-in, bottom-panel row visibility) need an IPC nudge so the renderer
+        // can apply the change live AND sync its localStorage copy. Without this
+        // the catalog write persists in electron-store but no UI refresh happens
+        // until the next app launch.
+        const RENDERER_APPLY_PATHS = new Set([
+          'appearance.theme',
+          'analytics.enabled',
+          'bottomPanel.playback',
+          'bottomPanel.export',
+          'bottomPanel.control',
+        ]);
+        if (RENDERER_APPLY_PATHS.has(body.path) && mainWindow && !mainWindow.isDestroyed()) {
+          try {
+            mainWindow.webContents.send('settings:apply-side-effect', { path: body.path, value: body.value });
+            sideEffects.push('renderer notified for live-apply');
+          } catch (e) {
+            sideEffects.push(`renderer notify failed: ${e.message}`);
+          }
+        }
         if (body.path === 'engine.model' && pythonProcess && !pythonProcess.killed) {
           try {
             const WebSocket = require('ws');

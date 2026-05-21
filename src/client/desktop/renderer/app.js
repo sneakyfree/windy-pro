@@ -693,9 +693,51 @@ class WindyApp {
   }
 
   /**
+   * Apply a settings-catalog side-effect pushed from main after an
+   * agent-initiated set_setting on a renderer-state path. Keeps localStorage
+   * in sync AND applies the change live so the UI reflects it immediately.
+   * Without this the catalog write would silently persist until next launch.
+   */
+  applySettingsSideEffect({ path, value }) {
+    try {
+      switch (path) {
+        case 'appearance.theme': {
+          const theme = value === 'light' ? 'light' : value === 'auto'
+            ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+            : 'dark';
+          localStorage.setItem('windy_theme', value);
+          document.body.classList.toggle('light-theme', theme === 'light');
+          break;
+        }
+        case 'analytics.enabled':
+          localStorage.setItem('windy_analytics', value ? 'true' : 'false');
+          break;
+        case 'bottomPanel.playback':
+        case 'bottomPanel.export':
+        case 'bottomPanel.control': {
+          // Catalog uses "control" (singular); legacy localStorage key is
+          // "controls" (plural). Map it explicitly so we don't break either.
+          const lsKey = path === 'bottomPanel.control' ? 'controls' : path.split('.')[1];
+          localStorage.setItem('windy_panelVis_' + lsKey, value);
+          this.applyPanelVisibility();
+          break;
+        }
+        default:
+          console.debug('[settings:apply-side-effect] unhandled path:', path);
+      }
+    } catch (e) {
+      console.warn('[settings:apply-side-effect] failed:', e.message);
+    }
+  }
+
+  /**
    * Bind IPC events from main process
    */
   bindIPCEvents() {
+    // Settings catalog → renderer side-effect bridge
+    if (window.windyAPI.onSettingsApplySideEffect) {
+      window.windyAPI.onSettingsApplySideEffect((payload) => this.applySettingsSideEffect(payload));
+    }
     // Toggle recording from hotkey
     window.windyAPI.onToggleRecording((shouldRecord) => {
       // Use the main process isRecording as the command (source of truth)
