@@ -3809,17 +3809,27 @@ polkit.addRule(function(action, subject) {
             sideEffects.push(`renderer notify failed: ${e.message}`);
           }
         }
-        if (body.path === 'engine.model' && pythonProcess && !pythonProcess.killed) {
+        // Engine config hot-swap — mirrors the engine.model pattern. Both
+        // engine.model and engine.language flow through the same Python-side
+        // handle_config (server.py:285-330): model triggers reload, language
+        // updates the in-memory transcriber config without reload. Faster
+        // path for language because no model swap is involved.
+        const ENGINE_CONFIG_HOT_PATHS = {
+          'engine.model': 'model',
+          'engine.language': 'language',
+        };
+        if (ENGINE_CONFIG_HOT_PATHS[body.path] && pythonProcess && !pythonProcess.killed) {
           try {
             const WebSocket = require('ws');
             const cfg = store.get('server', { host: '127.0.0.1', port: 9876 });
             const ws = new WebSocket(`ws://${cfg.host}:${cfg.port}`);
+            const cfgKey = ENGINE_CONFIG_HOT_PATHS[body.path];
             ws.on('open', () => {
-              ws.send(JSON.stringify({ action: 'config', config: { model: body.value } }));
+              ws.send(JSON.stringify({ action: 'config', config: { [cfgKey]: body.value } }));
               setTimeout(() => ws.close(), 5000);
             });
             ws.on('error', () => { });
-            sideEffects.push('python engine hot-reload sent');
+            sideEffects.push(`python engine hot-reload sent (${cfgKey})`);
           } catch (e) {
             sideEffects.push(`engine hot-reload failed: ${e.message}`);
           }
