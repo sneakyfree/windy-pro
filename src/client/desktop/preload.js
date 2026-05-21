@@ -23,6 +23,11 @@ const ALLOWED_RECEIVE_CHANNELS = new Set([
   // {requestId, op, args}; renderer dispatches in app.js initAgentBridge() and
   // replies on 'agent:reply'.
   'agent:request',
+  // Settings-catalog side-effect — main process pushes {path, value} after
+  // an agent-initiated set_setting on a renderer-state path (theme, analytics
+  // opt-in, bottom-panel row visibility). Renderer dispatches in app.js
+  // initSettingsSideEffectListener().
+  'settings:apply-side-effect',
 ]);
 
 function safeOn(channel, callback) {
@@ -41,6 +46,9 @@ contextBridge.exposeInMainWorld('windyAPI', {
   unmaximize: () => ipcRenderer.send('unmaximize-window'),
   isMaximized: () => ipcRenderer.invoke('is-maximized'),
   setVideoFullscreen: (on) => ipcRenderer.send('set-video-fullscreen', !!on),
+  onSettingsApplySideEffect: (callback) => {
+    safeOn('settings:apply-side-effect', (_e, payload) => callback(payload));
+  },
   platform: process.platform,
 
   // ═══ Settings ══════════════════════════════════════════════════
