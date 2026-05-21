@@ -2882,6 +2882,25 @@ function startWaylandControlServer() {
         res.end(JSON.stringify(result, null, 2));
         return;
       }
+      // ── Voice clone cloud submit (Wave W6) ─────────────────────────────
+      // POST /clones/cloud/submit body={cloneId} — submit a local voice
+      // clone to Windy Clone for ElevenLabs training. Idempotent on
+      // cloud_order_id (returns ok:false + the existing order_id if already
+      // submitted). Requires the user to be signed in to their Windy
+      // account (auth.token in electron-store). Use get_cloud_clone_order_status
+      // to poll training progress with the returned order_id.
+      if (req.method === 'POST' && pathname === '/clones/cloud/submit') {
+        const body = await readJsonBody(req);
+        if (!body.cloneId || typeof body.cloneId !== 'string') {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'cloneId (string) required' }));
+          return;
+        }
+        const result = await _submitVoiceCloneToCloud(body.cloneId);
+        res.writeHead(result.ok ? 200 : 422, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
+        return;
+      }
 
       // ── Misc utilities (v0.10.0) ───────────────────────────────────────
       // GET /hardware — system info (RAM, CPU, GPU, disk free, platform/arch).
@@ -8652,7 +8671,12 @@ ipcMain.handle('upload-voice-clone-file', async (event, name) => {
 
 const CLONE_API_DEFAULT_URL = 'https://api.windyclone.ai';
 
-ipcMain.handle('submit-voice-clone-to-cloud', async (event, cloneId) => {
+// Shared implementation for the submit-voice-clone-to-cloud IPC handler AND
+// the agent control surface HTTP endpoint (POST /clones/cloud/submit). The
+// two callers want identical semantics — same auth, same audit fields written
+// back to the local clones DB — so they go through one function rather than
+// two slightly-divergent copies.
+async function _submitVoiceCloneToCloud(cloneId) {
   try {
     const data = loadVoiceClones();
     const clone = data.clones.find(c => c.id === cloneId);
@@ -8727,7 +8751,9 @@ ipcMain.handle('submit-voice-clone-to-cloud', async (event, cloneId) => {
     console.error('[VC] submit-to-cloud error:', err && err.message);
     return { ok: false, error: err && err.message };
   }
-});
+}
+
+ipcMain.handle('submit-voice-clone-to-cloud', async (event, cloneId) => _submitVoiceCloneToCloud(cloneId));
 
 ipcMain.handle('get-cloud-clone-order-status', async (event, orderId) => {
   try {
