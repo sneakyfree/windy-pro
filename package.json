@@ -26,10 +26,12 @@
   "dependencies": {
     "archiver": "^7.0.0",
     "better-sqlite3": "^11.0.0",
+    "chokidar": "^5.0.0",
     "electron-store": "^8.1.0",
     "electron-updater": "^6.1.0",
     "form-data": "^4.0.5",
     "matrix-js-sdk": "^41.1.0",
+    "music-metadata": "^11.12.3",
     "node-fetch": "^2.7.0",
     "say": "^0.16.0",
     "stripe": "^20.4.0",

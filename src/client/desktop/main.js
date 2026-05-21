@@ -2285,6 +2285,136 @@ function applySettingChange(path, value, source) {
   return { previousValue, sideEffects, recordedAt };
 }
 
+// ── Bulk clone-ingest helpers (chokidar + music-metadata) ──────────────
+// Closes the user's natural "upload all my voice memos and make a clone"
+// request. Until now /voice-clones/create handled exactly one file at a
+// time, so an agent had to N-fold the call manually. These helpers
+// underpin /clones/scan, /clones/bulk-ingest, and /clones/watch-folder.
+
+// chokidar 4+ and music-metadata 11+ are ESM-only. Electron 28's bundled
+// Node 18.18 doesn't support require(esm), so we dynamic-import them on
+// first use and cache the module. Subsequent calls are cheap.
+let _chokidarModule = null;
+async function loadChokidar() {
+  if (!_chokidarModule) _chokidarModule = await import('chokidar');
+  return _chokidarModule.default || _chokidarModule;
+}
+let _musicMetadataModule = null;
+async function loadMusicMetadata() {
+  if (!_musicMetadataModule) _musicMetadataModule = await import('music-metadata');
+  return _musicMetadataModule.default || _musicMetadataModule;
+}
+
+// Extensions we count as voice-clone training material. Audio is the
+// primary target; video is included so the agent can SEE that the user
+// has e.g. an old QuickTime self-recording but has to ask whether to
+// strip audio before ingest (ffmpeg path is future work).
+const CLONE_INGEST_AUDIO_EXTS = new Set(['.webm', '.wav', '.mp3', '.ogg', '.m4a', '.flac']);
+const CLONE_INGEST_VIDEO_EXTS = new Set(['.mp4', '.mov', '.mkv', '.avi', '.webm']);
+const CLONE_INGEST_MAX_SCAN_RESULTS = 500;
+const CLONE_INGEST_MAX_DEPTH = 6;
+
+// Recursive folder scan for media files. Robust against permission
+// errors (skip + continue). Caps results so a misfire on the home
+// directory doesn't return a 50MB response.
+async function scanMediaFolder(rootPath, recursive) {
+  const results = [];
+  let truncated = false;
+  async function walk(dir, depth) {
+    if (results.length >= CLONE_INGEST_MAX_SCAN_RESULTS) { truncated = true; return; }
+    let entries;
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    } catch { return; }
+    for (const entry of entries) {
+      if (results.length >= CLONE_INGEST_MAX_SCAN_RESULTS) { truncated = true; return; }
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (recursive && depth < CLONE_INGEST_MAX_DEPTH) await walk(full, depth + 1);
+      } else if (entry.isFile()) {
+        const ext = path.extname(entry.name).toLowerCase();
+        const isAudio = CLONE_INGEST_AUDIO_EXTS.has(ext);
+        const isVideo = CLONE_INGEST_VIDEO_EXTS.has(ext);
+        if (!isAudio && !isVideo) continue;
+        try {
+          const stat = await fs.promises.stat(full);
+          const item = {
+            path: full,
+            name: entry.name,
+            ext,
+            sizeBytes: stat.size,
+            modifiedAt: stat.mtime.toISOString(),
+            kind: isAudio ? 'audio' : 'video',
+          };
+          if (isAudio) {
+            try {
+              // music-metadata 11+ is ESM-only; Electron 28's bundled
+              // Node 18.18 doesn't support require(esm), so use dynamic
+              // import. _musicMetadataModule is cached at module scope.
+              const mm = await loadMusicMetadata();
+              const meta = await mm.parseFile(full);
+              if (meta.format && typeof meta.format.duration === 'number') {
+                item.durationSec = Math.round(meta.format.duration);
+              }
+              if (meta.format && meta.format.sampleRate) item.sampleRate = meta.format.sampleRate;
+            } catch { /* metadata parse failed; skip enrichment */ }
+          }
+          results.push(item);
+        } catch { /* stat failed; skip */ }
+      }
+    }
+  }
+  await walk(rootPath, 0);
+  return { results, truncated, maxResults: CLONE_INGEST_MAX_SCAN_RESULTS };
+}
+
+// Copy N audio files into vcAudioDir + register each as a separate voice
+// clone in the JSON DB. Uses ElevenLabs' multi-sample training pattern:
+// each file becomes one clone entry; cloud-submission can later batch
+// them. Loads + saves the JSON DB once (not per-file) for efficiency.
+function bulkIngestToCloneSamples(paths, namePrefix) {
+  ensureDir(vcAudioDir);
+  const prefix = namePrefix || `Bulk import ${new Date().toISOString().slice(0, 10)}`;
+  const data = loadVoiceClones();
+  const results = [];
+  for (let i = 0; i < paths.length; i++) {
+    const src = paths[i];
+    try {
+      const srcResolved = path.resolve(src);
+      if (!fs.existsSync(srcResolved)) {
+        results.push({ source: src, ok: false, error: 'file not found' });
+        continue;
+      }
+      const ext = path.extname(srcResolved).toLowerCase();
+      if (!CLONE_INGEST_AUDIO_EXTS.has(ext)) {
+        results.push({ source: src, ok: false, error: `unsupported extension "${ext}"`, supported: [...CLONE_INGEST_AUDIO_EXTS] });
+        continue;
+      }
+      const id = require('crypto').randomUUID();
+      const destPath = path.join(vcAudioDir, `${id}${ext}`);
+      fs.copyFileSync(srcResolved, destPath);
+      const clone = {
+        id,
+        name: paths.length === 1 ? prefix : `${prefix} (${i + 1}/${paths.length})`,
+        duration: null,
+        audioPath: destPath,
+        status: 'ready',
+        created_at: new Date().toISOString(),
+      };
+      data.clones.push(clone);
+      results.push({ source: src, ok: true, cloneId: id, name: clone.name, copiedSizeBytes: fs.statSync(destPath).size });
+    } catch (e) {
+      results.push({ source: src, ok: false, error: e.message });
+    }
+  }
+  saveVoiceClones(data);
+  return results;
+}
+
+// Active folder watchers, keyed by absolute folder path. Cleared on app
+// exit (in-memory only — persistence across restarts is future work).
+const CLONE_WATCHERS = new Map();
+
 function startWaylandControlServer() {
   // NOTE: originally Wayland-only for GNOME keybindings. Now the control server
   // also serves the agent-control surface (paste strategies, settings) so we
@@ -4401,6 +4531,204 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ count: safe.length, bundles: safe }, null, 2));
         return;
       }
+
+      // ── Bulk clone-ingest (the upload-everything grandma flow) ────────
+      // Three routes that turn "find all my voice memos and make a clone"
+      // into one (or two) calls instead of N. POST/JSON for all so paths
+      // with spaces / Unicode aren't fragile.
+
+      // POST /clones/scan body={path, recursive?} → recursive media scan.
+      // Returns up to CLONE_INGEST_MAX_SCAN_RESULTS audio + video files
+      // with size, mtime, and (for audio) duration via music-metadata.
+      // Robust against permission errors — silently skips unreadable dirs.
+      if (req.method === 'POST' && pathname === '/clones/scan') {
+        const body = await readJsonBody(req);
+        if (!body.path || typeof body.path !== 'string') {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'body.path (string) required' }));
+          return;
+        }
+        let resolved;
+        try { resolved = path.resolve(body.path); } catch (e) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `bad path: ${e.message}` }));
+          return;
+        }
+        if (!fs.existsSync(resolved)) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `path not found: ${resolved}` }));
+          return;
+        }
+        const stat = fs.statSync(resolved);
+        if (!stat.isDirectory()) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `path is not a directory: ${resolved}` }));
+          return;
+        }
+        const recursive = body.recursive !== false; // default true
+        try {
+          const { results, truncated, maxResults } = await scanMediaFolder(resolved, recursive);
+          const audioCount = results.filter(r => r.kind === 'audio').length;
+          const videoCount = results.filter(r => r.kind === 'video').length;
+          const totalSizeBytes = results.reduce((sum, r) => sum + (r.sizeBytes || 0), 0);
+          const totalDurationSec = results.reduce((sum, r) => sum + (r.durationSec || 0), 0);
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({
+            ok: true,
+            root: resolved,
+            recursive,
+            count: results.length,
+            audioCount,
+            videoCount,
+            totalSizeBytes,
+            totalDurationSec,
+            truncated,
+            maxResults,
+            files: results,
+          }, null, 2));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
+      // POST /clones/bulk-ingest body={paths, namePrefix?}
+      // Copy N audio files into the voice-samples store as separate clone
+      // entries. Each file becomes one clone (ElevenLabs multi-sample
+      // training model). Returns per-file results so partial failures are
+      // visible. Loads + saves the JSON DB exactly once.
+      if (req.method === 'POST' && pathname === '/clones/bulk-ingest') {
+        const body = await readJsonBody(req);
+        if (!Array.isArray(body.paths) || body.paths.length === 0) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'body.paths must be a non-empty array of file paths' }));
+          return;
+        }
+        if (body.paths.length > 100) {
+          res.writeHead(413, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `too many paths (${body.paths.length}); cap is 100 per call. Make multiple calls.` }));
+          return;
+        }
+        const namePrefix = typeof body.namePrefix === 'string' && body.namePrefix.trim() ? body.namePrefix.trim() : null;
+        try {
+          const results = bulkIngestToCloneSamples(body.paths, namePrefix);
+          const successCount = results.filter(r => r.ok).length;
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({
+            ok: successCount > 0,
+            totalCount: results.length,
+            successCount,
+            failureCount: results.length - successCount,
+            results,
+          }, null, 2));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
+      // POST /clones/watch-folder body={path, enabled, autoIngest?}
+      // Start (enabled:true) or stop (enabled:false) a chokidar watcher
+      // on a folder. When autoIngest defaults true, new audio files
+      // landing in the folder are immediately ingested via the same
+      // bulkIngestToCloneSamples path. ignoreInitial + awaitWriteFinish
+      // are set so existing files don't trigger and in-progress writes
+      // wait until the file settles before ingest. In-memory only —
+      // watchers do not survive an app restart (caller must re-register).
+      if (req.method === 'POST' && pathname === '/clones/watch-folder') {
+        const body = await readJsonBody(req);
+        if (!body.path || typeof body.path !== 'string') {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'body.path (string) required' }));
+          return;
+        }
+        let resolved;
+        try { resolved = path.resolve(body.path); } catch (e) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `bad path: ${e.message}` }));
+          return;
+        }
+        const enabled = body.enabled !== false; // default true
+        const autoIngest = body.autoIngest !== false; // default true
+        try {
+          if (!enabled) {
+            const existing = CLONE_WATCHERS.get(resolved);
+            if (!existing) {
+              res.writeHead(404, { 'content-type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: `no active watcher for ${resolved}` }));
+              return;
+            }
+            await existing.watcher.close();
+            CLONE_WATCHERS.delete(resolved);
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, action: 'stopped', path: resolved }));
+            return;
+          }
+          // Enable path
+          if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+            res.writeHead(400, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: `path is not an existing directory: ${resolved}` }));
+            return;
+          }
+          if (CLONE_WATCHERS.has(resolved)) {
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, action: 'already-watching', path: resolved, ...CLONE_WATCHERS.get(resolved).meta }));
+            return;
+          }
+          // chokidar 4+ is ESM-only; Electron 28's bundled Node 18.18
+          // doesn't support require(esm), so dynamic import + module-
+          // level cache via loadChokidar().
+          const chokidar = await loadChokidar();
+          const watcher = chokidar.watch(resolved, {
+            ignoreInitial: true,
+            awaitWriteFinish: { stabilityThreshold: 2000, pollInterval: 200 },
+            depth: 0,
+          });
+          let ingestedCount = 0;
+          watcher.on('add', (filePath) => {
+            const ext = path.extname(filePath).toLowerCase();
+            if (!CLONE_INGEST_AUDIO_EXTS.has(ext)) return;
+            if (!autoIngest) {
+              console.info(`[CloneWatch] new file detected (autoIngest:false): ${filePath}`);
+              return;
+            }
+            try {
+              const [r] = bulkIngestToCloneSamples([filePath], `Auto-ingest from ${path.basename(resolved)}`);
+              if (r.ok) {
+                ingestedCount += 1;
+                console.info(`[CloneWatch] auto-ingested ${filePath} → cloneId=${r.cloneId}`);
+              } else {
+                console.warn(`[CloneWatch] auto-ingest failed for ${filePath}: ${r.error}`);
+              }
+            } catch (e) {
+              console.warn(`[CloneWatch] auto-ingest threw for ${filePath}:`, e.message);
+            }
+          });
+          watcher.on('error', (e) => console.warn(`[CloneWatch] watcher error on ${resolved}:`, e.message));
+          const meta = { autoIngest, startedAt: new Date().toISOString() };
+          CLONE_WATCHERS.set(resolved, { watcher, meta, get ingestedCount() { return ingestedCount; } });
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, action: 'started', path: resolved, ...meta }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
+      // GET /clones/watchers — list active folder watchers + their stats.
+      if (req.method === 'GET' && pathname === '/clones/watchers') {
+        const watchers = [];
+        for (const [p, entry] of CLONE_WATCHERS.entries()) {
+          watchers.push({ path: p, ingestedCount: entry.ingestedCount, ...entry.meta });
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, count: watchers.length, watchers }, null, 2));
+        return;
+      }
+
       // POST /paste/inject-test — real end-to-end paste injection test.
       // Spawns a focusable Tk capture target, temporarily flips Mutter's
       // focus-new-windows policy to 'strict' so the window auto-grabs
