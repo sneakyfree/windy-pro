@@ -1652,6 +1652,17 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
         // windysearch.com. EI-tier rate limits scale with user reputation
         // per ADR-014 §3.
         windy_search: { status: 'available', provisioned: false },
+        // Windy Connect — agent-onboarding kernel. CLI on PyPI
+        // (`pip install windy-connect`); marketing + privacy/ToS at
+        // windyconnect.com (Cloudflare Pages, sneakyfree/windy-connect-site);
+        // orchestrator Worker at api.windyconnect.com. Category 1 product
+        // per ADR-050 (human-direct, no bot relationship — the user installs
+        // the CLI on their own machine). Always-available semantic: the
+        // CLI is free + open-source + magic-link-auth, so 'available' is
+        // the truthful baseline. Could promote to 'active' for users whose
+        // Eternitas passport was minted via the windy-connect flow once we
+        // add that signal — separate change.
+        windy_connect: { status: 'available', provisioned: false },
         windy_traveler: { status: user.tier !== 'free' ? 'active' : 'upgrade_required', provisioned: user.tier !== 'free' },
       },
     });
