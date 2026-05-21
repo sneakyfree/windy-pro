@@ -1684,6 +1684,18 @@ function showChatWindow() {
 // Chat IPC — open from renderer
 ipcMain.on('open-windy-chat', () => showChatWindow());
 
+// Control Panel / Echo HQ — local-machine vitals.
+// Mirrors account-server's /api/v1/system-info shape so the renderer
+// can use the same EchoHQView component for local + remote sources.
+const systemInfoCollector = require('./system-info');
+ipcMain.handle('system-info', async () => {
+  try {
+    return await systemInfoCollector.collect();
+  } catch (err) {
+    return { error: String(err?.message || err) };
+  }
+});
+
 // Launch Windy Code desktop app
 ipcMain.handle('launch-windy-code', async () => {
   const { shell } = require('electron');

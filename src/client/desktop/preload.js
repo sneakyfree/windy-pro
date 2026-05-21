@@ -43,6 +43,12 @@ contextBridge.exposeInMainWorld('windyAPI', {
   setVideoFullscreen: (on) => ipcRenderer.send('set-video-fullscreen', !!on),
   platform: process.platform,
 
+  // ═══ Control Panel — local-machine vitals ══════════════════════
+  // Returns the same shape as account-server's /api/v1/system-info,
+  // but reads THIS machine's stats (the box the user is on), not the
+  // cloud server's. EchoHQView prefers this over the HTTP endpoint.
+  systemInfo: () => ipcRenderer.invoke('system-info'),
+
   // ═══ Settings ══════════════════════════════════════════════════
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (settings) => ipcRenderer.send('update-settings', settings),

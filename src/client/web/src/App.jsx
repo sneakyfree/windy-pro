@@ -5,6 +5,7 @@ import Landing from './pages/Landing'
 import Transcribe from './pages/Transcribe'
 import Dashboard from './pages/Dashboard'
 import EcosystemDashboard from './pages/EcosystemDashboard'
+import ControlPanel from './pages/ControlPanel'
 import SoulFile from './pages/SoulFile'
 import Vault from './pages/Vault'
 import Translate from './pages/Translate'
@@ -167,6 +168,9 @@ export default function App() {
                 } />
                 <Route path="/dashboard" element={
                     <ProtectedRoute><Dashboard /></ProtectedRoute>
+                } />
+                <Route path="/control-panel" element={
+                    <ProtectedRoute><ControlPanel /></ProtectedRoute>
                 } />
                 <Route path="/soul-file" element={
                     <ProtectedRoute><SoulFile /></ProtectedRoute>

@@ -37,6 +37,7 @@ import flyRoutes from './routes/fly';
 import mindRoutes from './routes/mind';
 import voiceRoutes from './routes/voice';
 import agentRoutes from './routes/agent';
+import systemInfoRoutes from './routes/system-info';
 import webhooksEternitasRoutes from './routes/webhooks-eternitas';
 import { authenticateToken } from './middleware/auth';
 import { initErrorReporting, reportError } from './services/error-reporter';
@@ -328,6 +329,10 @@ app.use('/api/v1/voice', voiceRoutes);
 // Wave 8 — Managed-credential broker + hatch-from-Pro endpoint.
 // HMAC-gated credentials/issue for S2S, Bearer-JWT /hatch that streams SSE.
 app.use('/api/v1/agent', agentRoutes);
+
+// Host vitals (server's machine) — Control Panel / Echo HQ feed.
+// Per-machine localhost sidecars will expose the same shape in a follow-up.
+app.use('/api/v1/system-info', systemInfoRoutes);
 
 
 // Billing

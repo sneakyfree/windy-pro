@@ -317,9 +317,16 @@ export default function Dashboard() {
                             // windy_connect: { status: 'available' } so the badge
                             // renders purple "Available" matching the others.
                             { key: 'windy_connect', label: 'Windy Connect', icon: '🔌', href: 'https://windyconnect.com' },
+                            // Control Panel — system-vitals dashboards in the spirit of the
+                            // kit-army agent machines' Echo HQ / Alpha Control Panel UIs.
+                            // alwaysActive bypasses ecosystem-status gating (this is a
+                            // local-machine surface, not a backend-provisioned product).
+                            { key: 'control_panel', label: 'Control Panel', icon: '🖥️', href: '/control-panel', alwaysActive: true },
                         ].map(p => {
                             const product = ecosystem.products?.[p.key] || {}
-                            const status = p.comingSoon ? 'coming_soon' : (product.status || 'not_provisioned')
+                            const status = p.comingSoon ? 'coming_soon'
+                                : p.alwaysActive ? 'active'
+                                : (product.status || 'not_provisioned')
                             const badgeClass = status === 'active' ? 'eco-active'
                                 : status === 'pending' ? 'eco-pending'
                                 : status === 'upgrade_required' ? 'eco-upgrade'
