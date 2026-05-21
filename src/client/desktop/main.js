@@ -3757,6 +3757,213 @@ function startWaylandControlServer() {
         return;
       }
 
+      // ── Account-server proxy (billing / plan / logout) ───────────────
+      // Six routes that proxy to https://windyword.ai/api/v1/* with the
+      // user's stored auth token. All return JSON {ok, ...}; auth failures
+      // surface as {ok:false, error:"Not signed in ..."} with 401 so the
+      // agent can prompt the user to sign in.
+
+      // GET /account/me — current user identity + tier (the "what plan
+      // am I on" answer). Wraps GET /api/v1/auth/me.
+      if (req.method === 'GET' && pathname === '/account/me') {
+        const token = store.get('auth.token', '') || store.get('auth.storageToken', '');
+        if (!token) {
+          res.writeHead(401, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Not signed in to Windy account — auth.token missing.' }));
+          return;
+        }
+        const baseUrl = process.env.WINDY_ACCOUNT_API_URL || ACCOUNT_API_DEFAULT_URL;
+        try {
+          const upstream = await fetch(`${baseUrl}/auth/me`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          const upstreamBody = await upstream.text();
+          let parsed;
+          try { parsed = JSON.parse(upstreamBody); } catch { parsed = { raw: upstreamBody.slice(0, 500) }; }
+          res.writeHead(upstream.ok ? 200 : upstream.status, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(upstream.ok
+            ? { ok: true, ...parsed }
+            : { ok: false, error: parsed.error || `account-server returned ${upstream.status}`, upstreamStatus: upstream.status }
+          ));
+        } catch (e) {
+          res.writeHead(502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
+      // GET /account/billing/transactions — purchase history. Wraps
+      // GET /api/v1/billing/transactions.
+      if (req.method === 'GET' && pathname === '/account/billing/transactions') {
+        const token = store.get('auth.token', '') || store.get('auth.storageToken', '');
+        if (!token) {
+          res.writeHead(401, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Not signed in to Windy account — auth.token missing.' }));
+          return;
+        }
+        const baseUrl = process.env.WINDY_ACCOUNT_API_URL || ACCOUNT_API_DEFAULT_URL;
+        try {
+          const upstream = await fetch(`${baseUrl}/billing/transactions`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          const upstreamBody = await upstream.text();
+          let parsed;
+          try { parsed = JSON.parse(upstreamBody); } catch { parsed = { raw: upstreamBody.slice(0, 500) }; }
+          res.writeHead(upstream.ok ? 200 : upstream.status, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(upstream.ok
+            ? { ok: true, ...parsed }
+            : { ok: false, error: parsed.error || `account-server returned ${upstream.status}`, upstreamStatus: upstream.status }
+          ));
+        } catch (e) {
+          res.writeHead(502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
+      // GET /account/billing/summary — current-tier + spend summary. Wraps
+      // GET /api/v1/billing/summary.
+      if (req.method === 'GET' && pathname === '/account/billing/summary') {
+        const token = store.get('auth.token', '') || store.get('auth.storageToken', '');
+        if (!token) {
+          res.writeHead(401, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Not signed in to Windy account — auth.token missing.' }));
+          return;
+        }
+        const baseUrl = process.env.WINDY_ACCOUNT_API_URL || ACCOUNT_API_DEFAULT_URL;
+        try {
+          const upstream = await fetch(`${baseUrl}/billing/summary`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          const upstreamBody = await upstream.text();
+          let parsed;
+          try { parsed = JSON.parse(upstreamBody); } catch { parsed = { raw: upstreamBody.slice(0, 500) }; }
+          res.writeHead(upstream.ok ? 200 : upstream.status, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(upstream.ok
+            ? { ok: true, ...parsed }
+            : { ok: false, error: parsed.error || `account-server returned ${upstream.status}`, upstreamStatus: upstream.status }
+          ));
+        } catch (e) {
+          res.writeHead(502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
+      // POST /account/billing/checkout body={tier, billing_type}
+      // Asks account-server for a Stripe Checkout URL, then opens it in the
+      // user's default browser via shell.openExternal. Response includes
+      // {ok, url, opened} so the agent can describe what happened
+      // ("I opened the upgrade page in your browser").
+      if (req.method === 'POST' && pathname === '/account/billing/checkout') {
+        const body = await readJsonBody(req);
+        const tier = body.tier;
+        const billing_type = body.billing_type;
+        if (!tier || !billing_type) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'tier and billing_type required (tier ∈ {pro, translate, translate_pro}, billing_type ∈ {lifetime, monthly, yearly})' }));
+          return;
+        }
+        const token = store.get('auth.token', '') || store.get('auth.storageToken', '');
+        if (!token) {
+          res.writeHead(401, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Not signed in to Windy account — auth.token missing.' }));
+          return;
+        }
+        const baseUrl = process.env.WINDY_ACCOUNT_API_URL || ACCOUNT_API_DEFAULT_URL;
+        try {
+          const upstream = await fetch(`${baseUrl}/stripe/create-checkout-session`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tier, billing_type }),
+          });
+          const upstreamBody = await upstream.text();
+          let parsed;
+          try { parsed = JSON.parse(upstreamBody); } catch { parsed = { raw: upstreamBody.slice(0, 500) }; }
+          if (!upstream.ok || !parsed.url) {
+            res.writeHead(upstream.ok ? 502 : upstream.status, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: parsed.error || `account-server returned ${upstream.status} without a checkout url`, upstreamStatus: upstream.status }));
+            return;
+          }
+          let opened = false;
+          try { await shell.openExternal(parsed.url); opened = true; } catch (e) { console.warn('[account/checkout] shell.openExternal failed:', e.message); }
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, url: parsed.url, sessionId: parsed.sessionId, opened }));
+        } catch (e) {
+          res.writeHead(502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
+      // POST /account/billing/portal — open Stripe Customer Portal (manage
+      // subscription, update card, cancel, invoices). Wraps
+      // POST /api/v1/stripe/create-portal-session and opens the URL.
+      if (req.method === 'POST' && pathname === '/account/billing/portal') {
+        const token = store.get('auth.token', '') || store.get('auth.storageToken', '');
+        if (!token) {
+          res.writeHead(401, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Not signed in to Windy account — auth.token missing.' }));
+          return;
+        }
+        const baseUrl = process.env.WINDY_ACCOUNT_API_URL || ACCOUNT_API_DEFAULT_URL;
+        try {
+          const upstream = await fetch(`${baseUrl}/stripe/create-portal-session`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: '{}',
+          });
+          const upstreamBody = await upstream.text();
+          let parsed;
+          try { parsed = JSON.parse(upstreamBody); } catch { parsed = { raw: upstreamBody.slice(0, 500) }; }
+          if (!upstream.ok || !parsed.url) {
+            res.writeHead(upstream.ok ? 502 : upstream.status, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: parsed.error || `account-server returned ${upstream.status} without a portal url`, upstreamStatus: upstream.status }));
+            return;
+          }
+          let opened = false;
+          try { await shell.openExternal(parsed.url); opened = true; } catch (e) { console.warn('[account/portal] shell.openExternal failed:', e.message); }
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, url: parsed.url, opened }));
+        } catch (e) {
+          res.writeHead(502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+      }
+
+      // POST /account/logout — best-effort upstream logout, then clear the
+      // local auth + license cache so subsequent /account/me returns 401.
+      // Upstream failure does NOT block local clearing — grandma can still
+      // "sign me out" when offline.
+      if (req.method === 'POST' && pathname === '/account/logout') {
+        const token = store.get('auth.token', '') || store.get('auth.storageToken', '');
+        let upstreamStatus = null;
+        if (token) {
+          const baseUrl = process.env.WINDY_ACCOUNT_API_URL || ACCOUNT_API_DEFAULT_URL;
+          try {
+            const upstream = await fetch(`${baseUrl}/auth/logout`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: '{}',
+            });
+            upstreamStatus = upstream.status;
+          } catch (e) {
+            console.warn('[account/logout] upstream failed (clearing local anyway):', e.message);
+          }
+        }
+        for (const key of [
+          'auth.token', 'auth.storageToken',
+          'license.tier', 'license.email', 'license.purchasedAt',
+          'license.expiresAt', 'license.stripeSessionId',
+        ]) {
+          try { store.delete(key); } catch { /* ignore */ }
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, upstreamStatus, cleared: true }));
+        return;
+      }
+
       // ── Soul file export (v0.12.0) ─────────────────────────────────────
       // POST /soul-file/export body={outputPath, overwrite?:bool}
       // Zips the entire archive (audio + video + transcripts + manifest)
@@ -5990,6 +6197,12 @@ ipcMain.handle('delete-archive-entry', async (event, filePath) => {
     throw new Error(`Delete failed: ${e.message}`);
   }
 });
+
+// ── Account-server proxy base ─────────────────────────────────────
+// Public Windy account-server. Routes mounted at /api/v1/* upstream.
+// Overridable for staging/local dev via WINDY_ACCOUNT_API_URL env var
+// (matches the existing WINDY_CLONE_API_URL pattern).
+const ACCOUNT_API_DEFAULT_URL = 'https://windyword.ai/api/v1';
 
 // ── Windy Word Cloud Storage helpers ──────────────────────────────
 const CLOUD_STORAGE_DEFAULT_URL = 'https://windyword.ai/api/storage';
