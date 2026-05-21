@@ -3107,6 +3107,128 @@ function startWaylandControlServer() {
         res.end(JSON.stringify(out, null, 2));
         return;
       }
+      // POST /archive/search body={query, limit?, caseInsensitive?, includeBody?}
+      //   Full-text search across every archived transcript. Substring match
+      //   by default; pass caseInsensitive:true (default true) to ignore case.
+      //   Returns matching entries with a short snippet showing the match in
+      //   context. Pass includeBody:true to get the full transcript text too.
+      //   Scans up to 5000 entries (covers years of usage at a few per day);
+      //   limit caps the returned result count at 200 by default.
+      if (req.method === 'POST' && pathname === '/archive/search') {
+        const body = await readJsonBody(req);
+        const query = typeof body?.query === 'string' ? body.query : '';
+        if (!query) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'body.query (non-empty string) required' }));
+          return;
+        }
+        const limit = Math.min(1000, Math.max(1, parseInt(body?.limit, 10) || 200));
+        const ci = body?.caseInsensitive !== false; // default true
+        const needle = ci ? query.toLowerCase() : query;
+        const includeBody = !!body?.includeBody;
+        const SNIPPET_RADIUS = 80;
+        const all = _agentArchiveScan();
+        const matches = [];
+        for (const entry of all) {
+          const text = entry.text || '';
+          const haystack = ci ? text.toLowerCase() : text;
+          const idx = haystack.indexOf(needle);
+          if (idx === -1) continue;
+          const start = Math.max(0, idx - SNIPPET_RADIUS);
+          const end = Math.min(text.length, idx + needle.length + SNIPPET_RADIUS);
+          const snippet = (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
+          matches.push({
+            id: entry.id,
+            date: entry.date,
+            wordCount: entry.wordCount,
+            engine: entry.engine,
+            hasAudio: entry.hasAudio,
+            hasVideo: entry.hasVideo,
+            matchIndex: idx,
+            snippet,
+            ...(includeBody ? { text } : {}),
+          });
+          if (matches.length >= limit) break;
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          query, caseInsensitive: ci, scanned: all.length, matched: matches.length, limit, matches,
+        }, null, 2));
+        return;
+      }
+      // GET /archive/by-date?from=ISO&to=ISO[&limit=N]
+      //   Return entries whose start date falls within [from, to] inclusive.
+      //   from/to are ISO 8601 (date or date+time). Either is optional —
+      //   omitting from means "from the beginning"; omitting to means "until
+      //   now". Sorted newest first. limit caps at 1000 (default 200).
+      if (req.method === 'GET' && pathname === '/archive/by-date') {
+        const fromStr = urlObj.searchParams.get('from');
+        const toStr = urlObj.searchParams.get('to');
+        const limit = Math.min(1000, Math.max(1, parseInt(urlObj.searchParams.get('limit') || '200', 10)));
+        const fromMs = fromStr ? Date.parse(fromStr) : -Infinity;
+        const toMs = toStr ? Date.parse(toStr) : Infinity;
+        if ((fromStr && isNaN(fromMs)) || (toStr && isNaN(toMs))) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'from/to must be ISO 8601 if provided' }));
+          return;
+        }
+        const all = _agentArchiveScan();
+        const filtered = all.filter((e) => {
+          if (!e.date) return false;
+          const ms = Date.parse(e.date);
+          return ms >= fromMs && ms <= toMs;
+        }).slice(0, limit);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          from: fromStr || null, to: toStr || null, scanned: all.length, matched: filtered.length, limit, entries: filtered,
+        }, null, 2));
+        return;
+      }
+      // POST /archive/bulk-delete body={ids:[...], confirm:"YES-DELETE-N"}
+      //   Tear down multiple archive entries in one call. Requires an explicit
+      //   confirm token "YES-DELETE-<N>" matching the number of ids — protects
+      //   against accidental wipes (an agent that hallucinates a single number
+      //   doesn't accidentally delete every recording). Returns per-id status.
+      if (req.method === 'POST' && pathname === '/archive/bulk-delete') {
+        const body = await readJsonBody(req);
+        const ids = Array.isArray(body?.ids) ? body.ids : null;
+        if (!ids || ids.length === 0) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'body.ids (non-empty array of archive ids) required' }));
+          return;
+        }
+        const required = `YES-DELETE-${ids.length}`;
+        if (body?.confirm !== required) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `body.confirm must equal "${required}" — guards against accidental bulk deletion`, idsCount: ids.length }));
+          return;
+        }
+        const results = [];
+        for (const id of ids) {
+          const resolved = _agentResolveArchiveId(id);
+          if (!resolved) {
+            results.push({ id, ok: false, error: 'not found' });
+            continue;
+          }
+          const safeRoot = path.resolve(resolved.archiveDir);
+          const deleted = [];
+          for (const p of [resolved.mdPath, resolved.audioPath, resolved.videoPath]) {
+            if (!p) continue;
+            const real = path.resolve(p);
+            if (!real.startsWith(safeRoot)) continue;
+            if (fs.existsSync(real)) {
+              try { fs.unlinkSync(real); deleted.push(path.basename(real)); } catch (_) {}
+            }
+          }
+          results.push({ id, ok: true, deletedFiles: deleted });
+        }
+        _archiveStatsCache = null;
+        const okCount = results.filter(r => r.ok).length;
+        console.info(`[AgentCtrl] archive.bulk-delete ${okCount}/${ids.length} ok`);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, requested: ids.length, succeeded: okCount, results }, null, 2));
+        return;
+      }
       // POST /archive/delete body={id} — tear down archive entry + media.
       // Confined to the archive folder via _agentResolveArchiveId's path
       // resolution + the explicit startsWith check below.
