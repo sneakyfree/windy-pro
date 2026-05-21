@@ -306,6 +306,17 @@ export default function Dashboard() {
                             // serves a Developer Preview Live landing page as of 2026-05-19.
                             // Phase 2 Chrome extension + Phase 3 browser fork still pending.
                             { key: 'windy_search', label: 'Windy Search', icon: '🔍', href: 'https://windysearch.com' },
+                            // Windy Connect — agent-onboarding kernel. The `windy` CLI
+                            // (PyPI `windy-connect`) pairs any agent runtime — OpenClaw,
+                            // Hermes, Claude Code, generic — with the rest of the Windy
+                            // ecosystem (Mail mailbox, Matrix chat ID, Windy Mind LLM
+                            // access, optional Eternitas Passport). Marketing site at
+                            // windyconnect.com (Cloudflare Pages, sneakyfree/windy-connect-site).
+                            // External-link tile follows the windy-code/windy-mind/
+                            // windy-search pattern. Account-server returns
+                            // windy_connect: { status: 'available' } so the badge
+                            // renders purple "Available" matching the others.
+                            { key: 'windy_connect', label: 'Windy Connect', icon: '🔌', href: 'https://windyconnect.com' },
                         ].map(p => {
                             const product = ecosystem.products?.[p.key] || {}
                             const status = p.comingSoon ? 'coming_soon' : (product.status || 'not_provisioned')
