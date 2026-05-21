@@ -2389,6 +2389,65 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true, key: body.key, accelerator: body.accelerator }));
         return;
       }
+      // POST /hotkeys/reset — restore all hotkeys to catalog defaults and
+      // re-register. Mirrors the "Reset All to Defaults" button in Settings →
+      // Customizable Keyboard Shortcuts. Returns the new bindings so the
+      // agent can confirm what was applied. Idempotent.
+      if (req.method === 'POST' && pathname === '/hotkeys/reset') {
+        const HOTKEY_KEYS = ['toggleRecording', 'pasteTranscript', 'pasteClipboard', 'showHide', 'quickTranslate'];
+        const applied = {};
+        for (const key of HOTKEY_KEYS) {
+          const entry = settingsCatalog.describe(`hotkeys.${key}`);
+          if (entry && entry.default) {
+            store.set(`hotkeys.${key}`, entry.default);
+            applied[key] = entry.default;
+          }
+        }
+        try {
+          globalShortcut.unregisterAll();
+          registerHotkeys();
+        } catch (e) { console.warn('[AgentCtrl] hotkey reset re-register failed:', e.message); }
+        console.info(`[AgentCtrl] hotkeys reset to defaults: ${JSON.stringify(applied)}`);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, applied }, null, 2));
+        return;
+      }
+      // POST /open-url — open an http/https URL or one of the Windy
+      // ecosystem schemes in the user's default browser via Electron's
+      // shell.openExternal. Mirrors what UI buttons like "View all history
+      // in Web Portal" and the Upgrade flow do. Rejects file:// and other
+      // schemes that could exfiltrate or run code.
+      // Body: { url: "https://..." }
+      if (req.method === 'POST' && pathname === '/open-url') {
+        const body = await readJsonBody(req);
+        if (!body.url || typeof body.url !== 'string') {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'body.url (string) required' }));
+          return;
+        }
+        let parsed;
+        try { parsed = new URL(body.url); } catch (_) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `not a valid URL: ${body.url}` }));
+          return;
+        }
+        const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'windypro:', 'windychat:', 'windyword:', 'windyfly:']);
+        if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) {
+          res.writeHead(403, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `protocol ${parsed.protocol} not allowed`, allowed: [...ALLOWED_PROTOCOLS] }));
+          return;
+        }
+        try {
+          await shell.openExternal(body.url);
+          console.info(`[AgentCtrl] open-url: ${body.url}`);
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, url: body.url, protocol: parsed.protocol }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `shell.openExternal failed: ${e.message}` }));
+        }
+        return;
+      }
       // GET /models — list available transcription models + current selection
       if (req.method === 'GET' && pathname === '/models') {
         res.writeHead(200, { 'content-type': 'application/json' });
