@@ -477,6 +477,22 @@ class WindyApp {
               note: 'Stop triggers the transcription + paste pipeline against the window that had focus at recording start.',
             });
           }
+          // Source of truth for recording state. Wave W1's /recording/state
+          // endpoint was reading main-process `isRecording` which is only
+          // toggled by the legacy GNOME-keybinding path, not by the
+          // agentBridge start_recording flow — leading to false negatives
+          // when agents polled state after start_recording. This op returns
+          // the renderer's true isRecording + currentState; main.js bridges
+          // through it.
+          case 'get_recording_status': {
+            return reply(requestId, {
+              ok: true,
+              isRecording: !!this.isRecording,
+              currentState: this.currentState || 'idle',
+              engine: localStorage.getItem('windy_engine') || this.transcriptionEngine || null,
+              mode: localStorage.getItem('windy_recordingMode') || 'batch',
+            });
+          }
           // enumerateDevices is read-only (no getUserMedia call) so it does
           // NOT trigger the Wayland focus-steal hazard from CLAUDE.md rule 2.
           // Device labels are hidden until mic permission has been granted at
