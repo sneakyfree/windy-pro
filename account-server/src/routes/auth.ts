@@ -191,6 +191,22 @@ export function generateTokens(user: { id: string; email: string; tier: string }
         passportNumber = row?.passport_number;
     } catch { /* table may not exist on first-run SQLite bootstrap */ }
 
+    // Fetch Matrix localpart (chat_user_id) + display_name from chat_profiles
+    // so the JWT carries the data downstream consumers need:
+    //   - Synapse jwt_config uses subject_claim=matrix_localpart for native
+    //     m.login.jwt SSO (no extra round-trip to chat-onboarding)
+    //   - chat web app reads display_name directly from the JWT without a
+    //     separate fetch; survives across cache misses
+    let chatUserId: string | undefined;
+    let displayNameClaim: string | undefined;
+    try {
+        const row = db.prepare(
+            'SELECT chat_user_id, display_name FROM chat_profiles WHERE identity_id = ? LIMIT 1',
+        ).get(user.id) as { chat_user_id: string | null; display_name: string | null } | undefined;
+        chatUserId = row?.chat_user_id || undefined;
+        displayNameClaim = row?.display_name || undefined;
+    } catch { /* table may not exist on first-run */ }
+
     // Phase 4: Sign with RS256 if available, HS256 fallback
     const tokenPayload: Record<string, any> = {
         // Standard JWT subject claim — RFC 7519. Required by every
@@ -214,6 +230,8 @@ export function generateTokens(user: { id: string; email: string; tier: string }
         iss: 'windy-identity',
     };
     if (passportNumber) tokenPayload.eternitas_passport = passportNumber;
+    if (chatUserId) tokenPayload.chat_user_id = chatUserId;
+    if (displayNameClaim) tokenPayload.display_name = displayNameClaim;
 
     let accessToken: string;
     const signingKey = getSigningKey();
