@@ -2461,7 +2461,33 @@ function startWaylandControlServer() {
           desktop: PLATFORM.desktop,
           hasXdotool: PLATFORM.hasXdotool,
           hasYdotool: PLATFORM.hasYdotool,
+          version: app.getVersion(),
+          electronVersion: process.versions.electron,
+          nodeVersion: process.versions.node,
         }, null, 2));
+        return;
+      }
+      // POST /updates/check — trigger the electron-updater check. Returns
+      // immediately; the actual check happens asynchronously. Agents can
+      // poll get_config lastUpdateCheck to see when it last ran. Safe to
+      // call — only DOWNLOADS the update; does NOT install (install requires
+      // a separate user-driven quitAndInstall via the in-app button).
+      if (req.method === 'POST' && pathname === '/updates/check') {
+        try {
+          const { autoUpdater } = require('electron-updater');
+          autoUpdater.checkForUpdates().catch((e) => {
+            console.warn('[updates/check] electron-updater rejected:', e.message);
+          });
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({
+            ok: true,
+            currentVersion: app.getVersion(),
+            message: 'update check fired; poll lastUpdateCheck or watch for in-app toast.',
+          }));
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `electron-updater unavailable: ${e.message}` }));
+        }
         return;
       }
       // GET /install/capabilities — what whitelisted tools the agent can
