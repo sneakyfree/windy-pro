@@ -434,6 +434,81 @@ class WindyApp {
               },
             });
           }
+          // Recording lifecycle verbs. toggleRecording() owns the mode/engine
+          // dispatch (batch / api / stream) and the Wayland setFocusable
+          // discipline — agents must NOT call startRecording() / stopRecording()
+          // directly. The renderer is the source of truth for `isRecording`,
+          // so idempotency checks happen here, not in main.js.
+          case 'start_recording': {
+            if (this.isRecording) {
+              return reply(requestId, {
+                ok: true,
+                alreadyRecording: true,
+                isRecording: true,
+                state: this.currentState,
+              });
+            }
+            try { this.toggleRecording(); }
+            catch (e) { return reply(requestId, { ok: false, error: `toggleRecording threw: ${e.message}` }); }
+            return reply(requestId, {
+              ok: true,
+              isRecording: this.isRecording,
+              state: this.currentState,
+              engine: localStorage.getItem('windy_engine') || this.transcriptionEngine,
+              mode: localStorage.getItem('windy_recordingMode') || 'batch',
+              note: 'Recording start is fire-and-forget; mic capture + WebSocket setup completes asynchronously. Poll GET /recording/state to confirm live state.',
+            });
+          }
+          case 'stop_recording': {
+            if (!this.isRecording) {
+              return reply(requestId, {
+                ok: true,
+                alreadyStopped: true,
+                isRecording: false,
+                state: this.currentState,
+              });
+            }
+            try { this.toggleRecording(); }
+            catch (e) { return reply(requestId, { ok: false, error: `toggleRecording threw: ${e.message}` }); }
+            return reply(requestId, {
+              ok: true,
+              isRecording: this.isRecording,
+              state: this.currentState,
+              note: 'Stop triggers the transcription + paste pipeline against the window that had focus at recording start.',
+            });
+          }
+          // enumerateDevices is read-only (no getUserMedia call) so it does
+          // NOT trigger the Wayland focus-steal hazard from CLAUDE.md rule 2.
+          // Device labels are hidden until mic permission has been granted at
+          // least once — we surface that as a hint, not an error.
+          case 'list_audio_devices': {
+            Promise.all([
+              navigator.mediaDevices.enumerateDevices(),
+              window.windyAPI?.getSettings ? window.windyAPI.getSettings() : Promise.resolve(null),
+            ]).then(([devices, settings]) => {
+              const currentId = settings?.micDeviceId || 'default';
+              const inputs = devices
+                .filter((d) => d.kind === 'audioinput')
+                .map((d) => ({
+                  deviceId: d.deviceId,
+                  label: d.label || '',
+                  groupId: d.groupId,
+                  isCurrent: d.deviceId === currentId,
+                }));
+              const labelsAvailable = inputs.some((d) => d.label.length > 0);
+              reply(requestId, {
+                ok: true,
+                count: inputs.length,
+                currentDeviceId: currentId,
+                devices: inputs,
+                labelsAvailable,
+                hint: labelsAvailable
+                  ? null
+                  : 'Device labels are hidden because mic permission has not been granted yet. Start a recording once to unlock labels, then re-call. To switch device, use set_setting with path "engine.micDeviceId" and a known deviceId.',
+              });
+            }).catch((e) => reply(requestId, { ok: false, error: `enumerateDevices failed: ${e.message}` }));
+            return;
+          }
           default:
             return reply(requestId, { ok: false, error: `unknown op: ${op}` });
         }
