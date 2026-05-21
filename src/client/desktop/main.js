@@ -2210,6 +2210,81 @@ const WAYLAND_CONTROL_PORT = 18765;
 let _waylandControlServer = null;
 let _savedWaylandFocusTarget = null;  // Forward-compat slot (for Scope C focus restore)
 
+// ── Settings change history (in-memory, this session only) ─────────────
+// Capped ring-buffer of catalog-validated setting writes so the agent can
+// answer "what did I just change?" and "undo my last change". Entries are
+// pushed by applySettingChange when source !== 'undo' (undo replays
+// previousValue through the same apply path but does NOT push to avoid
+// an undo→undo toggle loop). Buffer survives within a single app run.
+const SETTINGS_HISTORY_CAP = 50;
+const SETTINGS_HISTORY = [];
+
+function pushSettingHistory(entry) {
+  SETTINGS_HISTORY.push(entry);
+  while (SETTINGS_HISTORY.length > SETTINGS_HISTORY_CAP) SETTINGS_HISTORY.shift();
+}
+
+// Apply a single catalog-validated setting change. Caller MUST have
+// validated `value` through settingsCatalog.validate() first. Records
+// the change to SETTINGS_HISTORY unless source === 'undo'. Returns
+// { previousValue, sideEffects, recordedAt }.
+function applySettingChange(path, value, source) {
+  const previousValue = store.get(path);
+  store.set(path, value);
+  console.info(`[AgentCtrl] settings.${source} ${path} = ${JSON.stringify(value)} (was ${JSON.stringify(previousValue)})`);
+
+  const sideEffects = [];
+  if (path.startsWith('hotkeys.')) {
+    try {
+      globalShortcut.unregisterAll();
+      registerHotkeys();
+      sideEffects.push('global shortcuts re-registered');
+    } catch (e) {
+      sideEffects.push(`hotkey re-register failed: ${e.message}`);
+    }
+  }
+  const RENDERER_APPLY_PATHS = new Set([
+    'appearance.theme',
+    'analytics.enabled',
+    'bottomPanel.playback',
+    'bottomPanel.export',
+    'bottomPanel.control',
+  ]);
+  if (RENDERER_APPLY_PATHS.has(path) && mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('settings:apply-side-effect', { path, value });
+      sideEffects.push('renderer notified for live-apply');
+    } catch (e) {
+      sideEffects.push(`renderer notify failed: ${e.message}`);
+    }
+  }
+  const ENGINE_CONFIG_HOT_PATHS = {
+    'engine.model': 'model',
+    'engine.language': 'language',
+  };
+  if (ENGINE_CONFIG_HOT_PATHS[path] && pythonProcess && !pythonProcess.killed) {
+    try {
+      const WebSocket = require('ws');
+      const cfg = store.get('server', { host: '127.0.0.1', port: 9876 });
+      const ws = new WebSocket(`ws://${cfg.host}:${cfg.port}`);
+      const cfgKey = ENGINE_CONFIG_HOT_PATHS[path];
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ action: 'config', config: { [cfgKey]: value } }));
+        setTimeout(() => ws.close(), 5000);
+      });
+      ws.on('error', () => { });
+      sideEffects.push(`python engine hot-reload sent (${cfgKey})`);
+    } catch (e) {
+      sideEffects.push(`engine hot-reload failed: ${e.message}`);
+    }
+  }
+  const recordedAt = Date.now();
+  if (source !== 'undo') {
+    pushSettingHistory({ path, previousValue, newValue: value, timestamp: recordedAt, source });
+  }
+  return { previousValue, sideEffects, recordedAt };
+}
+
 function startWaylandControlServer() {
   // NOTE: originally Wayland-only for GNOME keybindings. Now the control server
   // also serves the agent-control surface (paste strategies, settings) so we
@@ -4581,74 +4656,70 @@ polkit.addRule(function(action, subject) {
           res.end(JSON.stringify({ ok: false, path: body.path, error: validationError }));
           return;
         }
-        const previous = store.get(body.path);
-        store.set(body.path, body.value);
-        console.info(`[AgentCtrl] settings.set ${body.path} = ${JSON.stringify(body.value)} (was ${JSON.stringify(previous)})`);
-
-        const sideEffects = [];
-        if (body.path.startsWith('hotkeys.')) {
-          try {
-            globalShortcut.unregisterAll();
-            registerHotkeys();
-            sideEffects.push('global shortcuts re-registered');
-          } catch (e) {
-            sideEffects.push(`hotkey re-register failed: ${e.message}`);
-          }
-        }
-        // Settings whose state lives in renderer localStorage (theme, analytics
-        // opt-in, bottom-panel row visibility) need an IPC nudge so the renderer
-        // can apply the change live AND sync its localStorage copy. Without this
-        // the catalog write persists in electron-store but no UI refresh happens
-        // until the next app launch.
-        const RENDERER_APPLY_PATHS = new Set([
-          'appearance.theme',
-          'analytics.enabled',
-          'bottomPanel.playback',
-          'bottomPanel.export',
-          'bottomPanel.control',
-        ]);
-        if (RENDERER_APPLY_PATHS.has(body.path) && mainWindow && !mainWindow.isDestroyed()) {
-          try {
-            mainWindow.webContents.send('settings:apply-side-effect', { path: body.path, value: body.value });
-            sideEffects.push('renderer notified for live-apply');
-          } catch (e) {
-            sideEffects.push(`renderer notify failed: ${e.message}`);
-          }
-        }
-        // Engine config hot-swap — mirrors the engine.model pattern. Both
-        // engine.model and engine.language flow through the same Python-side
-        // handle_config (server.py:285-330): model triggers reload, language
-        // updates the in-memory transcriber config without reload. Faster
-        // path for language because no model swap is involved.
-        const ENGINE_CONFIG_HOT_PATHS = {
-          'engine.model': 'model',
-          'engine.language': 'language',
-        };
-        if (ENGINE_CONFIG_HOT_PATHS[body.path] && pythonProcess && !pythonProcess.killed) {
-          try {
-            const WebSocket = require('ws');
-            const cfg = store.get('server', { host: '127.0.0.1', port: 9876 });
-            const ws = new WebSocket(`ws://${cfg.host}:${cfg.port}`);
-            const cfgKey = ENGINE_CONFIG_HOT_PATHS[body.path];
-            ws.on('open', () => {
-              ws.send(JSON.stringify({ action: 'config', config: { [cfgKey]: body.value } }));
-              setTimeout(() => ws.close(), 5000);
-            });
-            ws.on('error', () => { });
-            sideEffects.push(`python engine hot-reload sent (${cfgKey})`);
-          } catch (e) {
-            sideEffects.push(`engine hot-reload failed: ${e.message}`);
-          }
-        }
+        const { previousValue, sideEffects } = applySettingChange(body.path, body.value, 'set_setting');
         const entry = settingsCatalog.describe(body.path);
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({
           ok: true,
           path: body.path,
-          previousValue: previous,
+          previousValue,
           currentValue: body.value,
           sideEffects,
           restartRequired: entry?.restartRequired || false,
+        }, null, 2));
+        return;
+      }
+
+      // GET /settings/history — recent catalog-validated changes in this
+      // session, oldest first. The answer to "what did I just change?" /
+      // "show me my last few setting changes". Each entry contains
+      // { path, previousValue, newValue, timestamp, source }. Bounded by
+      // SETTINGS_HISTORY_CAP; oldest entries drop as new ones land.
+      if (req.method === 'GET' && pathname === '/settings/history') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          ok: true,
+          count: SETTINGS_HISTORY.length,
+          cap: SETTINGS_HISTORY_CAP,
+          history: SETTINGS_HISTORY.slice(),
+        }, null, 2));
+        return;
+      }
+
+      // POST /settings/undo — revert the most-recent catalog-validated
+      // change. Pops the last entry from SETTINGS_HISTORY (only on success)
+      // and replays its previousValue through applySettingChange so all
+      // side effects (hotkey re-register, renderer notify, engine hot-
+      // reload) fire correctly. Returns 404 with a clean error when there
+      // is nothing to undo. Re-validates the previousValue defensively in
+      // case the catalog has changed mid-session.
+      if (req.method === 'POST' && pathname === '/settings/undo') {
+        if (SETTINGS_HISTORY.length === 0) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'no settings changes to undo in this session' }));
+          return;
+        }
+        const last = SETTINGS_HISTORY[SETTINGS_HISTORY.length - 1];
+        const validationError = settingsCatalog.validate(last.path, last.previousValue);
+        if (validationError) {
+          res.writeHead(422, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `cannot undo: ${validationError}`, entry: last }));
+          return;
+        }
+        SETTINGS_HISTORY.pop();
+        const { sideEffects } = applySettingChange(last.path, last.previousValue, 'undo');
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          ok: true,
+          undone: {
+            path: last.path,
+            restoredValue: last.previousValue,
+            wasValue: last.newValue,
+            originalTimestamp: last.timestamp,
+            originalSource: last.source,
+          },
+          sideEffects,
+          remainingHistory: SETTINGS_HISTORY.length,
         }, null, 2));
         return;
       }
