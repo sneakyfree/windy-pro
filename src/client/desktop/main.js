@@ -2549,6 +2549,121 @@ function startWaylandControlServer() {
         }
         return;
       }
+      // ── Window + state observability (Wave W1 — UI-parity sweep) ──
+      // Wraps the existing renderer→main IPC handlers so agents can do
+      // what a user does with the title bar buttons: minimize, maximize,
+      // bring-to-front, resize, zoom. Plus a single GET /window for state
+      // snapshot and GET /recording/state for the recording-flow state.
+      if (req.method === 'GET' && pathname === '/window') {
+        const bounds = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null;
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          exists: !!(mainWindow && !mainWindow.isDestroyed()),
+          maximized: mainWindow && !mainWindow.isDestroyed() ? mainWindow.isMaximized() : false,
+          minimized: mainWindow && !mainWindow.isDestroyed() ? mainWindow.isMinimized() : false,
+          focused: mainWindow && !mainWindow.isDestroyed() ? mainWindow.isFocused() : false,
+          visible: mainWindow && !mainWindow.isDestroyed() ? mainWindow.isVisible() : false,
+          fullScreen: mainWindow && !mainWindow.isDestroyed() ? mainWindow.isFullScreen() : false,
+          simpleFullScreen: mainWindow && !mainWindow.isDestroyed() ? mainWindow.isSimpleFullScreen?.() : false,
+          bounds,
+          fontSize: store.get('appearance.fontSize') || 100,
+          opacity: store.get('appearance.opacity'),
+          alwaysOnTop: store.get('appearance.alwaysOnTop'),
+        }, null, 2));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/window/minimize') {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, action: 'minimize' }));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/window/maximize') {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.maximize();
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, action: 'maximize' }));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/window/unmaximize') {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.unmaximize();
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, action: 'unmaximize' }));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/window/bring-to-front') {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          if (!mainWindow.isVisible()) mainWindow.show();
+          // On macOS show() on a focusable:false window is a no-op for
+          // focus; just raise to top. Caller should know they aren't
+          // guaranteed input focus on this platform.
+          try { mainWindow.moveTop(); } catch (_) { /* not all platforms */ }
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, action: 'bring-to-front', focused: mainWindow?.isFocused?.() }));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/window/geometry') {
+        const body = await readJsonBody(req);
+        const { x, y, width, height } = body || {};
+        if ([x, y, width, height].some(v => typeof v !== 'number')) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'body must be {x,y,width,height} all numbers' }));
+          return;
+        }
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setBounds({ x, y, width, height });
+        }
+        // Persist so it survives restart
+        store.set('window', { x, y, width, height });
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, bounds: { x, y, width, height } }));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/window/font-size') {
+        const body = await readJsonBody(req);
+        const clamped = Math.max(70, Math.min(150, Number(body?.percent) || 100));
+        store.set('appearance.fontSize', clamped);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('font-size-changed', clamped);
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, fontSize: clamped }));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/window/video-fullscreen') {
+        const body = await readJsonBody(req);
+        const on = !!body?.on;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          try {
+            if (process.platform === 'darwin') mainWindow.setSimpleFullScreen(on);
+            else mainWindow.setFullScreen(on);
+          } catch (e) {
+            res.writeHead(500, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: e.message }));
+            return;
+          }
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, on, mode: process.platform === 'darwin' ? 'simple' : 'native' }));
+        return;
+      }
+      if (req.method === 'GET' && pathname === '/recording/state') {
+        // Recording-flow state observability. isRecording is the main-process
+        // truth. The renderer broadcasts richer substates via 'state-change'
+        // (idle/listening/processing/injecting/error) but those aren't
+        // currently cached in main — for now we return the boolean + a few
+        // adjacent signals an agent needs to decide "is it safe to act now".
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          isRecording,
+          pythonEngineRunning: !!(pythonProcess && !pythonProcess.killed),
+          // last paste attempt is available via /paste/history; surface count here
+          // so an agent can detect whether activity has happened since last poll.
+          totalPasteAttempts: pasteStrategies?.getHistory?.(9999)?.length ?? null,
+        }, null, 2));
+        return;
+      }
       // GET /install/capabilities — what whitelisted tools the agent can
       // install on this machine + the resolved install command per tool.
       // Always safe to call (no system mutation).
