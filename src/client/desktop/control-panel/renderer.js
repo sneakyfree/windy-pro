@@ -27,6 +27,9 @@ const dropCurrentBtn = document.getElementById("drop-current");
 const dropCurrentName = document.getElementById("drop-current-name");
 const dropMenu = document.getElementById("drop-menu");
 const topbarCta = document.getElementById("topbar-cta");
+const marketEl = document.getElementById("marketplace");
+const marketBodyEl = document.getElementById("market-body");
+const marketBackBtn = document.getElementById("market-back");
 
 function setStatus(text, isError = false) {
   statusEl.textContent = text;
@@ -282,17 +285,109 @@ async function main() {
     if (!e.target.closest("#drop-selector")) closeDropMenu();
   });
 
-  // ─── "Get more drops" button ──────────────────────────────────────
-  // Phase 3d will replace this with the in-window marketplace view.
-  // For now it pops a temporary status hint so the affordance feels
-  // real but advertises "Coming soon" rather than nothing.
-  if (topbarCta) {
-    topbarCta.addEventListener("click", () => {
-      setStatus(
-        "🛒 Marketplace browser lands in the next release — for now, visit https://windydrops.com to see what's available.",
-      );
+  // ─── In-window marketplace (Phase 3d) ─────────────────────────────
+  // Click "Get more drops" → fetch catalog from registry, render card
+  // grid in the marketplace overlay. Each card gets an Install button
+  // (or "Installed" / "Built-in" badge depending on state).
+
+  function openMarket() {
+    if (!marketEl) return;
+    marketEl.classList.add("open");
+    refreshMarketCatalog();
+  }
+  function closeMarket() {
+    if (!marketEl) return;
+    marketEl.classList.remove("open");
+  }
+  function isMarketOpen() {
+    return marketEl && marketEl.classList.contains("open");
+  }
+
+  async function refreshMarketCatalog() {
+    if (!marketBodyEl) return;
+    if (typeof window.windyDropLibrary === "undefined") {
+      marketBodyEl.innerHTML = `<div class="market-state error">⚠️ Drop library bridge unavailable — restart the app to use the marketplace.</div>`;
+      return;
+    }
+    marketBodyEl.innerHTML = `<div class="market-state">⏳ Loading drops from the marketplace…</div>`;
+    const [browseRes, installedRes] = await Promise.all([
+      window.windyDropLibrary.browseRegistry({ type: "control-panel-template", limit: 50 }),
+      window.windyDropLibrary.listInstalled(),
+    ]);
+    if (!browseRes || !browseRes.ok) {
+      const msg = browseRes && browseRes.error ? browseRes.error : "could not reach the registry";
+      marketBodyEl.innerHTML = `<div class="market-state error">⚠️ ${escapeText(msg)}</div><div class="market-state">Tip: check your internet, or try again in a moment.</div>`;
+      return;
+    }
+    const items = Array.isArray(browseRes.items) ? browseRes.items : [];
+    const installed = installedRes && installedRes.ok ? installedRes.drops : [];
+    if (items.length === 0) {
+      marketBodyEl.innerHTML = `<div class="market-state">The marketplace is empty — check back soon.</div>`;
+      return;
+    }
+    marketBodyEl.innerHTML = `
+      <div class="market-grid">
+        ${items.map((it) => renderMarketCard(it, installed)).join("")}
+      </div>
+    `;
+    // Wire install buttons.
+    marketBodyEl.querySelectorAll("button[data-action='install']").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-drop-id");
+        const item = items.find((i) => i.id === id);
+        if (!item) return;
+        btn.disabled = true;
+        btn.textContent = "⏳ Installing…";
+        const res = await window.windyDropLibrary.installDrop({
+          id: item.id,
+          version: item.current_version,
+          name: item.name,
+          subtitle: item.subtitle,
+          type: item.type,
+        });
+        if (!res || !res.ok) {
+          btn.disabled = false;
+          btn.textContent = "Try again";
+          setStatus(`⚠️ Install failed: ${res && res.error ? res.error : "unknown"}`, true);
+        }
+        // onLibraryChanged → refreshDropMenu + refreshMarketCatalog (below).
+      });
     });
   }
+
+  function renderMarketCard(item, installed) {
+    const isInstalled = installed.some(
+      (i) => i.id === item.id && (i.source !== "builtin" || !i.source),
+    );
+    const isBuiltin = installed.some((i) => i.id === item.id && i.source === "builtin");
+    let actionHtml;
+    if (isBuiltin) {
+      actionHtml = `<span class="badge builtin">Built-in</span>`;
+    } else if (isInstalled) {
+      actionHtml = `<span class="badge installed">Installed</span>`;
+    } else {
+      actionHtml = `<button type="button" data-action="install" data-drop-id="${escapeAttr(item.id)}">+ Install</button>`;
+    }
+    return `
+      <div class="market-card">
+        <div class="card-type">${escapeText(item.type || "drop")}</div>
+        <div class="card-name">${escapeText(item.name || item.id)}</div>
+        <div class="card-subtitle">${escapeText(item.subtitle || "")}</div>
+        <div class="card-actions">${actionHtml}</div>
+      </div>
+    `;
+  }
+
+  if (topbarCta) {
+    topbarCta.addEventListener("click", openMarket);
+  }
+  if (marketBackBtn) {
+    marketBackBtn.addEventListener("click", closeMarket);
+  }
+  // ESC closes the marketplace.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && isMarketOpen()) closeMarket();
+  });
 
   // Vitals tick — 1Hz. Push to whichever host is currently mounted.
   let vitalsTimer = null;
@@ -348,10 +443,12 @@ async function main() {
     });
   }
   // React to library changes (install / uninstall) — refresh the menu
-  // so newly-installed drops appear without restart.
+  // so newly-installed drops appear without restart, and refresh the
+  // marketplace cards so install buttons flip to "Installed" badges.
   if (window.windyDropLibrary && typeof window.windyDropLibrary.onLibraryChanged === "function") {
     window.windyDropLibrary.onLibraryChanged(async () => {
       await refreshDropMenu();
+      if (isMarketOpen()) await refreshMarketCatalog();
     });
   }
 

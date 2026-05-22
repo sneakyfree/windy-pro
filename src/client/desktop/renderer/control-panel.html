@@ -117,6 +117,141 @@
     border: 0;
     display: block;
   }
+
+  /* In-window marketplace view (Phase 3d).
+   * Overlays the iframe area when the user clicks "Get more drops".
+   * Hidden by default; .open shows it. */
+  #marketplace {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #0b1020 0%, #060a14 100%);
+    overflow-y: auto;
+    display: none;
+    z-index: 5;
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+  #marketplace.open { display: block; }
+  #marketplace .market-shell {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 32px 24px 48px;
+  }
+  #marketplace .market-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+    color: #e0e8ff;
+  }
+  #marketplace .market-back {
+    background: transparent;
+    border: 1px solid #2a3550;
+    color: #e0e8ff;
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  #marketplace .market-back:hover { border-color: #4a6090; background: rgba(80, 120, 255, 0.05); }
+  #marketplace h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  #marketplace .market-subtitle {
+    color: #6a7898;
+    font-size: 13px;
+    margin: 4px 0 0;
+  }
+  #marketplace .market-state {
+    color: #6a7898;
+    font-size: 13px;
+    text-align: center;
+    padding: 48px 0;
+  }
+  #marketplace .market-state.error { color: #ffaaaa; }
+  #marketplace .market-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  #marketplace .market-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid #1a2540;
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  #marketplace .market-card:hover { border-color: #4a6090; transform: translateY(-2px); }
+  #marketplace .market-card .card-type {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6ea8fe;
+  }
+  #marketplace .market-card .card-name {
+    font-size: 17px;
+    font-weight: 600;
+    color: #e0e8ff;
+  }
+  #marketplace .market-card .card-subtitle {
+    font-size: 13px;
+    color: #99a4c0;
+    line-height: 1.4;
+    flex: 1;
+    min-height: 36px;
+  }
+  #marketplace .market-card .card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  #marketplace .market-card button {
+    background: linear-gradient(135deg, #4060a0, #2b3f6b);
+    color: #fff;
+    border: 1px solid #4a6090;
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    transition: filter 0.15s;
+  }
+  #marketplace .market-card button:hover:not(:disabled) { filter: brightness(1.15); }
+  #marketplace .market-card button:disabled {
+    background: transparent;
+    border-color: #2a3550;
+    color: #6a7898;
+    cursor: default;
+  }
+  #marketplace .market-card .card-author {
+    font-size: 12px;
+    color: #6a7898;
+    margin-top: 4px;
+  }
+  #marketplace .market-card .badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  #marketplace .market-card .badge.installed {
+    background: rgba(110, 168, 254, 0.15);
+    color: #6ea8fe;
+  }
+  #marketplace .market-card .badge.builtin {
+    background: rgba(120, 200, 140, 0.12);
+    color: #78c88c;
+  }
 </style>
 </head>
 <body>
@@ -137,7 +272,22 @@
     </div>
   </div>
   <div id="status">⏳ Loading…</div>
-  <div id="frame-host"></div>
+  <div id="frame-host">
+    <div id="marketplace" role="dialog" aria-label="Browse drops">
+      <div class="market-shell">
+        <div class="market-header">
+          <button class="market-back" type="button" id="market-back">← Back</button>
+          <div>
+            <h1>Get more drops</h1>
+            <p class="market-subtitle">Tap a card to add it to your panel.</p>
+          </div>
+        </div>
+        <div id="market-body">
+          <div class="market-state">⏳ Loading drops from the marketplace…</div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 <script type="module" src="../control-panel/renderer.js"></script>
 </body>
