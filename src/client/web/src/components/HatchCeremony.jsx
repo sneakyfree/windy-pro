@@ -241,11 +241,17 @@ export default function HatchCeremony({ token, onDone }) {
     }
 
     const handleTalkToAgent = () => {
-        // Navigate to /app/fly with the dm_room_id (if any). Known gotcha:
-        // dm_room_id can be null on chat.provisioned — the agent will
-        // materialize the room on first message send.
-        const qs = dmRoomId ? `?dm_room_id=${encodeURIComponent(dmRoomId)}` : ''
-        navigate(`/app/fly${qs}`)
+        // Take the freshly-hatched user straight to app.windychat.ai
+        // where the agent actually responds. The legacy /app/fly panel
+        // polls a "runtime online" flag that never comes up and ends
+        // up showing "Hatched — runtime offline" right after hatch —
+        // grandma's first moment with her new helper should be the
+        // agent saying hi, not a status error.
+        const jwt = localStorage.getItem('windy_token') || ''
+        const url = new URL('https://app.windychat.ai/')
+        if (dmRoomId) url.searchParams.set('agent_room', dmRoomId)
+        if (jwt) url.hash = `token=${encodeURIComponent(jwt)}`
+        window.location.href = url.toString()
     }
 
     const handleDone = () => {
