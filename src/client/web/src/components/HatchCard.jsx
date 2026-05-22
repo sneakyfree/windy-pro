@@ -62,8 +62,20 @@ export default function HatchCard({ ecosystem = null }) {
 
     const handleClick = () => {
         if (alreadyHatched) {
-            const qs = dmRoomId ? `?dm_room_id=${encodeURIComponent(dmRoomId)}` : ''
-            navigate(`/app/fly${qs}`)
+            // Send the user straight to app.windychat.ai where the agent
+            // actually responds (windy-chat agent-roster service). The
+            // in-product /app/fly panel is legacy — it polls Pro for a
+            // local "runtime online" check that never comes up, and
+            // grandma ends up staring at "Hatched — runtime offline."
+            //
+            // SSO handoff: the chat web app reads #token=<pro_jwt> and
+            // calls /unified-login. The agent_room query param tells
+            // ChatPage to auto-select the DM room with the agent.
+            const jwt = localStorage.getItem('windy_token') || ''
+            const url = new URL('https://app.windychat.ai/')
+            if (dmRoomId) url.searchParams.set('agent_room', dmRoomId)
+            if (jwt) url.hash = `token=${encodeURIComponent(jwt)}`
+            window.location.href = url.toString()
         } else {
             navigate('/hatch')
         }
