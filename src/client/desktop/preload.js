@@ -120,6 +120,10 @@ contextBridge.exposeInMainWorld('windyAPI', {
 
   // ═══ Navigation & External ════════════════════════════════════
   openChat: () => ipcRenderer.send('open-windy-chat'),
+  // Control Panel — opens the WD-31 M-G window, which loads the
+  // Echo HQ drop from the vendored bundle. See main.js
+  // showControlPanelWindow().
+  openControlPanel: () => ipcRenderer.send('open-control-panel'),
   openExternal: (url) => ipcRenderer.invoke('open-external-url', url),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
   launchWindyCode: () => ipcRenderer.invoke('launch-windy-code'),

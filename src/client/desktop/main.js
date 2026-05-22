@@ -1684,6 +1684,81 @@ function showChatWindow() {
 // Chat IPC — open from renderer
 ipcMain.on('open-windy-chat', () => showChatWindow());
 
+// ═══ Control Panel (WD-31 M-G; ADR-054) ═════════════════════════
+// IPC handler that returns the local-machine Vitals v1 payload to any
+// drop template that calls window.windyVitals.get() from a Control
+// Panel-window renderer. The collector is the CJS port of
+// @windy/control-panel-host-electron/collect — see
+// src/client/desktop/control-panel/VENDOR_README.md.
+const controlPanelCollector = require('./control-panel/vendor/collect.cjs');
+ipcMain.handle('windy:control-panel:vitals', async () => {
+  try {
+    const vitals = await controlPanelCollector.collect();
+    return { ok: true, vitals };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+// Control Panel window — separate BrowserWindow so the renderer can be
+// a focused single-purpose host (template iframe + data feed) without
+// touching the main app's chrome. Sandboxed preload exposes
+// windowVitals.get() via the IPC channel registered above.
+let controlPanelWindow = null;
+function showControlPanelWindow() {
+  if (controlPanelWindow && !controlPanelWindow.isDestroyed()) {
+    controlPanelWindow.show();
+    controlPanelWindow.focus();
+    return;
+  }
+  controlPanelWindow = new BrowserWindow({
+    width: 1400,
+    height: 900,
+    minWidth: 900,
+    minHeight: 600,
+    frame: true,
+    title: 'Control Panel',
+    backgroundColor: '#060a14',
+    icon: path.join(__dirname, '..', '..', '..', 'assets', 'icon.png'),
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      preload: path.join(__dirname, 'control-panel', 'preload.js'),
+    },
+  });
+  controlPanelWindow.loadFile(path.join(__dirname, 'renderer', 'control-panel.html'));
+  controlPanelWindow.on('closed', () => { controlPanelWindow = null; });
+  if (process.argv.includes('--dev')) {
+    controlPanelWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+}
+ipcMain.on('open-control-panel', () => showControlPanelWindow());
+
+// Auth-token bridge for the Control Panel window. The main renderer
+// stores `windy_token` in its localStorage; the child window has its
+// own storage scope, so we proxy the read through executeJavaScript
+// on the main window. Returns null if main isn't up or the token
+// isn't set yet.
+ipcMain.handle('control-panel:get-token', async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  try {
+    const token = await mainWindow.webContents.executeJavaScript(
+      `(typeof localStorage !== 'undefined' && localStorage.getItem('windy_token')) || null`,
+    );
+    return token || null;
+  } catch {
+    return null;
+  }
+});
+
+// Account-server base URL — environment-controlled so flipping between
+// dev (http://localhost:3334) and prod (https://account.windyword.ai)
+// doesn't require a rebuild.
+ipcMain.handle('control-panel:account-server-url', async () => {
+  return process.env.WINDY_ACCOUNT_SERVER_URL || 'https://account.windyword.ai';
+});
+
 // Launch Windy Code desktop app
 ipcMain.handle('launch-windy-code', async () => {
   const { shell } = require('electron');

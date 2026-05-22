@@ -66,12 +66,39 @@ class EcosystemNav {
         tagline: 'Your personal AI, born into the ecosystem.',
         preview: 'An AI agent that\'s born connected — with its own chat identity, email inbox, phone number, and verified passport. It works while you sleep.',
         comingSoonFeatures: ['Personality sliders (humor, formality, creativity...)', 'Memory management and skill learning', 'Born with Windy Chat + Windy Mail identity', 'Eternitas-verified passport from day one']
+      },
+      // WD-31 M-G — Control Panel surface. Opens in its own
+      // BrowserWindow (see main.js showControlPanelWindow); the nav
+      // tile is a launcher, not a webview, so it follows the 'code'
+      // pattern in navigate() — clicking doesn't change activeProduct.
+      controlPanel: {
+        name: 'Control Panel',
+        icon: '🖥️',
+        url: null,
+        localUrl: null,
+        description: 'Watch this machine + your fleet in a single beautiful dashboard.',
+        tagline: 'Echo HQ — the box you\'re sitting at, beautified.',
+        preview: 'Real CPU/RAM/disk/network/load + every agent in your fleet, rendered through swappable templates. Pick a different look from Windy Drops anytime.',
+        comingSoonFeatures: ['Cyberpunk-vitals Echo HQ included', 'Pick any community template from Windy Drops', 'Same view in the browser + desktop', 'Multi-agent fleet grid']
       }
     };
 
     this.bindEvents();
     this.startBadgePolling();
     this.watchRecordingState();
+    this.maybePulseControlPanel();
+  }
+
+  /**
+   * WD-31 M-H — pulse the Control Panel tile once-per-user as a
+   * call-to-action. Stops on first click (localStorage flag).
+   */
+  maybePulseControlPanel() {
+    try {
+      if (localStorage.getItem('windy_control_panel_clicked')) return;
+    } catch { /* private mode etc. — fall through to pulse */ }
+    const btn = document.querySelector('[data-product="controlPanel"]');
+    if (btn) btn.classList.add('eco-pulse');
   }
 
   bindEvents() {
@@ -238,6 +265,18 @@ class EcosystemNav {
       this.showWord();
     } else if (product === 'code') {
       this.launchWindyCode();
+      this.activeProduct = previousProduct;
+      document.querySelectorAll('.eco-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector(`[data-product="${previousProduct}"]`)?.classList.add('active');
+    } else if (product === 'controlPanel') {
+      // Launches the Control Panel BrowserWindow (WD-31 M-G); doesn't
+      // hijack the current tab — same pattern as 'code'.
+      if (window.windyAPI?.openControlPanel) {
+        window.windyAPI.openControlPanel();
+      }
+      // Stop the M-H pulse — they've seen it.
+      try { localStorage.setItem('windy_control_panel_clicked', '1'); } catch { /* noop */ }
+      document.querySelector('[data-product="controlPanel"]')?.classList.remove('eco-pulse');
       this.activeProduct = previousProduct;
       document.querySelectorAll('.eco-btn').forEach(b => b.classList.remove('active'));
       document.querySelector(`[data-product="${previousProduct}"]`)?.classList.add('active');

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Panel — Windy Word</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; padding: 0; background: #060a14; color: #e0e8ff; height: 100%; }
+  body { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  #shell { display: flex; flex-direction: column; height: 100vh; }
+  #status {
+    padding: 4px 12px;
+    background: rgba(0, 180, 255, 0.06);
+    border-bottom: 1px solid #1a2540;
+    font-size: 11px;
+    color: #5a7090;
+    letter-spacing: 1px;
+  }
+  #status.error { background: rgba(255, 100, 100, 0.1); color: #ffaaaa; }
+  #frame-host { flex: 1 1 auto; position: relative; overflow: hidden; }
+  #frame-host > iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+  }
+</style>
+</head>
+<body>
+<div id="shell">
+  <div id="status">⏳ Loading Echo HQ…</div>
+  <div id="frame-host"></div>
+</div>
+<script type="module" src="../control-panel/renderer.js"></script>
+</body>
+</html>

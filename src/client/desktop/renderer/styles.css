@@ -6206,6 +6206,27 @@ body.light-mode .slib-tab-active {
   background: rgba(139, 92, 246, 0.08);
 }
 
+/* WD-31 M-H — pulse the Control Panel tile so a freshly-hatched user
+ * notices it. Toggle .eco-pulse on the tile's button after hatch
+ * completes; remove on first click (handled in ecosystem-nav.js). */
+.eco-btn.eco-pulse {
+  position: relative;
+}
+.eco-btn.eco-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  box-shadow: 0 0 0 0 rgba(0, 180, 255, 0.6);
+  animation: eco-pulse-shadow 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes eco-pulse-shadow {
+  0%   { box-shadow: 0 0 0 0 rgba(0, 180, 255, 0.55); }
+  60%  { box-shadow: 0 0 0 10px rgba(0, 180, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 180, 255, 0); }
+}
+
 .eco-icon {
   font-size: 14px;
   line-height: 1;
