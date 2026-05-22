@@ -35,7 +35,10 @@ CREATE TABLE IF NOT EXISTS users (
     phone_verified BOOLEAN DEFAULT false,
     passport_id TEXT,
     preferred_lang TEXT DEFAULT 'en',
-    last_login_at TIMESTAMPTZ
+    last_login_at TIMESTAMPTZ,
+    -- Wave E: windy-connect pair tracking (see migration 004)
+    connect_paired_at TIMESTAMPTZ,
+    connect_bundle_version TEXT
 );
 
 CREATE TABLE IF NOT EXISTS devices (
