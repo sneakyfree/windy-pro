@@ -1,6 +1,6 @@
 {
   "name": "windy-pro",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "description": "Windy Word — voice-to-text desktop app for the Windy ecosystem",
   "main": "src/client/desktop/main.js",
   "author": {
