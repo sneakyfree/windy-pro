@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Echo HQ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+// Canonical postMessage wrapper for control-panel-template drops.
+// Imports the drop's render.js + wires the ADR-053 sandbox protocol.
+// Once the windy-drops SDK auto-generates render.html during bundle
+// (planned), template authors can delete this file from their repos.
+import { render } from "./render.js";
+
+function send(msg) {
+  parent.postMessage(msg, "*");
+}
+
+window.addEventListener("message", (event) => {
+  const msg = event.data || {};
+  if (msg.type !== "data-update" && msg.type !== "mock-data") return;
+  try {
+    render(msg.payload.vitals, msg.payload.fleet);
+    send({ type: "rendered" });
+  } catch (err) {
+    send({ type: "error", error: err && err.message ? err.message : String(err) });
+  }
+});
+
+// Signal readiness once the module has loaded + the listener is wired.
+send({ type: "ready" });
+</script>
+</body>
+</html>
