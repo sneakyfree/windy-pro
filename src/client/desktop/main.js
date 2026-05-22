@@ -1759,6 +1759,79 @@ ipcMain.handle('control-panel:account-server-url', async () => {
   return process.env.WINDY_ACCOUNT_SERVER_URL || 'https://account.windyword.ai';
 });
 
+// ─── Drop library (WD-31 Phase 3a) ───────────────────────────────────
+// In-Electron marketplace plumbing. The library service tracks which
+// drops the user has installed + which one is currently selected. Echo
+// HQ is built-in (ships with the DMG) so first-run + offline-mode are
+// always covered without a network round-trip.
+const controlPanelLibrary = require('./control-panel/library-service.js');
+
+function userDataDir() {
+  return app.getPath('userData');
+}
+
+ipcMain.handle('windy:control-panel:list-installed', async () => {
+  try {
+    return { ok: true, drops: controlPanelLibrary.listAll(userDataDir()) };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('windy:control-panel:get-selected', async () => {
+  try {
+    return { ok: true, selected: controlPanelLibrary.getSelected(userDataDir()) };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('windy:control-panel:select-drop', async (_event, { dropId, version }) => {
+  try {
+    const selected = controlPanelLibrary.setSelected(userDataDir(), dropId, version);
+    // Notify the Control Panel renderer so it can reload the iframe.
+    if (controlPanelWindow && !controlPanelWindow.isDestroyed()) {
+      controlPanelWindow.webContents.send('windy:control-panel:selection-changed', selected);
+    }
+    return { ok: true, selected };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('windy:control-panel:install-drop', async (_event, manifest) => {
+  try {
+    const entry = controlPanelLibrary.installDrop(userDataDir(), manifest);
+    if (controlPanelWindow && !controlPanelWindow.isDestroyed()) {
+      controlPanelWindow.webContents.send('windy:control-panel:library-changed');
+    }
+    return { ok: true, drop: entry };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('windy:control-panel:uninstall-drop', async (_event, dropId) => {
+  try {
+    const result = controlPanelLibrary.uninstallDrop(userDataDir(), dropId);
+    if (controlPanelWindow && !controlPanelWindow.isDestroyed()) {
+      controlPanelWindow.webContents.send('windy:control-panel:library-changed');
+    }
+    return { ok: true, ...result };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('windy:control-panel:browse-registry', async (_event, query) => {
+  try {
+    const body = await controlPanelLibrary.browseRegistry(query || {});
+    return { ok: true, ...body };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
 // Launch Windy Code desktop app
 ipcMain.handle('launch-windy-code', async () => {
   const { shell } = require('electron');
