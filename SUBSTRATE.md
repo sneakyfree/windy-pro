@@ -188,7 +188,7 @@ Per `[[feedback_wrangler_pages_deploy_dir]]`: ALWAYS deploy `dist`, NEVER `.` �
 5. Verify:
    - `curl https://account.windyword.ai/health` → `{"status":"healthy"}`
    - `curl https://account.windyword.ai/.well-known/jwks.json` → JWKS with `kid 558f` (or whatever current kid)
-   - Per `[[feedback_jwks_split_brain]]` — `api.windyword.ai` is a zombie; DO NOT use that host.
+   - Per `[[feedback_jwks_split_brain]]` — the legacy `api.*` host is a zombie that still serves stale RS256 keys; DO NOT use it. Only `account.windyword.ai` is canonical.
 
 ### translate-api cold-start
 
@@ -219,7 +219,7 @@ Per `[[feedback_wrangler_pages_deploy_dir]]`: ALWAYS deploy `dist`, NEVER `.` �
 - eternitas SUBSTRATE.md (shared host): `/Users/thewindstorm/eternitas/deploy-prod/SUBSTRATE.md`
 - PR #137 — compose-name migration (the 2026-05-20 incident)
 - Memory: `feedback_windypro_volume_collision_2026_05_20.md`
-- Memory: `feedback_jwks_split_brain.md` (account.windyword.ai live; api.windyword.ai zombie)
+- Memory: `feedback_jwks_split_brain.md` (account.windyword.ai live; legacy `api.*` host is zombie)
 - Memory: `feedback_chat_identity_conflation.md` (service-token discipline)
 - Memory: `feedback_eternitas_platform_autodeactivate.md`
 - Memory: `feedback_wrangler_pages_deploy_dir.md`
