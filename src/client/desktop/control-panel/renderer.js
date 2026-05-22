@@ -23,10 +23,58 @@ const BUILTIN_ECHO_HQ_ID = "windy-echo-hq";
 
 const statusEl = document.getElementById("status");
 const hostEl = document.getElementById("frame-host");
+const dropCurrentBtn = document.getElementById("drop-current");
+const dropCurrentName = document.getElementById("drop-current-name");
+const dropMenu = document.getElementById("drop-menu");
+const topbarCta = document.getElementById("topbar-cta");
 
 function setStatus(text, isError = false) {
   statusEl.textContent = text;
   statusEl.classList.toggle("error", !!isError);
+}
+
+function setCurrentName(name) {
+  if (dropCurrentName) dropCurrentName.textContent = name;
+}
+
+function closeDropMenu() {
+  if (dropMenu) dropMenu.classList.remove("open");
+  if (dropCurrentBtn) dropCurrentBtn.setAttribute("aria-expanded", "false");
+}
+
+function openDropMenu() {
+  if (dropMenu) dropMenu.classList.add("open");
+  if (dropCurrentBtn) dropCurrentBtn.setAttribute("aria-expanded", "true");
+}
+
+function isDropMenuOpen() {
+  return dropMenu && dropMenu.classList.contains("open");
+}
+
+function renderDropMenu(drops, selected) {
+  if (!dropMenu) return;
+  dropMenu.innerHTML = drops
+    .map((d) => {
+      const isSelected = selected && d.id === selected.id && d.version === selected.version;
+      const sourceLabel = d.source === "builtin" ? "built-in" : "installed";
+      return `
+        <div class="drop-menu-item${isSelected ? " selected" : ""}"
+             role="option"
+             data-drop-id="${escapeAttr(d.id)}"
+             data-drop-version="${escapeAttr(d.version)}">
+          <span class="name">${escapeText(d.name || d.id)}</span>
+          <span class="source">${sourceLabel}</span>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function escapeText(s) {
+  return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+}
+function escapeAttr(s) {
+  return String(s).replace(/["&<>]/g, (c) => ({ '"': "&quot;", "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
 }
 
 // Built-in Echo HQ ships with the Pro DMG under
@@ -177,6 +225,74 @@ async function main() {
     return;
   }
   mountDrop(initialDrop);
+  setCurrentName(initialDrop.name || initialDrop.id);
+
+  // ─── Top-bar drop selector wiring ─────────────────────────────────
+  async function refreshDropMenu() {
+    if (typeof window.windyDropLibrary === "undefined") {
+      if (dropCurrentBtn) dropCurrentBtn.setAttribute("disabled", "");
+      return;
+    }
+    const [listRes, selRes] = await Promise.all([
+      window.windyDropLibrary.listInstalled(),
+      window.windyDropLibrary.getSelected(),
+    ]);
+    const drops = listRes && listRes.ok ? listRes.drops : [];
+    const sel = selRes && selRes.ok ? selRes.selected : null;
+    renderDropMenu(drops, sel);
+  }
+
+  await refreshDropMenu();
+
+  // Toggle the dropdown on the current-drop button.
+  if (dropCurrentBtn) {
+    dropCurrentBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (isDropMenuOpen()) closeDropMenu();
+      else openDropMenu();
+    });
+  }
+
+  // Click on a menu item = pick that drop.
+  if (dropMenu) {
+    dropMenu.addEventListener("click", async (e) => {
+      const item = e.target.closest(".drop-menu-item");
+      if (!item) return;
+      const dropId = item.getAttribute("data-drop-id");
+      const version = item.getAttribute("data-drop-version");
+      closeDropMenu();
+      if (!dropId || !version) return;
+      if (activeDrop && dropId === activeDrop.id && version === activeDrop.version) return;
+      if (typeof window.windyDropLibrary !== "undefined") {
+        const res = await window.windyDropLibrary.selectDrop(dropId, version);
+        if (res && res.ok) {
+          // The onSelectionChanged subscription below picks it up and
+          // remounts; this is just a feedback hint while that fires.
+          setStatus(`⏳ Switching to ${dropId}…`);
+        } else {
+          setStatus(`⚠️ Could not switch drops: ${res && res.error ? res.error : "unknown error"}`, true);
+        }
+      }
+    });
+  }
+
+  // Click anywhere else = close dropdown.
+  document.addEventListener("click", (e) => {
+    if (!isDropMenuOpen()) return;
+    if (!e.target.closest("#drop-selector")) closeDropMenu();
+  });
+
+  // ─── "Get more drops" button ──────────────────────────────────────
+  // Phase 3d will replace this with the in-window marketplace view.
+  // For now it pops a temporary status hint so the affordance feels
+  // real but advertises "Coming soon" rather than nothing.
+  if (topbarCta) {
+    topbarCta.addEventListener("click", () => {
+      setStatus(
+        "🛒 Marketplace browser lands in the next release — for now, visit https://windydrops.com to see what's available.",
+      );
+    });
+  }
 
   // Vitals tick — 1Hz. Push to whichever host is currently mounted.
   let vitalsTimer = null;
@@ -223,10 +339,19 @@ async function main() {
   if (window.windyDropLibrary && typeof window.windyDropLibrary.onSelectionChanged === "function") {
     window.windyDropLibrary.onSelectionChanged(async () => {
       const next = await resolveSelectedDrop();
-      if (!next || (activeDrop && next.id === activeDrop.id && next.version === activeDrop.version)) {
-        return;
+      if (!next) return;
+      if (!activeDrop || next.id !== activeDrop.id || next.version !== activeDrop.version) {
+        mountDrop(next);
       }
-      mountDrop(next);
+      setCurrentName(next.name || next.id);
+      await refreshDropMenu();
+    });
+  }
+  // React to library changes (install / uninstall) — refresh the menu
+  // so newly-installed drops appear without restart.
+  if (window.windyDropLibrary && typeof window.windyDropLibrary.onLibraryChanged === "function") {
+    window.windyDropLibrary.onLibraryChanged(async () => {
+      await refreshDropMenu();
     });
   }
 

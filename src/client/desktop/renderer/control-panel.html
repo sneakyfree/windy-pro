@@ -8,6 +8,95 @@
   html, body { margin: 0; padding: 0; background: #060a14; color: #e0e8ff; height: 100%; }
   body { font-family: ui-monospace, Menlo, Consolas, monospace; }
   #shell { display: flex; flex-direction: column; height: 100vh; }
+
+  /* Top bar: drop selector (left) + "Get more drops" CTA (right). */
+  #topbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.35);
+    border-bottom: 1px solid #1a2540;
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    -webkit-app-region: drag;
+  }
+  #topbar .group { display: flex; align-items: center; gap: 8px; -webkit-app-region: no-drag; }
+  #topbar button {
+    -webkit-app-region: no-drag;
+    background: transparent;
+    color: #e0e8ff;
+    border: 1px solid #2a3550;
+    border-radius: 6px;
+    padding: 5px 12px;
+    cursor: pointer;
+    font: inherit;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  #topbar button:hover { border-color: #4a6090; background: rgba(80, 120, 255, 0.05); }
+  #drop-selector {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #drop-current {
+    font-weight: 500;
+    color: #e0e8ff;
+  }
+  #drop-current::after {
+    content: "▾";
+    margin-left: 6px;
+    color: #5a7090;
+  }
+  #drop-current[disabled] { cursor: not-allowed; opacity: 0.6; }
+  #drop-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background: #0e1424;
+    border: 1px solid #2a3550;
+    border-radius: 8px;
+    min-width: 240px;
+    padding: 4px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+    z-index: 10;
+    display: none;
+  }
+  #drop-menu.open { display: block; }
+  .drop-menu-item {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #c0c8e8;
+  }
+  .drop-menu-item:hover { background: rgba(80, 120, 255, 0.1); color: #fff; }
+  .drop-menu-item.selected {
+    background: rgba(80, 120, 255, 0.15);
+    color: #fff;
+  }
+  .drop-menu-item.selected::after {
+    content: "✓";
+    float: right;
+    color: #6ea8fe;
+  }
+  .drop-menu-item .name { font-weight: 500; }
+  .drop-menu-item .source {
+    font-size: 11px;
+    color: #6a7898;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  #topbar-cta {
+    background: linear-gradient(135deg, #4060a0, #2b3f6b) !important;
+    border-color: #4a6090 !important;
+  }
+  #topbar-cta:hover { background: linear-gradient(135deg, #5070b0, #3a4f7b) !important; }
+
   #status {
     padding: 4px 12px;
     background: rgba(0, 180, 255, 0.06);
@@ -15,8 +104,10 @@
     font-size: 11px;
     color: #5a7090;
     letter-spacing: 1px;
+    flex: 0 0 auto;
   }
   #status.error { background: rgba(255, 100, 100, 0.1); color: #ffaaaa; }
+
   #frame-host { flex: 1 1 auto; position: relative; overflow: hidden; }
   #frame-host > iframe {
     position: absolute;
@@ -30,7 +121,22 @@
 </head>
 <body>
 <div id="shell">
-  <div id="status">⏳ Loading Echo HQ…</div>
+  <div id="topbar">
+    <div class="group">
+      <div id="drop-selector">
+        <button id="drop-current" type="button" aria-haspopup="listbox" aria-expanded="false">
+          <span id="drop-current-name">Loading…</span>
+        </button>
+        <div id="drop-menu" role="listbox"></div>
+      </div>
+    </div>
+    <div class="group">
+      <button id="topbar-cta" type="button" title="Browse + install drops from the registry">
+        + Get more drops
+      </button>
+    </div>
+  </div>
+  <div id="status">⏳ Loading…</div>
   <div id="frame-host"></div>
 </div>
 <script type="module" src="../control-panel/renderer.js"></script>
