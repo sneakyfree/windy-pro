@@ -98,6 +98,25 @@ body {
     font-weight: 700;
 }
 
+/* M-H thermal warning chip — sits between header + heartbeat. */
+.echo-thermal-chip {
+    margin: 0 0 12px;
+    padding: 8px 14px;
+    background: rgba(255, 80, 60, 0.08);
+    border: 1px solid #ff5040;
+    border-radius: 8px;
+    color: #ffb0a0;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-align: center;
+    animation: echo-thermal-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes echo-thermal-pulse {
+    0%, 100% { box-shadow: 0 0 6px rgba(255, 80, 60, 0.25); }
+    50%      { box-shadow: 0 0 16px rgba(255, 80, 60, 0.55); }
+}
+
 /* Heartbeat line */
 
 .echo-heartbeat {

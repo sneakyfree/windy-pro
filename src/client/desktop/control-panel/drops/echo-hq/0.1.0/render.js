@@ -202,6 +202,14 @@ export function render(vitals, fleet) {
   const tiles = [selfKitCard(vitals)];
   for (const agent of fleet.agents) tiles.push(agentKitCard(agent));
 
+  // M-H thermal warning chip — CPU >90% over a single sample is a
+  // signal of a runaway job (the average is over a 100ms window so a
+  // brief spike won't latch). Honest, not alarmist.
+  const thermalChip =
+    vitals.cpu.avg_utilization_pct > 90
+      ? `<div class="echo-thermal-chip">🔥 CPU &gt;90% — check for runaway jobs</div>`
+      : "";
+
   // ── write DOM ──────────────────────────────────────────────────
   root.innerHTML = `
 <div class="echo-shell">
@@ -222,6 +230,7 @@ export function render(vitals, fleet) {
       <div><span class="echo-header-stat-label">PROCS</span><div class="echo-header-stat-value">${vitals.processes.all}</div></div>
     </div>
   </div>
+  ${thermalChip}
 
   <div class="echo-heartbeat">
     <svg viewBox="0 0 2400 80" preserveAspectRatio="none">

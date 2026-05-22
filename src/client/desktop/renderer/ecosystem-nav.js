@@ -86,6 +86,19 @@ class EcosystemNav {
     this.bindEvents();
     this.startBadgePolling();
     this.watchRecordingState();
+    this.maybePulseControlPanel();
+  }
+
+  /**
+   * WD-31 M-H — pulse the Control Panel tile once-per-user as a
+   * call-to-action. Stops on first click (localStorage flag).
+   */
+  maybePulseControlPanel() {
+    try {
+      if (localStorage.getItem('windy_control_panel_clicked')) return;
+    } catch { /* private mode etc. — fall through to pulse */ }
+    const btn = document.querySelector('[data-product="controlPanel"]');
+    if (btn) btn.classList.add('eco-pulse');
   }
 
   bindEvents() {
@@ -261,6 +274,9 @@ class EcosystemNav {
       if (window.windyAPI?.openControlPanel) {
         window.windyAPI.openControlPanel();
       }
+      // Stop the M-H pulse — they've seen it.
+      try { localStorage.setItem('windy_control_panel_clicked', '1'); } catch { /* noop */ }
+      document.querySelector('[data-product="controlPanel"]')?.classList.remove('eco-pulse');
       this.activeProduct = previousProduct;
       document.querySelectorAll('.eco-btn').forEach(b => b.classList.remove('active'));
       document.querySelector(`[data-product="${previousProduct}"]`)?.classList.add('active');
