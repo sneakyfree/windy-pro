@@ -317,6 +317,17 @@ export default function Dashboard() {
                             // windy_connect: { status: 'available' } so the badge
                             // renders purple "Available" matching the others.
                             { key: 'windy_connect', label: 'Windy Connect', icon: '🔌', href: 'https://windyconnect.com' },
+                            // Windy Drops — the open marketplace for the Windy
+                            // ecosystem (WD-31). Marketing/browse surface at
+                            // windydrops.com (CF Pages, sneakyfree/windy-drops-site);
+                            // registry API at api.windydrops.com; drop bundles at
+                            // drops.windydrops.com. The in-Pro install path lives
+                            // inside Windy Word's Control Panel (Phase 3 of WD-31,
+                            // shipped in v1.7.0 DMG 2026-05-22) — this web tile is
+                            // the discovery surface for browsers. Account-server
+                            // returns windy_drops: { status: 'available' } matching
+                            // the windy_connect/windy_mind/windy_search pattern.
+                            { key: 'windy_drops', label: 'Windy Drops', icon: '🌀', href: 'https://windydrops.com' },
                         ].map(p => {
                             const product = ecosystem.products?.[p.key] || {}
                             const status = p.comingSoon ? 'coming_soon' : (product.status || 'not_provisioned')
