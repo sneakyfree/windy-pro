@@ -164,7 +164,7 @@ async function resolveSelectedDrop() {
 
 async function main() {
   if (typeof window.windyAuth === "undefined" || typeof window.windyVitals === "undefined") {
-    setStatus("⚠️ Control Panel bridge unavailable — restart the app", true);
+    setStatus("⚠️ Control Panel can't reach the app — try restarting Windy Word.", true);
     return;
   }
 
@@ -178,7 +178,7 @@ async function main() {
   let latestVitals = await fetchVitals();
   let latestFleet = await fetchFleet(token, accountServerUrl);
   if (!latestVitals) {
-    setStatus("⚠️ Could not read local vitals — IPC bridge offline?", true);
+    setStatus("⚠️ Couldn't read this computer's health — try restarting Windy Word.", true);
     return;
   }
   if (!latestFleet) latestFleet = emptyFleet(latestVitals.host.hostname);
@@ -213,7 +213,7 @@ async function main() {
       window,
     });
     activeHost.on("ready", () =>
-      setStatus(`✓ ${drop.name || drop.id} live — vitals every ${VITALS_REFRESH_MS / 1000}s`),
+      setStatus(`✓ ${drop.name || drop.id} — updating every ${VITALS_REFRESH_MS / 1000}s`),
     );
     activeHost.on("error", ({ error }) => {
       setStatus(`⚠️ ${drop.name || drop.id} error: ${error}`, true);
@@ -266,14 +266,16 @@ async function main() {
       closeDropMenu();
       if (!dropId || !version) return;
       if (activeDrop && dropId === activeDrop.id && version === activeDrop.version) return;
+      // Read the friendly name from the menu item we just clicked so the
+      // status hint uses "Glance" not "windy-glance".
+      const nameEl = item.querySelector(".name");
+      const dropName = nameEl ? nameEl.textContent : dropId;
       if (typeof window.windyDropLibrary !== "undefined") {
         const res = await window.windyDropLibrary.selectDrop(dropId, version);
         if (res && res.ok) {
-          // The onSelectionChanged subscription below picks it up and
-          // remounts; this is just a feedback hint while that fires.
-          setStatus(`⏳ Switching to ${dropId}…`);
+          setStatus(`⏳ Switching to ${dropName}…`);
         } else {
-          setStatus(`⚠️ Could not switch drops: ${res && res.error ? res.error : "unknown error"}`, true);
+          setStatus(`⚠️ Couldn't switch to ${dropName} — try again.`, true);
         }
       }
     });
@@ -306,7 +308,7 @@ async function main() {
   async function refreshMarketCatalog() {
     if (!marketBodyEl) return;
     if (typeof window.windyDropLibrary === "undefined") {
-      marketBodyEl.innerHTML = `<div class="market-state error">⚠️ Drop library bridge unavailable — restart the app to use the marketplace.</div>`;
+      marketBodyEl.innerHTML = `<div class="market-state error">⚠️ The marketplace isn't available right now — try restarting Windy Word.</div>`;
       return;
     }
     marketBodyEl.innerHTML = `<div class="market-state">⏳ Loading drops from the marketplace…</div>`;
@@ -348,7 +350,7 @@ async function main() {
         if (!res || !res.ok) {
           btn.disabled = false;
           btn.textContent = "Try again";
-          setStatus(`⚠️ Install failed: ${res && res.error ? res.error : "unknown"}`, true);
+          setStatus(`⚠️ Couldn't install ${item.name || item.id}. Try again in a moment.`, true);
         }
         // onLibraryChanged → refreshDropMenu + refreshMarketCatalog (below).
       });
