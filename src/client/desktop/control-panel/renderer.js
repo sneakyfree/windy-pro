@@ -59,14 +59,27 @@ function renderDropMenu(drops, selected) {
   dropMenu.innerHTML = drops
     .map((d) => {
       const isSelected = selected && d.id === selected.id && d.version === selected.version;
-      const sourceLabel = d.source === "builtin" ? "built-in" : "installed";
+      const isBuiltin = d.source === "builtin";
+      const sourceLabel = isBuiltin ? "built-in" : "installed";
+      // Built-ins can't be removed (always the safe fallback); installed
+      // drops get a small × button on hover.
+      const removeBtn = isBuiltin
+        ? ""
+        : `<button class="drop-menu-remove" type="button" data-action="remove"
+                   data-drop-id="${escapeAttr(d.id)}"
+                   data-drop-name="${escapeAttr(d.name || d.id)}"
+                   title="Remove ${escapeAttr(d.name || d.id)} from your library"
+                   aria-label="Remove ${escapeAttr(d.name || d.id)}">×</button>`;
       return `
         <div class="drop-menu-item${isSelected ? " selected" : ""}"
              role="option"
              data-drop-id="${escapeAttr(d.id)}"
              data-drop-version="${escapeAttr(d.version)}">
-          <span class="name">${escapeText(d.name || d.id)}</span>
-          <span class="source">${sourceLabel}</span>
+          <div class="drop-menu-item-body">
+            <span class="name">${escapeText(d.name || d.id)}</span>
+            <span class="source">${sourceLabel}</span>
+          </div>
+          ${removeBtn}
         </div>
       `;
     })
@@ -256,9 +269,37 @@ async function main() {
     });
   }
 
-  // Click on a menu item = pick that drop.
+  // Click handler for the menu — picks a drop OR removes one depending
+  // on what was clicked.
   if (dropMenu) {
     dropMenu.addEventListener("click", async (e) => {
+      // Remove button: handle first so it doesn't fall through to select.
+      const removeBtn = e.target.closest("[data-action='remove']");
+      if (removeBtn) {
+        e.stopPropagation();
+        const dropId = removeBtn.getAttribute("data-drop-id");
+        const dropName = removeBtn.getAttribute("data-drop-name") || dropId;
+        if (!dropId) return;
+        // Confirm with a clear grandma-readable prompt before destructive op.
+        const ok = window.confirm(
+          `Remove ${dropName} from your library?\n\nYou can always re-install it from "Get more drops".`,
+        );
+        if (!ok) return;
+        closeDropMenu();
+        if (typeof window.windyDropLibrary !== "undefined") {
+          const res = await window.windyDropLibrary.uninstallDrop(dropId);
+          if (res && res.ok && res.removed) {
+            setStatus(`✓ Removed ${dropName}.`);
+          } else if (res && res.ok && !res.removed) {
+            setStatus(`${dropName} wasn't in your library.`);
+          } else {
+            setStatus(`⚠️ Couldn't remove ${dropName} — try again.`, true);
+          }
+        }
+        return;
+      }
+
+      // Select a drop: click anywhere else on the item.
       const item = e.target.closest(".drop-menu-item");
       if (!item) return;
       const dropId = item.getAttribute("data-drop-id");
@@ -266,8 +307,6 @@ async function main() {
       closeDropMenu();
       if (!dropId || !version) return;
       if (activeDrop && dropId === activeDrop.id && version === activeDrop.version) return;
-      // Read the friendly name from the menu item we just clicked so the
-      // status hint uses "Glance" not "windy-glance".
       const nameEl = item.querySelector(".name");
       const dropName = nameEl ? nameEl.textContent : dropId;
       if (typeof window.windyDropLibrary !== "undefined") {

@@ -68,11 +68,42 @@
   #drop-menu.open { display: block; }
   .drop-menu-item {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     padding: 8px 10px;
     border-radius: 4px;
     cursor: pointer;
     color: #c0c8e8;
+  }
+  .drop-menu-item-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+  .drop-menu-remove {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #6a7898;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, border-color 0.15s, background 0.15s;
+    flex: 0 0 auto;
+  }
+  .drop-menu-item:hover .drop-menu-remove { opacity: 0.7; }
+  .drop-menu-remove:hover {
+    opacity: 1 !important;
+    color: #ffaaaa;
+    border-color: #5a3030;
+    background: rgba(255, 100, 100, 0.08);
   }
   .drop-menu-item:hover { background: rgba(80, 120, 255, 0.1); color: #fff; }
   .drop-menu-item.selected {
