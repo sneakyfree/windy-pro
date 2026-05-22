@@ -814,6 +814,56 @@ router.post('/agent/provision', authenticateToken, async (req: Request, res: Res
   }
 });
 
+// POST /api/v1/identity/mail/address-by-windy-id — service-token lookup
+//
+// Returns the mail address for the user identified by windy_identity_id,
+// or 404 if the user hasn't provisioned mail yet. Used by chat-side
+// services (specifically windy-chat's agent-roster) to look up mailbox
+// addresses without exposing user JWTs.
+//
+// Authenticated via the X-Service-Token header, matched against
+// CHAT_SERVICE_TOKEN. We use a header (not Authorization: Bearer)
+// because Bearer is reserved for user JWTs everywhere else on this
+// service and middleware overloads would be confusing. The header is
+// only honored when CHAT_SERVICE_TOKEN is configured AND the value
+// matches — empty/missing config refuses the call so a misconfigured
+// dev environment can't accidentally expose the lookup.
+router.post('/mail/address-by-windy-id', (req: Request, res: Response) => {
+  try {
+    const provided = req.headers['x-service-token'];
+    const expected = process.env.CHAT_SERVICE_TOKEN || '';
+    if (!expected || provided !== expected) {
+      return res.status(401).json({ error: 'Service token required' });
+    }
+    const windyId = (req.body && req.body.windy_identity_id) || '';
+    if (!windyId || typeof windyId !== 'string' || !/^[0-9a-f-]{36}$/i.test(windyId)) {
+      return res.status(400).json({ error: 'windy_identity_id (UUID) required' });
+    }
+    const db = getDb();
+    const row = db.prepare(
+      `SELECT pa.external_id, u.display_name, u.name
+         FROM product_accounts pa
+         JOIN users u ON u.id = pa.identity_id
+        WHERE u.windy_identity_id = ?
+          AND pa.product = 'windy_mail'
+          AND pa.status = 'active'
+        LIMIT 1`,
+    ).get(windyId) as { external_id: string | null; display_name: string | null; name: string | null } | undefined;
+
+    if (!row || !row.external_id) {
+      return res.status(404).json({ error: 'No active mail address for that windy_identity_id' });
+    }
+    res.json({
+      windy_identity_id: windyId,
+      mail_address: row.external_id,
+      display_name: row.display_name || row.name || null,
+    });
+  } catch (err: any) {
+    console.error('[identity] mail/address-by-windy-id error:', err?.message);
+    res.status(500).json({ error: 'Lookup failed' });
+  }
+});
+
 // GET /api/v1/identity/chat/profile — Get chat profile
 //
 // Returns the HUMAN caller's own chat profile. If the caller operates an
