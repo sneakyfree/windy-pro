@@ -32,3 +32,33 @@ contextBridge.exposeInMainWorld('windyAuth', {
 contextBridge.exposeInMainWorld('windyConfig', {
   accountServerUrl: () => ipcRenderer.invoke('control-panel:account-server-url'),
 });
+
+// Drop library (WD-31 Phase 3a) — lets the Control Panel renderer
+// list installed drops, switch between them, install new ones from the
+// registry, and uninstall. The renderer never sees the file system or
+// makes registry requests directly; everything flows through main.js
+// for sandbox safety + so the renderer stays small.
+contextBridge.exposeInMainWorld('windyDropLibrary', {
+  listInstalled: () => ipcRenderer.invoke('windy:control-panel:list-installed'),
+  getSelected: () => ipcRenderer.invoke('windy:control-panel:get-selected'),
+  selectDrop: (dropId, version) =>
+    ipcRenderer.invoke('windy:control-panel:select-drop', { dropId, version }),
+  installDrop: (manifest) =>
+    ipcRenderer.invoke('windy:control-panel:install-drop', manifest),
+  uninstallDrop: (dropId) =>
+    ipcRenderer.invoke('windy:control-panel:uninstall-drop', dropId),
+  browseRegistry: (query) =>
+    ipcRenderer.invoke('windy:control-panel:browse-registry', query),
+  // Subscribe to selection / library changes (main → renderer events).
+  // Returns an unsubscribe function so consumers can tear down listeners.
+  onSelectionChanged: (cb) => {
+    const handler = (_evt, payload) => cb(payload);
+    ipcRenderer.on('windy:control-panel:selection-changed', handler);
+    return () => ipcRenderer.removeListener('windy:control-panel:selection-changed', handler);
+  },
+  onLibraryChanged: (cb) => {
+    const handler = () => cb();
+    ipcRenderer.on('windy:control-panel:library-changed', handler);
+    return () => ipcRenderer.removeListener('windy:control-panel:library-changed', handler);
+  },
+});
