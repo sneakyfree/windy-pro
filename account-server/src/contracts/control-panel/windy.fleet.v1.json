@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://windydrops.com/schemas/windy.fleet.v1.json",
+  "title": "Fleet Protocol v1",
+  "description": "Per ADR-054. Per-user authenticated fleet response. Returned by GET /api/v1/me/fleet. Tier-1 free users get agents=[]; tier-2 credentialed users get one entry per windy_fly product_account.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "fetched_at", "user_id", "this_machine", "agents"],
+  "properties": {
+    "schema": { "const": "windy.fleet.v1" },
+    "fetched_at": { "type": "string", "format": "date-time" },
+    "user_id": { "type": "string", "minLength": 1 },
+    "this_machine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["is_user_device", "can_self_report", "vitals_url"],
+      "properties": {
+        "is_user_device": { "type": "boolean" },
+        "can_self_report": {
+          "type": "boolean",
+          "description": "true if a local Vitals source is available (Electron IPC, mobile bridge); false in plain browser."
+        },
+        "vitals_url": {
+          "type": ["string", "null"],
+          "description": "Pseudo-URL. 'ipc://…' = call the IPC bridge; 'internal' = call the account-server's /vitals; null = no source available."
+        }
+      }
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "callsign", "product", "status", "machine", "vitals_url", "auth", "created_at", "last_heartbeat"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "callsign": {
+            "type": ["string", "null"],
+            "description": "Optional; null for normie agents."
+          },
+          "product": { "type": "string", "minLength": 1 },
+          "status": {
+            "type": "string",
+            "enum": ["online", "offline", "unknown"]
+          },
+          "machine": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["model", "location"],
+            "properties": {
+              "model": { "type": "string" },
+              "location": {
+                "anyOf": [
+                  { "type": "null" },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["city", "region", "country"],
+                    "properties": {
+                      "city": { "type": "string" },
+                      "region": { "type": "string" },
+                      "country": { "type": "string" }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "vitals_url": { "type": "string", "minLength": 1 },
+          "auth": {
+            "type": "string",
+            "enum": ["cf-access", "bearer", "none"]
+          },
+          "created_at": { "type": "string", "format": "date-time" },
+          "last_heartbeat": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}

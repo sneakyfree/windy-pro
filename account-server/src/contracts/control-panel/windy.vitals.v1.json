@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://windydrops.com/schemas/windy.vitals.v1.json",
+  "title": "Vitals Protocol v1",
+  "description": "Per ADR-054. Standardized JSON shape returned by any Vitals source (Electron IPC, agent VPS, account-server, mobile, cloud aggregator). Strict: every field is required; optional fields use explicit null so templates can rely on the key existing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "sampled_at",
+    "source",
+    "host",
+    "cpu",
+    "gpu",
+    "memory",
+    "disk",
+    "network",
+    "load",
+    "processes",
+    "thermal"
+  ],
+  "properties": {
+    "schema": { "const": "windy.vitals.v1" },
+    "sampled_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp. Templates display 'as of …' and detect stale data."
+    },
+    "source": {
+      "type": "string",
+      "enum": ["electron-local", "agent-vps", "account-server", "mobile", "cloud-aggregator"],
+      "description": "Provenance. Templates can surface this (e.g. ⚡ local machine vs 📡 your VPS agent)."
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostname", "model", "platform", "release", "arch", "ip", "uptime_seconds", "location"],
+      "properties": {
+        "hostname": { "type": "string", "minLength": 1 },
+        "model": {
+          "type": ["string", "null"],
+          "description": "Friendly model name resolved per-platform; null if unknown."
+        },
+        "platform": {
+          "type": "string",
+          "enum": ["darwin", "linux", "win32", "ios", "android", "unknown"]
+        },
+        "release": { "type": "string", "description": "OS version string." },
+        "arch": { "type": "string", "description": "x64 | arm64 | etc." },
+        "ip": {
+          "type": ["string", "null"],
+          "description": "Primary IPv4; null if uninspectable."
+        },
+        "uptime_seconds": { "type": "number", "minimum": 0 },
+        "location": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["city", "region", "country"],
+              "properties": {
+                "city": { "type": "string" },
+                "region": { "type": "string" },
+                "country": { "type": "string" }
+              }
+            }
+          ],
+          "description": "{city,region,country} if user-permissioned; else null."
+        }
+      }
+    },
+    "cpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "cores", "avg_utilization_pct", "core_utilization_pct", "temperature_c"],
+      "properties": {
+        "model": { "type": "string" },
+        "cores": { "type": "integer", "minimum": 1 },
+        "avg_utilization_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+        "core_utilization_pct": {
+          "type": "array",
+          "items": { "type": "number", "minimum": 0, "maximum": 100 }
+        },
+        "temperature_c": { "type": ["number", "null"] }
+      }
+    },
+    "gpu": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model", "memory_total_bytes", "memory_used_bytes", "utilization_pct", "temperature_c"],
+          "properties": {
+            "model": { "type": "string" },
+            "memory_total_bytes": { "type": "integer", "minimum": 0 },
+            "memory_used_bytes": { "type": "integer", "minimum": 0 },
+            "utilization_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+            "temperature_c": { "type": ["number", "null"] }
+          }
+        }
+      ],
+      "description": "Optional. null when the platform reports no GPU."
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_bytes", "available_bytes", "used_pct"],
+      "properties": {
+        "total_bytes": { "type": "integer", "minimum": 0 },
+        "available_bytes": { "type": "integer", "minimum": 0 },
+        "used_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Honest: (total - available) / total."
+        }
+      }
+    },
+    "disk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_bytes", "used_bytes", "used_pct"],
+      "properties": {
+        "total_bytes": { "type": "integer", "minimum": 0 },
+        "used_bytes": { "type": "integer", "minimum": 0 },
+        "used_pct": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_tx_bytes_per_sec", "total_rx_bytes_per_sec"],
+      "properties": {
+        "total_tx_bytes_per_sec": { "type": "number", "minimum": 0 },
+        "total_rx_bytes_per_sec": { "type": "number", "minimum": 0 }
+      }
+    },
+    "load": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number", "minimum": 0 },
+      "description": "1m, 5m, 15m load averages."
+    },
+    "processes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all", "running", "sleeping"],
+      "properties": {
+        "all": { "type": "integer", "minimum": 0 },
+        "running": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "integer", "minimum": 0 }
+          ]
+        },
+        "sleeping": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "integer", "minimum": 0 }
+          ]
+        }
+      }
+    },
+    "thermal": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "temperature_c"],
+          "properties": {
+            "state": {
+              "type": "string",
+              "enum": ["ok", "fair", "serious", "critical"]
+            },
+            "temperature_c": { "type": ["number", "null"] }
+          }
+        }
+      ],
+      "description": "Optional. null when the platform reports no thermal state."
+    }
+  }
+}
