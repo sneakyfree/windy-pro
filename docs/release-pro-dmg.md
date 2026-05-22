@@ -1,8 +1,8 @@
 # Windy Word DMG release runbook
 
-The last-mile step to ship the in-Pro Control Panel marketplace to grandmas. Current public DMG is `Windy-Word-1.6.1-{arm64,x64}.dmg` from 2026-05-14 — predates the WD-31 Phase 3 work. This runbook builds + signs + notarizes + uploads a new DMG so end users get the marketplace experience.
+The recipe to build + sign + notarize + upload a Windy Word DMG. Used 2026-05-22 to ship v1.7.0 (in-Pro Control Panel marketplace) on top of the v1.6.1 foundation.
 
-Estimated wall-clock: ~45 min active + 15-60 min async notarization wait per arch.
+Estimated wall-clock: ~10 min active + ~16 min async notarization per arch (can run both archs in parallel) + ~30 min R2 upload (parallel).
 
 ## Prerequisites (one-time check)
 
@@ -40,34 +40,77 @@ Edit `package.json`'s `"version"` field accordingly. Commit.
 cd ~/windy-pro
 git checkout main && git pull --ff-only origin main
 
-# Make sure no stale build state.
-rm -rf dist node_modules/.cache
+# Make sure no stale build state — the build won't fail if dist exists
+# but the file timestamps from a partial prior build are confusing later.
+rm -rf "dist/Windy Word"*.dmg dist/mac dist/mac-arm64
 
 npm install
 npm run build:web   # bundle the SPA before the desktop build
 
-# Build both Mac architectures (electron-builder takes care of the afterPack
-# signing hook + native zsh-quote dance per [[feedback_electron_python_wheel_notarization]]).
-# electron-builder's `notarize: true` (per package.json) auto-submits + waits
-# when APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID are set.
-npm run build:mac   # produces dist/mac-arm64/*.dmg + dist/mac/*.dmg
+# Build both Mac architectures. The afterPack hook signs the bundled .app
+# (handles .whl recursion per [[feedback_electron_python_wheel_notarization]]).
+# IMPORTANT — must pass CODESIGN_IDENTITY to the afterPack hook environment,
+# otherwise it prints "CODESIGN_IDENTITY not set, skipping" and the .app
+# ships unsigned. Confirmed regression during v1.7.0 release (2026-05-22).
+CODESIGN_IDENTITY="Developer ID Application: Grant Whitmer (VXZ434QL89)" \
+  CSC_LINK="$HOME/kit-army-config/secrets/developer-id-app.p12" \
+  CSC_KEY_PASSWORD="<lockbox §Apple cert>" \
+  APPLE_ID="<lockbox §Apple App-Specific Password>" \
+  APPLE_APP_SPECIFIC_PASSWORD="<lockbox §Apple App-Specific Password>" \
+  APPLE_TEAM_ID="VXZ434QL89" \
+  npm run build:mac
 ```
 
-Watch the output for `electron-builder notarization` activity. Expect ~10-30 min per arch (Apple's quoted SLA is 3-5 business days but recent submissions have cleared in minutes).
+The DMGs land at the *root* of `dist/` (not under `dist/mac/` + `dist/mac-arm64/` — the `mac/` dirs hold the un-DMG-wrapped .app bundles):
 
-If notarization stalls or fails: separate the signing + notarize steps via
-`xcrun notarytool submit ./dist/mac-arm64/Windy-Word-{ver}-arm64.dmg --keychain-profile windy-notary --wait` and rerun the afterPack signing per PR #109.
+```
+dist/Windy Word-1.7.0.dmg            ← x64
+dist/Windy Word-1.7.0-arm64.dmg      ← arm64
+```
+
+## 2.5. Sign the DMG envelopes
+
+⚠️ **Gotcha caught during v1.7.0 release**: package.json's `"sign": null` (intentional — we use the afterPack hook for the .app's signing) makes electron-builder skip its own DMG signing AND skip its auto-notarization (`"notarize": true` becomes a no-op when `sign: null`). The .app inside is signed but the DMG envelope itself is not, and nothing has been submitted to Apple.
+
+Sign each DMG envelope explicitly before submitting to notary:
+
+```bash
+codesign --sign "Developer ID Application: Grant Whitmer (VXZ434QL89)" \
+  --options runtime --timestamp \
+  "dist/Windy Word-1.7.0.dmg"
+codesign --sign "Developer ID Application: Grant Whitmer (VXZ434QL89)" \
+  --options runtime --timestamp \
+  "dist/Windy Word-1.7.0-arm64.dmg"
+```
+
+## 2.6. Submit to Apple notary
+
+`xcrun notarytool` with `--wait` blocks until Apple decides. Recent submissions clear in ~15-20 min; quoted SLA is 3-5 business days. Run both in parallel:
+
+```bash
+xcrun notarytool submit "dist/Windy Word-1.7.0-arm64.dmg" \
+  --apple-id "<APPLE_ID>" --team-id "VXZ434QL89" \
+  --password "<APPLE_APP_SPECIFIC_PASSWORD>" --wait &
+
+xcrun notarytool submit "dist/Windy Word-1.7.0.dmg" \
+  --apple-id "<APPLE_ID>" --team-id "VXZ434QL89" \
+  --password "<APPLE_APP_SPECIFIC_PASSWORD>" --wait &
+
+wait
+```
+
+Each should print `status: Accepted` at the end. If either returns `Invalid`, fetch the log with `xcrun notarytool log <submission-id>` and chase from there. The most common cause is missing `--timestamp` on the DMG codesign (Apple requires a timestamp server signature).
 
 ## 3. Verify + staple
 
-For each .dmg produced:
+For each .dmg:
 
 ```bash
-~/notarize-work/finalize-notarized-dmg.sh dist/mac-arm64/Windy-Word-1.6.2-arm64.dmg
-~/notarize-work/finalize-notarized-dmg.sh dist/mac/Windy-Word-1.6.2-x64.dmg
+~/notarize-work/finalize-notarized-dmg.sh "dist/Windy Word-1.7.0-arm64.dmg"
+~/notarize-work/finalize-notarized-dmg.sh "dist/Windy Word-1.7.0.dmg"
 ```
 
-The script staples, validates the staple, runs Gatekeeper assessment, and prints the SHA256 + size. All three green checkmarks = ready for distribution.
+The script staples, validates, runs Gatekeeper assessment, and prints SHA256 + size. The Gatekeeper line should print `accepted` with `source=Notarized Developer ID`. If it prints `rejected source=no usable signature`, the DMG envelope wasn't signed (skip back to step 2.5 + redo 2.6).
 
 ## 4. Upload to R2
 
@@ -111,12 +154,11 @@ aws --endpoint-url=$R2_ENDPOINT s3 cp ~/notarize-work/Windy-Word-1.6.1-arm64-sig
 aws --endpoint-url=$R2_ENDPOINT s3 cp ~/notarize-work/Windy-Word-1.6.1-x64-signed-v2.dmg "$BUCKET/Windy-Word-x64.dmg"
 ```
 
-## Why this isn't autonomous
+## Lessons from the v1.7.0 release (2026-05-22)
 
-The Claude Code session that wrote this runbook (2026-05-22) considered running the full build but didn't:
+Two gotchas caught in flight that drove the corrections above:
 
-1. **Heavy + interactive failure modes.** `npm install` can fail on native deps; electron-builder can fail mid-bundle; notarization can reject for non-obvious signing issues — and each failure leaves stale state that's painful to clean up unattended.
-2. **Async waits with side effects.** Notarization is 10 min - 34h wall-clock. If the session ends mid-wait, recovery requires polling notarytool status by submission ID + manually completing.
-3. **R2 distribution is public-facing.** A mis-uploaded DMG (wrong arch, bad notarization, corrupt) reaches end users immediately via downloads.windyword.ai. The session preferred to err on the side of "operator-verified before shipping" rather than "ship and pray."
+1. **`CODESIGN_IDENTITY` must be in the env passed to the build command.** The afterPack hook reads it directly; without it the .app ships unsigned ("CODESIGN_IDENTITY not set, skipping" in the build log). Setting it as an exported shell variable in a parent shell is NOT sufficient — pass it inline to `npm run build:mac`.
+2. **`"sign": null` makes electron-builder skip notarization too.** Even with `"notarize": true` in package.json + APPLE_ID env vars set, electron-builder won't auto-notarize when its own signing is disabled. The DMG envelopes ship unsigned + Apple has no record of them. Must sign envelopes manually (step 2.5) and submit to notarytool manually (step 2.6) before stapling.
 
-Everything ELSE in the launch campaign (registry, R2 bucket, marketplace site, in-Pro UI, drift guards, docs) was code + idempotent + roll-back-able. The DMG release is the one step where the cost of an automated mistake is materially higher than the cost of a 1-hour manual session.
+This runbook can be run end-to-end without manual intervention IF you set all env vars correctly + the build doesn't fail on native dep rebuilds (`better-sqlite3` rebuilt fresh on this machine in ~10s). The async parts (notarization wait, R2 upload) parallelize cleanly across arm64 + x64.
