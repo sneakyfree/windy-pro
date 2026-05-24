@@ -10,6 +10,7 @@ import Vault from './pages/Vault'
 import Translate from './pages/Translate'
 import Auth from './pages/Auth'
 import GoogleAuthFinish from './pages/GoogleAuthFinish'
+import OAuthFinish from './pages/OAuthFinish'
 import VerifyEmail from './pages/VerifyEmail'
 import Hatch from './pages/Hatch'
 import Privacy from './pages/Privacy'
@@ -194,6 +195,7 @@ export default function App() {
                 } />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/auth/google/finish" element={<GoogleAuthFinish />} />
+                <Route path="/auth/oauth/finish" element={<OAuthFinish />} />
                 <Route path="/verify-email" element={
                     <ProtectedRoute><VerifyEmail /></ProtectedRoute>
                 } />

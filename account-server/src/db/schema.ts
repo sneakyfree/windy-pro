@@ -216,6 +216,21 @@ function initSchema(db: DbAdapter): void {
       expires_at TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- OAuth provider linkages (Google, GitHub, Apple, Facebook, ...).
+    -- A single Windy user can have multiple rows here, one per connected
+    -- provider. Lookup by (provider, provider_user_id) is the stable
+    -- linkage; email is captured only for audit/forensics.
+    CREATE TABLE IF NOT EXISTS oauth_identities (
+      user_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      provider_user_id TEXT NOT NULL,
+      email_at_link TEXT,
+      linked_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (provider, provider_user_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_oauth_identities_user ON oauth_identities(user_id);
   `);
 
   // Safe column migrations — silently skip if column already exists
