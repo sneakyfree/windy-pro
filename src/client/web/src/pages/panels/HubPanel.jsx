@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react'
 
 const PRODUCTS = [
     {
-        key: 'windy_pro',
+        // API /identity/ecosystem-status returns the Word entry under
+        // `windy_word` (matches the user-facing brand). The repo's internal
+        // dev-name is `windy-pro` but the ecosystem key tracks the brand.
+        key: 'windy_word',
         name: 'Windy Word',
         description: 'Your recordings and translations',
         icon: '\uD83C\uDF99\uFE0F',
@@ -283,24 +286,32 @@ export default function HubPanel({ apiFetch }) {
                 fontSize: '13px',
                 color: '#94A3B8',
             }}>
-                <div>
-                    <span style={{ color: '#22C55E', fontWeight: '700', marginRight: '6px' }}>
-                        {Object.values(statuses).filter(s => s.status === 'active' || s.status === 'healthy').length}
-                    </span>
-                    Active
-                </div>
-                <div>
-                    <span style={{ color: '#EAB308', fontWeight: '700', marginRight: '6px' }}>
-                        {Object.values(statuses).filter(s => s.status === 'pending').length}
-                    </span>
-                    Pending
-                </div>
-                <div>
-                    <span style={{ color: '#64748B', fontWeight: '700', marginRight: '6px' }}>
-                        {PRODUCTS.length - Object.keys(statuses).length}
-                    </span>
-                    Not provisioned
-                </div>
+                {(() => {
+                    // Scope counts to the products SHOWN on this hub (PRODUCTS),
+                    // not the full ecosystem-status response — comparing the
+                    // two sources produced a negative "Not provisioned" count
+                    // when the API returned more products than the hub lists.
+                    const localStatuses = PRODUCTS.map(p => statuses[p.key]?.status)
+                    const active = localStatuses.filter(s => s === 'active' || s === 'healthy').length
+                    const pending = localStatuses.filter(s => s === 'pending').length
+                    const notProvisioned = PRODUCTS.length - active - pending
+                    return (
+                        <>
+                            <div>
+                                <span style={{ color: '#22C55E', fontWeight: '700', marginRight: '6px' }}>{active}</span>
+                                Active
+                            </div>
+                            <div>
+                                <span style={{ color: '#EAB308', fontWeight: '700', marginRight: '6px' }}>{pending}</span>
+                                Pending
+                            </div>
+                            <div>
+                                <span style={{ color: '#64748B', fontWeight: '700', marginRight: '6px' }}>{notProvisioned}</span>
+                                Not provisioned
+                            </div>
+                        </>
+                    )
+                })()}
             </div>
         </div>
     )
