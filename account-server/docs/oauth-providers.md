@@ -1,8 +1,8 @@
 # OAuth Providers — Operator Runbook
 
 Windy account-server supports four consumer-side OAuth providers for
-"Sign in with X" on `app.windyword.ai`. This doc covers provisioning,
-env config, and operational notes for each.
+"Sign in with X" on the Windy Word web auth surface. This doc covers
+provisioning, env config, and operational notes for each.
 
 All four follow the same shape:
 - `GET /api/v1/auth/oauth/<provider>/start` — signs HMAC state, 302s to IdP.
