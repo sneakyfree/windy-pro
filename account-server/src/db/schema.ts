@@ -281,6 +281,15 @@ function initSchema(db: DbAdapter): void {
     // Adds the operator-relationship column to existing local-dev SQLite DBs.
     // For Postgres prod, see migrations/003-product-accounts-operator-identity-2026-05-19.sql.
     "ALTER TABLE product_accounts ADD COLUMN operator_identity_id TEXT",
+
+    // ─── Wave E: Windy Connect pair-tracking ───
+    // When a user completes the windyconnect.com magic-link pair flow,
+    // the orchestrator Worker POSTs /api/v1/identity/connect/paired with
+    // the user's email + the issued bundle's metadata. We persist the
+    // most-recent pair so the dashboard tile flips from Available → Active.
+    // NULL = user hasn't paired yet (safe default).
+    "ALTER TABLE users ADD COLUMN connect_paired_at TEXT",                   // ISO-8601 of last successful pair
+    "ALTER TABLE users ADD COLUMN connect_bundle_version TEXT",              // Bundle spec version, e.g. \"1.0\"
   ];
 
   for (const sql of migrations) {

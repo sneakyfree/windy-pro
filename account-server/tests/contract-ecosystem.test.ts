@@ -229,6 +229,13 @@ describe('Contract 4: Ecosystem status response shape', () => {
         // windy_word is always active
         expect(p.windy_word.status).toBe('active');
 
+        // Wave E: windy_connect defaults to 'available' (user hasn't
+        // completed the magic-link pair yet). After /v1/pair/verify on
+        // the orchestrator, this flips to 'active' via the connect/paired
+        // webhook — covered in connect-paired-webhook.test.ts.
+        expect(p.windy_connect.status).toBe('available');
+        expect(p.windy_connect.provisioned).toBe(false);
+
         // Tier is free for new user
         expect(res.body.tier).toBe('free');
     });

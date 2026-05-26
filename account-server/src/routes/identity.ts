@@ -446,6 +446,95 @@ router.post('/eternitas/webhook', botWebhookLimiter, (req: Request, res: Respons
   }
 });
 
+// ─── POST /api/v1/identity/connect/paired — Wave E webhook ─────────
+//
+// The windy-connect orchestrator Worker calls this after a successful
+// magic-link pair (POST /v1/pair/verify in the Worker). The body carries
+// the paired user's email + the bundle metadata so we can flip the
+// dashboard tile to "Active" via the connect_paired_at column.
+//
+// Auth: HMAC-SHA256 over `${email}:${issued_at}` with
+// WINDY_CONNECT_WEBHOOK_SECRET. Constant-time compared. Replay window =
+// 5 minutes (`issued_at` is the bundle's iat).
+//
+// This endpoint is intentionally unauthenticated by user-JWT — the
+// caller is a service, not a logged-in browser. The webhook secret is
+// the auth.
+//
+// Idempotency: re-sending the same payload UPDATEs to the same value;
+// safe to retry. We do NOT advance connect_paired_at backwards if a
+// stale webhook arrives — the SQL guard keeps the most-recent timestamp.
+
+router.post('/connect/paired', (req: Request, res: Response) => {
+  try {
+    const { email, issued_at, bundle_version, signature } = req.body ?? {};
+    const webhookSecret = process.env.WINDY_CONNECT_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      return res.status(503).json({
+        error: 'WINDY_CONNECT_WEBHOOK_SECRET not configured',
+        code: 'webhook_secret_not_configured',
+      });
+    }
+    if (typeof email !== 'string' || !email.includes('@')) {
+      return res.status(400).json({ error: 'email is required' });
+    }
+    if (typeof issued_at !== 'string' || !issued_at) {
+      return res.status(400).json({ error: 'issued_at is required (ISO-8601)' });
+    }
+    if (typeof signature !== 'string' || !signature) {
+      return res.status(401).json({ error: 'Missing webhook signature' });
+    }
+    const expected = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(`${email}:${issued_at}`)
+      .digest('hex');
+    const a = Buffer.from(signature);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
+    // Replay protection: drop anything outside ±5 min of now.
+    const issuedAtMs = Date.parse(issued_at);
+    if (!Number.isFinite(issuedAtMs)) {
+      return res.status(400).json({ error: 'issued_at must be ISO-8601' });
+    }
+    if (Math.abs(Date.now() - issuedAtMs) > 5 * 60 * 1000) {
+      return res.status(401).json({ error: 'issued_at outside accepted window (±5 min)' });
+    }
+
+    const db = getDb();
+    // Only advance forward — guards against an out-of-order retry that
+    // would overwrite a fresher pair with a stale timestamp.
+    const result = db.prepare(`
+      UPDATE users
+         SET connect_paired_at = ?,
+             connect_bundle_version = COALESCE(?, connect_bundle_version)
+       WHERE LOWER(email) = LOWER(?)
+         AND (connect_paired_at IS NULL OR connect_paired_at < ?)
+    `).run(
+      issued_at,
+      typeof bundle_version === 'string' ? bundle_version : null,
+      email,
+      issued_at,
+    );
+
+    // The user may not exist on this server (the windy-connect flow
+    // works on emails that haven't signed up for Windy Pro). Returning
+    // 200 either way makes the Worker's retry logic simple — the
+    // dashboard simply won't show the tile flip until they sign up.
+    return res.json({
+      ok: true,
+      updated: result.changes > 0,
+      email,
+      paired_at: issued_at,
+    });
+  } catch (err: any) {
+    console.error('[identity] connect/paired webhook error:', err);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+
 // ─── POST /api/v1/identity/backfill — One-time migration (admin) ──
 
 router.post('/backfill', authenticateToken, adminOnly, (_req: Request, res: Response) => {
@@ -1530,12 +1619,25 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
     const products = Array.from(productMap.values());
 
     const user = db.prepare(
-      'SELECT email, name, display_name, tier, storage_used, storage_limit, windy_identity_id FROM users WHERE id = ?',
-    ).get(userId) as { email: string; name: string; display_name: string; tier: string; storage_used: number; storage_limit: number; windy_identity_id: string } | undefined;
+      'SELECT email, name, display_name, tier, storage_used, storage_limit, windy_identity_id, connect_paired_at, connect_bundle_version FROM users WHERE id = ?',
+    ).get(userId) as { email: string; name: string; display_name: string; tier: string; storage_used: number; storage_limit: number; windy_identity_id: string; connect_paired_at: string | null; connect_bundle_version: string | null } | undefined;
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+
+    // Wave E: windy-connect tile flips Available → Active when the
+    // user has paired within the bundle TTL (30 days, matches
+    // BUNDLE_TTL_DAYS in windy-connect/backend/src/provision.ts). After
+    // 30 days, the agent's bundle has expired anyway; the user must
+    // re-pair, which re-writes connect_paired_at via the webhook.
+    const BUNDLE_TTL_MS = 30 * 24 * 3600 * 1000;
+    const connectStatus: 'active' | 'available' = (() => {
+      if (!user.connect_paired_at) return 'available';
+      const pairedAt = Date.parse(user.connect_paired_at);
+      if (!Number.isFinite(pairedAt)) return 'available';
+      return Date.now() - pairedAt < BUNDLE_TTL_MS ? 'active' : 'available';
+    })();
 
     const findProduct = (name: string) => products.find(p => p.product === name);
     const creatorName = user.display_name || user.name;
@@ -1707,12 +1809,18 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
         // windyconnect.com (Cloudflare Pages, sneakyfree/windy-connect-site);
         // orchestrator Worker at api.windyconnect.com. Category 1 product
         // per ADR-050 (human-direct, no bot relationship — the user installs
-        // the CLI on their own machine). Always-available semantic: the
-        // CLI is free + open-source + magic-link-auth, so 'available' is
-        // the truthful baseline. Could promote to 'active' for users whose
-        // Eternitas passport was minted via the windy-connect flow once we
-        // add that signal — separate change.
-        windy_connect: { status: 'available', provisioned: false },
+        // the CLI on their own machine).
+        //
+        // Status: 'active' once the user has completed the magic-link pair
+        // flow within the bundle TTL (30 days). Wave E added this; backed
+        // by the connect_paired_at column the orchestrator Worker writes
+        // through POST /api/v1/identity/connect/paired after each pair.
+        windy_connect: {
+          status: connectStatus,
+          provisioned: connectStatus === 'active',
+          last_paired_at: user.connect_paired_at ?? undefined,
+          bundle_version: user.connect_bundle_version ?? undefined,
+        },
         // Windy Drops — the open marketplace for the Windy ecosystem (WD-31).
         // Public surfaces are all live as of 2026-05-22:
         //   - windydrops.com (browse + integrate)
