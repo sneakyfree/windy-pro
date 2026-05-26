@@ -258,6 +258,26 @@ app.get('/.well-known/jwks.json', wellKnownLimiter, (_req, res) => {
     res.json(jwks);
 });
 
+// Apple Sign In — domain ownership verification.
+//
+// During Services ID configuration in the Apple Developer portal, Apple
+// fetches this URL to confirm we own account.windyword.ai. The file is a
+// single opaque string Apple shows in the portal modal — paste it verbatim
+// into the APPLE_DOMAIN_ASSOCIATION env var, restart, then click "Verify"
+// in the portal.
+//
+// Returns 404 when unset so random crawlers don't get a "configured but
+// empty" hint. Short cache because verification can be re-run after a
+// config change in the portal.
+app.get('/.well-known/apple-developer-domain-association.txt', wellKnownLimiter, (_req, res) => {
+    const content = process.env.APPLE_DOMAIN_ASSOCIATION;
+    if (!content) {
+        return res.status(404).type('text/plain').send('Not configured');
+    }
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    res.type('text/plain').send(content);
+});
+
 // OIDC Discovery (Phase 5 — OpenID Connect provider metadata)
 app.get('/.well-known/openid-configuration', wellKnownLimiter, (req, res) => {
     const issuer = process.env.OIDC_ISSUER || `${req.protocol}://${req.get('host')}`;
