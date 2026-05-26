@@ -125,4 +125,33 @@ export const config = {
     GOOGLE_OAUTH_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
     GOOGLE_OAUTH_REDIRECT_URI: process.env.GOOGLE_OAUTH_REDIRECT_URI || '',
     GOOGLE_OAUTH_POST_LOGIN_REDIRECT: process.env.GOOGLE_OAUTH_POST_LOGIN_REDIRECT || '',
+    // "Sign in with GitHub" — consumer-side OAuth credentials. Provision the
+    // OAuth App at https://github.com/settings/developers (sneakyfree account).
+    // When unset the /api/v1/auth/oauth/github/* routes return 503.
+    GITHUB_OAUTH_CLIENT_ID: process.env.GITHUB_OAUTH_CLIENT_ID || '',
+    GITHUB_OAUTH_CLIENT_SECRET: process.env.GITHUB_OAUTH_CLIENT_SECRET || '',
+    GITHUB_OAUTH_REDIRECT_URI: process.env.GITHUB_OAUTH_REDIRECT_URI || '',
+    GITHUB_OAUTH_POST_LOGIN_REDIRECT: process.env.GITHUB_OAUTH_POST_LOGIN_REDIRECT || '',
+    // "Sign in with Apple" — Services ID + Sign-in-with-Apple key (.p8).
+    // Mint at developer.apple.com → Identifiers → Services IDs. The client
+    // secret is a short-lived ES256 JWT generated at request time from
+    // APPLE_PRIVATE_KEY + APPLE_KEY_ID + APPLE_TEAM_ID.
+    // When any of these are unset the /api/v1/auth/oauth/apple/* routes return 503.
+    APPLE_TEAM_ID: process.env.APPLE_TEAM_ID || '',
+    APPLE_SERVICES_ID: process.env.APPLE_SERVICES_ID || '',
+    APPLE_KEY_ID: process.env.APPLE_KEY_ID || '',
+    // PEM-encoded ES256 private key from Apple. Multi-line — set in .env with
+    // literal \n line breaks or read from APPLE_PRIVATE_KEY_PATH if file-based.
+    APPLE_PRIVATE_KEY: process.env.APPLE_PRIVATE_KEY || '',
+    APPLE_PRIVATE_KEY_PATH: process.env.APPLE_PRIVATE_KEY_PATH || '',
+    APPLE_OAUTH_REDIRECT_URI: process.env.APPLE_OAUTH_REDIRECT_URI || '',
+    APPLE_OAUTH_POST_LOGIN_REDIRECT: process.env.APPLE_OAUTH_POST_LOGIN_REDIRECT || '',
+    // "Sign in with Facebook" — consumer-side OAuth credentials. Provision the
+    // App at https://developers.facebook.com → My Apps. Email permission
+    // requires Facebook App Review before serving prod traffic past test users.
+    // When unset the /api/v1/auth/oauth/facebook/* routes return 503.
+    FACEBOOK_OAUTH_CLIENT_ID: process.env.FACEBOOK_OAUTH_CLIENT_ID || '',
+    FACEBOOK_OAUTH_CLIENT_SECRET: process.env.FACEBOOK_OAUTH_CLIENT_SECRET || '',
+    FACEBOOK_OAUTH_REDIRECT_URI: process.env.FACEBOOK_OAUTH_REDIRECT_URI || '',
+    FACEBOOK_OAUTH_POST_LOGIN_REDIRECT: process.env.FACEBOOK_OAUTH_POST_LOGIN_REDIRECT || '',
 } as const;

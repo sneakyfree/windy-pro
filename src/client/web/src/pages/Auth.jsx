@@ -2,6 +2,15 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import './Auth.css'
 
+// Shared OAuth button style — same look for Google / GitHub / Apple / Facebook.
+// Each provider's /start route 503s when its env vars are unset; the SPA still
+// renders the button but the browser lands on a friendly fragment-error page.
+const oauthBtn = {
+    padding: '10px', borderRadius: '8px', border: '1px solid #334155',
+    background: '#1E293B', color: '#E2E8F0', cursor: 'pointer', fontSize: '14px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+}
+
 export default function Auth() {
     const [isLogin, setIsLogin] = useState(true)
     const [email, setEmail] = useState('')
@@ -224,23 +233,31 @@ export default function Auth() {
                         <span style={{ color: '#64748B', fontSize: '12px' }}>or continue with</span>
                         <div style={{ flex: 1, height: '1px', background: '#334155' }} />
                     </div>
-                    <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
                         <button
                             type="button"
                             onClick={() => { window.location.href = '/api/v1/auth/oauth/google/start' }}
                             title="Continue with Google"
-                            style={{
-                                flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #334155',
-                                background: '#1E293B', color: '#E2E8F0', cursor: 'pointer', fontSize: '14px',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            }}
+                            style={oauthBtn}
                         >🔵 Google</button>
-                        <button type="button" disabled title="GitHub OAuth coming soon" style={{
-                            flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #334155',
-                            background: '#1E293B', color: '#475569', cursor: 'not-allowed', fontSize: '14px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            opacity: 0.5
-                        }}>⚫ GitHub <span style={{ fontSize: '10px' }}>soon</span></button>
+                        <button
+                            type="button"
+                            onClick={() => { window.location.href = '/api/v1/auth/oauth/github/start' }}
+                            title="Continue with GitHub"
+                            style={oauthBtn}
+                        >⚫ GitHub</button>
+                        <button
+                            type="button"
+                            onClick={() => { window.location.href = '/api/v1/auth/oauth/apple/start' }}
+                            title="Continue with Apple"
+                            style={oauthBtn}
+                        >🍎 Apple</button>
+                        <button
+                            type="button"
+                            onClick={() => { window.location.href = '/api/v1/auth/oauth/facebook/start' }}
+                            title="Continue with Facebook"
+                            style={oauthBtn}
+                        >🔷 Facebook</button>
                     </div>
 
                     <div className="auth-footer">

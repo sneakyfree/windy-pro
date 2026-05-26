@@ -332,6 +332,21 @@ CREATE TABLE IF NOT EXISTS oauth_device_codes (
 );
 CREATE INDEX IF NOT EXISTS idx_device_codes_user ON oauth_device_codes(user_code);
 
+-- ─── OAuth Provider Linkages ────────────────────────────────────
+-- Tracks which third-party identity providers (Google, GitHub, Apple,
+-- Facebook, ...) a Windy user has connected. (provider, provider_user_id)
+-- is the stable lookup key — email is captured for audit only.
+
+CREATE TABLE IF NOT EXISTS oauth_identities (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    provider_user_id TEXT NOT NULL,
+    email_at_link TEXT,
+    linked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (provider, provider_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_oauth_identities_user ON oauth_identities(user_id);
+
 -- ─── Chat Profiles ──────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS chat_profiles (
