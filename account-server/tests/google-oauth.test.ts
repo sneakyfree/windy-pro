@@ -70,6 +70,13 @@ function uniqueGoogleEmail(label: string) {
     return `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@gmail.com`;
 }
 
+// Unique-per-call Google `sub` so the (provider, provider_user_id) lookup in
+// the OAuth helper doesn't match a row created by a previous test in the
+// same Jest invocation (account-server tests share a single SQLite file).
+function uniqueGoogleSub(): string {
+    return `${Date.now()}${Math.floor(Math.random() * 1_000_000)}`;
+}
+
 describe('Google OAuth — /start', () => {
     test('redirects to Google with required OAuth params', async () => {
         const res = await request(app).get('/api/v1/auth/oauth/google/start');
@@ -107,7 +114,7 @@ describe('Google OAuth — /callback', () => {
 
     test('creates a new user when Google email is novel', async () => {
         const email = uniqueGoogleEmail('newuser');
-        mockGoogle({ userBody: { sub: '12345', email, name: 'Brand New', email_verified: true } });
+        mockGoogle({ userBody: { sub: uniqueGoogleSub(), email, name: 'Brand New', email_verified: true } });
 
         const res = await request(app)
             .get(`/api/v1/auth/oauth/google/callback?code=abc&state=${signValidState()}`);
@@ -134,7 +141,7 @@ describe('Google OAuth — /callback', () => {
         expect(reg.status).toBe(201);
         const existingUserId = reg.body.userId;
 
-        mockGoogle({ userBody: { sub: '99999', email, name: 'Google Display', email_verified: true } });
+        mockGoogle({ userBody: { sub: uniqueGoogleSub(), email, name: 'Google Display', email_verified: true } });
 
         const res = await request(app)
             .get(`/api/v1/auth/oauth/google/callback?code=abc&state=${signValidState()}`);
@@ -154,7 +161,7 @@ describe('Google OAuth — /callback', () => {
     });
 
     test('redirects to fragment error when userinfo has no email', async () => {
-        mockGoogle({ userBody: { sub: '12345' } /* email missing */ });
+        mockGoogle({ userBody: { sub: uniqueGoogleSub() } /* email missing */ });
         const res = await request(app)
             .get(`/api/v1/auth/oauth/google/callback?code=abc&state=${signValidState()}`);
         expect(res.status).toBe(302);

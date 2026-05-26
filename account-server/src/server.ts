@@ -29,6 +29,9 @@ import identityRoutes from './routes/identity';
 import verificationRoutes from './routes/verification';
 import oauthRoutes, { seedEcosystemClients } from './routes/oauth';
 import googleOauthRoutes from './routes/google-oauth';
+import githubOauthRoutes from './routes/github-oauth';
+import appleOauthRoutes from './routes/apple-oauth';
+import facebookOauthRoutes from './routes/facebook-oauth';
 import deviceApprovalRoutes from './routes/device-approval';
 import passwordResetPageRoutes from './routes/password-reset-page';
 import adminConsoleRoutes from './routes/admin-console';
@@ -217,9 +220,12 @@ app.use('/api/v1/identity/verify', verificationRoutes);
 
 // OAuth2 / SSO (Phase 5 — "Sign in with Windy")
 app.use('/api/v1/oauth', oauthRoutes);
-// "Sign in with Google" — consumer-side, distinct from /api/v1/oauth which
-// makes Windy itself an OAuth provider.
+// Consumer-side OAuth — "Sign in with X" providers. Distinct from
+// /api/v1/oauth which makes Windy itself an OAuth provider.
 app.use('/api/v1/auth/oauth/google', googleOauthRoutes);
+app.use('/api/v1/auth/oauth/github', githubOauthRoutes);
+app.use('/api/v1/auth/oauth/apple', appleOauthRoutes);
+app.use('/api/v1/auth/oauth/facebook', facebookOauthRoutes);
 
 // Top-level device-code approval page (GET /device, POST /device/approve).
 // Mobile shows "Visit windyword.ai/device" — this is the operator UI.

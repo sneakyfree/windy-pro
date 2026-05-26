@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react'
 
 function formatBytes(bytes) {
-    if (!bytes) return '0 B'
+    // Postgres BIGINT columns (users.storage_used / storage_limit) come back
+    // as JSON strings to preserve 64-bit precision. Coerce before any math
+    // so the toFixed() call below doesn't crash on "0" / "524288000".
+    const n = Number(bytes)
+    if (!n || Number.isNaN(n)) return '0 B'
     const units = ['B', 'KB', 'MB', 'GB']
     let i = 0
-    let val = bytes
+    let val = n
     while (val >= 1024 && i < units.length - 1) { val /= 1024; i++ }
     return `${val.toFixed(i > 1 ? 1 : 0)} ${units[i]}`
 }

@@ -1821,6 +1821,15 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
           last_paired_at: user.connect_paired_at ?? undefined,
           bundle_version: user.connect_bundle_version ?? undefined,
         },
+        // Windy Drops — the open marketplace for the Windy ecosystem (WD-31).
+        // Public surfaces are all live as of 2026-05-22:
+        //   - windydrops.com (browse + integrate)
+        //   - api.windydrops.com (registry)
+        //   - drops.windydrops.com (R2 CDN for bundles)
+        // The grandma install flow lives inside Windy Word v1.7.0's Control
+        // Panel. This tile is the web-side discovery entry; no per-user state
+        // here (drops do their own auth via the marketplace UI when needed).
+        windy_drops: { status: 'available', provisioned: false },
         windy_traveler: { status: user.tier !== 'free' ? 'active' : 'upgrade_required', provisioned: user.tier !== 'free' },
       },
     });
