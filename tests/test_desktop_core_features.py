@@ -11,37 +11,49 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ─── Section 1: Backend API Endpoints ─────────────────────────
 
+# NOTE: account-server/server.js was refactored into a thin delegating shim
+# (see account-server/CLAUDE.md). These structural checks now point at each
+# feature's real current home in the TypeScript tree. The capabilities are
+# unchanged — only the file locations moved.
+_SCHEMA = os.path.join(ROOT, 'account-server', 'src', 'db', 'schema.ts')
+_TRANSLATIONS = os.path.join(ROOT, 'account-server', 'src', 'routes', 'translations.ts')
+_SERVER_TS = os.path.join(ROOT, 'account-server', 'src', 'server.ts')
+
 def test_server_has_translations_table():
-    server = open(os.path.join(ROOT, 'account-server', 'server.js')).read()
-    assert 'CREATE TABLE IF NOT EXISTS translations' in server
+    schema = open(_SCHEMA).read()
+    assert 'CREATE TABLE IF NOT EXISTS translations' in schema
 
 def test_server_has_favorites_table():
-    server = open(os.path.join(ROOT, 'account-server', 'server.js')).read()
-    assert 'CREATE TABLE IF NOT EXISTS favorites' in server
+    schema = open(_SCHEMA).read()
+    assert 'CREATE TABLE IF NOT EXISTS favorites' in schema
 
 def test_server_has_translate_speech_route():
-    server = open(os.path.join(ROOT, 'account-server', 'server.js')).read()
-    assert "/api/v1/translate/speech" in server
+    # router.post('/speech') mounted at app.use('/api/v1/translate', ...)
+    routes = open(_TRANSLATIONS).read()
+    assert "'/speech'" in routes
 
 def test_server_has_translate_text_route():
-    server = open(os.path.join(ROOT, 'account-server', 'server.js')).read()
-    assert "/api/v1/translate/text" in server
+    routes = open(_TRANSLATIONS).read()
+    assert "'/text'" in routes
 
 def test_server_has_translate_languages_route():
-    server = open(os.path.join(ROOT, 'account-server', 'server.js')).read()
-    assert "/api/v1/translate/languages" in server
+    routes = open(_TRANSLATIONS).read()
+    assert "'/languages'" in routes
 
 def test_server_has_user_history_route():
-    server = open(os.path.join(ROOT, 'account-server', 'server.js')).read()
+    # app.get('/api/v1/user/history', authenticateToken, historyHandler)
+    server = open(_SERVER_TS).read()
     assert "/api/v1/user/history" in server
 
 def test_server_has_user_favorites_route():
-    server = open(os.path.join(ROOT, 'account-server', 'server.js')).read()
+    # app.post('/api/v1/user/favorites', authenticateToken, favoritesHandler)
+    server = open(_SERVER_TS).read()
     assert "/api/v1/user/favorites" in server
 
 def test_server_uses_multer():
-    server = open(os.path.join(ROOT, 'account-server', 'server.js')).read()
-    assert "require('multer')" in server
+    # multer is the upload middleware for the /speech audio upload
+    routes = open(_TRANSLATIONS).read()
+    assert "import multer" in routes and "multer(" in routes
 
 # ─── Section 2: Speech Translation UI ─────────────────────────
 
@@ -56,9 +68,12 @@ def test_translate_js_tracks_translation_id():
     assert '_lastTranslationId = data.id' in translate
 
 def test_translate_js_has_audio_playback():
+    # Audio playback of the translated text now uses the Web Speech API TTS
+    # path (the 🔊 translatePlayBtn → _speakLastTranslation → speechSynthesis),
+    # which replaced the older server-audio Blob/object-URL approach.
     translate = open(os.path.join(ROOT, 'src', 'client', 'desktop', 'renderer', 'translate.js')).read()
-    assert 'data.audioData' in translate
-    assert 'URL.createObjectURL' in translate
+    assert 'translatePlayBtn' in translate
+    assert 'speechSynthesis' in translate
 
 def test_css_has_pulse_ring():
     css = open(os.path.join(ROOT, 'src', 'client', 'desktop', 'renderer', 'styles.css')).read()
@@ -98,9 +113,11 @@ def test_preload_has_open_translate():
 # ─── Section 4: Auto-Update ───────────────────────────────────
 
 def test_updater_6h_interval():
+    # 6h dedup window: `const sixHoursMs = 6 * 60 * 60 * 1000` guards re-checks
+    # via `if (Date.now() - lastCheck < sixHoursMs)`.
     updater = open(os.path.join(ROOT, 'src', 'client', 'desktop', 'updater.js')).read()
     assert 'sixHoursMs' in updater or '6 * 60 * 60' in updater
-    assert 'within last 6h' in updater
+    assert 'lastCheck' in updater
 
 def test_updater_has_install_update():
     updater = open(os.path.join(ROOT, 'src', 'client', 'desktop', 'updater.js')).read()

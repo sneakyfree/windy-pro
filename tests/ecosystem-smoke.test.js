@@ -6,6 +6,11 @@
  *
  * Run: node tests/ecosystem-smoke.test.js
  *   or: cd account-server && npm test (if wired into jest)
+ *
+ * Note: jest excludes this file via the testPathIgnorePatterns config in
+ * jest.config.js — it's a standalone script (top-level server spawn +
+ * process.exit), not a jest suite. Under jest it would spawn the
+ * account-server during module-load and hang.
  */
 
 const { spawn } = require('child_process');

@@ -42,10 +42,17 @@ const canonicalAvailable = Object.values(CANONICAL_FILES).every((p) => fs.exists
 (canonicalAvailable ? describe : describe.skip)(
   'Control Panel vendor drift guard (canonical present)',
   () => {
-    // Read all canonical sources once.
-    const canon = Object.fromEntries(
-      Object.entries(CANONICAL_FILES).map(([k, p]) => [k, fs.readFileSync(p, 'utf-8')]),
-    );
+    // Lazy reads — jest evaluates this describe callback at collection
+    // time even when skipped, so eager fs.readFileSync calls here throw
+    // when the sibling repo is absent before describe.skip can prevent
+    // the tests from running. Defer reads to beforeAll instead.
+    let canon = {};
+
+    beforeAll(() => {
+      canon = Object.fromEntries(
+        Object.entries(CANONICAL_FILES).map(([k, p]) => [k, fs.readFileSync(p, 'utf-8')]),
+      );
+    });
 
     function vendor(rel) {
       return fs.readFileSync(path.join(VENDOR_DIR, rel), 'utf-8');
