@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 004: oauth_identities (multi-provider OAuth linkage)
+-- Migration 005: oauth_identities (multi-provider OAuth linkage)
 -- =============================================================================
 --
 -- Adds the oauth_identities table so a single Windy user can have multiple
@@ -13,7 +13,7 @@
 -- backfill is lazy. No data is lost — the email-fallback path in the
 -- helper still finds them.
 --
--- Run with: psql "$DATABASE_URL" -f 004-oauth-identities-2026-05-24.sql
+-- Run with: psql "$DATABASE_URL" -f 005-oauth-identities-2026-05-24.sql
 -- Reversible: DROP TABLE oauth_identities CASCADE;
 -- =============================================================================
 
@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_oauth_identities_user
     ON oauth_identities(user_id);
 
 INSERT INTO schema_migrations (version, description)
-SELECT '004', 'oauth_identities table for multi-provider OAuth linkage'
- WHERE NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version = '004');
+SELECT '005', 'oauth_identities table for multi-provider OAuth linkage'
+ WHERE NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version = '005');
 
 COMMIT;
