@@ -69,11 +69,14 @@ The DMG is verified to *build & contain our code*, but behavior is unverified. O
 7. Confirm it stays local (no cloud transcription on free).
 
 ### C. Deploy the sheared site to windyword.ai
+The repo's `.github/workflows/deploy.yml` deploys `dist` to the **`windyword` Pages project = LIVE windyword.ai** (it correctly deploys `dist`, not `.`). **Live windyword.ai is currently the ORIGINAL site, untouched** — deploying replaces it with the sheared version. I set the workflow to **`workflow_dispatch` only** (removed auto-deploy-on-push) so it can't go live before you're ready. To deploy (do this AFTER first-run + final review):
 ```bash
-cd ~/windyword-site-book-launch && npm install && npm run build
-# Deploy dist/ to the windyword.ai Cloudflare Pages project (WindyProCIDeployToken, or connect the repo).
+# 1. Add the Pages-deploy token as a repo secret (WindyProCIDeployToken — Pages:Edit, in lockbox):
+gh secret set CF_API_TOKEN -R sneakyfree/windyword-site-book-launch   # paste the token value
+# 2. Trigger the deliberate deploy:
+gh workflow run deploy.yml -R sneakyfree/windyword-site-book-launch
 ```
-⚠️ **Deploy `dist/`, NOT `.`** (the known wrangler-pages footgun that shipped a blank page once).
+After launch, re-add `push: { branches: [main] }` to `deploy.yml` if you want auto-deploy back.
 
 ### D. Lift password walls + Coming Soon pages  (live prod — ordered!)
 A ready Coming Soon page is staged at `~/windyword-coming-soon/index.html`. For each gated domain (windytranslate.com, windytraveler.com, windyclone.ai, windymail.ai, eternitas.ai, windyfly.ai):
