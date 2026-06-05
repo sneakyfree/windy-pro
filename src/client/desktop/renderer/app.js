@@ -1572,10 +1572,11 @@ class WindyApp {
       quickTranslate: hotkeys?.quickTranslate || defaults.quickTranslate
     };
 
-    // Format accelerator string for display
-    const fmt = (accel) => accel
-      .replace(/CommandOrControl/gi, 'Ctrl')
-      .replace(/\+/g, '+');
+    // Format accelerator string for display — OS-aware. On macOS, CommandOrControl
+    // maps to ⌘ (Command), NOT Ctrl. Showing "Ctrl" on a Mac is a lie that leaves
+    // people mashing the wrong key and concluding the app is broken.
+    const isMac = (window.windyAPI && window.windyAPI.platform === 'darwin');
+    const fmt = (accel) => accel.replace(/CommandOrControl/gi, isMac ? '⌘' : 'Ctrl');
 
     const customBadge = ' <span style="color:#A78BFA;font-size:10px;font-weight:600;vertical-align:middle;margin-left:4px;background:rgba(167,139,250,0.15);padding:1px 5px;border-radius:4px;">✦ custom</span>';
 
@@ -1687,6 +1688,20 @@ class WindyApp {
       'position:fixed;z-index:100000;background:#11161f;border:1px solid #2a3340;' +
       'border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.55);padding:6px;' +
       'width:288px;max-height:72vh;overflow:auto;font-size:13px;';
+
+    // Clear close (✕) affordance — top-right of the menu.
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText =
+      'position:sticky;top:0;float:right;margin:-2px -2px 0 0;width:24px;height:24px;border:none;' +
+      'background:rgba(255,255,255,0.06);color:#9aa6b2;border-radius:6px;cursor:pointer;' +
+      'font-size:12px;line-height:1;z-index:1;';
+    closeBtn.onmouseenter = () => { closeBtn.style.background = 'rgba(255,255,255,0.16)'; closeBtn.style.color = '#fff'; };
+    closeBtn.onmouseleave = () => { closeBtn.style.background = 'rgba(255,255,255,0.06)'; closeBtn.style.color = '#9aa6b2'; };
+    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.remove(); });
+    menu.appendChild(closeBtn);
 
     const mkRow = (id, name, note, size, selected) => {
       const row = document.createElement('button');

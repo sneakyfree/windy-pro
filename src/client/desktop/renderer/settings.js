@@ -353,32 +353,32 @@ class SettingsPanel {
             <div class="hotkey-item-stacked">
               <span class="hotkey-label">🎙️ Start / Stop Recording</span>
               <span class="hotkey-desc">Begins or ends a voice recording session</span>
-              <div class="shortcut-capture shortcut-btn" id="shortcutToggle" tabindex="0" data-key="toggleRecording">Ctrl+Shift+Space</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutToggle" tabindex="0" data-key="toggleRecording">${this._mod}+Shift+Space</div>
             </div>
             <div class="hotkey-item-stacked">
               <span class="hotkey-label">📋 Auto-Type Transcription</span>
               <span class="hotkey-desc">Types your latest recording at the cursor</span>
-              <div class="shortcut-capture shortcut-btn" id="shortcutPaste" tabindex="0" data-key="pasteTranscript">Ctrl+Shift+V</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutPaste" tabindex="0" data-key="pasteTranscript">${this._mod}+Shift+V</div>
             </div>
             <div class="hotkey-item-stacked">
               <span class="hotkey-label">📸 Paste from Clipboard</span>
               <span class="hotkey-desc">Pastes clipboard contents (screenshots, copied text)</span>
-              <div class="shortcut-capture shortcut-btn" id="shortcutClipboard" tabindex="0" data-key="pasteClipboard">Ctrl+Shift+B</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutClipboard" tabindex="0" data-key="pasteClipboard">${this._mod}+Shift+B</div>
             </div>
             <div class="hotkey-item-stacked">
               <span class="hotkey-label">👁️ Show / Hide Window</span>
               <span class="hotkey-desc">Cycles: Full window → Tornado → Hidden</span>
-              <div class="shortcut-capture shortcut-btn" id="shortcutShowHide" tabindex="0" data-key="showHide">Ctrl+Shift+W</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutShowHide" tabindex="0" data-key="showHide">${this._mod}+Shift+W</div>
             </div>
             <div class="hotkey-item-stacked">
               <span class="hotkey-label">🌐 Quick Translate</span>
               <span class="hotkey-desc">Opens floating translate pop-up for instant translations</span>
-              <div class="shortcut-capture shortcut-btn" id="shortcutQuickTranslate" tabindex="0" data-key="quickTranslate">Ctrl+Shift+T</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutQuickTranslate" tabindex="0" data-key="quickTranslate">${this._mod}+Shift+T</div>
             </div>
             <div class="hotkey-item-stacked hotkey-readonly">
               <span class="hotkey-label">🔍 Zoom (app window only)</span>
               <span class="hotkey-desc">Click inside the app first — only zooms the Windy Word window, not your desktop</span>
-              <span class="hotkey-fixed-btn">Ctrl + / −  ·  Ctrl+0 Reset</span>
+              <span class="hotkey-fixed-btn">${this._mod} + / −  ·  ${this._mod}+0 Reset</span>
             </div>
           </div>
           <button class="hotkey-reset-btn" id="hotkeyResetBtn">🔄 Reset All to Defaults</button>
@@ -393,7 +393,7 @@ class SettingsPanel {
               <span>Ctrl+W</span><span>Ctrl+T</span><span>Ctrl+Q</span>
               <span>Alt+F4</span>
             </div>
-            <p>✅ <b>Tip:</b> Use <b>Ctrl+Shift+key</b> or <b>Ctrl+Alt+key</b> combos — those are fair game!</p>
+            <p>✅ <b>Tip:</b> Use <b>${this._mod}+Shift+key</b> or <b>${this._mod}+Alt+key</b> combos — those are fair game!</p>
           </details>
         </div>
         
@@ -1234,7 +1234,7 @@ class SettingsPanel {
 
           const accelerator = parts.join('+');
           const settingKey = el.dataset.key;
-          const displayStr = accelerator.replace('CommandOrControl', 'Ctrl');
+          const displayStr = accelerator.replace('CommandOrControl', (window.windyAPI && window.windyAPI.platform === 'darwin') ? '⌘' : 'Ctrl');
 
           // Block reserved system shortcuts that should never be hijacked
           const reserved = [
@@ -1300,7 +1300,7 @@ class SettingsPanel {
         // Reset each badge display
         for (const [key, selector] of Object.entries(displayMap)) {
           const el = this.panel.querySelector(selector);
-          if (el) el.textContent = defaults[key].replace('CommandOrControl', 'Ctrl');
+          if (el) el.textContent = defaults[key].replace('CommandOrControl', (window.windyAPI && window.windyAPI.platform === 'darwin') ? '⌘' : 'Ctrl');
         }
         // Tell main process to reset each
         if (window.windyAPI?.rebindHotkey) {
@@ -2621,7 +2621,7 @@ class SettingsPanel {
           for (const [key, selector] of Object.entries(map)) {
             const el = this.panel.querySelector(selector);
             if (el && settings.hotkeys[key]) {
-              el.textContent = settings.hotkeys[key].replace('CommandOrControl', 'Ctrl');
+              el.textContent = settings.hotkeys[key].replace('CommandOrControl', (window.windyAPI && window.windyAPI.platform === 'darwin') ? '⌘' : 'Ctrl');
             }
           }
         }
@@ -2984,6 +2984,11 @@ class SettingsPanel {
       try { localStorage.setItem(`windy_${key}`, value || ''); } catch (_) { }
     }
   }
+
+  // OS-aware modifier label: CommandOrControl renders as ⌘ on macOS, Ctrl elsewhere.
+  // Showing "Ctrl" on a Mac (where the real key is Command) makes users think the
+  // shortcut is broken.
+  get _mod() { return (window.windyAPI && window.windyAPI.platform === 'darwin') ? '⌘' : 'Ctrl'; }
 
   toggle() {
     this.isOpen ? this.close() : this.open();

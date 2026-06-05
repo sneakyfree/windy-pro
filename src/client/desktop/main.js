@@ -699,6 +699,12 @@ function createWindow() {
   ipcMain.on('request-focus', () => {
     if (mainWindow && !mainWindow.isDestroyed() && process.platform === 'darwin') {
       mainWindow.setFocusable(true);
+      // A window created focusable:false at a 'floating' panel level often won't
+      // become the KEY window from setFocusable+focus alone — so keyboard events
+      // (e.g. rebinding a shortcut, typing in a field) never arrive. Steal app
+      // focus + move to top so the window actually becomes key and receives keys.
+      try { app.focus({ steal: true }); } catch (_) { /* best-effort */ }
+      mainWindow.moveTop();
       mainWindow.focus();
     }
   });
