@@ -1631,15 +1631,18 @@ class WindyApp {
   // engine === 'windytune'). The safety valve for "WindyTune is stuck on a slow
   // model and won't come down." Reuses the proven switch path (updateSettings +
   // WS model hot-reload). Fastest → most accurate.
+  // Engine catalog — id ↔ whisper model ↔ friendly name + size. Sizes/notes match
+  // the website (TheVault). `model` lets the badge translate the raw whisper model
+  // WindyTune is running (e.g. 'small') back into a real engine name (Windy Lite).
   get _engineLadder() {
     return [
-      { id: 'windy-nano',       name: 'Windy Nano',  note: 'Fastest · lightest' },
-      { id: 'windy-lite',       name: 'Windy Lite',  note: 'Fast · balanced' },
-      { id: 'windy-core',       name: 'Windy Core',  note: 'Everyday' },
-      { id: 'windy-edge',       name: 'Windy Edge',  note: 'High accuracy' },
-      { id: 'windy-plus',       name: 'Windy Plus',  note: 'Premium accuracy' },
-      { id: 'windy-turbo',      name: 'Windy Turbo', note: 'State of the art' },
-      { id: 'windy-pro-engine', name: 'Windy Word',  note: 'Flagship · most accurate' },
+      { id: 'windy-nano',       model: 'tiny',           name: 'Windy Nano',  size: '38 MB',  note: 'Fastest · lightest' },
+      { id: 'windy-lite',       model: 'small',          name: 'Windy Lite',  size: '72 MB',  note: 'Fast · balanced' },
+      { id: 'windy-core',       model: 'base',           name: 'Windy Core',  size: '234 MB', note: 'Balanced everyday driver' },
+      { id: 'windy-edge',       model: 'medium',         name: 'Windy Edge',  size: '727 MB', note: 'High-accuracy workhorse' },
+      { id: 'windy-plus',       model: 'large-v2',       name: 'Windy Plus',  size: '734 MB', note: 'Premium accuracy' },
+      { id: 'windy-turbo',      model: 'large-v3',       name: 'Windy Turbo', size: '777 MB', note: 'State of the art · 99 languages' },
+      { id: 'windy-pro-engine', model: 'large-v3-turbo', name: 'Windy Word',  size: '1.5 GB', note: 'Flagship · most accurate' },
     ];
   }
 
@@ -1685,7 +1688,7 @@ class WindyApp {
       'border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.55);padding:6px;' +
       'width:288px;max-height:72vh;overflow:auto;font-size:13px;';
 
-    const mkRow = (id, name, note, selected) => {
+    const mkRow = (id, name, note, size, selected) => {
       const row = document.createElement('button');
       row.type = 'button';
       row.style.cssText =
@@ -1697,13 +1700,18 @@ class WindyApp {
       row.onmouseleave = () => { if (!selected) row.style.background = 'transparent'; };
       row.innerHTML =
         '<span style="width:16px;flex:none;color:#F59E0B">' + (selected ? '✓' : '') + '</span>' +
-        '<span style="flex:1"><span style="font-weight:600">' + name + '</span>' +
-        '<span style="display:block;color:#8b97a5;font-size:11px">' + note + '</span></span>';
+        '<span style="flex:1">' +
+          '<span style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">' +
+            '<span style="font-weight:600">' + name + '</span>' +
+            (size ? '<span style="color:#8b97a5;font-size:11px;white-space:nowrap">' + size + '</span>' : '') +
+          '</span>' +
+          '<span style="display:block;color:#8b97a5;font-size:11px;margin-top:1px">' + note + '</span>' +
+        '</span>';
       row.addEventListener('click', (e) => { e.stopPropagation(); menu.remove(); this.setEngine(id); });
       return row;
     };
 
-    menu.appendChild(mkRow('windytune', '⚡ Auto — WindyTune', 'Picks the best engine for your machine', isAuto));
+    menu.appendChild(mkRow('windytune', '⚡ Auto — WindyTune', 'Picks the best engine for your machine', '', isAuto));
 
     const divider = document.createElement('div');
     divider.style.cssText = 'height:1px;background:#2a3340;margin:6px 4px;';
@@ -1714,7 +1722,7 @@ class WindyApp {
     menu.appendChild(hdr);
 
     for (const e of this._engineLadder) {
-      menu.appendChild(mkRow(e.id, e.name, e.note, !isAuto && current === e.id));
+      menu.appendChild(mkRow(e.id, e.name, e.note, e.size, !isAuto && current === e.id));
     }
 
     const foot = document.createElement('div');
@@ -1822,25 +1830,33 @@ class WindyApp {
       return;
     }
 
-    // WindyTune (Auto) + the manual engine ladder — always show a friendly brand
-    // name + the live model, so the engine is unmistakable at all times.
-    const FRIENDLY = {
-      'windytune': 'WindyTune', 'windy-nano': 'Windy Nano', 'windy-lite': 'Windy Lite',
-      'windy-core': 'Windy Core', 'windy-edge': 'Windy Edge', 'windy-plus': 'Windy Plus',
-      'windy-turbo': 'Windy Turbo', 'windy-pro-engine': 'Windy Word',
-    };
-    if (activeEngine in FRIENDLY) {
-      const m = (modelName && modelName !== activeEngine) ? modelName : ((this._engineModelMap && this._engineModelMap[activeEngine]) || 'small');
-      const sz = modelSizes[String(m).toLowerCase()];
-      const isAuto = activeEngine === 'windytune';
-      const brand = FRIENDLY[activeEngine];
-      // Trailing ▾ signals the badge is a clickable menu (engine switcher).
-      badge.textContent = (sz ? `⚡ ${brand} · ${m} (${sz})` : `⚡ ${brand} · ${m}`) + ' ▾';
-      badge.title = isAuto
-        ? `WindyTune (auto) — currently running ${m}. Click to pin a specific engine.`
-        : `Manual: ${brand} (${m}). Click to change or return to Auto.`;
-      badge.classList.remove('loading');
-      return;
+    // WindyTune (Auto) + the manual engine ladder. Translate the raw whisper model
+    // into a real engine NAME + size (e.g. model 'small' → "Windy Lite (72 MB)") so
+    // the badge never shows an internal model name the user can't find in the menu.
+    // Trailing ▾ signals the badge is a clickable engine switcher.
+    {
+      const ladder = this._engineLadder;
+      const byId = {}, byModel = {};
+      ladder.forEach(e => { byId[e.id] = e; byModel[e.model] = e; });
+      const auto = activeEngine === 'windytune' || activeEngine === 'local';
+      if (auto || (activeEngine in byId)) {
+        let eng;
+        if (auto) {
+          // Reflect whichever model WindyTune is actually running (default small/Lite).
+          const m = (modelName && byModel[modelName]) ? modelName
+            : ((this._engineModelMap && this._engineModelMap['windytune']) || 'small');
+          eng = byModel[m] || byModel['small'];
+        } else {
+          eng = byId[activeEngine];
+        }
+        const label = eng ? `${eng.name} (${eng.size})` : 'engine';
+        badge.textContent = (auto ? `⚡ WindyTune · ${label}` : `⚡ ${label}`) + ' ▾';
+        badge.title = auto
+          ? `WindyTune (auto) — currently running ${eng ? eng.name : 'an engine'}. Click to pin a specific engine.`
+          : `Manual: ${eng ? eng.name : activeEngine}. Click to change or return to Auto.`;
+        badge.classList.remove('loading');
+        return;
+      }
     }
 
     // Cloud API engines — always show engine name
