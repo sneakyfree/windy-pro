@@ -1646,9 +1646,23 @@ class WindyApp {
   _setupEngineMenu() {
     const badge = document.getElementById('modelBadge');
     if (!badge) return;
+    // Make the badge read + feel like a real button — it opens the engine menu.
+    const REST = 'rgba(167,139,250,0.14)';
+    const HOVER = 'rgba(167,139,250,0.28)';
     badge.style.cursor = 'pointer';
+    badge.style.userSelect = 'none';
+    badge.style.background = REST;
+    badge.style.borderColor = 'rgba(167,139,250,0.55)';
+    badge.style.padding = '3px 10px';
+    badge.style.fontWeight = '600';
+    badge.style.transition = 'background .15s, border-color .15s, transform .05s';
     badge.setAttribute('role', 'button');
     badge.setAttribute('tabindex', '0');
+    badge.setAttribute('aria-haspopup', 'menu');
+    badge.addEventListener('mouseenter', () => { badge.style.background = HOVER; badge.style.borderColor = 'rgba(167,139,250,0.85)'; });
+    badge.addEventListener('mouseleave', () => { badge.style.background = REST; badge.style.borderColor = 'rgba(167,139,250,0.55)'; });
+    badge.addEventListener('mousedown', () => { badge.style.transform = 'scale(0.96)'; });
+    badge.addEventListener('mouseup', () => { badge.style.transform = 'scale(1)'; });
     badge.addEventListener('click', (e) => { e.stopPropagation(); this._toggleEngineMenu(); });
     badge.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._toggleEngineMenu(); }
@@ -1820,7 +1834,8 @@ class WindyApp {
       const sz = modelSizes[String(m).toLowerCase()];
       const isAuto = activeEngine === 'windytune';
       const brand = FRIENDLY[activeEngine];
-      badge.textContent = sz ? `⚡ ${brand} · ${m} (${sz})` : `⚡ ${brand} · ${m}`;
+      // Trailing ▾ signals the badge is a clickable menu (engine switcher).
+      badge.textContent = (sz ? `⚡ ${brand} · ${m} (${sz})` : `⚡ ${brand} · ${m}`) + ' ▾';
       badge.title = isAuto
         ? `WindyTune (auto) — currently running ${m}. Click to pin a specific engine.`
         : `Manual: ${brand} (${m}). Click to change or return to Auto.`;

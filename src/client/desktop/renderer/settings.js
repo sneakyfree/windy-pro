@@ -138,12 +138,23 @@ class SettingsPanel {
           <div class="setting-row">
             <label for="storageLocation">Storage</label>
             <select id="storageLocation">
-              <option value="local" selected>💾 Local only — stays on this device</option>
+              ${(() => {
+                // Book-launch: WindyCloud isn't live yet — show Local only and hide
+                // the cloud/sync options. The "Local folder" picker below still lets
+                // users save anywhere on disk. Reversible: the full set returns when
+                // CLOUD_STORAGE is true in edition.js (WindyCloud ships).
+                if (window.windyAPI && window.windyAPI.cloudStorage === false) {
+                  return `<option value="local" selected>💾 Local only — stays on this device</option>`;
+                }
+                return `<option value="local" selected>💾 Local only — stays on this device</option>
               <option value="windy-cloud">☁️ WindyCloud — encrypted, syncs when on Wi-Fi</option>
-              <option value="both">🔄 Both — local + WindyCloud backup</option>
+              <option value="both">🔄 Both — local + WindyCloud backup</option>`;
+              })()}
             </select>
           </div>
-          <p class="settings-hint" id="storageHint">Local storage selected — your data stays on this machine. Change to WindyCloud or Both to enable syncing.</p>
+          <p class="settings-hint" id="storageHint">${(window.windyAPI && window.windyAPI.cloudStorage === false)
+            ? 'Your recordings stay on this machine. Use the “Local folder” below to save them anywhere you like.'
+            : 'Local storage selected — your data stays on this machine. Change to WindyCloud or Both to enable syncing.'}</p>
           <div class="setting-row" title="Where to save files on this device.">
             <label for="archiveFolder">Local folder</label>
             <div class="setting-inline">
@@ -197,7 +208,7 @@ class SettingsPanel {
           <p class="settings-hint" style="margin-top:6px;">Exports audio + transcripts in formats compatible with ElevenLabs, Coqui, Tortoise TTS, and other major voice cloning platforms.</p>
         </div>
 
-        <div class="settings-section">
+        <div class="settings-section" id="transcriptionEngineSection">
           <h3>🔌 Transcription Engine</h3>
           <div class="setting-row">
             <label for="engineSelect">Engine</label>

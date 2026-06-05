@@ -24,3 +24,13 @@ html.edition-simple #ecoWebviewContainer {
 html.edition-no-translate #translateMenuWrap {
   display: none !important;
 }
+
+/* Book-launch: the advanced Transcription settings (Engine dropdown, Model Size,
+   Device/GPU, Language, Identify-speakers, and the plan/upgrade banner) are
+   redundant — engine selection now lives on the status-bar WindyTune badge, and
+   everything else is auto. Hide both legacy sections. Reversible: they return in
+   the full build (no edition-simple class). */
+html.edition-simple #transcriptionEngineSection,
+html.edition-simple #localModelSection {
+  display: none !important;
+}
