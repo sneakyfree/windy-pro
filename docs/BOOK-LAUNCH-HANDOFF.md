@@ -97,6 +97,7 @@ The desktop app still shows ecosystem/paid UI a free reader would find confusing
 ---
 
 ## ⚠️ Review before launch
+- **I made accuracy edits to brand copy across the whole site — review your voice.** All driven by "match the real free product + don't over-promise": `Claim` (removed a fabricated "50,000+ downloads" count; Windows/Linux → "coming soon"; fixed broken anchors), `Covenant` ("Open Source — inspect weights, train your own variants" → "Yours to Keep", since the engines are proprietary LoRA; removed a dead GitHub link), `TheWord` (the 5-language **medical translation** demo → honest multilingual **transcription**), `TheRitual` ("choose your specialist models" → auto/no-picker; ecosystem → "coming soon"), plus the earlier Offering/TheVault/Kingdom/Footer/Scrolls/Powers/Voices shear. Adjust anything that clashes with your intent.
 - **`Voices.jsx` testimonials are illustrative** — swap for real reader testimonials or your own book-writing story.
 - **`Offering.jsx` `BOOK_URL` is empty** → Reader card shows "notify me". Set the Amazon/Kindle link when the book is purchasable.
 - **`NotifyForm.jsx` `NOTIFY_EMAIL`** = `hello@windyword.ai` — confirm that inbox exists/routes.
