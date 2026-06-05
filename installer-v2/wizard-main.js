@@ -309,7 +309,19 @@ class InstallWizard {
     ipcMain.handle('wizard-install', async () => {
       wizardLog('═══════════ wizard-install IPC handler ENTRY ═══════════');
       wizardLog(`log file location: ${getLogPath()}`);
-      const models = this.selectedEngines.length > 0 ? this.selectedEngines : this.recommendation?.recommended || ['windy-lite-ct2'];
+      // Book-launch free build: install the FIXED edition set (Lite=2 / Reader=7 int8
+      // engines) regardless of hardware — one predictable install, no auto-detect branching.
+      // WindyTune adapts among whatever is installed at runtime. Falls back to the legacy
+      // hardware selection only if the edition config is somehow unavailable.
+      let models;
+      try {
+        const { ENGINES } = require('./core/edition');
+        models = (ENGINES && ENGINES.length)
+          ? ENGINES
+          : (this.selectedEngines.length > 0 ? this.selectedEngines : this.recommendation?.recommended || ['windy-lite-ct2']);
+      } catch (_) {
+        models = this.selectedEngines.length > 0 ? this.selectedEngines : this.recommendation?.recommended || ['windy-lite-ct2'];
+      }
       wizardLog('selected models:', models);
       console.log('[InstallWizard] Starting install for models:', models);
 
