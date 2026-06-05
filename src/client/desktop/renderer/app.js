@@ -84,6 +84,19 @@ class WindyApp {
     this.archiveOpenBtn = document.getElementById('archiveOpenBtn');
     this.archiveChangeBtn = document.getElementById('archiveChangeBtn');
     this.archivePathLabel = document.getElementById('archivePathLabel');
+
+    // Book-launch: WindyCloud isn't live — restrict the bottom-bar archive route to
+    // local destinations (Local / Off) by dropping the cloud options. The folder
+    // picker (⚙️) still lets users archive anywhere on disk. Reversible: the cloud
+    // routes return when CLOUD_STORAGE is true in edition.js.
+    if (this.archiveRouteSelect && window.windyAPI?.cloudStorage === false) {
+      Array.from(this.archiveRouteSelect.options).forEach(opt => {
+        if (opt.value === 'cloud' || opt.value === 'local_cloud') opt.remove();
+      });
+      if (['cloud', 'local_cloud'].includes(this.archiveRouteSelect.value)) {
+        this.archiveRouteSelect.value = 'local';
+      }
+    }
     this.connectionDot = document.getElementById('connectionDot');
     this.connectionText = document.getElementById('connectionText');
     this.archiveStatus = document.getElementById('archiveStatus');
@@ -176,7 +189,12 @@ class WindyApp {
     if (window.windyAPI?.getSettings) {
       const settings = await window.windyAPI.getSettings();
       this.livePreview = settings?.livePreview !== false;
-      const route = settings?.archiveRouteToday || 'local';
+      let route = settings?.archiveRouteToday || 'local';
+      // Book-launch: a previously-saved cloud route is invalid (cloud options
+      // removed) — fall back to local so the selector never ends up blank.
+      if (window.windyAPI?.cloudStorage === false && (route === 'cloud' || route === 'local_cloud')) {
+        route = 'local';
+      }
       if (this.archiveRouteSelect) this.archiveRouteSelect.value = route;
       this._setArchiveRouteStatus(route);
 
@@ -594,6 +612,9 @@ class WindyApp {
 
     // Paste button
     this.pasteBtn.addEventListener('click', () => this.pasteTranscript());
+
+    // Engine badge → manual override menu (WindyTune Auto, or pin any engine).
+    this._setupEngineMenu();
 
     // Today archive route
     this.archiveRouteSelect?.addEventListener('change', () => {
@@ -1603,6 +1624,150 @@ class WindyApp {
     }
   }
 
+  // ── Manual engine override (status-bar badge menu) ───────────────────────
+  // WindyTune auto-pilot is the default. Clicking the engine badge opens a menu
+  // to pin any installed engine — or return to Auto. Pinning sets engine.engine
+  // to a specific id, which makes WindyTune back off (it only auto-switches when
+  // engine === 'windytune'). The safety valve for "WindyTune is stuck on a slow
+  // model and won't come down." Reuses the proven switch path (updateSettings +
+  // WS model hot-reload). Fastest → most accurate.
+  get _engineLadder() {
+    return [
+      { id: 'windy-nano',       name: 'Windy Nano',  note: 'Fastest · lightest' },
+      { id: 'windy-lite',       name: 'Windy Lite',  note: 'Fast · balanced' },
+      { id: 'windy-core',       name: 'Windy Core',  note: 'Everyday' },
+      { id: 'windy-edge',       name: 'Windy Edge',  note: 'High accuracy' },
+      { id: 'windy-plus',       name: 'Windy Plus',  note: 'Premium accuracy' },
+      { id: 'windy-turbo',      name: 'Windy Turbo', note: 'State of the art' },
+      { id: 'windy-pro-engine', name: 'Windy Word',  note: 'Flagship · most accurate' },
+    ];
+  }
+
+  _setupEngineMenu() {
+    const badge = document.getElementById('modelBadge');
+    if (!badge) return;
+    badge.style.cursor = 'pointer';
+    badge.setAttribute('role', 'button');
+    badge.setAttribute('tabindex', '0');
+    badge.addEventListener('click', (e) => { e.stopPropagation(); this._toggleEngineMenu(); });
+    badge.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._toggleEngineMenu(); }
+    });
+  }
+
+  _toggleEngineMenu() {
+    const existing = document.getElementById('engineMenu');
+    if (existing) { existing.remove(); return; }
+    const badge = document.getElementById('modelBadge');
+    if (!badge) return;
+
+    const current = localStorage.getItem('windy_engine') || 'windytune';
+    const isAuto = current === 'windytune' || current === 'local';
+
+    const menu = document.createElement('div');
+    menu.id = 'engineMenu';
+    menu.style.cssText =
+      'position:fixed;z-index:100000;background:#11161f;border:1px solid #2a3340;' +
+      'border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.55);padding:6px;' +
+      'width:288px;max-height:72vh;overflow:auto;font-size:13px;';
+
+    const mkRow = (id, name, note, selected) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.style.cssText =
+        'display:flex;align-items:center;gap:10px;width:100%;text-align:left;' +
+        'background:' + (selected ? 'rgba(245,158,11,0.12)' : 'transparent') + ';' +
+        'border:1px solid ' + (selected ? 'rgba(245,158,11,0.35)' : 'transparent') + ';' +
+        'border-radius:8px;padding:8px 10px;margin:2px 0;cursor:pointer;color:#e8edf2;';
+      row.onmouseenter = () => { if (!selected) row.style.background = 'rgba(255,255,255,0.05)'; };
+      row.onmouseleave = () => { if (!selected) row.style.background = 'transparent'; };
+      row.innerHTML =
+        '<span style="width:16px;flex:none;color:#F59E0B">' + (selected ? '✓' : '') + '</span>' +
+        '<span style="flex:1"><span style="font-weight:600">' + name + '</span>' +
+        '<span style="display:block;color:#8b97a5;font-size:11px">' + note + '</span></span>';
+      row.addEventListener('click', (e) => { e.stopPropagation(); menu.remove(); this.setEngine(id); });
+      return row;
+    };
+
+    menu.appendChild(mkRow('windytune', '⚡ Auto — WindyTune', 'Picks the best engine for your machine', isAuto));
+
+    const divider = document.createElement('div');
+    divider.style.cssText = 'height:1px;background:#2a3340;margin:6px 4px;';
+    menu.appendChild(divider);
+    const hdr = document.createElement('div');
+    hdr.textContent = 'Pin a specific engine';
+    hdr.style.cssText = 'color:#6b7785;font-size:10px;text-transform:uppercase;letter-spacing:.08em;padding:4px 10px 6px;';
+    menu.appendChild(hdr);
+
+    for (const e of this._engineLadder) {
+      menu.appendChild(mkRow(e.id, e.name, e.note, !isAuto && current === e.id));
+    }
+
+    const foot = document.createElement('div');
+    foot.style.cssText = 'color:#6b7785;font-size:10px;padding:8px 10px 4px;border-top:1px solid #2a3340;margin-top:6px;';
+    foot.textContent = 'Auto adapts to your hardware. Pin one for full control — Back to Auto anytime.';
+    menu.appendChild(foot);
+
+    document.body.appendChild(menu);
+
+    // Position anchored to the badge (prefer above; flip below if no room).
+    const r = badge.getBoundingClientRect();
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    let left = Math.max(8, Math.min(r.left, window.innerWidth - mw - 8));
+    let top = r.top - mh - 8;
+    if (top < 8) top = Math.min(r.bottom + 8, window.innerHeight - mh - 8);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+
+    const close = (ev) => {
+      if (ev.type === 'keydown' && ev.key !== 'Escape') return;
+      if (ev.type === 'click' && menu.contains(ev.target)) return;
+      menu.remove();
+      document.removeEventListener('click', close, true);
+      document.removeEventListener('keydown', close, true);
+    };
+    setTimeout(() => {
+      document.addEventListener('click', close, true);
+      document.addEventListener('keydown', close, true);
+    }, 0);
+  }
+
+  /**
+   * Switch the transcription engine. engineId 'windytune' = Auto (re-enables
+   * WindyTune); any other id pins that engine (WindyTune backs off). Persists to
+   * the main store (engine.engine + engine.model) and hot-reloads the Python
+   * model over the existing WS — the same mechanism WindyTune uses internally.
+   */
+  setEngine(engineId) {
+    const isAuto = engineId === 'windytune';
+    const model = (this._engineModelMap && this._engineModelMap[engineId]) || 'small';
+    this.transcriptionEngine = engineId;
+    try {
+      if (window.windyAPI?.updateSettings) window.windyAPI.updateSettings({ engine: engineId, model });
+    } catch (_) { /* settings persist best-effort */ }
+    try {
+      localStorage.setItem('windy_engine', engineId);
+      if (model) localStorage.setItem('windy_model', model);
+    } catch (_) { /* localStorage best-effort */ }
+    // Hot-reload the model on the Python server (same message the settings panel
+    // and WindyTune use). If the socket isn't open, the persisted setting applies
+    // on the next connect.
+    try {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN && model) {
+        this.ws.send(JSON.stringify({ type: 'config', model }));
+      }
+    } catch (_) { /* ws best-effort */ }
+    this.updateModelBadge(engineId);
+    const label = isAuto
+      ? 'Auto — WindyTune'
+      : (this._engineLadder.find(e => e.id === engineId)?.name || engineId);
+    if (typeof this.showReconnectToast === 'function') {
+      this.showReconnectToast(isAuto
+        ? '⚡ Back to Auto — WindyTune will pick the best engine for your machine'
+        : `⚡ Engine pinned: ${label}`);
+    }
+  }
+
   /**
    * Update model badge in status bar
    */
@@ -1640,6 +1805,26 @@ class WindyApp {
       const icon = engineIcons[activeEngine] || '🏠';
       badge.textContent = `${icon} ${message || 'Loading...'}`;
       badge.classList.add('loading');
+      return;
+    }
+
+    // WindyTune (Auto) + the manual engine ladder — always show a friendly brand
+    // name + the live model, so the engine is unmistakable at all times.
+    const FRIENDLY = {
+      'windytune': 'WindyTune', 'windy-nano': 'Windy Nano', 'windy-lite': 'Windy Lite',
+      'windy-core': 'Windy Core', 'windy-edge': 'Windy Edge', 'windy-plus': 'Windy Plus',
+      'windy-turbo': 'Windy Turbo', 'windy-pro-engine': 'Windy Word',
+    };
+    if (activeEngine in FRIENDLY) {
+      const m = (modelName && modelName !== activeEngine) ? modelName : ((this._engineModelMap && this._engineModelMap[activeEngine]) || 'small');
+      const sz = modelSizes[String(m).toLowerCase()];
+      const isAuto = activeEngine === 'windytune';
+      const brand = FRIENDLY[activeEngine];
+      badge.textContent = sz ? `⚡ ${brand} · ${m} (${sz})` : `⚡ ${brand} · ${m}`;
+      badge.title = isAuto
+        ? `WindyTune (auto) — currently running ${m}. Click to pin a specific engine.`
+        : `Manual: ${brand} (${m}). Click to change or return to Auto.`;
+      badge.classList.remove('loading');
       return;
     }
 
