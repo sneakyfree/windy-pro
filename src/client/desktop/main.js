@@ -504,10 +504,17 @@ function startPythonServer() {
   const userVenvPython = process.platform === 'win32'
     ? path.join(appDataDir, 'venv', 'Scripts', 'python.exe')
     : path.join(appDataDir, 'venv', 'bin', 'python');
-  const bundledPython = process.resourcesPath
+  // Universal (multi-arch) builds ship the runtime as `python-<arch>`; single-arch
+  // builds ship plain `python`. Prefer the arch match, fall back to legacy.
+  const bundledPythonRoot = process.resourcesPath
+    ? (fs.existsSync(path.join(process.resourcesPath, 'bundled', `python-${process.arch}`))
+        ? path.join(process.resourcesPath, 'bundled', `python-${process.arch}`)
+        : path.join(process.resourcesPath, 'bundled', 'python'))
+    : null;
+  const bundledPython = bundledPythonRoot
     ? (process.platform === 'win32'
-        ? path.join(process.resourcesPath, 'bundled', 'python', 'python.exe')
-        : path.join(process.resourcesPath, 'bundled', 'python', 'bin', 'python3'))
+        ? path.join(bundledPythonRoot, 'python.exe')
+        : path.join(bundledPythonRoot, 'bin', 'python3'))
     : null;
 
   let pythonPath;

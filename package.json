@@ -127,6 +127,7 @@
         }
       ],
       "icon": "assets/icon.icns",
+      "x64ArchFiles": "**/bundled/**",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "identity": null,
