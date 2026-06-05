@@ -2247,14 +2247,8 @@ class WindyApp {
           if (tierLimits && !tierLimits.batchMode) {
             // Batch mode is now available on all tiers — no gate needed
           }
-          // Override max recording with tier limit
-          if (tierLimits?.maxMinutes) {
-            const currentMax = parseInt(localStorage.getItem('windy_maxRecordingMin') || '10');
-            if (currentMax > tierLimits.maxMinutes) {
-              localStorage.setItem('windy_maxRecordingMin', String(tierLimits.maxMinutes));
-              this.showReconnectToast(`⚡ Free plan: max ${tierLimits.maxMinutes} min. Upgrade for 30 min.`);
-            }
-          }
+          // Recording length: UNLIMITED in the free book-launch build — no tier clamp and
+          // no upgrade nag. (Removed the maxMinutes downgrade + upsell toast.)
         }
       } catch (e) { console.warn('[TierLimits] Failed to enforce plan limits:', e.message); }
 
@@ -2404,22 +2398,11 @@ class WindyApp {
         }
       }
 
-      // 4. Set up max duration auto-stop (skip for clone_capture — unlimited)
+      // 4. Max-duration auto-stop — DISABLED for the free book-launch build: recording is
+      //    UNLIMITED (the dictate-a-whole-book use case). The mic indicator signals recording
+      //    health; long-session memory behavior is verified in launch hardening.
+      //    (clone_capture was already unlimited via this same path.)
       const currentRecMode = localStorage.getItem('windy_recordingMode') || 'batch';
-      if (currentRecMode !== 'clone_capture') {
-        const maxMin = parseInt(localStorage.getItem('windy_maxRecordingMin') || '10');
-        this._batchMaxTimer = setTimeout(() => {
-          this.showReconnectToast('⏰ Max recording time reached. Processing...');
-          this.stopBatchRecording();
-        }, maxMin * 60 * 1000);
-
-        // 5. Warning at 30s before max
-        if (maxMin * 60 > 30) {
-          this._batchWarnTimer = setTimeout(() => {
-            this.showReconnectToast(`⏰ ${maxMin} min limit in 30 seconds...`);
-          }, (maxMin * 60 - 30) * 1000);
-        }
-      }
 
       // 5b. Voice level monitoring for mini widget strobe
       try {
