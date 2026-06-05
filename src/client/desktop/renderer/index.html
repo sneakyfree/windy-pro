@@ -13,6 +13,9 @@
   <link rel="stylesheet" href="auto-sync.css">
   <link rel="stylesheet" href="marketplace.css">
   <link rel="stylesheet" href="hatch-ceremony.css">
+  <!-- Book-launch UI gating: hide ecosystem cross-sell in the free edition. -->
+  <link rel="stylesheet" href="edition-ui.css">
+  <script src="edition-ui.js"></script>
 </head>
 
 <body>
@@ -205,7 +208,7 @@
       <span class="status-dot" id="connectionDot" data-tooltip="Connection Status"></span>
       <span class="status-text" id="connectionText" data-tooltip="Engine Connection">Connecting...</span>
       <span class="word-count" id="wordCount" data-tooltip="Word Count"></span>
-      <span class="model-badge" id="modelBadge" title="Current transcription model" data-tooltip="Transcription Model">⚡ windytune (0.5GB)</span>
+      <span class="model-badge" id="modelBadge" title="WindyTune — auto-selects the best model for your hardware" data-tooltip="WindyTune engine">⚡ WindyTune</span>
       <span class="sfx-volume-wrap" id="sfxVolumeWrap" title="Sound effects volume" data-tooltip="Sound Effects Volume">
         <span class="sfx-volume-icon" id="sfxVolumeIcon">🔊</span>
       </span>

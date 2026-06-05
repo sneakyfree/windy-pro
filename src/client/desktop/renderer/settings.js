@@ -79,6 +79,13 @@ class SettingsPanel {
             <label for="maxRecordingSelect">Max Recording</label>
             <select id="maxRecordingSelect">
               ${(() => {
+                // Book-launch free build: recording is unlimited (the max-duration
+                // auto-stop is disabled in the renderer). Show an honest "Unlimited"
+                // option instead of the license-tier cap. Reversible — reverts to the
+                // tiered dropdown when UNLIMITED_RECORDING is false (paid/tiered builds).
+                if (window.windyAPI && window.windyAPI.unlimitedRecording) {
+                  return `<option value="0" selected>Unlimited</option>`;
+                }
                 const tier = localStorage.getItem('windy_license_tier') || 'free';
                 const tierMaxMap = { free: 5, pro: 30, translate: 30, translate_pro: 60 };
                 const tierMax = tierMaxMap[tier] || 5;

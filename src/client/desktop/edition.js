@@ -39,6 +39,25 @@ module.exports = {
   // Hard-off for ALL free book-launch builds. Do not flip to true here — paid enforcement
   // belongs in a separate build, never in the free reader/lite editions.
   LICENSE_ENFORCEMENT: false,
+  // ── Book-launch UI minimalism ────────────────────────────────────────────
+  // The free Windy Word build is deliberately ONE thing: God's-gift local
+  // voice-to-text. The full-ecosystem cross-sell surfaces — the product-switcher
+  // tab bar (Chat/Mail/Cloud/Clone/Agent/Code/Panel), the marketplace/Bundles
+  // view, the "Hatch Your Agent" card, and the embedded ecosystem webviews — are
+  // HIDDEN here, not removed. All that code stays in place; the full build (main
+  // branch) leaves this true and shows everything. Flip to true to restore the
+  // full ecosystem UI in this build with zero other changes. Reversible by design.
+  ECOSYSTEM_UI: false,
+  // Translation tools (🌐 Translate Studio / Quick Translate). A voice feature,
+  // not ecosystem cross-sell, so kept ON by default — gated separately so it can
+  // be toggled independently. Flip to false to strip the app to pure dictation.
+  TRANSLATION_UI: true,
+  // Unlimited recording length — the dictate-a-whole-book use case. The
+  // max-duration auto-stop is already disabled in the renderer for free builds;
+  // this flag makes the Settings UI honest about it (shows "Unlimited" instead of
+  // the license-tier 5-minute cap). Paid/tiered builds set this false to restore
+  // the tiered Max-Recording dropdown.
+  UNLIMITED_RECORDING: true,
   ENGINES: ENGINE_SETS[EDITION] || ENGINE_SETS.reader,
   ENGINE_SETS,
 };

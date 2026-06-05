@@ -905,12 +905,10 @@ class WindyApp {
     // ═══ WindyTune Adaptive Model Notifications ═══
     window.windyAPI.onWindyTuneModelSwitched?.((data) => {
       console.info(`[WindyTune] Model switched: ${data.oldModel} → ${data.newModel}`);
-      // Update model badge in status bar
-      const modelBadge = document.getElementById('modelBadge');
-      if (modelBadge) {
-        modelBadge.textContent = `WindyTune (${data.newModel})`;
-      }
-      // Show actionable toast with Undo option
+      // Update the persistent badge via the branded formatter (⚡ WindyTune · <model>).
+      this.updateModelBadge(data.newModel);
+      // Show actionable toast with Undo option — this is the "switching engines"
+      // notification the user sees (and a support breadcrumb).
       this._showWindyTuneToast(`⚡ ${data.message}`, data.canUndo ? data.oldModel : null);
     });
 
@@ -1665,12 +1663,16 @@ class WindyApp {
       return;
     }
 
-    // 'local' auto-detect — show whatever the Python server reports
-    const icon = '🏠';
+    // 'local' auto-detect == WindyTune auto mode: the engine is WindyTune and it
+    // auto-picks the model. Brand the badge so the user ALWAYS sees that WindyTune
+    // is active AND which model it's currently running — the value-prop made
+    // visible, and a support signal ("what engine were you on?").
     const name = modelName || 'unknown';
     const size = modelSizes[name.toLowerCase()];
-    badge.textContent = size ? `${icon} ${name} (${size})` : `${icon} ${name}`;
-    badge.title = size ? `Model: ${name} (${size})` : `Model: ${name}`;
+    const label = `WindyTune · ${name}`;
+    badge.textContent = size ? `⚡ ${label} (${size})` : `⚡ ${label}`;
+    badge.title = `WindyTune (auto) — currently running ${name}${size ? ' (' + size + ')' : ''}. `
+      + `Switches models automatically for the best speed/accuracy on your hardware.`;
     badge.classList.remove('loading');
   }
 

@@ -6,6 +6,10 @@
  * `script-src 'self'` — no unsafe-inline.
  */
 (function () {
+    // Book-launch free build: the "Hatch Your Agent" card is an ecosystem
+    // cross-sell (Windy Fly). When ecosystem UI is gated off, do not mount it at
+    // all — pure voice-to-text. Reversible: returns when ECOSYSTEM_UI is true.
+    if (window.windyAPI && window.windyAPI.ecosystemUI === false) return;
     if (typeof window.HatchCeremony !== 'function') return;
     const ceremony = new window.HatchCeremony();
     window.windyHatchCeremony = ceremony;

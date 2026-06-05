@@ -1,0 +1,26 @@
+/*
+ * Book-launch edition UI gating.
+ *
+ * These rules hide the full-ecosystem cross-sell surfaces so the free Windy Word
+ * build is pure voice-to-text. They ONLY take effect when edition-ui.js adds the
+ * gating class to <html> — which happens when edition.js sets ECOSYSTEM_UI:false
+ * (the book-launch reader/lite editions). The full build (main branch) leaves the
+ * flag true, no class is added, and every surface renders exactly as before.
+ *
+ * Nothing is removed — this is a reversible light switch. Flip ECOSYSTEM_UI back
+ * to true in edition.js (or build from main) and the ecosystem returns untouched.
+ */
+
+/* Ecosystem off → hide the product-switcher tab bar, the marketplace/Bundles
+   button, the "Hatch Your Agent" card mount, and the embedded ecosystem webviews. */
+html.edition-simple #ecosystemWrapper,
+html.edition-simple #marketplaceBtn,
+html.edition-simple #hatchCardMount,
+html.edition-simple #ecoWebviewContainer {
+  display: none !important;
+}
+
+/* Translation off (optional, independent flag) → hide the 🌐 Translate menu. */
+html.edition-no-translate #translateMenuWrap {
+  display: none !important;
+}

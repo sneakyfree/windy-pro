@@ -6,6 +6,13 @@
 
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
+// Build-time edition config (book-launch flags). With `sandbox: true` the preload
+// CANNOT require() local modules, so we fetch the flags synchronously from main
+// (which can read edition.js). sendSync resolves before any page script runs, so
+// the renderer's edition-ui.js head script + settings.js have them at first paint.
+let _edition = { edition: 'reader', ecosystemUI: true, translationUI: true, unlimitedRecording: false };
+try { _edition = { ..._edition, ...(ipcRenderer.sendSync('get-edition-flags') || {}) }; } catch (_) { /* full UI fallback */ }
+
 // ── Helpers ──────────────────────────────────────────────────────
 // Restrict ipcRenderer.on listeners to known channels only (defense-in-depth)
 const ALLOWED_RECEIVE_CHANNELS = new Set([
@@ -50,6 +57,14 @@ contextBridge.exposeInMainWorld('windyAPI', {
     safeOn('settings:apply-side-effect', (_e, payload) => callback(payload));
   },
   platform: process.platform,
+
+  // ═══ Edition (book-launch UI flags) ════════════════════════════
+  // Read synchronously by edition-ui.js to hide ecosystem/cross-sell surfaces
+  // in the free build. ecosystemUI=false → pure voice-to-text. Reversible.
+  edition: _edition.edition,
+  ecosystemUI: _edition.ecosystemUI !== false,
+  translationUI: _edition.translationUI !== false,
+  unlimitedRecording: _edition.unlimitedRecording === true,
 
   // ═══ Settings ══════════════════════════════════════════════════
   getSettings: () => ipcRenderer.invoke('get-settings'),

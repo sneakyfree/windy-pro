@@ -5795,6 +5795,24 @@ registerSettingsIpc({
   reservedShortcuts: RESERVED_SHORTCUTS,
 });
 
+// Edition flags for the renderer. With `sandbox: true`, the preload CANNOT
+// require() local modules — so it can't read edition.js directly. The main
+// process can, and exposes the book-launch flags synchronously via sendSync so
+// the renderer has them before first paint (used by edition-ui.js + settings.js).
+ipcMain.on('get-edition-flags', (event) => {
+  try {
+    const ed = require('./edition');
+    event.returnValue = {
+      edition: ed.EDITION,
+      ecosystemUI: ed.ECOSYSTEM_UI !== false,
+      translationUI: ed.TRANSLATION_UI !== false,
+      unlimitedRecording: ed.UNLIMITED_RECORDING === true,
+    };
+  } catch (_) {
+    event.returnValue = { edition: 'reader', ecosystemUI: true, translationUI: true, unlimitedRecording: false };
+  }
+});
+
 // SEC-P0: Encrypted API key storage via safeStorage (replaces plaintext localStorage)
 ipcMain.handle('set-api-key', (event, keyName, keyValue) => {
   const allowedKeys = ['groqApiKey', 'openaiApiKey', 'deepgramApiKey'];
@@ -6264,23 +6282,52 @@ async function _transcribeViaWS(wavPath) {
 //
 // Returns the same shape the IPC handler returns (text or full WS
 // result depending on caller).
+/**
+ * Resolve an ABSOLUTE path to the ffmpeg binary for the transcription pipeline.
+ *
+ * GUI-launched macOS apps do NOT inherit the shell PATH (no /usr/local/bin or
+ * /opt/homebrew/bin), so a bare `spawn('ffmpeg')` throws ENOENT even when
+ * ffmpeg is installed for terminal use — the exact "Transcription failed:
+ * spawn ffmpeg ENOENT" symptom. We must hand spawn an absolute path. Priority:
+ *   1. wizard-installed copy (~/.windy-pro/bin, <userData>/bin) — writable
+ *   2. in-app bundled ffmpeg (Resources/bundled/ffmpeg[-<arch>]) — always
+ *      shipped + correct arch; the reliable hit in a packaged build. Arch
+ *      suffix supports universal (multi-arch) builds.
+ *   3. legacy mis-located paths, kept as harmless fallbacks
+ *   4. common Homebrew/system locations (defensive, for the GUI-PATH case)
+ *   5. bare 'ffmpeg' (PATH) — last resort
+ */
+function resolveFfmpegBin() {
+  const exe = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+  const home = path.join(os.homedir(), '.windy-pro');
+  let userData = null;
+  try { userData = app.getPath('userData'); } catch (_) {}
+  const res = process.resourcesPath;
+  const candidates = [
+    path.join(home, 'bin', exe),
+    userData && path.join(userData, 'bin', exe),
+    res && path.join(res, 'bundled', `ffmpeg-${process.arch}`, exe),
+    res && path.join(res, 'bundled', 'ffmpeg', exe),
+    path.join(home, 'ffmpeg', exe),
+    userData && path.join(userData, 'ffmpeg', exe),
+    process.execPath && path.join(path.dirname(process.execPath), exe),
+    '/opt/homebrew/bin/' + exe,
+    '/usr/local/bin/' + exe,
+    '/usr/bin/' + exe,
+  ].filter(Boolean);
+  for (const fp of candidates) {
+    try { if (fs.existsSync(fp)) return fp; } catch (_) { /* ignore */ }
+  }
+  return 'ffmpeg';
+}
+
 async function _transcribeAudioFile(audioPath, opts = {}) {
   const tmpDir = os.tmpdir();
   const tmpId = crypto.randomBytes(16).toString('hex');
   const wavPath = path.join(tmpDir, `windy-agent-batch-${tmpId}.wav`);
 
-  // Locate ffmpeg using the same search list the legacy IPC uses
-  const appDataDir = app.getPath('userData');
-  const homeDataDir = path.join(os.homedir(), '.windy-pro');
-  const ffmpegExeName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
-  let ffmpegBin = 'ffmpeg';
-  for (const fp of [
-    path.join(homeDataDir, 'ffmpeg', ffmpegExeName),
-    path.join(appDataDir, 'ffmpeg', ffmpegExeName),
-    path.join(path.dirname(process.execPath), ffmpegExeName),
-  ]) {
-    if (fs.existsSync(fp)) { ffmpegBin = fp; break; }
-  }
+  // Locate ffmpeg — GUI apps don't inherit shell PATH, so resolve an absolute path.
+  const ffmpegBin = resolveFfmpegBin();
 
   try {
     await execFileAsync(ffmpegBin, [
@@ -6328,22 +6375,10 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     await fsp.writeFile(webmPath, buffer);
     console.info('[Batch Local] Saved webm:', webmPath, '— size:', buffer.length, 'bytes');
 
-    // Find ffmpeg — check bundled location (.windy-pro), userData, then PATH
+    // appDataDir is reused later in this handler (venv resolution); keep it.
     const appDataDir = app.getPath('userData');
-    const homeDataDir = path.join(os.homedir(), '.windy-pro');
-    let ffmpegBin = 'ffmpeg';
-    const ffmpegExeName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
-    const ffmpegSearchPaths = [
-      path.join(homeDataDir, 'ffmpeg', ffmpegExeName),
-      path.join(appDataDir, 'ffmpeg', ffmpegExeName),
-      path.join(path.dirname(process.execPath), ffmpegExeName),
-    ];
-    for (const fp of ffmpegSearchPaths) {
-      if (fs.existsSync(fp)) {
-        ffmpegBin = fp;
-        break;
-      }
-    }
+    // Find ffmpeg — GUI apps don't inherit shell PATH, so resolve an absolute path.
+    const ffmpegBin = resolveFfmpegBin();
     console.info('[Batch Local] Using ffmpeg:', ffmpegBin);
 
     // P0-1: Convert to WAV using async execFile (non-blocking)
@@ -6481,6 +6516,12 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
     const trimmed = text.trim();
     const pasteConfig = store.get('paste') || { strategy: 'auto', fallbackChain: [] };
     console.info(`[AutoPaste] Text length: ${trimmed.length} chars, config.strategy=${pasteConfig.strategy}`);
+
+    // Tank rule: the transcript must NEVER be lost. Put it on the clipboard
+    // FIRST — before any focus/permission step that might bail (e.g. missing
+    // Accessibility) — so the user can always recover it with a manual Cmd+V
+    // even when auto-injection can't run.
+    try { clipboard.writeText(trimmed); } catch (_) { /* clipboard best-effort */ }
 
     // ── macOS PID activation (load-bearing focus prep) ──
     // Move focus to the tracked target app BEFORE paste fires. Without this,
@@ -9020,6 +9061,41 @@ app.on('ready', () => {
 
 app.whenReady().then(async () => {
   _perfMark('app.whenReady()');
+
+  // ── macOS microphone access (CRITICAL for dictation) ──────────────────────
+  // The Chromium permission handler approves getUserMedia at the APP layer, but
+  // that does NOT obtain the macOS OS-level (TCC) microphone grant. Without the
+  // OS grant, CoreAudio hands the process SILENT audio — getUserMedia succeeds,
+  // MediaRecorder records, but the result is empty ("No speech detected in
+  // recording"). A signed app usually gets an automatic system prompt on first
+  // device access; we must not rely on that. Explicitly ask the OS so the
+  // permission dialog reliably appears on first run (and after updates).
+  if (process.platform === 'darwin') {
+    try {
+      const { systemPreferences } = require('electron');
+      const status = systemPreferences.getMediaAccessStatus('microphone');
+      console.info('[Media] microphone access status at launch:', status);
+      if (status !== 'granted') {
+        systemPreferences.askForMediaAccess('microphone')
+          .then((granted) => console.info('[Media] microphone access granted:', granted))
+          .catch((e) => console.warn('[Media] askForMediaAccess(microphone) failed:', e?.message));
+      }
+      // Camera — for the opt-in video-recording feature ("Save video recordings").
+      // askForMediaAccess only shows a prompt when status is 'not-determined'; if
+      // already granted/denied it resolves instantly with no prompt, so requesting
+      // at launch costs at most one first-run dialog the user can decline.
+      const camStatus = systemPreferences.getMediaAccessStatus('camera');
+      console.info('[Media] camera access status at launch:', camStatus);
+      if (camStatus !== 'granted') {
+        systemPreferences.askForMediaAccess('camera')
+          .then((granted) => console.info('[Media] camera access granted:', granted))
+          .catch((e) => console.warn('[Media] askForMediaAccess(camera) failed:', e?.message));
+      }
+    } catch (e) {
+      console.warn('[Media] media access check failed:', e?.message);
+    }
+  }
+
   // Clear file cache in dev mode to ensure fresh JS files
   if (process.argv.includes('--dev')) {
     try { await session.defaultSession.clearCache(); } catch (_) {}
