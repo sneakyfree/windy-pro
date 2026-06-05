@@ -9189,7 +9189,14 @@ app.whenReady().then(async () => {
           console.warn('[Heartbeat] License revoked — all models deleted');
         }
       });
-      heartbeat.start();
+      // Book-launch free build: license enforcement is OFF (edition.js), so the heartbeat
+      // is never started — no phone-home, no offline-grace lockout, no revoke-delete.
+      // The app must work forever, offline. Paid enforcement lives in a separate build only.
+      if (require('./edition').LICENSE_ENFORCEMENT) {
+        heartbeat.start();
+      } else {
+        console.info('[Main] License enforcement OFF (free book-launch build) — heartbeat not started');
+      }
     } catch (e) {
       console.error('[Main] Heartbeat service skipped:', e.message);
     }
