@@ -6123,7 +6123,13 @@ ipcMain.handle('open-external-url', async (event, url) => {
 // WindyTune Adaptive Model Tracker
 // ═══════════════════════════════════════════════════════════════════
 const _windyTuneHistory = [];          // Rolling window of last 10 transcription timings
-const WINDYTUNE_MODEL_LADDER = ['tiny', 'base', 'small', 'medium', 'large-v3']; // fastest → most accurate
+const WINDYTUNE_ALL_LADDER = ['tiny', 'base', 'small', 'medium', 'large-v3']; // fastest → most accurate
+// Tank-proof: WindyTune may only move among models that are actually BUNDLED on the
+// machine — it can never auto-switch to an absent model and trigger a silent multi-GB
+// download (the wobble we're killing). With one bundled model the ladder has a single
+// rung, so Auto simply stays put. Expand BUNDLED_MODELS when the full engine pack ships.
+const WINDYTUNE_BUNDLED_MODELS = ['base']; // Windy Core
+const WINDYTUNE_MODEL_LADDER = WINDYTUNE_ALL_LADDER.filter(m => WINDYTUNE_BUNDLED_MODELS.includes(m));
 const WINDYTUNE_THRESHOLDS = {
   DOWNGRADE_RATIO: 2.0,       // transcription_time / audio_duration > 2x → too slow
   UPGRADE_RATIO: 0.3,         // ratio < 0.3 → model is fast enough to try bigger

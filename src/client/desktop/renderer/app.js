@@ -29,7 +29,7 @@ class WindyApp {
     // Engine name → model mapping (UI names → actual models)
     this._engineModelMap = {
       'local': null, // auto-detect
-      'windytune': 'small', // auto-pilot: starts with small, auto-adjusts
+      'windytune': 'base', // auto-pilot: uses the bundled model (Windy Core) — see BUNDLED_MODELS
       'windy-nano': 'tiny', 'windy-lite': 'small', 'windy-core': 'base',
       'windy-edge': 'medium', 'windy-plus': 'large-v2', 'windy-turbo': 'large-v3',
       'windy-pro-engine': 'large-v3-turbo',
@@ -1778,6 +1778,21 @@ class WindyApp {
   setEngine(engineId) {
     const isAuto = engineId === 'windytune';
     const model = (this._engineModelMap && this._engineModelMap[engineId]) || 'small';
+    // ── Tank-proof guard ──────────────────────────────────────────────────
+    // Only switch to a model that's actually bundled on the machine. Picking an
+    // un-bundled engine would make faster-whisper start a silent multi-GB download
+    // and the engine would appear to "hang" — the exact wobble we're killing. The
+    // full engine pack (all 7 models, shipped offline) lights the rest up; until
+    // then, non-bundled picks give clear feedback instead of breaking. Expand
+    // BUNDLED_MODELS to the full set when the pack ships.
+    const BUNDLED_MODELS = ['base']; // Windy Core
+    if (!isAuto && !BUNDLED_MODELS.includes(model)) {
+      const eng = this._engineLadder.find(e => e.id === engineId);
+      if (typeof this.showReconnectToast === 'function') {
+        this.showReconnectToast(`⬇ ${eng ? eng.name : engineId}${eng?.size ? ' (' + eng.size + ')' : ''} ships in the full engine pack — coming soon. Keeping your current engine so nothing stalls.`);
+      }
+      return; // do NOT switch — prevents the silent download/hang
+    }
     this.transcriptionEngine = engineId;
     try {
       if (window.windyAPI?.updateSettings) window.windyAPI.updateSettings({ engine: engineId, model });
