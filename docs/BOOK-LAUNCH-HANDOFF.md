@@ -87,6 +87,10 @@ Dead-DNS domains (windysearch.ai, windycloud.com, windycode.ai, windycall/cell/t
 ### F. Windows installer
 `npm run build:win:reader` (+ Windows code-signing cert). Site currently marks Windows "Soon" — flip `available: true` in `Download.jsx` when it ships. **Windows matters for a mass book audience — prioritize.**
 
+### G. Simplify the app's in-app UI for the free edition  ← important for the "dead simple" promise
+The desktop app still shows ecosystem/paid UI a free reader would find confusing: a **Marketplace** button, **ecosystem-nav** webviews (Chat/Clone/Cloud/etc.), a **document translator**, **conversation mode**, and the agent **"hatch" ceremony**. Files: `src/client/desktop/renderer/{marketplace.js, ecosystem-nav.js, document-translator.js, conversation-mode.js, hatch-ceremony.js, chat.html, mini-translate.js}` + the `marketplaceBtn` in `index.html`. The *features* are already tier-gated off for free, but the *entry points still render*. For the "one big button, dead simple" vision, gate these UI surfaces behind the edition (e.g. a `edition.showEcosystem` flag, default false for the free build) so the free app is just voice-to-text + settings.
+**NOT done autonomously:** it's UI work best done with the app running (during first-run) so layout is verifiable, and `app.js`/`main.js` sit near the fragile Wayland paste/focus code the repo warns about. Recommend doing it as part of the first-run pass.
+
 ---
 
 ## ⚠️ Review before launch
