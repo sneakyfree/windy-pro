@@ -677,7 +677,10 @@ function createWindow() {
     },
 
     // Visual
-    backgroundColor: '#0B0F1A',  // Opaque dark (temp Linux tweak)
+    // Match the in-app .window background (--bg-primary #1F2937) so any pixels the
+    // page hasn't painted (e.g. a brief gap after zoom/resize) blend seamlessly
+    // instead of showing as a near-black strip below the UI.
+    backgroundColor: '#1F2937',
     hasShadow: true,
     opacity: appearance.opacity,
 
@@ -5807,9 +5810,10 @@ ipcMain.on('get-edition-flags', (event) => {
       ecosystemUI: ed.ECOSYSTEM_UI !== false,
       translationUI: ed.TRANSLATION_UI !== false,
       unlimitedRecording: ed.UNLIMITED_RECORDING === true,
+      cloudStorage: ed.CLOUD_STORAGE !== false,
     };
   } catch (_) {
-    event.returnValue = { edition: 'reader', ecosystemUI: true, translationUI: true, unlimitedRecording: false };
+    event.returnValue = { edition: 'reader', ecosystemUI: true, translationUI: true, unlimitedRecording: false, cloudStorage: true };
   }
 });
 

@@ -69,12 +69,22 @@ class SettingsPanel {
           <div class="setting-row">
             <label for="transcriptionModeSelect">Transcription Route</label>
             <select id="transcriptionModeSelect">
-              <option value="auto" selected>🔄 Auto — local first, cloud failover</option>
+              ${(() => {
+                // Book-launch: no cloud transcription yet — lock to Local only.
+                // Reversible: the full Auto/Cloud options return when CLOUD_STORAGE
+                // is true (cloud ships).
+                if (window.windyAPI && window.windyAPI.cloudStorage === false) {
+                  return `<option value="local_only" selected>🏠 Local only — runs on your machine</option>`;
+                }
+                return `<option value="auto" selected>🔄 Auto — local first, cloud failover</option>
               <option value="local_only">🏠 Local only — never use cloud</option>
-              <option value="cloud_only">☁️ Cloud only — always use cloud</option>
+              <option value="cloud_only">☁️ Cloud only — always use cloud</option>`;
+              })()}
             </select>
           </div>
-          <p class="settings-hint" id="transcriptionModeHint">Auto switches to cloud when local performance drops. Cloud only is best for weak hardware.</p>
+          <p class="settings-hint" id="transcriptionModeHint">${(window.windyAPI && window.windyAPI.cloudStorage === false)
+            ? 'Everything is transcribed right on your machine — nothing is ever sent to the cloud.'
+            : 'Auto switches to cloud when local performance drops. Cloud only is best for weak hardware.'}</p>
           <div class="setting-row" id="maxDurationRow">
             <label for="maxRecordingSelect">Max Recording</label>
             <select id="maxRecordingSelect">
