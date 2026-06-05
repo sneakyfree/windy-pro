@@ -2992,11 +2992,17 @@ class SettingsPanel {
   open() {
     this.panel.classList.add('open');
     this.isOpen = true;
+    // The macOS window is focusable:false (so it can't steal the cursor during
+    // paste-to-cursor). That also blocks ALL keyboard input — including rebinding
+    // shortcuts and typing in fields. Make it focusable while Settings is open,
+    // and release it on close.
+    try { window.windyAPI?.requestFocus?.(); } catch (_) { /* best-effort */ }
   }
 
   close() {
     this.panel.classList.remove('open');
     this.isOpen = false;
+    try { window.windyAPI?.releaseFocus?.(); } catch (_) { /* best-effort */ }
   }
 
   /**

@@ -31,6 +31,7 @@ html.edition-no-translate #translateMenuWrap {
    everything else is auto. Hide both legacy sections. Reversible: they return in
    the full build (no edition-simple class). */
 html.edition-simple #transcriptionEngineSection,
-html.edition-simple #localModelSection {
+html.edition-simple #localModelSection,
+html.edition-simple #settingsPlanSection {
   display: none !important;
 }
