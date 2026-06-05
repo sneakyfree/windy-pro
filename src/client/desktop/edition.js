@@ -13,7 +13,13 @@
  */
 'use strict';
 
-const EDITION = process.env.WINDY_EDITION || 'reader';
+function resolveEdition() {
+  // Baked at build time by scripts/stamp-edition.cjs. Falls back to env, then 'reader',
+  // so a plain build (no stamp file) is always a valid Reader edition.
+  try { return require('./edition.generated.json').edition; } catch (_) { /* not stamped */ }
+  return process.env.WINDY_EDITION || 'reader';
+}
+const EDITION = resolveEdition() === 'lite' ? 'lite' : 'reader';
 
 const ENGINE_SETS = {
   lite: ['windy-lite-ct2', 'windy-turbo-ct2'],
