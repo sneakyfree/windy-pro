@@ -6467,18 +6467,33 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     const pythonPathLocal = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
     console.info('[Batch Local] Using python (fallback):', pythonPathLocal);
 
-    const modelName = store.get('engine.model') || 'base';
-    const localModelDir = path.join(os.homedir(), '.windy-pro', 'model', `faster-whisper-${modelName}`);
-    let bundledModelDir = '';
-    if (process.resourcesPath) {
-      bundledModelDir = path.join(process.resourcesPath, 'bundled', 'model', `faster-whisper-${modelName}`);
+    let modelName = store.get('engine.model') || 'base';
+    // Resolve a model name to its on-disk dir. Lean Windy engines use canonical
+    // ids (windy-*-ct2 → bundled/model/<id>/); legacy whisper names use the
+    // faster-whisper-<name>/ scheme. Both the bundled (offline) and any
+    // user-downloaded (~/.windy-pro/model) locations are checked.
+    const dirFor = (m) => (/-ct2$/.test(m) ? m : `faster-whisper-${m}`);
+    const userModelRoot = path.join(os.homedir(), '.windy-pro', 'model');
+    const bundledModelRoot = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : '';
+    const findModelDir = (m) => {
+      const u = path.join(userModelRoot, dirFor(m));
+      if (fs.existsSync(path.join(u, 'model.bin'))) return u;
+      if (bundledModelRoot) {
+        const b = path.join(bundledModelRoot, dirFor(m));
+        if (fs.existsSync(path.join(b, 'model.bin'))) return b;
+      }
+      return null;
+    };
+    let resolvedDir = findModelDir(modelName);
+    if (!resolvedDir && modelName !== 'base') {
+      // Tank-proof: never hand a bare model name to faster-whisper for an unbundled
+      // model — it would trigger a multi-GB HuggingFace download mid-transcribe and
+      // hang. Fall back to the always-bundled `base` engine instead.
+      console.warn(`[Batch Local] model "${modelName}" not present locally/bundled — falling back to bundled base`);
+      resolvedDir = findModelDir('base');
+      modelName = 'base';
     }
-    let modelRef = `"${modelName}"`;
-    if (fs.existsSync(path.join(localModelDir, 'model.bin'))) {
-      modelRef = `"${localModelDir.replace(/\\/g, '/')}"`;
-    } else if (bundledModelDir && fs.existsSync(path.join(bundledModelDir, 'model.bin'))) {
-      modelRef = `"${bundledModelDir.replace(/\\/g, '/')}"`;
-    }
+    const modelRef = resolvedDir ? `"${resolvedDir.replace(/\\/g, '/')}"` : `"${modelName}"`;
     console.info('[Batch Local] Model ref:', modelRef, '(configured model:', modelName, ')');
     const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${tmpId}.py`);
     const scriptContent = [

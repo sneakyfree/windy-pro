@@ -381,20 +381,32 @@ function findRecursive(dir, name) {
 }
 
 function buildModel(targetOut) {
-  const modelOut = path.join(targetOut, 'model', 'faster-whisper-base');
-  if (fs.existsSync(modelOut) && !force) {
-    ok(`model already present: ${path.relative(repoRoot, modelOut)}`);
-    return modelOut;
-  }
-  if (!fs.existsSync(existingModelDir)) {
-    warn(`source model not found: ${existingModelDir} — skipping`);
+  // Bundle EVERY model dir present in bundled/model/ — the Windy Core base PLUS
+  // all lean windy-*-ct2 engines fetched by scripts/fetch-lean-engines.sh — so the
+  // Reader edition ships all 7 engines fully offline. Each dir must contain model.bin.
+  const srcModelRoot = path.join(repoRoot, 'bundled', 'model');
+  const outModelRoot = path.join(targetOut, 'model');
+  if (!fs.existsSync(srcModelRoot)) {
+    warn(`source model dir not found: ${srcModelRoot} — skipping`);
     return null;
   }
-  fs.mkdirSync(path.dirname(modelOut), { recursive: true });
-  log(`copying model: ${path.relative(repoRoot, existingModelDir)} → ${path.relative(repoRoot, modelOut)}`);
-  execSync(`cp -r "${existingModelDir}" "${modelOut}"`);
-  ok(`model copied (${du(modelOut)})`);
-  return modelOut;
+  const dirs = fs.readdirSync(srcModelRoot)
+    .filter((d) => fs.existsSync(path.join(srcModelRoot, d, 'model.bin')));
+  if (dirs.length === 0) {
+    warn(`no model dirs with model.bin under ${srcModelRoot} — skipping (run scripts/fetch-lean-engines.sh)`);
+    return null;
+  }
+  fs.mkdirSync(outModelRoot, { recursive: true });
+  for (const d of dirs) {
+    const src = path.join(srcModelRoot, d);
+    const dst = path.join(outModelRoot, d);
+    if (fs.existsSync(dst) && !force) { ok(`model already present: ${path.relative(repoRoot, dst)}`); continue; }
+    if (fs.existsSync(dst)) execSync(`rm -rf "${dst}"`);
+    log(`copying model: bundled/model/${d} → ${path.relative(repoRoot, dst)}`);
+    execSync(`cp -r "${src}" "${dst}"`);
+    ok(`model copied: ${d} (${du(dst)})`);
+  }
+  return outModelRoot;
 }
 
 /**

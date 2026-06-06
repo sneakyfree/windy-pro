@@ -27,15 +27,20 @@ class WindyApp {
     this.transcriptionEngine = 'local';  // 'local' | 'cloud' | 'stream' | 'smart'
 
     // Engine name → model mapping (UI names → actual models)
+    // Each Windy engine maps to its canonical lean CT2 model id (windy-*-ct2).
+    // main.js resolves these to the bundled offline model dir of the same name —
+    // NO legacy whisper-name translation (which mis-mapped Plus→large-v2 etc. and
+    // could trigger a 3GB HuggingFace download). WindyTune (Auto) stays on the
+    // always-bundled multilingual `base` for a rock-solid default. See BUNDLED_MODELS.
     this._engineModelMap = {
       'local': null, // auto-detect
-      'windytune': 'base', // auto-pilot: uses the bundled model (Windy Core) — see BUNDLED_MODELS
-      'windy-nano': 'tiny', 'windy-lite': 'small', 'windy-core': 'base',
-      'windy-edge': 'medium', 'windy-plus': 'large-v2', 'windy-turbo': 'large-v3',
-      'windy-pro-engine': 'large-v3-turbo',
-      'windy-nano-cpu': 'tiny', 'windy-lite-cpu': 'small', 'windy-core-cpu': 'base',
-      'windy-edge-cpu': 'medium', 'windy-plus-cpu': 'large-v2', 'windy-turbo-cpu': 'large-v3',
-      'windy-pro-engine-cpu': 'large-v3-turbo',
+      'windytune': 'base', // auto-pilot: bundled multilingual base — see BUNDLED_MODELS
+      'windy-nano': 'windy-nano-ct2', 'windy-lite': 'windy-lite-ct2', 'windy-core': 'windy-core-ct2',
+      'windy-edge': 'windy-edge-ct2', 'windy-plus': 'windy-plus-ct2', 'windy-turbo': 'windy-turbo-ct2',
+      'windy-pro-engine': 'windy-pro-engine-ct2',
+      'windy-nano-cpu': 'windy-nano-ct2', 'windy-lite-cpu': 'windy-lite-ct2', 'windy-core-cpu': 'windy-core-ct2',
+      'windy-edge-cpu': 'windy-edge-ct2', 'windy-plus-cpu': 'windy-plus-ct2', 'windy-turbo-cpu': 'windy-turbo-ct2',
+      'windy-pro-engine-cpu': 'windy-pro-engine-ct2',
       'windy-translate-spark': null, 'windy-translate-standard': null
     };
 
@@ -1637,13 +1642,13 @@ class WindyApp {
   // WindyTune is running (e.g. 'small') back into a real engine name (Windy Lite).
   get _engineLadder() {
     return [
-      { id: 'windy-nano',       model: 'tiny',           name: 'Windy Nano',  size: '38 MB',  note: 'Fastest · lightest' },
-      { id: 'windy-lite',       model: 'small',          name: 'Windy Lite',  size: '72 MB',  note: 'Fast · balanced' },
-      { id: 'windy-core',       model: 'base',           name: 'Windy Core',  size: '234 MB', note: 'Balanced everyday driver' },
-      { id: 'windy-edge',       model: 'medium',         name: 'Windy Edge',  size: '727 MB', note: 'High-accuracy workhorse' },
-      { id: 'windy-plus',       model: 'large-v2',       name: 'Windy Plus',  size: '734 MB', note: 'Premium accuracy' },
-      { id: 'windy-turbo',      model: 'large-v3',       name: 'Windy Turbo', size: '777 MB', note: 'State of the art · 99 languages' },
-      { id: 'windy-pro-engine', model: 'large-v3-turbo', name: 'Windy Word',  size: '1.5 GB', note: 'Flagship · most accurate' },
+      { id: 'windy-nano',       model: 'windy-nano-ct2',       name: 'Windy Nano',  size: '38 MB',  note: 'Fastest · lightest' },
+      { id: 'windy-lite',       model: 'windy-lite-ct2',       name: 'Windy Lite',  size: '72 MB',  note: 'Fast · balanced' },
+      { id: 'windy-core',       model: 'windy-core-ct2',       name: 'Windy Core',  size: '234 MB', note: 'Balanced everyday driver' },
+      { id: 'windy-edge',       model: 'windy-edge-ct2',       name: 'Windy Edge',  size: '727 MB', note: 'High-accuracy workhorse' },
+      { id: 'windy-plus',       model: 'windy-plus-ct2',       name: 'Windy Plus',  size: '734 MB', note: 'Premium accuracy' },
+      { id: 'windy-turbo',      model: 'windy-turbo-ct2',      name: 'Windy Turbo', size: '777 MB', note: 'State of the art · 99 languages' },
+      { id: 'windy-pro-engine', model: 'windy-pro-engine-ct2', name: 'Windy Word',  size: '1.5 GB', note: 'Flagship · most accurate' },
     ];
   }
 
@@ -1777,15 +1782,16 @@ class WindyApp {
    */
   setEngine(engineId) {
     const isAuto = engineId === 'windytune';
-    const model = (this._engineModelMap && this._engineModelMap[engineId]) || 'small';
+    const model = (this._engineModelMap && this._engineModelMap[engineId]) || 'base';
     // ── Tank-proof guard ──────────────────────────────────────────────────
     // Only switch to a model that's actually bundled on the machine. Picking an
     // un-bundled engine would make faster-whisper start a silent multi-GB download
-    // and the engine would appear to "hang" — the exact wobble we're killing. The
-    // full engine pack (all 7 models, shipped offline) lights the rest up; until
-    // then, non-bundled picks give clear feedback instead of breaking. Expand
-    // BUNDLED_MODELS to the full set when the pack ships.
-    const BUNDLED_MODELS = ['base']; // Windy Core
+    // and the engine would appear to "hang" — the exact wobble we're killing.
+    // The Reader edition ships all 7 lean engines offline, so the full ladder is
+    // live; `base` is the always-present WindyTune default.
+    const BUNDLED_MODELS = ['base',
+      'windy-nano-ct2', 'windy-lite-ct2', 'windy-core-ct2', 'windy-edge-ct2',
+      'windy-plus-ct2', 'windy-turbo-ct2', 'windy-pro-engine-ct2'];
     if (!isAuto && !BUNDLED_MODELS.includes(model)) {
       const eng = this._engineLadder.find(e => e.id === engineId);
       if (typeof this.showReconnectToast === 'function') {
@@ -1874,8 +1880,10 @@ class WindyApp {
         if (auto) {
           // Reflect whichever model WindyTune is actually running (default small/Lite).
           const m = (modelName && byModel[modelName]) ? modelName
-            : ((this._engineModelMap && this._engineModelMap['windytune']) || 'small');
-          eng = byModel[m] || byModel['small'];
+            : ((this._engineModelMap && this._engineModelMap['windytune']) || 'base');
+          // WindyTune runs the bundled multilingual `base`, which has no ladder
+          // entry — present it as the Core engine so the badge stays human-readable.
+          eng = byModel[m] || byId['windy-core'];
         } else {
           eng = byId[activeEngine];
         }
