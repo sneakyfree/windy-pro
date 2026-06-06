@@ -58,6 +58,11 @@ module.exports = {
   // the license-tier 5-minute cap). Paid/tiered builds set this false to restore
   // the tiered Max-Recording dropdown.
   UNLIMITED_RECORDING: true,
+  // Cloud storage (WindyCloud sync). OFF for book-launch — WindyCloud isn't live
+  // yet, so the storage selectors hide the WindyCloud/Both options and lock to
+  // local-only. The local-folder picker (save anywhere on disk) stays. Flip to
+  // true when WindyCloud ships to restore cloud/sync storage. Reversible.
+  CLOUD_STORAGE: false,
   ENGINES: ENGINE_SETS[EDITION] || ENGINE_SETS.reader,
   ENGINE_SETS,
 };

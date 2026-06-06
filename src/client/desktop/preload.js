@@ -10,7 +10,7 @@ const { contextBridge, ipcRenderer, webFrame } = require('electron');
 // CANNOT require() local modules, so we fetch the flags synchronously from main
 // (which can read edition.js). sendSync resolves before any page script runs, so
 // the renderer's edition-ui.js head script + settings.js have them at first paint.
-let _edition = { edition: 'reader', ecosystemUI: true, translationUI: true, unlimitedRecording: false };
+let _edition = { edition: 'reader', ecosystemUI: true, translationUI: true, unlimitedRecording: false, cloudStorage: true };
 try { _edition = { ..._edition, ...(ipcRenderer.sendSync('get-edition-flags') || {}) }; } catch (_) { /* full UI fallback */ }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   ecosystemUI: _edition.ecosystemUI !== false,
   translationUI: _edition.translationUI !== false,
   unlimitedRecording: _edition.unlimitedRecording === true,
+  cloudStorage: _edition.cloudStorage !== false,
 
   // ═══ Settings ══════════════════════════════════════════════════
   getSettings: () => ipcRenderer.invoke('get-settings'),
