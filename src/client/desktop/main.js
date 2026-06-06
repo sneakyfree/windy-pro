@@ -488,6 +488,62 @@ function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
 }
 
 /**
+ * First-run (book-launch bypass): build the offline engine venv from bundled wheels.
+ *
+ * The installer-v2 wizard normally creates ~/.windy-pro/venv and pip-installs the
+ * bundled wheels into it — the engine server imports faster_whisper/websockets/etc.,
+ * which are NOT present in the read-only bundled Python inside the .app. The
+ * book-launch fast path skips the wizard, so we replicate just that one step here.
+ *
+ * Fully offline (`pip install --no-index --find-links <bundled/wheels>`), arch-native
+ * (runs the user's own matching bundled Python — no cross-arch issue), and first-run
+ * only: the venv persists, so later launches are instant. Runs ASYNC so the window +
+ * welcome panel paint immediately; startPythonServer() is deferred and invoked when the
+ * venv is ready (or, on failure, as a best-effort fallback to bundled/system Python).
+ *
+ * Returns true if a build was started (caller should defer startPythonServer); false if
+ * the venv already exists or required assets are missing (caller should start now).
+ */
+function ensureEngineVenv(appDataDir) {
+  try {
+    const venvDir = path.join(appDataDir, 'venv');
+    const venvPy = process.platform === 'win32'
+      ? path.join(venvDir, 'Scripts', 'python.exe')
+      : path.join(venvDir, 'bin', 'python');
+    if (fs.existsSync(venvPy)) return false; // already set up — normal start handles it
+
+    const bundledRoot = process.resourcesPath ? path.join(process.resourcesPath, 'bundled') : null;
+    if (!bundledRoot) return false;
+    const bundledPy = process.platform === 'win32'
+      ? path.join(bundledRoot, 'python', 'python.exe')
+      : path.join(bundledRoot, 'python', 'bin', 'python3');
+    const wheelsDir = path.join(bundledRoot, 'wheels');
+    const reqFile = path.join(bundledRoot, 'requirements-bundle.txt');
+    if (!fs.existsSync(bundledPy) || !fs.existsSync(wheelsDir) || !fs.existsSync(reqFile)) return false;
+
+    console.info('[Python] First run: building offline engine venv from bundled wheels…');
+    const { execFile } = require('child_process');
+    const startServer = () => {
+      try { pythonRestartCount = 0; startPythonServer(); }
+      catch (e) { console.error('[Python] start after venv failed:', e.message); }
+    };
+    execFile(bundledPy, ['-m', 'venv', venvDir], { timeout: 120000 }, (e1) => {
+      if (e1) { console.error('[Python] venv create failed — falling back:', e1.message); startServer(); return; }
+      execFile(venvPy, ['-m', 'pip', 'install', '--no-index', '--no-cache-dir', '--find-links', wheelsDir, '-r', reqFile],
+        { timeout: 300000, maxBuffer: 64 * 1024 * 1024 }, (e2) => {
+          if (e2) console.error('[Python] venv pip install failed — falling back:', e2.message);
+          else console.info('[Python] ✓ engine venv ready');
+          startServer();
+        });
+    });
+    return true;
+  } catch (e) {
+    console.error('[Python] ensureEngineVenv error:', e.message);
+    return false;
+  }
+}
+
+/**
  * Start the Python WebSocket server as a child process
  */
 function startPythonServer() {
@@ -9143,6 +9199,10 @@ app.whenReady().then(async () => {
   const { InstallWizard } = require(wizardPath);
   const APP_DATA_DIR = path.join(os.homedir(), '.windy-pro');
 
+  // When the book-launch fast path builds the engine venv on first run (async), defer
+  // the initial Python-server start until the venv is ready (ensureEngineVenv restarts
+  // it) — avoids a burst of failing bundled-Python attempts while pip runs.
+  let deferPythonForVenv = false;
   if (InstallWizard.needsSetup(APP_DATA_DIR)) {
     // ── Book-launch fast path ─────────────────────────────────────────────────
     // The free Windy Word builds bundle every speech engine offline and have no
@@ -9175,6 +9235,8 @@ app.whenReady().then(async () => {
           defaultModel: engines[0]
         }, null, 2));
         console.info(`[Main] Book-launch fast path: all ${engines.length} engines bundled — wizard skipped`);
+        // Replicate the one wizard step the engine truly needs: the offline venv.
+        deferPythonForVenv = ensureEngineVenv(APP_DATA_DIR);
       }
     } catch (e) {
       console.warn('[Main] Book-launch fast path skipped:', e.message);
@@ -9206,7 +9268,9 @@ app.whenReady().then(async () => {
     }
   }
 
-  startPythonServer();
+  // On a book-launch first run the venv is still building; ensureEngineVenv() starts the
+  // server when it's ready. Otherwise (venv exists, or normal/wizard path) start now.
+  if (!deferPythonForVenv) startPythonServer();
   createWindow();
   createTray();
   createMacOSMenu();  // macOS application menu bar (Cmd+Q, Cmd+H, Cmd+M, Edit menu)
