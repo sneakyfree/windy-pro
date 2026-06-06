@@ -46,6 +46,11 @@ for row in "${ENGINES[@]}"; do
   done
   if [ "$tok" = "A" ]; then cp "$TOK_A" "$d/tokenizer.json"; else cp "$TOK_B" "$d/tokenizer.json"; fi
   echo "   tokenizer.json $(wc -c <"$d/tokenizer.json") bytes ($tok)"
+  # B-family (large-v3 / large-v3-turbo / distil-large-v3) uses 128 mel bins; faster-whisper
+  # defaults to 80 and crashes at transcribe ("expected (1,128,3000), got (1,80,3000)")
+  # unless the model dir carries a 128-mel preprocessor_config.json. A-family (80 mel) is
+  # the library default and needs none.
+  if [ "$tok" = "B" ]; then cp "$ROOT/scripts/release/preprocessor_config-128mel.json" "$d/preprocessor_config.json"; echo "   preprocessor_config.json 128-mel"; fi
   # mirror into extraResources/ via hardlinks (no extra disk, same filesystem)
   m="$MIRROR/$id"; rm -rf "$m"; cp -al "$d" "$m"
 done
