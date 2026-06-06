@@ -17,4 +17,7 @@
 faster-whisper
 websockets
 sounddevice
-numpy
+# numpy MUST stay <2: ctranslate2 4.7.1 is compiled against the numpy 1.x C-ABI and
+# SEGFAULTS at inference with numpy 2.x; onnxruntime<2 also constrains numpy<2. The
+# bundle previously shipped numpy 2.4.x, which crashed offline dictation on first run.
+numpy==1.26.4
