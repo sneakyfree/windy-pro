@@ -22,7 +22,63 @@ class FirstRunExperience {
   show() {
     if (localStorage.getItem('windy_first_run_complete')) return;
     this._createOverlay();
-    this._renderStep(1);
+    // Book-launch (free) editions bundle every engine offline and hide the ecosystem
+    // surfaces, so the 4-step hardware-scan / model-pick / "open the Chat tab" flow is
+    // moot here. Show one dead-simple screen: the dictation hotkey + the mic-permission
+    // heads-up. The full ecosystem build (ecosystemUI !== false) keeps the 4-step flow.
+    const api = (typeof window !== 'undefined' && window.windyAPI) || {};
+    if (api.ecosystemUI === false) {
+      this._renderSimpleWelcome();
+    } else {
+      this._renderStep(1);
+    }
+  }
+
+  /**
+   * Single-screen welcome for the free book-launch build. No hardware scan, no model
+   * picker, no cross-sell — just how to start dictating and the mic-permission note.
+   */
+  _renderSimpleWelcome() {
+    const api = (typeof window !== 'undefined' && window.windyAPI) || {};
+    const isMac = ((api.platform || navigator.platform || '') + navigator.userAgent)
+      .toLowerCase().indexOf('mac') !== -1;
+    // Default recording hotkey is CommandOrControl+Shift+Space (main.js DEFAULT_HOTKEYS).
+    const hotkey = isMac ? '⌘ ⇧ Space' : 'Ctrl + Shift + Space';
+    const micNote = isMac
+      ? 'The first time you speak, macOS will ask to use your microphone &mdash; click <b style="color:#E2E8F0;">OK</b>.'
+      : 'The first time you speak, allow microphone access if your system asks.';
+
+    this.card.innerHTML = `
+      <div style="text-align:center;">
+        <div style="font-size:48px;margin-bottom:16px;">&#127786;&#65039;</div>
+        <h1 style="font-size:24px;font-weight:700;margin:0 0 8px 0;color:#F8FAFC;">
+          Welcome to Windy Word
+        </h1>
+        <p style="font-size:15px;color:#A78BFA;font-weight:600;margin:0 0 28px 0;">
+          Stop typing through a straw.
+        </p>
+        <p style="font-size:14px;color:#94A3B8;line-height:1.7;margin:0 0 20px 0;">
+          Press the hotkey, talk, and your words land wherever your cursor is &mdash;
+          instantly, privately, on your machine.
+        </p>
+        <div style="
+          display:inline-block;
+          background:linear-gradient(135deg,rgba(139,92,246,0.18),rgba(99,102,241,0.18));
+          border:1px solid rgba(139,92,246,0.45);
+          border-radius:12px;
+          padding:14px 22px;
+          margin:0 0 24px 0;
+          font-size:20px;font-weight:700;color:#F8FAFC;letter-spacing:0.5px;
+        ">${hotkey}</div>
+        <p style="font-size:13px;color:#94A3B8;line-height:1.6;margin:0;">
+          ${micNote}
+        </p>
+      </div>
+    `;
+    this._addButton('Start Dictating →', () => {
+      localStorage.setItem('windy_first_run_complete', 'true');
+      this._dismiss();
+    });
   }
 
   _createOverlay() {

@@ -9144,6 +9144,46 @@ app.whenReady().then(async () => {
   const APP_DATA_DIR = path.join(os.homedir(), '.windy-pro');
 
   if (InstallWizard.needsSetup(APP_DATA_DIR)) {
+    // ── Book-launch fast path ─────────────────────────────────────────────────
+    // The free Windy Word builds bundle every speech engine offline and have no
+    // account/license/model-download, so the installer-v2 wizard's real job (pick +
+    // download engines) is already done. Running its 10-screen flow on a launch-day
+    // machine only adds failure surface (hardware scan, a paywall screen, a network
+    // "install" step). When every engine this edition needs is already on disk, write
+    // the same config.json the wizard's final step writes and boot straight in. The
+    // in-app welcome panel (first-run.js) covers the only first-run touchpoint that
+    // matters: the dictation hotkey + mic permission. installer-v2 is left fully
+    // intact and simply never runs here. Reversible: nothing removed.
+    try {
+      const edition = require('./edition');
+      const engines = Array.isArray(edition.ENGINES) ? edition.ENGINES : [];
+      const userModelRoot = path.join(APP_DATA_DIR, 'model');
+      const bundledModelRoot = process.resourcesPath
+        ? path.join(process.resourcesPath, 'bundled', 'model') : '';
+      const isBundled = (id) => {
+        const dir = /-ct2$/.test(id) ? id : `faster-whisper-${id}`;
+        if (fs.existsSync(path.join(userModelRoot, dir, 'model.bin'))) return true;
+        return !!bundledModelRoot && fs.existsSync(path.join(bundledModelRoot, dir, 'model.bin'));
+      };
+      if (engines.length > 0 && engines.every(isBundled)) {
+        fs.mkdirSync(APP_DATA_DIR, { recursive: true });
+        fs.writeFileSync(path.join(APP_DATA_DIR, 'config.json'), JSON.stringify({
+          version: app.getVersion(),
+          installedAt: new Date().toISOString(),
+          models: engines,
+          pairs: [],
+          defaultModel: engines[0]
+        }, null, 2));
+        console.info(`[Main] Book-launch fast path: all ${engines.length} engines bundled — wizard skipped`);
+      }
+    } catch (e) {
+      console.warn('[Main] Book-launch fast path skipped:', e.message);
+    }
+  }
+
+  // Run the real installer-v2 wizard only if setup is STILL needed (i.e. engines must
+  // be downloaded). The fast path above satisfies it for the bundled free builds.
+  if (InstallWizard.needsSetup(APP_DATA_DIR)) {
     console.info('[Main] Wizard needed — launching setup wizard');
     // Load platform adapter for this OS
     let platformAdapter = null;
