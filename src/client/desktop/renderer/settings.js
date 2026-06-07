@@ -378,7 +378,7 @@ class SettingsPanel {
               <span class="hotkey-desc">Cycles: Full window → Tornado → Hidden</span>
               <div class="shortcut-capture shortcut-btn" id="shortcutShowHide" tabindex="0" data-key="showHide">${this._mod}+Shift+W</div>
             </div>
-            <div class="hotkey-item-stacked">
+            <div class="hotkey-item-stacked" id="qtHotkeyRow">
               <span class="hotkey-label">🌐 Quick Translate</span>
               <span class="hotkey-desc">Opens floating translate pop-up for instant translations</span>
               <div class="shortcut-capture shortcut-btn" id="shortcutQuickTranslate" tabindex="0" data-key="quickTranslate">${this._mod}+Shift+T</div>

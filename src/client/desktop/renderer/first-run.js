@@ -58,8 +58,9 @@ class FirstRunExperience {
           Stop typing through a straw.
         </p>
         <p style="font-size:14px;color:#94A3B8;line-height:1.7;margin:0 0 20px 0;">
-          Press the hotkey, talk, and your words land wherever your cursor is &mdash;
-          instantly, privately, on your machine.
+          Click the big <b style="color:#E2E8F0;">🎤 Record</b> button (or press the shortcut
+          below), talk, and your words land wherever your cursor is &mdash; instantly,
+          privately, on your machine.
         </p>
         <div style="
           display:inline-block;

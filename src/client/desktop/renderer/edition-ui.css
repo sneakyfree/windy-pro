@@ -24,7 +24,8 @@ html.edition-simple #ecoWebviewContainer {
    Quick-Translate row in Settings (its hotkey is also unregistered in main.js, so no
    dangling shortcut to a hidden feature). */
 html.edition-no-translate #translateMenuWrap,
-html.edition-no-translate #shortcutRow_quickTranslate {
+html.edition-no-translate #shortcutRow_quickTranslate,
+html.edition-no-translate #qtHotkeyRow {
   display: none !important;
 }
 
