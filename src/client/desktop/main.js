@@ -828,7 +828,7 @@ function createWindow() {
           "connect-src 'self' ws://127.0.0.1:* wss://*.windyword.ai https://*.windyword.ai https://api.groq.com https://api.openai.com https://api.deepgram.com wss://api.deepgram.com; " +
           "img-src 'self' data:; " +
           "media-src 'self' blob: data:; " +
-          "base-src 'self'; " +
+          "base-uri 'self'; " +
           "object-src 'none';"
         ]
       }
@@ -9422,15 +9422,22 @@ app.whenReady().then(async () => {
     // Auto-cleanup old archive media files (keeps transcripts forever)
     autoCleanupArchive();
 
-    // Auto-update check (T16 — fail silently if no releases)
+    // Auto-update check (T16 — fail silently if no releases).
+    // Skipped in the book-launch build: it's distributed via R2, not GitHub releases,
+    // so checkForUpdates only 404s on latest-mac.yml and leaks an unhandled rejection
+    // on every launch. Gated on the edition AUTO_UPDATE flag (reversible).
     try {
-      const { WindyUpdater } = require('./updater');
-      updaterInstance = new WindyUpdater();
-      updaterInstance.checkForUpdates();
-      // Periodic update check every 6 hours
-      setInterval(() => {
-        try { updaterInstance.checkForUpdates(); } catch (e) { /* silent */ }
-      }, 6 * 60 * 60 * 1000);
+      if (require('./edition').AUTO_UPDATE === false) {
+        console.info('[Main] Auto-updater disabled (book-launch build — distributed via R2, not GitHub releases)');
+      } else {
+        const { WindyUpdater } = require('./updater');
+        updaterInstance = new WindyUpdater();
+        Promise.resolve(updaterInstance.checkForUpdates()).catch((e) => console.warn('[Updater] check failed:', e?.message));
+        // Periodic update check every 6 hours
+        setInterval(() => {
+          try { Promise.resolve(updaterInstance.checkForUpdates()).catch(() => {}); } catch (e) { /* silent */ }
+        }, 6 * 60 * 60 * 1000);
+      }
     } catch (e) {
       console.error('[Main] Auto-updater skipped:', e.message);
     }

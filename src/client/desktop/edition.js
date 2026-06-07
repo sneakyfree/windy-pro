@@ -63,6 +63,12 @@ module.exports = {
   // local-only. The local-folder picker (save anywhere on disk) stays. Flip to
   // true when WindyCloud ships to restore cloud/sync storage. Reversible.
   CLOUD_STORAGE: false,
+  // Auto-update via electron-updater (GitHub releases). OFF for book-launch: this
+  // build is distributed as a notarized DMG from R2 (downloads.windyword.ai), not via
+  // GitHub releases, so the updater only 404s on latest-mac.yml and throws an unhandled
+  // rejection on every launch. Users update by re-downloading. Flip true in the full
+  // build (which ships GitHub releases) to restore auto-update. Reversible.
+  AUTO_UPDATE: false,
   ENGINES: ENGINE_SETS[EDITION] || ENGINE_SETS.reader,
   ENGINE_SETS,
 };
