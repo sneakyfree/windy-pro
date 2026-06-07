@@ -61,8 +61,8 @@ class SettingsPanel {
               <option value="batch" selected>✨ Batch — record first, transcribe on stop</option>
               ${(window.windyAPI && window.windyAPI.ecosystemUI === false) ? '' : `
               <option value="live">⚡ Live — see words as you speak</option>
-              <option value="hybrid">🔄 Hybrid — live preview + final polish</option>
-              <option value="clone_capture">🧬 Clone Capture — record only, no transcription</option>`}
+              <option value="hybrid">🔄 Hybrid — live preview + final polish</option>`}
+              <option value="clone_capture">🧬 Clone Capture — record only, no transcription</option>
             </select>
           </div>
           <p class="settings-hint" id="recordingModeHint">Records everything, transcribes on stop. Best accuracy. Works with any engine above.</p>
