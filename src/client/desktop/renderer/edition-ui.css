@@ -20,8 +20,11 @@ html.edition-simple #ecoWebviewContainer {
   display: none !important;
 }
 
-/* Translation off (optional, independent flag) → hide the 🌐 Translate menu. */
-html.edition-no-translate #translateMenuWrap {
+/* Translation off (optional, independent flag) → hide the 🌐 Translate menu AND the
+   Quick-Translate row in Settings (its hotkey is also unregistered in main.js, so no
+   dangling shortcut to a hidden feature). */
+html.edition-no-translate #translateMenuWrap,
+html.edition-no-translate #shortcutRow_quickTranslate {
   display: none !important;
 }
 

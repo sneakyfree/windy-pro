@@ -5655,12 +5655,19 @@ function registerHotkeys() {
   });
   console.info(`[Hotkey] Show/Hide (${hotkeys.showHide}): ${regShow ? 'OK' : 'FAILED'}`);
 
-  // Quick Translate hotkey
-  const qtAccel = hotkeys.quickTranslate || 'CommandOrControl+Shift+T';
-  const regTranslate = globalShortcut.register(qtAccel, () => {
-    showMiniTranslateWindow();
-  });
-  console.info(`[Hotkey] Quick Translate (${qtAccel}): ${regTranslate ? 'OK' : 'FAILED'}`);
+  // Quick Translate hotkey — skip when Translate is hidden (book-launch), so the
+  // global Ctrl+Shift+T can't summon a hidden, cloud-only feature.
+  let translationOn = true;
+  try { translationOn = require('./edition').TRANSLATION_UI !== false; } catch (_) {}
+  if (translationOn) {
+    const qtAccel = hotkeys.quickTranslate || 'CommandOrControl+Shift+T';
+    const regTranslate = globalShortcut.register(qtAccel, () => {
+      showMiniTranslateWindow();
+    });
+    console.info(`[Hotkey] Quick Translate (${qtAccel}): ${regTranslate ? 'OK' : 'FAILED'}`);
+  } else {
+    console.info('[Hotkey] Quick Translate skipped (Translate hidden in this edition)');
+  }
 }
 
 /**
