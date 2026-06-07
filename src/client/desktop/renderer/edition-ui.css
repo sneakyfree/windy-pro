@@ -38,3 +38,12 @@ html.edition-simple #localModelSection,
 html.edition-simple #settingsPlanSection {
   display: none !important;
 }
+
+/* Book-launch: camera/video recording is a Windy Clone (AI-avatar) data-capture
+   feature — out of place (and privacy-alarming) in a pure dictation tool. Hide the
+   whole group. The Transcription-Mode dropdown is also trimmed to Batch-only in
+   settings.js (Live/Hybrid can't load the bundled engines; Clone Capture is ecosystem).
+   Reversible: returns in the full build (no edition-simple class). */
+html.edition-simple #videoRecordingGroup {
+  display: none !important;
+}

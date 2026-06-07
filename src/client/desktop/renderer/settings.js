@@ -59,9 +59,10 @@ class SettingsPanel {
             <label for="recordingModeSelect">Transcription Mode</label>
             <select id="recordingModeSelect">
               <option value="batch" selected>✨ Batch — record first, transcribe on stop</option>
+              ${(window.windyAPI && window.windyAPI.ecosystemUI === false) ? '' : `
               <option value="live">⚡ Live — see words as you speak</option>
               <option value="hybrid">🔄 Hybrid — live preview + final polish</option>
-              <option value="clone_capture">🧬 Clone Capture — record only, no transcription</option>
+              <option value="clone_capture">🧬 Clone Capture — record only, no transcription</option>`}
             </select>
           </div>
           <p class="settings-hint" id="recordingModeHint">Records everything, transcribes on stop. Best accuracy. Works with any engine above.</p>
@@ -118,6 +119,12 @@ class SettingsPanel {
             <input type="checkbox" id="saveText" checked>
           </div>
           <p class="settings-hint">Saves transcript text to your archive. Uncheck for "Snapchat mode" — text pastes to cursor then disappears forever.</p>
+          <!-- Camera/video recording = Windy Clone (AI-avatar) data capture. Hidden for
+               book-launch (a camera toggle in a dictation app alarms normies + it's an
+               ecosystem feature). Wrapped in #videoRecordingGroup, CSS-hidden via
+               .edition-simple so the elements stay in the DOM (no JS null refs) and the
+               feature stays off by default. Reversible: returns in the full build. -->
+          <div id="videoRecordingGroup">
           <div class="setting-row" title="Record video from your camera during voice sessions.">
             <label for="saveVideo">Save video recordings</label>
             <input type="checkbox" id="saveVideo">
@@ -132,6 +139,7 @@ class SettingsPanel {
             </select>
           </div>
           <p id="cameraCapHint" class="settings-hint" style="display:none; font-size:11px;"></p>
+          </div>
           <div id="audioQualityRow" class="setting-row" title="Audio recording quality.">
             <label for="audioQuality">Audio quality</label>
             <select id="audioQuality">
