@@ -2574,11 +2574,7 @@ class WindyApp {
         let videoEnabled = false;
         if (window.windyAPI) {
           const settings = await window.windyAPI.getSettings();
-          // Book-launch (ecosystemUI=false): camera/video capture is a Windy Clone
-          // feature and is hidden — never activate the camera here, regardless of any
-          // stored saveVideo value. Reversible: full build (ecosystemUI!==false) honors
-          // the setting.
-          videoEnabled = (window.windyAPI.ecosystemUI !== false) && !!settings?.saveVideo;
+          videoEnabled = !!settings?.saveVideo;
         }
         if (videoEnabled) {
           if (videoBadge) { videoBadge.style.display = 'inline-flex'; videoBadge.textContent = '🎬 Video…'; }
