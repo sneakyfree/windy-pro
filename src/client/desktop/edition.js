@@ -71,6 +71,16 @@ module.exports = {
   // rejection on every launch. Users update by re-downloading. Flip true in the full
   // build (which ships GitHub releases) to restore auto-update. Reversible.
   AUTO_UPDATE: false,
+  // Agent-control HTTP surface (localhost:18765 — /recording, /audio, /sound-effects,
+  // /widget, /paste config, /install, /transcribe-file) that lets an external AI agent
+  // drive the app. OFF for book-launch: it's an ecosystem/power-user feature, and being
+  // unauthenticated (localhost-only, but no token/Origin check) a visited web page could
+  // POST to it and silently start the mic — not something to ship to a general audience.
+  // When false: the control server is NOT started on macOS/Windows (it has no other job
+  // there — hotkeys use Electron globalShortcut); on Linux it still runs for Wayland paste
+  // but serves ONLY the legacy paste/toggle actions, not the agent routes. The full build
+  // (main branch) leaves this true so agents can drive it. Reversible. See docs/AGENT-ARCHITECTURE.md.
+  AGENT_CONTROL: false,
   ENGINES: ENGINE_SETS[EDITION] || ENGINE_SETS.reader,
   ENGINE_SETS,
 };

@@ -2653,6 +2653,15 @@ function startWaylandControlServer() {
   // also serves the agent-control surface (paste strategies, settings) so we
   // start it on ALL platforms — agents need it on macOS/Windows/X11 too.
   const http = require('http');
+  // Edition gate: the agent-control surface is OFF in reader/lite (book-launch). On
+  // macOS/Windows the control server has no other purpose (hotkeys use Electron
+  // globalShortcut), so don't start it at all. On Linux it's still needed for Wayland
+  // paste, so it starts but only serves the legacy paste/toggle actions (see route guard).
+  const agentControl = require('./edition').AGENT_CONTROL !== false;
+  if (!agentControl && !PLATFORM.isWayland) {
+    console.info('[AgentCtrl] disabled in this edition — control server not started (no Wayland paste need on this platform)');
+    return;
+  }
   const actionHandlers = {
     'toggle-recording': () => toggleRecording(),
     'paste-transcript': () => pasteTranscript(),
@@ -2688,6 +2697,14 @@ function startWaylandControlServer() {
     }
     const urlObj = new URL(req.url, 'http://localhost');
     const pathname = urlObj.pathname;
+
+    // Reader/lite editions: serve ONLY the legacy Wayland-paste actions; the agent-control
+    // surface (paste config, recording, audio, effects, widget, install, transcribe) is off.
+    if (!agentControl && /^\/(paste|recording|audio|sound-effects|widget|install|transcribe-file)(\/|$)/.test(pathname)) {
+      res.writeHead(404, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'agent-control is disabled in this edition' }));
+      return;
+    }
 
     // ── Agent-control endpoints (paste strategy registry) ──
     try {
