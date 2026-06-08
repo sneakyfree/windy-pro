@@ -453,7 +453,10 @@ function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
 
     const safeText = text.trim();
     const mode = engine.archiveMode || 'both';
-    const meta = `Start: ${start.toISOString()}\nEnd: ${end.toISOString()}\nWords: ${safeText.split(/\s+/).filter(Boolean).length}`;
+    // Record the app that had focus (future-proofs per-app insights — "you dictate most
+    // into VS Code"). Strip newlines and '|' so it can't break the daily-aggregate format.
+    const appName = String(global._lastFocusedApp || 'unknown').replace(/[\r\n|]/g, ' ').slice(0, 80);
+    const meta = `Start: ${start.toISOString()}\nEnd: ${end.toISOString()}\nWords: ${safeText.split(/\s+/).filter(Boolean).length}\nApp: ${appName}`;
 
     const wrote = [];
 
@@ -3741,7 +3744,7 @@ function startWaylandControlServer() {
           const archiveRoot = getArchiveFolder();
           try { await fsp.access(archiveRoot); } catch {
             res.writeHead(200, { 'content-type': 'application/json' });
-            res.end(JSON.stringify({ totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0 }));
+            res.end(JSON.stringify({ totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0, wpm: 0, streak: 0 }));
             return;
           }
           if (_archiveStatsCache && Date.now() - _archiveStatsCacheTime < ARCHIVE_STATS_CACHE_TTL) {
@@ -6954,7 +6957,7 @@ ipcMain.handle('get-archive-history', async () => {
               if (line.startsWith('# ')) continue;
               // Handle both **Bold:** and bare Key: metadata formats
               const isMetaLine = (line.startsWith('**') && line.includes(':')) ||
-                /^(Start|End|Words|Engine|Time|Date|Duration):\s/.test(line);
+                /^(Start|End|Words|Engine|Time|Date|Duration|App):\s/.test(line);
               if (isMetaLine) {
                 if (line.includes('Words:')) {
                   const m = line.match(/Words:\s*(\d+)/);
@@ -7326,10 +7329,10 @@ ipcMain.handle('get-archive-stats', async () => {
   }
   try {
     const archiveRoot = getArchiveFolder();
-    try { await fsp.access(archiveRoot); } catch { return { totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0 }; }
+    try { await fsp.access(archiveRoot); } catch { return { totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0, wpm: 0, streak: 0 }; }
 
     let totalFiles = 0, totalSize = 0, days = new Set();
-    let audioBytes = 0, videoBytes = 0, totalWords = 0, totalSessions = 0, totalChars = 0;
+    let audioBytes = 0, videoBytes = 0, totalWords = 0, totalSessions = 0, totalChars = 0, speakingMs = 0;
 
     const items = await fsp.readdir(archiveRoot);
     for (const item of items) {
@@ -7352,10 +7355,16 @@ ipcMain.handle('get-archive-stats', async () => {
             totalSessions++;
             try {
               const content = await fsp.readFile(path.join(itemPath, file), 'utf-8');
-              const textLines = content.split('\n').filter(l => !l.startsWith('#') && !l.startsWith('**') && l.trim() !== '---' && l.trim() !== '');
-              const text = textLines.join(' ').trim();
-              totalWords += text.split(/\s+/).filter(Boolean).length;
-              totalChars += text.length;
+              // Word count: prefer the authoritative "Words:" metadata (the real text count
+              // written at archive time); fall back to counting the body for legacy entries.
+              // (The old approach counted the Start/End/Words meta lines as text — inflated.)
+              const wm = content.match(/^Words:\s*(\d+)/m);
+              const body = content.includes('---') ? content.split('---').slice(1).join('---').trim() : content;
+              totalWords += wm ? parseInt(wm[1], 10) : body.split(/\s+/).filter(Boolean).length;
+              totalChars += body.length;
+              // Speaking duration (for wpm) from Start/End metadata.
+              const sm = content.match(/^Start:\s*(.+)$/m), em = content.match(/^End:\s*(.+)$/m);
+              if (sm && em) { const dur = new Date(em[1]) - new Date(sm[1]); if (dur > 0 && dur < 3600000) speakingMs += dur; }
             } catch (_) { }
           }
         } catch (_) { }
@@ -7363,12 +7372,21 @@ ipcMain.handle('get-archive-stats', async () => {
     }
     const audioHours = (audioBytes / 1024 / 16) / 3600;
     const videoHours = (videoBytes / 1024 / 100) / 3600;
+    // wpm = total words / total speaking minutes (Wispr-style average dictation rate).
+    const wpm = speakingMs > 0 ? Math.round(totalWords / (speakingMs / 60000)) : 0;
+    // Current day-streak: consecutive days with >=1 dictation, counting back from today.
+    // Today is optional (grace) — the streak only breaks once a full day is missed.
+    const pad = (n) => String(n).padStart(2, '0');
+    const keyOf = (dt) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+    let streak = 0; const cursor = new Date();
+    if (!days.has(keyOf(cursor))) cursor.setDate(cursor.getDate() - 1);
+    while (days.has(keyOf(cursor))) { streak++; cursor.setDate(cursor.getDate() - 1); }
     const result = {
       totalFiles, totalSizeMB: Math.round(totalSize / (1024 * 1024) * 10) / 10,
       days: days.size,
       audioHours: Math.round(audioHours * 100) / 100,
       videoHours: Math.round(videoHours * 100) / 100,
-      totalWords, totalSessions, totalChars
+      totalWords, totalSessions, totalChars, wpm, streak
     };
     _archiveStatsCache = result;
     _archiveStatsCacheTime = Date.now();

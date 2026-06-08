@@ -138,6 +138,8 @@
         <div class="transcript-content" id="transcriptContent">
           <!-- Transcript segments will appear here -->
           <div class="placeholder" id="shortcutsPlaceholder">
+            <!-- Local, private dictation insights (stats card + recent timeline) — 100% on-device, by home-insights.js -->
+            <div id="homeInsightsMount"></div>
             <!-- Wave 8 Grandma Ribbon: Hatch Your Agent card is mounted here by hatch-ceremony.js -->
             <div id="hatchCardMount"></div>
             <div style="margin-bottom:8px;font-weight:600;">⌨️ Keyboard Shortcuts</div>
@@ -344,6 +346,7 @@
   <!-- P4 transcript-format helpers — pure functions, no DOM, used
        by app.js _exportTranscript via window.WindyTranscriptFormat. -->
   <script src="transcript-format.js"></script>
+  <script src="home-insights.js"></script>
   <script src="app.js"></script>
 </body>
 
