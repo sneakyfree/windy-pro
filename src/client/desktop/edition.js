@@ -48,13 +48,12 @@ module.exports = {
   // branch) leaves this true and shows everything. Flip to true to restore the
   // full ecosystem UI in this build with zero other changes. Reversible by design.
   ECOSYSTEM_UI: false,
-  // Translation tools (🌐 Translate Studio / Quick Translate). HIDDEN for book-launch:
-  // text translation is cloud-powered (Groq/OpenAI LLMs) and needs internet + a user
-  // API key, and the on-device pair-model path isn't shipped in this build — so it's a
-  // dead-end for an offline, keyless audience. Hiding keeps the app pure, 100%-local
-  // dictation. Fast-follow: re-enable once a local NLLB-200 (CTranslate2) MT model is
-  // bundled to make translation truly on-device. Flip true to restore. Reversible.
-  TRANSLATION_UI: false,
+  // Translation tools (🌐 Translate Studio / Quick Translate). ON: translation is now
+  // fully ON-DEVICE — a bundled NLLB-200 (CTranslate2 int8) model + SentencePiece,
+  // routed through the offline 'translate-local' engine path. No internet, no API key.
+  // Works on a plane or a mountain bus. (Speech→English is local Whisper; text→any
+  // language is local NLLB.) Reversible: flip false to strip back to pure dictation.
+  TRANSLATION_UI: true,
   // Unlimited recording length — the dictate-a-whole-book use case. The
   // max-duration auto-stop is already disabled in the renderer for free builds;
   // this flag makes the Settings UI honest about it (shows "Unlimited" instead of

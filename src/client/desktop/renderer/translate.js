@@ -445,7 +445,7 @@ class TranslatePanel {
         this._targetText.textContent = `Translating to ${this._getLanguageName(targetLang)}…`;
 
         try {
-            const result = await window.windyAPI.translateText(englishText, 'en', targetLang);
+            const result = await window.windyAPI.translateLocal(englishText, 'en', targetLang);
 
             if (result?.ok && result.translatedText) {
                 this._showResult({
@@ -514,36 +514,19 @@ class TranslatePanel {
         this._confidence.innerHTML = '';
         this._resultArea.classList.add('visible');
 
-        // Try offline first if backend is down
-        if (!this.isOnline) {
-            try {
-                const result = await window.windyAPI.translateOffline(text, this._sourceLang.value, this._targetLang.value);
-                if (result && result.translated) {
-                    this._showResult({ text, translatedText: result.translated, confidence: result.confidence || 0.7, offline: true });
-                    return;
-                }
-            } catch (e) {
-                this._log.warn('_translateText', `offline fallback failed: ${e.message || e}`);
-            }
-            this._targetText.textContent = '⚠️ Offline — translation queued';
-            this.offlineQueue.push({ type: 'text', text, sourceLang: this._sourceLang.value, targetLang: this._targetLang.value });
-            return;
-        }
-
-        // ── Try local AI translation (Groq/OpenAI via main process) ──
+        // ── On-device NLLB translation — works online OR offline, no API key ──
         try {
-            const result = await window.windyAPI.translateText(text, this._sourceLang.value, this._targetLang.value);
+            const result = await window.windyAPI.translateLocal(text, this._sourceLang.value, this._targetLang.value);
             if (result?.ok && result.translatedText) {
                 this._showResult({
                     text,
                     translatedText: result.translatedText,
-                    confidence: result.confidence || 0.9,
-                    engine: result.engine || 'ai'
+                    confidence: 0.9,
+                    engine: result.engine || 'nllb-local'
                 });
-                const engineLabel = result.engine === 'groq' ? 'Groq AI' : result.engine === 'openai' ? 'OpenAI' : 'AI';
                 this._confidence.innerHTML = `
                     <span class="confidence-badge" style="background:#3B82F620;color:#3B82F6;border:1px solid #3B82F640;">
-                        🌐 Translated by ${engineLabel}
+                        🏠 Translated on-device by NLLB
                     </span>
                 `;
                 return;

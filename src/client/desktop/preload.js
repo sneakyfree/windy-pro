@@ -204,6 +204,8 @@ contextBridge.exposeInMainWorld('windyAPI', {
   // ═══ Translation ══════════════════════════════════════════════
   translateOffline: (text, sourceLang, targetLang) => ipcRenderer.invoke('translate-offline', text, sourceLang, targetLang),
   translateText: (text, sourceLang, targetLang) => ipcRenderer.invoke('translate-text', text, sourceLang, targetLang),
+  // On-device NLLB translation (fully offline, no key) — preferred for the book-launch build.
+  translateLocal: (text, sourceLang, targetLang) => ipcRenderer.invoke('translate-local', text, sourceLang, targetLang),
   openMiniTranslate: () => ipcRenderer.send('open-mini-translate'),
   onOpenTranslate: (callback) => {
     safeOn('open-translate', () => callback());

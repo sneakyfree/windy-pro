@@ -248,8 +248,8 @@ async function doTranslate() {
     textInput.value = '';
 
     try {
-        const result = await miniAPI.translate(text, sourceLang.value, targetLang.value);
-        if (result.translatedText) {
+        const result = await miniAPI.translateLocal(text, sourceLang.value, targetLang.value);
+        if (result?.ok && result.translatedText) {
             appendChunk(`${result.translatedText}`);
         } else {
             appendChunk('⚠️ No translation returned', 'error');

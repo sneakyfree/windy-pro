@@ -2279,9 +2279,9 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
 
         // If target is NOT English, translate English → target
         if (localResult.text && localResult.text.trim()) {
-          const textResult = await translateTextViaAI(localResult.text, 'en', targetLang);
+          const textResult = await nllbTranslate(localResult.text, 'en', targetLang);
           if (textResult && textResult.ok) {
-            return { text: textResult.translatedText, detectedLang: localResult.detectedLang, engine: textResult.engine || 'groq', modelInfo };
+            return { text: textResult.translatedText, detectedLang: localResult.detectedLang, engine: textResult.engine || 'nllb-local', modelInfo };
           }
           return { ...localResult, modelInfo };
         }
@@ -8720,6 +8720,56 @@ ipcMain.handle('translate-offline', async (event, text, sourceLang, targetLang) 
     return { ok: false, error: err.message };
   }
 });
+
+// On-device translation — NLLB-200 (CTranslate2 + SentencePiece), fully offline.
+// Spawns the venv python on the bundled translate_local.py with the bundled model
+// (same offline-correct pattern as 'batch-transcribe-local'). No cloud, no API key.
+// Shared by the 'translate-local' IPC and the mini-translate-speech text step.
+async function nllbTranslate(text, sourceLang, targetLang) {
+  if (!text || !targetLang) return { ok: false, error: 'Missing text or target language' };
+  const tmpReq = path.join(os.tmpdir(), `windy-tr-${crypto.randomBytes(8).toString('hex')}.json`);
+  try {
+    const appDataDir = path.join(os.homedir(), '.windy-pro');
+    const venvPy = process.platform === 'win32'
+      ? path.join(appDataDir, 'venv', 'Scripts', 'python.exe')
+      : path.join(appDataDir, 'venv', 'bin', 'python');
+    const bundledRoot = process.resourcesPath ? path.join(process.resourcesPath, 'bundled') : null;
+    const bundledPy = bundledRoot
+      ? (process.platform === 'win32' ? path.join(bundledRoot, 'python', 'python.exe') : path.join(bundledRoot, 'python', 'bin', 'python3'))
+      : null;
+    const pythonPath = fs.existsSync(venvPy) ? venvPy : (bundledPy && fs.existsSync(bundledPy) ? bundledPy : 'python3');
+
+    const modelDir = app.isPackaged
+      ? path.join(process.resourcesPath, 'bundled', 'model', 'nllb-200-600M')
+      : path.join(__dirname, '..', '..', '..', 'extraResources', 'model', 'nllb-200-600M');
+    const scriptPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'engine', 'translate_local.py')
+      : path.join(__dirname, '..', '..', 'engine', 'translate_local.py');
+
+    if (!fs.existsSync(path.join(modelDir, 'model.bin'))) {
+      return { ok: false, error: 'On-device translation model is not installed.' };
+    }
+    fs.writeFileSync(tmpReq, JSON.stringify({
+      model_dir: modelDir,
+      items: [{ text, source: sourceLang || 'en', target: targetLang }],
+    }));
+
+    const { stdout } = await execFileAsync(pythonPath, [scriptPath, tmpReq], {
+      timeout: 60000,
+      maxBuffer: 16 * 1024 * 1024,
+      env: { ...process.env, HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1', KMP_DUPLICATE_LIB_OK: 'TRUE' },
+    });
+    const parsed = JSON.parse(stdout.trim().split('\n').pop());
+    if (!parsed.ok) return { ok: false, error: parsed.error || 'translation failed' };
+    return { ok: true, translatedText: parsed.results?.[0]?.translatedText || '', engine: parsed.engine || 'nllb-local' };
+  } catch (err) {
+    console.error('[translate-local] error:', err.message);
+    return { ok: false, error: err.message };
+  } finally {
+    try { fs.unlinkSync(tmpReq); } catch (_) {}
+  }
+}
+ipcMain.handle('translate-local', (event, text, sourceLang, targetLang) => nllbTranslate(text, sourceLang, targetLang));
 
 ipcMain.handle('apply-coupon', async (event, code) => {
   try {

@@ -210,8 +210,8 @@ class DocumentTranslator {
             document.getElementById('doc-progress-text').textContent = `Translating... ${pct}% (${i + 1}/${chunks.length} chunks)`;
 
             try {
-                const result = await window.windyAPI.translateOffline(chunks[i], this.sourceLang === 'auto' ? 'en' : this.sourceLang, this.targetLang);
-                translated.push(result?.text || result || chunks[i]);
+                const result = await window.windyAPI.translateLocal(chunks[i], this.sourceLang === 'auto' ? 'en' : this.sourceLang, this.targetLang);
+                translated.push((result?.ok && result.translatedText) ? result.translatedText : chunks[i]);
             } catch {
                 translated.push(chunks[i]); // fallback to original
             }
@@ -260,8 +260,8 @@ class DocumentTranslator {
             tbody.appendChild(row);
 
             try {
-                const result = await window.windyAPI.translateOffline(phrase, this.sourceLang === 'auto' ? 'en' : this.sourceLang, this.targetLang);
-                const translated = result?.text || result || phrase;
+                const result = await window.windyAPI.translateLocal(phrase, this.sourceLang === 'auto' ? 'en' : this.sourceLang, this.targetLang);
+                const translated = (result?.ok && result.translatedText) ? result.translatedText : phrase;
                 row.cells[1].textContent = translated;
                 row.cells[1].className = '';
                 this.batchData.push({ source: phrase, translation: translated });
