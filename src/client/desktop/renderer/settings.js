@@ -770,7 +770,7 @@ class SettingsPanel {
         }
         // Also tell the Python server to switch models now
         if (this.app?.ws?.readyState === WebSocket.OPEN) {
-          this.app.ws.send(JSON.stringify({ type: 'config', model: whisperModel }));
+          this.app.ws.send(JSON.stringify({ action: 'config', config: { model: whisperModel } }));
         }
       }
     });
