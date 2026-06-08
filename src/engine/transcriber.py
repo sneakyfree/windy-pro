@@ -28,6 +28,24 @@ except ImportError:
     FASTER_WHISPER_AVAILABLE = False
     WhisperModel = None
 
+
+def _resolve_model_ref(model_size):
+    """Resolve a model NAME to a bundled/user local directory PATH so the custom
+    windy-*-ct2 engines (and the stock names like 'base') load on-device and offline.
+    faster-whisper rejects 'windy-*-ct2' as a model name — they must be loaded by path.
+    Mirrors main.js findModelDir. Roots come from env set by the desktop main process.
+    Falls back to the bare name (HF download) only if no local copy exists."""
+    if not model_size or os.path.isdir(str(model_size)):
+        return model_size  # already an absolute path
+    name = str(model_size)
+    sub = name if name.endswith("-ct2") else f"faster-whisper-{name}"
+    for root in (os.environ.get("WINDY_USER_MODEL_DIR", ""), os.environ.get("WINDY_BUNDLED_MODEL_DIR", "")):
+        if root:
+            cand = os.path.join(root, sub)
+            if os.path.isfile(os.path.join(cand, "model.bin")):
+                return cand
+    return model_size
+
 try:
     import numpy as np
     NUMPY_AVAILABLE = True
@@ -195,10 +213,11 @@ class StreamingTranscriber:
             if compute_type == "auto":
                 compute_type = "float16" if device == "cuda" else "int8"
             
-            print(f"Loading model: {self.config.model_size} on {device} ({compute_type})")
-            
+            model_ref = _resolve_model_ref(self.config.model_size)
+            print(f"Loading model: {self.config.model_size} -> {model_ref} on {device} ({compute_type})")
+
             self.model = WhisperModel(
-                self.config.model_size,
+                model_ref,
                 device=device,
                 compute_type=compute_type
             )

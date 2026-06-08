@@ -340,8 +340,8 @@ class WindyServer:
             if "model" in config_data:
                 new_model = config_data["model"]
                 applied["model"] = new_model
-                
-                if self.transcriber and not self.transcriber._running:
+
+                if self.transcriber and new_model != self.transcriber.config.model_size and not self.transcriber._running:
                     # No active session — reload immediately
                     await websocket.send(json.dumps({
                         "type": "state",

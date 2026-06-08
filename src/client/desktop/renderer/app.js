@@ -1812,7 +1812,7 @@ class WindyApp {
     // on the next connect.
     try {
       if (this.ws && this.ws.readyState === WebSocket.OPEN && model) {
-        this.ws.send(JSON.stringify({ type: 'config', model }));
+        this.send('config', { config: { model } });
       }
     } catch (_) { /* ws best-effort */ }
     this.updateModelBadge(engineId);
@@ -2001,7 +2001,7 @@ class WindyApp {
           this._engineModelMap['windytune'] = nextModel;
           localStorage.setItem('windy_model', nextModel);
           if (this.ws?.readyState === WebSocket.OPEN) {
-            this.send('config', { model: nextModel });
+            this.send('config', { config: { model: nextModel } });
           }
           this.showReconnectToast(`🌪️ WindyTune: Auto-switched to ${nextModel} for better speed`);
           this._slowStreak = 0;
@@ -2951,7 +2951,7 @@ class WindyApp {
               this._engineModelMap['windytune'] = nextModel;
               localStorage.setItem('windy_model', nextModel);
               if (this.ws?.readyState === WebSocket.OPEN) {
-                this.send('config', { model: nextModel });
+                this.send('config', { config: { model: nextModel } });
               }
               this.showReconnectToast(`🌪️ WindyTune: ${batchDuration.toFixed(1)}s latency → switching from ${currentModel} to ${nextModel} for speed`);
             }
@@ -4080,7 +4080,7 @@ class WindyApp {
         // Send resolved whisper model config to Python server for custom engines
         const engineModel = this._engineModelMap?.[this.transcriptionEngine];
         if (engineModel) {
-          this.send('config', { model: engineModel });
+          this.send('config', { config: { model: engineModel } });
         }
         this.send('start');
       }

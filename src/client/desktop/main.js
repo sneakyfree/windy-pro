@@ -634,7 +634,20 @@ function startPythonServer() {
   ], {
     cwd: projectRoot,
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, PYTHONUNBUFFERED: '1', KMP_DUPLICATE_LIB_OK: 'TRUE' }
+    env: {
+      ...process.env,
+      PYTHONUNBUFFERED: '1',
+      KMP_DUPLICATE_LIB_OK: 'TRUE',
+      // Resolve engine NAMES (base, windy-*-ct2) to bundled local dirs so the warm
+      // server can actually load + hot-swap any engine — fully offline. Without these
+      // the server tried to load 'windy-*-ct2' as a HuggingFace name (rejected) and
+      // stayed stuck on whatever it first loaded (the engine-switch bug).
+      HF_HUB_OFFLINE: '1',
+      WINDY_USER_MODEL_DIR: path.join(os.homedir(), '.windy-pro', 'model'),
+      WINDY_BUNDLED_MODEL_DIR: app.isPackaged
+        ? path.join(process.resourcesPath, 'bundled', 'model')
+        : path.join(projectRoot, 'extraResources', 'model'),
+    }
   });
 
   pythonProcess.stdout.on('data', (data) => {
