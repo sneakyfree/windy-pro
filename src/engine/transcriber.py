@@ -387,9 +387,11 @@ class StreamingTranscriber:
                     self._running = False
                     break
                 
-                # Auto-recover: brief ERROR flash then back to LISTENING
+                # Auto-recover: ERROR flash, then back to LISTENING — with capped
+                # exponential backoff so a rapid crash loop (e.g. corrupted chunk, OOM)
+                # can't spin the CPU retrying every 0.5s before hitting the error ceiling.
                 self._set_state(TranscriptionState.ERROR)
-                time.sleep(0.5)
+                time.sleep(min(0.5 * (2 ** (self._consecutive_errors - 1)), 10.0))
                 if self._running:
                     self._set_state(TranscriptionState.LISTENING)
                 audio_buffer = b""  # Discard corrupted buffer

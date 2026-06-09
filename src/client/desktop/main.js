@@ -222,6 +222,42 @@ let userHiddenWindow = false;  // Tracks if user intentionally hid everything vi
 let pythonProcess = null;
 let pythonRestartCount = 0;
 const MAX_PYTHON_RESTARTS = 3;
+// Startup watchdog: if the engine never signals ready (hangs) or keeps crashing, surface
+// a clear, actionable error to non-technical users instead of a frozen UI / silent fail.
+let pythonReady = false;
+let pythonStartupTimer = null;
+let engineFailureShown = false;
+const PYTHON_STARTUP_TIMEOUT_MS = 120000; // generous: the 1.5GB engine loads ~30s on old CPUs
+
+// One-time, user-facing "engine couldn't start" dialog with Retry / Quit. Covers every
+// failure mode uniformly: missing venv, model-load failure, hung startup, repeated crashes.
+function showEngineFailure(detail) {
+  if (engineFailureShown) return;
+  engineFailureShown = true;
+  try { safeSend('python-loading', false); safeSend('state-change', 'error'); } catch (_) { /* window may be gone */ }
+  try {
+    const choice = dialog.showMessageBoxSync({
+      type: 'error',
+      title: 'Windy Word — Speech Engine',
+      message: "Windy Word's speech engine couldn't start.",
+      detail: (detail ? detail + '\n\n' : '') + 'This is usually a disk-space or first-run setup issue. You can retry, or quit and reopen the app.',
+      buttons: ['Retry', 'Quit'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (choice === 0) {
+      engineFailureShown = false;
+      pythonReady = false;
+      pythonRestartCount = 0;
+      startPythonServer();
+    } else {
+      app.isQuitting = true;
+      app.quit();
+    }
+  } catch (e) {
+    console.error('[Python] showEngineFailure dialog error:', e.message);
+  }
+}
 
 // ═══ Model Download Manifest ═══
 const MODEL_MANIFEST = {
@@ -532,10 +568,35 @@ function ensureEngineVenv(appDataDir) {
     };
     execFile(bundledPy, ['-m', 'venv', venvDir], { timeout: 120000 }, (e1) => {
       if (e1) { console.error('[Python] venv create failed — falling back:', e1.message); startServer(); return; }
+      // Supply-chain: verify bundled wheels against the build-time checksum manifest before
+      // installing. Fail-closed on mismatch (possible tampering); skip if no manifest so a
+      // build without one can never be bricked by this check.
+      try {
+        const manifest = path.join(wheelsDir, 'CHECKSUMS.sha256');
+        if (fs.existsSync(manifest)) {
+          const crypto = require('crypto');
+          let n = 0;
+          for (const line of fs.readFileSync(manifest, 'utf-8').split('\n')) {
+            const m = line.trim().match(/^([a-f0-9]{64})\s+\*?(.+)$/i);
+            if (!m) continue;
+            const wp = path.join(wheelsDir, path.basename(m[2]));
+            if (!fs.existsSync(wp)) continue;
+            const actual = crypto.createHash('sha256').update(fs.readFileSync(wp)).digest('hex');
+            if (actual.toLowerCase() !== m[1].toLowerCase()) {
+              console.error('[Python] Wheel checksum MISMATCH:', m[2], '— refusing to install (possible tampering)');
+              showEngineFailure('A bundled component failed its integrity check.');
+              return;
+            }
+            n++;
+          }
+          console.info('[Python] ✓ wheel checksums verified (' + n + ')');
+        }
+      } catch (ve) { console.warn('[Python] wheel checksum verify skipped:', ve.message); }
       execFile(venvPy, ['-m', 'pip', 'install', '--no-index', '--no-cache-dir', '--find-links', wheelsDir, '-r', reqFile],
         { timeout: 300000, maxBuffer: 64 * 1024 * 1024 }, (e2) => {
           if (e2) console.error('[Python] venv pip install failed — falling back:', e2.message);
           else console.info('[Python] ✓ engine venv ready');
+          if (!fs.existsSync(venvPy)) console.error('[Python] venv missing after build — engine will likely fail; the startup watchdog will surface a Retry/Quit dialog to the user');
           startServer();
         });
     });
@@ -653,11 +714,23 @@ function startPythonServer() {
     }
   });
 
+  // Arm the startup watchdog — cleared once the engine signals ready or the process exits.
+  pythonReady = false;
+  clearTimeout(pythonStartupTimer);
+  pythonStartupTimer = setTimeout(() => {
+    if (pythonReady) return;
+    console.error(`[Python] Startup watchdog fired — engine did not signal ready within ${PYTHON_STARTUP_TIMEOUT_MS}ms`);
+    try { pythonProcess && pythonProcess.kill(); } catch (_) {}
+    showEngineFailure('It took too long to start.');
+  }, PYTHON_STARTUP_TIMEOUT_MS);
+
   pythonProcess.stdout.on('data', (data) => {
     const msg = data.toString().trim();
     console.log(`[Python] ${msg}`);
     // Detect server ready
     if (msg.includes('Waiting for connections') || msg.includes('Server running')) {
+      pythonReady = true;
+      clearTimeout(pythonStartupTimer);
       if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
         safeSend('python-loading', false);
       }
@@ -671,6 +744,8 @@ function startPythonServer() {
   pythonProcess.on('close', (code) => {
     console.info(`[Python] Server exited with code ${code}`);
     pythonProcess = null;
+    clearTimeout(pythonStartupTimer);
+    if (engineFailureShown) return; // failure dialog already owns the recovery flow
 
     // Auto-restart on unexpected exit with exponential backoff
     if (code !== 0 && !app.isQuitting && pythonRestartCount < MAX_PYTHON_RESTARTS) {
@@ -680,10 +755,7 @@ function startPythonServer() {
       setTimeout(() => startPythonServer(), delay);
     } else if (code !== 0 && pythonRestartCount >= MAX_PYTHON_RESTARTS) {
       console.error('[Python] Max restarts reached. Server will not restart.');
-      if (mainWindow) {
-        safeSend('state-change', 'error');
-        safeSend('python-loading', false);
-      }
+      showEngineFailure('The speech engine kept failing to start.');
     }
   });
 
@@ -2701,12 +2773,19 @@ function startWaylandControlServer() {
     const urlObj = new URL(req.url, 'http://localhost');
     const pathname = urlObj.pathname;
 
-    // Reader/lite editions: serve ONLY the legacy Wayland-paste actions; the agent-control
-    // surface (paste config, recording, audio, effects, widget, install, transcribe) is off.
-    if (!agentControl && /^\/(paste|recording|audio|sound-effects|widget|install|transcribe-file)(\/|$)/.test(pathname)) {
-      res.writeHead(404, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'agent-control is disabled in this edition' }));
-      return;
+    // Reader/lite editions: ALLOWLIST — serve ONLY the legacy Wayland-paste actions
+    // (toggle-recording / paste-transcript / show-hide / quick-translate, used by GNOME
+    // keybindings on Linux). EVERYTHING else — the entire agent-control surface incl.
+    // /config (store dump + arbitrary mutate), /doctor/cloud-diagnose, /paste/*, /recording/*,
+    // /sound-effects/*, /install, /transcribe-file, and any FUTURE route — is 404'd.
+    // Allowlist by design: new endpoints are off-by-default, not exposed until whitelisted.
+    if (!agentControl) {
+      const LEGACY_PASTE_ACTIONS = ['toggle-recording', 'paste-transcript', 'show-hide', 'quick-translate'];
+      if (!LEGACY_PASTE_ACTIONS.includes(pathname.replace(/^\//, ''))) {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'agent-control is disabled in this edition' }));
+        return;
+      }
     }
 
     // ── Agent-control endpoints (paste strategy registry) ──
@@ -5518,7 +5597,18 @@ function startUserYdotoold() {
     console.warn('[ydotool] /dev/uinput not writable — paste to Wayland-native apps unavailable.');
     console.warn('[ydotool] Fix: add user to "input" group + udev rule KERNEL=="uinput", GROUP="input", MODE="0660"');
     if (fs.existsSync('/tmp/.ydotool_socket')) {
-      try { fs.accessSync('/tmp/.ydotool_socket', fs.constants.W_OK); _ydotoolSocket = '/tmp/.ydotool_socket'; } catch { }
+      try {
+        // Only trust the well-known socket if it's owned by root or us — otherwise another
+        // local user could pre-plant a rogue socket at this predictable path and intercept
+        // our injected keystrokes.
+        const st = fs.statSync('/tmp/.ydotool_socket');
+        const me = process.getuid ? process.getuid() : -1;
+        if (st.uid === 0 || st.uid === me) {
+          fs.accessSync('/tmp/.ydotool_socket', fs.constants.W_OK); _ydotoolSocket = '/tmp/.ydotool_socket';
+        } else {
+          console.warn('[ydotool] ignoring /tmp/.ydotool_socket — not owned by root or current user (uid ' + st.uid + ')');
+        }
+      } catch { }
     }
     return;
   }
@@ -6473,6 +6563,8 @@ async function _transcribeAudioFile(audioPath, opts = {}) {
 }
 
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
+  // Top-level timeout: a wedged engine (model inference hang) can't freeze the UI forever.
+  return withTimeout((async () => {
   console.info('[Batch Local] Starting transcription, audio size:', base64Audio?.length || 0, 'chars');
   const batchStartTime = Date.now();
   const tmpDir = os.tmpdir();
@@ -6589,15 +6681,15 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
       resolvedDir = findModelDir('base');
       modelName = 'base';
     }
-    const modelRef = resolvedDir ? `"${resolvedDir.replace(/\\/g, '/')}"` : `"${modelName}"`;
+    const modelRef = resolvedDir ? resolvedDir.replace(/\\/g, '/') : modelName;
     console.info('[Batch Local] Model ref:', modelRef, '(configured model:', modelName, ')');
     const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${tmpId}.py`);
     const scriptContent = [
       'import time',
       'from faster_whisper import WhisperModel',
       't0 = time.monotonic()',
-      `model = WhisperModel(${modelRef}, device="cpu", compute_type="int8")`,
-      `segments, info = model.transcribe("${wavPath.replace(/\\/g, '/')}", language="en", beam_size=5, condition_on_previous_text=True, vad_filter=False, no_speech_threshold=0.3)`,
+      `model = WhisperModel(${JSON.stringify(modelRef)}, device="cpu", compute_type="int8")`,
+      `segments, info = model.transcribe(${JSON.stringify(wavPath.replace(/\\/g, '/'))}, language="en", beam_size=5, condition_on_previous_text=True, vad_filter=False, no_speech_threshold=0.3)`,
       'text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())',
       'elapsed = round(time.monotonic() - t0, 2)',
       'print(text)',
@@ -6634,6 +6726,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     try { await fsp.unlink(webmPath); } catch (_) { }
     try { await fsp.unlink(wavPath); } catch (_) { }
   }
+  })(), 180000, 'batch-transcribe-local');
 });
 
 ipcMain.handle('auto-paste-text', async (event, text) => {
@@ -6922,7 +7015,7 @@ ipcMain.handle('get-archive-history', async () => {
 
         // Gather all files in this day directory for media matching
         const allFiles = fs.readdirSync(dirPath);
-        const mdFiles = allFiles.filter(f => f.endsWith('.md') && f !== `${dateDir}.md`).sort().reverse();
+        const mdFiles = allFiles.filter(f => /^\d{6}\.md$/.test(f)).sort().reverse();
         const audioFiles = allFiles.filter(f => f.endsWith('.webm') && !f.includes('-video'));
         const videoFiles = allFiles.filter(f => f.endsWith('.webm') && f.includes('-video'));
         const consumedAudio = new Set(); // Track matched audio files
@@ -8431,9 +8524,9 @@ print(f"DOWNLOADING {sys.argv[0]}", flush=True)
 try:
     from huggingface_hub import snapshot_download
     print("LOADING", flush=True)
-    local_dir = "${localDir}"
+    local_dir = ${JSON.stringify(localDir)}
     os.makedirs(local_dir, exist_ok=True)
-    snapshot_download("WindyLabs/${repoName}", local_dir=local_dir)
+    snapshot_download(${JSON.stringify('WindyLabs/' + repoName)}, local_dir=local_dir)
     print("DONE", flush=True)
 except Exception as e:
     print(f"ERROR {e}", flush=True)

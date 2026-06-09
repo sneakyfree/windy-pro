@@ -1070,6 +1070,12 @@ class WindyApp {
     this.setConnectionStatus('connecting');
 
     try {
+      // Detach + close any prior socket before reopening, so reconnect loops don't leak
+      // handlers/sockets (e.g. when the backend is briefly unavailable and we retry).
+      if (this.ws) {
+        try { this.ws.onopen = this.ws.onmessage = this.ws.onerror = this.ws.onclose = null; } catch (_) {}
+        try { this.ws.close(); } catch (_) {}
+      }
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {

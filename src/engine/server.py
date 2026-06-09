@@ -917,6 +917,13 @@ async def main():
             print("\nShutting down...")
         finally:
             await server.stop()
+    else:
+        # Model load / port bind failed. Exit NON-ZERO so the desktop app detects the
+        # failure (its pythonProcess 'close' handler restarts, then surfaces an error)
+        # instead of the process lingering at exit 0 while the UI waits forever for the
+        # 'Waiting for connections' ready signal that will never come.
+        print("Server failed to start (model load or port bind failed)", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

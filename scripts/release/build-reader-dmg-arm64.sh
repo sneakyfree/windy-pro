@@ -45,6 +45,10 @@ print(f"  ✓ offline transcribe OK: {name:24} → {txt!r}")
 PY
 done
 
+echo "═══ 2.6 Generate wheel integrity manifest (CHECKSUMS.sha256) ═══"
+( cd extraResources/wheels && shasum -a 256 *.whl > CHECKSUMS.sha256 ) \
+  && echo "  ✓ $(grep -c . extraResources/wheels/CHECKSUMS.sha256) wheel checksums written"
+
 echo "═══ 3. Build signed Reader arm64 DMG ═══"
 rm -rf dist/*arm64*.dmg dist/mac-arm64 "dist/Windy Word"*arm64*.dmg 2>/dev/null || true
 npm run build:web

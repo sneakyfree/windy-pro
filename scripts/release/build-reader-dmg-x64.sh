@@ -21,6 +21,10 @@ file extraResources/python/bin/python3.11 | grep -q "x86_64" \
   && echo "  ✓ bundled python is x86_64" \
   || { echo "✗ bundled python is NOT x86_64:"; file extraResources/python/bin/python3.11; exit 1; }
 
+echo "═══ 1.6 Generate wheel integrity manifest (CHECKSUMS.sha256) ═══"
+( cd extraResources/wheels && shasum -a 256 *.whl > CHECKSUMS.sha256 ) \
+  && echo "  ✓ $(grep -c . extraResources/wheels/CHECKSUMS.sha256) wheel checksums written"
+
 echo "═══ 1.5 Ensure 128-mel preprocessor_config on large-v3 family ═══"
 for id in windy-edge-ct2 windy-turbo-ct2 windy-pro-engine-ct2; do
   cp scripts/release/preprocessor_config-128mel.json "extraResources/model/$id/preprocessor_config.json"
