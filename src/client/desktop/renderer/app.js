@@ -2975,6 +2975,12 @@ class WindyApp {
         } finally {
           // Always clean up the processing effect interval
           clearInterval(this._processEffectInterval);
+          // Always tell main the batch phase is over — even on error or early-return paths.
+          // This clears global._batchProcessing so the macOS focus keepalive can stop;
+          // without it (the old error path) the keepalive leaked and trapped the window.
+          if (window.windyAPI?.notifyBatchComplete) {
+            try { window.windyAPI.notifyBatchComplete(0); } catch (_) { }
+          }
         }
 
         resolve();

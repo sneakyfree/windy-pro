@@ -9143,6 +9143,15 @@ ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
 // Also fires a second restore 200ms later to catch AudioContext focus-steal.
 ipcMain.on('mic-access-granted', () => {
   if (process.platform !== 'darwin' || !global._lastFocusedPid) return;
+  // Don't steal focus to the target app when the user is ACTIVELY in the Windy window
+  // (e.g. Settings open) — that's what shoved the window behind everything. Discriminator:
+  // normal hotkey dictation keeps mainWindow focusable:false (getUserMedia momentarily
+  // steals focus but isFocusable stays false → restore still runs, paste works); only the
+  // Settings/UI path sets focusable:true, so isFocusable()&&isFocused() means "user is in Windy".
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocusable() && mainWindow.isFocused()) {
+    console.info('[Focus] Windy window is active (Settings/UI) — skipping restore-to-target');
+    return;
+  }
   const targetPid = global._lastFocusedPid;
   const targetApp = global._lastFocusedApp;
   console.info(`[Focus] Mic access granted — restoring cursor to "${targetApp}" (pid ${targetPid})`);
@@ -9173,11 +9182,21 @@ ipcMain.on('mic-access-granted', () => {
   // Every 5s, re-assert focus to keep the cursor blinking.
   // Some macOS apps lose caret blink if another process touches focus.
   if (global._focusKeepAlive) clearInterval(global._focusKeepAlive);
+  const keepAliveStart = Date.now();
   global._focusKeepAlive = setInterval(() => {
+    // Stop when recording + processing are done…
     if (!isRecording && !global._batchProcessing) {
-      clearInterval(global._focusKeepAlive);
-      global._focusKeepAlive = null;
-      return;
+      clearInterval(global._focusKeepAlive); global._focusKeepAlive = null; return;
+    }
+    // …or the instant the user is back in the Windy window (Settings/UI), so it can never
+    // keep yanking focus away from a window the user is trying to use…
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocusable() && mainWindow.isFocused()) {
+      clearInterval(global._focusKeepAlive); global._focusKeepAlive = null; return;
+    }
+    // …or after a 10-minute hard cap, so a stuck state can NEVER trap focus forever.
+    if (Date.now() - keepAliveStart > 600000) {
+      console.warn('[Focus] keepalive hit 10-min cap — stopping (safety)');
+      clearInterval(global._focusKeepAlive); global._focusKeepAlive = null; return;
     }
     restore('keepalive');
   }, 5000);
