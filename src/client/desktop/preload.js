@@ -104,6 +104,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   notifyBatchComplete: (wordCount) => ipcRenderer.send('batch-complete', { wordCount }),
   notifyBatchProcessing: () => ipcRenderer.send('batch-processing'),
   notifyRecordingFailed: () => ipcRenderer.send('recording-failed'),
+  notifyRecordingStarted: () => ipcRenderer.send('recording-started'),
   notifyRecordingStopped: () => ipcRenderer.send('recording-stopped'),
 
   // ═══ WindyTune Adaptive ═══
@@ -146,6 +147,9 @@ contextBridge.exposeInMainWorld('windyAPI', {
   openCheckoutUrl: (opts) => ipcRenderer.invoke('open-checkout-url', opts),
   copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
   saveFile: (options) => ipcRenderer.invoke('save-file', options),
+  // B3 — Reveal a saved recording in the OS file manager (Finder/Explorer/Files).
+  // The 'reveal-in-folder' handler lives in main.js (added by another agent).
+  revealInFolder: (filePath) => ipcRenderer.invoke('reveal-in-folder', filePath),
 
   // ═══ State & UI Events ════════════════════════════════════════
   onStateChange: (callback) => {

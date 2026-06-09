@@ -47,7 +47,7 @@ function registerSettingsIpc(deps) {
   ipcMain.on('update-settings', (event, settings) => {
     const appearanceKeys = ['alwaysOnTop', 'opacity'];
     const serverKeys = ['host', 'port'];
-    const hotkeyKeys = ['toggleRecording', 'pasteTranscript', 'showHide'];
+    const hotkeyKeys = ['toggleRecording', 'pasteTranscript', 'showHide', 'pasteClipboard', 'quickTranslate'];
 
     for (const [key, value] of Object.entries(settings)) {
       if (appearanceKeys.includes(key)) {
@@ -113,6 +113,14 @@ function registerSettingsIpc(deps) {
       // Snapshot the working hotkeys so we can ROLL BACK if the new one won't register —
       // never leave the user with dead show-hide / toggle-recording shortcuts.
       const oldHotkeys = { ...(store.get('hotkeys') || {}) };
+      // Record which CORE shortcuts were actually working BEFORE this rebind, so we only
+      // roll back a CORE key the rebind itself broke (not one that was already dead/corrupt).
+      const CORE_KEYS = ['toggleRecording', 'showHide', 'pasteTranscript'];
+      const coreWasRegistered = {};
+      for (const ck of CORE_KEYS) {
+        const acc = oldHotkeys[ck];
+        coreWasRegistered[ck] = !!(acc && globalShortcut.isRegistered(acc));
+      }
       store.set('hotkeys', { ...oldHotkeys, [key]: accelerator });
       globalShortcut.unregisterAll();
       registerHotkeys();
@@ -122,6 +130,18 @@ function registerSettingsIpc(deps) {
         registerHotkeys();
         console.warn(`[Hotkey] ${accelerator} failed to register — reverted ${key}`);
         return { ok: false, error: `${accelerator} couldn't be registered (already in use?) — reverted` };
+      }
+      // The new accelerator registered, but the rebind may have clobbered a CORE shortcut
+      // that was working before. Only roll back keys that were working BEFORE and broke AFTER.
+      for (const ck of CORE_KEYS) {
+        const acc = (store.get('hotkeys') || {})[ck];
+        if (coreWasRegistered[ck] && !(acc && globalShortcut.isRegistered(acc))) {
+          store.set('hotkeys', oldHotkeys);
+          globalShortcut.unregisterAll();
+          registerHotkeys();
+          console.warn(`[Hotkey] Rebinding ${key} → ${accelerator} clobbered ${ck} — reverted`);
+          return { ok: false, error: 'That combo conflicts with an existing shortcut' };
+        }
       }
       console.info(`[Hotkey] Rebound ${key} → ${accelerator}`);
       return { ok: true, key, accelerator };

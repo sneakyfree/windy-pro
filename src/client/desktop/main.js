@@ -187,6 +187,7 @@ const store = new Store({
     },
     engine: {
       model: 'base',
+      saveVideo: false,
       clearOnPaste: false,
       livePreview: true,
       autoArchive: true,
@@ -467,7 +468,7 @@ function _startArchiveRetryTimer() {
 
 function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
   const engine = store.get('engine', {});
-  if (!engine.autoArchive || !engine.archiveLocalEnabled || !text || !text.trim()) return { archived: false };
+  if (!store.get('engine.autoArchive', true) || !store.get('engine.archiveLocalEnabled', true) || !text || !text.trim()) return { archived: false };
 
   try {
     const archiveRoot = getArchiveFolder();
@@ -553,10 +554,20 @@ function ensureEngineVenv(appDataDir) {
 
     const bundledRoot = process.resourcesPath ? path.join(process.resourcesPath, 'bundled') : null;
     if (!bundledRoot) return false;
+    // Universal (multi-arch) bundles stage per-arch native payloads as
+    // `python-<arch>` / `wheels-<arch>` next to the shared model/. Single-arch
+    // bundles ship the plain `python` / `wheels`. Resolve the arch match first
+    // and fall back to the flat legacy layout (mirrors startPythonServer +
+    // installer-v2/core/bundled-assets.js#_archDir).
+    const archDir = (name) => {
+      const suffixed = path.join(bundledRoot, `${name}-${process.arch}`);
+      return fs.existsSync(suffixed) ? suffixed : path.join(bundledRoot, name);
+    };
+    const bundledPyRoot = archDir('python');
     const bundledPy = process.platform === 'win32'
-      ? path.join(bundledRoot, 'python', 'python.exe')
-      : path.join(bundledRoot, 'python', 'bin', 'python3');
-    const wheelsDir = path.join(bundledRoot, 'wheels');
+      ? path.join(bundledPyRoot, 'python.exe')
+      : path.join(bundledPyRoot, 'bin', 'python3');
+    const wheelsDir = archDir('wheels');
     const reqFile = path.join(bundledRoot, 'requirements-bundle.txt');
     if (!fs.existsSync(bundledPy) || !fs.existsSync(wheelsDir) || !fs.existsSync(reqFile)) return false;
 
@@ -2352,7 +2363,7 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
                 clearTimeout(timeout);
                 ws.close();
                 if (msg.error) reject(new Error(msg.error));
-                else resolve({ text: msg.text || '', detectedLang: msg.language || sourceLang, engine: 'local', modelInfo });
+                else resolve({ text: msg.text || '', detectedLang: msg.detected_language || msg.language || sourceLang, engine: 'local', modelInfo });
               }
             } catch (e) {
               // Non-JSON message, ignore
@@ -2992,13 +3003,17 @@ function startWaylandControlServer() {
           current: store.get('engine.model'),
           engine: store.get('engine.engine'),
           ladder: WINDYTUNE_MODEL_LADDER,
+          // Advertise the same ct2 engine ids the ladder validates against, so
+          // /models GET and POST agree. fastest/lightest → most accurate.
           available: [
-            { id: 'tiny',     size_mb: 73,   speed: 'fastest',  accuracy: 'basic' },
-            { id: 'base',     size_mb: 462,  speed: 'fast',     accuracy: 'good' },
-            { id: 'small',    size_mb: 140,  speed: 'medium',   accuracy: 'better' },
-            { id: 'medium',   size_mb: 1444, speed: 'slow',     accuracy: 'high' },
-            { id: 'large-v3', size_mb: 2945, speed: 'slowest',  accuracy: 'best' },
-          ],
+            { id: 'windy-nano-ct2',       speed: 'fastest',  accuracy: 'basic' },
+            { id: 'windy-lite-ct2',       speed: 'fast',     accuracy: 'good' },
+            { id: 'windy-core-ct2',       speed: 'medium',   accuracy: 'better' },
+            { id: 'windy-edge-ct2',       speed: 'medium',   accuracy: 'better' },
+            { id: 'windy-plus-ct2',       speed: 'slow',     accuracy: 'high' },
+            { id: 'windy-turbo-ct2',      speed: 'slow',     accuracy: 'high' },
+            { id: 'windy-pro-engine-ct2', speed: 'slowest',  accuracy: 'best' },
+          ].filter(m => WINDYTUNE_ALL_LADDER.includes(m.id)),
         }, null, 2));
         return;
       }
@@ -5643,13 +5658,28 @@ function registerHotkeys() {
   if (!app.isReady()) return;
   const hotkeys = store.get('hotkeys');
 
+  // Throw-safe registration. globalShortcut.register() throws synchronously on an
+  // unparseable accelerator (e.g. a macOS Option dead-key like "Alt+®"). If that
+  // escapes — at rebind OR at startup when a bad value was persisted — it crashes the
+  // whole app. Wrap each one so a single bad accelerator is skipped, never fatal, and
+  // never blocks the remaining (good) shortcuts from registering.
+  const safeRegister = (accel, cb) => {
+    if (!accel || typeof accel !== 'string') return false;
+    try {
+      return globalShortcut.register(accel, cb);
+    } catch (err) {
+      console.warn(`[Hotkey] skipped invalid accelerator "${accel}": ${err.message}`);
+      return false;
+    }
+  };
+
   // Log platform strategy for debugging
   if (PLATFORM.isLinux) {
     console.info(`[Hotkey] Platform: ${PLATFORM.displayServer}/${PLATFORM.desktop}, strategy: ${PLATFORM.hotkeyStrategy}`);
   }
 
   // Toggle recording — save & restore focus so cursor stays in target app
-  const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
+  const regToggle = safeRegister(hotkeys.toggleRecording, () => {
     // Only capture the focused app when STARTING recording (not when stopping).
     let savedWindowId = null;
     if (!isRecording) {
@@ -5721,14 +5751,14 @@ function registerHotkeys() {
   console.info(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
 
   // Paste transcript
-  const regPaste = globalShortcut.register(hotkeys.pasteTranscript, () => {
+  const regPaste = safeRegister(hotkeys.pasteTranscript, () => {
     pasteTranscript();
   });
   console.info(`[Hotkey] Paste transcript (${hotkeys.pasteTranscript}): ${regPaste ? 'OK' : 'FAILED'}`);
 
   // Paste clipboard (screenshots, copied text, etc.) via simulated Ctrl+V
   const pasteClipAccel = hotkeys.pasteClipboard || 'CommandOrControl+Shift+B';
-  const regClipboard = globalShortcut.register(pasteClipAccel, () => {
+  const regClipboard = safeRegister(pasteClipAccel, () => {
     // Small delay to let modifier keys release, then simulate Ctrl+V
     // CR-005: replace `exec('sleep … && …')` with execFile + setTimeout.
     // The literal strings were safe (no renderer input interpolated),
@@ -5757,7 +5787,7 @@ function registerHotkeys() {
   console.info(`[Hotkey] Paste clipboard (${pasteClipAccel}): ${regClipboard ? 'OK' : 'FAILED'}`);
 
   // Show/hide window — three-state cycle: Full Window → Tornado → Hidden → Full Window
-  const regShow = globalShortcut.register(hotkeys.showHide, () => {
+  const regShow = safeRegister(hotkeys.showHide, () => {
     const mainVisible = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible();
     const miniVisible = miniWindow && !miniWindow.isDestroyed() && miniWindow.isVisible();
 
@@ -5784,7 +5814,7 @@ function registerHotkeys() {
   try { translationOn = require('./edition').TRANSLATION_UI !== false; } catch (_) {}
   if (translationOn) {
     const qtAccel = hotkeys.quickTranslate || 'CommandOrControl+Shift+T';
-    const regTranslate = globalShortcut.register(qtAccel, () => {
+    const regTranslate = safeRegister(qtAccel, () => {
       showMiniTranslateWindow();
     });
     console.info(`[Hotkey] Quick Translate (${qtAccel}): ${regTranslate ? 'OK' : 'FAILED'}`);
@@ -5809,7 +5839,8 @@ const HOTKEY_DEFAULTS = {
   toggleRecording: 'CommandOrControl+Shift+Space',
   pasteTranscript: 'CommandOrControl+Shift+V',
   pasteClipboard: 'CommandOrControl+Shift+B',
-  showHide: 'CommandOrControl+Shift+W'
+  showHide: 'CommandOrControl+Shift+W',
+  quickTranslate: 'CommandOrControl+Shift+T'
 };
 
 // Startup: sanitize any reserved shortcuts that were accidentally bound
@@ -6210,6 +6241,15 @@ ipcMain.handle('open-external-url', async (event, url) => {
 
   // Linux: BrowserWindow is the most reliable on AppImage
   if (process.platform === 'linux') {
+    // mailto: can't be loaded into a BrowserWindow (no navigation, false success).
+    // Hand it to the system default mail handler instead.
+    {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'mailto:') {
+        await shell.openExternal(url);
+        return { ok: true };
+      }
+    }
     // Method 1: BrowserWindow (opens inside app — with OAuth support)
     try {
       const extWin = new BrowserWindow({
@@ -6305,17 +6345,56 @@ ipcMain.handle('open-external-url', async (event, url) => {
   }
 });
 
+// Reveal a file in the OS file manager (Finder/Explorer) — used by the Share feature.
+// The preload bridge + UI button are wired by another agent.
+ipcMain.handle('reveal-in-folder', (e, filePath) => {
+  try {
+    require('electron').shell.showItemInFolder(filePath);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════
 // WindyTune Adaptive Model Tracker
 // ═══════════════════════════════════════════════════════════════════
 const _windyTuneHistory = [];          // Rolling window of last 10 transcription timings
-const WINDYTUNE_ALL_LADDER = ['tiny', 'base', 'small', 'medium', 'large-v3']; // fastest → most accurate
-// Tank-proof: WindyTune may only move among models that are actually BUNDLED on the
+// The exact ct2 engine ids, ascending accuracy/cost. These are the model ids the
+// engine actually reports + accepts, so indexOf() against the running model id works.
+const WINDYTUNE_ALL_LADDER = [
+  'windy-nano-ct2',
+  'windy-lite-ct2',
+  'windy-core-ct2',
+  'windy-edge-ct2',
+  'windy-plus-ct2',
+  'windy-turbo-ct2',
+  'windy-pro-engine-ct2',
+]; // fastest/lightest → most accurate
+
+// Resolve a model id to its on-disk dir (user-downloaded OR bundled). Mirrors the
+// per-batch findModelDir helper but at module scope so the ladder can be derived
+// from what's actually present. Lean Windy engines use canonical ct2 ids
+// (bundled/model/<id>/); legacy whisper names use faster-whisper-<name>/.
+function _windyTuneModelDir(m) {
+  const dirFor = (n) => (/-ct2$/.test(n) ? n : `faster-whisper-${n}`);
+  const userRoot = path.join(os.homedir(), '.windy-pro', 'model');
+  const u = path.join(userRoot, dirFor(m));
+  if (fs.existsSync(path.join(u, 'model.bin'))) return u;
+  const bundledRoot = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : '';
+  if (bundledRoot) {
+    const b = path.join(bundledRoot, dirFor(m));
+    if (fs.existsSync(path.join(b, 'model.bin'))) return b;
+  }
+  return null;
+}
+
+// Tank-proof: WindyTune may only move among models that are actually present on the
 // machine — it can never auto-switch to an absent model and trigger a silent multi-GB
-// download (the wobble we're killing). With one bundled model the ladder has a single
-// rung, so Auto simply stays put. Expand BUNDLED_MODELS when the full engine pack ships.
-const WINDYTUNE_BUNDLED_MODELS = ['base']; // Windy Core
-const WINDYTUNE_MODEL_LADDER = WINDYTUNE_ALL_LADDER.filter(m => WINDYTUNE_BUNDLED_MODELS.includes(m));
+// download (the wobble we're killing). Derive the bundled set from on-disk model.bin
+// presence instead of hardcoding it. With one present model the ladder has a single
+// rung, so Auto simply stays put; the full engine pack lights up extra rungs.
+const WINDYTUNE_MODEL_LADDER = WINDYTUNE_ALL_LADDER.filter(m => _windyTuneModelDir(m) !== null);
 const WINDYTUNE_THRESHOLDS = {
   DOWNGRADE_RATIO: 2.0,       // transcription_time / audio_duration > 2x → too slow
   UPGRADE_RATIO: 0.3,         // ratio < 0.3 → model is fast enough to try bigger
@@ -6333,8 +6412,18 @@ function _windyTuneRecord(elapsed, audioDuration, model) {
   const isWindyTune = store.get('engine.engine') === 'windytune';
   if (!isWindyTune) return; // Only adapt in WindyTune auto mode
 
-  const currentIdx = WINDYTUNE_MODEL_LADDER.indexOf(model);
-  if (currentIdx < 0) return; // Unknown model, skip
+  // Map the running model id onto the ct2 ladder so indexOf is never -1.
+  // Legacy whisper names ('base' / 'faster-whisper-base') and any model not on the
+  // ladder anchor at 'windy-lite-ct2' so downgrade (toward nano) + upgrade can fire.
+  let ladderModel = model;
+  if (WINDYTUNE_MODEL_LADDER.indexOf(ladderModel) < 0) {
+    ladderModel = WINDYTUNE_MODEL_LADDER.indexOf('windy-lite-ct2') >= 0
+      ? 'windy-lite-ct2'
+      : (WINDYTUNE_MODEL_LADDER[0] || null);
+  }
+  const currentIdx = ladderModel === null ? -1 : WINDYTUNE_MODEL_LADDER.indexOf(ladderModel);
+  if (currentIdx < 0) return; // No present model on the ladder, can't adapt
+  model = ladderModel; // downstream switch/messages use the ladder id
 
   // ── Critical: single transcription > 30s → immediate downgrade ──
   if (elapsed > WINDYTUNE_THRESHOLDS.CRITICAL_SECONDS && currentIdx > 0) {
@@ -6421,39 +6510,64 @@ async function _transcribeViaWS(wavPath) {
   const serverConfig = store.get('server', { host: '127.0.0.1', port: 9876 });
   const wsUrl = `ws://${serverConfig.host}:${serverConfig.port}`;
 
+  const SAFE_FRAME = 45 * 1024 * 1024;   // stay safely under the server's 50MB frame limit
+  const UPLOAD_CHUNK = 8 * 1024 * 1024;  // sub-frame chunk size for large recordings
+
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(wsUrl, { maxPayload: 64 * 1024 * 1024 });
     let responded = false;
-    const timeout = setTimeout(() => {
-      if (!responded) {
-        responded = true;
-        ws.close();
-        reject(new Error('WS transcription timeout (120s)'));
-      }
-    }, 120000); // 120s — covers up to ~4 min recordings on CPU
+
+    // Self-renewing idle timeout. Long recordings on a slow CPU can take many
+    // minutes to transcribe; a fixed 120s wrongly aborted them (and a >50MB blob
+    // used to be rejected outright). We now give up only after a long stretch with
+    // NO message from the server, resetting the clock on every message received.
+    let timer = null;
+    const IDLE_MS = 15 * 60 * 1000; // 15 min of total server silence => give up
+    const fail = (err) => {
+      if (responded) return;
+      responded = true;
+      if (timer) clearTimeout(timer);
+      try { ws.close(); } catch (_) {}
+      reject(err);
+    };
+    const arm = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => fail(new Error('WS transcription timeout (no progress for 15m)')), IDLE_MS);
+    };
+    arm();
 
     ws.on('open', async () => {
       try {
-        // Send the command
-        ws.send(JSON.stringify({ action: 'transcribe_blob', language: 'en', format: 'wav' }));
-        // Send the audio data as binary
         const audioData = await fsp.readFile(wavPath);
-        ws.send(audioData);
+        const ext = (_path.extname(wavPath) || '.wav').slice(1) || 'wav';
+        if (audioData.length <= SAFE_FRAME) {
+          // Common path — unchanged: one command + one binary frame.
+          ws.send(JSON.stringify({ action: 'transcribe_blob', language: 'auto', format: ext }));
+          ws.send(audioData);
+        } else {
+          // Large recording — stream in sub-frame chunks so we never hit the 50MB
+          // WS frame limit, then signal end. The server reassembles to disk and
+          // transcribes the whole file (bounded RAM). This is what makes the
+          // "unlimited recording" promise actually deliverable.
+          ws.send(JSON.stringify({ action: 'transcribe_upload', language: 'auto', format: ext }));
+          for (let off = 0; off < audioData.length; off += UPLOAD_CHUNK) {
+            ws.send(audioData.subarray(off, Math.min(off + UPLOAD_CHUNK, audioData.length)));
+          }
+          ws.send(JSON.stringify({ action: 'transcribe_upload_end' }));
+        }
       } catch (err) {
-        responded = true;
-        clearTimeout(timeout);
-        ws.close();
-        reject(err);
+        fail(err);
       }
     });
 
     ws.on('message', (data) => {
       if (responded) return;
+      arm(); // server is alive and working — extend the deadline
       try {
         const msg = JSON.parse(data.toString());
         if (msg.type === 'transcribe_result') {
           responded = true;
-          clearTimeout(timeout);
+          if (timer) clearTimeout(timer);
           ws.close();
           if (msg.error) {
             reject(new Error(msg.error));
@@ -6464,13 +6578,7 @@ async function _transcribeViaWS(wavPath) {
       } catch (_) { /* non-JSON message */ }
     });
 
-    ws.on('error', (err) => {
-      if (!responded) {
-        responded = true;
-        clearTimeout(timeout);
-        reject(err);
-      }
-    });
+    ws.on('error', (err) => fail(err));
   });
 }
 
@@ -6563,7 +6671,14 @@ async function _transcribeAudioFile(audioPath, opts = {}) {
 }
 
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
-  // Top-level timeout: a wedged engine (model inference hang) can't freeze the UI forever.
+  // Top-level timeout: a wedged engine (model inference hang) can't freeze the UI
+  // forever. Scale it with recording length so long dictations aren't killed mid-
+  // transcribe — the old fixed 180s silently lost book-length recordings (the
+  // "unlimited recording" promise). ~90s of budget per minute of opus audio covers
+  // even the slowest engine on CPU; floored at 3 min for short clips, capped at 4 h.
+  const approxBytes = (base64Audio?.length || 0) * 0.75;   // base64 ≈ 1.33× binary
+  const approxMinutes = approxBytes / (1024 * 1024);        // opus ≈ 1 MB/min
+  const dynTimeoutMs = Math.min(4 * 60 * 60 * 1000, Math.max(180000, Math.round(approxMinutes * 90000)));
   return withTimeout((async () => {
   console.info('[Batch Local] Starting transcription, audio size:', base64Audio?.length || 0, 'chars');
   const batchStartTime = Date.now();
@@ -6689,7 +6804,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
       'from faster_whisper import WhisperModel',
       't0 = time.monotonic()',
       `model = WhisperModel(${JSON.stringify(modelRef)}, device="cpu", compute_type="int8")`,
-      `segments, info = model.transcribe(${JSON.stringify(wavPath.replace(/\\/g, '/'))}, language="en", beam_size=5, condition_on_previous_text=True, vad_filter=False, no_speech_threshold=0.3)`,
+      `segments, info = model.transcribe(${JSON.stringify(wavPath.replace(/\\/g, '/'))}, language=None, beam_size=5, condition_on_previous_text=True, vad_filter=False, no_speech_threshold=0.3)`,
       'text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())',
       'elapsed = round(time.monotonic() - t0, 2)',
       'print(text)',
@@ -6699,7 +6814,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     console.info('[Batch Local] Running Python transcription script (fallback)...');
 
     const { stdout, stderr } = await execFileAsync(pythonPathLocal, [scriptPath], {
-      timeout: 120000,
+      timeout: dynTimeoutMs,
       maxBuffer: 10 * 1024 * 1024,
       env: { ...process.env, KMP_DUPLICATE_LIB_OK: 'TRUE' }
     });
@@ -6726,7 +6841,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     try { await fsp.unlink(webmPath); } catch (_) { }
     try { await fsp.unlink(wavPath); } catch (_) { }
   }
-  })(), 180000, 'batch-transcribe-local');
+  })(), dynTimeoutMs, 'batch-transcribe-local');
 });
 
 ipcMain.handle('auto-paste-text', async (event, text) => {
@@ -7720,6 +7835,14 @@ ipcMain.handle('export-voice-clone', async () => {
       }
     }
 
+    // No audio means a useless empty zip — audio older than 7 days is auto-deleted.
+    // Tear down the already-opened write stream so we don't leave a partial file behind.
+    if (audioCount === 0) {
+      try { output.destroy(); } catch (_) { }
+      try { fs.unlinkSync(result.filePath); } catch (_) { }
+      return { ok: false, error: 'No audio recordings found (audio older than 7 days is auto-deleted; re-record to export voice data).' };
+    }
+
     // Add metadata CSV
     archive.append(csvRows.join('\n'), { name: 'metadata.csv' });
 
@@ -8022,7 +8145,6 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
   const DATA = JSON.stringify({ allPlans, featureDefs, tiers, monthlyPlanUrls, annualPlanUrls: Object.keys(annualPlanUrls).length ? annualPlanUrls : planUrls, lifetimePlanUrls, currentTier, initialTier });
 
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Choose Your Plan</title>' +
-    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
     '<style>' +
     '*{margin:0;padding:0;box-sizing:border-box;}' +
     'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B,#0F172A);color:#F1F5F9;min-height:100vh;overflow-x:hidden;}' +
@@ -8219,7 +8341,6 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
       if (navUrl.includes('/payment-success')) {
         navEvent.preventDefault();
         const successHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment Successful!</title>' +
-          '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">' +
           '<style>*{margin:0;padding:0;box-sizing:border-box;}' +
           'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B);color:#F1F5F9;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;}' +
           '.card{max-width:500px;padding:40px;animation:fadeIn 0.6s ease;}' +
@@ -8612,7 +8733,6 @@ function showDownloadWizard(newTier) {
   const DATA = JSON.stringify({ modelRows, toDownload, tierName, totalSizeMB });
 
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Downloading Engines</title>' +
-    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
     '<style>' +
     '*{margin:0;padding:0;box-sizing:border-box;}' +
     'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B,#0F172A);color:#F1F5F9;min-height:100vh;padding:30px;}' +
@@ -9218,11 +9338,14 @@ ipcMain.on('batch-complete', (event, { wordCount }) => {
   updateTrayMenu();
   if (tray) tray.setToolTip('Windy Word');
 
-  // Show OS notification
-  if (Notification.isSupported()) {
+  // Show OS notification — ONLY for a real result. The batch teardown finally-block
+  // also fires batch-complete with 0 (to clear the focus-keepalive state on every path);
+  // without this gate that produced a spurious second "0 words captured" toast after
+  // every successful transcription.
+  if (wordCount > 0 && Notification.isSupported()) {
     const notification = new Notification({
       title: '✨ Transcription Ready!',
-      body: `${wordCount || 0} words captured and polished.`,
+      body: `${wordCount} words captured and polished.`,
       silent: false
     });
     notification.on('click', () => {
@@ -9263,6 +9386,18 @@ ipcMain.on('recording-stopped', () => {
   updateMiniState('idle');
   if (tray) tray.setToolTip('Windy Word');
   console.info(`[Recording] Stopped via UI. PID preserved: "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
+});
+
+// Mirror of recording-stopped: the renderer notifies us when recording STARTS via the
+// Record button (or mini button). Without this, main's isRecording stayed false after a
+// button-start, so the ⌘⇧Space global hotkey's toggle flipped false→true and sent `true`
+// — which the renderer (already recording) ignored, leaving recording stuck ON. Only sets
+// isRecording=true; cannot regress the stop path.
+ipcMain.on('recording-started', () => {
+  isRecording = true;
+  updateTrayMenu();
+  updateTrayIcon('listening');
+  updateMiniState('recording');
 });
 
 // Save file dialog
