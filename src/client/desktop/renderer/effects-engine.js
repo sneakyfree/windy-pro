@@ -261,12 +261,21 @@ class EffectsEngine {
                 this._dynamicScaling = s.dynamicScaling !== false;
                 this._surpriseCategory = s.surpriseCategory || 'all';
                 this._favorites = s.favorites || [];
-                if (s.hookPoints) {
+                // One-time heal (schemaVersion < 2): builds before the audible-defaults fix
+                // shipped every hook DISABLED (during/process volume 30) and persisted that,
+                // which silenced Default mode for everyone who ran them. For those legacy
+                // profiles, DROP the stale muted hookPoints and keep the audible constructor
+                // defaults (start 90 / during 70 / stop 90 / process 75 / warning 85 / paste 100,
+                // all enabled). v2+ profiles honor the user's saved per-hook mutes/volumes.
+                const isLegacy = !s.schemaVersion || s.schemaVersion < 2;
+                if (s.hookPoints && !isLegacy) {
                     for (const [k, v] of Object.entries(s.hookPoints)) {
                         if (this._hookPoints[k]) Object.assign(this._hookPoints[k], v);
                     }
                 }
                 if (s.activePack) this._activePackId = s.activePack;
+                // Persist the heal once so it sticks and never re-fires (stamps schemaVersion 2).
+                if (isLegacy) this._saveSettings();
             }
         } catch (_) { }
 
@@ -278,6 +287,7 @@ class EffectsEngine {
     _saveSettings() {
         try {
             localStorage.setItem('windy_effects', JSON.stringify({
+                schemaVersion: 2,
                 mode: this._mode,
                 activePack: this._activePack?.id || this._activePackId || null,
                 surpriseCategory: this._surpriseCategory,

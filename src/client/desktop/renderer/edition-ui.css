@@ -39,3 +39,10 @@ html.edition-simple #localModelSection,
 html.edition-simple #settingsPlanSection {
   display: none !important;
 }
+
+/* Book-launch: the History panel's cloud "View all history in Web Portal" button
+   points at the dashboard, which the free offline build has no account for. Hide it.
+   Reversible: returns in the full build (no edition-simple class). */
+html.edition-simple #historyOpenPortal {
+  display: none !important;
+}

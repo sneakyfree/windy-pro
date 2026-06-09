@@ -137,6 +137,14 @@ class TranslatePanel {
             if (src !== 'auto') {
                 this._sourceLang.value = tgt;
                 this._targetLang.value = src;
+            } else {
+                // Can't swap into an auto target (target has no auto option) — hint the user
+                const hint = document.getElementById('translateSpeechHint');
+                if (hint) {
+                    const prev = hint.innerHTML;
+                    hint.innerHTML = '↔️ Pick a source language to swap';
+                    setTimeout(() => { hint.innerHTML = prev; }, 2000);
+                }
             }
         });
 
@@ -180,6 +188,7 @@ class TranslatePanel {
         this.isOpen = true;
         this._loadLanguages();
         this._loadHistory();
+        this._renderFavorites();
         // Start health check only when panel is open
         if (!this._healthInterval) this._startHealthCheck();
     }
@@ -203,6 +212,12 @@ class TranslatePanel {
 
     async _loadLanguages() {
         if (this.languages.length > 0) return;
+        // Don't attempt a network fetch when offline — use the bundled fallback directly
+        if (!navigator.onLine) {
+            this._log.debug('_loadLanguages', 'offline — using fallback language list');
+            this._useFallbackLanguages();
+            return;
+        }
         try {
             const resp = await fetch(window.API_CONFIG.languages);
             if (!resp.ok) throw new Error('Failed to load languages');
@@ -211,16 +226,20 @@ class TranslatePanel {
             this._populateDropdowns();
         } catch (err) {
             this._log.warn('_loadLanguages', `could not load languages: ${err.message}`);
-            this.languages = [
+            this._useFallbackLanguages();
+        }
+    }
+
+    _useFallbackLanguages() {
+        this.languages = [
                 { code: 'en', name: 'English' }, { code: 'es', name: 'Spanish' },
                 { code: 'fr', name: 'French' }, { code: 'de', name: 'German' },
                 { code: 'pt', name: 'Portuguese' }, { code: 'it', name: 'Italian' },
                 { code: 'zh', name: 'Chinese' }, { code: 'ja', name: 'Japanese' },
                 { code: 'ko', name: 'Korean' }, { code: 'ar', name: 'Arabic' },
                 { code: 'hi', name: 'Hindi' }, { code: 'ru', name: 'Russian' },
-            ];
-            this._populateDropdowns();
-        }
+        ];
+        this._populateDropdowns();
     }
 
     _populateDropdowns() {
@@ -466,6 +485,7 @@ class TranslatePanel {
             }
         } catch (textErr) {
             this._log.warn('_translateSpeech', `text translation failed: ${textErr.message}`);
+            var textErrMessage = textErr.message;
         }
 
         // ── Fallback: show English result with note ──
@@ -477,7 +497,7 @@ class TranslatePanel {
         });
         this._confidence.innerHTML += `
             <span class="confidence-badge" style="background:#EAB30820;color:#EAB308;border:1px solid #EAB30840;margin-left:6px;">
-                ⚠️ Text translation needs an AI key — add Groq or OpenAI key in Settings
+                ⚠️ On-device translation engine unavailable — try restarting the app. ${this._escapeHtml(textErrMessage || '')}
             </span>
         `;
 
@@ -529,6 +549,16 @@ class TranslatePanel {
                         🏠 Translated on-device by NLLB
                     </span>
                 `;
+                // Auto-detect honesty: typed text has no language detection. When the
+                // source is 'auto', the local engine assumes English — say so plainly
+                // rather than silently mislabeling the source language.
+                if (this._sourceLang.value === 'auto') {
+                    this._confidence.innerHTML += `
+                    <span class="confidence-badge" style="background:#EAB30820;color:#EAB308;border:1px solid #EAB30840;margin-left:6px;">
+                        ℹ️ assumed English source (typed text isn't auto-detected)
+                    </span>
+                `;
+                }
                 return;
             } else {
                 throw new Error(result?.error || 'Translation failed');
@@ -539,8 +569,8 @@ class TranslatePanel {
             this._targetText.textContent = '';
             this._confidence.innerHTML = `
                 <span class="confidence-badge" style="background:#EAB30820;color:#EAB308;border:1px solid #EAB30840;font-size:12px;padding:8px 12px;line-height:1.4;display:block;">
-                    ⚠️ <strong>AI translation key needed.</strong><br>
-                    Add a <strong>Groq</strong> (free) or <strong>OpenAI</strong> API key in Settings → Transcription Engine to enable text translation.
+                    ⚠️ <strong>On-device translation engine unavailable</strong> — try restarting the app.<br>
+                    ${this._escapeHtml(err.message || 'Translation failed')}
                 </span>
             `;
 
@@ -585,6 +615,20 @@ class TranslatePanel {
           ${pct}% confidence${data.offline ? ' · Offline' : ''}
         </span>
       `;
+        }
+
+        // Reflect whether this result is already a saved favorite.
+        const favBtn = document.getElementById('translateFavBtn');
+        if (favBtn) {
+            const srcText = (this._sourceText.textContent || '').trim();
+            const tgtText = (this._lastTranslatedText || '').trim();
+            if (this._isFavorited(srcText, tgtText)) {
+                favBtn.classList.add('favorited');
+                favBtn.textContent = '⭐';
+            } else {
+                favBtn.classList.remove('favorited');
+                favBtn.textContent = '⭐';
+            }
         }
 
         // Prepend to history view
@@ -643,43 +687,121 @@ class TranslatePanel {
 
     // ─── Favorites ────────────────────────────────────────────────
 
-    async _saveFavorite() {
-        const btn = document.getElementById('translateFavBtn');
-        const translationId = this._lastTranslationId;
-        if (!translationId) { btn.textContent = '⚠️'; setTimeout(() => { btn.textContent = '⭐'; }, 1000); return; }
+    // Favorites are stored entirely locally (offline-first, no cloud). Each entry:
+    // { source, target, sourceText, translatedText, ts }. Capped at FAV_MAX.
+    static get FAV_MAX() { return 50; }
 
-        // Offline: indicate saved locally
-        if (!navigator.onLine) {
-            btn.textContent = '📌';
-            setTimeout(() => { btn.textContent = '⭐'; }, 1500);
+    _loadFavorites() {
+        try {
+            const stored = localStorage.getItem('windy_translateFavorites');
+            return stored ? (JSON.parse(stored) || []) : [];
+        } catch (e) {
+            this._log.warn('_loadFavorites', `restore failed: ${e.message}`);
+            return [];
+        }
+    }
+
+    _persistFavorites(favs) {
+        try {
+            localStorage.setItem('windy_translateFavorites', JSON.stringify(favs.slice(0, TranslatePanel.FAV_MAX)));
+        } catch (e) {
+            this._log.warn('_persistFavorites', `persist failed: ${e.message}`);
+        }
+    }
+
+    /** Is the currently-shown translation already a saved favorite? */
+    _isFavorited(sourceText, translatedText) {
+        return this._loadFavorites().some(f =>
+            f.sourceText === sourceText && f.translatedText === translatedText);
+    }
+
+    _saveFavorite() {
+        const btn = document.getElementById('translateFavBtn');
+        // Capture from the live result panel — not a non-existent _lastTranslatedText.
+        const sourceText = (this._sourceText.textContent || '').trim();
+        const translatedText = (this._lastTranslatedText || this._targetText.textContent || '').trim();
+        if (!translatedText) {
+            btn.textContent = '⚠️';
+            setTimeout(() => { btn.textContent = '⭐'; }, 1000);
             return;
         }
 
-        try {
-            const token = localStorage.getItem('windy_cloudToken') || '';
-            await fetch(window.API_CONFIG.userFavorites, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                },
-                body: JSON.stringify({ translationId })
-            });
+        const source = this._sourceLang.value;
+        const target = this._lastTargetLang || this._targetLang.value;
+        let favs = this._loadFavorites();
+
+        const idx = favs.findIndex(f =>
+            f.sourceText === sourceText && f.translatedText === translatedText);
+        if (idx >= 0) {
+            // Toggle off — un-favorite.
+            favs.splice(idx, 1);
+            this._persistFavorites(favs);
+            btn.textContent = '⭐';
+            btn.classList.remove('favorited');
+        } else {
+            favs.unshift({ source, target, sourceText, translatedText, ts: Date.now() });
+            this._persistFavorites(favs);
             btn.textContent = '⭐✓';
+            btn.classList.add('favorited');
             setTimeout(() => { btn.textContent = '⭐'; }, 1500);
-        } catch (err) {
-            this._log.warn('_saveFavorite', `save failed: ${err.message || err}`);
-            btn.textContent = '⚠️';
-            setTimeout(() => { btn.textContent = '⭐'; }, 1000);
         }
+        this._renderFavorites();
+    }
+
+    /** Render saved favorites at the top of the RECENT area, reusing history styling. */
+    _renderFavorites() {
+        if (!this._historyEl) return;
+        // Clear any prior favorites block, then re-render history fresh below it.
+        const favs = this._loadFavorites();
+        // Re-render history first (clears the container), then prepend favorites.
+        this._renderHistory();
+        if (favs.length === 0) return;
+
+        const wrap = document.createElement('div');
+        wrap.id = 'translateFavorites';
+        const header = document.createElement('div');
+        header.className = 'translate-history-subheader';
+        header.style.cssText = 'font-size:11px;color:#9CA3AF;margin:4px 0;display:flex;justify-content:space-between;align-items:center;';
+        header.innerHTML = '<span>⭐ Favorites</span>';
+        wrap.appendChild(header);
+
+        for (const item of favs.slice(0, 8)) {
+            const div = document.createElement('div');
+            div.className = 'translate-history-item favorite';
+            const srcPreview = (item.sourceText || '').substring(0, 40);
+            const tgtPreview = (item.translatedText || '').substring(0, 40);
+            div.innerHTML = `
+        <div class="th-source">${this._escapeHtml(srcPreview)}${srcPreview.length < (item.sourceText || '').length ? '…' : ''}</div>
+        <div class="th-target">${this._escapeHtml(tgtPreview)}${tgtPreview.length < (item.translatedText || '').length ? '…' : ''}</div>
+      `;
+            div.addEventListener('click', () => {
+                this._sourceText.textContent = item.sourceText || '';
+                this._targetText.textContent = item.translatedText || '';
+                this._resultArea.classList.add('visible');
+            });
+            wrap.appendChild(div);
+        }
+        // Insert favorites block above the history items.
+        this._historyEl.insertBefore(wrap, this._historyEl.firstChild);
     }
 
     // ─── History ──────────────────────────────────────────────────
 
     async _loadHistory() {
+        // Seed from persisted local history so RECENT survives app restart
+        if (this.history.length === 0) {
+            try {
+                const stored = localStorage.getItem('windy_translateHistory');
+                if (stored) this.history = JSON.parse(stored) || [];
+            } catch (e) {
+                this._log.warn('_loadHistory', `restore failed: ${e.message}`);
+            }
+        }
+
         // Don't attempt network fetch when offline — show cached history
         if (!navigator.onLine) {
             this._log.debug('_loadHistory', 'offline — using cached history');
+            this._renderHistory();
             return;
         }
         try {
@@ -707,6 +829,11 @@ class TranslatePanel {
             created_at: new Date().toISOString()
         });
         if (this.history.length > 20) this.history.pop();
+        try {
+            localStorage.setItem('windy_translateHistory', JSON.stringify(this.history.slice(0, 20)));
+        } catch (e) {
+            this._log.warn('_addHistoryItem', `persist failed: ${e.message}`);
+        }
         this._renderHistory();
     }
 

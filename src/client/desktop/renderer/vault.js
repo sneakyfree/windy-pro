@@ -245,13 +245,17 @@ class VaultPanel {
             try {
                 const msg = JSON.parse(event.data);
                 if (msg.type === 'vault_export' && msg.text) {
-                    // Copy to clipboard
-                    navigator.clipboard.writeText(msg.text).then(() => {
-                        this.showToast(`Exported as ${format.toUpperCase()} — copied to clipboard!`);
-                    });
                     this.app.ws.removeEventListener('message', handler);
+                    // Save to file via the real saver bridge
+                    window.windyAPI.saveFile({
+                        content: msg.text,
+                        defaultName: 'vault-session-' + this.currentSession + '.' + format,
+                        filters: [{ name: format.toUpperCase(), extensions: [format] }]
+                    }).then(res => {
+                        if (res?.saved) this.showToast('Saved');
+                    });
                 }
-            } catch (e) { console.warn('[Vault] Clipboard copy error:', e.message); }
+            } catch (e) { console.warn('[Vault] Save file error:', e.message); }
         };
         this.app.ws.addEventListener('message', handler);
     }

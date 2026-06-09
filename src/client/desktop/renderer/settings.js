@@ -286,11 +286,14 @@ class SettingsPanel {
           <div class="setting-row" id="modelSizeRow">
             <label for="modelSelect">Model Size</label>
             <select id="modelSelect">
-              <option value="tiny" selected>Windy Nano (73MB — fastest, GPU ✅)</option>
-              <option value="base">Windy Core (462MB — recommended, GPU ✅)</option>
-              <option value="small">Windy Lite (140MB — lightweight, GPU ✅)</option>
-              <option value="medium">Windy Edge (1444MB — high-accuracy, GPU ✅)</option>
-              <option value="large-v3">Windy Word Engine (2945MB — ultra-fast large model, GPU ✅)</option>
+              <option value="base" selected>Windy Core (462MB — recommended, GPU ✅)</option>
+              <option value="windy-nano-ct2">Windy Nano (fastest, GPU ✅)</option>
+              <option value="windy-lite-ct2">Windy Lite (lightweight, GPU ✅)</option>
+              <option value="windy-core-ct2">Windy Core CT2 (balanced, GPU ✅)</option>
+              <option value="windy-edge-ct2">Windy Edge (high-accuracy, GPU ✅)</option>
+              <option value="windy-plus-ct2">Windy Plus (high-accuracy, GPU ✅)</option>
+              <option value="windy-turbo-ct2">Windy Turbo (fast large, GPU ✅)</option>
+              <option value="windy-pro-engine-ct2">Windy Pro Engine (ultra-fast large, GPU ✅)</option>
             </select>
           </div>
           <div class="setting-row">
@@ -656,11 +659,19 @@ class SettingsPanel {
 
     // Font size buttons (zoom webContents)
     this.panel.querySelector('#settingsFontDown')?.addEventListener('click', () => {
-      if (window.windyAPI?.zoomOut) window.windyAPI.zoomOut();
+      // Mirror the main-window Ctrl-zoom path so font size persists/broadcasts.
+      const current = window.app?._currentFontSize || 100;
+      const next = Math.max(70, Math.min(150, current - 10));
+      if (window.app) window.app._currentFontSize = next;
+      if (window.windyAPI?.setFontSize) window.windyAPI.setFontSize(next);
       else document.body.style.zoom = (parseFloat(document.body.style.zoom || '1') - 0.1).toFixed(1);
     });
     this.panel.querySelector('#settingsFontUp')?.addEventListener('click', () => {
-      if (window.windyAPI?.zoomIn) window.windyAPI.zoomIn();
+      // Mirror the main-window Ctrl-zoom path so font size persists/broadcasts.
+      const current = window.app?._currentFontSize || 100;
+      const next = Math.max(70, Math.min(150, current + 10));
+      if (window.app) window.app._currentFontSize = next;
+      if (window.windyAPI?.setFontSize) window.windyAPI.setFontSize(next);
       else document.body.style.zoom = (parseFloat(document.body.style.zoom || '1') + 0.1).toFixed(1);
     });
 
@@ -954,7 +965,7 @@ class SettingsPanel {
 
       const confirmed = confirm(
         `Switch model: ${currentModel} → ${newModel}\n\n` +
-        `📦 Download: ${info.size} (first time only)\n` +
+        `📦 Bundled offline — no download needed\n` +
         `💾 RAM needed: ${info.ram}\n` +
         `⏱️ Load time: ${info.time}\n` +
         `🎯 Quality: ${info.quality}` +
@@ -1226,8 +1237,16 @@ class SettingsPanel {
         if (e.ctrlKey || e.metaKey) parts.push('CommandOrControl');
         if (e.altKey) parts.push('Alt');
         if (e.shiftKey) parts.push('Shift');
-        // Get the actual key (not modifier-only)
-        const key = e.key;
+        // Get the actual key (not modifier-only). Derive letters/digits from the
+        // PHYSICAL key code, NOT e.key: on macOS, Option+<letter> composes a special
+        // character in e.key (e.g. Option+R → "®"), which becomes an accelerator like
+        // "Alt+®" that Electron's globalShortcut.register() cannot parse and CRASHES
+        // the app ("conversion failure from Alt+®"). e.code is layout/Option-immune.
+        const code = e.code || '';
+        let key = e.key;
+        if (/^Key[A-Z]$/.test(code)) key = code.slice(3);          // KeyR → R
+        else if (/^Digit[0-9]$/.test(code)) key = code.slice(5);   // Digit5 → 5
+        else if (code === 'Space') key = ' ';
         // Escape cancels capture without saving.
         if (key === 'Escape') {
           el.textContent = el.dataset.previous || el.textContent;
@@ -1298,7 +1317,7 @@ class SettingsPanel {
     // Reset all hotkeys to defaults
     const resetBtn = this.panel.querySelector('#hotkeyResetBtn');
     if (resetBtn) {
-      resetBtn.addEventListener('click', () => {
+      resetBtn.addEventListener('click', async () => {
         const defaults = {
           toggleRecording: 'CommandOrControl+Shift+Space',
           pasteTranscript: 'CommandOrControl+Shift+V',
@@ -1318,13 +1337,30 @@ class SettingsPanel {
           const el = this.panel.querySelector(selector);
           if (el) el.textContent = defaults[key].replace('CommandOrControl', (window.windyAPI && window.windyAPI.platform === 'darwin') ? '⌘' : 'Ctrl');
         }
-        // Tell main process to reset each
+        // Tell main process to reset each — await so we know which actually bound
+        const failures = [];
         if (window.windyAPI?.rebindHotkey) {
           for (const [key, accel] of Object.entries(defaults)) {
-            window.windyAPI.rebindHotkey(key, accel);
+            try {
+              const result = await window.windyAPI.rebindHotkey(key, accel);
+              if (result && result.ok === false) failures.push(key);
+            } catch (_) {
+              failures.push(key);
+            }
           }
         }
-        this.showToast('✅ All shortcuts reset to defaults');
+        if (failures.length === 0) {
+          this.showToast('✅ All shortcuts reset to defaults');
+        } else {
+          this.showToast(`⚠️ Reset failed for: ${failures.join(', ')}`);
+          // Re-sync badges from the real saved state on failure
+          if (window.windyAPI?.getSettings && window.app?._populateShortcutDisplay) {
+            try {
+              const s = await window.windyAPI.getSettings();
+              window.app._populateShortcutDisplay(s?.hotkeys);
+            } catch (_) { }
+          }
+        }
       });
     }
 
@@ -1398,6 +1434,9 @@ class SettingsPanel {
       if (surpriseRow) surpriseRow.style.display = mode === 'surprise' ? 'flex' : 'none';
       if (unifiedSection) unifiedSection.style.display = mode === 'silent' ? 'none' : '';
       if (previewRow) previewRow.style.display = mode === 'silent' ? 'none' : '';
+      // Per-hook sound dropdowns are only honored in custom mode — disable them
+      // elsewhere so they don't look interactive when they're ignored.
+      this.panel.querySelectorAll('[id^="uniSelect_"]').forEach(s => { s.disabled = (mode !== 'custom'); });
     };
 
     modePills.forEach(pill => {
@@ -2238,6 +2277,51 @@ class SettingsPanel {
       });
     }
 
+    // Master volume slider + mute button (windy_sfxVolume stored 0–100; engine wants 0–1)
+    const masterVol = this.panel.querySelector('#sfxMasterVol');
+    const masterVolPct = this.panel.querySelector('#sfxMasterVolPct');
+    const masterMute = this.panel.querySelector('#sfxMasterMute');
+
+    // Initialize slider + pct from saved value on render
+    const savedMasterVol = parseInt(localStorage.getItem('windy_sfxVolume') || '85', 10) || 0;
+    if (masterVol) masterVol.value = savedMasterVol;
+    if (masterVolPct) masterVolPct.textContent = savedMasterVol + '%';
+    if (masterMute) masterMute.textContent = savedMasterVol === 0 ? '🔇' : '🔊';
+
+    if (masterVol) {
+      masterVol.addEventListener('input', () => {
+        const v = parseInt(masterVol.value, 10) || 0;
+        fx?.setMasterVolume(v / 100);
+        localStorage.setItem('windy_sfxVolume', String(v));
+        if (masterVolPct) masterVolPct.textContent = v + '%';
+        if (masterMute) masterMute.textContent = v === 0 ? '🔇' : '🔊';
+      });
+    }
+
+    if (masterMute) {
+      masterMute.style.cursor = 'pointer';
+      masterMute.addEventListener('click', () => {
+        const current = parseInt(localStorage.getItem('windy_sfxVolume') || '85', 10) || 0;
+        if (current > 0) {
+          // Mute: remember current level so we can restore it on unmute
+          localStorage.setItem('windy_sfxVolumePrev', String(current));
+          fx?.setMasterVolume(0);
+          localStorage.setItem('windy_sfxVolume', '0');
+          if (masterVol) masterVol.value = 0;
+          if (masterVolPct) masterVolPct.textContent = '0%';
+          masterMute.textContent = '🔇';
+        } else {
+          // Unmute: restore the saved level (fall back to 85 if none)
+          const restore = parseInt(localStorage.getItem('windy_sfxVolumePrev') || '85', 10) || 85;
+          fx?.setMasterVolume(restore / 100);
+          localStorage.setItem('windy_sfxVolume', String(restore));
+          if (masterVol) masterVol.value = restore;
+          if (masterVolPct) masterVolPct.textContent = restore + '%';
+          masterMute.textContent = '🔊';
+        }
+      });
+    }
+
     // Surprise Me category
     const surpriseCat = this.panel.querySelector('#sfxSurpriseCategory');
     if (surpriseCat && fx) {
@@ -2352,8 +2436,32 @@ class SettingsPanel {
           <button class="custom-widget-delete" data-del="${i}" title="Remove">✕</button>
         </div>
       `).join('');
+    };
 
-      // Click to select
+    // Widget mode pills
+    const widgetModePills = this.panel.querySelector('#widgetModePills');
+    const specificSection = this.panel.querySelector('#widgetSpecificSection');
+    const randomStockInfo = this.panel.querySelector('#widgetRandomStockInfo');
+    const randomCustomInfo = this.panel.querySelector('#widgetRandomCustomInfo');
+    const savedWidgetMode = localStorage.getItem('windy_widgetMode') || 'specific';
+
+    const setWidgetMode = (mode) => {
+      localStorage.setItem('windy_widgetMode', mode);
+      if (widgetModePills) {
+        widgetModePills.querySelectorAll('.widget-mode-pill').forEach(p => {
+          p.classList.toggle('active', p.dataset.mode === mode);
+        });
+      }
+      if (specificSection) specificSection.style.display = mode === 'specific' ? '' : 'none';
+      if (randomStockInfo) randomStockInfo.style.display = mode === 'random-stock' ? '' : 'none';
+      if (randomCustomInfo) randomCustomInfo.style.display = mode === 'random-custom' ? '' : 'none';
+    };
+
+    setWidgetMode(savedWidgetMode);
+
+    // Custom-widget grid click handler — attached ONCE (renderCustomGrid only
+    // rewrites innerHTML, so re-binding here would stack duplicate listeners).
+    if (customGrid) {
       customGrid.addEventListener('click', (e) => {
         const del = e.target.closest('[data-del]');
         if (del) {
@@ -2380,28 +2488,7 @@ class SettingsPanel {
           this.showToast('✅ Custom widget selected!');
         }
       });
-    };
-
-    // Widget mode pills
-    const widgetModePills = this.panel.querySelector('#widgetModePills');
-    const specificSection = this.panel.querySelector('#widgetSpecificSection');
-    const randomStockInfo = this.panel.querySelector('#widgetRandomStockInfo');
-    const randomCustomInfo = this.panel.querySelector('#widgetRandomCustomInfo');
-    const savedWidgetMode = localStorage.getItem('windy_widgetMode') || 'specific';
-
-    const setWidgetMode = (mode) => {
-      localStorage.setItem('windy_widgetMode', mode);
-      if (widgetModePills) {
-        widgetModePills.querySelectorAll('.widget-mode-pill').forEach(p => {
-          p.classList.toggle('active', p.dataset.mode === mode);
-        });
-      }
-      if (specificSection) specificSection.style.display = mode === 'specific' ? '' : 'none';
-      if (randomStockInfo) randomStockInfo.style.display = mode === 'random-stock' ? '' : 'none';
-      if (randomCustomInfo) randomCustomInfo.style.display = mode === 'random-custom' ? '' : 'none';
-    };
-
-    setWidgetMode(savedWidgetMode);
+    }
 
     if (widgetModePills) {
       widgetModePills.addEventListener('click', (e) => {
@@ -2470,6 +2557,10 @@ class SettingsPanel {
         input.addEventListener('change', async () => {
           const file = input.files?.[0];
           if (!file) return;
+          if (file.type && !/^image\/(png|gif|svg\+xml|webp)$/.test(file.type)) {
+            this.showToast('❌ Use PNG, GIF, SVG, or WebP');
+            return;
+          }
           if (file.size > 2 * 1024 * 1024) {
             this.showToast('❌ File too large (max 2MB)');
             return;
@@ -2505,7 +2596,7 @@ class SettingsPanel {
     const checkUpdBtn = this.panel.querySelector('#checkUpdatesBtn');
     if (checkUpdBtn) {
       checkUpdBtn.addEventListener('click', async () => {
-        checkUpdBtn.textContent = '⏳ Checking...';
+        checkUpdBtn.textContent = 'ℹ️ Auto-update off — re-download to update';
         checkUpdBtn.disabled = true;
         try {
           if (window.windyAPI?.checkForUpdates) {
@@ -2629,6 +2720,9 @@ class SettingsPanel {
         if (settings.clearOnPaste !== undefined) {
           this.panel.querySelector('#clearOnPaste').checked = settings.clearOnPaste;
         }
+        // Restore analytics opt-in from localStorage (persists across relaunch)
+        const a = this.panel.querySelector('#analyticsEnabled');
+        if (a) a.checked = localStorage.getItem('windy_analytics') === 'true';
         /* livePreview restore handled via recordingMode */
         this.app.livePreview = settings.recordingMode === 'live' || settings.recordingMode === 'hybrid';
         // Recording mode restore
