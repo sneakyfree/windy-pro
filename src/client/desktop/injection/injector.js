@@ -113,7 +113,10 @@ class CursorInjector {
      */
     async injectMacOS() {
         return new Promise((resolve, reject) => {
-            const cmd = 'osascript -e \'tell application "System Events" to keystroke "v" using command down\'';
+            // key code 9 (physical V) + explicit {command down} holds the modifier
+            // reliably; the bare `keystroke "v" using command down` form occasionally
+            // drops Command and types a literal "v" instead of pasting.
+            const cmd = 'osascript -e \'tell application "System Events" to key code 9 using {command down}\'';
             exec(cmd, { timeout: 3000 }, (error) => {
                 if (error) {
                     if (error.message.includes('not allowed')) {

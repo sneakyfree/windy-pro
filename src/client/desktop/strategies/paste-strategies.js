@@ -87,8 +87,15 @@ const strategies = [
     needsClipboard: true,
     detect: async () => process.platform === 'darwin',
     paste: async (text) => {
+      // System Events sometimes drops the synthetic Command modifier with the
+      // `keystroke "v" using command down` form — especially right after an app
+      // activation or while the user's physical Cmd+Shift+V is still releasing —
+      // typing a bare literal "v" instead of pasting. `key code 9` (the physical V
+      // key) + the explicit `using {command down}` brace form holds the modifier
+      // reliably; the brief settle lets a held hotkey modifier release first.
+      await new Promise(r => setTimeout(r, 150));
       const { ok } = await execFilePromise('osascript', ['-e',
-        'tell application "System Events" to keystroke "v" using command down'
+        'tell application "System Events" to key code 9 using {command down}'
       ], { timeout: 3000 });
       return ok;
     },
