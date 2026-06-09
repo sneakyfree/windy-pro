@@ -215,23 +215,31 @@ class EffectsEngine {
         this.sound = new SoundManager();
         this.visual = new VisualOverlay();
 
-        // Current configuration
-        this._mode = 'silent';        // 'silent' | 'single' | 'surprise'
+        // Current configuration — ship with the friendly Classic sounds ON by default
+        // (a soft tick when recording starts, while transcribing, and on paste — genuinely
+        // useful when you've looked away during a local-model transcription). Fully
+        // user-adjustable: change volume, swap packs, or go Silent in Settings. This is only
+        // the FRESH-INSTALL default; any saved preference in localStorage('windy_effects')
+        // overrides it, so existing users keep their choice.
+        this._mode = 'single';        // 'silent' | 'single' | 'surprise'
         this._activePack = null;      // ThemePack manifest object
+        this._activePackId = 'classic-beep'; // 🔔 Classic ★ — the nice default pack
         this._packs = {};             // id → manifest
         this._favorites = [];
         this._surpriseCategory = 'all';
         this._shuffleBag = [];
         this._dynamicScaling = true;
 
-        // Per-hook-point settings
+        // Per-hook-point settings — the helpful trio (record-start / transcribing tick /
+        // paste) plus stop are ON by default; continuous 'during' and the 'warning' error
+        // cue stay off to keep it tasteful, not noisy.
         this._hookPoints = {
-            start: { enabled: false, volume: 70 },
+            start: { enabled: true, volume: 70 },
             during: { enabled: false, volume: 30 },
-            stop: { enabled: false, volume: 70 },
-            process: { enabled: false, volume: 30 },
+            stop: { enabled: true, volume: 70 },
+            process: { enabled: true, volume: 30 },
             warning: { enabled: false, volume: 80 },
-            paste: { enabled: false, volume: 100 }
+            paste: { enabled: true, volume: 100 }
         };
 
         this._loadSettings();
