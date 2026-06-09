@@ -1228,7 +1228,22 @@ class SettingsPanel {
         if (e.shiftKey) parts.push('Shift');
         // Get the actual key (not modifier-only)
         const key = e.key;
+        // Escape cancels capture without saving.
+        if (key === 'Escape') {
+          el.textContent = el.dataset.previous || el.textContent;
+          el.classList.remove('capturing');
+          el.blur();
+          return;
+        }
         if (!['Control', 'Shift', 'Alt', 'Meta'].includes(key)) {
+          // REQUIRE at least one modifier. A bare key (e.g. just "Space") would register as
+          // a GLOBAL shortcut that fires on every keystroke — that's what froze the window
+          // and killed show-hide / toggle-recording. Keep capturing until a real chord.
+          if (parts.length === 0) {
+            this.showToast('⚠️ Shortcuts need a modifier — hold ⌘/Ctrl (and Shift), then press a key');
+            el.textContent = 'Press keys… (need ⌘/Ctrl)';
+            return;
+          }
           if (key === ' ') parts.push('Space');
           else if (key.length === 1) parts.push(key.toUpperCase());
           else parts.push(key);

@@ -5869,7 +5869,7 @@ function toggleRecording() {
 
   // Update tray icon color based on state
   if (tray) {
-    tray.setToolTip(isRecording ? 'Windy Word - Recording...' : 'Windy Word');
+    tray.setToolTip(isRecording ? 'Windy Word — Recording (click the tray icon to stop)' : 'Windy Word');
   }
 
   // macOS: getUserMedia/AudioContext in Chromium steal focus even with focusable:false.

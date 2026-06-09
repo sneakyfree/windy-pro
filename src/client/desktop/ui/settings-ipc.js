@@ -104,15 +104,30 @@ function registerSettingsIpc(deps) {
       if (RESERVED.includes(accelerator)) {
         return { ok: false, error: `${accelerator} is a reserved system shortcut` };
       }
+      // Reject anything that isn't a real chord. A bare key (no modifier) registers as a
+      // global shortcut that fires on every keystroke and clobbers the others — the bug
+      // that hid the window and left recording un-stoppable.
+      if (!/\+/.test(accelerator) || !/(CommandOrControl|Command|Control|Cmd|Ctrl|Alt|Option|Shift|Super|Meta)\s*\+/i.test(accelerator)) {
+        return { ok: false, error: 'Shortcut must include a modifier, e.g. CommandOrControl+Shift+Key' };
+      }
+      // Snapshot the working hotkeys so we can ROLL BACK if the new one won't register —
+      // never leave the user with dead show-hide / toggle-recording shortcuts.
+      const oldHotkeys = { ...(store.get('hotkeys') || {}) };
+      store.set('hotkeys', { ...oldHotkeys, [key]: accelerator });
       globalShortcut.unregisterAll();
-      const hotkeys = store.get('hotkeys') || {};
-      hotkeys[key] = accelerator;
-      store.set('hotkeys', hotkeys);
       registerHotkeys();
+      if (!globalShortcut.isRegistered(accelerator)) {
+        store.set('hotkeys', oldHotkeys);
+        globalShortcut.unregisterAll();
+        registerHotkeys();
+        console.warn(`[Hotkey] ${accelerator} failed to register — reverted ${key}`);
+        return { ok: false, error: `${accelerator} couldn't be registered (already in use?) — reverted` };
+      }
       console.info(`[Hotkey] Rebound ${key} → ${accelerator}`);
       return { ok: true, key, accelerator };
     } catch (err) {
       console.error('[Hotkey] Rebind failed:', err);
+      try { globalShortcut.unregisterAll(); registerHotkeys(); } catch (_) { /* best-effort restore */ }
       return { ok: false, error: err.message };
     }
   });
