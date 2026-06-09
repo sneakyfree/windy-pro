@@ -1403,7 +1403,28 @@ class SettingsPanel {
     modePills.forEach(pill => {
       pill.addEventListener('click', () => {
         const mode = pill.dataset.mode;
-        if (fx) fx.setMode(mode);
+        if (fx && mode === 'default') {
+          // "Default" is a true RESET: re-enable all 6 hooks at audible volumes, restore the
+          // Classic pack + master — and reflect it in the UI (mute icons + sliders) at once,
+          // so a user who muted/quieted things gets working sound back in one click.
+          fx.resetToDefaults();
+          ['start', 'during', 'stop', 'process', 'warning', 'paste'].forEach(k => {
+            const hp = fx._hookPoints[k];
+            const mute = this.panel.querySelector(`#uniMute_${k}`);
+            const vol = this.panel.querySelector(`#uniVol_${k}`);
+            const pct = this.panel.querySelector(`#uniVolPct_${k}`);
+            if (hp && mute) mute.textContent = hp.enabled ? '🔊' : '🔇';
+            if (hp && vol) vol.value = hp.volume;
+            if (hp && pct) pct.textContent = hp.volume + '%';
+          });
+          const mv = this.panel.querySelector('#sfxMasterVol');
+          const mvPct = this.panel.querySelector('#sfxMasterVolPct');
+          if (mv) mv.value = 85;
+          if (mvPct) mvPct.textContent = '85%';
+          try { this.showToast('🔔 Sounds reset to default — all 6 stages on'); } catch (_) { }
+        } else if (fx) {
+          fx.setMode(mode);
+        }
         updateModeUI(mode);
       });
     });
