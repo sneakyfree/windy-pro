@@ -6,6 +6,10 @@ name: Build Offline Installers (Win + Linux)
 # dev machine. Manual trigger only.
 on:
   workflow_dispatch: {}
+  # workflow_dispatch only works once a workflow is on the default branch. Until then,
+  # pushing this branch's content to `ci/offline-build` fires the run.
+  push:
+    branches: [ 'ci/offline-build' ]
 
 env:
   WINDY_EDITION: reader
