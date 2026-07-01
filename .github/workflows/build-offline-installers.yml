@@ -42,19 +42,22 @@ jobs:
       - name: Show staged model size
         shell: bash
         run: du -sh extraResources/model || true
-      - name: Build NSIS installer .exe (with models)
-        run: npx electron-builder --win nsis --x64 --publish never
-      - name: Upload offline installer to R2
+      # NSIS's 32-bit makensis.exe can't mmap a >4GB payload ("failed creating mmap"),
+      # so an offline (~4.3GB) build must ship as a portable ZIP, not an installer.
+      - name: Build portable ZIP (with models)
+        run: npx electron-builder --win zip --x64 --publish never
+      - name: Upload offline ZIP to R2
         shell: bash
         run: |
-          EXE=$(find dist -maxdepth 1 -name "*.exe" | head -1)
-          echo "uploading: $EXE ($(du -h "$EXE" | cut -f1))"
-          aws s3 cp "$EXE" "$R2_BUCKET/Windy-Word-Reader-Offline-win-x64.exe" \
-            --endpoint-url "$R2_ENDPOINT" --content-type application/x-msdownload --only-show-errors
-          echo "verify:"; curl -sI "https://downloads.windyword.ai/Windy-Word-Reader-Offline-win-x64.exe" | grep -iE "^HTTP|content-length"
+          ZIP=$(find dist -maxdepth 1 -name "*.zip" | head -1)
+          echo "uploading: $ZIP ($(du -h "$ZIP" | cut -f1))"
+          aws s3 cp "$ZIP" "$R2_BUCKET/Windy-Word-Reader-Offline-win-x64.zip" \
+            --endpoint-url "$R2_ENDPOINT" --content-type application/zip --only-show-errors
+          echo "verify:"; curl -sI "https://downloads.windyword.ai/Windy-Word-Reader-Offline-win-x64.zip" | grep -iE "^HTTP|content-length"
 
   linux-offline:
     name: Linux x64 (offline)
+    if: false   # already built + published to R2 (AppImage live); flip to true to rebuild
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
