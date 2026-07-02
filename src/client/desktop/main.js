@@ -555,6 +555,34 @@ function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
 // marker is a half-built/interrupted first run and must be rebuilt, never trusted.
 const ENGINE_VENV_READY_MARKER = '.windy-engine-ready';
 
+// True if a venv already has the engine's Python deps installed. Fast filesystem check (no
+// python spawn → never blocks the main process / window paint), used to ADOPT a marker-less
+// venv (e.g. one the installer-v2 wizard built) instead of destroying it.
+function _venvHasEngineDeps(venvDir) {
+  try {
+    let roots;
+    if (process.platform === 'win32') {
+      roots = [path.join(venvDir, 'Lib', 'site-packages')];
+    } else {
+      const lib = path.join(venvDir, 'lib');
+      roots = fs.existsSync(lib) ? fs.readdirSync(lib).map(d => path.join(lib, d, 'site-packages')) : [];
+    }
+    return roots.some(sp => fs.existsSync(path.join(sp, 'faster_whisper')) && fs.existsSync(path.join(sp, 'websockets')));
+  } catch (_) { return false; }
+}
+
+// Free bytes available on the volume holding `dir` (or its nearest existing parent), or null
+// if it can't be determined (older Node without statfsSync, or an error) → callers fail open.
+function _freeSpaceBytes(dir) {
+  try {
+    if (typeof fs.statfsSync !== 'function') return null;
+    let target = dir;
+    while (target && !fs.existsSync(target)) target = path.dirname(target);
+    const s = fs.statfsSync(target || '/');
+    return s.bavail * s.bsize;
+  } catch (_) { return null; }
+}
+
 function ensureEngineVenv(appDataDir) {
   try {
     const venvDir = path.join(appDataDir, 'venv');
@@ -566,15 +594,22 @@ function ensureEngineVenv(appDataDir) {
     // Complete iff the interpreter exists AND we previously proved it can run the engine.
     if (fs.existsSync(venvPy) && fs.existsSync(readyMarker)) return false; // normal start handles it
 
-    // A venv dir with no ready-marker is an interrupted/slow first-run build (bin/python
-    // was created, but pip never finished) or a pre-marker build. Either way it is unsafe
-    // to trust — remove it so the build below starts clean and can't be "adopted" as done.
-    // This is the core of the anti-brick fix: without it, config.json is written before the
-    // async build finishes and needsSetup() only checks config.json, so an interrupted first
-    // run would leave a permanently broken venv that even reinstalling the app can't fix
-    // (the venv lives in ~/.windy-pro, outside the .app).
+    // A venv dir with no ready-marker is EITHER a good venv the installer-v2 wizard built
+    // (it uses this SAME ~/.windy-pro/venv path and never writes our marker) / a pre-marker
+    // build, OR a half-built one from an interrupted first run. Do NOT blindly scrub — that
+    // would destroy the wizard's work and force a redundant multi-minute rebuild (or, for a
+    // build lacking bundled wheels, brick it). ADOPT it if it already has the engine deps;
+    // only scrub+rebuild a genuinely broken/incomplete venv. This keeps the anti-brick
+    // guarantee (config.json is written before the async build finishes and needsSetup()
+    // only checks config.json, so an interrupted first run would otherwise never rebuild)
+    // without clobbering a working venv from another code path.
     if (fs.existsSync(venvDir)) {
-      console.warn('[Python] engine venv present but not marked ready (interrupted/old setup) — rebuilding clean');
+      if (fs.existsSync(venvPy) && _venvHasEngineDeps(venvDir)) {
+        try { fs.writeFileSync(readyMarker, `${app.getVersion()} ${new Date().toISOString()} adopted\n`); }
+        catch (e) { console.warn('[Python] adopted existing engine venv but could not write ready marker:', e.message); }
+        return false; // usable venv (e.g. wizard-built) — normal start handles it
+      }
+      console.warn('[Python] engine venv present but missing deps / not usable (interrupted setup) — rebuilding clean');
       try { fs.rmSync(venvDir, { recursive: true, force: true }); }
       catch (e) { console.error('[Python] could not remove incomplete venv:', e.message); }
     }
@@ -597,6 +632,20 @@ function ensureEngineVenv(appDataDir) {
     const wheelsDir = archDir('wheels');
     const reqFile = path.join(bundledRoot, 'requirements-bundle.txt');
     if (!fs.existsSync(bundledPy) || !fs.existsSync(wheelsDir) || !fs.existsSync(reqFile)) return false;
+
+    // Disk preflight: the venv + offline wheel install needs ~2 GB in ~/.windy-pro. On a full
+    // disk pip fails with ENOSPC, we scrub, and the next launch retries the same doomed build —
+    // a confusing multi-minute stall loop. Bail early with a specific message instead. This
+    // covers the first-LAUNCH moment (the go.sh/go.ps1 preflight is install-time only, and
+    // off-installer paths — manual copy / USB hand-off — have no preflight at all). Fail-open
+    // if free space can't be read.
+    const _free = _freeSpaceBytes(appDataDir);
+    if (_free !== null && _free < 2 * 1024 * 1024 * 1024) {
+      const gb = Math.max(0, _free / (1024 * 1024 * 1024)).toFixed(1);
+      console.error(`[Python] Not enough disk space to build the engine (~${gb} GB free in ~/.windy-pro, need ~2 GB).`);
+      showEngineFailure(`Not enough free disk space to set up the speech engine — about ${gb} GB free, but ~2 GB is needed in your home folder. Free up some space and reopen Windy Word.`);
+      return true; // dialog shown; defer (do NOT fall through to a doomed normal start)
+    }
 
     console.info('[Python] First run: building offline engine venv from bundled wheels…');
     const { execFile } = require('child_process');
