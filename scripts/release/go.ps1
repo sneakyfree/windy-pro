@@ -22,11 +22,37 @@ for ($i = 0; $i -lt 120; $i++) {
 }
 if (-not $ready) { Write-Error "Build not available yet at $url. Please try again in a few minutes."; return }
 
-Write-Host '-> Downloading (~4 GB, all 7 local models). This takes a while...'
-Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+Write-Host '-> Downloading (~4 GB, all 7 local models) with resume — safe to re-run if it drops. This takes a while...'
+# curl.exe (built into Windows 10 1803+) gives resume (-C -), auto-retry, and a live
+# progress bar. Invoke-WebRequest had none of these, so a single network blip aborted the
+# whole 4 GB download and forced a full re-download from zero. $zip is a stable path in
+# %TEMP%, so -C - resumes across re-runs.
+$curl = Join-Path $env:SystemRoot 'System32\curl.exe'
+if (Test-Path $curl) {
+  & $curl -L --fail --retry 8 --retry-delay 5 --retry-all-errors -C - -o $zip $url
+  if ($LASTEXITCODE -ne 0) { Write-Error "Download failed (curl exit $LASTEXITCODE) - re-run the same command to resume."; return }
+} else {
+  # Very old Windows without curl.exe: fall back to Invoke-WebRequest (no resume).
+  Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+}
+
+# Truncation check: a partial ZIP would make tar fail with a confusing error mid-extract.
+try {
+  $expected = [int64]((Invoke-WebRequest -Method Head -Uri $url -UseBasicParsing).Headers['Content-Length'])
+  $actual   = (Get-Item $zip).Length
+  if ($expected -gt 0 -and $actual -lt $expected) {
+    Write-Error "Download incomplete ($actual of $expected bytes) - re-run the same command to resume."; return
+  }
+} catch {}
 
 Write-Host "-> Extracting to $dest ..."
-if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+if (Test-Path $dest) {
+  # Close a running Windy Word from a prior install first — otherwise Remove-Item throws on
+  # the locked .exe (ErrorActionPreference=Stop) and leaves the install half-deleted.
+  Get-Process 'Windy Word' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Milliseconds 500
+  Remove-Item -Recurse -Force $dest
+}
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 # tar.exe (bsdtar, built into Windows 10+) handles multi-GB zips; Expand-Archive can choke >2GB.
 tar -xf $zip -C $dest

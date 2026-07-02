@@ -23,17 +23,30 @@ wait_and_get() {  # $1=url  $2=out
 case "$OS" in
   Darwin)
     case "$(uname -m)" in arm64) KEY="Windy-Word-Reader-arm64.dmg";; *) KEY="Windy-Word-Reader-x64.dmg";; esac
-    URL="https://downloads.windyword.ai/$KEY"; TMP="$(mktemp -d)"; DMG="$TMP/WindyWord.dmg"; APP="/Applications/Windy Word.app"; MP=""
-    trap '[ -n "$MP" ] && hdiutil detach "$MP" -quiet 2>/dev/null; rm -rf "$TMP"' EXIT
+    URL="https://downloads.windyword.ai/$KEY"
+    # Download to a STABLE cache path (not a fresh mktemp dir). The old code used
+    # `mktemp -d` + an EXIT-trap `rm -rf`, so `curl -C -` had nothing to resume from and
+    # every re-run re-downloaded all ~4 GB from zero — the "re-run to resume" promise was false.
+    CACHE="${TMPDIR:-/tmp}/windyword-dl"; mkdir -p "$CACHE"; DMG="$CACHE/$KEY"
+    APP="/Applications/Windy Word.app"; MP=""
+    # Detach the mount on exit only — must NOT delete the partial download, or resume breaks.
+    trap '[ -n "$MP" ] && hdiutil detach "$MP" -quiet 2>/dev/null || true' EXIT
     echo "-> Windy Word installer (macOS)"
     wait_and_get "$URL" "$DMG"
     echo "-> Installing to /Applications…"
-    MP="$(hdiutil attach "$DMG" -nobrowse -noverify | grep -o '/Volumes/.*' | head -1)"
-    [ -n "$MP" ] || { echo "  Could not mount (re-run to resume)." >&2; exit 1; }
+    # No -noverify: let hdiutil verify the DMG's checksum so a corrupt/truncated download is
+    # caught here rather than installing a broken app.
+    MP="$(hdiutil attach "$DMG" -nobrowse | grep -o '/Volumes/.*' | head -1)"
+    if [ -z "$MP" ]; then
+      rm -f "$DMG"   # likely corrupt (not merely incomplete) — clear it so a re-run fetches fresh
+      echo "  Could not mount the download (it may be corrupt). Re-run the command to download a fresh copy." >&2
+      exit 1
+    fi
     if [ -d "$APP" ]; then rm -rf "$APP"; fi
     cp -R "$MP/Windy Word.app" /Applications/
     hdiutil detach "$MP" -quiet; MP=""
     xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
+    rm -f "$DMG"   # success — free the ~4 GB cache
     echo "-> Launching…"; open "$APP"
     echo "✓ Windy Word installed and starting. Press ⌘⇧Space and just talk."
     ;;
@@ -45,10 +58,20 @@ case "$OS" in
     D="$HOME/.local/share/applications"; mkdir -p "$D"
     printf '[Desktop Entry]\nType=Application\nName=Windy Word\nExec=%s\nTerminal=false\nCategories=Utility;AudioVideo;\n' "$APP" > "$D/windy-word.desktop" 2>/dev/null || true
     echo "-> Launching…"
-    nohup "$APP" >/dev/null 2>&1 &
-    echo "✓ Windy Word installed to ~/Applications and starting. Press Ctrl+Shift+Space to dictate."
-    echo "   If it doesn't open, AppImages need libfuse2:  sudo apt install -y libfuse2"
-    echo "   (or run without FUSE:  \"$APP\" --appimage-extract-and-run )"
+    nohup "$APP" >/tmp/windyword-launch.log 2>&1 &
+    APP_PID=$!
+    # Verify it actually stayed up before claiming success. Classic AppImages need libfuse2
+    # (absent by default on Ubuntu 22.04+/Debian 12), so they die instantly — the old code
+    # printed a green "✓ installed and starting" regardless, misleading the user.
+    sleep 2
+    if kill -0 "$APP_PID" 2>/dev/null; then
+      echo "✓ Windy Word installed to ~/Applications and starting. Press Ctrl+Shift+Space to dictate."
+    else
+      echo "⚠ Installed to ~/Applications, but it didn't stay open — AppImages need libfuse2." >&2
+      echo "   Fix:   sudo apt install -y libfuse2     then run:  \"$APP\"" >&2
+      echo "   Or run without FUSE:  \"$APP\" --appimage-extract-and-run" >&2
+      exit 1
+    fi
     ;;
   *)
     echo "This command installs Windy Word on macOS and Linux." >&2
