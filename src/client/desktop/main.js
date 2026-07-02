@@ -6454,7 +6454,8 @@ const WINDYTUNE_MODEL_LADDER = WINDYTUNE_ALL_LADDER.filter(m => _windyTuneModelD
 const WINDYTUNE_THRESHOLDS = {
   DOWNGRADE_RATIO: 2.0,       // transcription_time / audio_duration > 2x → too slow
   UPGRADE_RATIO: 0.3,         // ratio < 0.3 → model is fast enough to try bigger
-  CRITICAL_SECONDS: 30,       // single transcription > 30s → immediate downgrade
+  CRITICAL_RATIO: 4.0,        // a single transcription > 4x slower than real-time → immediate downgrade
+  CRITICAL_MIN_AUDIO_S: 5,    // ...but only with ≥5s of audio, so a short-clip cold-start outlier can't false-trigger
   AUTO_DOWNGRADE_AFTER: 2,    // consecutive slow transcriptions before auto-switch
   PROMPT_UPGRADE_AFTER: 3,    // consecutive fast transcriptions before suggesting upgrade
 };
@@ -6481,11 +6482,16 @@ function _windyTuneRecord(elapsed, audioDuration, model) {
   if (currentIdx < 0) return; // No present model on the ladder, can't adapt
   model = ladderModel; // downstream switch/messages use the ladder id
 
-  // ── Critical: single transcription > 30s → immediate downgrade ──
-  if (elapsed > WINDYTUNE_THRESHOLDS.CRITICAL_SECONDS && currentIdx > 0) {
+  // ── Critical: a single transcription far slower than real-time → immediate downgrade.
+  // Uses RATIO, not absolute elapsed. A long (dictate-a-whole-book) recording legitimately
+  // takes many seconds to transcribe, so the old `elapsed > 30s` rule wrongly pinned whole
+  // sessions down to the lowest-accuracy engine. Ratio is length-independent; the min-audio
+  // guard keeps a short-clip cold-start outlier from tripping it. ──
+  if (audioDuration >= WINDYTUNE_THRESHOLDS.CRITICAL_MIN_AUDIO_S &&
+      ratio > WINDYTUNE_THRESHOLDS.CRITICAL_RATIO && currentIdx > 0) {
     const newModel = WINDYTUNE_MODEL_LADDER[currentIdx - 1];
-    console.warn(`[WindyTune] ⚡ CRITICAL: ${elapsed.toFixed(1)}s transcription → auto-switching ${model} → ${newModel}`);
-    _windyTuneSwitch(newModel, `Transcription took ${elapsed.toFixed(0)}s — switched to ${newModel} for speed`);
+    console.warn(`[WindyTune] ⚡ CRITICAL: ${ratio.toFixed(1)}x slower than real-time (${elapsed.toFixed(1)}s / ${audioDuration.toFixed(1)}s) → auto-switching ${model} → ${newModel}`);
+    _windyTuneSwitch(newModel, `Transcription ran ${ratio.toFixed(1)}× slower than real time — switched to ${newModel} for speed`);
     return;
   }
 
