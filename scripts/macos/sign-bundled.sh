@@ -31,8 +31,10 @@ date '+[sign-bundled] %H:%M:%S start'
 # --- 1. loose bundled Mach-O binaries (python interpreter, ffmpeg, tcl libs, .so dynload) ---
 if [ -d "$APP/Contents/Resources/bundled" ]; then
   echo "[sign-bundled] 1/6 sign loose bundled binaries"
+  # `uv` (Astral, used to build the first-run venv) is a Mach-O binary too — Apple's notary
+  # rejects the whole archive if it ships unsigned (no cert / no timestamp / no hardened runtime).
   find "$APP/Contents/Resources/bundled" \
-    -type f \( -name "*.dylib" -o -name "*.so" -o -name "python3.11" -o -name "ffmpeg" \) \
+    -type f \( -name "*.dylib" -o -name "*.so" -o -name "python3.11" -o -name "ffmpeg" -o -name "uv" \) \
     ! -path "*/wheels/*" \
     -print0 | xargs -0 -n1 -I{} codesign --force --options runtime --timestamp --sign "$IDENT" "{}" 2>/dev/null
   # 1b: The bundled Python interpreter runs ctranslate2/oneDNN, which JIT-compiles its
