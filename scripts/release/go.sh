@@ -20,6 +20,20 @@ wait_and_get() {  # $1=url  $2=out
     || { echo "  Download failed. Re-run the same command to resume." >&2; exit 1; }
 }
 
+# Abort BEFORE the long ~4 GB download if the target volume can't hold the install — a
+# near-full disk otherwise bricks it silently mid-download or mid-copy. Fail-open when free
+# space can't be read (never block a valid install over a df quirk).
+check_space() {  # $1=dir  $2=need_gb
+  local dir="$1" need_gb="$2" avail_kb
+  avail_kb="$(df -Pk "$dir" 2>/dev/null | awk 'NR==2{print $4}')"
+  case "$avail_kb" in ''|*[!0-9]*) return 0 ;; esac   # unknown → don't block
+  if [ "$avail_kb" -lt "$((need_gb * 1024 * 1024))" ]; then
+    echo "  ⚠ Not enough free disk space: about $((avail_kb / 1024 / 1024)) GB free, but Windy Word needs ~${need_gb} GB to download and install." >&2
+    echo "    Free up some space, then re-run the same command." >&2
+    exit 1
+  fi
+}
+
 case "$OS" in
   Darwin)
     case "$(uname -m)" in arm64) KEY="Windy-Word-Reader-arm64.dmg";; *) KEY="Windy-Word-Reader-x64.dmg";; esac
@@ -32,6 +46,7 @@ case "$OS" in
     # Detach the mount on exit only — must NOT delete the partial download, or resume breaks.
     trap '[ -n "$MP" ] && hdiutil detach "$MP" -quiet 2>/dev/null || true' EXIT
     echo "-> Windy Word installer (macOS)"
+    check_space "$CACHE" 10   # ~4.3 GB DMG cache + ~4.3 GB copy into /Applications during install
     wait_and_get "$URL" "$DMG"
     echo "-> Installing to /Applications…"
     # No -noverify: let hdiutil verify the DMG's checksum so a corrupt/truncated download is
@@ -54,6 +69,7 @@ case "$OS" in
     KEY="Windy-Word-Reader-Offline-linux-x86_64.AppImage"; URL="https://downloads.windyword.ai/$KEY"
     DEST="$HOME/Applications"; mkdir -p "$DEST"; APP="$DEST/Windy Word.AppImage"
     echo "-> Windy Word installer (Linux)"
+    check_space "$DEST" 5   # ~3.9 GB AppImage + margin
     wait_and_get "$URL" "$APP"; chmod +x "$APP"
     D="$HOME/.local/share/applications"; mkdir -p "$D"
     printf '[Desktop Entry]\nType=Application\nName=Windy Word\nExec=%s\nTerminal=false\nCategories=Utility;AudioVideo;\n' "$APP" > "$D/windy-word.desktop" 2>/dev/null || true
