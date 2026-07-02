@@ -161,18 +161,23 @@ jobs:
           rm -f "$CERT"
           echo "CSC_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"    # electron-builder uses this keychain (no temp one)
           echo "signing identities:"; security find-identity -v -p codesigning "$KEYCHAIN"
-      # Repo is pre-configured for signed+notarized mac builds (package.json build.mac:
-      # notarize:true, hardenedRuntime, entitlements, afterpack-sign-bundled.cjs). The afterPack
-      # hook signs bundled binaries from the keychain above; electron-builder then signs the app
-      # (CSC_KEYCHAIN, no temp keychain) and notarizes via @electron/notarize.
-      - name: Build signed + notarized arm64 DMG
-        run: npx electron-builder --mac dmg --arm64 --publish never
-      - name: Staple + verify notarization
+      # afterPack hook signs the bundled binaries from the keychain above; electron-builder signs
+      # the app (CSC_KEYCHAIN, no temp keychain). We DISABLE electron-builder's own notarize
+      # (-c.mac.notarize=false) and notarize the DMG explicitly with notarytool below — its
+      # notarize left the .dmg envelope without a stapleable ticket. This mirrors the proven
+      # local build-reader-dmg-arm64.sh flow (sign DMG → notarytool submit → staple).
+      - name: Build signed arm64 DMG
+        run: npx electron-builder --mac dmg --arm64 --publish never -c.mac.notarize=false
+      - name: Notarize DMG + staple + verify
         run: |
           DMG="$(ls -t dist/*arm64*.dmg 2>/dev/null | head -1)"
           [ -f "$DMG" ] || { echo "::error::no arm64 DMG produced"; exit 1; }
           echo "built: $DMG ($(du -h "$DMG" | cut -f1))"
-          xcrun stapler staple "$DMG" || true
+          # sign the DMG envelope (contents already signed by the afterPack hook), then notarize IT
+          codesign --force --options runtime --timestamp --sign "$CODESIGN_IDENTITY" "$DMG"
+          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait
+          xcrun stapler staple "$DMG"
           xcrun stapler validate "$DMG" || { echo "::error::DMG not stapled — notarization failed"; exit 1; }
           spctl -a -vvv -t open --context context:primary-signature "$DMG" 2>&1 | head -4
           echo "DMG=$DMG" >> "$GITHUB_ENV"
