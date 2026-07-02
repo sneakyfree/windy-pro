@@ -42,6 +42,17 @@ for row in "${ENGINES[@]}"; do
   fi
 done
 
+# NLLB-200 on-device translation model (Translate Studio). Fetched into the same
+# extraResources/model/ dir the app reads (main.js nllbTranslate → .../model/nllb-200-600M).
+# Without this the Reader ships a Translate Studio that errors on every click.
+echo "-- nllb-200-600M  (on-device translate) --"
+nd="$DEST/nllb-200-600M"; mkdir -p "$nd"
+for f in model.bin config.json shared_vocabulary.txt sentencepiece.bpe.model tokenizer.json tokenizer_config.json special_tokens_map.json; do
+  curl -fSL --retry 5 -C - -o "$nd/$f" "$R2/nllb-200-600M/$f"
+done
+test -f "$nd/model.bin" && test -f "$nd/sentencepiece.bpe.model" \
+  || { echo "::error::nllb-200-600M model incomplete — Translate Studio would error on every use"; exit 1; }
+
 echo "== staged engines =="
-du -sh "$DEST"/windy-*-ct2 2>/dev/null || true
-echo "OK: 7 lean engines staged into $DEST"
+du -sh "$DEST"/windy-*-ct2 "$DEST"/nllb-200-600M 2>/dev/null || true
+echo "OK: 7 lean engines + NLLB translate model staged into $DEST"
