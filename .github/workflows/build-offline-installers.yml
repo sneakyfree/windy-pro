@@ -98,3 +98,60 @@ jobs:
           aws s3 cp "$IMG" "$R2_BUCKET/Windy-Word-Reader-Offline-linux-x86_64.AppImage" \
             --endpoint-url "$R2_ENDPOINT" --content-type application/octet-stream --only-show-errors
           echo "verify:"; curl -sI "https://downloads.windyword.ai/Windy-Word-Reader-Offline-linux-x86_64.AppImage" | grep -iE "^HTTP|content-length"
+
+  mac-arm64-offline:
+    name: macOS arm64 (offline, signed+notarized)
+    runs-on: macos-14          # Apple Silicon — arch-native python/wheels/ffmpeg
+    timeout-minutes: 120
+    env:
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install npm deps
+        run: npm ci
+      - name: Build portable Python+wheels bundle (mac-arm64)
+        run: node scripts/build-portable-bundle.js --target mac-arm64
+      - name: Stage bundle into extraResources/
+        run: node scripts/stage-portable-bundle.js --target mac-arm64
+      - name: Assert ffmpeg is bundled (guards the ENOENT-every-transcription regression)
+        run: |
+          test -f extraResources/ffmpeg/ffmpeg \
+            || { echo "::error::extraResources/ffmpeg/ffmpeg missing — every transcription would fail"; exit 1; }
+          echo "ffmpeg present: $(ls -la extraResources/ffmpeg/ffmpeg)"
+      - name: Fetch 7 lean engines + NLLB into extraResources/model (OFFLINE bundle)
+        run: bash scripts/ci/fetch-engines-ci.sh
+      - name: Show staged model size
+        run: du -sh extraResources/model || true
+      - name: Build web + stamp Reader edition
+        run: npm run build:web && npm run stamp:reader
+      # Repo is pre-configured for signed+notarized mac builds (package.json build.mac:
+      # notarize:true, hardenedRuntime, entitlements, afterpack-sign-bundled.cjs). With the
+      # CSC_* + APPLE_* env above, electron-builder signs the app (temp keychain) and
+      # notarizes via @electron/notarize during the build.
+      - name: Build signed + notarized arm64 DMG
+        run: npx electron-builder --mac dmg --arm64 --publish never
+      - name: Staple + verify notarization
+        run: |
+          DMG="$(ls -t dist/*arm64*.dmg 2>/dev/null | head -1)"
+          [ -f "$DMG" ] || { echo "::error::no arm64 DMG produced"; exit 1; }
+          echo "built: $DMG ($(du -h "$DMG" | cut -f1))"
+          xcrun stapler staple "$DMG" || true
+          xcrun stapler validate "$DMG" || { echo "::error::DMG not stapled — notarization failed"; exit 1; }
+          spctl -a -vvv -t open --context context:primary-signature "$DMG" 2>&1 | head -4
+          echo "DMG=$DMG" >> "$GITHUB_ENV"
+      # Staging key ONLY — a human verifies spctl/stapler on the downloaded file before this
+      # is promoted to the canonical Windy-Word-arm64.dmg the site + go.sh serve.
+      - name: Upload to R2 STAGING (promote to canonical after manual verify)
+        run: |
+          aws s3 cp "$DMG" "$R2_BUCKET/staging/Windy-Word-Reader-arm64.dmg" \
+            --endpoint-url "$R2_ENDPOINT" --content-type application/x-apple-diskimage --only-show-errors
+          echo "verify:"; curl -sI "https://downloads.windyword.ai/staging/Windy-Word-Reader-arm64.dmg" | grep -iE "^HTTP|content-length"
