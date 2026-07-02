@@ -2802,9 +2802,18 @@ class WindyApp {
         window.windyAPI.notifyRecordingFailed();
       }
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        this.showReconnectToast('🚫 Microphone access denied. Check system permissions.');
+        // macOS never re-prompts once mic access is denied, so a vague transient toast
+        // left the app silently non-functional with no way forward. Give an explicit,
+        // per-OS recovery path and keep it on screen (persistent) until the next action.
+        const p = (navigator.platform || '').toLowerCase();
+        const where = p.includes('mac')
+          ? 'System Settings ▸ Privacy & Security ▸ Microphone, then turn on Windy Word'
+          : p.includes('win')
+            ? 'Settings ▸ Privacy & security ▸ Microphone, then allow Windy Word'
+            : 'your system Settings ▸ Privacy ▸ Microphone, then allow Windy Word';
+        this.showReconnectToast(`🚫 Microphone access is blocked — Windy Word can't hear you. Enable it in ${where}, then press the shortcut again.`, true);
       } else {
-        this.showReconnectToast('⚠️ Could not access microphone.');
+        this.showReconnectToast('⚠️ Could not access the microphone. Make sure no other app is using it, then try again.');
       }
     }
   }

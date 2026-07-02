@@ -9582,17 +9582,13 @@ app.whenReady().then(async () => {
           .then((granted) => console.info('[Media] microphone access granted:', granted))
           .catch((e) => console.warn('[Media] askForMediaAccess(microphone) failed:', e?.message));
       }
-      // Camera — for the opt-in video-recording feature ("Save video recordings").
-      // askForMediaAccess only shows a prompt when status is 'not-determined'; if
-      // already granted/denied it resolves instantly with no prompt, so requesting
-      // at launch costs at most one first-run dialog the user can decline.
-      const camStatus = systemPreferences.getMediaAccessStatus('camera');
-      console.info('[Media] camera access status at launch:', camStatus);
-      if (camStatus !== 'granted') {
-        systemPreferences.askForMediaAccess('camera')
-          .then((granted) => console.info('[Media] camera access granted:', granted))
-          .catch((e) => console.warn('[Media] askForMediaAccess(camera) failed:', e?.message));
-      }
+      // Camera: do NOT pre-request at launch. Windy Word is a voice-to-text app, and an
+      // unsolicited camera-permission dialog on first run reads as invasive to a
+      // non-technical reader. Camera is only used by the opt-in "Save video recordings"
+      // feature, so the OS prompt is deferred to first actual video use — getUserMedia
+      // ({ video: true }) triggers the macOS TCC prompt naturally at that point. (Mic is
+      // pre-requested above because an ungranted mic yields SILENT audio, a silent
+      // failure; camera has no equivalent silent-failure mode.)
     } catch (e) {
       console.warn('[Media] media access check failed:', e?.message);
     }
