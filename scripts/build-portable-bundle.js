@@ -297,6 +297,11 @@ function buildWheels(t, targetOut, hostPython) {
 const FFMPEG_ASSETS = {
   'win-x64':   { url: 'https://downloads.windyword.ai/bin/ffmpeg/ffmpeg-8.0.1-win-x64.exe', sha256: '5af82a0d4fe2b9eae211b967332ea97edfc51c6b328ca35b827e73eac560dc0d' },
   'linux-x64': { url: 'https://downloads.windyword.ai/bin/ffmpeg/ffmpeg-7.0.2-linux-x64',    sha256: 'e7e7fb30477f717e6f55f9180a70386c62677ef8a4d4d1a5d948f4098aa3eb99' },
+  // macOS ffmpeg (evermeet 8.0.1, x86_64 — runs on Apple Silicon via Rosetta). Mirrored to R2
+  // so the macos-14 CI job builds from a clean checkout (bundled/ffmpeg/ is gitignored).
+  // TODO(book-launch#6): ship an arm64-native/universal build to drop the Rosetta dependency.
+  'mac-arm64': { url: 'https://downloads.windyword.ai/bin/ffmpeg/ffmpeg-8.0.1-mac-x64', sha256: '430d60fbf419dab28daee9b679e7929a31ee9bae53f6e42e8ae26b725584290f' },
+  'mac-x64':   { url: 'https://downloads.windyword.ai/bin/ffmpeg/ffmpeg-8.0.1-mac-x64', sha256: '430d60fbf419dab28daee9b679e7929a31ee9bae53f6e42e8ae26b725584290f' },
 };
 
 async function buildFfmpeg(t, targetOut) {
@@ -311,15 +316,29 @@ async function buildFfmpeg(t, targetOut) {
   }
   fs.mkdirSync(ffmpegOut, { recursive: true });
 
-  // macOS: use the pre-extracted local binary (built locally; no CI mac job).
+  // macOS: prefer the pre-extracted local binary (fast for local dev builds); else fetch the
+  // pinned R2 binary and verify SHA-256, so the macos-14 CI job works from a clean checkout.
   if (t === 'mac-arm64' || t === 'mac-x64') {
     const macSrc = path.join(existingFfmpegDir, 'extracted-mac', 'ffmpeg');
-    if (!fs.existsSync(macSrc)) {
-      fail(`ffmpeg missing for ${t}: expected ${path.relative(repoRoot, macSrc)} — place the macOS ffmpeg binary there before building.`);
+    let src = fs.existsSync(macSrc) ? macSrc : null;
+    let origin = 'local mac';
+    if (!src) {
+      const asset = FFMPEG_ASSETS[t];
+      if (!asset) fail(`no ffmpeg asset defined for target ${t}`);
+      const cached = path.join(cacheDir, path.basename(asset.url));
+      if (fs.existsSync(cached) && sha256(cached) !== asset.sha256) rm(cached); // drop stale/corrupt cache
+      await downloadFile(asset.url, cached);
+      const got = sha256(cached);
+      if (got !== asset.sha256) {
+        rm(cached);
+        fail(`ffmpeg checksum mismatch for ${t}: expected ${asset.sha256}, got ${got} (removed ${path.basename(cached)}; re-run to retry)`);
+      }
+      src = cached;
+      origin = 'R2, sha256-verified';
     }
-    fs.copyFileSync(macSrc, dst);
+    fs.copyFileSync(src, dst);
     fs.chmodSync(dst, 0o755);
-    ok(`ffmpeg staged (local mac): ${path.relative(repoRoot, dst)} (${du(ffmpegOut)})`);
+    ok(`ffmpeg staged (${origin}): ${path.relative(repoRoot, dst)} (${du(ffmpegOut)})`);
     return ffmpegOut;
   }
 

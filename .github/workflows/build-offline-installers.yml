@@ -22,6 +22,7 @@ env:
 jobs:
   win-offline:
     name: Windows x64 (offline)
+    if: false   # 2026-07-02: rebuilt + live on R2; re-run is mac-only (flip to true to rebuild)
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
@@ -63,7 +64,7 @@ jobs:
 
   linux-offline:
     name: Linux x64 (offline)
-    if: true   # 2026-07-02 recut: rebuild for bundled-ffmpeg fix + NLLB translate model
+    if: false   # 2026-07-02: rebuilt + live on R2; re-run is mac-only (flip to true to rebuild)
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
