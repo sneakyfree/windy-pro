@@ -245,11 +245,17 @@ class WindyApp {
       if (settings?.cloudPassword) this.cloudPassword = settings.cloudPassword;
       console.debug(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? 'configured' : 'empty'}`);
 
-      // Load transcription mode (auto / local_only / cloud_only)
-      // Free/offline build (cloudStorage off) defaults to local-only so no cloud
-      // transcription path is ever reachable — keeps the "fully offline" guarantee.
-      const _modeDefault = (window.windyAPI?.cloudStorage === false) ? 'local_only' : 'auto';
-      this.transcriptionMode = settings?.transcriptionMode || localStorage.getItem('windy_transcriptionMode') || _modeDefault;
+      // Load transcription mode (auto / local_only / cloud_only).
+      // Free/offline build (cloudStorage off): FORCE local-only and ignore any persisted
+      // mode. An upgrader from a prior tiered build can carry a stale 'cloud_only' (or
+      // 'auto') in settings/localStorage, which would otherwise win the `||` chain here and
+      // silently connect to wss://windyword.ai on launch (see the cloud_only branch below) —
+      // breaking the "your voice never leaves your device" promise. Only paid builds
+      // (cloudStorage on) honor the saved mode.
+      const _cloudDisabled = (window.windyAPI?.cloudStorage === false);
+      this.transcriptionMode = _cloudDisabled
+        ? 'local_only'
+        : (settings?.transcriptionMode || localStorage.getItem('windy_transcriptionMode') || 'auto');
       console.debug(`[Init] Transcription mode: ${this.transcriptionMode}`);
 
       // Cloud-only mode: connect to cloud WebSocket immediately, skip local backend

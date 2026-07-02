@@ -6876,7 +6876,10 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     const { stdout, stderr } = await execFileAsync(pythonPathLocal, [scriptPath], {
       timeout: dynTimeoutMs,
       maxBuffer: 10 * 1024 * 1024,
-      env: { ...process.env, KMP_DUPLICATE_LIB_OK: 'TRUE' }
+      // Force faster-whisper fully offline (matches the primary server spawn + translate_local.py).
+      // Without these, an unresolved model dir here could trigger a HuggingFace fetch — a hang
+      // and a phone-home that breaks the "fully offline / your voice stays local" guarantee.
+      env: { ...process.env, KMP_DUPLICATE_LIB_OK: 'TRUE', HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1' }
     });
 
     // Extract timing from stderr
