@@ -250,7 +250,12 @@ function showEngineFailure(detail) {
       engineFailureShown = false;
       pythonReady = false;
       pythonRestartCount = 0;
-      startPythonServer();
+      // Self-heal: if the engine venv is missing/broken, rebuild it rather than just
+      // re-spawning against it (which would fail again). ensureEngineVenv() scrubs a
+      // broken venv, rebuilds from bundled wheels, and starts the server itself when
+      // ready; it returns false (start now) when the venv is already good or absent.
+      const appDataDir = path.join(os.homedir(), '.windy-pro');
+      if (!ensureEngineVenv(appDataDir)) startPythonServer();
     } else {
       app.isQuitting = true;
       app.quit();
@@ -544,13 +549,35 @@ function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
  * Returns true if a build was started (caller should defer startPythonServer); false if
  * the venv already exists or required assets are missing (caller should start now).
  */
+// Written into the venv ONLY after it is built, pip-installed, AND proven to import the
+// engine deps. Its presence is the single source of truth for "this venv is usable" —
+// used by both ensureEngineVenv() and startPythonServer(). A venv with bin/python but no
+// marker is a half-built/interrupted first run and must be rebuilt, never trusted.
+const ENGINE_VENV_READY_MARKER = '.windy-engine-ready';
+
 function ensureEngineVenv(appDataDir) {
   try {
     const venvDir = path.join(appDataDir, 'venv');
     const venvPy = process.platform === 'win32'
       ? path.join(venvDir, 'Scripts', 'python.exe')
       : path.join(venvDir, 'bin', 'python');
-    if (fs.existsSync(venvPy)) return false; // already set up — normal start handles it
+    const readyMarker = path.join(venvDir, ENGINE_VENV_READY_MARKER);
+
+    // Complete iff the interpreter exists AND we previously proved it can run the engine.
+    if (fs.existsSync(venvPy) && fs.existsSync(readyMarker)) return false; // normal start handles it
+
+    // A venv dir with no ready-marker is an interrupted/slow first-run build (bin/python
+    // was created, but pip never finished) or a pre-marker build. Either way it is unsafe
+    // to trust — remove it so the build below starts clean and can't be "adopted" as done.
+    // This is the core of the anti-brick fix: without it, config.json is written before the
+    // async build finishes and needsSetup() only checks config.json, so an interrupted first
+    // run would leave a permanently broken venv that even reinstalling the app can't fix
+    // (the venv lives in ~/.windy-pro, outside the .app).
+    if (fs.existsSync(venvDir)) {
+      console.warn('[Python] engine venv present but not marked ready (interrupted/old setup) — rebuilding clean');
+      try { fs.rmSync(venvDir, { recursive: true, force: true }); }
+      catch (e) { console.error('[Python] could not remove incomplete venv:', e.message); }
+    }
 
     const bundledRoot = process.resourcesPath ? path.join(process.resourcesPath, 'bundled') : null;
     if (!bundledRoot) return false;
@@ -573,12 +600,15 @@ function ensureEngineVenv(appDataDir) {
 
     console.info('[Python] First run: building offline engine venv from bundled wheels…');
     const { execFile } = require('child_process');
+    // Any failure below removes the half-built venv so the NEXT launch retries cleanly
+    // instead of adopting a broken venv forever (the original brick).
+    const scrubVenv = () => { try { fs.rmSync(venvDir, { recursive: true, force: true }); } catch (_) { /* best effort */ } };
     const startServer = () => {
       try { pythonRestartCount = 0; startPythonServer(); }
       catch (e) { console.error('[Python] start after venv failed:', e.message); }
     };
     execFile(bundledPy, ['-m', 'venv', venvDir], { timeout: 120000 }, (e1) => {
-      if (e1) { console.error('[Python] venv create failed — falling back:', e1.message); startServer(); return; }
+      if (e1) { console.error('[Python] venv create failed — falling back:', e1.message); scrubVenv(); startServer(); return; }
       // Supply-chain: verify bundled wheels against the build-time checksum manifest before
       // installing. Fail-closed on mismatch (possible tampering); skip if no manifest so a
       // build without one can never be bricked by this check.
@@ -595,6 +625,7 @@ function ensureEngineVenv(appDataDir) {
             const actual = crypto.createHash('sha256').update(fs.readFileSync(wp)).digest('hex');
             if (actual.toLowerCase() !== m[1].toLowerCase()) {
               console.error('[Python] Wheel checksum MISMATCH:', m[2], '— refusing to install (possible tampering)');
+              scrubVenv();
               showEngineFailure('A bundled component failed its integrity check.');
               return;
             }
@@ -603,12 +634,33 @@ function ensureEngineVenv(appDataDir) {
           console.info('[Python] ✓ wheel checksums verified (' + n + ')');
         }
       } catch (ve) { console.warn('[Python] wheel checksum verify skipped:', ve.message); }
+      // Generous timeout: this is an offline `--no-index` local-wheel install, so it is
+      // disk-bound, not network-bound; slow HDDs on launch-day consumer machines can take
+      // several minutes. The old 5-min cap could fire mid-install and brick the venv.
       execFile(venvPy, ['-m', 'pip', 'install', '--no-index', '--no-cache-dir', '--find-links', wheelsDir, '-r', reqFile],
-        { timeout: 300000, maxBuffer: 64 * 1024 * 1024 }, (e2) => {
-          if (e2) console.error('[Python] venv pip install failed — falling back:', e2.message);
-          else console.info('[Python] ✓ engine venv ready');
-          if (!fs.existsSync(venvPy)) console.error('[Python] venv missing after build — engine will likely fail; the startup watchdog will surface a Retry/Quit dialog to the user');
-          startServer();
+        { timeout: 900000, maxBuffer: 64 * 1024 * 1024 }, (e2) => {
+          if (e2) {
+            console.error('[Python] venv pip install failed — scrubbing so next launch retries:', e2.message);
+            scrubVenv();
+            startServer();
+            return;
+          }
+          // pip can exit 0 yet leave an unusable venv (a bad/partial wheel). Prove the venv
+          // can actually import the engine deps BEFORE marking it ready — the marker is what
+          // every later launch and startPythonServer() trust. Async so the event loop is
+          // never blocked. On failure, scrub so the next launch rebuilds cleanly.
+          execFile(venvPy, ['-c', 'import faster_whisper, websockets'], { timeout: 60000 }, (e3) => {
+            if (e3 || !fs.existsSync(venvPy)) {
+              console.error('[Python] venv built but engine deps not importable — scrubbing so next launch retries:', e3 ? e3.message : 'venv python missing');
+              scrubVenv();
+              startServer();
+              return;
+            }
+            try { fs.writeFileSync(readyMarker, `${app.getVersion()} ${new Date().toISOString()}\n`); }
+            catch (me) { console.warn('[Python] could not write venv ready marker:', me.message); }
+            console.info('[Python] ✓ engine venv ready (verified)');
+            startServer();
+          });
         });
     });
     return true;
@@ -649,11 +701,15 @@ function startPythonServer() {
     : null;
 
   let pythonPath;
-  if (fs.existsSync(userVenvPython)) {
+  // Prefer the user venv ONLY if ensureEngineVenv() marked it ready. A marker-less venv is
+  // a half-built/interrupted first run; using it here would shadow bundled Python and fail
+  // every transcription. ensureEngineVenv() rebuilds such a venv — until then, use bundled.
+  const userVenvReady = fs.existsSync(path.join(appDataDir, 'venv', ENGINE_VENV_READY_MARKER));
+  if (fs.existsSync(userVenvPython) && userVenvReady) {
     pythonPath = userVenvPython;
   } else if (bundledPython && fs.existsSync(bundledPython)) {
     pythonPath = bundledPython;
-    console.info('[Python] Using bundled Python (wizard venv not yet created)');
+    console.info('[Python] Using bundled Python (engine venv not present/ready)');
   } else {
     pythonPath = 'python3';
     console.warn('[Python] Falling back to system python3 — bundled assets not detected');
@@ -9591,8 +9647,6 @@ app.whenReady().then(async () => {
           defaultModel: engines[0]
         }, null, 2));
         console.info(`[Main] Book-launch fast path: all ${engines.length} engines bundled — wizard skipped`);
-        // Replicate the one wizard step the engine truly needs: the offline venv.
-        deferPythonForVenv = ensureEngineVenv(APP_DATA_DIR);
       }
     } catch (e) {
       console.warn('[Main] Book-launch fast path skipped:', e.message);
@@ -9624,8 +9678,13 @@ app.whenReady().then(async () => {
     }
   }
 
-  // On a book-launch first run the venv is still building; ensureEngineVenv() starts the
-  // server when it's ready. Otherwise (venv exists, or normal/wizard path) start now.
+  // Ensure the offline engine venv is healthy on EVERY launch — this is what self-heals a
+  // venv left half-built by an interrupted/slow first run. It MUST run regardless of
+  // config.json: needsSetup() only checks config.json (which is written before the async
+  // build finishes), so gating this behind it would let an interrupted first build stay
+  // bricked forever. Cheap no-op when the venv is already marked ready; returns true if a
+  // (re)build started, in which case ensureEngineVenv() starts the server itself when ready.
+  deferPythonForVenv = ensureEngineVenv(APP_DATA_DIR);
   if (!deferPythonForVenv) startPythonServer();
   createWindow();
   createTray();
