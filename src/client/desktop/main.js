@@ -6628,6 +6628,10 @@ function resolveFfmpegBin() {
   for (const fp of candidates) {
     try { if (fs.existsSync(fp)) return fp; } catch (_) { /* ignore */ }
   }
+  // No bundled or system ffmpeg found. Windows has no system ffmpeg, so the bare
+  // fallback below ENOENTs at transcribe time — log loudly so a packaging regression
+  // (missing bundled ffmpeg) is diagnosable instead of a silent per-recording failure.
+  console.error('[ffmpeg] no bundled/system ffmpeg found; falling back to bare "ffmpeg" (will fail on Windows). checked: ' + candidates.join(', '));
   return 'ffmpeg';
 }
 

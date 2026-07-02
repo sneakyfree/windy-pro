@@ -36,6 +36,12 @@ jobs:
         run: node scripts/build-portable-bundle.js --target win-x64
       - name: Stage bundle into extraResources/
         run: node scripts/stage-portable-bundle.js --target win-x64
+      - name: Assert ffmpeg is bundled (guards the ENOENT-every-transcription regression)
+        shell: bash
+        run: |
+          test -f extraResources/ffmpeg/ffmpeg.exe \
+            || { echo "::error::extraResources/ffmpeg/ffmpeg.exe missing — Windows build would ship with no ffmpeg and every transcription would fail"; exit 1; }
+          echo "ffmpeg present: $(ls -la extraResources/ffmpeg/ffmpeg.exe)"
       - name: Fetch 7 lean engines into extraResources/model (OFFLINE bundle)
         shell: bash
         run: bash scripts/ci/fetch-engines-ci.sh
@@ -74,6 +80,11 @@ jobs:
         run: node scripts/build-portable-bundle.js --target linux-x64
       - name: Stage bundle into extraResources/
         run: node scripts/stage-portable-bundle.js --target linux-x64
+      - name: Assert ffmpeg is bundled (guards the ENOENT-every-transcription regression)
+        run: |
+          test -f extraResources/ffmpeg/ffmpeg \
+            || { echo "::error::extraResources/ffmpeg/ffmpeg missing — Linux build would ship with no ffmpeg and every transcription would fail"; exit 1; }
+          echo "ffmpeg present: $(ls -la extraResources/ffmpeg/ffmpeg)"
       - name: Fetch 7 lean engines into extraResources/model (OFFLINE bundle)
         run: bash scripts/ci/fetch-engines-ci.sh
       - name: Show staged model size
