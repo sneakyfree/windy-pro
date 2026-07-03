@@ -212,10 +212,10 @@ describe('PR5 — OAuth consent screen UI', () => {
         .set('Authorization', `Bearer ${u.token}`)
         .set('Accept', 'text/html');
 
-      // Auto-approve produces a JSON `redirect` URL (existing behavior); no 302 to /consent
-      expect(res.status).toBe(200);
-      expect(res.body.code).toBeTruthy();
-      expect(res.body.redirect).toContain('https://first.windy/cb?code=');
+      // Auto-approve sends the browser straight back to the app with the
+      // code (302). API clients (Accept: application/json) still get JSON.
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toContain('https://first.windy/cb?code=');
     });
 
     it('pre-approved scopes skip the consent screen', async () => {
@@ -239,8 +239,9 @@ describe('PR5 — OAuth consent screen UI', () => {
         .set('Authorization', `Bearer ${u.token}`)
         .set('Accept', 'text/html');
 
-      expect(res.status).toBe(200);
-      expect(res.body.code).toBeTruthy();
+      // Pre-approved → browser goes straight back to the app with a code.
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toContain('https://acme.example/cb?code=');
     });
   });
 });

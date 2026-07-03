@@ -21,9 +21,12 @@ import jwt from 'jsonwebtoken';
 import { makeRateLimiter } from '../services/rate-limiter';
 import { config } from '../config';
 import { getDb } from '../db/schema';
+import { getStatements } from '../db/statements';
 import { authenticateToken, adminOnly, AuthRequest } from '../middleware/auth';
 import { logAuditEvent, getScopes, getProductAccounts } from '../identity-service';
 import { isRS256Available, getSigningKey } from '../jwks';
+import { decryptSecret, verifyTotpCode, consumeBackupCode } from '../services/mfa';
+import { renderOAuthLoginPage, renderOAuthErrorPage } from './oauth-login-page';
 
 const router = Router();
 
@@ -40,6 +43,15 @@ const tokenLimiter = makeRateLimiter('oauth-token', {
   windowMs: 60 * 1000,
   max: 20,
   message: { error: 'Too many token requests. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Stricter limit for the credential-accepting login page POST.
+const loginPageLimiter = makeRateLimiter('oauth-login', {
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many sign-in attempts. Try again in a minute.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -199,49 +211,124 @@ router.post('/register-client', oauthLimiter, (req: Request, res: Response) => {
  *
  * For first-party clients: auto-approves and redirects with code.
  * For third-party clients: returns consent_required with client info.
+ *
+ * Unauthenticated browsers (Accept: text/html, no Bearer/query token) get a
+ * rendered login page instead of a raw 401, so a full-page redirect from an
+ * ecosystem app ("Sign in with Windy") actually lands somewhere a human can
+ * sign in. API clients keep the 401 JSON contract.
  */
-router.get('/authorize', authenticateToken, oauthLimiter, (req: Request, res: Response) => {
+
+/**
+ * Validate the OAuth authorize params + client. Shared by GET /authorize
+ * (both authenticated and login-page branches) and POST /login so the form
+ * can't smuggle a tampered redirect_uri past the checks.
+ */
+function validateAuthorizeRequest(params: Record<string, string | undefined>):
+  | { ok: true; client: any }
+  | { ok: false; status: number; error: string; error_description: string } {
+  const { client_id, redirect_uri, response_type, code_challenge, code_challenge_method } = params;
+
+  if (response_type !== 'code') {
+    return { ok: false, status: 400, error: 'unsupported_response_type', error_description: 'Only response_type=code is supported' };
+  }
+  if (!client_id) {
+    return { ok: false, status: 400, error: 'invalid_request', error_description: 'client_id is required' };
+  }
+  if (!redirect_uri) {
+    return { ok: false, status: 400, error: 'invalid_request', error_description: 'redirect_uri is required' };
+  }
+
+  const db = getDb();
+  const client = db.prepare('SELECT * FROM oauth_clients WHERE client_id = ?').get(client_id) as any;
+  if (!client) {
+    return { ok: false, status: 400, error: 'invalid_client', error_description: 'Unknown client_id' };
+  }
+
+  const allowedUris: string[] = JSON.parse(client.redirect_uris);
+  if (!allowedUris.includes(redirect_uri)) {
+    return { ok: false, status: 400, error: 'invalid_request', error_description: 'redirect_uri not registered for this client' };
+  }
+
+  if (client.is_public && !code_challenge) {
+    return { ok: false, status: 400, error: 'invalid_request', error_description: 'code_challenge is required for public clients (PKCE)' };
+  }
+  if (code_challenge && code_challenge_method && code_challenge_method !== 'S256') {
+    return { ok: false, status: 400, error: 'invalid_request', error_description: 'Only S256 code_challenge_method is supported' };
+  }
+
+  return { ok: true, client };
+}
+
+function acceptsHtml(req: Request): boolean {
+  return (req.headers.accept || '').toLowerCase().includes('text/html');
+}
+
+/** Pull the OAuth params out of a query/body bag, as plain strings. */
+function pickOAuthParams(src: Record<string, unknown>): {
+  client_id: string; redirect_uri: string; response_type: string; scope: string;
+  state: string; code_challenge: string; code_challenge_method: string;
+} {
+  const s = (k: string) => (typeof src[k] === 'string' ? (src[k] as string) : '');
+  return {
+    client_id: s('client_id'),
+    redirect_uri: s('redirect_uri'),
+    response_type: s('response_type'),
+    scope: s('scope'),
+    state: s('state'),
+    code_challenge: s('code_challenge'),
+    code_challenge_method: s('code_challenge_method'),
+  };
+}
+
+router.get('/authorize', oauthLimiter, (req: Request, res: Response) => {
+  // Requests that carry a token (Bearer header or ?token= query) go through
+  // the normal auth middleware — preserving blacklist checks and the JSON
+  // contract. Token-less browser navigations get the login page.
+  const authHeader = req.headers['authorization'];
+  const hasToken = !!(authHeader && authHeader.split(' ')[1]) ||
+    (typeof req.query.token === 'string' && req.query.token.length > 0);
+
+  if (hasToken) {
+    return authenticateToken(req, res, () => handleAuthorizeGet(req, res));
+  }
+
+  // Unauthenticated. API clients keep the historical 401 JSON.
+  if (!acceptsHtml(req)) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  // Browser: validate the link, then show the login page.
+  const params = pickOAuthParams(req.query as Record<string, unknown>);
+  const v = validateAuthorizeRequest(params);
+  if (!v.ok) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(v.status).send(renderOAuthErrorPage(v.error_description));
+  }
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  return res.send(renderOAuthLoginPage({ clientName: v.client.name, params }));
+});
+
+function handleAuthorizeGet(req: Request, res: Response) {
   try {
     const {
-      client_id, redirect_uri, response_type, scope,
-      state, code_challenge, code_challenge_method,
+      client_id, redirect_uri, scope,
+      state, code_challenge,
     } = req.query as Record<string, string>;
 
-    // Validate required params
-    if (response_type !== 'code') {
-      return res.status(400).json({ error: 'unsupported_response_type', error_description: 'Only response_type=code is supported' });
+    const v = validateAuthorizeRequest(pickOAuthParams(req.query as Record<string, unknown>));
+    if (!v.ok) {
+      return res.status(v.status).json({ error: v.error, error_description: v.error_description });
     }
-    if (!client_id) {
-      return res.status(400).json({ error: 'invalid_request', error_description: 'client_id is required' });
-    }
-    if (!redirect_uri) {
-      return res.status(400).json({ error: 'invalid_request', error_description: 'redirect_uri is required' });
-    }
-
-    const db = getDb();
-    const client = db.prepare('SELECT * FROM oauth_clients WHERE client_id = ?').get(client_id) as any;
-    if (!client) {
-      return res.status(400).json({ error: 'invalid_client', error_description: 'Unknown client_id' });
-    }
-
-    // Validate redirect_uri
-    const allowedUris: string[] = JSON.parse(client.redirect_uris);
-    if (!allowedUris.includes(redirect_uri)) {
-      return res.status(400).json({ error: 'invalid_request', error_description: 'redirect_uri not registered for this client' });
-    }
-
-    // PKCE required for public clients
-    if (client.is_public && !code_challenge) {
-      return res.status(400).json({ error: 'invalid_request', error_description: 'code_challenge is required for public clients (PKCE)' });
-    }
-    if (code_challenge && code_challenge_method && code_challenge_method !== 'S256') {
-      return res.status(400).json({ error: 'invalid_request', error_description: 'Only S256 code_challenge_method is supported' });
-    }
+    const client = v.client;
 
     const userId = (req as AuthRequest).user.userId;
     const requestedScopes = scope ? scope.split(' ').filter(Boolean) : [];
 
     // Check for existing consent (or first-party auto-approve)
+    const db = getDb();
     const isFirstParty = !!client.is_first_party;
     let hasConsent = isFirstParty;
 
@@ -267,6 +354,12 @@ router.get('/authorize', authenticateToken, oauthLimiter, (req: Request, res: Re
       redirectUrl.searchParams.set('code', code);
       if (state) redirectUrl.searchParams.set('state', state);
 
+      // Browsers navigating here get sent back to the app; API clients keep
+      // the JSON contract.
+      if (acceptsHtml(req)) {
+        return res.redirect(302, redirectUrl.toString());
+      }
+
       return res.json({
         redirect: redirectUrl.toString(),
         code,
@@ -278,10 +371,13 @@ router.get('/authorize', authenticateToken, oauthLimiter, (req: Request, res: Re
     // straight to the rendered consent screen so the user lands on a page
     // they can interact with. For API clients, return JSON describing what's
     // needed so they can build their own UX.
-    const acceptsHtml = (req.headers.accept || '').toLowerCase().includes('text/html');
-    if (acceptsHtml) {
+    if (acceptsHtml(req)) {
       const consentUrl = new URL('/api/v1/oauth/consent', `${req.protocol}://${req.get('host')}`);
-      for (const k of ['client_id', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method'] as const) {
+      // `token` is forwarded so the consent page (and its form POST) stays
+      // authenticated across the redirect — browser navigations can't carry
+      // a Bearer header. Same query-token pattern authenticateToken already
+      // supports for media URLs.
+      for (const k of ['client_id', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method', 'token'] as const) {
         const v = req.query[k];
         if (typeof v === 'string' && v.length > 0) consentUrl.searchParams.set(k, v);
       }
@@ -309,7 +405,187 @@ router.get('/authorize', authenticateToken, oauthLimiter, (req: Request, res: Re
     console.error('[oauth] Authorization error:', err);
     res.status(500).json({ error: 'server_error', error_description: 'Authorization failed' });
   }
+}
+
+// ═══════════════════════════════════════════
+//  LOGIN PAGE SUBMIT
+// ═══════════════════════════════════════════
+
+/**
+ * POST /api/v1/oauth/login — Login-page submit: authenticate + authorize in
+ * one step. Body is URL-encoded form data from renderOAuthLoginPage: email,
+ * password, optional mfaCode, plus the original authorize params as hidden
+ * fields. On success the browser is 302'd back to the client's redirect_uri
+ * with an authorization code (first-party / already-consented clients) or to
+ * the consent screen (third-party clients).
+ *
+ * Credential handling mirrors POST /api/v1/auth/login (bcrypt compare,
+ * 24h-grace email-verification gate, TOTP/backup-code MFA) with page
+ * re-renders in place of JSON errors.
+ */
+router.post('/login', express.urlencoded({ extended: false }), loginPageLimiter, async (req: Request, res: Response) => {
+  try {
+    const body = req.body as Record<string, string>;
+    const params = pickOAuthParams(body);
+    const v = validateAuthorizeRequest(params);
+    if (!v.ok) {
+      // Tampered or stale form — never proceed with an unvalidated redirect_uri.
+      if (acceptsHtml(req)) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.status(v.status).send(renderOAuthErrorPage(v.error_description));
+      }
+      return res.status(v.status).json({ error: v.error, error_description: v.error_description });
+    }
+    const client = v.client;
+
+    const rerender = (status: number, opts: { error?: string; showMfa?: boolean }) => {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(status).send(renderOAuthLoginPage({
+        clientName: client.name,
+        params,
+        email: (body.email || '').trim(),
+        error: opts.error,
+        showMfa: opts.showMfa,
+      }));
+    };
+
+    const email = (body.email || '').trim().toLowerCase();
+    const password = body.password || '';
+    const mfaCode = (body.mfaCode || '').trim();
+
+    if (!email || !password) {
+      return rerender(400, { error: 'Please enter your email and password.' });
+    }
+
+    const user = getStatements().findUserByEmail.get(email) as any;
+    if (!user) {
+      logAuditEvent('login_failed', null, { email, reason: 'user_not_found', via: 'oauth_login_page' }, req.ip, req.get('user-agent'));
+      return rerender(401, { error: 'Incorrect email or password.' });
+    }
+
+    const passwordValid = await bcrypt.compare(password, user.password_hash);
+    if (!passwordValid) {
+      logAuditEvent('login_failed', user.id, { email, reason: 'invalid_password', via: 'oauth_login_page' }, req.ip, req.get('user-agent'));
+      return rerender(401, { error: 'Incorrect email or password.' });
+    }
+
+    // Mirror POST /auth/login's verified-email gate (24h grace window).
+    if (!user.email_verified) {
+      const createdMs = user.created_at ? new Date(user.created_at).getTime() : Date.now();
+      const ageHours = (Date.now() - createdMs) / (1000 * 60 * 60);
+      if (ageHours > 24) {
+        logAuditEvent('login_blocked', user.id, { email, reason: 'email_not_verified', via: 'oauth_login_page' }, req.ip, req.get('user-agent'));
+        return rerender(403, { error: 'Please verify your email first — open the verification link we sent you, then come back and sign in.' });
+      }
+    }
+
+    // Mirror POST /auth/login's MFA gate.
+    const mfa = getDb().prepare(
+      'SELECT totp_secret_encrypted, totp_secret_iv, totp_secret_tag, backup_codes_hash, enabled_at FROM mfa_secrets WHERE user_id = ?',
+    ).get(user.id) as any;
+
+    if (mfa?.enabled_at) {
+      if (!mfaCode) {
+        logAuditEvent('mfa_login_challenge', user.id, { email, via: 'oauth_login_page' }, req.ip, req.get('user-agent'));
+        return rerender(200, { showMfa: true });
+      }
+
+      let mfaPassed = false;
+      try {
+        const secret = decryptSecret({
+          ciphertext: mfa.totp_secret_encrypted,
+          iv: mfa.totp_secret_iv,
+          tag: mfa.totp_secret_tag,
+        });
+        if (verifyTotpCode(secret, mfaCode)) mfaPassed = true;
+      } catch (e) {
+        console.error('[oauth] MFA decrypt failed:', (e as any).message);
+      }
+
+      if (!mfaPassed) {
+        const hashes: string[] = JSON.parse(mfa.backup_codes_hash || '[]');
+        const idx = await consumeBackupCode(mfaCode, hashes);
+        if (idx >= 0) {
+          hashes[idx] = ''; // mark consumed; keep array indices stable
+          getDb().prepare('UPDATE mfa_secrets SET backup_codes_hash = ? WHERE user_id = ?')
+            .run(JSON.stringify(hashes), user.id);
+          mfaPassed = true;
+        }
+      }
+
+      if (!mfaPassed) {
+        logAuditEvent('mfa_login_failed', user.id, { email, via: 'oauth_login_page' }, req.ip, req.get('user-agent'));
+        return rerender(401, { error: "That verification code didn't work. Try again.", showMfa: true });
+      }
+      logAuditEvent('mfa_login_success', user.id, { email, via: 'oauth_login_page' }, req.ip, req.get('user-agent'));
+    }
+
+    logAuditEvent('login', user.id, { email, via: 'oauth_login_page', client_id: client.client_id }, req.ip, req.get('user-agent'));
+
+    // Authorize — same consent logic as GET /authorize.
+    const db = getDb();
+    const requestedScopes = params.scope ? params.scope.split(' ').filter(Boolean) : [];
+    let hasConsent = !!client.is_first_party;
+    if (!hasConsent) {
+      const existingConsent = db.prepare(
+        "SELECT scopes FROM oauth_consents WHERE identity_id = ? AND client_id = ? AND revoked_at IS NULL",
+      ).get(user.id, params.client_id) as any;
+      if (existingConsent) {
+        const approvedScopes = existingConsent.scopes.split(' ').filter(Boolean);
+        hasConsent = requestedScopes.every((s: string) => approvedScopes.includes(s));
+      }
+    }
+
+    if (hasConsent) {
+      const code = generateAuthorizationCode(
+        db, params.client_id, user.id, params.redirect_uri, requestedScopes.join(' '),
+        params.state || null, params.code_challenge || null,
+      );
+      const redirectUrl = new URL(params.redirect_uri);
+      redirectUrl.searchParams.set('code', code);
+      if (params.state) redirectUrl.searchParams.set('state', params.state);
+      return res.redirect(302, redirectUrl.toString());
+    }
+
+    // Third-party client → consent screen. A short-lived token keeps the
+    // consent page + its form POST authenticated across the redirect
+    // (browser navigations can't carry a Bearer header).
+    const ssoToken = signShortLivedSsoToken(user);
+    const consentUrl = new URL('/api/v1/oauth/consent', `${req.protocol}://${req.get('host')}`);
+    for (const [k, val] of Object.entries(params)) {
+      if (val) consentUrl.searchParams.set(k, val);
+    }
+    consentUrl.searchParams.set('token', ssoToken);
+    return res.redirect(302, consentUrl.pathname + consentUrl.search);
+  } catch (err: any) {
+    console.error('[oauth] Login page error:', err);
+    res.status(500).json({ error: 'server_error', error_description: 'Sign-in failed' });
+  }
 });
+
+/**
+ * Short-lived (10 min) token minted after a successful login-page auth,
+ * used only to carry identity into the consent-page redirect. Deliberately
+ * NOT generateTokens/generateOAuthTokens — those persist refresh tokens;
+ * this hop needs none of that.
+ */
+function signShortLivedSsoToken(user: any): string {
+  const payload: Record<string, any> = {
+    sub: user.id,
+    userId: user.id,
+    email: user.email,
+    tier: user.tier,
+    accountId: user.id,
+    type: user.identity_type || 'human',
+  };
+  const signingKey = getSigningKey();
+  if (signingKey) {
+    return jwt.sign(payload, signingKey.privateKey, { algorithm: 'RS256', expiresIn: '10m', keyid: signingKey.kid });
+  }
+  return jwt.sign(payload, config.JWT_SECRET, { algorithm: 'HS256', expiresIn: '10m' });
+}
 
 /**
  * POST /api/v1/oauth/authorize — Submit consent decision
@@ -340,9 +616,12 @@ router.post('/authorize', express.urlencoded({ extended: false }), authenticateT
     const isApproved = approved === true || approved === 'true';
 
     if (!isApproved) {
-      return res.json({
-        redirect: `${redirect_uri}?error=access_denied&error_description=User+denied+consent${state ? `&state=${state}` : ''}`,
-      });
+      const deniedUrl = `${redirect_uri}?error=access_denied&error_description=User+denied+consent${state ? `&state=${state}` : ''}`;
+      // Consent-page form posts navigate the browser; send it back to the app.
+      if (acceptsHtml(req)) {
+        return res.redirect(302, deniedUrl);
+      }
+      return res.json({ redirect: deniedUrl });
     }
 
     // Record consent
@@ -364,6 +643,11 @@ router.post('/authorize', express.urlencoded({ extended: false }), authenticateT
     if (state) redirectUrl.searchParams.set('state', state);
 
     logAuditEvent('oauth_consent_granted' as any, userId, { client_id, scopes: scopeStr });
+
+    // Consent-page form posts navigate the browser; send it back to the app.
+    if (acceptsHtml(req)) {
+      return res.redirect(302, redirectUrl.toString());
+    }
 
     res.json({
       redirect: redirectUrl.toString(),
@@ -881,6 +1165,11 @@ router.get('/consent', authenticateToken, oauthLimiter, (req: Request, res: Resp
     const requestedScopes = scope ? scope.split(' ').filter(Boolean) : [];
     const scopeDescriptions = formatScopeDescriptions(requestedScopes);
 
+    // The consent form's POST must stay authenticated. Browser navigations
+    // can't set a Bearer header, so when this page was reached with a query
+    // token (the login-page → consent redirect), thread it into the form
+    // action — authenticateToken accepts ?token=.
+    const queryToken = typeof req.query.token === 'string' ? req.query.token : '';
     const html = renderConsentPage({
       clientName: client.name,
       clientId: client.client_id,
@@ -890,7 +1179,7 @@ router.get('/consent', authenticateToken, oauthLimiter, (req: Request, res: Resp
       state: state || '',
       codeChallenge: code_challenge || '',
       scope: scope || '',
-      authorizeUrl: '/api/v1/oauth/authorize',
+      authorizeUrl: `/api/v1/oauth/authorize${queryToken ? `?token=${encodeURIComponent(queryToken)}` : ''}`,
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -1051,7 +1340,7 @@ function renderConsentPage(data: {
       ${scopeListHtml || '<div style="color:#888;text-align:center;padding:12px;">No specific permissions requested.</div>'}
     </div>
 
-    <form method="POST" action="${data.authorizeUrl}" id="consent-form">
+    <form method="POST" action="${escapeAttr(data.authorizeUrl)}" id="consent-form">
       <input type="hidden" name="client_id" value="${escapeAttr(data.clientId)}">
       <input type="hidden" name="redirect_uri" value="${escapeAttr(data.redirectUri)}">
       <input type="hidden" name="scope" value="${escapeAttr(data.scope)}">
@@ -1224,8 +1513,17 @@ function generateUserCode(): string {
 // actual consumer sends — e.g. windy-code (hyphen) is how the VS Code fork
 // identifies itself in extensions/windy-ecosystem/src/signIn.ts. Don't
 // normalize here — the INSERT below stores the literal value.
-const ECOSYSTEM_CLIENTS = [
+const ECOSYSTEM_CLIENTS: { client_id: string; name: string; scopes: string[]; redirect_uris?: string[] }[] = [
   { client_id: 'windy_chat', name: 'Windy Chat', scopes: ['windy_chat:*'] },
+  // Windy Chat web SPA — hyphen on purpose: matches the client_id the
+  // deployed app sends from windy-chat/web/src/pages/LoginPage.tsx
+  // ("Sign in with Windy" authorization-code + PKCE flow).
+  {
+    client_id: 'windy-chat',
+    name: 'Windy Chat',
+    scopes: ['openid', 'profile', 'email', 'windy_chat:*'],
+    redirect_uris: ['https://app.windychat.ai/auth/callback', 'http://localhost:5173/auth/callback'],
+  },
   { client_id: 'windy_mail', name: 'Windy Mail', scopes: ['windy_mail:*'] },
   { client_id: 'eternitas', name: 'Eternitas', scopes: ['eternitas:*'] },
   { client_id: 'windy_fly', name: 'Windy Fly', scopes: ['windy_fly:*'] },
@@ -1238,19 +1536,31 @@ const ECOSYSTEM_CLIENTS = [
 
 /**
  * Pre-seed the oauth_clients table with Windy ecosystem services.
- * Safe to call multiple times — skips clients that already exist.
+ * Safe to call multiple times — skips clients that already exist, except
+ * that entries which declare redirect_uris keep the DB row's redirect_uris
+ * in sync (an existing row with a stale/empty list would make GET /authorize
+ * reject every redirect_uri for that client). Admin-managed clients (no
+ * redirect_uris declared here) are never touched.
  */
 export function seedEcosystemClients(): void {
   const db = getDb();
 
   for (const client of ECOSYSTEM_CLIENTS) {
-    const existing = db.prepare('SELECT client_id FROM oauth_clients WHERE client_id = ?').get(client.client_id);
-    if (existing) continue;
+    const wantedRedirects = JSON.stringify(client.redirect_uris || []);
+    const existing = db.prepare('SELECT client_id, redirect_uris FROM oauth_clients WHERE client_id = ?').get(client.client_id) as any;
+    if (existing) {
+      if (client.redirect_uris && existing.redirect_uris !== wantedRedirects) {
+        db.prepare('UPDATE oauth_clients SET redirect_uris = ? WHERE client_id = ?')
+          .run(wantedRedirects, client.client_id);
+        console.log(`[oauth] Synced redirect_uris for ecosystem client: ${client.client_id}`);
+      }
+      continue;
+    }
 
     db.prepare(`
       INSERT INTO oauth_clients (client_id, client_secret_hash, name, redirect_uris, allowed_scopes, is_first_party, is_public)
-      VALUES (?, NULL, ?, '[]', ?, 1, 1)
-    `).run(client.client_id, client.name, JSON.stringify(client.scopes));
+      VALUES (?, NULL, ?, ?, ?, 1, 1)
+    `).run(client.client_id, client.name, wantedRedirects, JSON.stringify(client.scopes));
 
     console.log(`[oauth] Seeded ecosystem client: ${client.client_id}`);
   }
