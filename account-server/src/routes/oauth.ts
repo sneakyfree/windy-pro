@@ -244,7 +244,7 @@ function validateAuthorizeRequest(params: Record<string, string | undefined>):
     return { ok: false, status: 400, error: 'invalid_client', error_description: 'Unknown client_id' };
   }
 
-  const allowedUris: string[] = JSON.parse(client.redirect_uris);
+  const allowedUris: string[] = parseJsonArrayColumn(client.redirect_uris);
   if (!allowedUris.includes(redirect_uri)) {
     return { ok: false, status: 400, error: 'invalid_request', error_description: 'redirect_uri not registered for this client' };
   }
@@ -261,6 +261,23 @@ function validateAuthorizeRequest(params: Record<string, string | undefined>):
 
 function acceptsHtml(req: Request): boolean {
   return (req.headers.accept || '').toLowerCase().includes('text/html');
+}
+
+/**
+ * Read a JSON-array column across both adapters: SQLite stores TEXT (raw
+ * JSON string), Postgres stores JSONB which node-postgres returns already
+ * parsed. JSON.parse on an already-parsed array coerces it to a plain
+ * string ("a,b") and throws — the prod-only 500 this helper exists for.
+ */
+function parseJsonArrayColumn(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw as string[];
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  }
+  return [];
 }
 
 /** Pull the OAuth params out of a query/body bag, as plain strings. */
@@ -809,7 +826,7 @@ function handleClientCredentialsWithAuth(_req: Request, res: Response, clientId:
   }
 
   // Client credentials tokens represent the client itself, not a user
-  const scopeStr = scope || JSON.parse(client.allowed_scopes).join(' ');
+  const scopeStr = scope || parseJsonArrayColumn(client.allowed_scopes).join(' ');
   const tokenPayload: Record<string, unknown> = {
     sub: clientId,
     client_id: clientId,
@@ -1549,7 +1566,10 @@ export function seedEcosystemClients(): void {
     const wantedRedirects = JSON.stringify(client.redirect_uris || []);
     const existing = db.prepare('SELECT client_id, redirect_uris FROM oauth_clients WHERE client_id = ?').get(client.client_id) as any;
     if (existing) {
-      if (client.redirect_uris && existing.redirect_uris !== wantedRedirects) {
+      // Compare canonically — Postgres hands JSONB back as a parsed array,
+      // SQLite as a raw string; a naive !== would rewrite on every boot.
+      const existingRedirects = JSON.stringify(parseJsonArrayColumn(existing.redirect_uris));
+      if (client.redirect_uris && existingRedirects !== wantedRedirects) {
         db.prepare('UPDATE oauth_clients SET redirect_uris = ? WHERE client_id = ?')
           .run(wantedRedirects, client.client_id);
         console.log(`[oauth] Synced redirect_uris for ecosystem client: ${client.client_id}`);
