@@ -2722,9 +2722,22 @@ class WindyApp {
           this._displayBatchResult(result);
         } catch (err) {
           console.error('[Batch] Transcription failed:', err);
+          // Persist the recording even though transcription failed — otherwise a long
+          // (dictate-a-whole-book) session is lost on any transcribe error. The SUCCESS
+          // path saves in _displayBatchResult; this covers the FAILURE path only, so
+          // there is no double-save. Best-effort + honestly gated on the save-audio pref.
+          const recordingSaved = localStorage.getItem('windy_saveAudio') !== 'false' && !!audioBlob;
+          if (recordingSaved) {
+            try {
+              const failTs = this.recordingStartedAt || new Date(this._batchStartTime || Date.now()).toISOString();
+              await this._saveAudioRecording(audioBlob, failTs);
+            } catch (saveErr) {
+              console.warn('[Batch] Could not persist recording after failure:', saveErr.message);
+            }
+          }
           this.showReconnectToast(`⚠️ Processing failed: ${err.message}`);
           // Clear the processing spinner from transcript area
-          this.transcriptContent.innerHTML = `<p style="color:#EF4444;text-align:center;padding:20px;">⚠️ Transcription failed<br><span style="font-size:12px;color:#888;">${err.message}</span></p>`;
+          this.transcriptContent.innerHTML = `<p style="color:#EF4444;text-align:center;padding:20px;">⚠️ Transcription failed<br><span style="font-size:12px;color:#888;">${err.message}${recordingSaved ? ' — your recording was saved.' : ''}</span></p>`;
           this.setState('error');
           setTimeout(() => this.setState('idle'), 3000);
         } finally {
@@ -2820,12 +2833,19 @@ class WindyApp {
     // Save audio blob to temp file, then use IPC to have main process
     // run ffmpeg + faster-whisper on it directly (avoids AudioContext crashes)
     try {
-      // Convert blob to base64 and send to main process for transcription
+      // Convert blob to base64 and send to main process for transcription.
+      // Chunked (8KB) conversion: a byte-by-byte `String.fromCharCode(uint8[i])`
+      // loop here froze / OOM'd the renderer on long (dictate-a-whole-book)
+      // recordings. This mirrors the proven chunking in _saveAudioRecording /
+      // _saveVideoRecording; the base64 output is byte-identical, so the
+      // 'batch-transcribe-local' IPC contract is unchanged.
       const arrayBuffer = await audioBlob.arrayBuffer();
       const uint8 = new Uint8Array(arrayBuffer);
       let binary = '';
-      for (let i = 0; i < uint8.length; i++) {
-        binary += String.fromCharCode(uint8[i]);
+      const chunkSize = 8192;
+      for (let i = 0; i < uint8.length; i += chunkSize) {
+        const chunk = uint8.subarray(i, Math.min(i + chunkSize, uint8.length));
+        binary += String.fromCharCode.apply(null, chunk);
       }
       const base64 = btoa(binary);
 
