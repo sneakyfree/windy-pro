@@ -427,7 +427,10 @@ export interface HatchEvent {
     seq: number;
     at: string;                    // ISO-8601
     type: string;                  // dotted event name
-    status: 'pending' | 'ok' | 'failed';
+    // 'skipped' — a step that didn't run (e.g. a service not configured);
+    // 'partial' — hatch.complete when some resource didn't provision. Both
+    // exist so the birth is reported honestly rather than a blanket 'ok'.
+    status: 'pending' | 'ok' | 'failed' | 'skipped' | 'partial';
     label: string;                 // short human label
     data?: Record<string, any>;
 }

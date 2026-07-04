@@ -489,6 +489,10 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
     // them from the canonical contract.
     emit({ type: 'mail.provisioning', status: 'pending', label: 'Allocating agent inbox…' });
     let agentEmail: string | null = null;
+    // Track the real outcome of each cross-product step so hatch.complete can
+    // report an honest partial birth instead of a blanket "ok". A skipped or
+    // failed mailbox/chat used to be swallowed under a green hatch.complete.
+    let mailOk = false;
     try {
         if (process.env.WINDYMAIL_API_URL) {
             const mailResult = await fetchJson(`${process.env.WINDYMAIL_API_URL}/api/v1/webhooks/identity/created`, {
@@ -524,6 +528,7 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
                     JSON.stringify({ passport_number: passportNumber, agent_name: agentName }),
                 );
             }
+            mailOk = !!(mailResult.ok && agentEmail);
             emit({
                 type: 'mail.provisioned',
                 status: mailResult.ok ? 'ok' : 'failed',
@@ -531,7 +536,10 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
                 data: { email: agentEmail },
             });
         } else {
-            emit({ type: 'mail.provisioned', status: 'ok', label: 'Mail inbox skipped (no mail service configured).', data: { skipped: true } });
+            // Mail service not configured — this is a real gap, not an "ok".
+            // Report it as skipped so the client renders a warning and
+            // hatch.complete can flag the birth as partial.
+            emit({ type: 'mail.provisioned', status: 'skipped', label: 'Mail inbox skipped (no mail service configured).', data: { skipped: true } });
         }
     } catch (err: any) {
         emit({ type: 'mail.provisioned', status: 'failed', label: 'Mail inbox call threw.', data: { error: String(err?.message || err) } });
@@ -652,7 +660,24 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
     });
 
     // ── Step 10: Hatch complete ───────────────────────────────
-    emit({ type: 'hatch.complete', status: 'ok', label: 'Your agent is here.', data: { session_id: session.id, resumed: false } });
+    // Honest terminal frame: if a core cross-product resource (mailbox, chat
+    // identity) didn't actually provision, report a PARTIAL birth naming what's
+    // degraded — don't paper over it with a blanket "ok". (Phone is
+    // intentionally deferred and not counted; the passport is fail-closed
+    // upstream so it always exists by the time we reach here.)
+    const degraded: string[] = [];
+    if (!mailOk) degraded.push('mail');
+    if (!matrixUserId) degraded.push('chat');
+    if (degraded.length > 0) {
+        emit({
+            type: 'hatch.complete',
+            status: 'partial',
+            label: `Your agent is here — but ${degraded.join(' + ')} didn't finish provisioning.`,
+            data: { session_id: session.id, resumed: false, degraded },
+        });
+    } else {
+        emit({ type: 'hatch.complete', status: 'ok', label: 'Your agent is here.', data: { session_id: session.id, resumed: false } });
+    }
 
     finishHatchSession(session.id, {
         status: 'complete',
