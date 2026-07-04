@@ -288,30 +288,66 @@ function buildWheels(t, targetOut, hostPython) {
   return wheelsOut;
 }
 
-function buildFfmpeg(t, targetOut) {
-  // For now reuse the existing pre-extracted ffmpeg in bundled/ffmpeg/.
-  // A future improvement: download ffmpeg-static per-platform here.
+// Pinned, checksum-verified static ffmpeg per platform. The win/linux binaries are
+// mirrored to R2 (downloads.windyword.ai) so a fresh CI checkout — which has NO
+// bundled/ffmpeg/ dir (gitignored) — still produces a bundle that actually contains
+// ffmpeg. Without this a portable win/linux bundle ships with no ffmpeg and every
+// transcription fails at runtime with `spawn ffmpeg ENOENT`. macOS uses the
+// pre-extracted local binary (there is no macOS CI job; DMGs are built locally).
+const FFMPEG_ASSETS = {
+  'win-x64':   { url: 'https://downloads.windyword.ai/bin/ffmpeg/ffmpeg-8.0.1-win-x64.exe', sha256: '5af82a0d4fe2b9eae211b967332ea97edfc51c6b328ca35b827e73eac560dc0d' },
+  'linux-x64': { url: 'https://downloads.windyword.ai/bin/ffmpeg/ffmpeg-7.0.2-linux-x64',    sha256: 'e7e7fb30477f717e6f55f9180a70386c62677ef8a4d4d1a5d948f4098aa3eb99' },
+};
+
+async function buildFfmpeg(t, targetOut) {
   const ffmpegOut = path.join(targetOut, 'ffmpeg');
-  if (fs.existsSync(ffmpegOut) && !force) {
-    ok(`ffmpeg already present: ${path.relative(repoRoot, ffmpegOut)}`);
+  const binName = (t === 'win-x64') ? 'ffmpeg.exe' : 'ffmpeg';
+  const dst = path.join(ffmpegOut, binName);
+  // Check the actual binary, not just the dir — the old code returned early on an
+  // EMPTY ffmpeg/ dir left behind by a prior skipped build.
+  if (fs.existsSync(dst) && !force) {
+    ok(`ffmpeg already present: ${path.relative(repoRoot, dst)}`);
     return ffmpegOut;
   }
   fs.mkdirSync(ffmpegOut, { recursive: true });
-  const map = {
-    'mac-arm64':  { src: path.join(existingFfmpegDir, 'extracted-mac', 'ffmpeg'), name: 'ffmpeg' },
-    'mac-x64':    { src: path.join(existingFfmpegDir, 'extracted-mac', 'ffmpeg'), name: 'ffmpeg' },
-    'linux-x64':  { src: null, name: 'ffmpeg' }, // depends on existing extracted layout
-    'win-x64':    { src: null, name: 'ffmpeg.exe' },
-  };
-  const entry = map[t];
-  if (!entry || !entry.src || !fs.existsSync(entry.src)) {
-    warn(`no pre-existing ffmpeg for ${t} — skipping (will be added in next iteration)`);
-    return null;
+
+  // macOS: use the pre-extracted local binary (built locally; no CI mac job).
+  if (t === 'mac-arm64' || t === 'mac-x64') {
+    const macSrc = path.join(existingFfmpegDir, 'extracted-mac', 'ffmpeg');
+    if (!fs.existsSync(macSrc)) {
+      fail(`ffmpeg missing for ${t}: expected ${path.relative(repoRoot, macSrc)} — place the macOS ffmpeg binary there before building.`);
+    }
+    fs.copyFileSync(macSrc, dst);
+    fs.chmodSync(dst, 0o755);
+    ok(`ffmpeg staged (local mac): ${path.relative(repoRoot, dst)} (${du(ffmpegOut)})`);
+    return ffmpegOut;
   }
-  const dst = path.join(ffmpegOut, entry.name);
-  fs.copyFileSync(entry.src, dst);
+
+  // win/linux: prefer a local extracted copy, else fetch the pinned R2 binary and
+  // verify SHA-256. Missing/mismatched ffmpeg is a HARD build failure — a bundle
+  // without ffmpeg is broken by definition (the original bug was a silent skip).
+  const asset = FFMPEG_ASSETS[t];
+  if (!asset) fail(`no ffmpeg asset defined for target ${t}`);
+
+  const localExtracted = path.join(existingFfmpegDir, `extracted-${t}`, binName);
+  let src = fs.existsSync(localExtracted) ? localExtracted : null;
+  let origin = 'local';
+
+  if (!src) {
+    const cached = path.join(cacheDir, path.basename(asset.url));
+    if (fs.existsSync(cached) && sha256(cached) !== asset.sha256) rm(cached); // drop a stale/corrupt cache
+    await downloadFile(asset.url, cached);
+    const got = sha256(cached);
+    if (got !== asset.sha256) {
+      rm(cached);
+      fail(`ffmpeg checksum mismatch for ${t}: expected ${asset.sha256}, got ${got} (removed ${path.basename(cached)}; re-run to retry)`);
+    }
+    src = cached;
+    origin = 'R2, sha256-verified';
+  }
+  fs.copyFileSync(src, dst);
   if (t !== 'win-x64') fs.chmodSync(dst, 0o755);
-  ok(`ffmpeg copied: ${path.relative(repoRoot, dst)} (${du(ffmpegOut)})`);
+  ok(`ffmpeg staged (${origin}): ${path.relative(repoRoot, dst)} (${du(ffmpegOut)})`);
   return ffmpegOut;
 }
 
@@ -479,7 +515,7 @@ function writeManifest(t, targetOut, info) {
     }
 
     if (!skipFfmpeg) {
-      info.ffmpeg = buildFfmpeg(t, targetOut);
+      info.ffmpeg = await buildFfmpeg(t, targetOut);
     }
 
     if (!skipUv) {
