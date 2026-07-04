@@ -182,6 +182,42 @@ describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
         }
     });
 
+    it('reports a PARTIAL birth when a core resource does not provision (honest, not blanket ok)', async () => {
+        const user = makeUser();
+        // Mail service unconfigured — the mail step must report skipped and the
+        // terminal frame must be a partial birth naming what's degraded, NOT a
+        // green 'ok' that hides the missing mailbox.
+        const savedMailUrl = process.env.WINDYMAIL_API_URL;
+        delete process.env.WINDYMAIL_API_URL;
+        handler = async (url) => {
+            if (url.includes('eternitas') && url.includes('auto-hatch')) {
+                return { ok: true, status: 200, json: async () => ({ passport_number: 'ET26-PART-1AL0' }) };
+            }
+            if (url.includes('chat.test') && url.includes('/api/v1/onboarding/agent')) {
+                return { ok: true, status: 200, json: async () => ({ matrix_user_id: '@a:chat.windychat.ai', dm_room_id: '!r:chat.windychat.ai' }) };
+            }
+            return { ok: true, status: 200, json: async () => ({}) };
+        };
+        try {
+            const res = await request(app)
+                .post('/api/v1/agent/hatch')
+                .set('Authorization', `Bearer ${user.token}`)
+                .buffer(true).parse((r: any, cb: any) => {
+                    let chunks = '';
+                    r.on('data', (c: Buffer) => (chunks += c.toString()));
+                    r.on('end', () => cb(null, chunks));
+                });
+            const events = parseSse(res.body as unknown as string);
+            const mail = events.find(e => e.event === 'mail.provisioned')!.data;
+            expect(mail.status).toBe('skipped');
+            const complete = events.find(e => e.event === 'hatch.complete')!.data;
+            expect(complete.status).toBe('partial');
+            expect(complete.data.degraded).toContain('mail');
+        } finally {
+            if (savedMailUrl) process.env.WINDYMAIL_API_URL = savedMailUrl;
+        }
+    });
+
     it('is idempotent — a second call replays existing state via hatch.complete with resumed=true', async () => {
         const user = makeUser();
         handler = async (url) => {
