@@ -698,7 +698,20 @@ function ensureEngineVenv(appDataDir) {
           // can actually import the engine deps BEFORE marking it ready — the marker is what
           // every later launch and startPythonServer() trust. Async so the event loop is
           // never blocked. On failure, scrub so the next launch rebuilds cleanly.
-          execFile(venvPy, ['-c', 'import faster_whisper, websockets'], { timeout: 60000 }, (e3) => {
+          // Probe timeout is 5 min for the same reason as the pip timeout above: the FIRST
+          // import of faster_whisper/ctranslate2/onnxruntime is disk-bound (measured 60s
+          // wall at ~1% CPU on a loaded 2017 iMac), and a 60s cap killed a HEALTHY venv at
+          // the finish line — then the scrub forced the identical doomed rebuild on every
+          // launch, an infinite first-run failure loop.
+          execFile(venvPy, ['-c', 'import faster_whisper, websockets'], { timeout: 300000 }, (e3) => {
+            if (e3 && e3.killed) {
+              // Timed out ≠ broken. pip succeeded and the deps are on disk — the machine is
+              // just slow/thrashing. Do NOT scrub: the next launch ADOPTS this venv via the
+              // _venvHasEngineDeps fast path (no import needed) instead of rebuilding forever.
+              console.warn('[Python] venv import probe timed out (slow/loaded disk) — keeping venv; next launch adopts it');
+              startServer();
+              return;
+            }
             if (e3 || !fs.existsSync(venvPy)) {
               console.error('[Python] venv built but engine deps not importable — scrubbing so next launch retries:', e3 ? e3.message : 'venv python missing');
               scrubVenv();
