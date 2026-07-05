@@ -1170,8 +1170,13 @@ class SettingsPanel {
     // Transcription route (auto / local_only / cloud_only)
     const transcriptionModeSelect = this.panel.querySelector('#transcriptionModeSelect');
     if (transcriptionModeSelect) {
-      // Restore saved value
-      const saved = localStorage.getItem('windy_transcriptionMode') || 'auto';
+      // Restore saved value — clamped to the options this build actually renders.
+      // The free build lists only local_only; restoring the tiered default 'auto'
+      // left the select with selectedIndex=-1 (a blank dropdown) and the hint
+      // showing cloud-failover copy that doesn't apply.
+      let saved = localStorage.getItem('windy_transcriptionMode') || 'auto';
+      const available = [...transcriptionModeSelect.options].map(o => o.value);
+      if (!available.includes(saved)) saved = available[0] || 'local_only';
       transcriptionModeSelect.value = saved;
       const tmHint = this.panel.querySelector('#transcriptionModeHint');
       const tmHints = {
@@ -1351,6 +1356,14 @@ class SettingsPanel {
         }
         if (failures.length === 0) {
           this.showToast('✅ All shortcuts reset to defaults');
+          // Refresh the main-screen shortcuts card too — individual rebinds do
+          // this, but reset left the card showing the pre-reset custom combo.
+          if (window.windyAPI?.getSettings && window.app?._populateShortcutDisplay) {
+            try {
+              const s = await window.windyAPI.getSettings();
+              window.app._populateShortcutDisplay(s?.hotkeys);
+            } catch (_) { }
+          }
         } else {
           this.showToast(`⚠️ Reset failed for: ${failures.join(', ')}`);
           // Re-sync badges from the real saved state on failure
@@ -2704,8 +2717,18 @@ class SettingsPanel {
         if (settings.device) this.panel.querySelector('#deviceSelect').value = settings.device;
         if (settings.language) this.panel.querySelector('#languageSelect').value = settings.language;
         if (settings.opacity) {
-          this.panel.querySelector('#opacityRange').value = settings.opacity;
-          this.panel.querySelector('#opacityValue').textContent = `${settings.opacity}%`;
+          // Normalize: some writers store a 0-1 fraction (Electron setOpacity
+          // scale), the slider speaks 50-100 percent. An unnormalized "1"
+          // rendered as "1%" beside a fully opaque window.
+          let opPct = Number(settings.opacity);
+          if (isFinite(opPct)) {
+            if (opPct <= 1) opPct = Math.round(opPct * 100);
+            opPct = Math.max(50, Math.min(100, opPct));
+            this.panel.querySelector('#opacityRange').value = opPct;
+            this.panel.querySelector('#opacityValue').textContent = `${opPct}%`;
+            const winEl = document.querySelector('.window');
+            if (winEl) winEl.style.opacity = opPct / 100;
+          }
         }
         if (settings.alwaysOnTop !== undefined) {
           this.panel.querySelector('#alwaysOnTop').checked = settings.alwaysOnTop;
