@@ -380,6 +380,9 @@ class WindyServer:
                     
                     if success:
                         self.transcriber = new_transcriber
+                        # Keep _model_config in sync so /health reports the LIVE model, not the
+                        # startup one — it read the stale value through every hot-reload before.
+                        self._model_config = new_config
                         applied["model_reloaded"] = True
                         print(f"Model hot-reloaded to: {new_model}")
                     else:

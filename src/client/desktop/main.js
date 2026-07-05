@@ -6646,6 +6646,7 @@ async function _transcribeViaWS(wavPath) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(wsUrl, { maxPayload: 64 * 1024 * 1024 });
     let responded = false;
+    let pendingTranscribe = null; // set when we must load the selected model before transcribing
 
     // Self-renewing idle timeout. Long recordings on a slow CPU can take many
     // minutes to transcribe; a fixed 120s wrongly aborted them (and a >50MB blob
@@ -6670,20 +6671,41 @@ async function _transcribeViaWS(wavPath) {
       try {
         const audioData = await fsp.readFile(wavPath);
         const ext = (_path.extname(wavPath) || '.wav').slice(1) || 'wav';
-        if (audioData.length <= SAFE_FRAME) {
-          // Common path — unchanged: one command + one binary frame.
-          ws.send(JSON.stringify({ action: 'transcribe_blob', language: 'auto', format: ext }));
-          ws.send(audioData);
-        } else {
-          // Large recording — stream in sub-frame chunks so we never hit the 50MB
-          // WS frame limit, then signal end. The server reassembles to disk and
-          // transcribes the whole file (bounded RAM). This is what makes the
-          // "unlimited recording" promise actually deliverable.
-          ws.send(JSON.stringify({ action: 'transcribe_upload', language: 'auto', format: ext }));
-          for (let off = 0; off < audioData.length; off += UPLOAD_CHUNK) {
-            ws.send(audioData.subarray(off, Math.min(off + UPLOAD_CHUNK, audioData.length)));
+
+        // Actually send the audio for transcription (may run now, or after a model swap).
+        const sendTranscribe = () => {
+          if (audioData.length <= SAFE_FRAME) {
+            // Common path — unchanged: one command + one binary frame.
+            ws.send(JSON.stringify({ action: 'transcribe_blob', language: 'auto', format: ext }));
+            ws.send(audioData);
+          } else {
+            // Large recording — stream in sub-frame chunks so we never hit the 50MB
+            // WS frame limit, then signal end. The server reassembles to disk and
+            // transcribes the whole file (bounded RAM). This is what makes the
+            // "unlimited recording" promise actually deliverable.
+            ws.send(JSON.stringify({ action: 'transcribe_upload', language: 'auto', format: ext }));
+            for (let off = 0; off < audioData.length; off += UPLOAD_CHUNK) {
+              ws.send(audioData.subarray(off, Math.min(off + UPLOAD_CHUNK, audioData.length)));
+            }
+            ws.send(JSON.stringify({ action: 'transcribe_upload_end' }));
           }
-          ws.send(JSON.stringify({ action: 'transcribe_upload_end' }));
+        };
+
+        // ── Model sync (fixes: batch mode ignored the engine picker) ──
+        // Batch transcription reuses the WARM engine server but never opens the renderer's
+        // streaming ws, which is the only path that told the server to hot-reload the
+        // selected model. So the server kept its launch model ('base') and every batch
+        // transcribed with base no matter what engine the user pinned (or WindyTune chose).
+        // store.engine.model is the source of truth (both setEngine and _windyTuneSwitch
+        // write it), so pin it here first: the server no-ops if it's already loaded, else
+        // it reloads and acks — only then do we transcribe. On a failed load the server
+        // keeps its working model and still acks, so we proceed rather than fail.
+        const desiredModel = store.get('engine.model');
+        if (desiredModel) {
+          pendingTranscribe = sendTranscribe;
+          ws.send(JSON.stringify({ action: 'config', config: { model: desiredModel } }));
+        } else {
+          sendTranscribe();
         }
       } catch (err) {
         fail(err);
@@ -6695,6 +6717,17 @@ async function _transcribeViaWS(wavPath) {
       arm(); // server is alive and working — extend the deadline
       try {
         const msg = JSON.parse(data.toString());
+        // Model config was ack'd (server reloaded the selected model, or no-op'd because it
+        // was already loaded, or kept its old model on a failed load) — now transcribe.
+        if (msg.type === 'ack' && msg.action === 'config' && pendingTranscribe) {
+          if (msg.applied && msg.applied.model_error) {
+            console.warn(`[Batch] engine model load failed (${msg.applied.model_error}); transcribing with the currently loaded model`);
+          }
+          const run = pendingTranscribe;
+          pendingTranscribe = null;
+          run();
+          return;
+        }
         if (msg.type === 'transcribe_result') {
           responded = true;
           if (timer) clearTimeout(timer);
