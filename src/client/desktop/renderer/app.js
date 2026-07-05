@@ -1010,7 +1010,7 @@ class WindyApp {
           <div class="welcome-panel" data-step="1" style="display:none">
             <div style="font-size:56px;margin-bottom:16px">🎤</div>
             <h2 style="font-size:22px;color:#f1f5f9;margin-bottom:8px">How to Record</h2>
-            <p style="color:#94a3b8;font-size:14px;line-height:1.6">Click the <strong style="color:#22c55e">Record</strong> button or press <strong style="color:#60a5fa">Ctrl+Shift+Space</strong> to start recording. Speak naturally — Windy Word transcribes as you go.</p>
+            <p style="color:#94a3b8;font-size:14px;line-height:1.6">Click the <strong style="color:#22c55e">Record</strong> button or press <strong style="color:#60a5fa">${window.windyAPI?.platform === 'darwin' ? '⌘+Shift+Space' : 'Ctrl+Shift+Space'}</strong> to start recording. Speak naturally — Windy Word transcribes as you go.</p>
           </div>
           <div class="welcome-panel" data-step="2" style="display:none">
             <div style="font-size:56px;margin-bottom:16px">🌐</div>

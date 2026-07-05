@@ -4,7 +4,12 @@
  */
 class ChangelogPopup {
   constructor() {
-    this.currentVersion = '0.4.0';
+    // Real app version (package.json), not a hardcode — the old '0.4.0' shipped as a stale
+    // literal and showed up in the UI as "Windy Word v0.4.0" while the app was actually 1.7.0.
+    this.currentVersion = '1.7.0';
+    if (window.windyAPI?.getAppVersion) {
+      window.windyAPI.getAppVersion().then(v => { if (v) this.currentVersion = v; }).catch(() => {});
+    }
     this.overlay = null;
   }
 
