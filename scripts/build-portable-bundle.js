@@ -236,12 +236,34 @@ async function buildPython(t, targetOut) {
   };
 }
 
+// Write wheels/CHECKSUMS.sha256 (sha256sum format: "<hex>  <filename>"). The first-run
+// engine-venv build (main.js ensureEngineVenv) fail-CLOSES on any wheel whose hash doesn't
+// match this manifest — but it SILENTLY SKIPS the whole check when the manifest is absent.
+// The build never emitted one, so the supply-chain guard shipped inert. Generate it here so
+// every recut arms it. Idempotent; safe to call on the cached path too.
+function writeWheelChecksums(wheelsOut) {
+  try {
+    const crypto = require('crypto');
+    const files = fs.readdirSync(wheelsOut)
+      .filter(f => (f.endsWith('.whl') || f.endsWith('.tar.gz')) && f !== 'CHECKSUMS.sha256')
+      .sort();
+    if (files.length === 0) return;
+    const lines = files.map(f =>
+      `${crypto.createHash('sha256').update(fs.readFileSync(path.join(wheelsOut, f))).digest('hex')}  ${f}`);
+    fs.writeFileSync(path.join(wheelsOut, 'CHECKSUMS.sha256'), lines.join('\n') + '\n');
+    ok(`wrote wheels/CHECKSUMS.sha256 (${files.length} wheels)`);
+  } catch (e) {
+    warn(`could not write wheel checksum manifest: ${e.message}`);
+  }
+}
+
 function buildWheels(t, targetOut, hostPython) {
   const wheelsOut = path.join(targetOut, 'wheels');
   if (fs.existsSync(wheelsOut) && !force) {
     const count = fs.readdirSync(wheelsOut).filter(f => f.endsWith('.whl') || f.endsWith('.tar.gz')).length;
     if (count > 0) {
       ok(`wheels already downloaded: ${count} files in ${path.relative(repoRoot, wheelsOut)}`);
+      if (!fs.existsSync(path.join(wheelsOut, 'CHECKSUMS.sha256'))) writeWheelChecksums(wheelsOut);
       return wheelsOut;
     }
   }
@@ -285,6 +307,7 @@ function buildWheels(t, targetOut, hostPython) {
     }
     throw e;
   }
+  writeWheelChecksums(wheelsOut);
   return wheelsOut;
 }
 
