@@ -38,6 +38,15 @@ class TranslatePanel {
         // Health check starts on open(), not on construction (avoids CSP spam when panel is closed)
     }
 
+    // The free offline builds (reader/lite) must never call the windyword.ai API:
+    // the app CSP blocks those requests anyway, so every panel open spammed console
+    // errors ("Refused to connect …/translate/languages, /user/history, /health")
+    // while translation itself runs on-device. Serve bundled/local data instead.
+    _isOfflineBuild() {
+        const ed = (window.windyAPI && window.windyAPI.edition) || '';
+        return ed === 'reader' || ed === 'lite';
+    }
+
     // ─── Build DOM ────────────────────────────────────────────────
 
     _build() {
@@ -162,9 +171,11 @@ class TranslatePanel {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._translateText(); }
         });
 
-        // Copy
+        // Copy — use the stored translation string, not _targetText.textContent:
+        // the result node also contains the language label + 🔊 icon, so textContent
+        // pasted as "🇪🇸 Spanish\n🔊\n\n<translation>".
         document.getElementById('translateCopyBtn').addEventListener('click', () => {
-            const text = this._targetText.textContent;
+            const text = this._lastTranslatedText || (this._targetText.textContent || '').trim();
             if (text) {
                 navigator.clipboard.writeText(text);
                 document.getElementById('translateCopyBtn').textContent = '✓';
@@ -212,6 +223,11 @@ class TranslatePanel {
 
     async _loadLanguages() {
         if (this.languages.length > 0) return;
+        // Offline builds always use the bundled list — no cloud call to be blocked
+        if (this._isOfflineBuild()) {
+            this._useFallbackLanguages();
+            return;
+        }
         // Don't attempt a network fetch when offline — use the bundled fallback directly
         if (!navigator.onLine) {
             this._log.debug('_loadLanguages', 'offline — using fallback language list');
@@ -798,6 +814,11 @@ class TranslatePanel {
             }
         }
 
+        // Offline builds keep history purely local (it was saved by _addHistoryItem)
+        if (this._isOfflineBuild()) {
+            this._renderHistory();
+            return;
+        }
         // Don't attempt network fetch when offline — show cached history
         if (!navigator.onLine) {
             this._log.debug('_loadHistory', 'offline — using cached history');
@@ -866,6 +887,12 @@ class TranslatePanel {
     // ─── Health Check / Online Status ─────────────────────────────
 
     _startHealthCheck() {
+        // Offline builds have no cloud to health-check — show the honest ⚡ Offline
+        // badge once instead of polling a CSP-blocked endpoint every 30s.
+        if (this._isOfflineBuild()) {
+            this._setOnline(false);
+            return;
+        }
         this._checkHealth();
         this._healthInterval = setInterval(() => this._checkHealth(), 30000);
     }
