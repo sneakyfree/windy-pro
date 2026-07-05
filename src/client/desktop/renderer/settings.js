@@ -1269,10 +1269,11 @@ class SettingsPanel {
           showHide: '#shortcutShowHide',
           quickTranslate: '#shortcutQuickTranslate'
         };
-        // Reset each badge display
+        // Reset each badge display (⌘ on macOS — "Ctrl" on a Mac is a lie)
+        const resetMod = (window.windyAPI && window.windyAPI.platform === 'darwin') ? '⌘' : 'Ctrl';
         for (const [key, selector] of Object.entries(displayMap)) {
           const el = this.panel.querySelector(selector);
-          if (el) el.textContent = defaults[key].replace('CommandOrControl', 'Ctrl');
+          if (el) el.textContent = defaults[key].replace('CommandOrControl', resetMod);
         }
         // Tell main process to reset each
         if (window.windyAPI?.rebindHotkey) {
@@ -1281,6 +1282,13 @@ class SettingsPanel {
           }
         }
         this.showToast('✅ All shortcuts reset to defaults');
+        // Refresh the main-screen shortcuts card too — without this it kept
+        // showing the pre-reset custom combo until the next full reload.
+        if (window.windyAPI?.getSettings && window.app?._populateShortcutDisplay) {
+          window.windyAPI.getSettings()
+            .then(s => window.app._populateShortcutDisplay(s?.hotkeys))
+            .catch(() => { });
+        }
       });
     }
 
@@ -2548,8 +2556,18 @@ class SettingsPanel {
         if (settings.device) this.panel.querySelector('#deviceSelect').value = settings.device;
         if (settings.language) this.panel.querySelector('#languageSelect').value = settings.language;
         if (settings.opacity) {
-          this.panel.querySelector('#opacityRange').value = settings.opacity;
-          this.panel.querySelector('#opacityValue').textContent = `${settings.opacity}%`;
+          // Normalize: some writers store a 0-1 fraction (Electron setOpacity
+          // scale), the slider speaks 50-100 percent. An unnormalized "1"
+          // rendered as "1%" beside a fully opaque window.
+          let opPct = Number(settings.opacity);
+          if (isFinite(opPct)) {
+            if (opPct <= 1) opPct = Math.round(opPct * 100);
+            opPct = Math.max(50, Math.min(100, opPct));
+            this.panel.querySelector('#opacityRange').value = opPct;
+            this.panel.querySelector('#opacityValue').textContent = `${opPct}%`;
+            const winEl = document.querySelector('.window');
+            if (winEl) winEl.style.opacity = opPct / 100;
+          }
         }
         if (settings.alwaysOnTop !== undefined) {
           this.panel.querySelector('#alwaysOnTop').checked = settings.alwaysOnTop;
