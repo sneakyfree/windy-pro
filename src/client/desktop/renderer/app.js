@@ -332,15 +332,18 @@ class WindyApp {
       });
     }
 
-    // Keyboard shortcuts: Ctrl+= (zoom in), Ctrl+- (zoom out), Ctrl+0 (reset)
+    // Keyboard shortcuts: zoom in/out/reset. Ctrl everywhere; on macOS ⌘ too —
+    // the shortcut cards advertise the platform modifier, so ⌘ must actually work.
+    const zoomIsMac = (window.windyAPI && window.windyAPI.platform === 'darwin');
     document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
+      const mod = e.ctrlKey || (zoomIsMac && e.metaKey);
+      if (mod && (e.key === '=' || e.key === '+')) {
         e.preventDefault();
         this._changeFontSize(10);
-      } else if (e.ctrlKey && e.key === '-') {
+      } else if (mod && e.key === '-') {
         e.preventDefault();
         this._changeFontSize(-10);
-      } else if (e.ctrlKey && e.key === '0') {
+      } else if (mod && e.key === '0') {
         e.preventDefault();
         this._setFontSize(100);
       }
@@ -1669,6 +1672,14 @@ class WindyApp {
       if (!el) continue;
       const isCustom = actual[row.key] !== defaults[row.key];
       el.innerHTML = `<kbd>${fmt(actual[row.key])}</kbd> — ${row.label}${isCustom ? customBadge : ''}`;
+    }
+
+    // Zoom row: the listener accepts ⌘ on macOS (and Ctrl everywhere), so show
+    // the platform modifier instead of the hardcoded "Ctrl" the markup ships.
+    const zoomEl = document.getElementById('shortcutRow_zoom');
+    if (zoomEl) {
+      const zm = isMac ? '⌘' : 'Ctrl';
+      zoomEl.innerHTML = `<kbd>${zm} + / −</kbd> — <span style="color:#A78BFA;font-weight:600;">Zoom</span> in / out &nbsp; <kbd>${zm}+0</kbd> Reset`;
     }
   }
 
@@ -3267,14 +3278,26 @@ class WindyApp {
           if (!fxPasteMode || fxPasteMode === 'default' || fxPasteMode === 'silent') {
             this._playPasteBlip();
           }
+          // Read the "Clear after paste" preference ONCE, up front. Default is
+          // false (main.js store default + the unchecked Simple Mode checkbox).
+          // The old code force-cleared after 3s whenever the paste FAILED,
+          // ignoring the setting — so in the common no-Accessibility case the
+          // transcript vanished and the .txt/.md/.srt export bar was left with
+          // nothing to export ("Nothing to export yet" on every click).
+          let clearAfterPaste = false;
+          if (window.windyAPI?.getSettings) {
+            try {
+              const settings = await window.windyAPI.getSettings();
+              clearAfterPaste = settings.clearOnPaste === true;
+            } catch (_) { }
+          }
           const pasteResult = await window.windyAPI.autoPasteText(text.trim());
           if (!pasteResult) {
             // Paste failed (no target PID or target not reachable)
-            // Text is already archived and on clipboard — show toast and clear after brief delay
+            // Text is already archived and on clipboard — show toast
             console.warn('[AutoPaste] Paste returned false — text on clipboard and archived. Use Cmd+V to paste.');
             this.showReconnectToast('📋 Text copied to clipboard — use Cmd+V to paste');
-            // Still clear after 3s since text is archived and on clipboard
-            setTimeout(() => this.clearTranscript(), 3000);
+            if (clearAfterPaste) setTimeout(() => this.clearTranscript(), 3000);
           } else {
             // A3: paste succeeded — reassure the user the transcript is also on
             // the clipboard. The macOS paste keystroke can rarely drop Cmd and
@@ -3285,14 +3308,7 @@ class WindyApp {
           }
           // Strand I: trigger paste effect with word count for dynamic scaling
           try { if (this.effectsEngine) this.effectsEngine.trigger('paste', { wordCount: text.trim().split(/\s+/).length }); } catch (_) { }
-          // Only clear if "Clear after paste" is checked (stored in electron-store, not localStorage)
-          let clearAfterPaste = true;
-          if (window.windyAPI?.getSettings) {
-            try {
-              const settings = await window.windyAPI.getSettings();
-              clearAfterPaste = settings.clearOnPaste !== false;
-            } catch (_) { }
-          }
+          // Only clear if "Clear after paste" is checked (read once above)
           if (clearAfterPaste) {
             this.clearTranscript();
           }
@@ -4531,7 +4547,7 @@ class WindyApp {
       <div id="shortcutRow_paste" style="margin:4px 0;"></div>
       <div id="shortcutRow_showHide" style="margin:4px 0;"></div>
       <div id="shortcutRow_quickTranslate" style="margin:4px 0;"></div>
-      <div style="margin:4px 0;"><kbd>Ctrl + / −</kbd> — <span style="color:#A78BFA;font-weight:600;">Zoom</span> in / out &nbsp; <kbd>Ctrl+0</kbd> Reset</div>
+      <div id="shortcutRow_zoom" style="margin:4px 0;"><kbd>Ctrl + / −</kbd> — <span style="color:#A78BFA;font-weight:600;">Zoom</span> in / out &nbsp; <kbd>Ctrl+0</kbd> Reset</div>
     </div>`;
     // Re-populate with user's actual hotkeys
     if (window.windyAPI?.getSettings) {
