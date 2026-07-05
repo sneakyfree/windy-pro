@@ -4,8 +4,24 @@
  */
 class ChangelogPopup {
   constructor() {
-    this.currentVersion = '0.4.0';
+    // Real app version (package.json), not a hardcode — the stale '0.4.0'
+    // literal showed as "What's New in v0.4.0" while the app was 1.7.0.
+    this.currentVersion = '1.7.0';
+    this._setVersionWatermark(this.currentVersion);
+    if (window.windyAPI?.getAppVersion) {
+      window.windyAPI.getAppVersion().then(v => {
+        if (v) { this.currentVersion = v; this._setVersionWatermark(v); }
+      }).catch(() => { });
+    }
     this.overlay = null;
+  }
+
+  // Feeds the .window::before version watermark (styles.css) so it can't go
+  // stale again — it displayed a hardcoded 'v0.4.0' for four releases.
+  _setVersionWatermark(v) {
+    try {
+      document.documentElement.style.setProperty('--ww-version-label', `'Windy Word v${v}'`);
+    } catch (_) { }
   }
 
   shouldShow() {
