@@ -174,12 +174,19 @@ class TranslatePanel {
         // Copy — use the stored translation string, not _targetText.textContent:
         // the result node also contains the language label + 🔊 icon, so textContent
         // pasted as "🇪🇸 Spanish\n🔊\n\n<translation>".
-        document.getElementById('translateCopyBtn').addEventListener('click', () => {
+        document.getElementById('translateCopyBtn').addEventListener('click', async () => {
             const text = this._lastTranslatedText || (this._targetText.textContent || '').trim();
             if (text) {
-                navigator.clipboard.writeText(text);
-                document.getElementById('translateCopyBtn').textContent = '✓';
-                setTimeout(() => { document.getElementById('translateCopyBtn').textContent = '📋'; }, 1000);
+                const btn = document.getElementById('translateCopyBtn');
+                try {
+                    // Await it — the old fire-and-forget showed ✓ even when the
+                    // write was rejected (e.g. "Document is not focused").
+                    await navigator.clipboard.writeText(text);
+                    btn.textContent = '✓';
+                } catch (_) {
+                    btn.textContent = '⚠️';
+                }
+                setTimeout(() => { btn.textContent = '📋'; }, 1000);
             }
         });
 
