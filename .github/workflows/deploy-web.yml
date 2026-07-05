@@ -51,6 +51,11 @@ jobs:
 
       - name: Build
         working-directory: src/client/web
+        env:
+          # ADR-056 — the $1 verified hatch. Publishable key is safe to
+          # embed; without it the UI degrades to free-only gracefully.
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
+          VITE_ETERNITAS_URL: 'https://api.eternitas.ai'
         run: npm run build
 
       - name: Set up Python (for deploy script)

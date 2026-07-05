@@ -17,4 +17,4 @@
   Referrer-Policy: strict-origin-when-cross-origin
   # Deny every permission the app doesn't need. Microphone stays enabled
   # because the Windy Word voice feature needs it on some routes.
-  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), payment=(), usb=(), fullscreen=(self)
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), payment=(self "https://js.stripe.com"), usb=(), fullscreen=(self)

@@ -10,9 +10,11 @@
  * Thin wrapper: renders <HatchCeremony>. All SSE/UI logic lives in the
  * component + hook so the page stays at ~50 lines.
  */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import HatchCeremony from '../components/HatchCeremony'
+import HatchChooser from '../components/HatchChooser'
+import { isHatched } from '../utils/hatchStorage'
 import './Hatch.css'
 
 function decodeJwtPayload(token) {
@@ -38,6 +40,12 @@ export default function Hatch() {
     const token = typeof window !== 'undefined'
         ? localStorage.getItem('windy_token')
         : null
+
+    // ADR-056 hatch fork. Already-hatched users skip the chooser — the
+    // ceremony resumes idempotently and re-shows their certificate.
+    // extras: null = still choosing; {} = free; { verified_payment_intent_id }
+    // or { comp_code } = verified.
+    const [extras, setExtras] = useState(() => (isHatched() ? {} : null))
 
     // Email-verified check: look at the JWT claim first, then fall back to
     // the stored user object. If neither says verified, send them to the
@@ -66,5 +74,8 @@ export default function Hatch() {
         return <Navigate to="/verify-email" replace state={{ reason: 'hatch_requires_verified' }} />
     }
 
-    return <HatchCeremony token={token} />
+    if (extras === null) {
+        return <HatchChooser onChoose={setExtras} />
+    }
+    return <HatchCeremony token={token} extras={extras} />
 }
