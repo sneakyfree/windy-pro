@@ -150,7 +150,14 @@ swapBtn.addEventListener('click', () => {
 
 // ── WindyTune / Manual toggle ──
 let isWindyTune = true;
-let isLocalOnly = false;
+// Local Only defaults ON: the offline build's local engine is the only path that
+// works without a cloud API key, so an unchecked default made every Live Listen
+// chunk fail out of the box. Persist the user's explicit choice.
+let isLocalOnly = localStorage.getItem('windy_qtLocalOnly') !== 'false';
+if (localOnlyCheckbox) {
+    localOnlyCheckbox.checked = isLocalOnly;
+    localOnlyRow.classList.toggle('active', isLocalOnly);
+}
 
 windyTuneToggle.addEventListener('click', () => {
     isWindyTune = !isWindyTune;
@@ -188,6 +195,7 @@ function updateCockpitFromSelects() {
 
 localOnlyCheckbox.addEventListener('change', () => {
     isLocalOnly = localOnlyCheckbox.checked;
+    localStorage.setItem('windy_qtLocalOnly', String(isLocalOnly));
     localOnlyRow.classList.toggle('active', isLocalOnly);
     // Disable cloud options when Local Only is checked
     const cloudOpts = [...listenModelSelect.querySelectorAll('option[value="cloud"]'),

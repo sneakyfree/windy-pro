@@ -2404,6 +2404,12 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   const rendererKeys = apiKeys || {};
   const groqKey = rendererKeys.groq || store.get('engine.groqApiKey', '') || process.env.GROQ_API_KEY || '';
   const openaiKey = rendererKeys.openai || store.get('engine.openaiApiKey', '') || process.env.OPENAI_API_KEY || '';
+  // With no cloud key the cloud path can never succeed — route those chunks to the
+  // local engine instead of failing every one with "No API key" (the free offline
+  // build has no key UI, and the Settings → Transcription Engine section the old
+  // error pointed at is hidden there).
+  const hasCloudKey = !!(groqKey || openaiKey);
+  const effectiveLocalOnly = !!localOnly || !hasCloudKey;
 
   // Use the model the user selected in the cockpit (not the global store)
   const engineId = listeningModel === 'windytune'
@@ -2450,8 +2456,9 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   const mi = MODEL_INFO[engineId] || { name: engineId, size: '', specialty: '' };
   const modelInfo = { model: mi.name, size: mi.size, windyTune, engineId, specialty: mi.specialty };
 
-  // If user explicitly selected cloud for listening, skip local and go straight to cloud
-  if (userWantsCloud && !localOnly) {
+  // If user explicitly selected cloud for listening (and actually has a key),
+  // skip local and go straight to cloud
+  if (userWantsCloud && !effectiveLocalOnly) {
     // Jump directly to cloud section below
   } else {
 
@@ -2468,8 +2475,14 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
 
         const localResult = await new Promise((resolve, reject) => {
           const ws = new WebSocket(wsUrl);
-          // Flat 8s timeout — chunks are capped at 10s (~165KB), server processes in ~5-6s
-          let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 8000);
+          // Adaptive timeout. The old flat 8s cap assumed "server processes in ~5-6s",
+          // but on a slow machine or with a large engine pinned even the BASE model
+          // takes >10s for a 10s chunk (measured 11.1s on a 2017 iMac) — every chunk
+          // timed out and Live Listen was dead. Estimate duration from the opus blob
+          // (~16.5 KB/s) and allow 12x realtime, floor 60s / cap 180s.
+          const estAudioSec = Math.max(1, audioBuffer.length / 16500);
+          const localTimeoutMs = Math.max(60000, Math.min(180000, Math.round(estAudioSec * 12000)));
+          let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, localTimeoutMs);
 
           ws.on('open', () => {
             ws.send(JSON.stringify({
@@ -2520,8 +2533,11 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     }
 
     // All retries exhausted
-    if (localOnly) {
-      return { error: '🔒 Local Only mode: No local engine available after ' + MAX_RETRIES + ' attempts. Server may be overloaded — try a longer chunk duration.' };
+    if (effectiveLocalOnly) {
+      const timedOut = lastLocalErr && /local timeout/.test(lastLocalErr.message || '');
+      return { error: timedOut
+        ? '🏠 The local engine didn\'t finish this chunk in time — it may be busy or the selected engine is too large for live listening on this machine. Try a smaller engine (Nano/Lite) or a longer chunk duration.'
+        : '🏠 Couldn\'t reach the local engine (' + ((lastLocalErr && lastLocalErr.message) || 'unavailable') + '). If the app just started, give it a few seconds and try again.' };
     }
   } // end else (not userWantsCloud)
 
@@ -7342,7 +7358,12 @@ ipcMain.handle('get-archive-history', async () => {
                   if (m) wordCount = parseInt(m[1]);
                 }
                 if (line.includes('Start:') || line.includes('Time:')) {
-                  const m = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/);
+                  // Keep fractional seconds + timezone designator: the archive
+                  // writes "Start: …T09:57:12.582Z" and truncating the Z made
+                  // new Date() re-read the UTC clock as LOCAL time — every
+                  // archive entry showed 4h in the future AND escaped the 30s
+                  // dedupe against its localStorage twin (double-listed rows).
+                  const m = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)/);
                   if (m) dateStr = m[1];
                 }
                 if (line.includes('Engine:')) {
@@ -10046,7 +10067,10 @@ app.whenReady().then(async () => {
     // macOS: re-create window if dock icon clicked
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
-    } else {
+    } else if (mainWindow && !mainWindow.isDestroyed()) {
+      // show() alone does NOT un-minimize: after the title-bar ─ button the
+      // window stayed in the Dock no matter how often the icon was clicked.
+      if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
     }
   });
