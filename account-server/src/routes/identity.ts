@@ -51,7 +51,7 @@ router.get('/me', authenticateToken, (req: Request, res: Response) => {
       SELECT id, email, name, tier, identity_type, phone, display_name,
              avatar_url, email_verified, phone_verified, passport_id,
              preferred_lang, last_login_at, windy_identity_id, created_at, updated_at,
-             storage_used, storage_limit
+             storage_used, storage_limit, role
       FROM users WHERE id = ?
     `).get(userId) as any;
 
@@ -67,10 +67,17 @@ router.get('/me', authenticateToken, (req: Request, res: Response) => {
       'SELECT * FROM chat_profiles WHERE identity_id = ?',
     ).get(userId) as any | undefined;
 
-    // Check for Eternitas passport
+    // Check for Eternitas passport. A hatch stores the passport row keyed by
+    // the BOT's identity_id, with the human OPERATOR in operator_identity_id.
+    // The logged-in user here is the operator, so match operator_identity_id
+    // first (falling back to identity_id for agent/self logins). Matching only
+    // identity_id — as this did — meant every operator saw "NO PASSPORT" even
+    // though their agent had one. (Mirrors the correct lookup at ~L1687.)
     const passport = db.prepare(
-      'SELECT * FROM eternitas_passports WHERE identity_id = ?',
-    ).get(userId) as any | undefined;
+      `SELECT * FROM eternitas_passports
+       WHERE operator_identity_id = ? OR identity_id = ?
+       ORDER BY (operator_identity_id = ?) DESC, registered_at DESC LIMIT 1`,
+    ).get(userId, userId, userId) as any | undefined;
 
     res.json({
       identity: {
@@ -94,11 +101,22 @@ router.get('/me', authenticateToken, (req: Request, res: Response) => {
         // the user's provisioned cloud quota without a second round-trip.
         storageUsed: user.storage_used ?? 0,
         storageLimit: user.storage_limit ?? 0,
+        // Client role gate (e.g. the /admin route). Server routes still
+        // enforce admin independently — this is UX, not the security boundary.
+        isAdmin: user.role === 'admin',
       },
       products,
       scopes,
       chatProfile: chatProfile || undefined,
-      passport: passport || undefined,
+      // Map DB columns → the shape PassportPanel reads. The row has
+      // passport_number (not passport_id); passing it through as-is left the
+      // panel's Passport ID blank even when a row was found.
+      passport: passport ? {
+        passport_id: passport.passport_number,
+        passport_number: passport.passport_number,
+        status: passport.status,
+        trust_score: passport.trust_score,
+      } : undefined,
     });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to fetch identity' });

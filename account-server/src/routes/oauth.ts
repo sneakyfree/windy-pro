@@ -1453,9 +1453,13 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
   // continue to authenticate until the JWT expires).
   let passportNumber: string | undefined;
   try {
+    // Operator context — prefer operator_identity_id (the passport row is keyed
+    // by the bot's identity_id), so the OAuth JWT carries the agent's passport.
     const row = db.prepare(
-      "SELECT passport_number FROM eternitas_passports WHERE identity_id = ? AND status = 'active' LIMIT 1",
-    ).get(identityId) as { passport_number: string } | undefined;
+      `SELECT passport_number FROM eternitas_passports
+       WHERE (operator_identity_id = ? OR identity_id = ?) AND status = 'active'
+       ORDER BY (operator_identity_id = ?) DESC, registered_at DESC LIMIT 1`,
+    ).get(identityId, identityId, identityId) as { passport_number: string } | undefined;
     passportNumber = row?.passport_number;
   } catch { /* table may not exist on first-run SQLite bootstrap */ }
 
