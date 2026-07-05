@@ -241,7 +241,13 @@ function showEngineFailure(detail) {
       type: 'error',
       title: 'Windy Word — Speech Engine',
       message: "Windy Word's speech engine couldn't start.",
-      detail: (detail ? detail + '\n\n' : '') + 'This is usually a disk-space or first-run setup issue. You can retry, or quit and reopen the app.',
+      // Show the specific reason the caller gave (disk space / integrity / timeout / kept-
+      // failing) and an honest action line. The old blanket "this is usually a disk-space
+      // issue" was appended to EVERY failure — including the integrity-check and timeout
+      // paths, where it misattributes the cause. Retry genuinely rebuilds the engine venv
+      // from scratch (see the ensureEngineVenv call below), so say that instead.
+      detail: (detail ? detail + '\n\n' : "The speech engine couldn't finish setting up.\n\n")
+        + 'Click Retry to rebuild it from scratch (this fixes most first-run problems), or Quit and reopen the app.',
       buttons: ['Retry', 'Quit'],
       defaultId: 0,
       cancelId: 1,
