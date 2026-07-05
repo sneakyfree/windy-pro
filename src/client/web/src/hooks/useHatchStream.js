@@ -49,7 +49,7 @@ function parseSseFrame(frame) {
     }
 }
 
-export default function useHatchStream({ token, apiBase = '/api/v1' } = {}) {
+export default function useHatchStream({ token, apiBase = '/api/v1', extras = null } = {}) {
     const [status, setStatus] = useState('idle')
     const [events, setEvents] = useState([])
     const [steps, setSteps] = useState({}) // baseType → { status, label, type }
@@ -136,7 +136,9 @@ export default function useHatchStream({ token, apiBase = '/api/v1' } = {}) {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({}),
+                // ADR-056: extras carries verified_payment_intent_id (the
+                // $1 hatch) or comp_code (ballroom) — empty = free hatch.
+                body: JSON.stringify(extras || {}),
                 signal: controller.signal,
             })
         } catch (err) {
@@ -206,7 +208,7 @@ export default function useHatchStream({ token, apiBase = '/api/v1' } = {}) {
             setErrorMessage((m) => m || 'The ceremony ended unexpectedly. Try again in a moment.')
             return 'error'
         })
-    }, [status, token, apiBase, reset, applyEvent])
+    }, [status, token, apiBase, extras, reset, applyEvent])
 
     return {
         status,

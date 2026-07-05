@@ -218,6 +218,61 @@ describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
         }
     });
 
+    it('forwards verified_payment_intent_id and comp_code to Eternitas auto-hatch (ADR-056)', async () => {
+        const user = makeUser();
+        let eternitasBody: any = null;
+        handler = async (url, init) => {
+            let body: any = {};
+            try { body = JSON.parse(String(init.body || '{}')); } catch { /* noop */ }
+            if (url.includes('eternitas') && url.includes('auto-hatch')) {
+                eternitasBody = body;
+                return { ok: true, status: 200, json: async () => ({ passport_number: 'ET26-PAID-0001' }) };
+            }
+            return { ok: true, status: 200, json: async () => ({}) };
+        };
+
+        await request(app)
+            .post('/api/v1/agent/hatch')
+            .set('Authorization', `Bearer ${user.token}`)
+            .send({ verified_payment_intent_id: 'pi_test_adr056', comp_code: 'WINDY-AAAA-BBBB' })
+            .buffer(true).parse((r: any, cb: any) => {
+                let chunks = '';
+                r.on('data', (c: Buffer) => (chunks += c.toString()));
+                r.on('end', () => cb(null, chunks));
+            });
+
+        expect(eternitasBody).toBeDefined();
+        expect(eternitasBody.verified_payment_intent_id).toBe('pi_test_adr056');
+        expect(eternitasBody.comp_code).toBe('WINDY-AAAA-BBBB');
+    });
+
+    it('sends empty payment fields on a plain free hatch (never accidentally paid)', async () => {
+        const user = makeUser();
+        let eternitasBody: any = null;
+        handler = async (url, init) => {
+            let body: any = {};
+            try { body = JSON.parse(String(init.body || '{}')); } catch { /* noop */ }
+            if (url.includes('eternitas') && url.includes('auto-hatch')) {
+                eternitasBody = body;
+                return { ok: true, status: 200, json: async () => ({ passport_number: 'ET26-FREE-0001' }) };
+            }
+            return { ok: true, status: 200, json: async () => ({}) };
+        };
+
+        await request(app)
+            .post('/api/v1/agent/hatch')
+            .set('Authorization', `Bearer ${user.token}`)
+            .buffer(true).parse((r: any, cb: any) => {
+                let chunks = '';
+                r.on('data', (c: Buffer) => (chunks += c.toString()));
+                r.on('end', () => cb(null, chunks));
+            });
+
+        expect(eternitasBody).toBeDefined();
+        expect(eternitasBody.verified_payment_intent_id).toBe('');
+        expect(eternitasBody.comp_code).toBe('');
+    });
+
     it('is idempotent — a second call replays existing state via hatch.complete with resumed=true', async () => {
         const user = makeUser();
         handler = async (url) => {

@@ -9,6 +9,8 @@
         "preview": "vite preview"
     },
     "dependencies": {
+        "@stripe/react-stripe-js": "^6.7.0",
+        "@stripe/stripe-js": "^9.9.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "react-router-dom": "^7.0.0"

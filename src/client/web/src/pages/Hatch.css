@@ -229,6 +229,95 @@
     border-color: #7C3AED;
 }
 
+/* ─── Hatch fork (ADR-056: free vs $1 verified) ──────────── */
+.hatch-fork {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+.hatch-fork-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 18px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.025);
+}
+.hatch-fork-card-verified {
+    border-color: rgba(139, 92, 246, 0.55);
+    background: rgba(139, 92, 246, 0.08);
+}
+.hatch-fork-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #F8FAFC;
+    margin: 0;
+}
+.hatch-fork-body {
+    font-size: 13.5px;
+    color: #94A3B8;
+    line-height: 1.5;
+    margin: 0;
+    flex: 1;
+}
+.hatch-banner-info {
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #C4B5FD;
+    margin-bottom: 14px;
+}
+.hatch-payform {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+/* ─── Comp code (ballroom) ───────────────────────────────── */
+.hatch-comp {
+    text-align: center;
+    padding-top: 4px;
+}
+.hatch-comp-link {
+    background: none;
+    border: none;
+    color: #94A3B8;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: underline;
+    font-family: inherit;
+}
+.hatch-comp-link:hover { color: #C4B5FD; }
+.hatch-comp-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.hatch-comp-input {
+    padding: 11px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.04);
+    color: #F8FAFC;
+    font-family: 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', monospace;
+    font-size: 14px;
+    letter-spacing: 1px;
+    width: 200px;
+    text-transform: uppercase;
+}
+.hatch-comp-input:focus {
+    outline: none;
+    border-color: #8B5CF6;
+}
+
+@media (max-width: 560px) {
+    .hatch-fork {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* ─── HatchCard (Dashboard hero) ─────────────────────────── */
 .hatch-card {
     display: flex;

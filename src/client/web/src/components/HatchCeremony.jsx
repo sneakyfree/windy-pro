@@ -76,13 +76,23 @@ function formatBornAt(iso) {
 }
 
 // ─── Row component ─────────────────────────────────────────────────
-function StepRow({ step }) {
+function StepRow({ step, paidHatch }) {
     const { type, status, label } = step
     const copy = STEP_LABELS[type]
     let display
     if (status === 'failed') {
         const family = baseType(type)
-        display = FAILURE_COPY[family] || FAILURE_COPY.hatch
+        // ADR-056: when a payment/comp code was supplied and the identity
+        // step refuses, "service hiccup" is the wrong message — the usual
+        // cause is the code or payment not verifying. Cards are only ever
+        // charged once per intent, so a retry is safe.
+        if (family === 'eternitas' && paidHatch) {
+            display = paidHatch === 'comp'
+                ? "That code didn't work — double-check the letters, or go back and hatch free."
+                : "We couldn't verify the payment. You were not charged twice — try again in a moment."
+        } else {
+            display = FAILURE_COPY[family] || FAILURE_COPY.hatch
+        }
     } else if (copy) {
         display = status === 'ok' ? copy.ok : copy.pending
     } else {
@@ -137,7 +147,7 @@ function BirthCertificate({ data }) {
 }
 
 // ─── Main component ────────────────────────────────────────────────
-export default function HatchCeremony({ token, onDone }) {
+export default function HatchCeremony({ token, onDone, extras = null }) {
     const navigate = useNavigate()
     const {
         status,
@@ -149,7 +159,14 @@ export default function HatchCeremony({ token, onDone }) {
         start,
         cancel,
         reset,
-    } = useHatchStream({ token, apiBase: '/api/v1' })
+    } = useHatchStream({ token, apiBase: '/api/v1', extras })
+
+    // 'comp' | 'paid' | null — steers the eternitas-failure copy only.
+    const paidHatch = extras?.comp_code
+        ? 'comp'
+        : extras?.verified_payment_intent_id
+            ? 'paid'
+            : null
 
     // Auto-start the SSE on mount. Don't retry on failure — surface the
     // error + retry button so the user decides.
@@ -291,7 +308,7 @@ export default function HatchCeremony({ token, onDone }) {
                             </li>
                         )}
                         {orderedSteps.map((s) => (
-                            <StepRow key={s.key} step={s} />
+                            <StepRow key={s.key} step={s} paidHatch={paidHatch} />
                         ))}
                     </ul>
 

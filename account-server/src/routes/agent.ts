@@ -307,6 +307,9 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
     // hatch: forwarded to Eternitas, which proves it against Stripe
     // server-side and mints the passport at tru=70/ver="basic".
     const verifiedPaymentIntentId: string = String((req.body || {}).verified_payment_intent_id || '');
+    // ADR-056 D5 — a one-use ballroom comp code: same VERIFIED shape,
+    // no card. Eternitas enforces mutual exclusion with the intent id.
+    const compCode: string = String((req.body || {}).comp_code || '');
 
     logInternal('ceremony.started', { session_id: session.id, agent_name: agentName, owner_email: owner.email });
 
@@ -375,8 +378,9 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
                 creator_email: owner.email,
                 creator_name: owner.name || owner.email.split('@')[0],
                 operator_windy_identity_id: windyIdentityId,
-                // ADR-056: empty string = free hatch (Eternitas ignores it).
+                // ADR-056: empty strings = free hatch (Eternitas ignores them).
                 verified_payment_intent_id: verifiedPaymentIntentId,
+                comp_code: compCode,
             }),
         });
         if (!result.ok) {
