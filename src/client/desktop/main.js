@@ -2109,6 +2109,10 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   const rendererKeys = apiKeys || {};
   const groqKey = rendererKeys.groq || store.get('engine.groqApiKey', '') || process.env.GROQ_API_KEY || '';
   const openaiKey = rendererKeys.openai || store.get('engine.openaiApiKey', '') || process.env.OPENAI_API_KEY || '';
+  // With no cloud key the cloud path can never succeed — route those chunks to
+  // the local engine instead of failing every one with "No API key".
+  const hasCloudKey = !!(groqKey || openaiKey);
+  const effectiveLocalOnly = !!localOnly || !hasCloudKey;
 
   // Use the model the user selected in the cockpit (not the global store)
   const engineId = listeningModel === 'windytune'
@@ -2155,8 +2159,9 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   const mi = MODEL_INFO[engineId] || { name: engineId, size: '', specialty: '' };
   const modelInfo = { model: mi.name, size: mi.size, windyTune, engineId, specialty: mi.specialty };
 
-  // If user explicitly selected cloud for listening, skip local and go straight to cloud
-  if (userWantsCloud && !localOnly) {
+  // If user explicitly selected cloud for listening (and actually has a key),
+  // skip local and go straight to cloud
+  if (userWantsCloud && !effectiveLocalOnly) {
     // Jump directly to cloud section below
   } else {
 
@@ -2173,8 +2178,15 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
 
         const localResult = await new Promise((resolve, reject) => {
           const ws = new WebSocket(wsUrl);
-          // Flat 8s timeout — chunks are capped at 10s (~165KB), server processes in ~5-6s
-          let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 8000);
+          // Adaptive timeout. The old flat 8s cap assumed "server processes in
+          // ~5-6s", but on a slow machine or with a large engine loaded even the
+          // BASE model takes >10s for a 10s chunk (measured 11.1s on a 2017
+          // iMac) — every chunk timed out and Live Listen was dead. Estimate
+          // duration from the opus blob (~16.5 KB/s), allow 12x realtime,
+          // floor 60s / cap 180s.
+          const estAudioSec = Math.max(1, audioBuffer.length / 16500);
+          const localTimeoutMs = Math.max(60000, Math.min(180000, Math.round(estAudioSec * 12000)));
+          let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, localTimeoutMs);
 
           ws.on('open', () => {
             ws.send(JSON.stringify({
@@ -2225,8 +2237,11 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     }
 
     // All retries exhausted
-    if (localOnly) {
-      return { error: '🔒 Local Only mode: No local engine available after ' + MAX_RETRIES + ' attempts. Server may be overloaded — try a longer chunk duration.' };
+    if (effectiveLocalOnly) {
+      const timedOut = lastLocalErr && /local timeout/.test(lastLocalErr.message || '');
+      return { error: timedOut
+        ? '🏠 The local engine didn\'t finish this chunk in time — it may be busy or the selected engine is too large for live listening on this machine. Try a smaller engine (Nano/Lite) or a longer chunk duration.'
+        : '🏠 Couldn\'t reach the local engine (' + ((lastLocalErr && lastLocalErr.message) || 'unavailable') + '). If the app just started, give it a few seconds and try again.' };
     }
   } // end else (not userWantsCloud)
 
@@ -6189,7 +6204,7 @@ ipcMain.handle('windytune-undo-switch', async (event, oldModel) => {
 // ═══════════════════════════════════════════════════════════════════
 // WS-routed batch transcription (fast path — model already loaded)
 // ═══════════════════════════════════════════════════════════════════
-async function _transcribeViaWS(wavPath) {
+async function _transcribeViaWS(wavPath, desiredModel) {
   const WebSocket = require('ws');
   const serverConfig = store.get('server', { host: '127.0.0.1', port: 9876 });
   const wsUrl = `ws://${serverConfig.host}:${serverConfig.port}`;
@@ -6197,6 +6212,7 @@ async function _transcribeViaWS(wavPath) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
     let responded = false;
+    let pendingTranscribe = null; // set when the selected model must load before transcribing
     const timeout = setTimeout(() => {
       if (!responded) {
         responded = true;
@@ -6207,11 +6223,24 @@ async function _transcribeViaWS(wavPath) {
 
     ws.on('open', async () => {
       try {
-        // Send the command
-        ws.send(JSON.stringify({ action: 'transcribe_blob', language: 'en', format: 'wav' }));
-        // Send the audio data as binary
         const audioData = await fsp.readFile(wavPath);
-        ws.send(audioData);
+        const sendTranscribe = () => {
+          ws.send(JSON.stringify({ action: 'transcribe_blob', language: 'en', format: 'wav' }));
+          ws.send(audioData);
+        };
+        // ── Model sync (batch mode ignored the engine picker) ──
+        // Batch reuses the WARM engine server but never opens the renderer's
+        // streaming ws — the only path that told the server to hot-reload the
+        // selected model. The server kept its LAUNCH model, so every batch
+        // transcribed with that regardless of the user's pick. Pin the picked
+        // model first: the server no-ops if already loaded, else reloads and
+        // acks (keeping its working model on a failed load) — then transcribe.
+        if (desiredModel) {
+          pendingTranscribe = sendTranscribe;
+          ws.send(JSON.stringify({ action: 'config', config: { model: desiredModel } }));
+        } else {
+          sendTranscribe();
+        }
       } catch (err) {
         responded = true;
         clearTimeout(timeout);
@@ -6224,6 +6253,17 @@ async function _transcribeViaWS(wavPath) {
       if (responded) return;
       try {
         const msg = JSON.parse(data.toString());
+        // Config ack (model reloaded / already loaded / kept old model on a
+        // failed load) — now run the queued transcription.
+        if (msg.type === 'ack' && msg.action === 'config' && pendingTranscribe) {
+          if (msg.applied && msg.applied.model_error) {
+            console.warn(`[Batch] engine model load failed (${msg.applied.model_error}); transcribing with the currently loaded model`);
+          }
+          const run = pendingTranscribe;
+          pendingTranscribe = null;
+          run();
+          return;
+        }
         if (msg.type === 'transcribe_result') {
           responded = true;
           clearTimeout(timeout);
@@ -6306,7 +6346,7 @@ async function _transcribeAudioFile(audioPath, opts = {}) {
   }
 }
 
-ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
+ipcMain.handle('batch-transcribe-local', async (event, base64Audio, desiredModel) => {
   console.info('[Batch Local] Starting transcription, audio size:', base64Audio?.length || 0, 'chars');
   const batchStartTime = Date.now();
   const tmpDir = os.tmpdir();
@@ -6374,10 +6414,12 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     console.info('[Batch Local] FFmpeg conversion done, wav:', wavPath);
 
     // ─── PRIMARY: WS-routed transcription (fast path) ───
-    // Model is already loaded in the Python server — no cold start
+    // The warm server pins the user's picked model first (config-ack) — without
+    // this the picker was cosmetic in batch mode and everything transcribed with
+    // the server's launch model.
     const transcribeStartTime = Date.now();
     try {
-      const wsResult = await _transcribeViaWS(wavPath);
+      const wsResult = await _transcribeViaWS(wavPath, desiredModel);
       const transcribeElapsed = ((Date.now() - transcribeStartTime) / 1000).toFixed(1);
       const totalElapsed = ((Date.now() - batchStartTime) / 1000).toFixed(1);
       console.info(`[Batch Local] ⏱ WS transcription: ${transcribeElapsed}s (total pipeline: ${totalElapsed}s)`);
@@ -6409,7 +6451,9 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     const pythonPathLocal = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
     console.info('[Batch Local] Using python (fallback):', pythonPathLocal);
 
-    const modelName = store.get('engine.model') || 'base';
+    // Prefer the model the renderer passed (the user's actual pick — the store
+    // key is only written by settings/agent-control, not the badge picker).
+    const modelName = desiredModel || store.get('engine.model') || 'base';
     const localModelDir = path.join(os.homedir(), '.windy-pro', 'model', `faster-whisper-${modelName}`);
     let bundledModelDir = '';
     if (process.resourcesPath) {
@@ -6789,7 +6833,12 @@ ipcMain.handle('get-archive-history', async () => {
                   if (m) wordCount = parseInt(m[1]);
                 }
                 if (line.includes('Start:') || line.includes('Time:')) {
-                  const m = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/);
+                  // Keep fractional seconds + timezone designator: the archive
+                  // writes "Start: …T09:57:12.582Z" and truncating the Z made
+                  // new Date() re-read the UTC clock as LOCAL time — entries
+                  // showed hours in the future AND escaped the dedupe against
+                  // their localStorage twins (double-listed history rows).
+                  const m = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)/);
                   if (m) dateStr = m[1];
                 }
                 if (line.includes('Engine:')) {
@@ -7255,7 +7304,8 @@ function _agentArchiveScan() {
             const isMeta = (line.startsWith('**') && line.includes(':')) || /^(Start|End|Words|Engine|Time|Date|Duration):\s/.test(line);
             if (isMeta) {
               const wm = line.match(/Words:\s*(\d+)/); if (wm) wordCount = parseInt(wm[1]);
-              const dm = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/); if (dm && !dateStr) dateStr = dm[1];
+              // Same Z-preserving regex as get-archive-history (see comment there)
+              const dm = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)/); if (dm && !dateStr) dateStr = dm[1];
               const em = line.match(/Engine:\s*(\w+)/); if (em) engine = em[1].toLowerCase();
               continue;
             }
@@ -9293,7 +9343,10 @@ app.whenReady().then(async () => {
     // macOS: re-create window if dock icon clicked
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
-    } else {
+    } else if (mainWindow && !mainWindow.isDestroyed()) {
+      // show() alone does NOT un-minimize: after the title-bar ─ button the
+      // window stayed in the Dock no matter how often the icon was clicked.
+      if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
     }
   });
