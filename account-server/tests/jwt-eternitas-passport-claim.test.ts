@@ -50,6 +50,24 @@ function linkPassport(identityId: string, passportNumber: string, status: string
   `).run(crypto.randomUUID(), identityId, passportNumber, status);
 }
 
+/**
+ * The REAL hatch shape: the passport row is keyed by the BOT's identity_id,
+ * with the human operator in operator_identity_id. Every operator-facing
+ * lookup (login/oauth JWT claim, /identity/me → PassportPanel) must resolve
+ * the passport by operator here — matching only identity_id (as the code did)
+ * meant operators never saw their agent's passport.
+ */
+function linkPassportViaBot(operatorId: string, botId: string, passportNumber: string, status: string = 'active') {
+  const db = getDb();
+  db.prepare(`INSERT INTO users (id, email, name, password_hash, tier, identity_type, windy_identity_id, display_name)
+              VALUES (?, ?, 'Bot', '', 'free', 'bot', ?, 'Bot')`)
+    .run(botId, `agent-${botId.slice(0, 8)}@agents.windy.internal`, crypto.randomUUID());
+  db.prepare(`
+    INSERT INTO eternitas_passports (id, identity_id, passport_number, status, operator_identity_id, birth_certificate, registered_at, last_verified_at)
+    VALUES (?, ?, ?, ?, ?, '{}', datetime('now'), datetime('now'))
+  `).run(crypto.randomUUID(), botId, passportNumber, status, operatorId);
+}
+
 /** Decode a JWT without verifying — we only care about payload contents here. */
 function decode(token: string): Record<string, any> {
   return jwt.decode(token) as Record<string, any>;
@@ -79,6 +97,20 @@ describe('eternitas_passport claim on /api/v1/auth/login JWT', () => {
     expect(res.status).toBe(200);
     const payload = decode(res.body.token);
     expect(payload.eternitas_passport).toBe(passport);
+  });
+
+  it('includes the claim for the REAL hatch shape (passport keyed by bot, operator in operator_identity_id)', async () => {
+    // Regression: this is how a hatch actually stores the row. The old
+    // `WHERE identity_id = ?` (operator) never matched → claim silently absent.
+    const u = await registerUser();
+    const passport = `ET-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    linkPassportViaBot(u.userId, crypto.randomUUID(), passport, 'active');
+
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: u.email, password: u.password });
+    expect(res.status).toBe(200);
+    expect(decode(res.body.token).eternitas_passport).toBe(passport);
   });
 
   it('omits the claim for a revoked passport', async () => {
@@ -195,5 +227,44 @@ describe('eternitas_passport claim on /api/v1/oauth/token JWT (device-code)', ()
     const payload = decode(res.body.access_token);
     expect(payload.eternitas_passport).toBe(activePassport);
     expect(payload.eternitas_passport).not.toBe(revokedPassport);
+  });
+});
+
+// ─── /api/v1/identity/me — operator passport + isAdmin (PassportPanel) ──
+
+describe('GET /api/v1/identity/me passport + isAdmin', () => {
+  it('returns the operator\'s agent passport (real bot-keyed hatch shape)', async () => {
+    const u = await registerUser();
+    const passport = `ET-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    linkPassportViaBot(u.userId, crypto.randomUUID(), passport, 'active');
+
+    const res = await request(app)
+      .get('/api/v1/identity/me')
+      .set('Authorization', `Bearer ${u.token}`);
+    expect(res.status).toBe(200);
+    // Was undefined (→ "NO PASSPORT" panel) before the operator-lookup fix.
+    expect(res.body.passport).toBeDefined();
+    expect(res.body.passport.passport_number).toBe(passport);
+    // passport_id is what PassportPanel actually renders — must be populated.
+    expect(res.body.passport.passport_id).toBe(passport);
+  });
+
+  it('exposes isAdmin=false for a normal user', async () => {
+    const u = await registerUser();
+    const res = await request(app)
+      .get('/api/v1/identity/me')
+      .set('Authorization', `Bearer ${u.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.identity.isAdmin).toBe(false);
+  });
+
+  it('exposes isAdmin=true for an admin user', async () => {
+    const u = await registerUser();
+    getDb().prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(u.userId);
+    const res = await request(app)
+      .get('/api/v1/identity/me')
+      .set('Authorization', `Bearer ${u.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.identity.isAdmin).toBe(true);
   });
 });

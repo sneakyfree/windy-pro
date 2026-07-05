@@ -5,10 +5,33 @@ export default function PassportPanel({ apiFetch }) {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        apiFetch('/identity/me').then(d => {
-            if (d?.passport) setPassport(d.passport)
-            setLoading(false)
-        }).catch(() => setLoading(false))
+        let cancelled = false
+        apiFetch('/identity/me').then(async d => {
+            let p = d?.passport || null
+            // Enrich with the LIVE Eternitas trust view so "Verified" and
+            // "Trust Score" reflect reality, not the local default (1.0). The
+            // registry is public and allows the app.windyword.ai origin.
+            if (p?.passport_number) {
+                try {
+                    const base = import.meta.env.VITE_ETERNITAS_URL || 'https://api.eternitas.ai'
+                    const t = await fetch(`${base}/api/v1/trust/${encodeURIComponent(p.passport_number)}`)
+                        .then(r => (r.ok ? r.json() : null))
+                    if (t) {
+                        p = {
+                            ...p,
+                            clearance: t.clearance_level,
+                            band: t.band,
+                            verified: !!t.clearance_level && t.clearance_level !== 'registered',
+                            trust_score: typeof t.integrity_score === 'number'
+                                ? +(t.integrity_score / 1000).toFixed(2)
+                                : p.trust_score,
+                        }
+                    }
+                } catch { /* registry unreachable — show what we have */ }
+            }
+            if (!cancelled) { setPassport(p); setLoading(false) }
+        }).catch(() => { if (!cancelled) setLoading(false) })
+        return () => { cancelled = true }
     }, [apiFetch])
 
     return (
@@ -42,8 +65,25 @@ export default function PassportPanel({ apiFetch }) {
                                     {passport.verified ? 'Verified' : 'Pending'}
                                 </span>
                             </div>
+                            {passport.clearance && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: '#94A3B8', fontSize: '13px' }}>Clearance</span>
+                                    <span style={{ color: '#CBD5E1', fontSize: '13px', textTransform: 'capitalize' }}>{passport.clearance}</span>
+                                </div>
+                            )}
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#94A3B8', fontSize: '13px' }}>Status</span>
+                                <span className={`panel-badge ${passport.status === 'active' ? 'badge-active' : 'badge-pending'}`}>
+                                    {passport.status || 'unknown'}
+                                </span>
+                            </div>
                         </div>
                     </div>
+                    {!passport.verified && (
+                        <a href="/upgrade" className="panel-btn" style={{ marginTop: '4px', display: 'inline-block' }}>
+                            Upgrade to verified — $1 {'→'}
+                        </a>
+                    )}
 
                     <div className="panel-card">
                         <div className="panel-card-title">Trust Score</div>

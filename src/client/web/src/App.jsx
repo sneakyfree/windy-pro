@@ -20,6 +20,7 @@ import Settings from './pages/Settings'
 import Admin from './pages/Admin'
 import Profile from './pages/Profile'
 import ProtectedRoute from './components/ProtectedRoute'
+import AdminRoute from './components/AdminRoute'
 
 function NotFound() {
     return (
@@ -183,7 +184,7 @@ export default function App() {
                     <ProtectedRoute><Settings /></ProtectedRoute>
                 } />
                 <Route path="/admin" element={
-                    <ProtectedRoute><Admin /></ProtectedRoute>
+                    <AdminRoute><Admin /></AdminRoute>
                 } />
                 <Route path="/profile" element={
                     <ProtectedRoute><Profile /></ProtectedRoute>
