@@ -98,6 +98,10 @@ export default function Upgrade() {
     const [codeOpen, setCodeOpen] = useState(false)
     const [code, setCode] = useState('')
     const [result, setResult] = useState(null)
+    // A charge that succeeded but whose upgrade POST failed transiently.
+    // Kept so retry re-submits the SAME intent (no second charge) — the
+    // Eternitas replay guard only consumes on success, so this is safe.
+    const [paidIntentId, setPaidIntentId] = useState(null)
 
     const cleanPassport = passport.trim().toUpperCase()
 
@@ -111,8 +115,10 @@ export default function Upgrade() {
                 compCode,
             })
             setResult(res)
+            setPaidIntentId(null)
             setPhase('done')
         } catch (err) {
+            if (paymentIntentId) setPaidIntentId(paymentIntentId)
             setError(err.message)
             setPhase('form')
         } finally {
@@ -233,14 +239,25 @@ export default function Upgrade() {
                 </div>
 
                 <div className="hatch-ctas">
-                    <button
-                        type="button"
-                        className="hatch-cta hatch-cta-primary"
-                        onClick={handlePayClick}
-                        disabled={!cleanPassport || busy}
-                    >
-                        {busy ? 'One moment…' : 'Upgrade — $1'}
-                    </button>
+                    {paidIntentId ? (
+                        <button
+                            type="button"
+                            className="hatch-cta hatch-cta-primary"
+                            onClick={() => finishUpgrade({ paymentIntentId: paidIntentId })}
+                            disabled={!cleanPassport || busy}
+                        >
+                            {busy ? 'One moment…' : 'Finish my upgrade (already paid)'}
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            className="hatch-cta hatch-cta-primary"
+                            onClick={handlePayClick}
+                            disabled={!cleanPassport || busy}
+                        >
+                            {busy ? 'One moment…' : 'Upgrade — $1'}
+                        </button>
+                    )}
                 </div>
 
                 <div className="hatch-comp">
