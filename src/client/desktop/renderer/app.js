@@ -664,6 +664,13 @@ class WindyApp {
     // Engine badge → manual override menu (WindyTune Auto, or pin any engine).
     this._setupEngineMenu();
 
+    // UI-6: the translate menu's Quick-Translate <kbd> is static HTML ("Ctrl+Shift+T");
+    // show the ⌘ modifier on macOS to match the real accelerator (⌘ = CommandOrControl).
+    if (window.windyAPI?.platform === 'darwin') {
+      const qt = document.getElementById('qtShortcut');
+      if (qt) qt.textContent = '⌘+Shift+T';
+    }
+
     // Today archive route
     this.archiveRouteSelect?.addEventListener('change', () => {
       const route = this.archiveRouteSelect.value;
