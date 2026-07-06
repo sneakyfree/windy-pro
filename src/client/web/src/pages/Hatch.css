@@ -398,3 +398,116 @@
         margin-top: 6px;
     }
 }
+
+/* ─── Naming Ceremony (HatchNaming.jsx) ──────────────────── */
+.hatch-naming {
+    text-align: center;
+}
+
+/* Beat 1 — wake animation: egg pulses, lightning strikes, fly lands. */
+.hatch-wake {
+    position: relative;
+    height: 96px;
+    margin: 24px 0 8px;
+    font-size: 56px;
+    line-height: 96px;
+}
+.hatch-wake span {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+}
+.hatch-wake-egg {
+    animation: hatch-wake-egg 2.5s ease forwards;
+}
+.hatch-wake-zap {
+    animation: hatch-wake-zap 2.5s ease forwards;
+}
+.hatch-wake-fly {
+    animation: hatch-wake-fly 2.5s ease forwards;
+}
+@keyframes hatch-wake-egg {
+    0%   { opacity: 1; transform: translateX(-50%) rotate(0deg); }
+    20%  { transform: translateX(-52%) rotate(-6deg); }
+    30%  { transform: translateX(-48%) rotate(6deg); }
+    40%  { transform: translateX(-52%) rotate(-8deg); }
+    50%  { opacity: 1; transform: translateX(-48%) rotate(8deg); }
+    62%  { opacity: 0; }
+    100% { opacity: 0; }
+}
+@keyframes hatch-wake-zap {
+    0%, 48% { opacity: 0; transform: translateX(-50%) scale(0.6); }
+    54%     { opacity: 1; transform: translateX(-50%) scale(1.25); }
+    64%     { opacity: 0; transform: translateX(-50%) scale(0.9); }
+    100%    { opacity: 0; }
+}
+@keyframes hatch-wake-fly {
+    0%, 62% { opacity: 0; transform: translateX(-50%) translateY(14px) scale(0.7); }
+    78%     { opacity: 1; transform: translateX(-50%) translateY(-6px) scale(1.08); }
+    100%    { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+.hatch-wake-sub {
+    margin-top: 10px;
+}
+
+/* Beat 2/3 — the speech bubble. */
+.hatch-bubble {
+    background: rgba(139, 92, 246, 0.10);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin: 14px 0 20px;
+    text-align: left;
+}
+.hatch-bubble-line {
+    font-size: 16px;
+    color: #E2E8F0;
+    line-height: 1.55;
+    margin: 0 0 8px;
+}
+.hatch-bubble-line:last-child {
+    margin-bottom: 0;
+}
+.hatch-bubble-ask {
+    font-size: 19px;
+    color: #F8FAFC;
+}
+
+.hatch-name-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 14px 16px;
+    font-size: 18px;
+    font-family: inherit;
+    text-align: center;
+    color: #F8FAFC;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+    outline: none;
+    margin-bottom: 18px;
+    transition: border-color 0.18s ease;
+}
+.hatch-name-input:focus {
+    border-color: #8B5CF6;
+}
+.hatch-name-input::placeholder {
+    color: #64748B;
+}
+
+.hatch-skip-link {
+    display: block;
+    margin: 16px auto 0;
+    background: none;
+    border: none;
+    color: #94A3B8;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.hatch-skip-link:hover {
+    color: #CBD5E1;
+}

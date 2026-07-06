@@ -302,7 +302,25 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
         console.log(`[hatch] ${stage}`, detail);
     };
 
-    const agentName = `${(owner.name || owner.email.split('@')[0]).split(' ')[0]}'s Agent`;
+    // ── The Naming Ceremony ────────────────────────────────────
+    // The web ceremony asks the owner to name their helper BEFORE the
+    // provisioning stream starts and passes it as body.agent_name.
+    // Sanitize hard: strip HTML tags, collapse whitespace, cap at 60
+    // chars, and require at least one letter or digit — the windy-mail
+    // localpart below is slugified from this name, so an all-emoji /
+    // all-punctuation name would produce an empty localpart. Anything
+    // unusable falls back to the historical auto-name ("<first>'s
+    // Agent"), which also keeps older clients that send no name
+    // hatching exactly as before.
+    const requestedName = String((req.body || {}).agent_name || '')
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 60)
+        .trim();
+    const agentName = /[a-zA-Z0-9]/.test(requestedName)
+        ? requestedName
+        : `${(owner.name || owner.email.split('@')[0]).split(' ')[0]}'s Agent`;
     // ADR-056 — a succeeded $1 PaymentIntent id makes this a VERIFIED
     // hatch: forwarded to Eternitas, which proves it against Stripe
     // server-side and mints the passport at tru=70/ver="basic".
@@ -513,7 +531,12 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
                 },
                 body: JSON.stringify({
                     windy_identity_id: botUserId,
-                    email: `${agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}@windymail.ai`,
+                    // Slug the display name into a localpart. Trim the
+                    // leading/trailing hyphens a name like "Sunny!" would
+                    // leave behind — a bare hyphen at either end makes an
+                    // invalid (and ugly) address. The name sanitizer above
+                    // guarantees at least one [a-z0-9] survives.
+                    email: `${agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}@windymail.ai`,
                     display_name: agentName,
                     identity_type: 'bot',
                     passport_number: passportNumber,

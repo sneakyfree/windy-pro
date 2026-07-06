@@ -14,6 +14,7 @@ import { useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import HatchCeremony from '../components/HatchCeremony'
 import HatchChooser from '../components/HatchChooser'
+import HatchNaming from '../components/HatchNaming'
 import { isHatched } from '../utils/hatchStorage'
 import './Hatch.css'
 
@@ -44,8 +45,12 @@ export default function Hatch() {
     // ADR-056 hatch fork. Already-hatched users skip the chooser — the
     // ceremony resumes idempotently and re-shows their certificate.
     // extras: null = still choosing; {} = free; { verified_payment_intent_id }
-    // or { comp_code } = verified.
+    // or { comp_code } = verified. The Naming Ceremony then folds
+    // { agent_name } into extras before the provisioning POST fires.
     const [extras, setExtras] = useState(() => (isHatched() ? {} : null))
+    // Naming Ceremony gate. Already-hatched users skip it — their agent
+    // has a name; the resume path re-shows the existing certificate.
+    const [named, setNamed] = useState(() => isHatched())
 
     // Email-verified check: look at the JWT claim first, then fall back to
     // the stored user object. If neither says verified, send them to the
@@ -76,6 +81,18 @@ export default function Hatch() {
 
     if (extras === null) {
         return <HatchChooser onChoose={setExtras} />
+    }
+    if (!named) {
+        return (
+            <HatchNaming
+                onNamed={(name) => {
+                    if (name) {
+                        setExtras((prev) => ({ ...(prev || {}), agent_name: name }))
+                    }
+                    setNamed(true)
+                }}
+            />
+        )
     }
     return <HatchCeremony token={token} extras={extras} />
 }
