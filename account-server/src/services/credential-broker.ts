@@ -25,6 +25,7 @@
  *     tamper-evident.
  */
 import crypto from 'crypto';
+import { emitAdminEvent } from './admin-telemetry';
 import bcrypt from 'bcryptjs';
 import { getDb } from '../db/schema';
 import { config } from '../config';
@@ -513,6 +514,21 @@ export function finishHatchSession(
         fields.error ?? null,
         sessionId,
     );
+    // Funnel drop-off beat (ADR-WA-001 §3). Every failure exit funnels
+    // through here, so one hook covers all of them; the success path
+    // additionally emits hatch.completed (with duration) from the route.
+    if (fields.status === 'failed') {
+        const sess = db.prepare(
+            'SELECT windy_identity_id FROM hatch_sessions WHERE id = ?',
+        ).get(sessionId) as { windy_identity_id: string } | undefined;
+        emitAdminEvent({
+            event_type: 'hatch.failed',
+            actor_type: 'human',
+            actor_id: sess?.windy_identity_id || 'unknown',
+            session_id: sessionId,
+            metadata: {},
+        });
+    }
 }
 
 export function getHatchSession(sessionId: string): {

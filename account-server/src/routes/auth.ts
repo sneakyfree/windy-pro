@@ -20,6 +20,7 @@ import { blacklistToken as redisBlacklistToken, isRedisAvailable } from '../redi
 import { isRS256Available, getSigningKey } from '../jwks';
 import { provisionEcosystem } from '../services/ecosystem-provisioner';
 import { trackEvent, trackEventAsync } from '../services/analytics';
+import { emitAdminEvent } from '../services/admin-telemetry';
 import { validate } from '../middleware/validation';
 import {
     RegisterRequestSchema,
@@ -380,6 +381,13 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
         }, req.ip, req.get('user-agent'));
 
         await trackEventAsync('user_registered', userId);
+        // Funnel head (ADR-WA-001 §3): signups → email-verified → hatch.
+        emitAdminEvent({
+            event_type: 'funnel.signup_completed',
+            actor_type: 'human',
+            actor_id: windyIdentityId,
+            metadata: { platform_signup: platform || 'unknown' },
+        });
         console.log(`✅ Registered: ${email} (${userId.slice(0, 8)}...)`);
 
         res.status(201).json({
@@ -1002,6 +1010,15 @@ router.post('/verify-email', authenticateToken, verifyEmailLimiter, validate(Ver
         db.prepare("UPDATE users SET email_verified = 1, updated_at = datetime('now') WHERE id = ?").run(userId);
 
         logAuditEvent('email_verified', userId, {}, req.ip, req.get('user-agent'));
+
+        const verifiedUser = db.prepare('SELECT windy_identity_id FROM users WHERE id = ?')
+            .get(userId) as { windy_identity_id: string } | undefined;
+        emitAdminEvent({
+            event_type: 'funnel.email_verified',
+            actor_type: 'human',
+            actor_id: verifiedUser?.windy_identity_id || userId,
+            metadata: {},
+        });
 
         res.json({ success: true, verified: true });
     } catch (err: any) {
