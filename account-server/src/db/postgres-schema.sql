@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS users (
     display_name TEXT,
     avatar_url TEXT,
     email_verified BOOLEAN DEFAULT false,
+    admin_role TEXT,  -- Windy Admin RBAC (ADR-WA-001 §6): super_admin|admin|support|analyst; NULL = no admin access
     phone_verified BOOLEAN DEFAULT false,
     passport_id TEXT,
     preferred_lang TEXT DEFAULT 'en',
