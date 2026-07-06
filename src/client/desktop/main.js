@@ -2879,12 +2879,19 @@ function startWaylandControlServer() {
   // also serves the agent-control surface (paste strategies, settings) so we
   // start it on ALL platforms — agents need it on macOS/Windows/X11 too.
   const http = require('http');
-  // Edition gate: the agent-control surface is OFF in reader/lite (book-launch). On
-  // macOS/Windows the control server has no other purpose (hotkeys use Electron
-  // globalShortcut), so don't start it at all. On Linux it's still needed for Wayland
-  // paste, so it starts but only serves the legacy paste/toggle actions (see route guard).
-  const agentControl = require('./edition').AGENT_CONTROL !== false;
-  if (!agentControl && !PLATFORM.isWayland) {
+  // Edition gate. The FULL agent-control surface (AGENT_CONTROL) — /config
+  // raw-mutate, /install, /transcribe-file, cloud upload, paste injection — stays
+  // OFF in reader/lite (book-launch). But a co-located Windy Fly agent still needs
+  // to turn the SAFE knobs by voice for a grandma ("turn the sounds down", "make
+  // the window bigger"): the sound/settings/widget/window surface. Those are served
+  // in every edition, on every platform, via the SAFE_KNOB allowlist in the route
+  // guard below — so the server now starts everywhere (macOS/Windows included, where
+  // it previously never started). AGENT_CONTROL_KNOBS=false in edition.js turns even
+  // the knobs off. Dangerous routes remain 404'd regardless.
+  const _edition = require('./edition');
+  const agentControl = _edition.AGENT_CONTROL !== false;
+  const safeKnobs = _edition.AGENT_CONTROL_KNOBS !== false;
+  if (!agentControl && !safeKnobs && !PLATFORM.isWayland) {
     console.info('[AgentCtrl] disabled in this edition — control server not started (no Wayland paste need on this platform)');
     return;
   }
@@ -2924,17 +2931,43 @@ function startWaylandControlServer() {
     const urlObj = new URL(req.url, 'http://localhost');
     const pathname = urlObj.pathname;
 
-    // Reader/lite editions: ALLOWLIST — serve ONLY the legacy Wayland-paste actions
-    // (toggle-recording / paste-transcript / show-hide / quick-translate, used by GNOME
-    // keybindings on Linux). EVERYTHING else — the entire agent-control surface incl.
-    // /config (store dump + arbitrary mutate), /doctor/cloud-diagnose, /paste/*, /recording/*,
-    // /sound-effects/*, /install, /transcribe-file, and any FUTURE route — is 404'd.
-    // Allowlist by design: new endpoints are off-by-default, not exposed until whitelisted.
+    // Reader/lite editions: ALLOWLIST. Two safe tiers are served; everything else 404s.
+    //   1. Legacy Wayland-paste actions (GNOME keybindings on Linux).
+    //   2. SAFE KNOBS — the dials a grandma turns by voice through her co-located
+    //      Windy Fly agent: sounds, on-screen widget, catalog-validated settings, and
+    //      window geometry. These only change the app's own preferences.
+    // Deliberately STILL 404'd (the dangerous surface): /config (raw store dump +
+    // arbitrary mutate), /install (binary installs), /transcribe-file (arbitrary file
+    // read), /clones/cloud/* (uploads voice off-device), /paste/* strategy mutation +
+    // injection, /open-url, /updates/check, /models mutation. Allowlist by design:
+    // any FUTURE route is off until explicitly added here.
     if (!agentControl) {
       const LEGACY_PASTE_ACTIONS = ['toggle-recording', 'paste-transcript', 'show-hide', 'quick-translate'];
-      if (!LEGACY_PASTE_ACTIONS.includes(pathname.replace(/^\//, ''))) {
+      const SAFE_KNOB_PATHS = new Set([
+        '/platform',
+        // sounds
+        '/sound-effects/state', '/sound-effects/packs', '/sound-effects/hook',
+        '/sound-effects/active-pack', '/sound-effects/master-volume', '/sound-effects/mode',
+        // on-screen widget
+        '/widget/state',
+        // catalog-validated settings (only known paths; no raw /config)
+        '/settings/catalog', '/settings/describe', '/settings/set',
+        '/settings/history', '/settings/undo',
+        // window geometry / appearance
+        '/window', '/window/minimize', '/window/maximize', '/window/unmaximize',
+        '/window/bring-to-front', '/window/geometry', '/window/font-size',
+        '/window/video-fullscreen',
+        // hotkeys + read-only status
+        '/hotkeys', '/hotkeys/reset', '/windytune/state',
+        '/recording/state', '/audio/devices',
+      ]);
+      const bare = pathname.replace(/^\//, '');
+      const allowed = safeKnobs
+        ? (LEGACY_PASTE_ACTIONS.includes(bare) || SAFE_KNOB_PATHS.has(pathname))
+        : LEGACY_PASTE_ACTIONS.includes(bare);
+      if (!allowed) {
         res.writeHead(404, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ error: 'agent-control is disabled in this edition' }));
+        res.end(JSON.stringify({ error: 'this endpoint is disabled in the book-launch edition' }));
         return;
       }
     }
