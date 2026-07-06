@@ -23,6 +23,7 @@
  *     arbitrary logs.
  */
 import { Router, Request, Response } from 'express';
+import { emitAdminEvent } from '../services/admin-telemetry';
 import crypto from 'crypto';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { getDb } from '../db/schema';
@@ -281,6 +282,17 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
         res.end();
         return;
     }
+
+    // Funnel beat (ADR-WA-001 §3): a FRESH hatch is starting (replays
+    // returned above). Duration to hatch.complete is grandma's wait.
+    const hatchStartedAtMs = Date.now();
+    emitAdminEvent({
+        event_type: 'hatch.started',
+        actor_type: 'human',
+        actor_id: windyIdentityId,
+        session_id: session.id,
+        metadata: { tier: owner.tier || 'free' },
+    });
 
     // Heartbeat — keep intermediaries from closing the stream.
     const heartbeat = setInterval(() => {
@@ -711,6 +723,19 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
     } else {
         emit({ type: 'hatch.complete', status: 'ok', label: 'Your agent is here.', data: { session_id: session.id, resumed: false } });
     }
+
+    emitAdminEvent({
+        event_type: 'hatch.completed',
+        actor_type: 'human',
+        actor_id: windyIdentityId,
+        duration_ms: Date.now() - hatchStartedAtMs,
+        session_id: session.id,
+        metadata: {
+            status: degraded.length > 0 ? 'partial' : 'ok',
+            degraded,
+            passport: passportNumber || null,
+        },
+    });
 
     finishHatchSession(session.id, {
         status: 'complete',
