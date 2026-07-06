@@ -171,12 +171,14 @@ export function generateTokens(user: { id: string; email: string; tier: string }
     // Fetch identity type and windy_identity_id
     let identityType = 'human';
     let windyIdentityId: string | undefined;
+    let adminRole: string | undefined;
     try {
         const identity = db.prepare(
-            'SELECT identity_type, windy_identity_id FROM users WHERE id = ?',
-        ).get(user.id) as { identity_type: string; windy_identity_id: string } | undefined;
+            'SELECT identity_type, windy_identity_id, admin_role FROM users WHERE id = ?',
+        ).get(user.id) as { identity_type: string; windy_identity_id: string; admin_role: string | null } | undefined;
         identityType = identity?.identity_type || 'human';
         windyIdentityId = identity?.windy_identity_id;
+        adminRole = identity?.admin_role || undefined;
     } catch { /* default human */ }
 
     // Fetch active Eternitas passport (if any). Kept in sync with the same
@@ -236,6 +238,10 @@ export function generateTokens(user: { id: string; email: string; tier: string }
         products,
         iss: 'windy-identity',
     };
+    // Windy Admin RBAC claim (ADR-WA-001 §6) — only present for the
+    // handful of humans with an admin tier; every other token is
+    // byte-identical to before.
+    if (adminRole) tokenPayload.admin_role = adminRole;
     if (passportNumber) tokenPayload.eternitas_passport = passportNumber;
     if (chatUserId) tokenPayload.chat_user_id = chatUserId;
     if (displayNameClaim) tokenPayload.display_name = displayNameClaim;

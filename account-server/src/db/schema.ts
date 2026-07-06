@@ -290,6 +290,7 @@ function initSchema(db: DbAdapter): void {
     // NULL = user hasn't paired yet (safe default).
     "ALTER TABLE users ADD COLUMN connect_paired_at TEXT",                   // ISO-8601 of last successful pair
     "ALTER TABLE users ADD COLUMN connect_bundle_version TEXT",              // Bundle spec version, e.g. \"1.0\"
+    "ALTER TABLE users ADD COLUMN admin_role TEXT",                          // Windy Admin RBAC (ADR-WA-001 §6): super_admin|admin|support|analyst; NULL = no admin access
   ];
 
   for (const sql of migrations) {
