@@ -81,6 +81,15 @@ module.exports = {
   // but serves ONLY the legacy paste/toggle actions, not the agent routes. The full build
   // (main branch) leaves this true so agents can drive it. Reversible. See docs/AGENT-ARCHITECTURE.md.
   AGENT_CONTROL: false,
+  // Safe app-control KNOBS for a co-located Windy Fly agent — the dials a grandma
+  // turns by voice ("turn the sounds down", "make the window bigger"): sounds,
+  // on-screen widget, catalog-validated settings, window geometry. ON even in the
+  // free book-launch build (the whole point is a normie controlling her app by
+  // talking to her agent), but the DANGEROUS surface (/config raw-mutate, /install,
+  // /transcribe-file, cloud upload, paste injection) stays gated behind AGENT_CONTROL.
+  // With this true the control server starts on every platform (macOS/Windows too).
+  // Flip false to strip the app back to zero local control surface. Reversible.
+  AGENT_CONTROL_KNOBS: true,
   ENGINES: ENGINE_SETS[EDITION] || ENGINE_SETS.reader,
   ENGINE_SETS,
 };
