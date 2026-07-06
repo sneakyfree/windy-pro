@@ -306,6 +306,15 @@ export default function Dashboard() {
                             // serves a Developer Preview Live landing page as of 2026-05-19.
                             // Phase 2 Chrome extension + Phase 3 browser fork still pending.
                             { key: 'windy_search', label: 'Windy Search', icon: '🔍', href: 'https://windysearch.com' },
+                            // Windy Hand — the browser/render layer (Search finds pages,
+                            // Hand uses them: renders JS, navigates, extracts, gets past
+                            // walls). Beachhead: sneakyfree/windy-hand + windyhand.com (not
+                            // yet a deployed standalone product). Phase-1 is already live as
+                            // rented Browserbase behind Windy Search's /web/fetch (render
+                            // on/auto); the own-built fleet is pending. Coming-soon chip until
+                            // there's a standalone surface — no account-server product row
+                            // needed (comingSoon forces the badge). See project_windy_hand.
+                            { key: 'windy_hand', label: 'Windy Hand', icon: '🖐️', comingSoon: true },
                             // Windy Connect — agent-onboarding kernel. The `windy` CLI
                             // (PyPI `windy-connect`) pairs any agent runtime — OpenClaw,
                             // Hermes, Claude Code, generic — with the rest of the Windy
