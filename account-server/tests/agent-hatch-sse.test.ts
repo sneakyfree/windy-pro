@@ -246,6 +246,99 @@ describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
         expect(eternitasBody.comp_code).toBe('WINDY-AAAA-BBBB');
     });
 
+    it('honors the Naming Ceremony: body.agent_name flows to Eternitas, mail slug, and the certificate', async () => {
+        const user = makeUser();
+        let eternitasBody: any = null;
+        let mailBody: any = null;
+        handler = async (url, init) => {
+            let body: any = {};
+            try { body = JSON.parse(String(init.body || '{}')); } catch { /* noop */ }
+            if (url.includes('eternitas') && url.includes('auto-hatch')) {
+                eternitasBody = body;
+                return { ok: true, status: 200, json: async () => ({ passport_number: 'ET26-NAME-0001' }) };
+            }
+            if (url.includes('mail.test')) {
+                mailBody = body;
+                return { ok: true, status: 200, json: async () => ({ email: body.email }) };
+            }
+            return { ok: true, status: 200, json: async () => ({}) };
+        };
+        process.env.WINDYMAIL_API_URL = 'http://mail.test';
+        process.env.WINDYMAIL_SERVICE_TOKEN = 'test-token';
+
+        const res = await request(app)
+            .post('/api/v1/agent/hatch')
+            .set('Authorization', `Bearer ${user.token}`)
+            .send({ agent_name: '  Sunny!  ' })
+            .buffer(true).parse((r: any, cb: any) => {
+                let chunks = '';
+                r.on('data', (c: Buffer) => (chunks += c.toString()));
+                r.on('end', () => cb(null, chunks));
+            });
+
+        // Whitespace is collapsed/trimmed; the display name keeps its
+        // punctuation ("Sunny!") but the mail localpart slug drops it and
+        // never carries edge hyphens.
+        expect(eternitasBody.agent_name).toBe('Sunny!');
+        expect(mailBody.email).toBe('sunny@windymail.ai');
+        expect(mailBody.display_name).toBe('Sunny!');
+
+        const events = parseSse(res.body as unknown as string);
+        const cert = events.find(e => e.event === 'birth_certificate.ready')!.data;
+        expect(cert.data.agent_name).toBe('Sunny!');
+    });
+
+    it('falls back to the auto-name when agent_name is missing, HTML-only, or unusable', async () => {
+        for (const badName of [undefined, '<script></script>', '  🌟🌟  ', '!!!']) {
+            const user = makeUser();
+            let eternitasBody: any = null;
+            handler = async (url, init) => {
+                let body: any = {};
+                try { body = JSON.parse(String(init.body || '{}')); } catch { /* noop */ }
+                if (url.includes('eternitas') && url.includes('auto-hatch')) {
+                    eternitasBody = body;
+                    return { ok: true, status: 200, json: async () => ({ passport_number: 'ET26-FALL-BACK' }) };
+                }
+                return { ok: true, status: 200, json: async () => ({}) };
+            };
+            const req_ = request(app)
+                .post('/api/v1/agent/hatch')
+                .set('Authorization', `Bearer ${user.token}`);
+            if (badName !== undefined) req_.send({ agent_name: badName });
+            await req_.buffer(true).parse((r: any, cb: any) => {
+                let chunks = '';
+                r.on('data', (c: Buffer) => (chunks += c.toString()));
+                r.on('end', () => cb(null, chunks));
+            });
+            // makeUser seeds name 'Nora Grandma' → auto-name is first token.
+            expect(eternitasBody.agent_name).toBe("Nora's Agent");
+        }
+    });
+
+    it('caps an absurdly long agent_name at 60 chars (fits Eternitas 100-char limit with room)', async () => {
+        const user = makeUser();
+        let eternitasBody: any = null;
+        handler = async (url, init) => {
+            let body: any = {};
+            try { body = JSON.parse(String(init.body || '{}')); } catch { /* noop */ }
+            if (url.includes('eternitas') && url.includes('auto-hatch')) {
+                eternitasBody = body;
+                return { ok: true, status: 200, json: async () => ({ passport_number: 'ET26-LONG-0001' }) };
+            }
+            return { ok: true, status: 200, json: async () => ({}) };
+        };
+        await request(app)
+            .post('/api/v1/agent/hatch')
+            .set('Authorization', `Bearer ${user.token}`)
+            .send({ agent_name: 'A'.repeat(300) })
+            .buffer(true).parse((r: any, cb: any) => {
+                let chunks = '';
+                r.on('data', (c: Buffer) => (chunks += c.toString()));
+                r.on('end', () => cb(null, chunks));
+            });
+        expect(eternitasBody.agent_name).toHaveLength(60);
+    });
+
     it('sends empty payment fields on a plain free hatch (never accidentally paid)', async () => {
         const user = makeUser();
         let eternitasBody: any = null;

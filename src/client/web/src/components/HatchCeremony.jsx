@@ -250,6 +250,13 @@ export default function HatchCeremony({ token, onDone, extras = null }) {
 
     const orderedSteps = stepOrder.map((k) => ({ key: k, ...steps[k] }))
 
+    // Naming Ceremony: once the owner has named their helper, the birth is
+    // personal — "Sunny is being born", not "Your helper is being born".
+    // The certificate's name wins once it lands (it's the server's final
+    // word); before that, the chosen name from the naming beat; fall back
+    // to the generic copy for skip/resume/older flows.
+    const helperName = certificate?.agent_name || extras?.agent_name || null
+
     const handleRetry = () => {
         cancel()
         reset()
@@ -283,13 +290,15 @@ export default function HatchCeremony({ token, onDone, extras = null }) {
                 <header className="hatch-header">
                     <div className="hatch-mascot" aria-hidden="true">🪰</div>
                     <h1 className="hatch-title">
-                        {isDone ? 'Your helper is ready!' : 'Your helper is being born'}
+                        {isDone
+                            ? `${helperName || 'Your helper'} is ready!`
+                            : `${helperName || 'Your helper'} is being born`}
                     </h1>
                     <p className="hatch-sub">
                         {isDone
                             ? resumed
                                 ? "You've done this already — here's your helper."
-                                : 'Say hi when you are ready.'
+                                : `Say hi to ${helperName || 'your helper'} when you are ready.`
                             : isStreaming
                                 ? 'This takes about 30 seconds. Sit tight.'
                                 : showRetry
