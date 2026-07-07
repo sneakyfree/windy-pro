@@ -15,6 +15,25 @@ function getUser() {
     try { return JSON.parse(localStorage.getItem('windy_user')) } catch { return null }
 }
 
+// Windy Admin RBAC (ADR-WA-001 §6): the account-server JWT carries an
+// `admin_role` claim only for staff. Read it so the dashboard can show
+// the super-admin panel tile to the handful of people who have a role.
+function getAdminRole() {
+    const token = getToken()
+    if (!token) return null
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+        return payload.admin_role || null
+    } catch { return null }
+}
+
+const ADMIN_ROLE_LABEL = {
+    super_admin: 'Super Admin',
+    admin: 'Admin',
+    support: 'Support',
+    analyst: 'Analyst',
+}
+
 async function apiFetch(path, options = {}) {
     const token = getToken()
     let res
@@ -251,6 +270,31 @@ export default function Dashboard() {
                             </div>
                         </>
                     )}
+                </div>
+            )}
+
+            {/* Staff — the super-admin panel, shown ONLY to accounts with an
+                admin_role claim. Deep-links to admin.windyword.ai with the
+                account-server JWT in the URL fragment for seamless SSO
+                (same token the panel verifies; no second login). */}
+            {getAdminRole() && (
+                <div className="dash-ecosystem" style={{ marginBottom: '1.5rem' }}>
+                    <h3 className="dash-ecosystem-title">Staff</h3>
+                    <div className="dash-ecosystem-grid">
+                        <a
+                            className="dash-eco-card"
+                            href={`https://admin.windyword.ai/#token=${encodeURIComponent(getToken() || '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Open the Windy Admin super-admin panel"
+                        >
+                            <span className="dash-eco-icon">🛠️</span>
+                            <span className="dash-eco-label">Admin Panel</span>
+                            <span className="dash-eco-badge eco-active">
+                                {ADMIN_ROLE_LABEL[getAdminRole()] || getAdminRole()}
+                            </span>
+                        </a>
+                    </div>
                 </div>
             )}
 
