@@ -79,13 +79,14 @@ class CloneDataArchive {
             }
         </div>
 
-        <!-- Coming Soon Banner -->
+        <!-- Windy Clone is live -->
         <div class="cda-coming-soon" style="background:rgba(163,230,53,0.08); border:1px solid rgba(163,230,53,0.2); border-radius:12px; padding:16px; margin:0 0 16px 0;">
-          <p style="color:#A3E635; font-weight:700; margin:0 0 6px 0;">Windy Clone — Coming Soon</p>
+          <p style="color:#A3E635; font-weight:700; margin:0 0 6px 0;">Windy Clone — Live</p>
           <p style="color:#9CA3AF; font-size:13px; margin:0;">
             Your voice data is being archived and quality-scored automatically.
-            When Windy Clone launches, your data will be ready for instant clone training.
-            In the meantime, export your package for use with any voice cloning service.
+            Create your Voice Twin any time: Settings → Soul File → Manage Voice
+            Clones, or browse providers at windyclone.ai. You can also export
+            your package for use with any voice cloning service.
           </p>
         </div>
 

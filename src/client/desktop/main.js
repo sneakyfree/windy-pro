@@ -9902,11 +9902,13 @@ ipcMain.handle('export-clone-bundles', async (event, bundleIds) => {
 });
 
 ipcMain.handle('start-clone-training', async (event, bundleIds) => {
-  // Clone training is not yet available — offer export instead
+  // Voice-clone training is live via the Voice Clone Manager (record a
+  // sample → Submit to Windy Clone → ElevenLabs). This bundle-based path
+  // still offers the export package for people who want their data.
   const { response } = await dialog.showMessageBox({
     type: 'info',
-    title: 'Windy Clone — Coming Soon',
-    message: 'Clone training is coming soon!\n\nWould you like to export your selected bundles as a voice data package instead?\n\nYou can use the exported package with ElevenLabs, PlayHT, or any voice cloning service.',
+    title: 'Windy Clone',
+    message: 'Voice cloning is live!\n\nTo create your Voice Twin, open Settings → Soul File → Manage Voice Clones, record a sample, and click "Submit to Windy Clone".\n\nOr export your selected bundles as a voice data package to use with ElevenLabs or any voice cloning service.',
     buttons: ['Export Package', 'Not Now'],
     defaultId: 0,
     cancelId: 1,

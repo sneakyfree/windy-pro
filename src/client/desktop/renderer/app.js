@@ -535,10 +535,45 @@ class WindyApp {
     console.info('[AgentBridge] renderer-side dispatcher armed');
   }
 
+  // Voice Clone Manager — the ADR-045 Phase 2 record/submit/poll panel.
+  // Shipped in v1.6.2 but never instantiated anywhere; this makes it
+  // reachable (Settings → Soul File → Manage Voice Clones).
+  async openVoiceCloneManager() {
+    const overlay = document.getElementById('voiceCloneOverlay');
+    if (!overlay || typeof VoiceCloneManager === 'undefined') return;
+    if (!this.voiceCloneManager) this.voiceCloneManager = new VoiceCloneManager();
+    overlay.innerHTML = '';
+    const host = document.createElement('div');
+    host.style.cssText = 'max-width:720px; margin:0 auto;';
+    overlay.appendChild(host);
+    overlay.style.display = 'block';
+    await this.voiceCloneManager.render(host);
+  }
+
   /**
    * Bind DOM events
    */
   bindEvents() {
+    // Voice Clone Manager open/close. Opened via a window event so any
+    // surface (Settings panel, future nav tiles) can trigger it without
+    // holding an app reference. The panel's own ✕ empties its container;
+    // the delegated listener below also hides the darkened backdrop, and
+    // clicking the backdrop itself closes too.
+    const vcOverlay = document.getElementById('voiceCloneOverlay');
+    if (vcOverlay) {
+      window.addEventListener('open-voice-clone-manager', () => this.openVoiceCloneManager());
+      vcOverlay.addEventListener('click', (e) => {
+        if (e.target === vcOverlay || e.target.closest('#vc-close')) {
+          if (this.voiceCloneManager?._cloudPollTimer) {
+            clearInterval(this.voiceCloneManager._cloudPollTimer);
+            this.voiceCloneManager._cloudPollTimer = null;
+          }
+          vcOverlay.innerHTML = '';
+          vcOverlay.style.display = 'none';
+        }
+      });
+    }
+
     // Record button
     this.recordBtn.addEventListener('click', () => this.toggleRecording());
 
