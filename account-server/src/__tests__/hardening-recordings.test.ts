@@ -95,6 +95,19 @@ function mockDbPrepare(sql: string) {
       if (sql.includes('FROM users WHERE id')) {
         return users.get(args[0]) || null;
       }
+      // SELECT file_path, audio_path, has_video FROM recordings WHERE bundle_id = ? AND user_id = ? AND clone_training_ready = 1
+      if (sql.includes('file_path, audio_path')) {
+        const [bundleId, userId] = args;
+        let found: any = null;
+        recordings.forEach(r => {
+          if (r.bundle_id === bundleId && r.user_id === userId && r.clone_training_ready === 1) {
+            if (!found || r.created_at > found.created_at) found = r;
+          }
+        });
+        return found
+          ? { file_path: found.file_path || null, audio_path: found.audio_path || null, has_video: found.has_video }
+          : null;
+      }
       // SELECT COUNT(*) ... FROM recordings WHERE bundle_id IN (...) AND user_id = ? AND clone_training_ready = 1
       if (sql.includes('COUNT(*)') && sql.includes('bundle_id IN')) {
         // Last arg is user_id, preceding args are bundle_ids
@@ -483,5 +496,101 @@ describe('Recording & Clone Route Hardening', () => {
       .send();
 
     expect(res.status).toBe(401);
+  });
+
+  // ─── Bundle audio export (Clone pull path) ──────────────────
+
+  const os = require('os');
+  const fsMod = require('fs');
+  const pathMod = require('path');
+
+  it('should stream bundle media bytes with content-type + X-Has-Video', async () => {
+    const token = generateTestAccessToken();
+    const mediaFile = pathMod.join(os.tmpdir(), `clone-audio-test-${Date.now()}.webm`);
+    fsMod.writeFileSync(mediaFile, Buffer.from('fake-webm-bytes'));
+
+    recordings.set('rec-audio-1', {
+      id: 'rec-audio-1',
+      bundle_id: 'bundle-audio-1',
+      user_id: TEST_USER_ID,
+      clone_training_ready: 1,
+      has_video: 0,
+      file_path: mediaFile,
+      created_at: '2026-07-01T10:00:00Z',
+    });
+
+    const res = await request(app)
+      .get('/api/v1/clone/training-data/bundle-audio-1/audio')
+      .set('Authorization', `Bearer ${token}`)
+      .buffer(true)
+      .parse((r, cb) => {
+        const chunks: Buffer[] = [];
+        r.on('data', (c: Buffer) => chunks.push(c));
+        r.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('audio/webm');
+    expect(res.headers['x-has-video']).toBe('0');
+    expect((res.body as Buffer).toString()).toBe('fake-webm-bytes');
+
+    fsMod.unlinkSync(mediaFile);
+  });
+
+  it('should 404 bundle audio for another user\'s bundle', async () => {
+    const token = generateTestAccessToken();
+    recordings.set('rec-audio-2', {
+      id: 'rec-audio-2',
+      bundle_id: 'bundle-audio-2',
+      user_id: OTHER_USER_ID,
+      clone_training_ready: 1,
+      has_video: 0,
+      file_path: '/tmp/does-not-matter.webm',
+      created_at: '2026-07-01T10:00:00Z',
+    });
+
+    const res = await request(app)
+      .get('/api/v1/clone/training-data/bundle-audio-2/audio')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it('should 404 bundle audio when not training-ready', async () => {
+    const token = generateTestAccessToken();
+    recordings.set('rec-audio-3', {
+      id: 'rec-audio-3',
+      bundle_id: 'bundle-audio-3',
+      user_id: TEST_USER_ID,
+      clone_training_ready: 0,
+      has_video: 0,
+      file_path: '/tmp/does-not-matter.webm',
+      created_at: '2026-07-01T10:00:00Z',
+    });
+
+    const res = await request(app)
+      .get('/api/v1/clone/training-data/bundle-audio-3/audio')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it('should 404 bundle audio when the file is missing on disk', async () => {
+    const token = generateTestAccessToken();
+    recordings.set('rec-audio-4', {
+      id: 'rec-audio-4',
+      bundle_id: 'bundle-audio-4',
+      user_id: TEST_USER_ID,
+      clone_training_ready: 1,
+      has_video: 0,
+      file_path: '/tmp/definitely-not-a-real-file-xyz.webm',
+      created_at: '2026-07-01T10:00:00Z',
+    });
+
+    const res = await request(app)
+      .get('/api/v1/clone/training-data/bundle-audio-4/audio')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(404);
   });
 });
