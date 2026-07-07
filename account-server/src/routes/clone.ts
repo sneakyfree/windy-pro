@@ -1,7 +1,9 @@
 /**
- * Clone routes — training data listing, cloud training submission, job status.
+ * Clone routes — training data listing, media export, cloud training submission, job status.
  */
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { Router, Request, Response } from 'express';
 import { getDb } from '../db/schema';
 import { config } from '../config';
@@ -37,6 +39,59 @@ router.get('/training-data', authenticateToken, (req: Request, res: Response) =>
             createdAt: r.created_at,
         }));
         res.json({ bundles, total: bundles.length });
+    } catch (err: any) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ─── GET /api/v1/clone/training-data/:bundleId/audio ─────────
+//
+// Streams the raw media bytes for one training-ready bundle. This is the
+// endpoint Windy Clone's pipeline has been parking orders on ("Windy Pro
+// hasn't enabled audio export yet" → AWAITING_UPSTREAM) — with it live,
+// Clone can pull training audio directly instead of requiring the desktop
+// app to inline-base64 every sample.
+//
+// Auth: the user's own JWT (Clone forwards it), same as /training-data.
+// Ownership + clone_training_ready are enforced in the WHERE clause.
+
+const AUDIO_CONTENT_TYPES: Record<string, string> = {
+    '.webm': 'audio/webm',
+    '.wav': 'audio/wav',
+    '.mp3': 'audio/mpeg',
+    '.m4a': 'audio/mp4',
+    '.ogg': 'audio/ogg',
+    '.flac': 'audio/flac',
+    '.mp4': 'video/mp4', // video bundles export as-is; consumer decides
+    '.mkv': 'video/x-matroska',
+};
+
+router.get('/training-data/:bundleId/audio', authenticateToken, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const row = db.prepare(
+            `SELECT file_path, audio_path, has_video FROM recordings
+       WHERE bundle_id = ? AND user_id = ? AND clone_training_ready = 1
+       ORDER BY created_at DESC LIMIT 1`
+        ).get(req.params.bundleId, (req as AuthRequest).user.userId) as any;
+
+        // file_path is what /recordings/upload writes today; audio_path is
+        // the older column some rows carry. Prefer the current one.
+        const mediaPath = row ? (row.file_path || row.audio_path) : null;
+        if (!mediaPath || !fs.existsSync(mediaPath)) {
+            return res.status(404).json({ error: 'Bundle media not found' });
+        }
+
+        const stat = fs.statSync(mediaPath);
+        const ext = path.extname(mediaPath).toLowerCase();
+        const contentType = AUDIO_CONTENT_TYPES[ext] || 'application/octet-stream';
+
+        res.writeHead(200, {
+            'Content-Length': stat.size,
+            'Content-Type': contentType,
+            'X-Has-Video': row.has_video ? '1' : '0',
+        });
+        fs.createReadStream(mediaPath).pipe(res);
     } catch (err: any) {
         res.status(500).json({ error: 'Internal server error' });
     }
@@ -125,7 +180,7 @@ router.post('/start-training', authenticateToken, validate(StartTrainingRequestS
         res.status(202).json({
             status: 'export_ready',
             bundleCount: bundle_ids.length,
-            message: 'Clone training service coming soon. Use the desktop app to export your voice data package for use with ElevenLabs, PlayHT, or other voice cloning services.',
+            message: 'Clone training service coming soon. Use the desktop app to export your voice data package for use with ElevenLabs or other voice cloning services.',
             exportInstructions: 'In the Windy Word desktop app, go to Clone Data Archive → select your bundles → click Export Clone Package.',
         });
     } catch (err: any) {
