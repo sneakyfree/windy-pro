@@ -184,10 +184,11 @@ class SettingsPanel {
             </div>
           </div>
           <div style="display:flex; gap:8px;">
+            <button id="openVoiceCloneManager" class="settings-btn" style="flex:1; background:#A3E635; color:#000; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer;">🎭 Manage Voice Clones</button>
             <button id="exportSoulFile" class="settings-btn" style="flex:1; background:#3B82F6; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer;">🧬 Export Soul File Package</button>
             <button id="exportVoiceClone" class="settings-btn" style="flex:1; background:#22C55E; color:#000; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer;">🎤 Export for Voice Cloning</button>
           </div>
-          <p class="settings-hint" style="margin-top:6px;">Exports audio + transcripts in formats compatible with ElevenLabs, Coqui, Tortoise TTS, and other major voice cloning platforms.</p>
+          <p class="settings-hint" style="margin-top:6px;">Record a voice sample and submit it to Windy Clone for training, or export audio + transcripts in formats compatible with ElevenLabs, Coqui, Tortoise TTS, and other major voice cloning platforms.</p>
         </div>
 
         <div class="settings-section">
@@ -1044,6 +1045,15 @@ class SettingsPanel {
           both: 'Saved locally first, then backed up to WindyCloud over Wi-Fi. Best of both worlds.'
         };
         if (hint) hint.textContent = hints[e.target.value] || hints.local;
+      });
+    }
+
+    // Voice Clone Manager — record a sample + submit to Windy Clone for
+    // ElevenLabs training. Fired as a window event; app.js owns the overlay.
+    const openVcBtn = this.panel.querySelector('#openVoiceCloneManager');
+    if (openVcBtn) {
+      openVcBtn.addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('open-voice-clone-manager'));
       });
     }
 
