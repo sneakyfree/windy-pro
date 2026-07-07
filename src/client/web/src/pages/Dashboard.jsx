@@ -280,9 +280,11 @@ export default function Dashboard() {
                             { key: 'windy_cloud', label: 'Windy Cloud', icon: '☁️', href: '/vault' },
                             { key: 'windy_fly', label: 'Windy Fly', icon: '🪰', href: '/app/fly' },
                             // Windy Clone: external — the marketplace SPA is live at the
-                            // apex (served by the Clone API container, 2026-07-07). The
-                            // in-app Soul File panel remains reachable via Settings.
-                            { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: 'https://windyclone.ai' },
+                            // apex (served by the Clone API container, 2026-07-07). Clone
+                            // validates the same Pro JWT via JWKS, and its web app is built
+                            // for a ?token= handoff (stores to localStorage, strips the
+                            // URL immediately) — pass ours so the user lands signed in.
+                            { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: `https://windyclone.ai/?token=${encodeURIComponent(getToken() || '')}` },
                             { key: 'windy_traveler', label: 'Windy Traveler', icon: '🌍', href: '/translate' },
                             // Marketing / external sites (still navigable, broken CTAs tracked
                             // separately in docs/ballroom-blockers-2026-05-08.md).
