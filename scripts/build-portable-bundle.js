@@ -428,7 +428,9 @@ function buildModel(targetOut) {
   }
   fs.mkdirSync(path.dirname(modelOut), { recursive: true });
   log(`copying model: ${path.relative(repoRoot, existingModelDir)} → ${path.relative(repoRoot, modelOut)}`);
-  execSync(`cp -r "${existingModelDir}" "${modelOut}"`);
+  // fs.cpSync (not `cp -r`) so this works on Windows too — `cp` doesn't exist in cmd.exe,
+  // which broke every native Windows build that had a source model present (Mission 10b).
+  fs.cpSync(existingModelDir, modelOut, { recursive: true });
   ok(`model copied (${du(modelOut)})`);
   return modelOut;
 }

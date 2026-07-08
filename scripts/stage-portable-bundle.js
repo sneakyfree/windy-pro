@@ -42,7 +42,9 @@ if (!fs.existsSync(src)) {
 }
 
 console.log(`▸ staging ${target} → extraResources/`);
-if (fs.existsSync(dst)) execSync(`rm -rf "${dst}"`);
+// fs.rmSync/cpSync (not `rm -rf`/`cp -R`) so staging works on Windows — those are
+// Unix-only and crashed native Windows builds in cmd.exe (Mission 10b, 2026-07-08).
+if (fs.existsSync(dst)) fs.rmSync(dst, { recursive: true, force: true });
 fs.mkdirSync(dst, { recursive: true });
 
 // Copy each bundle component
@@ -53,7 +55,7 @@ for (const sub of ['python', 'wheels', 'ffmpeg', 'model', 'uv']) {
     continue;
   }
   const subDst = path.join(dst, sub);
-  execSync(`cp -R "${subSrc}" "${subDst}"`);
+  fs.cpSync(subSrc, subDst, { recursive: true });
   console.log(`✓ copied ${sub}/`);
 }
 
@@ -70,6 +72,8 @@ if (fs.existsSync(manifest)) {
   console.log(`✓ copied bundle-manifest.json`);
 }
 
-const totalSize = execSync(`du -sh "${dst}" | cut -f1`).toString().trim();
+// `du` is Unix-only; guard so the final size print never crashes staging on Windows.
+let totalSize = '?';
+try { totalSize = execSync(`du -sh "${dst}" | cut -f1`).toString().trim(); } catch { /* windows / no du */ }
 console.log(`\n✓ extraResources/ ready (${totalSize})`);
 console.log(`  next: npm run build:${target.startsWith('mac') ? 'mac' : target.startsWith('win') ? 'win' : 'linux'}`);
