@@ -41,6 +41,15 @@ function requirePg() {
 export function translateSQL(sql: string): string {
   let translated = sql;
 
+  // datetime('now', '+5 minutes') / ('-30 days') -> (NOW() + INTERVAL '5 minutes')
+  // The two-arg form must be covered too: the provisioner's retry-backoff
+  // UPDATE, pending_provisions INSERT, and both cleanup DELETEs use it, and
+  // Postgres has no datetime() at all — every such query fails on prod.
+  translated = translated.replace(
+    /datetime\s*\(\s*'now'\s*,\s*'([+-])\s*(\d+)\s+(seconds?|minutes?|hours?|days?|months?|years?)'\s*\)/gi,
+    "(NOW() $1 INTERVAL '$2 $3')",
+  );
+
   // datetime('now') -> NOW()
   translated = translated.replace(/datetime\s*\(\s*'now'\s*\)/gi, 'NOW()');
 
