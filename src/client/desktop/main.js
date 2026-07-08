@@ -9766,6 +9766,21 @@ app.on('ready', () => {
 app.whenReady().then(async () => {
   _perfMark('app.whenReady()');
 
+  // Windy Admin observability (ADR-WA-001): desktop session lifecycle. Inert unless
+  // WINDY_ADMIN_INGEST_URL + WINDY_ADMIN_INGEST_TOKEN are set (operator/stress rigs only) —
+  // a consumer install emits nothing. Counts/versions only, never content.
+  try {
+    global._windySessionStart = Date.now();
+    require('./admin-telemetry').emitAdminEvent('desktop.session_start', {
+      metadata: {
+        os: process.platform,
+        arch: process.arch,
+        app_version: app.getVersion(),
+        edition: (() => { try { return require('./edition').EDITION; } catch (_) { return 'unknown'; } })(),
+      },
+    });
+  } catch (_) { /* never block startup */ }
+
   // ── macOS microphone access (CRITICAL for dictation) ──────────────────────
   // The Chromium permission handler approves getUserMedia at the APP layer, but
   // that does NOT obtain the macOS OS-level (TCC) microphone grant. Without the
@@ -10160,6 +10175,14 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  // Windy Admin observability: session end (fire-and-forget; inert unless configured).
+  try {
+    require('./admin-telemetry').emitAdminEvent('desktop.session_end', {
+      duration_ms: global._windySessionStart ? Date.now() - global._windySessionStart : null,
+      metadata: { os: process.platform, app_version: app.getVersion() },
+    });
+  } catch (_) { /* never block quit */ }
+
   // Graceful Python server shutdown: SIGTERM → 3s → SIGKILL
   if (pythonProcess) {
     try {
