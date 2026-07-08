@@ -243,13 +243,31 @@ class BundledAssets {
 
     // Get bundled Python
     const bundledPyDir = this._getPythonExtractedDir();
-    const bundledPyExe = this._findPythonExe(bundledPyDir);
+    let bundledPyExe = this._findPythonExe(bundledPyDir);
     if (!bundledPyExe || !this._isPythonWorking(bundledPyExe)) {
       log('[BundledAssets] Bundled Python not available or not working');
       return null;
     }
 
-    // Create fresh venv on user's machine — no path portability issues possible
+    // Linux AppImage: the bundled python lives inside the AppImage's EPHEMERAL FUSE mount
+    // (/tmp/.mount_XXXXXX — a new random dir every launch that dies with the process). A
+    // venv created from it dangles on every later launch: pyvenv.cfg `home` and the
+    // bin/python symlink both point into the dead mount, so the engine works for exactly
+    // one session and startPythonServer falls back to bundled python forever after
+    // (proven on OC2 / Ubuntu 24.04, Mission 10 2026-07-08). Install the runtime to the
+    // stable APP_DIR copy first (same mechanism the legacy path already uses) and build
+    // the venv from that. mac .app / Windows LOCALAPPDATA / .deb paths are stable — no copy.
+    if (this.platform === 'linux' && /^\/tmp\/\.mount_/.test(bundledPyExe)) {
+      const stablePy = await this.installPython(appDir, log);
+      if (stablePy) {
+        log('[BundledAssets] AppImage detected — building venv from the stable python copy');
+        bundledPyExe = stablePy;
+      } else {
+        log('[BundledAssets] stable python copy failed — venv will NOT survive an app relaunch');
+      }
+    }
+
+    // Create fresh venv on user's machine from a launch-stable interpreter path
     const venvDir = path.join(appDir, 'venv');
     const venvPyExe = this.platform === 'win32'
       ? path.join(venvDir, 'Scripts', 'python.exe')
