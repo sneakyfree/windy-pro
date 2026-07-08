@@ -9013,6 +9013,18 @@ app.on('ready', () => {
 
 app.whenReady().then(async () => {
   _perfMark('app.whenReady()');
+
+  try {
+    global._windySessionStart = Date.now();
+    require('./admin-telemetry').emitAdminEvent('desktop.session_start', {
+      metadata: {
+        os: process.platform,
+        arch: process.arch,
+        app_version: app.getVersion(),
+        edition: (() => { try { return require('./edition').EDITION; } catch (_) { return 'unknown'; } })(),
+      },
+    });
+  } catch (_) { /* never block startup */ }
   // Clear file cache in dev mode to ensure fresh JS files
   if (process.argv.includes('--dev')) {
     try { await session.defaultSession.clearCache(); } catch (_) {}
@@ -9309,6 +9321,13 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  try {
+    require('./admin-telemetry').emitAdminEvent('desktop.session_end', {
+      duration_ms: global._windySessionStart ? Date.now() - global._windySessionStart : null,
+      metadata: { os: process.platform, app_version: app.getVersion() },
+    });
+  } catch (_) { /* never block quit */ }
+
   // Graceful Python server shutdown: SIGTERM → 3s → SIGKILL
   if (pythonProcess) {
     try {
