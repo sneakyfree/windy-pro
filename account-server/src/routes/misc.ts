@@ -237,6 +237,55 @@ router.post('/api/v1/license/activate', authenticateToken, validate(LicenseActiv
     }
 });
 
+// ─── POST /v1/license/heartbeat (+ /api/v1 alias) ────────────
+// Desktop DRM heartbeat (src/client/desktop/heartbeat-service.js). The
+// bearer is the LICENSE KEY (WP-XXXX-XXXX-XXXX), not a session JWT.
+//
+// ⚠️ Response-code contract: the desktop client DELETES all downloaded
+// model files when this endpoint returns 401/403 (treated as "revoked").
+// The ONLY case allowed to do that is the deliberate 'revoked' tier
+// sentinel set by the admin revoke route (admin.ts license/revoke).
+// Unknown/invalid keys get 200 {valid:false}, which puts the client on
+// the offline-grace path (lock after grace, recoverable) instead of
+// destructive delete — data drift must never nuke a customer's models.
+const heartbeatLimiter = makeRateLimiter('license-heartbeat', {
+    windowMs: 60 * 1000,
+    max: 30,
+    message: { error: 'Too many requests' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+router.post(['/v1/license/heartbeat', '/api/v1/license/heartbeat'], heartbeatLimiter, (req: Request, res: Response) => {
+    const auth = String(req.headers.authorization || '');
+    const key = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+
+    if (!key || key === 'free') {
+        return res.json({ valid: false, reason: 'no_license' });
+    }
+
+    try {
+        const db = getDb();
+        const row = db.prepare('SELECT id, license_tier FROM users WHERE license_key = ?')
+            .get(key) as { id: string; license_tier: string | null } | undefined;
+
+        if (!row) {
+            return res.json({ valid: false, reason: 'unknown_token' });
+        }
+
+        // 'revoked' is a deliberate admin sentinel (admin.ts license/revoke)
+        // — the ONLY case allowed to trigger the client's delete-on-revoke.
+        if (row.license_tier === 'revoked') {
+            return res.status(403).json({ valid: false, reason: 'revoked' });
+        }
+
+        return res.json({ valid: true, tier: row.license_tier || tierFromKey(key) });
+    } catch (err: any) {
+        console.error('License heartbeat error:', err);
+        return res.status(500).json({ valid: false, reason: 'server_error' });
+    }
+});
+
 // ─── POST /api/v1/rtc/signal ─────────────────────────────────
 
 router.post('/api/v1/rtc/signal', authenticateToken, (req: Request, res: Response) => {

@@ -104,8 +104,15 @@ class HeartbeatService {
     const tier = this.store.get('license.tier', 'free');
 
     if (!token || token === 'free') {
-      this._log('info', 'No license token — skipping heartbeat (free tier)');
-      this._checkGracePeriod(tier);
+      // Free tier has nothing to lock (STT engines ship plain; pair models
+      // are paid-only), so it must never run the grace countdown — a free
+      // install has no heartbeat to reset the clock and would always "expire".
+      this._log('info', 'No license token — free tier, heartbeat and grace checks skipped');
+      if (this.store.get('license.modelsLocked', false)) {
+        this._log('info', 'Clearing stale free-tier model lock');
+        this.store.set('license.modelsLocked', false);
+        this.store.set('heartbeat.graceStartTime', 0);
+      }
       return;
     }
 
