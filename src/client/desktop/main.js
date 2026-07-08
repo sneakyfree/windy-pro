@@ -577,6 +577,37 @@ function _venvHasEngineDeps(venvDir) {
   } catch (_) { return false; }
 }
 
+// Linux AppImage: process.resourcesPath lives inside an EPHEMERAL FUSE mount
+// (/tmp/.mount_XXXXXX) that changes every launch and dies with the process. A venv created
+// from the bundled python in that mount dangles on every later launch (pyvenv.cfg `home` +
+// bin/python symlink both point into the dead mount) — so each relaunch either rebuilt the
+// whole venv from scratch ("First run" every launch) or, after a crash left a zombie mount,
+// started a session with a permanently dead engine. Copy the bundled runtime ONCE to a
+// stable per-user path and build the venv from the copy. mac (.app) and Windows
+// (LOCALAPPDATA) install paths are stable, so they keep using the bundled tree in place.
+function _stableEnginePythonRoot(bundledPyRoot, appDataDir) {
+  if (process.platform !== 'linux') return bundledPyRoot;
+  if (!/^\/tmp\/\.mount_/.test(process.resourcesPath || '')) return bundledPyRoot; // .deb/dev tree: stable
+  const stableRoot = path.join(appDataDir, 'python-runtime');
+  const stamp = path.join(stableRoot, '.windy-runtime-stamp');
+  const want = `${app.getVersion()} ${process.arch}`;
+  try {
+    if (fs.existsSync(stamp)
+        && fs.readFileSync(stamp, 'utf-8').trim() === want
+        && fs.existsSync(path.join(stableRoot, 'bin', 'python3'))) {
+      return stableRoot;
+    }
+    fs.rmSync(stableRoot, { recursive: true, force: true });
+    fs.cpSync(bundledPyRoot, stableRoot, { recursive: true, verbatimSymlinks: true });
+    fs.writeFileSync(stamp, want + '\n');
+    console.info('[Python] bundled runtime copied to stable path:', stableRoot);
+    return stableRoot;
+  } catch (e) {
+    console.warn('[Python] stable runtime copy failed — using bundled python in place (venv will not survive relaunch):', e.message);
+    return bundledPyRoot;
+  }
+}
+
 // Free bytes available on the volume holding `dir` (or its nearest existing parent), or null
 // if it can't be determined (older Node without statfsSync, or an error) → callers fail open.
 function _freeSpaceBytes(dir) {
@@ -615,7 +646,15 @@ function ensureEngineVenv(appDataDir) {
         catch (e) { console.warn('[Python] adopted existing engine venv but could not write ready marker:', e.message); }
         return false; // usable venv (e.g. wizard-built) — normal start handles it
       }
-      console.warn('[Python] engine venv present but missing deps / not usable (interrupted setup) — rebuilding clean');
+      let why = 'missing deps / not usable (interrupted setup)';
+      try {
+        const cfg = path.join(venvDir, 'pyvenv.cfg');
+        if (fs.existsSync(cfg)) {
+          const home = (fs.readFileSync(cfg, 'utf-8').match(/^home\s*=\s*(.+)$/m) || [])[1];
+          if (home && !fs.existsSync(home.trim())) why = `bound to a vanished python at ${home.trim()} (stale AppImage mount)`;
+        }
+      } catch (_) { /* keep generic reason */ }
+      console.warn(`[Python] engine venv present but ${why} — rebuilding clean`);
       try { fs.rmSync(venvDir, { recursive: true, force: true }); }
       catch (e) { console.error('[Python] could not remove incomplete venv:', e.message); }
     }
@@ -631,7 +670,9 @@ function ensureEngineVenv(appDataDir) {
       const suffixed = path.join(bundledRoot, `${name}-${process.arch}`);
       return fs.existsSync(suffixed) ? suffixed : path.join(bundledRoot, name);
     };
-    const bundledPyRoot = archDir('python');
+    // On Linux AppImage this is a stable per-user COPY of the bundled runtime (see
+    // _stableEnginePythonRoot) — a venv built from the in-mount python breaks on relaunch.
+    const bundledPyRoot = _stableEnginePythonRoot(archDir('python'), appDataDir);
     const bundledPy = process.platform === 'win32'
       ? path.join(bundledPyRoot, 'python.exe')
       : path.join(bundledPyRoot, 'bin', 'python3');
