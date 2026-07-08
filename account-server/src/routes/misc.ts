@@ -243,10 +243,11 @@ router.post('/api/v1/license/activate', authenticateToken, validate(LicenseActiv
 //
 // ⚠️ Response-code contract: the desktop client DELETES all downloaded
 // model files when this endpoint returns 401/403 (treated as "revoked").
-// Until an explicit server-side revocation flag exists, this handler must
-// never return 401/403 and never set reason:'revoked' — unknown/invalid
-// keys get 200 {valid:false}, which puts the client on the offline-grace
-// path (lock after grace, recoverable) instead of destructive delete.
+// The ONLY case allowed to do that is the deliberate 'revoked' tier
+// sentinel set by the admin revoke route (admin.ts license/revoke).
+// Unknown/invalid keys get 200 {valid:false}, which puts the client on
+// the offline-grace path (lock after grace, recoverable) instead of
+// destructive delete — data drift must never nuke a customer's models.
 const heartbeatLimiter = makeRateLimiter('license-heartbeat', {
     windowMs: 60 * 1000,
     max: 30,
@@ -270,6 +271,12 @@ router.post(['/v1/license/heartbeat', '/api/v1/license/heartbeat'], heartbeatLim
 
         if (!row) {
             return res.json({ valid: false, reason: 'unknown_token' });
+        }
+
+        // 'revoked' is a deliberate admin sentinel (admin.ts license/revoke)
+        // — the ONLY case allowed to trigger the client's delete-on-revoke.
+        if (row.license_tier === 'revoked') {
+            return res.status(403).json({ valid: false, reason: 'revoked' });
         }
 
         return res.json({ valid: true, tier: row.license_tier || tierFromKey(key) });

@@ -196,6 +196,30 @@ router.post('/users/:userId/tier', authenticateToken, adminOnly, (req: Request, 
     }
 });
 
+// ─── POST /users/:userId/license/revoke — DRM revocation ─────
+//
+// Sets license_tier to the 'revoked' sentinel (the key is kept for
+// audit). The heartbeat endpoint returns 403 reason:'revoked' ONLY for
+// this sentinel — which the desktop client answers by deleting model
+// files — so revocation can never be triggered by data drift, only by
+// this deliberate admin action. Re-activating any key via
+// /api/v1/license/activate overwrites the sentinel and restores access.
+
+router.post('/users/:userId/license/revoke', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const user = db.prepare('SELECT id, license_key, license_tier FROM users WHERE id = ?').get(req.params.userId) as any;
+        if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+        if (!user.license_key) { res.status(400).json({ error: 'User has no license to revoke' }); return; }
+
+        db.prepare("UPDATE users SET license_tier = 'revoked' WHERE id = ?").run(user.id);
+        console.warn(`🔒 License REVOKED for user ${String(user.id).slice(0, 8)} (was tier: ${user.license_tier})`);
+        res.json({ ok: true, previousTier: user.license_tier });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── DELETE /users/:userId — delete user + all data ──────────
 
 router.delete('/users/:userId', authenticateToken, adminOnly, (req: Request, res: Response) => {

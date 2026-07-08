@@ -22,6 +22,7 @@ process.env.DATA_ROOT = tmpDir;
 
 import request from 'supertest';
 import { app } from '../src/server';
+import { getDb } from '../src/db/schema';
 
 const PATHS = ['/v1/license/heartbeat', '/api/v1/license/heartbeat'];
 const LICENSE_KEY = 'WP-TAAA-BBBB-CCCC'; // WP-T prefix → translate tier
@@ -63,6 +64,67 @@ describe('POST /v1/license/heartbeat', () => {
         expect(res.status).toBe(200);
         expect(res.body.valid).toBe(false);
         expect(res.body.reason).not.toBe('revoked');
+    });
+
+    it('revoke lifecycle: admin revoke → 403 revoked; reactivate → valid again', async () => {
+        const reg = await request(app)
+            .post('/api/v1/auth/register')
+            .send({ name: 'RV', email: 'revoke@test.windy', password: 'Heartbeat-Test-1!' });
+        expect(reg.status).toBe(201);
+        const userId = reg.body.userId;
+        const token = reg.body.token;
+        const key = 'WP-UREV-OKED-TEST'; // WP-U prefix → translate_pro
+
+        const act = await request(app)
+            .post('/api/v1/license/activate')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ key });
+        expect(act.status).toBe(200);
+
+        // double-activate is idempotent
+        const act2 = await request(app)
+            .post('/api/v1/license/activate')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ key });
+        expect(act2.status).toBe(200);
+
+        const hb = () => request(app)
+            .post('/v1/license/heartbeat')
+            .set('Authorization', `Bearer ${key}`)
+            .send({ timestamp: new Date().toISOString() });
+
+        expect((await hb()).body).toMatchObject({ valid: true, tier: 'translate_pro' });
+
+        // admin revoke — promote a fresh user to admin directly in the DB
+        const admReg = await request(app)
+            .post('/api/v1/auth/register')
+            .send({ name: 'ADM', email: 'hb-admin@test.windy', password: 'Heartbeat-Test-1!' });
+        getDb().prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(admReg.body.userId);
+        const admLogin = await request(app)
+            .post('/api/v1/auth/login')
+            .send({ email: 'hb-admin@test.windy', password: 'Heartbeat-Test-1!' });
+        const admToken = admLogin.body.token;
+
+        const rev = await request(app)
+            .post(`/api/v1/admin/users/${userId}/license/revoke`)
+            .set('Authorization', `Bearer ${admToken}`)
+            .send({});
+        expect(rev.status).toBe(200);
+        expect(rev.body.previousTier).toBe('translate_pro');
+
+        // revoked → the one deliberate 403 case
+        const revoked = await hb();
+        expect(revoked.status).toBe(403);
+        expect(revoked.body).toEqual({ valid: false, reason: 'revoked' });
+
+        // reactivate-after-revoke restores access; a still-revoked key must
+        // never verify (P0: revoked license keeps working = unacceptable)
+        const react = await request(app)
+            .post('/api/v1/license/activate')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ key });
+        expect(react.status).toBe(200);
+        expect((await hb()).body).toMatchObject({ valid: true, tier: 'translate_pro' });
     });
 
     it('activated key → 200 valid:true with tier, on both path aliases', async () => {
