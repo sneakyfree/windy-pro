@@ -24,14 +24,17 @@ if (-not $ready) { Write-Error "Build not available yet at $url. Please try agai
 
 # Abort BEFORE the long ~4 GB download if the drive can't hold download + extraction
 # (~8 GB peak on C: — the ZIP is removed after extract). Fail-open if free space can't be read.
-try {
-  $needGB = 8
-  $free = (Get-Item $env:LOCALAPPDATA).PSDrive.Free
-  if ($free -and $free -lt ($needGB * 1GB)) {
-    Write-Error ("Not enough free disk space: about {0:N1} GB free, but Windy Word needs ~{1} GB to download and install. Free up some space, then re-run." -f ($free / 1GB), $needGB)
-    return
-  }
-} catch {}
+# NOTE: only the READ is inside try/catch. With $ErrorActionPreference='Stop', a Write-Error
+# inside the try would throw and be swallowed by our own catch — which made this whole
+# preflight a silent no-op (proven on a 7.8 GB-free laptop that sailed straight into the
+# download). The abort itself must live OUTSIDE the try.
+$needGB = 8
+$free = $null
+try { $free = (Get-Item $env:LOCALAPPDATA).PSDrive.Free } catch {}
+if ($free -and $free -lt ($needGB * 1GB)) {
+  Write-Host ("!! Not enough free disk space: about {0:N1} GB free, but Windy Word needs ~{1} GB to download and install. Free up some space, then re-run." -f ($free / 1GB), $needGB) -ForegroundColor Red
+  return
+}
 
 Write-Host '-> Downloading (~4 GB, all 7 local models) with resume — safe to re-run if it drops. This takes a while...'
 # curl.exe (built into Windows 10 1803+) gives resume (-C -), auto-retry, and a live
