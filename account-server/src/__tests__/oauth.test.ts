@@ -32,7 +32,7 @@ jest.mock('../config', () => ({
     UPLOADS_PATH: '/tmp/test/uploads',
     PORT: 0,
     BCRYPT_ROUNDS: 4,
-    MAX_DEVICES: 5,
+    MAX_DEVICES: 3,
   },
 }));
 

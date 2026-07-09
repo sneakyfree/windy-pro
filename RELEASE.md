@@ -33,6 +33,29 @@ Tags drive everything. The CI workflow `.github/workflows/build-installer.yml`
 builds installers for every push and PR; `.github/workflows/ci.yml`
 `build-electron` job runs only when a `v*` tag is pushed.
 
+## 0. Telemetry ingest config (Intel V2)
+
+The desktop app's Windy Admin telemetry (INTEL-CONTRACT-V2) reads its ingest
+config from `src/client/desktop/telemetry.generated.json`. The **committed**
+file is inert (`{"ingest_url":"","ingest_token":""}`) so source builds emit
+nothing. For a release build, bake the config in before `electron-builder`:
+
+```bash
+export WINDY_ADMIN_INGEST_URL=https://admin.windyword.ai
+export WINDY_ADMIN_INGEST_TOKEN__WINDY_WORD_DESKTOP=<token from lockbox secrets/windy-admin/ingest-tokens.env>
+npm run gen:telemetry   # rewrites telemetry.generated.json (also runs automatically inside npm run build:*)
+```
+
+**MANDATORY after packaging:** restore the inert file so a real token is
+never committed:
+
+```bash
+git checkout -- src/client/desktop/telemetry.generated.json
+```
+
+Secrets stay in the lockbox by NAME only; never paste the token value into
+any committed file.
+
 ## 1. Pre-flight
 
 Run from the repo root on a clean working tree.

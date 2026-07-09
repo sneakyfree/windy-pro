@@ -344,7 +344,7 @@ jest.mock('../config', () => ({
     MAX_FILE_SIZE: 500 * 1024 * 1024,
     PORT: 0,
     BCRYPT_ROUNDS: 4,
-    MAX_DEVICES: 5,
+    MAX_DEVICES: 3,
   },
 }));
 

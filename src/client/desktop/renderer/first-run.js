@@ -71,6 +71,17 @@ class FirstRunExperience {
     this.currentStep = step;
     this.card.innerHTML = '';
 
+    // Intel V2 (INTEL-CONTRACT-V2 §1.7): onboarding funnel. The 4 overlay
+    // steps map onto the contract enum (welcome→launched, hardware scan→
+    // engine_ready, mic test→permissions, summary→done). The main process
+    // enriches with install_id/os/app_version and dedupes once-per-install.
+    try {
+      const stepMap = { 1: 'launched', 2: 'engine_ready', 3: 'permissions', 4: 'done' };
+      if (stepMap[step]) {
+        window.windyAPI?.intel?.emit('install.first_run.step', { step: stepMap[step] });
+      }
+    } catch (_) { }
+
     // Progress dots
     const progress = document.createElement('div');
     Object.assign(progress.style, {

@@ -6,7 +6,7 @@
  *
  * - Runs every 48 hours via setInterval
  * - Checks on startup if lastCheckTime > 48 hours ago
- * - Tiered offline grace periods (Free: 24h, Pro: 7d, Ultra: 14d, Max/Marco Polo: 30d)
+ * - Offline grace: uniform 14 days for all premium tiers; free tier skips grace entirely
  * - On grace expiry: lock models (wipe key from memory)
  * - On re-verification: unlock models
  * - On revoked license: delete all model files
@@ -24,13 +24,17 @@ const https = require('https');
 
 const HEARTBEAT_INTERVAL_MS = 48 * 60 * 60 * 1000; // 48 hours
 
-// Tiered grace periods in hours
+// Tiered grace periods in hours.
+// Business default (Mission 12 P1): ALL premium tiers get a uniform 14-day
+// offline grace. The free tier never runs the grace countdown at all —
+// check() returns early when there is no license token (free installs have
+// no heartbeat to reset the clock), so free local features can never lock.
 const GRACE_PERIODS = {
-  free:           24,       // 24 hours
-  pro:            168,      // 7 days
-  translate:      336,      // 14 days (Ultra)
-  translate_pro:  720,      // 30 days (Max)
-  marco_polo:     720       // 30 days
+  free:           24,       // fallback only — free tier skips grace entirely (see check())
+  pro:            336,      // 14 days
+  translate:      336,      // 14 days
+  translate_pro:  336,      // 14 days
+  marco_polo:     336       // 14 days
 };
 
 // Heartbeat endpoint — configurable via env for local testing

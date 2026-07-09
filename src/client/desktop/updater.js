@@ -39,6 +39,7 @@ class WindyUpdater {
         autoUpdater.on('update-available', (info) => {
             console.info(`[Updater] Update available: ${info.version}`);
             this.updateAvailable = true;
+            this._pendingVersion = info.version; // for update.failed reporting
             // Non-intrusive toast — send to renderer
             this._sendToast(`🔄 Windy Word v${info.version} is downloading in the background…`);
         });
@@ -59,6 +60,15 @@ class WindyUpdater {
 
         autoUpdater.on('error', (error) => {
             console.error('[Updater] Error:', error.message);
+            // Intel: update.failed (§1.6) — only when an update was actually
+            // in flight (a failed availability CHECK is not an update failure).
+            if (this._pendingVersion) {
+                try {
+                    const { app } = require('electron');
+                    require('./intel').emitUpdateFailed(app.getVersion(), this._pendingVersion, 'updater_error');
+                } catch (_) { /* fire-and-forget */ }
+                this._pendingVersion = null;
+            }
         });
     }
 

@@ -133,6 +133,10 @@ class AutoUpdater {
                     shell.openExternal(update.downloadUrl);
                 } else if (update.downloadUrl) {
                     log.warn('_showUpdateDialog', `Blocked non-HTTPS download URL: ${update.downloadUrl}`);
+                    // Intel: the user accepted the update but it cannot proceed (§1.6)
+                    try {
+                        require('./intel').emitUpdateFailed(this.currentVersion, update.version, 'updater_error');
+                    } catch (_) { /* fire-and-forget */ }
                 }
             }
         }).catch(() => { });
