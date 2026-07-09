@@ -689,11 +689,14 @@ class HistoryPanel {
                     navigator.clipboard.writeText(item.text || '');
                     btn.textContent = '✅ Copied';
                     setTimeout(() => { btn.textContent = '📋 Copy'; }, 1500);
+                    this._emitExportIntel('txt', 'clipboard');
                 } else if (action === 'export-txt') {
                     this._downloadFile(item.text, 'transcript.txt', 'text/plain');
+                    this._emitExportIntel('txt', 'file');
                 } else if (action === 'export-md') {
                     const md = `# Transcript\n\n${item.text}\n`;
                     this._downloadFile(md, 'transcript.md', 'text/markdown');
+                    this._emitExportIntel('md', 'file');
                 } else if (action === 'delete-text') {
                     if (confirm('Delete the transcript text for this session? This cannot be undone.')) {
                         await this._deleteAsset(item, 'text', btn);
@@ -850,6 +853,16 @@ class HistoryPanel {
         return null;
     }
 
+    /**
+     * Intel V2 (INTEL-CONTRACT-V2 §1.2): feature.usage.export — format +
+     * destination enums only, never transcript content. Fire-and-forget.
+     */
+    _emitExportIntel(format, destination) {
+        try {
+            window.windyAPI?.intel?.emit('feature.usage.export', { format, destination });
+        } catch (_) { }
+    }
+
     async _exportToFile(format) {
         const data = this._buildExportContent(format);
         if (!data) return;
@@ -868,11 +881,13 @@ class HistoryPanel {
             });
             if (result?.saved) {
                 this._showExportToast(`✅ Saved to ${result.path || 'chosen location'}`);
+                this._emitExportIntel(format, 'file');
             }
         } catch (err) {
             // Fallback to browser download
             this._downloadFile(data.content, data.filename, data.type);
             this._showExportToast('📥 Downloaded to default folder');
+            this._emitExportIntel(format, 'file');
         }
     }
 
@@ -880,6 +895,7 @@ class HistoryPanel {
         const data = this._buildExportContent('txt');
         if (!data) return;
         navigator.clipboard.writeText(data.content);
+        this._emitExportIntel('txt', 'clipboard');
         this._showExportToast('📋 All transcripts copied to clipboard!');
     }
 
@@ -894,6 +910,7 @@ class HistoryPanel {
         const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.windyAPI.openExternalUrl(mailto);
         this._showExportToast('📧 Opening email client…');
+        this._emitExportIntel('txt', 'share'); // email → share per contract enum
     }
 
     _showExportToast(message) {

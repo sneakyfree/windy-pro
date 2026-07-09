@@ -37,7 +37,7 @@ export const config = {
     JWT_SECRET: requireEnv('JWT_SECRET'),
     JWT_EXPIRY: '15m' as const, // SEC-M6: Reduced from 24h — short-lived tokens minimize stolen-token risk
     REFRESH_EXPIRY: '30d' as const,
-    MAX_DEVICES: 5,
+    MAX_DEVICES: 3,
     BCRYPT_ROUNDS: 12, // SEC-L2: Increased from 10 to meet modern recommendations
     DB_PATH: process.env.DB_PATH || path.join(__dirname, '..', 'accounts.db'),
     GROQ_API_KEY: process.env.GROQ_API_KEY || '',

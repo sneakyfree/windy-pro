@@ -15,7 +15,7 @@ const crypto = require('crypto');
 
 // Production: const API_BASE = 'https://account.windyword.ai/v1';
 const API_BASE = process.env.ACCOUNT_API || 'http://localhost:8098/v1';
-const MAX_DEVICES = 5;
+const MAX_DEVICES = 3;
 
 class AccountManager {
   constructor(appDataDir) {

@@ -110,6 +110,13 @@ class InstallWizard {
     this.platformAdapter = opts.platformAdapter || (process.platform === 'linux' ? getLinuxAdapter() : null);
     this.downloadManager = new DownloadManager(ENGINES_DIR);
     this.accountManager = new AccountManager(APP_DIR);
+    // Intel V2 (INTEL-CONTRACT-V2 §1.7): main.js injects a callback so the
+    // wizard can report install.first_run.step without requiring ./intel
+    // (the wizard is packaged outside app.asar). Always fire-and-forget.
+    this._reportFirstRunStep = (step, ok) => {
+      try { if (typeof opts.onFirstRunStep === 'function') opts.onFirstRunStep(step, ok); } catch (_) { }
+    };
+    this._permStepReported = false;
   }
 
   /**
@@ -272,6 +279,7 @@ class InstallWizard {
     ipcMain.handle('wizard-login', async (event, email, password) => {
       try {
         const account = await this.accountManager.login(email, password);
+        this._reportFirstRunStep('account_linked', true); // Intel: funnel §1.7
         return { success: true, account: { email: account.email, name: account.name, tier: account.tier } };
       } catch (e) {
         return { success: false, error: e.message };
@@ -281,6 +289,7 @@ class InstallWizard {
     ipcMain.handle('wizard-register', async (event, name, email, password) => {
       try {
         const account = await this.accountManager.register(name, email, password);
+        this._reportFirstRunStep('account_linked', true); // Intel: funnel §1.7
         return { success: true, account: { email: account.email, name: account.name, tier: account.tier } };
       } catch (e) {
         return { success: false, error: e.message };
@@ -289,6 +298,7 @@ class InstallWizard {
 
     ipcMain.handle('wizard-free-account', async () => {
       const account = this.accountManager.createFreeAccount();
+      this._reportFirstRunStep('account_linked', true); // Intel: funnel §1.7
       return { success: true, account: { name: account.name, tier: account.tier } };
     });
 
@@ -307,6 +317,7 @@ class InstallWizard {
 
     // ─── Install ───
     ipcMain.handle('wizard-install', async () => {
+      this._reportFirstRunStep('engine_download'); // Intel: funnel §1.7
       wizardLog('═══════════ wizard-install IPC handler ENTRY ═══════════');
       wizardLog(`log file location: ${getLogPath()}`);
       const models = this.selectedEngines.length > 0 ? this.selectedEngines : this.recommendation?.recommended || ['windy-lite-ct2'];
@@ -533,6 +544,7 @@ class InstallWizard {
         }, null, 2));
 
         wizardLog('═══════════ wizard-install handler EXIT (success) ═══════════');
+        this._reportFirstRunStep('engine_ready', true); // Intel: funnel §1.7
         return { success: true, models };
 
       } catch (error) {
@@ -547,6 +559,7 @@ class InstallWizard {
           message: '❌ Installation failed',
           detail: userMessage
         });
+        this._reportFirstRunStep('engine_ready', false); // Intel: funnel §1.7
         return { success: false, error: userMessage };
       }
     });
@@ -640,6 +653,7 @@ class InstallWizard {
 
     // ─── Complete (close wizard) ───
     ipcMain.handle('wizard-complete', async () => {
+      this._reportFirstRunStep('done', true); // Intel: funnel §1.7
       if (this.window && !this.window.isDestroyed()) {
         this.window.close();
       }
@@ -693,6 +707,10 @@ class InstallWizard {
           );
         });
         wizardLog(`IPC wizard-verify-accessibility EXIT: ${result.status}`);
+        if (result.status === 'granted' && !this._permStepReported) {
+          this._permStepReported = true;
+          this._reportFirstRunStep('permissions', true); // Intel: funnel §1.7
+        }
         return result;
       } catch (e) {
         wizardLog(`IPC wizard-verify-accessibility THREW: ${e.message}`);
@@ -712,6 +730,10 @@ class InstallWizard {
           const { systemPreferences } = require('electron');
           const status = systemPreferences.getMediaAccessStatus('microphone');
           wizardLog(`IPC wizard-mic-status EXIT: ${status}`);
+          if (status === 'granted' && !this._permStepReported) {
+            this._permStepReported = true;
+            this._reportFirstRunStep('permissions', true); // Intel: funnel §1.7
+          }
           return { status };
         } catch (e) {
           return { status: 'unknown', error: e.message };

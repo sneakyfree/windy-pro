@@ -24,6 +24,24 @@ const crashLogPath = _path.join(crashLogDir, 'crash.log');
 // src/client/desktop/lib/crash-summary.js (unit tested).
 const { safeErrorSummary: _safeErrorSummary } = require('./lib/crash-summary');
 
+// Intel V2 (INTEL-CONTRACT-V2 §1.4): persist a pending-crash record so the
+// NEXT launch can emit client.crash. Only the 16-hex stack SIGNATURE is
+// stored (frames stripped to basenames before hashing) — never frames,
+// messages, or paths. Written here (not via intel.js) because a crash can
+// happen before app.whenReady()/intel init.
+const { crashSignatureFromError: _crashSignature } = require('./lib/intel-validate');
+const _pendingCrashPath = _path.join(crashLogDir, 'pending-crash.json');
+function writePendingCrash(err) {
+  try {
+    const dir = _path.dirname(_pendingCrashPath);
+    if (!_fs.existsSync(dir)) _fs.mkdirSync(dir, { recursive: true });
+    _fs.writeFileSync(_pendingCrashPath, JSON.stringify({
+      signature: _crashSignature(err),
+      ts: new Date().toISOString(),
+    }));
+  } catch (_) { }
+}
+
 function writeCrashLog(type, err) {
   try {
     const dir = _path.dirname(crashLogPath);
@@ -39,6 +57,7 @@ function writeCrashLog(type, err) {
 
 process.on('uncaughtException', (err) => {
   writeCrashLog('UncaughtException', err);
+  writePendingCrash(err);
   // CR-002: route the visible strings through safeErrorSummary so
   // the console output + the user-facing dialog never show any
   // attached fields (axios .response, etc.) — only the allow-listed
@@ -66,6 +85,7 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason) => {
   writeCrashLog('UnhandledRejection', reason);
+  writePendingCrash(reason);
   // CR-002: avoid String(reason) which would call the object's
   // toString — for most Errors that's safe (name + message) but
   // a library could override toString to emit arbitrary fields.
@@ -153,6 +173,187 @@ function safeSend(channel, ...args) {
     mainWindow.webContents.send(channel, ...args);
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Intel V2 (INTEL-CONTRACT-V2) — client intel hooks
+// ═══════════════════════════════════════════════════════════════════
+
+// Any error dialog surfaced to the user counts as a handled client.error.
+// Only the stable slug 'error_dialog_shown' is emitted — never the dialog
+// title/text (privacy hard line). No-op until intel.init() runs.
+try {
+  const _origShowErrorBox = dialog.showErrorBox.bind(dialog);
+  dialog.showErrorBox = (title, content) => {
+    try { require('./intel').noteClientError('error_dialog_shown', 'main'); } catch (_) { }
+    return _origShowErrorBox(title, content);
+  };
+} catch (_) { /* keep the original on any failure */ }
+
+let _intelUpdateWallWindow = null;
+let _intelNudgeSentThisRun = false;
+
+/**
+ * Blocking "update required" wall (contract §3 min_version policy).
+ * The user can update (opens the download page) or quit — closing the
+ * wall quits the app.
+ */
+function showUpdateRequiredWindow(updateUrl, latestVersion) {
+  try {
+    if (_intelUpdateWallWindow && !_intelUpdateWallWindow.isDestroyed()) return;
+    _intelUpdateWallWindow = new BrowserWindow({
+      width: 520,
+      height: 420,
+      resizable: false,
+      minimizable: false,
+      fullscreenable: false,
+      alwaysOnTop: true,
+      autoHideMenuBar: true,
+      title: 'Update Required',
+      backgroundColor: '#0f172a',
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+      },
+    });
+    _intelUpdateWallWindow.loadFile(
+      path.join(__dirname, 'renderer', 'update-required.html'),
+      { query: { url: updateUrl, v: latestVersion || '' } }
+    );
+    // Blocking: dismissing the wall exits the app (update or quit).
+    _intelUpdateWallWindow.on('closed', () => {
+      _intelUpdateWallWindow = null;
+      app.quit();
+    });
+    // Hide the main window behind the wall
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+  } catch (e) {
+    console.warn('[Intel] update-required wall failed:', e.message);
+  }
+}
+
+/**
+ * React to each /v1/client/config payload (fetched or cached):
+ * min_version wall, gentle update nudge, message-bus banner push.
+ * Renderer-side rendering (renderer/intel-banner.js) defers anything
+ * visual until dictation/recording is idle.
+ */
+function handleIntelConfig(cfg) {
+  try {
+    if (!cfg) return;
+    const intel = require('./intel');
+    const { compareSemver } = require('./lib/intel-validate');
+    const cur = app.getVersion();
+    const downloadUrl = cfg.update_url || 'https://windyword.ai/#download';
+
+    // 1. Blocking wall: app_version < min_version
+    if (cfg.min_version && compareSemver(cur, cfg.min_version) < 0) {
+      intel.emitWallHit('feature_locked', store.get('license.tier', 'free'), {
+        surface: 'update_required',
+      });
+      showUpdateRequiredWindow(downloadUrl, cfg.latest_version);
+      return;
+    }
+
+    // 2. Gentle dismissible nudge: newer version available (once per run;
+    //    if an update-type message carries it, its frequency_cap governs)
+    if (cfg.latest_version && compareSemver(cfg.latest_version, cur) > 0 && !_intelNudgeSentThisRun) {
+      const updMsg = Array.isArray(cfg.messages)
+        ? cfg.messages.find((m) => m && m.type === 'update') : null;
+      if (updMsg) {
+        // snooze/caps respected via the message's frequency_cap
+        const eligible = intel.pickEligibleMessage([updMsg]);
+        if (eligible) {
+          _intelNudgeSentThisRun = true;
+          safeSend('intel:update-nudge', {
+            latest_version: cfg.latest_version,
+            update_url: updMsg.cta_url || downloadUrl,
+            message: eligible,
+          });
+        }
+      } else {
+        _intelNudgeSentThisRun = true;
+        safeSend('intel:update-nudge', {
+          latest_version: cfg.latest_version,
+          update_url: downloadUrl,
+          message: null,
+        });
+      }
+    }
+
+    // 3. Message bus: promo/survey/maintenance → gentle banner in renderer.
+    //    Frequency caps are enforced client-side (electron-store history);
+    //    do-not-market is server-side (we pass the account JWT on fetch).
+    const candidates = (Array.isArray(cfg.messages) ? cfg.messages : [])
+      .filter((m) => m && m.type !== 'update');
+    if (cfg.maintenance && cfg.maintenance.banner) {
+      candidates.push({
+        message_id: 'maintenance_banner',
+        campaign_id: 'maintenance',
+        type: 'maintenance',
+        priority: 1000,
+        title: cfg.maintenance.severity === 'critical' ? 'Service alert' : 'Maintenance',
+        body: String(cfg.maintenance.banner),
+        dismissible: true,
+        frequency_cap: { max_impressions: 1, per_hours: 6, cooldown_hours: 6 },
+      });
+    }
+    const msg = intel.pickEligibleMessage(candidates);
+    if (msg) safeSend('intel:message', msg);
+  } catch (_) { /* config handling must never break the app */ }
+}
+
+// "Send Feedback…" (Help menu): tiny window with a textarea. The text goes
+// ONLY into a mailto: URL (feedback@windyword.ai) — it never touches
+// telemetry. The only event emitted is feature.usage.feedback {count:1}.
+let _feedbackWindow = null;
+function openFeedbackWindow() {
+  try {
+    if (_feedbackWindow && !_feedbackWindow.isDestroyed()) { _feedbackWindow.focus(); return; }
+    _feedbackWindow = new BrowserWindow({
+      width: 460,
+      height: 400,
+      resizable: false,
+      minimizable: false,
+      fullscreenable: false,
+      autoHideMenuBar: true,
+      title: 'Send Feedback',
+      backgroundColor: '#0f172a',
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+      },
+    });
+    _feedbackWindow.loadFile(path.join(__dirname, 'renderer', 'feedback.html'));
+    _feedbackWindow.on('closed', () => { _feedbackWindow = null; });
+  } catch (e) {
+    console.warn('[Feedback] window failed:', e.message);
+  }
+}
+
+ipcMain.handle('intel:feedback', async (_event, text) => {
+  try {
+    const intel = require('./intel');
+    const body = [
+      String(text || '').slice(0, 4000),
+      '',
+      '--',
+      `App: Windy Word ${app.getVersion()}`,
+      `OS: ${process.platform} ${os.release()}`,
+      `Last error code: ${intel.getLastErrorCode() || 'none'}`,
+    ].join('\n');
+    const mailto = `mailto:feedback@windyword.ai?subject=${encodeURIComponent('Windy Word feedback')}&body=${encodeURIComponent(body)}`;
+    await shell.openExternal(mailto);
+    intel.emit('feature.usage.feedback', { count: 1 });
+    if (_feedbackWindow && !_feedbackWindow.isDestroyed()) _feedbackWindow.close();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false };
+  }
+});
 
 // Persistent settings storage
 const store = new Store({
@@ -1150,6 +1351,10 @@ function createMacOSMenu() {
         {
           label: 'Windy Word Website',
           click: () => shell.openExternal('https://windyword.ai')
+        },
+        {
+          label: 'Send Feedback…',
+          click: () => openFeedbackWindow()
         },
         {
           label: 'Report a Bug',
@@ -8132,8 +8337,13 @@ async function validateLicense() {
     }
     // Grace period exceeded — downgrade
     console.warn('[License] Grace period exceeded — reverting to free tier');
+    const _prevTier = store.get('license.tier', 'free');
     store.set('license.tier', 'free');
     safeSend('license-expired', { reason: 'grace_period_exceeded' });
+    // Intel: grace-expiry lock (§1.5)
+    try {
+      require('./intel').emitWallHit('feature_locked', _prevTier, { surface: 'license_grace_expired' });
+    } catch (_) { }
     return;
   }
 
@@ -8157,8 +8367,13 @@ async function validateLicense() {
     if (license.lastValidated) {
       const daysSinceCheck = (Date.now() - new Date(license.lastValidated).getTime()) / (24 * 60 * 60 * 1000);
       if (daysSinceCheck > 7) {
+        const _prevTier = store.get('license.tier', 'free');
         store.set('license.tier', 'free');
         safeSend('license-expired', { reason: 'validation_failed' });
+        // Intel: grace-expiry lock (§1.5)
+        try {
+          require('./intel').emitWallHit('feature_locked', _prevTier, { surface: 'license_grace_expired' });
+        } catch (_) { }
       }
     }
   }
@@ -9014,16 +9229,21 @@ app.on('ready', () => {
 app.whenReady().then(async () => {
   _perfMark('app.whenReady()');
 
+  // Intel V2 (INTEL-CONTRACT-V2): supersedes the legacy admin-telemetry.js
+  // desktop.session_start/end emits. Hard-inert unless configured; validated
+  // + journaled offline (§2); fire-and-forget. Initialized BEFORE the
+  // install wizard so the install.first_run funnel is captured.
   try {
     global._windySessionStart = Date.now();
-    require('./admin-telemetry').emitAdminEvent('desktop.session_start', {
-      metadata: {
-        os: process.platform,
-        arch: process.arch,
-        app_version: app.getVersion(),
-        edition: (() => { try { return require('./edition').EDITION; } catch (_) { return 'unknown'; } })(),
-      },
-    });
+    const intel = require('./intel');
+    intel.init({ app, store, ipcMain, pendingCrashPath: _pendingCrashPath });
+    intel.onConfig(handleIntelConfig);
+    intel.emitSessionStart();
+    // Dev/stress rigs only: prove the client.error pipeline end-to-end
+    // without having to provoke a real error dialog.
+    if (process.env.WINDY_INTEL_SELFTEST === '1') {
+      setTimeout(() => intel.noteClientError('error_dialog_shown', 'selftest', { recoverable: true }), 4000);
+    }
   } catch (_) { /* never block startup */ }
   // Clear file cache in dev mode to ensure fresh JS files
   if (process.argv.includes('--dev')) {
@@ -9043,6 +9263,8 @@ app.whenReady().then(async () => {
 
   if (InstallWizard.needsSetup(APP_DATA_DIR)) {
     console.info('[Main] Wizard needed — launching setup wizard');
+    // Intel: onboarding funnel start (install.first_run.step, contract §1.7)
+    try { require('./intel').emitFirstRunStep('launched'); } catch (_) { }
     // Load platform adapter for this OS
     let platformAdapter = null;
     try {
@@ -9054,7 +9276,14 @@ app.whenReady().then(async () => {
     } catch (e) {
       console.error('[Main] Platform adapter not loaded:', e.message);
     }
-    const wizard = new InstallWizard({ platformAdapter });
+    const wizard = new InstallWizard({
+      platformAdapter,
+      // Intel: wizard reports funnel steps back via callback (the wizard is
+      // packaged outside app.asar, so it cannot require ./intel itself).
+      onFirstRunStep: (step, ok) => {
+        try { require('./intel').emitFirstRunStep(step, ok); } catch (_) { }
+      },
+    });
 
     const completed = await wizard.show();
     console.info('[Main] Wizard completed:', completed);
@@ -9181,6 +9410,11 @@ app.whenReady().then(async () => {
           store.set('license.modelsLocked', true);
           safeSend('license-locked', { reason: 'grace_expired' });
           console.warn('[Heartbeat] Models locked — grace period expired');
+          // Intel: grace-expiry lock is a commercial wall signal (§1.5)
+          try {
+            require('./intel').emitWallHit('feature_locked',
+              store.get('license.tier', 'free'), { surface: 'grace_expired_lock' });
+          } catch (_) { }
         },
         onLicenseRestored: (tier) => {
           store.set('license.modelsLocked', false);
@@ -9290,6 +9524,10 @@ app.whenReady().then(async () => {
       return { ok: true };
     } catch (err) {
       console.error('[Updater] .deb install failed:', err.message);
+      // Intel: update.failed (§1.6) — slug only, never the error text
+      try {
+        require('./intel').emitUpdateFailed(app.getVersion(), 'unknown', 'deb_install_failed');
+      } catch (_) { }
       // Fallback: try electron-updater's built-in
       try {
         const { autoUpdater } = require('electron-updater');
@@ -9322,10 +9560,12 @@ app.on('before-quit', () => {
 
 app.on('will-quit', () => {
   try {
-    require('./admin-telemetry').emitAdminEvent('desktop.session_end', {
-      duration_ms: global._windySessionStart ? Date.now() - global._windySessionStart : null,
-      metadata: { os: process.platform, app_version: app.getVersion() },
-    });
+    // Intel V2: session.end + best-effort journal flush (fire-and-forget —
+    // if the flush doesn't finish before exit, the batch stays on disk and
+    // uploads on next launch via /v1/journal idempotent replay).
+    const intel = require('./intel');
+    intel.emitSessionEnd('quit');
+    intel.flush();
   } catch (_) { /* never block quit */ }
 
   // Graceful Python server shutdown: SIGTERM → 3s → SIGKILL

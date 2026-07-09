@@ -28,6 +28,11 @@ const ALLOWED_RECEIVE_CHANNELS = new Set([
   // opt-in, bottom-panel row visibility). Renderer dispatches in app.js
   // initSettingsSideEffectListener().
   'settings:apply-side-effect',
+  // Intel V2 (INTEL-CONTRACT-V2 §3) — main pushes a gentle update nudge and
+  // message-bus banners (promo/survey/maintenance). Rendered by
+  // renderer/intel-banner.js, never during active dictation/recording.
+  'intel:update-nudge',
+  'intel:message',
 ]);
 
 function safeOn(channel, callback) {
@@ -50,6 +55,17 @@ contextBridge.exposeInMainWorld('windyAPI', {
     safeOn('settings:apply-side-effect', (_e, payload) => callback(payload));
   },
   platform: process.platform,
+
+  // ═══ Intel V2 telemetry + message bus (INTEL-CONTRACT-V2) ═══════
+  // emit() forwards to the main process which validates the event type +
+  // metadata keys against the contract whitelist before journaling — the
+  // renderer cannot push free-form data through this channel.
+  intel: {
+    emit: (eventType, metadata) => ipcRenderer.invoke('intel:emit', eventType, metadata).catch(() => { }),
+    onUpdateNudge: (cb) => safeOn('intel:update-nudge', (_e, payload) => cb(payload)),
+    onMessage: (cb) => safeOn('intel:message', (_e, payload) => cb(payload)),
+    sendFeedback: (text) => ipcRenderer.invoke('intel:feedback', text),
+  },
 
   // ═══ Settings ══════════════════════════════════════════════════
   getSettings: () => ipcRenderer.invoke('get-settings'),

@@ -2097,6 +2097,12 @@ class WindyApp {
       console.error('[Stream] Speech recognition error:', event.error);
       if (event.error === 'not-allowed') {
         this.showReconnectToast('🚫 Microphone access denied.');
+        // Intel V2: handled client.error (§1.3) — stable slug, no message text
+        try {
+          window.windyAPI?.intel?.emit('client.error', {
+            code: 'mic_permission_denied', surface: 'stream_dictation', recoverable: true,
+          });
+        } catch (_) { }
         this.stopStreamRecognition();
       } else if (event.error === 'no-speech') {
         // Normal — just means silence. Don't stop.
@@ -2169,6 +2175,11 @@ class WindyApp {
           route
         });
       }
+    }
+    // Intel V2: one completed streaming dictation (§1.2) — word COUNT only
+    if (this._streamingText.trim()) {
+      const streamWords = this._streamingText.trim().split(/\s+/).filter(Boolean).length;
+      this._emitDictationIntel(streamWords, this.recordingStartedAt);
     }
     this.recordingStartedAt = null;
   }
@@ -2757,6 +2768,14 @@ class WindyApp {
           this._displayBatchResult(result);
         } catch (err) {
           console.error('[Batch] Transcription failed:', err);
+          // Intel V2: handled client.error (§1.3) — stable slug, never err.message
+          try {
+            window.windyAPI?.intel?.emit('client.error', {
+              code: this._intelEngineTier() === 'cloud' ? 'cloud_transcribe_failed' : 'transcribe_failed',
+              surface: 'batch_dictation',
+              recoverable: true,
+            });
+          } catch (_) { }
           // Persist the recording even though transcription failed — otherwise a long
           // (dictate-a-whole-book) session is lost on any transcribe error. The SUCCESS
           // path saves in _displayBatchResult; this covers the FAILURE path only, so
@@ -3037,6 +3056,10 @@ class WindyApp {
     // Opt-in analytics (never transcript content)
     this._sendAnalytics({ wordCount });
 
+    // Intel V2: one completed dictation (§1.2). Audio length ≈ recording
+    // start → processing start (this._batchStartTime), not paste time.
+    this._emitDictationIntel(wordCount, savedStartedAt, this._batchStartTime);
+
     // Save audio recording if enabled
     if (this._lastBatchBlob) {
       await this._saveAudioRecording(this._lastBatchBlob, savedStartedAt);
@@ -3102,6 +3125,50 @@ class WindyApp {
   /**
    * Save audio recording blob for playback.
    */
+  /**
+   * Intel V2 (INTEL-CONTRACT-V2 §1.2): map the active engine/model onto the
+   * contract engine_tier enum. Local models → ultralight|light|standard|pro,
+   * any cloud/stream engine → cloud.
+   */
+  _intelEngineTier() {
+    try {
+      const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine || 'local';
+      if (engine === 'cloud' || engine === 'stream' || engine === 'deepgram'
+        || (engine === 'smart' && this._usingCloud)) return 'cloud';
+      const model = localStorage.getItem('windy_model') || 'small';
+      const m = String(model).replace(/-cpu$/, '');
+      if (m === 'tiny' || m === 'windy-nano') return 'ultralight';
+      if (m === 'small' || m === 'windy-lite' || m === 'base' || m === 'windy-core') return 'light';
+      if (m === 'medium' || m === 'windy-edge' || m === 'windy-plus') return 'standard';
+      if (m === 'turbo' || m === 'windy-turbo' || m === 'large-v3' || m === 'windy-pro-engine') return 'pro';
+      return 'standard';
+    } catch (_) { return 'standard'; }
+  }
+
+  /**
+   * Intel V2: emit feature.usage.dictation for one COMPLETED dictation.
+   * Counts/enums only — never transcript content. Fire-and-forget; the main
+   * process validates against the contract whitelist before journaling.
+   */
+  _emitDictationIntel(wordCount, startedAtIso, endedAtMs) {
+    try {
+      if (!window.windyAPI?.intel?.emit) return;
+      const started = startedAtIso ? Date.parse(startedAtIso) : NaN;
+      const ended = Number.isFinite(endedAtMs) ? endedAtMs : Date.now();
+      const seconds = Number.isFinite(started)
+        ? Math.max(0, Math.round((ended - started) / 1000))
+        : 0;
+      const tier = this._intelEngineTier();
+      window.windyAPI.intel.emit('feature.usage.dictation', {
+        seconds,
+        language: localStorage.getItem('windy_language') || 'en',
+        engine_tier: tier,
+        word_count: Number.isInteger(wordCount) ? wordCount : 0,
+        on_device: tier !== 'cloud',
+      });
+    } catch (_) { /* never disturb the dictation flow */ }
+  }
+
   /**
    * Send anonymous usage analytics (opt-in only).
    * Never sends transcript content.

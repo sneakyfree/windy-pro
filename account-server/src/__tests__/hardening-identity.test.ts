@@ -302,7 +302,7 @@ jest.mock('../config', () => ({
     UPLOADS_PATH: '/tmp/test/uploads',
     PORT: 0,
     BCRYPT_ROUNDS: 4,
-    MAX_DEVICES: 5,
+    MAX_DEVICES: 3,
   },
 }));
 
@@ -601,10 +601,10 @@ describe('Login hardening', () => {
     expect(res.status).toBe(400);
   });
 
-  test('login from 6th device when 5 already registered — succeeds, device count stays at 5', async () => {
-    // Pre-seed 5 devices for the test user
+  test('login from 4th device when 3 already registered — succeeds, device count stays at 3', async () => {
+    // Pre-seed MAX_DEVICES (3) devices for the test user
     const existingDevices: any[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 3; i++) {
       existingDevices.push({
         id: `device-${i}`,
         user_id: TEST_USER_ID,
@@ -621,18 +621,18 @@ describe('Login hardening', () => {
       .send({
         email: TEST_USER_EMAIL,
         password: TEST_USER_PASSWORD,
-        deviceId: 'device-new-6th',
-        deviceName: 'Sixth Device',
+        deviceId: 'device-new-4th',
+        deviceName: 'Fourth Device',
         platform: 'test',
       });
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('token');
 
-    // The 6th device should NOT have been added
+    // The 4th device should NOT have been added
     const userDevices = devices.get(TEST_USER_ID) || [];
-    expect(userDevices.length).toBe(5);
-    expect(userDevices.find((d: any) => d.id === 'device-new-6th')).toBeUndefined();
+    expect(userDevices.length).toBe(3);
+    expect(userDevices.find((d: any) => d.id === 'device-new-4th')).toBeUndefined();
   });
 
   test('login with existing device touches it instead of adding a new one', async () => {

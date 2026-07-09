@@ -168,7 +168,7 @@ jest.mock('../config', () => ({
     UPLOADS_PATH: '/tmp/test/uploads',
     PORT: 0,
     BCRYPT_ROUNDS: 4,
-    MAX_DEVICES: 5,
+    MAX_DEVICES: 3,
     STRIPE_SECRET_KEY: 'sk_test_mock_stripe_key',
     STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
   },
