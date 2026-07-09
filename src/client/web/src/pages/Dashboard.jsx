@@ -344,6 +344,11 @@ export default function Dashboard() {
                             { key: 'windy_text', label: 'Windy Text', icon: '📱', comingSoon: true },
                             { key: 'windy_call', label: 'Windy Call', icon: '📞', comingSoon: true },
                             { key: 'windy_mobile', label: 'Windy Mobile', icon: '📲', comingSoon: true },
+                            // Windy Talk — Platform 14 (blessed by Grant 2026-07-08, amends
+                            // ADR-010 §2/§5; see ADR-058). The universal voice layer: talk
+                            // to your agent hands-free and it acts on your computer. Repo
+                            // sneakyfree/windytalk; windytalk.com. Coming soon.
+                            { key: 'windy_talk', label: 'Windy Talk', icon: '🗣️', comingSoon: true },
                             // Windy Mind — Platform 12 per ADR-010 §2. BYOM intelligence
                             // layer. windymind.ai serves a Developer Preview Live landing
                             // page (9 providers, 15+ models) as of 2026-05-19. Tile is now
