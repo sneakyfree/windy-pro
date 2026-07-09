@@ -251,6 +251,44 @@ router.delete('/users/:userId', authenticateToken, adminOnly, (req: Request, res
     }
 });
 
+// ─── GET /users/:userId/devices — license board (activations) ──
+//
+// Windy Admin's license board reads a user's registered devices so an
+// operator can see per-license activations and deactivate ONE machine
+// without revoking the whole license. Devices double as the machine
+// registry for the DRM license (one activation per device row).
+
+router.get('/users/:userId/devices', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const user = db.prepare('SELECT id, license_key, license_tier FROM users WHERE id = ?').get(req.params.userId) as any;
+        if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+        const devices = db.prepare(
+            'SELECT id, name, platform, registered_at, last_seen FROM devices WHERE user_id = ? ORDER BY last_seen DESC'
+        ).all(user.id) as any[];
+        res.json({ userId: user.id, license_tier: user.license_tier, devices });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /users/:userId/devices/:deviceId/remove — deactivate one ──
+
+router.post('/users/:userId/devices/:deviceId/remove', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.userId) as any;
+        if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+        const result = db.prepare('DELETE FROM devices WHERE id = ? AND user_id = ?')
+            .run(req.params.deviceId, user.id);
+        if (result.changes === 0) { res.status(404).json({ error: 'Device not found for this user' }); return; }
+        console.warn(`\uD83D\uDD13 Admin deactivated device ${req.params.deviceId} for user ${String(user.id).slice(0, 8)}`);
+        res.json({ ok: true, deviceId: req.params.deviceId });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── GET /overview — storage and system overview ─────────────
 
 router.get('/overview', authenticateToken, adminOnly, (_req: Request, res: Response) => {
