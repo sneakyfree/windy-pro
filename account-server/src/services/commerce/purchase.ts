@@ -86,8 +86,13 @@ export async function createSetupIntent(user: any): Promise<{ client_secret: str
 export async function setDefaultPaymentMethod(user: any, paymentMethodId: string): Promise<void> {
     const stripe = getStripeClient();
     const customerId = await ensureStripeCustomer(user);
+    // attach() may return a DIFFERENT id than what was passed (Stripe's test
+    // tokens like pm_card_visa expand into a fresh pm_…) — always set the
+    // default from the attach result, never the input string.
+    let attachedId = paymentMethodId;
     try {
-        await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+        const attached = await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+        attachedId = attached.id || paymentMethodId;
     } catch (err: any) {
         // Already attached to THIS customer is fine; attached elsewhere is not.
         if (!String(err?.message || '').includes('already been attached to a customer') || !(await pmBelongsToCustomer(paymentMethodId, customerId))) {
@@ -95,7 +100,7 @@ export async function setDefaultPaymentMethod(user: any, paymentMethodId: string
         }
     }
     await stripe.customers.update(customerId, {
-        invoice_settings: { default_payment_method: paymentMethodId },
+        invoice_settings: { default_payment_method: attachedId },
     });
 }
 
