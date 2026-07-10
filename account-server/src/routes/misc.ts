@@ -213,16 +213,58 @@ router.get('/api/v1/updates/check', (_req: Request, res: Response) => {
 
 // ─── POST /api/v1/license/activate ───────────────────────────
 
+// Commerce P5: activation is device-bound. A license key activates on at
+// most MAX_LICENSE_ACTIVATIONS distinct machines (fingerprint from the
+// X-Device-Fingerprint header the desktop DRM layer already sends).
+// Enforcement happens HERE, at activation — never via the heartbeat, and
+// never by deleting anything (balanced anti-piracy: local tier stays
+// usable offline; over-cap and multi-account keys are FLAGGED for admin
+// review via GET /api/v1/admin/licenses/flagged).
+const MAX_LICENSE_ACTIVATIONS = 3;
+
 router.post('/api/v1/license/activate', authenticateToken, validate(LicenseActivateRequestSchema), (req: Request, res: Response) => {
     try {
         const db = getDb();
         const { key } = req.body;
         const userId = (req as AuthRequest).user.userId;
+        const fingerprint = String(req.headers['x-device-fingerprint'] || '').slice(0, 128);
+        const deviceName = String(req.headers['x-device-name'] || '').slice(0, 128) || null;
+
+        // Commerce P5: device-bound activation. Enforce the machine cap BEFORE
+        // binding the key (the security de-grant below is independent of this).
+        if (fingerprint) {
+            const existing = db.prepare(
+                'SELECT active FROM license_activations WHERE license_key = ? AND device_fingerprint = ?',
+            ).get(key, fingerprint) as { active: number | boolean } | undefined;
+            const activeCount = (db.prepare(
+                'SELECT COUNT(*) as n FROM license_activations WHERE license_key = ? AND active IN (1, true)',
+            ).get(key) as any).n;
+
+            const alreadyActive = existing && (existing.active === 1 || existing.active === true);
+            if (!alreadyActive && activeCount >= MAX_LICENSE_ACTIVATIONS) {
+                return res.status(403).json({
+                    error: 'activation_limit',
+                    message: `This license is already active on ${MAX_LICENSE_ACTIVATIONS} machines. Deactivate one from your account page (or ask support) and try again.`,
+                    active_devices: activeCount,
+                    max_devices: MAX_LICENSE_ACTIVATIONS,
+                });
+            }
+            if (existing) {
+                db.prepare(
+                    'UPDATE license_activations SET active = 1, user_id = ?, device_name = ?, last_seen_at = ? WHERE license_key = ? AND device_fingerprint = ?',
+                ).run(userId, deviceName, new Date().toISOString(), key, fingerprint);
+            } else {
+                db.prepare(
+                    'INSERT INTO license_activations (license_key, device_fingerprint, user_id, device_name, active) VALUES (?, ?, ?, ?, 1)',
+                ).run(key, fingerprint, userId, deviceName);
+            }
+        }
 
         // [A1 fix] A license key does NOT confer a tier. WP- keys are format-only
         // (tierFromKey is a string parse) with no issued-key store or signature, so an
         // activated key can never be trusted to grant paid access. Bind the key for the
-        // desktop DRM heartbeat; the tier comes solely from the Stripe-verified account.
+        // desktop DRM heartbeat + device board (above); the tier comes solely from the
+        // Stripe-verified account.
         db.prepare('UPDATE users SET license_key = ? WHERE id = ?').run(key, userId);
         const acct = db.prepare('SELECT tier FROM users WHERE id = ?')
             .get(userId) as { tier: string | null } | undefined;
@@ -284,12 +326,77 @@ router.post(['/v1/license/heartbeat', '/api/v1/license/heartbeat'], heartbeatLim
             return res.status(403).json({ valid: false, reason: 'revoked' });
         }
 
+        // Commerce P5: record the sighting for the key-sharing flag. Beyond
+        // the activation cap the sighting is stored INACTIVE (active=0) —
+        // it grants nothing and feeds /api/v1/admin/licenses/flagged. The
+        // heartbeat response itself is unchanged: flag, never punish here.
+        const fingerprint = String(req.headers['x-device-fingerprint'] || '').slice(0, 128);
+        if (fingerprint) {
+            try {
+                const seen = db.prepare(
+                    'SELECT active FROM license_activations WHERE license_key = ? AND device_fingerprint = ?',
+                ).get(key, fingerprint);
+                if (seen) {
+                    db.prepare('UPDATE license_activations SET last_seen_at = ? WHERE license_key = ? AND device_fingerprint = ?')
+                        .run(new Date().toISOString(), key, fingerprint);
+                } else {
+                    const activeCount = (db.prepare(
+                        'SELECT COUNT(*) as n FROM license_activations WHERE license_key = ? AND active IN (1, true)',
+                    ).get(key) as any).n;
+                    db.prepare(
+                        'INSERT INTO license_activations (license_key, device_fingerprint, user_id, active) VALUES (?, ?, ?, ?)',
+                    ).run(key, fingerprint, row.id, activeCount >= 3 ? 0 : 1);
+                }
+            } catch { /* sighting bookkeeping must never break the heartbeat */ }
+        }
+
         // [A1 fix] Report the Stripe-verified account tier, never tierFromKey(key)
         // (which would echo a fabricated key's prefix back to the client as a paid tier).
         return res.json({ valid: true, tier: row.tier || 'free' });
     } catch (err: any) {
         console.error('License heartbeat error:', err);
         return res.status(500).json({ valid: false, reason: 'server_error' });
+    }
+});
+
+// ─── License activations (self-serve device board) ──────────
+// The activation-limit error tells users to deactivate a machine — these
+// are the endpoints that make that real, scoped to the caller's own key.
+
+router.get('/api/v1/license/activations', authenticateToken, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const user = db.prepare('SELECT license_key FROM users WHERE id = ?')
+            .get((req as AuthRequest).user.userId) as { license_key: string | null } | undefined;
+        if (!user?.license_key) return res.json({ ok: true, activations: [] });
+        const activations = db.prepare(
+            'SELECT device_fingerprint, device_name, active, activated_at, last_seen_at FROM license_activations WHERE license_key = ? ORDER BY activated_at',
+        ).all(user.license_key);
+        res.json({ ok: true, activations });
+    } catch (err: any) {
+        console.error('License activations list error:', err);
+        res.status(500).json({ error: 'internal_error' });
+    }
+});
+
+router.post('/api/v1/license/activations/deactivate', authenticateToken, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const { device_fingerprint } = req.body || {};
+        if (!device_fingerprint || typeof device_fingerprint !== 'string') {
+            return res.status(400).json({ error: 'missing_fingerprint' });
+        }
+        const user = db.prepare('SELECT license_key FROM users WHERE id = ?')
+            .get((req as AuthRequest).user.userId) as { license_key: string | null } | undefined;
+        if (!user?.license_key) return res.status(404).json({ error: 'no_license' });
+        const result = db.prepare(
+            'UPDATE license_activations SET active = 0, last_seen_at = ? WHERE license_key = ? AND device_fingerprint = ?',
+        ).run(new Date().toISOString(), user.license_key, device_fingerprint);
+        if (result.changes === 0) return res.status(404).json({ error: 'activation_not_found' });
+        res.json({ ok: true, deactivated: device_fingerprint });
+    } catch (err: any) {
+        console.error('License deactivation error:', err);
+        res.status(500).json({ error: 'internal_error' });
     }
 });
 
