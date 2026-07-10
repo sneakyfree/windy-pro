@@ -92,7 +92,7 @@ export const stripeRouter = Router();
  *       NOT the global express.json() middleware. The server.ts
  *       mounts this before express.json() kicks in.
  */
-stripeRouter.post('/webhook', (req: Request, res: Response) => {
+stripeRouter.post('/webhook', async (req: Request, res: Response) => {
     let event: any;
 
     try {
@@ -134,6 +134,23 @@ stripeRouter.post('/webhook', (req: Request, res: Response) => {
     const db = getDb();
     const type = event.type;
     const data = event.data?.object || {};
+
+    // Commerce engine (wallet/catalog/entitlements) events are handled by
+    // their own idempotent handlers and MUST NOT fall through to the legacy
+    // email/amount-matching below (a $20 bundle would otherwise be
+    // misclassified by TIER_BY_AMOUNT). Signature is already verified above.
+    try {
+        const { handleCommerceWebhookEvent } = await import('../services/commerce/webhook');
+        if (await handleCommerceWebhookEvent(event)) {
+            res.json({ received: true, commerce: true });
+            return;
+        }
+    } catch (e: any) {
+        console.error('[Billing] Commerce webhook processing error:', e);
+        // Non-2xx so Stripe redelivers — commerce handlers are idempotent.
+        res.status(500).json({ error: 'commerce_webhook_error', retryable: true });
+        return;
+    }
 
     try {
         if (type === 'payment_intent.succeeded' || type === 'invoice.paid') {

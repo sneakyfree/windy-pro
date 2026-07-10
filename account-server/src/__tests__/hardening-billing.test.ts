@@ -71,6 +71,18 @@ const testKeyPair = generateKeyPair();
 
 jest.mock('../db/schema', () => ({
   getDb: () => ({
+    // Commerce webhook intercept (services/commerce/webhook.ts) probes the
+    // purchases table via the async adapter API before the legacy handlers
+    // run. This suite has no commerce purchases — answer "no rows" so every
+    // event falls through to the legacy paths under test.
+    getAsync: async (_sql: string, ..._args: any[]) => undefined,
+    allAsync: async (_sql: string, ..._args: any[]) => [],
+    runAsync: async (_sql: string, ..._args: any[]) => ({ changes: 0, lastInsertRowid: 0 }),
+    transactionAsync: async (fn: (ctx: any) => Promise<any>) => fn({
+      run: async () => ({ changes: 0, lastInsertRowid: 0 }),
+      get: async () => undefined,
+      all: async () => [],
+    }),
     prepare: (sql: string) => ({
       run: (...args: any[]) => {
         if (sql.includes('INSERT INTO transactions')) {

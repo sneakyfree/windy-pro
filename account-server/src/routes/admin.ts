@@ -7,7 +7,10 @@ import path from 'path';
 import https from 'https';
 import { config } from '../config';
 import { getDb } from '../db/schema';
-import { authenticateToken, adminOnly } from '../middleware/auth';
+import { authenticateToken, adminOnly, AuthRequest } from '../middleware/auth';
+import { listSkus, upsertSku } from '../services/commerce/catalog';
+import { adminGrantEntitlement, recomputeDerivedState, entitlementStatus } from '../services/commerce/entitlements';
+import { logAuditEvent } from '../identity-service';
 
 const router = Router();
 
@@ -468,6 +471,146 @@ router.get('/analytics', authenticateToken, adminOnly, (req: Request, res: Respo
                 mrr_cents: 0, // placeholder — real Stripe data via billing route
             },
         });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  Commerce admin (P5) — catalog editing, entitlement comp/adjust,
+//  key-sharing flags. Every mutation writes an identity_audit_log row.
+//  Consumed by windy-admin's control plane (it forwards the admin's JWT,
+//  same federation pattern as freeze/tier/devices).
+// ═══════════════════════════════════════════════════════════════
+
+// ─── GET /api/v1/admin/catalog — full catalog incl. inactive ───
+
+router.get('/catalog', authenticateToken, adminOnly, (_req: Request, res: Response) => {
+    try {
+        res.json({ ok: true, skus: listSkus(true) });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── PUT /api/v1/admin/catalog/:skuId — edit prices/contents live ───
+
+router.put('/catalog/:skuId', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const adminUser = (req as AuthRequest).user;
+        const body = req.body || {};
+        if (body.price_cents != null && (!Number.isInteger(body.price_cents) || body.price_cents < 0 || body.price_cents > 100000000)) {
+            return res.status(400).json({ error: 'invalid_price', message: 'price_cents must be a non-negative integer.' });
+        }
+        if (body.entitlements != null && (typeof body.entitlements !== 'object' || Array.isArray(body.entitlements))) {
+            return res.status(400).json({ error: 'invalid_entitlements', message: 'entitlements must be a {feature: limit} object.' });
+        }
+        const sku = upsertSku({ ...body, sku_id: String(req.params.skuId) }, adminUser.email || adminUser.userId);
+        logAuditEvent('commerce_catalog_upsert', adminUser.userId, { sku_id: req.params.skuId, price_cents: sku.price_cents, active: sku.active });
+        res.json({ ok: true, sku });
+    } catch (err: any) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/v1/admin/users/:userId/entitlements ───
+
+router.get('/users/:userId/entitlements', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const rows = db.prepare('SELECT * FROM entitlements WHERE user_id = ? ORDER BY created_at DESC').all(String(req.params.userId));
+        res.json({ ok: true, rows, status: entitlementStatus(String(req.params.userId)) });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/v1/admin/users/:userId/entitlements — comp/grant ───
+
+router.post('/users/:userId/entitlements', authenticateToken, adminOnly, async (req: Request, res: Response) => {
+    try {
+        const adminUser = (req as AuthRequest).user;
+        const { feature, limit_value, expires_at } = req.body || {};
+        if (!feature || typeof feature !== 'string') {
+            return res.status(400).json({ error: 'missing_feature' });
+        }
+        const limit = Number(limit_value ?? 1);
+        if (!Number.isFinite(limit) || limit < 0) {
+            return res.status(400).json({ error: 'invalid_limit' });
+        }
+        const target = getDb().prepare('SELECT id FROM users WHERE id = ?').get(req.params.userId);
+        if (!target) return res.status(404).json({ error: 'user_not_found' });
+        const actionId = `admin:${adminUser.userId}:${Date.now()}`;
+        const id = adminGrantEntitlement(String(req.params.userId), feature, limit, actionId, expires_at || null);
+        await recomputeDerivedState(String(req.params.userId));
+        logAuditEvent('commerce_entitlement_grant', adminUser.userId, {
+            target_user: req.params.userId, feature, limit_value: limit, expires_at: expires_at || null, entitlement_id: id,
+        });
+        res.json({ ok: true, entitlement_id: id });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── DELETE /api/v1/admin/users/:userId/entitlements/:id — revoke one ───
+
+router.delete('/users/:userId/entitlements/:id', authenticateToken, adminOnly, async (req: Request, res: Response) => {
+    try {
+        const adminUser = (req as AuthRequest).user;
+        const db = getDb();
+        const row = db.prepare('SELECT * FROM entitlements WHERE id = ? AND user_id = ?').get(String(req.params.id), String(req.params.userId)) as any;
+        if (!row) return res.status(404).json({ error: 'entitlement_not_found' });
+        db.prepare("UPDATE entitlements SET status = 'revoked', ended_reason = ?, updated_at = ? WHERE id = ?")
+            .run('This add-on was removed by Windy support. Reply to any receipt email if that looks wrong.', new Date().toISOString(), req.params.id);
+        await recomputeDerivedState(String(req.params.userId));
+        logAuditEvent('commerce_entitlement_revoke', adminUser.userId, { target_user: req.params.userId, entitlement_id: req.params.id, feature: row.feature });
+        res.json({ ok: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/v1/admin/licenses/flagged — key-sharing review queue ───
+// A key is flagged when it has been seen on more distinct fingerprints than
+// the activation cap, or from more than one account. Flag-for-review only —
+// enforcement stays at activation (balanced anti-piracy; never auto-revoke).
+
+// ─── POST /api/v1/admin/licenses/deactivate — free one machine slot ───
+
+router.post('/licenses/deactivate', authenticateToken, adminOnly, (req: Request, res: Response) => {
+    try {
+        const adminUser = (req as AuthRequest).user;
+        const { license_key, device_fingerprint } = req.body || {};
+        if (!license_key || !device_fingerprint) {
+            return res.status(400).json({ error: 'missing_fields', message: 'license_key and device_fingerprint are required.' });
+        }
+        const result = getDb().prepare(
+            'UPDATE license_activations SET active = 0, last_seen_at = ? WHERE license_key = ? AND device_fingerprint = ?',
+        ).run(new Date().toISOString(), license_key, device_fingerprint);
+        if (result.changes === 0) return res.status(404).json({ error: 'activation_not_found' });
+        logAuditEvent('commerce_license_deactivate_device', adminUser.userId, { license_key: String(license_key).slice(0, 7) + '…', device_fingerprint });
+        res.json({ ok: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/licenses/flagged', authenticateToken, adminOnly, (_req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const flagged = db.prepare(`
+            SELECT license_key,
+                   COUNT(*) as fingerprints,
+                   SUM(CASE WHEN active IN (1, true) THEN 1 ELSE 0 END) as active_fingerprints,
+                   COUNT(DISTINCT user_id) as distinct_users,
+                   MAX(last_seen_at) as last_seen_at
+              FROM license_activations
+             GROUP BY license_key
+            HAVING COUNT(*) > 3 OR COUNT(DISTINCT user_id) > 1
+             ORDER BY last_seen_at DESC
+             LIMIT 200
+        `).all();
+        res.json({ ok: true, flagged });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
