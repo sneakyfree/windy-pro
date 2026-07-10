@@ -73,7 +73,11 @@ describe('POST /v1/license/heartbeat', () => {
         expect(reg.status).toBe(201);
         const userId = reg.body.userId;
         const token = reg.body.token;
-        const key = 'WP-UREV-OKED-TEST'; // WP-U prefix → translate_pro
+        const key = 'WP-UREV-OKED-TEST';
+
+        // Post-A1 (#215): the heartbeat reports the STRIPE-verified account
+        // tier, never a tier parsed from the key. Simulate a paying account.
+        getDb().prepare("UPDATE users SET tier = 'translate_pro' WHERE id = ?").run(userId);
 
         const act = await request(app)
             .post('/api/v1/license/activate')
@@ -93,6 +97,7 @@ describe('POST /v1/license/heartbeat', () => {
             .set('Authorization', `Bearer ${key}`)
             .send({ timestamp: new Date().toISOString() });
 
+        // tier mirrors the account (translate_pro), not the WP-U key prefix
         expect((await hb()).body).toMatchObject({ valid: true, tier: 'translate_pro' });
 
         // admin revoke — promote a fresh user to admin directly in the DB
@@ -110,15 +115,21 @@ describe('POST /v1/license/heartbeat', () => {
             .set('Authorization', `Bearer ${admToken}`)
             .send({});
         expect(rev.status).toBe(200);
-        expect(rev.body.previousTier).toBe('translate_pro');
+        // Post-A1: activate binds the key only and never writes a paid tier,
+        // so the pre-revoke license_tier is still the 'free' default (proof
+        // the WP-U key did NOT self-grant translate_pro).
+        expect(rev.body.previousTier).toBe('free');
 
-        // revoked → the one deliberate 403 case
+        // revoked → the one deliberate 403 case (desktop deletes model files)
         const revoked = await hb();
         expect(revoked.status).toBe(403);
         expect(revoked.body).toEqual({ valid: false, reason: 'revoked' });
 
-        // reactivate-after-revoke restores access; a still-revoked key must
-        // never verify (P0: revoked license keeps working = unacceptable)
+        // Reactivate-after-revoke restores access: activate clears the
+        // 'revoked' sentinel (the reactivation fix), so the heartbeat verifies
+        // again and reports the account tier. Guards BOTH invariants: a
+        // still-revoked key must never verify (Mission-5 P0), AND a revoked
+        // license must be recoverable (the regression this fixes).
         const react = await request(app)
             .post('/api/v1/license/activate')
             .set('Authorization', `Bearer ${token}`)
@@ -127,7 +138,12 @@ describe('POST /v1/license/heartbeat', () => {
         expect((await hb()).body).toMatchObject({ valid: true, tier: 'translate_pro' });
     });
 
-    it('activated key → 200 valid:true with tier, on both path aliases', async () => {
+    it('activated key → 200 valid:true with the ACCOUNT tier, on both path aliases', async () => {
+        // Post-A1 (#215): the heartbeat reports the Stripe-verified account
+        // tier, never tierFromKey(). Simulate a paid account, then confirm the
+        // heartbeat mirrors it (not the WP-T key prefix).
+        getDb().prepare("UPDATE users SET tier = 'translate' WHERE email = ?").run('heartbeat@test.windy');
+
         const act = await request(app)
             .post('/api/v1/license/activate')
             .set('Authorization', `Bearer ${sessionToken}`)
@@ -143,5 +159,23 @@ describe('POST /v1/license/heartbeat', () => {
             expect(res.body.valid).toBe(true);
             expect(res.body.tier).toBe('translate');
         }
+    });
+
+    it('[reactivation fix] a fabricated key still cannot self-grant a paid tier (A1 invariant preserved)', async () => {
+        // A free account activating any WP- key stays free — clearing the
+        // 'revoked' sentinel on reactivate must never elevate an unpaid account.
+        const reg = await request(app)
+            .post('/api/v1/auth/register')
+            .send({ name: 'FREE', email: 'hb-free@test.windy', password: 'Heartbeat-Test-1!' });
+        const act = await request(app)
+            .post('/api/v1/license/activate')
+            .set('Authorization', `Bearer ${reg.body.token}`)
+            .send({ key: 'WP-UPRO-XXXX-YYYY' }); // WP-U prefix = "translate_pro" if keys granted tier
+        expect(act.status).toBe(200);
+        const hb = await request(app)
+            .post('/v1/license/heartbeat')
+            .set('Authorization', 'Bearer WP-UPRO-XXXX-YYYY')
+            .send({ timestamp: new Date().toISOString() });
+        expect(hb.body).toMatchObject({ valid: true, tier: 'free' });
     });
 });

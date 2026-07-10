@@ -265,7 +265,18 @@ router.post('/api/v1/license/activate', authenticateToken, validate(LicenseActiv
         // activated key can never be trusted to grant paid access. Bind the key for the
         // desktop DRM heartbeat + device board (above); the tier comes solely from the
         // Stripe-verified account.
-        db.prepare('UPDATE users SET license_key = ? WHERE id = ?').run(key, userId);
+        //
+        // [reactivation fix] Re-activating a key must CLEAR the admin 'revoked'
+        // sentinel — otherwise a revoked license can never be restored (the
+        // heartbeat 403s forever → the desktop keeps deleting model files). A1
+        // stopped activate from writing license_tier, so nothing cleared the
+        // sentinel anymore; this restores the Mission-5 revoke→reactivate
+        // lifecycle. We flip ONLY 'revoked' → NULL; a key can never write a
+        // PAID tier, so A1's no-elevation invariant holds (license_tier is only
+        // ever NULL or the admin-set 'revoked').
+        db.prepare(
+            "UPDATE users SET license_key = ?, license_tier = CASE WHEN license_tier = 'revoked' THEN NULL ELSE license_tier END WHERE id = ?",
+        ).run(key, userId);
         const acct = db.prepare('SELECT tier FROM users WHERE id = ?')
             .get(userId) as { tier: string | null } | undefined;
         const tier = acct?.tier || 'free';
