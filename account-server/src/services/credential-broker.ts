@@ -56,6 +56,25 @@ export function chooseProvider(tier: string | null | undefined): ProviderChoice 
     return TIER_TO_PROVIDER[key] || TIER_TO_PROVIDER.free;
 }
 
+/**
+ * [A1] Resolve the effective billing tier for broker-token issuance.
+ *
+ * SECURITY INVARIANT: `licenseTier` is client-settable via POST /license/activate
+ * (an unbacked WP- key parsed by tierFromKey — no issued-key store, no signature), so it
+ * MUST NOT elevate access. Paid tier is authoritative only from the Stripe-verified `tier`
+ * column (billing.ts) or an explicit trusted server-side override. The only `licenseTier`
+ * signal honored is the admin 'revoked' kill-switch (admin.ts license/revoke) — a DOWNGRADE.
+ */
+export function resolveEffectiveTier(
+    licenseTier: string | null | undefined,
+    tier: string | null | undefined,
+    planTierOverride?: string | null,
+): string {
+    if (planTierOverride) return planTierOverride;   // trusted server override — original top precedence
+    if (licenseTier === 'revoked') return 'free';    // admin kill-switch (the only license_tier signal honored)
+    return tier || 'free';                            // Stripe-verified account tier — never the license key
+}
+
 // ─── HMAC signing for service-to-service calls ───────────────
 //
 // Headers:   X-Windy-Signature: sha256=<hex>
@@ -225,8 +244,8 @@ export function issueBrokerToken(params: IssueParams): IssuedToken {
         }
     }
 
-    // Explicit override > license_tier > tier > 'free'.
-    const effectiveTier = params.plan_tier_override || user.license_tier || user.tier || 'free';
+    // [A1 fix] license_tier is client-settable via POST /license/activate and must never elevate.
+    const effectiveTier = resolveEffectiveTier(user.license_tier, user.tier, params.plan_tier_override);
     const choice = chooseProvider(effectiveTier);
 
     // Default 1 hour, clamp to [60s, 24h].
