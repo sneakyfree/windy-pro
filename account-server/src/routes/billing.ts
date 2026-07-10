@@ -92,7 +92,7 @@ export const stripeRouter = Router();
  *       NOT the global express.json() middleware. The server.ts
  *       mounts this before express.json() kicks in.
  */
-stripeRouter.post('/webhook', (req: Request, res: Response) => {
+stripeRouter.post('/webhook', async (req: Request, res: Response) => {
     let event: any;
 
     try {
@@ -118,6 +118,15 @@ stripeRouter.post('/webhook', (req: Request, res: Response) => {
             return;
         }
 
+        // Replay window: reject a captured-then-replayed webhook whose
+        // timestamp is more than 5 minutes off (mirrors Stripe's own default
+        // tolerance). Handlers are idempotent, but this closes the replay door.
+        const tsSec = parseInt(ts, 10);
+        if (!Number.isFinite(tsSec) || Math.abs(Date.now() / 1000 - tsSec) > 300) {
+            res.status(400).json({ error: 'Stale or invalid webhook timestamp' });
+            return;
+        }
+
         const expected = crypto.createHmac('sha256', config.STRIPE_WEBHOOK_SECRET)
             .update(`${ts}.${rawBody}`).digest('hex');
         if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(v1))) {
@@ -134,6 +143,23 @@ stripeRouter.post('/webhook', (req: Request, res: Response) => {
     const db = getDb();
     const type = event.type;
     const data = event.data?.object || {};
+
+    // Commerce engine (wallet/catalog/entitlements) events are handled by
+    // their own idempotent handlers and MUST NOT fall through to the legacy
+    // email/amount-matching below (a $20 bundle would otherwise be
+    // misclassified by TIER_BY_AMOUNT). Signature is already verified above.
+    try {
+        const { handleCommerceWebhookEvent } = await import('../services/commerce/webhook');
+        if (await handleCommerceWebhookEvent(event)) {
+            res.json({ received: true, commerce: true });
+            return;
+        }
+    } catch (e: any) {
+        console.error('[Billing] Commerce webhook processing error:', e);
+        // Non-2xx so Stripe redelivers — commerce handlers are idempotent.
+        res.status(500).json({ error: 'commerce_webhook_error', retryable: true });
+        return;
+    }
 
     try {
         if (type === 'payment_intent.succeeded' || type === 'invoice.paid') {

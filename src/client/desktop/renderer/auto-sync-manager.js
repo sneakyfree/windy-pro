@@ -250,9 +250,10 @@ class AutoSyncManager {
             <span>${cloudUsedPct}% used${stats.cloudFileCount ? ` · ${stats.cloudFileCount} files` : ''}</span>
           </div>
           ${stats.cloudTier === 'free' || !stats.cloudTier ? `
-            <button id="sync-upgrade-btn" style="margin-top:8px;width:100%;padding:8px;border:none;border-radius:8px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:600;font-size:12px;cursor:pointer;">
-              ⬆️ Upgrade for More Storage
+            <button id="sync-upgrade-btn" style="margin-top:8px;width:100%;padding:10px;border:none;border-radius:8px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:600;font-size:13px;cursor:pointer;">
+              ☁️ Save everything to the cloud
             </button>
+            <div id="sync-upgrade-note" style="margin-top:4px;font-size:11px;opacity:0.55;text-align:center;"></div>
           ` : ''}
         </div>
 
@@ -341,12 +342,13 @@ class AutoSyncManager {
     bindDashboardEvents(container) {
         document.getElementById('sync-close').addEventListener('click', () => container.innerHTML = '');
 
-        // Upgrade button (only exists for free tier)
+        // Storage-as-hero upsell (only exists for free tier). ONE TAP:
+        // card already in the Windy wallet → purchase right here, storage
+        // provisions, sync starts. No card yet → hand off to the web
+        // wallet (Stripe Elements) — card data never enters Electron.
         const upgradeBtn = document.getElementById('sync-upgrade-btn');
         if (upgradeBtn) {
-            upgradeBtn.addEventListener('click', () => {
-                window.windyAPI.openExternalUrl((window.API_CONFIG || {}).upgrade || 'https://windyword.ai/upgrade');
-            });
+            this.hydrateUpsell(upgradeBtn, container);
         }
 
         document.getElementById('sync-clean-local').addEventListener('click', async () => {
@@ -376,6 +378,71 @@ class AutoSyncManager {
         const units = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
         return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+    }
+
+    // ═══ Storage-as-hero upsell (Commerce P3) ═══
+    // The hero bundle comes from the SERVER catalog (prices/contents change
+    // without a client release). One price, one button, one decision.
+    async hydrateUpsell(button, container) {
+        const note = document.getElementById('sync-upgrade-note');
+        const emitUpsell = (action, offer) => {
+            try { window.windyAPI.intel?.emit('feature.usage.upsell', { action, offer, surface: 'sync_dashboard', count: 1 }); } catch { /* inert */ }
+        };
+
+        let hero = null;
+        try {
+            const catalog = await window.windyAPI.commerce.catalog();
+            const bundles = catalog?.bundles || [];
+            // Middle bundle is the hero (most-popular framing); fall back sanely.
+            hero = bundles[1] || bundles[0] || null;
+        } catch { /* stay generic */ }
+
+        if (hero) {
+            const price = `$${(hero.price_cents / 100).toFixed(hero.price_cents % 100 ? 2 : 0)}/month`;
+            const storage = hero.entitlements_human?.['storage.bytes'];
+            button.textContent = `☁️ Save everything to the cloud — ${price}`;
+            if (note && storage) note.textContent = `${hero.name}: ${storage} of cloud storage, plus transcription, translation and agent time.`;
+            emitUpsell('shown', hero.sku_id);
+        }
+
+        button.addEventListener('click', async () => {
+            // Always send a defined offer slug — an undefined value fails the
+            // intel validator and the click would be silently dropped.
+            emitUpsell('click', hero?.sku_id || 'unknown_sku');
+            if (!hero) {
+                // Catalog unreachable — the web wallet is the safe path.
+                await window.windyAPI.commerce.openWallet();
+                return;
+            }
+            button.disabled = true;
+            const originalLabel = button.textContent;
+            button.textContent = 'One moment…';
+            try {
+                const wallet = await window.windyAPI.commerce.wallet();
+                if (wallet?.has_payment_method) {
+                    const result = await window.windyAPI.commerce.purchase(hero.sku_id);
+                    if (result?.status === 'succeeded') {
+                        emitUpsell('purchased', hero.sku_id);
+                        if (note) note.textContent = '✅ You\'re all set — your cloud space is active and syncing has started.';
+                        await this.processQueues();
+                        await this.checkForNewBundles();
+                        this.renderDashboard(container);
+                        return;
+                    }
+                    emitUpsell('failed', hero.sku_id);
+                    if (note) note.textContent = result?.message || 'The payment didn\'t go through — nothing was charged.';
+                } else {
+                    // No card yet → finish in the browser (Stripe Elements).
+                    emitUpsell('opened_wallet', hero.sku_id);
+                    await window.windyAPI.commerce.openWallet(hero.sku_id);
+                    if (note) note.textContent = 'Finishing up in your browser — come back here when you\'re done.';
+                }
+            } catch {
+                if (note) note.textContent = 'Could not reach Windy — check your connection and try again.';
+            }
+            button.disabled = false;
+            button.textContent = originalLabel;
+        });
     }
 }
 
