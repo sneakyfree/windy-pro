@@ -14,6 +14,7 @@ import OAuthFinish from './pages/OAuthFinish'
 import VerifyEmail from './pages/VerifyEmail'
 import Hatch from './pages/Hatch'
 import Upgrade from './pages/Upgrade'
+import Wallet from './pages/Wallet'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 import Settings from './pages/Settings'
@@ -207,6 +208,11 @@ export default function App() {
                 {/* ADR-056: public — the midwife links here from Windy
                     Chat; payment/comp proof is the authorization. */}
                 <Route path="/upgrade" element={<Upgrade />} />
+                {/* Commerce P1/P3: the unified wallet — desktop/mobile
+                    deep-link here with ?sku= for card entry + purchase. */}
+                <Route path="/wallet" element={
+                    <ProtectedRoute><Wallet /></ProtectedRoute>
+                } />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="*" element={<NotFound />} />

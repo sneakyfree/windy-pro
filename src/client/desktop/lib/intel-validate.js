@@ -131,6 +131,16 @@ const FAMILIES = {
     keys: { message_id: str, campaign_id: str, action: oneOf(['cta', 'dismiss', 'snooze']) },
     required: ['message_id', 'action'],
   },
+  // Commerce P3 — generic counter per contract §1.2 (feature.usage.<name>
+  // with count + typed dims). `offer` is a SKU slug, never free text.
+  'feature.usage.upsell': {
+    keys: {
+      count: int, offer: str,
+      action: oneOf(['shown', 'click', 'purchased', 'opened_wallet', 'failed']),
+      surface: str,
+    },
+    required: ['action'],
+  },
 };
 
 /** Event types the renderer may emit over the 'intel:emit' IPC channel. */
@@ -138,6 +148,7 @@ const RENDERER_ALLOWED_TYPES = [
   'feature.usage.dictation',
   'feature.usage.export',
   'feature.usage.translate',
+  'feature.usage.upsell',
   'client.error',
   'marketing.impression',
   'marketing.click',

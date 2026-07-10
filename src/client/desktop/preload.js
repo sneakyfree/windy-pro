@@ -67,6 +67,18 @@ contextBridge.exposeInMainWorld('windyAPI', {
     sendFeedback: (text) => ipcRenderer.invoke('intel:feedback', text),
   },
 
+  // ═══ Commerce — unified wallet (P3) ════════════════════════════
+  // One-tap purchase when a card is already on file; otherwise
+  // openWallet() hands off to the web app (Stripe Elements), so card
+  // data never enters Electron.
+  commerce: {
+    catalog: () => ipcRenderer.invoke('commerce:catalog'),
+    wallet: () => ipcRenderer.invoke('commerce:wallet'),
+    purchase: (skuId) => ipcRenderer.invoke('commerce:purchase', skuId),
+    entitlements: () => ipcRenderer.invoke('commerce:entitlements'),
+    openWallet: (skuId) => ipcRenderer.invoke('commerce:open-wallet', skuId),
+  },
+
   // ═══ Settings ══════════════════════════════════════════════════
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (settings) => ipcRenderer.send('update-settings', settings),

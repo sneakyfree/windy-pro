@@ -411,6 +411,12 @@ const store = new Store({
   }
 });
 
+// Commerce P3 — unified-wallet IPC (catalog / one-tap purchase /
+// entitlements / open web wallet). Card entry never happens in Electron.
+try { require('./commerce').registerCommerceIpc(store); } catch (err) {
+  console.error('[commerce] IPC registration failed:', err?.message || err);
+}
+
 let mainWindow = null;
 let miniWindow = null;
 let miniTranslateWindow = null;
