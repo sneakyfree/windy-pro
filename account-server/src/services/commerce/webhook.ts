@@ -11,7 +11,7 @@
 import { getDb } from '../../db/schema';
 import { getSku } from './catalog';
 import { provisionSkuEntitlements, recomputeDerivedState, revokeBySource } from './entitlements';
-import { PurchaseRow, subscriptionExpiry } from './purchase';
+import { PurchaseRow, subscriptionExpiry, oneTimeTopupExpiry } from './purchase';
 
 const nowIso = () => new Date().toISOString();
 
@@ -49,6 +49,12 @@ export async function handleCommerceWebhookEvent(event: any): Promise<boolean> {
         const subId = invoiceSubscriptionId(obj);
         const purchase = await purchaseBySubscription(subId);
         if (!purchase) return false; // legacy invoice — let billing.ts handle it
+        // A $0 proration/credit invoice is not a real renewal — don't extend on it.
+        const amountPaid = Number(obj?.amount_paid ?? 0);
+        if (amountPaid <= 0) return true;
+        // Never re-activate a subscription that was refunded or cancelled — a
+        // late/redelivered invoice for a prior period must not resurrect access.
+        if (purchase.status === 'refunded' || purchase.status === 'canceled') return true;
         const sku = getSku(purchase.sku_id);
         if (sku) {
             const periodEnd: number | undefined = obj?.lines?.data?.[0]?.period?.end;
@@ -56,6 +62,13 @@ export async function handleCommerceWebhookEvent(event: any): Promise<boolean> {
                 periodEnd ? { items: { data: [{ current_period_end: periodEnd }] } } : {},
             );
             await db.transactionAsync(async (tx) => {
+                // Heal a purchase left 'pending' by a post-capture provisioning
+                // failure in the inline path (charge_captured_retry): flip it
+                // to succeeded here. Already-succeeded rows just get extended.
+                await tx.run(
+                    `UPDATE purchases SET status = 'succeeded', provision_status = 'provisioned', updated_at = ? WHERE id = ? AND status = 'pending'`,
+                    nowIso(), purchase.id,
+                );
                 await provisionSkuEntitlements(tx, purchase.user_id, sku, subId as string, 'subscription', expiresAt);
             });
             await recomputeDerivedState(purchase.user_id);
@@ -84,6 +97,7 @@ export async function handleCommerceWebhookEvent(event: any): Promise<boolean> {
             await revokeBySource(
                 obj.id,
                 `Your ${sku?.name || 'plan'} subscription ended. Re-subscribe any time to get it back.`,
+                purchase.user_id,
             );
         }
         return true;
@@ -99,6 +113,7 @@ export async function handleCommerceWebhookEvent(event: any): Promise<boolean> {
         await revokeBySource(
             purchase.stripe_subscription_id || purchase.id,
             `Your ${sku?.name || 'plan'} payment was refunded, so the plan switched off.`,
+            purchase.user_id,
         );
         return true;
     }
@@ -113,12 +128,16 @@ export async function handleCommerceWebhookEvent(event: any): Promise<boolean> {
         if (purchase && purchase.status === 'pending') {
             const sku = getSku(purchase.sku_id);
             if (sku) {
+                // Only one_time SKUs stamp windy_commerce on the PI, so a
+                // recovered PI is always a top-up — give it the same 30-day
+                // expiry the inline path would have, not a forever grant.
+                const expiresAt = sku.billing_mode === 'one_time' ? oneTimeTopupExpiry() : null;
                 await db.transactionAsync(async (tx) => {
                     await tx.run(
                         `UPDATE purchases SET status = 'succeeded', stripe_payment_intent_id = ?, provision_status = 'provisioned', updated_at = ? WHERE id = ? AND status = 'pending'`,
                         obj.id, nowIso(), purchase.id,
                     );
-                    await provisionSkuEntitlements(tx, purchase.user_id, sku, purchase.id, 'purchase', null);
+                    await provisionSkuEntitlements(tx, purchase.user_id, sku, purchase.id, 'purchase', expiresAt);
                 });
                 await recomputeDerivedState(purchase.user_id);
             }

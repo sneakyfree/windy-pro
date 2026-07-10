@@ -338,6 +338,68 @@ describe('one-tap purchase (the $20 bundle E2E)', () => {
     });
 });
 
+describe('post-capture provisioning failure (money-safety)', () => {
+    it('a provisioning failure AFTER the charge leaves the row pending+retry, and invoice.paid heals it — never marks a captured charge failed', async () => {
+        const { token, userId } = await registerUser();
+        await addCard(token);
+        // Persist the Stripe linkage, then make the provisioning transaction
+        // throw once (simulating a transient DB error after capture).
+        const realTx = (getDb() as any).transactionAsync.bind(getDb());
+        let tripped = false;
+        (getDb() as any).transactionAsync = async (fn: any) => {
+            if (!tripped) { tripped = true; throw new Error('simulated post-capture DB failure'); }
+            return realTx(fn);
+        };
+        let res: any;
+        try {
+            res = await buy(token, 'bundle_breeze');
+        } finally {
+            (getDb() as any).transactionAsync = realTx;
+        }
+        // 202-ish: the client is told it's processing, NOT that it failed.
+        expect(res.status).toBe(202);
+        expect(res.body.error).toBe('provisioning_pending');
+
+        // The purchase is pending+retry with the Stripe ids saved (findable by webhook).
+        const purchase = getDb().get('SELECT status, provision_status, stripe_subscription_id FROM purchases WHERE user_id = ?', userId) as any;
+        expect(purchase.status).toBe('pending');
+        expect(purchase.provision_status).toBe('charge_captured_retry');
+        expect(purchase.stripe_subscription_id).toMatch(/^sub_test_/);
+        // No entitlements yet (the tx that would have written them failed).
+        expect(getDb().all('SELECT 1 FROM entitlements WHERE user_id = ?', userId).length).toBe(0);
+
+        // invoice.paid (Stripe's first-invoice event) heals it: flips to succeeded + provisions.
+        const periodEnd = Math.floor(Date.now() / 1000) + 30 * 86400;
+        const heal = await signedWebhook({
+            type: 'invoice.paid',
+            data: { object: { subscription: purchase.stripe_subscription_id, amount_paid: 500, lines: { data: [{ period: { end: periodEnd } }] } } },
+        });
+        expect(heal.status).toBe(200);
+        const healed = getDb().get('SELECT status FROM purchases WHERE user_id = ?', userId) as any;
+        expect(healed.status).toBe('succeeded');
+        const limits = await request(app).get('/api/v1/entitlements/limits').set('Authorization', `Bearer ${token}`);
+        expect(limits.body.limits['storage.bytes']).toBe(100 * 1024 * 1024 * 1024);
+    });
+
+    it('a $0/refunded invoice never extends or re-activates', async () => {
+        const { token, userId } = await registerUser();
+        await addCard(token);
+        const purchase = await buy(token, 'bundle_gale');
+        const subId = purchase.body.subscription_id;
+        // $0 proration invoice — must be a no-op extension
+        const before = getDb().get("SELECT expires_at FROM entitlements WHERE user_id = ? AND feature = 'storage.bytes'", userId) as any;
+        await signedWebhook({ type: 'invoice.paid', data: { object: { subscription: subId, amount_paid: 0, lines: { data: [{ period: { end: Math.floor(Date.now() / 1000) + 999 * 86400 } }] } } } });
+        const after = getDb().get("SELECT expires_at FROM entitlements WHERE user_id = ? AND feature = 'storage.bytes'", userId) as any;
+        expect(after.expires_at).toBe(before.expires_at);
+        // refund, then a late redelivered invoice.paid must NOT resurrect access
+        const pi = getDb().get('SELECT stripe_payment_intent_id FROM purchases WHERE id = ?', purchase.body.purchase_id) as any;
+        await signedWebhook({ type: 'charge.refunded', data: { object: { payment_intent: pi.stripe_payment_intent_id } } });
+        await signedWebhook({ type: 'invoice.paid', data: { object: { subscription: subId, amount_paid: 2000, lines: { data: [{ period: { end: Math.floor(Date.now() / 1000) + 60 * 86400 } }] } } } });
+        const limits = await request(app).get('/api/v1/entitlements/limits').set('Authorization', `Bearer ${token}`);
+        expect(limits.body.limits['storage.bytes']).toBe(524288000); // stays free — not resurrected
+    });
+});
+
 describe('cross-account isolation', () => {
     it("user B cannot cancel or see user A's subscription/wallet", async () => {
         const a = await registerUser();
@@ -377,7 +439,7 @@ describe('Stripe webhooks (signed)', () => {
         const newPeriodEnd = Math.floor(Date.now() / 1000) + 60 * 86400;
         const res = await signedWebhook({
             type: 'invoice.paid',
-            data: { object: { subscription: subId, lines: { data: [{ period: { end: newPeriodEnd } }] } } },
+            data: { object: { subscription: subId, amount_paid: 500, lines: { data: [{ period: { end: newPeriodEnd } }] } } },
         });
         expect(res.status).toBe(200);
         expect(res.body.commerce).toBe(true);

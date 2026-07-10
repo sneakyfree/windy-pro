@@ -30,7 +30,14 @@ const nowIso = () => new Date().toISOString();
  *  dead card keep cloud value forever. */
 const RENEWAL_GRACE_DAYS = 3;
 /** One-time top-ups (e.g. STT minutes) live this long. */
-const ONE_TIME_TOPUP_DAYS = 30;
+export const ONE_TIME_TOPUP_DAYS = 30;
+
+/** Expiry for a one-time top-up from now (used by both the inline path and
+ *  the webhook crash-recovery path so a recovered top-up doesn't grant
+ *  forever). */
+export function oneTimeTopupExpiry(): string {
+    return new Date(Date.now() + ONE_TIME_TOPUP_DAYS * 86400_000).toISOString();
+}
 
 export interface PurchaseRow {
     id: string;
@@ -188,6 +195,7 @@ export async function purchaseSku(user: any, skuId: string, idempotencyKey: stri
         throw new PurchaseError(500, 'purchase_insert_failed', 'Something went wrong starting this purchase. Nothing was charged.');
     }
 
+    let chargeCaptured = false;
     try {
         let paymentIntentId: string | null = null;
         let subscriptionId: string | null = null;
@@ -208,7 +216,7 @@ export async function purchaseSku(user: any, skuId: string, idempotencyKey: stri
                 throw Object.assign(new Error('payment_not_succeeded'), { code: `pi_status_${pi.status}` });
             }
             paymentIntentId = pi.id;
-            expiresAt = new Date(Date.now() + ONE_TIME_TOPUP_DAYS * 86400_000).toISOString();
+            expiresAt = oneTimeTopupExpiry();
         } else {
             const productId = await ensureStripeProduct(sku);
             const sub = await getStripeClient().subscriptions.create({
@@ -233,14 +241,26 @@ export async function purchaseSku(user: any, skuId: string, idempotencyKey: stri
             expiresAt = subscriptionExpiry(sub);
         }
 
-        // ATOMIC success: purchase flips to succeeded + entitlements provision
-        // in one transaction. A crash between charge and here leaves a
-        // 'pending' row that the webhook (payment_intent.succeeded /
-        // invoice.paid carries purchase_id metadata) completes idempotently.
+        // Money is now CAPTURED. Persist the Stripe linkage FIRST, in its own
+        // write — so even if the provisioning transaction below fails, the
+        // webhook (invoice.paid / payment_intent.succeeded) can still find
+        // this row by its subscription/payment_intent id and heal it. If we
+        // only wrote the ids inside the provisioning tx, a rollback would
+        // orphan the charge (charged, un-findable, un-cancelable).
+        chargeCaptured = true;
+        await db.runAsync(
+            `UPDATE purchases SET stripe_payment_intent_id = ?, stripe_subscription_id = ?, updated_at = ? WHERE id = ?`,
+            paymentIntentId, subscriptionId, nowIso(), purchaseId,
+        );
+
+        // Success transaction: flip to succeeded + provision entitlements
+        // atomically. If THIS fails post-capture, we do NOT mark the purchase
+        // failed (the money is real) — we leave it 'pending' with a retry
+        // marker and let the webhook complete it. See the catch below.
         await db.transactionAsync(async (tx) => {
             await tx.run(
-                `UPDATE purchases SET status = 'succeeded', stripe_payment_intent_id = ?, stripe_subscription_id = ?, provision_status = 'provisioned', updated_at = ? WHERE id = ?`,
-                paymentIntentId, subscriptionId, nowIso(), purchaseId,
+                `UPDATE purchases SET status = 'succeeded', provision_status = 'provisioned', updated_at = ? WHERE id = ?`,
+                nowIso(), purchaseId,
             );
             await provisionSkuEntitlements(
                 tx, user.id, sku,
@@ -250,11 +270,19 @@ export async function purchaseSku(user: any, skuId: string, idempotencyKey: stri
             );
         });
 
-        // Derived gates (account storage_limit + cloud tier). Fail-soft on
-        // cloud: the sweep converges it; the purchase is already good.
-        const derived = await recomputeDerivedState(user.id);
-        if (!derived.cloudPushed) {
-            await db.runAsync("UPDATE purchases SET provision_status = 'cloud_retry' WHERE id = ?", purchaseId);
+        // Derived gates (account storage_limit + cloud tier). The purchase +
+        // entitlements are already COMMITTED and the money is captured — this
+        // must NEVER throw into the catch below (which would mislabel a paid,
+        // provisioned purchase as "nothing was charged"). Any failure here is
+        // fail-soft: the 15-min sweep converges derived state.
+        try {
+            const derived = await recomputeDerivedState(user.id);
+            if (!derived.cloudPushed) {
+                await db.runAsync("UPDATE purchases SET provision_status = 'cloud_retry' WHERE id = ?", purchaseId);
+            }
+        } catch (deriveErr: any) {
+            console.error('[Commerce] post-commit derived-state recompute failed (sweep will converge):', deriveErr?.message || deriveErr);
+            await db.runAsync("UPDATE purchases SET provision_status = 'cloud_retry' WHERE id = ?", purchaseId).catch(() => {});
         }
 
         return {
@@ -269,6 +297,23 @@ export async function purchaseSku(user: any, skuId: string, idempotencyKey: stri
         };
     } catch (err: any) {
         const code = err?.code || err?.raw?.code || err?.decline_code || 'payment_failed';
+
+        // Post-capture failure: the charge is REAL. Never mark it failed
+        // (that would strand the money + hide it from cancel). Leave it
+        // 'pending' with a retry marker; the webhook completes provisioning.
+        if (chargeCaptured) {
+            await db.runAsync(
+                `UPDATE purchases SET provision_status = 'charge_captured_retry', updated_at = ? WHERE id = ? AND status = 'pending'`,
+                nowIso(), purchaseId,
+            ).catch(() => {});
+            console.error(`[Commerce] provisioning failed AFTER capture for purchase ${purchaseId} (webhook will complete):`, err?.message || err);
+            throw new PurchaseError(
+                202 as any, 'provisioning_pending',
+                'Your payment went through and we\'re finishing setting up your plan — it\'ll be active in a moment.',
+            );
+        }
+
+        // Pre-capture failure (decline / Stripe error): nothing was charged.
         await db.runAsync(
             `UPDATE purchases SET status = 'failed', error_code = ?, updated_at = ? WHERE id = ? AND status = 'pending'`,
             String(code).slice(0, 64), nowIso(), purchaseId,
@@ -331,6 +376,7 @@ export async function cancelSubscription(user: any, subscriptionId: string) {
     await revokeBySource(
         subscriptionId,
         `You cancelled ${sku?.name || 'this plan'} — it's off your bill. Re-subscribe any time to pick up where you left off.`,
+        user.id,
     );
     return { ok: true, canceled: subscriptionId };
 }

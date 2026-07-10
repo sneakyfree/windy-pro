@@ -406,7 +406,9 @@ class AutoSyncManager {
         }
 
         button.addEventListener('click', async () => {
-            emitUpsell('click', hero?.sku_id);
+            // Always send a defined offer slug — an undefined value fails the
+            // intel validator and the click would be silently dropped.
+            emitUpsell('click', hero?.sku_id || 'unknown_sku');
             if (!hero) {
                 // Catalog unreachable — the web wallet is the safe path.
                 await window.windyAPI.commerce.openWallet();

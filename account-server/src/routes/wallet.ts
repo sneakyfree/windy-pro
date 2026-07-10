@@ -65,6 +65,14 @@ const purchaseLimiter = makeRateLimiter('wallet-purchase', {
     legacyHeaders: false,
 });
 
+const walletSetupLimiter = makeRateLimiter('wallet-setup', {
+    windowMs: 60 * 1000,
+    max: process.env.NODE_ENV === 'test' ? 10000 : 20,
+    message: { error: 'too_many_requests', message: 'Too many card-setup attempts — wait a minute.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 walletRouter.get('/', authenticateToken, async (req: Request, res: Response) => {
     try {
         const user = freshUser((req as AuthRequest).user.userId);
@@ -75,7 +83,7 @@ walletRouter.get('/', authenticateToken, async (req: Request, res: Response) => 
     }
 });
 
-walletRouter.post('/setup-intent', authenticateToken, async (req: Request, res: Response) => {
+walletRouter.post('/setup-intent', authenticateToken, walletSetupLimiter, async (req: Request, res: Response) => {
     try {
         const user = freshUser((req as AuthRequest).user.userId);
         if (!user) return res.status(404).json({ error: 'user_not_found' });
@@ -85,7 +93,7 @@ walletRouter.post('/setup-intent', authenticateToken, async (req: Request, res: 
     }
 });
 
-walletRouter.post('/payment-method', authenticateToken, async (req: Request, res: Response) => {
+walletRouter.post('/payment-method', authenticateToken, walletSetupLimiter, async (req: Request, res: Response) => {
     try {
         const user = freshUser((req as AuthRequest).user.userId);
         if (!user) return res.status(404).json({ error: 'user_not_found' });
@@ -134,7 +142,7 @@ entitlementsRouter.get('/', authenticateToken, async (req: Request, res: Respons
     try {
         const userId = (req as AuthRequest).user.userId;
         // Opportunistic expiry so a read never shows a stale unlock.
-        await expireDueEntitlements();
+        await expireDueEntitlements(userId);
         res.json({ ok: true, ...entitlementStatus(userId) });
     } catch (err) {
         console.error('[Entitlements] error:', err);
@@ -145,7 +153,7 @@ entitlementsRouter.get('/', authenticateToken, async (req: Request, res: Respons
 entitlementsRouter.get('/limits', authenticateToken, async (req: Request, res: Response) => {
     try {
         const userId = (req as AuthRequest).user.userId;
-        await expireDueEntitlements();
+        await expireDueEntitlements(userId);
         res.json({ ok: true, limits: effectiveLimits(userId) });
     } catch (err) {
         console.error('[Entitlements] error:', err);

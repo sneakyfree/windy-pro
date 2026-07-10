@@ -237,7 +237,7 @@ router.post('/api/v1/license/activate', authenticateToken, validate(LicenseActiv
                 'SELECT active FROM license_activations WHERE license_key = ? AND device_fingerprint = ?',
             ).get(key, fingerprint) as { active: number | boolean } | undefined;
             const activeCount = (db.prepare(
-                'SELECT COUNT(*) as n FROM license_activations WHERE license_key = ? AND active IN (1, true)',
+                'SELECT COUNT(*) as n FROM license_activations WHERE license_key = ? AND active = 1',
             ).get(key) as any).n;
 
             const alreadyActive = existing && (existing.active === 1 || existing.active === true);
@@ -334,7 +334,7 @@ router.post(['/v1/license/heartbeat', '/api/v1/license/heartbeat'], heartbeatLim
                         .run(new Date().toISOString(), key, fingerprint);
                 } else {
                     const activeCount = (db.prepare(
-                        'SELECT COUNT(*) as n FROM license_activations WHERE license_key = ? AND active IN (1, true)',
+                        'SELECT COUNT(*) as n FROM license_activations WHERE license_key = ? AND active = 1',
                     ).get(key) as any).n;
                     db.prepare(
                         'INSERT INTO license_activations (license_key, device_fingerprint, user_id, active) VALUES (?, ?, ?, ?)',

@@ -380,7 +380,7 @@ CREATE TABLE IF NOT EXISTS catalog_skus (
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     entitlements_json TEXT NOT NULL DEFAULT '{}',
-    active BOOLEAN NOT NULL DEFAULT true,
+    active INTEGER NOT NULL DEFAULT 1,
     sort_order INTEGER NOT NULL DEFAULT 100,
     stripe_product_id TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -430,7 +430,7 @@ CREATE TABLE IF NOT EXISTS license_activations (
     device_fingerprint TEXT NOT NULL,
     user_id UUID,
     device_name TEXT,
-    active BOOLEAN NOT NULL DEFAULT true,
+    active INTEGER NOT NULL DEFAULT 1,
     activated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (license_key, device_fingerprint)

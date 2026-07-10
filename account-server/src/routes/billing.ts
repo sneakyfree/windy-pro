@@ -118,6 +118,15 @@ stripeRouter.post('/webhook', async (req: Request, res: Response) => {
             return;
         }
 
+        // Replay window: reject a captured-then-replayed webhook whose
+        // timestamp is more than 5 minutes off (mirrors Stripe's own default
+        // tolerance). Handlers are idempotent, but this closes the replay door.
+        const tsSec = parseInt(ts, 10);
+        if (!Number.isFinite(tsSec) || Math.abs(Date.now() / 1000 - tsSec) > 300) {
+            res.status(400).json({ error: 'Stale or invalid webhook timestamp' });
+            return;
+        }
+
         const expected = crypto.createHmac('sha256', config.STRIPE_WEBHOOK_SECRET)
             .update(`${ts}.${rawBody}`).digest('hex');
         if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(v1))) {
