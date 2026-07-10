@@ -89,7 +89,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   },
 
   // ═══ Recording ═════════════════════════════════════════════════
-  batchTranscribeLocal: (base64Audio) => ipcRenderer.invoke('batch-transcribe-local', base64Audio),
+  batchTranscribeLocal: (base64Audio, model) => ipcRenderer.invoke('batch-transcribe-local', base64Audio, model),
   autoPasteText: (text) => ipcRenderer.invoke('auto-paste-text', text),
   sendVoiceLevel: (level) => ipcRenderer.send('voice-level', level),
   onToggleRecording: (callback) => {

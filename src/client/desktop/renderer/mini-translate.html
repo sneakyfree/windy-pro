@@ -1087,13 +1087,9 @@
 
     <script src="mini-translate.js"></script>
     <script src="windy-voice-input.js"></script>
-    <script>
-      // Add voice input to translation textarea
-      document.addEventListener('DOMContentLoaded', () => {
-        const textInput = document.getElementById('textInput');
-        if (textInput) addVoiceInput(textInput);
-      });
-    </script>
+    <!-- Voice-input wiring lives in mini-translate-voice-init.js: an inline script
+         here is refused by the CSP (script-src 'self') so it never ran. -->
+    <script src="mini-translate-voice-init.js"></script>
 </body>
 
 </html>

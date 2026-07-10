@@ -3668,7 +3668,9 @@ body.light-mode .sfx-master-controls {
    ═══════════════════════════════ */
 
 .window::before {
-  content: 'Windy Word v0.4.0';
+  /* Real version injected by changelog.js via --ww-version-label; the old
+     hardcoded 'v0.4.0' literal outlived four releases in this watermark. */
+  content: var(--ww-version-label, 'Windy Word');
   position: absolute;
   bottom: 4px;
   right: 8px;
