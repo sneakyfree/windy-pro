@@ -152,7 +152,7 @@ export function getSku(skuId: string): CatalogSku | undefined {
 export function listSkus(includeInactive = false): CatalogSku[] {
     const rows = includeInactive
         ? getDb().all('SELECT * FROM catalog_skus ORDER BY sort_order ASC')
-        : getDb().all('SELECT * FROM catalog_skus WHERE active IN (1, true) ORDER BY sort_order ASC');
+        : getDb().all('SELECT * FROM catalog_skus WHERE active = 1 ORDER BY sort_order ASC');
     return rows.map(rowToSku);
 }
 

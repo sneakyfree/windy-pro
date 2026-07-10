@@ -499,8 +499,15 @@ router.put('/catalog/:skuId', authenticateToken, adminOnly, (req: Request, res: 
     try {
         const adminUser = (req as AuthRequest).user;
         const body = req.body || {};
-        if (body.price_cents != null && (!Number.isInteger(body.price_cents) || body.price_cents < 0 || body.price_cents > 100000000)) {
-            return res.status(400).json({ error: 'invalid_price', message: 'price_cents must be a non-negative integer.' });
+        if (body.price_cents != null && (!Number.isInteger(body.price_cents) || body.price_cents > 100000000)) {
+            return res.status(400).json({ error: 'invalid_price', message: 'price_cents must be an integer ≤ 100000000.' });
+        }
+        // Reject the $0-subscription free-money footgun: a $0 subscription SKU
+        // would go active with no payment and provision entitlements for free.
+        // Below Stripe's ~$0.50 floor is never a real paid SKU. (Admin-gated,
+        // but defense-in-depth against a fat-fingered free tier.)
+        if (body.price_cents != null && body.price_cents < 50) {
+            return res.status(400).json({ error: 'price_below_minimum', message: 'price_cents must be at least 50 ($0.50) — Stripe cannot charge less.' });
         }
         if (body.entitlements != null && (typeof body.entitlements !== 'object' || Array.isArray(body.entitlements))) {
             return res.status(400).json({ error: 'invalid_entitlements', message: 'entitlements must be a {feature: limit} object.' });
@@ -535,8 +542,10 @@ router.post('/users/:userId/entitlements', authenticateToken, adminOnly, async (
             return res.status(400).json({ error: 'missing_feature' });
         }
         const limit = Number(limit_value ?? 1);
-        if (!Number.isFinite(limit) || limit < 0) {
-            return res.status(400).json({ error: 'invalid_limit' });
+        // Upper bound keeps limit_value inside BIGINT range (a value past
+        // ~9.2e18 would error at INSERT). 1e15 bytes = 1 PB — ample headroom.
+        if (!Number.isFinite(limit) || limit < 0 || limit > 1e15) {
+            return res.status(400).json({ error: 'invalid_limit', message: 'limit_value must be between 0 and 1e15.' });
         }
         const target = getDb().prepare('SELECT id FROM users WHERE id = ?').get(req.params.userId);
         if (!target) return res.status(404).json({ error: 'user_not_found' });
@@ -601,7 +610,7 @@ router.get('/licenses/flagged', authenticateToken, adminOnly, (_req: Request, re
         const flagged = db.prepare(`
             SELECT license_key,
                    COUNT(*) as fingerprints,
-                   SUM(CASE WHEN active IN (1, true) THEN 1 ELSE 0 END) as active_fingerprints,
+                   SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END) as active_fingerprints,
                    COUNT(DISTINCT user_id) as distinct_users,
                    MAX(last_seen_at) as last_seen_at
               FROM license_activations

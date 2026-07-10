@@ -100,12 +100,21 @@ export function adminGrantEntitlement(
 
 // ─── Revocation / expiry ────────────────────────────────────────────────────
 
-/** Revoke every active grant from one source (refund / cancellation / admin). */
-export async function revokeBySource(sourceId: string, reason: string): Promise<string[]> {
+/**
+ * Revoke every active grant from one source (refund / cancellation / admin).
+ * `userId` scopes the revoke to that account when known — defense-in-depth:
+ * source_ids are globally unique today (Stripe ids / UUIDs), but the
+ * entitlements UNIQUE is (user_id, feature, source_id), so the DB permits a
+ * shared source_id across users; never let one account's refund touch
+ * another's grants.
+ */
+export async function revokeBySource(sourceId: string, reason: string, userId?: string): Promise<string[]> {
     const db = getDb();
-    const rows = await db.allAsync<EntitlementRow>(
-        "SELECT * FROM entitlements WHERE source_id = ? AND status = 'active'", sourceId,
-    );
+    const rows = userId
+        ? await db.allAsync<EntitlementRow>(
+            "SELECT * FROM entitlements WHERE source_id = ? AND user_id = ? AND status = 'active'", sourceId, userId)
+        : await db.allAsync<EntitlementRow>(
+            "SELECT * FROM entitlements WHERE source_id = ? AND status = 'active'", sourceId);
     for (const row of rows) {
         await db.runAsync(
             "UPDATE entitlements SET status = 'revoked', ended_reason = ?, updated_at = ? WHERE id = ?",
@@ -119,15 +128,21 @@ export async function revokeBySource(sourceId: string, reason: string): Promise<
 
 /**
  * Expiry sweep — marks past-due rows expired with a friendly reason, then
- * recomputes derived state (which also converges the cloud tier). Run from
- * the maintenance timer AND opportunistically before entitlement reads.
+ * recomputes derived state (which also converges the cloud tier). The global
+ * form runs from the 15-min maintenance timer; the per-user form
+ * (`expireDueEntitlementsForUser`) runs opportunistically before a user's
+ * own entitlement read — scoping the read-triggered work to the requester so
+ * a single account's polling can't drive global writes + outbound cloud calls.
  */
-export async function expireDueEntitlements(): Promise<number> {
+export async function expireDueEntitlements(userId?: string): Promise<number> {
     const db = getDb();
-    const due = await db.allAsync<EntitlementRow>(
-        "SELECT * FROM entitlements WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at < ?",
-        nowIso(),
-    );
+    const due = userId
+        ? await db.allAsync<EntitlementRow>(
+            "SELECT * FROM entitlements WHERE user_id = ? AND status = 'active' AND expires_at IS NOT NULL AND expires_at < ?",
+            userId, nowIso())
+        : await db.allAsync<EntitlementRow>(
+            "SELECT * FROM entitlements WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at < ?",
+            nowIso());
     for (const row of due) {
         const spec = featureSpec(row.feature);
         const reason = `Your ${spec.label} plan ended on ${(row.expires_at || '').slice(0, 10)}. Renew any time to get ${humanLimit(row.feature, row.limit_value)} back.`;
