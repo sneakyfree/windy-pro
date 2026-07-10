@@ -14,7 +14,6 @@ import {
     AnalyticsRequestSchema,
     RtcSignalRequestSchema,
 } from '@windy-pro/contracts';
-import { tierFromKey } from '@windy-pro/contracts';
 
 // Read version from package.json
 import packageJson from '../../package.json';
@@ -218,12 +217,18 @@ router.post('/api/v1/license/activate', authenticateToken, validate(LicenseActiv
     try {
         const db = getDb();
         const { key } = req.body;
-        const tier = tierFromKey(key);
+        const userId = (req as AuthRequest).user.userId;
 
-        db.prepare('UPDATE users SET license_key = ?, license_tier = ? WHERE id = ?')
-            .run(key, tier, (req as AuthRequest).user.userId);
+        // [A1 fix] A license key does NOT confer a tier. WP- keys are format-only
+        // (tierFromKey is a string parse) with no issued-key store or signature, so an
+        // activated key can never be trusted to grant paid access. Bind the key for the
+        // desktop DRM heartbeat; the tier comes solely from the Stripe-verified account.
+        db.prepare('UPDATE users SET license_key = ? WHERE id = ?').run(key, userId);
+        const acct = db.prepare('SELECT tier FROM users WHERE id = ?')
+            .get(userId) as { tier: string | null } | undefined;
+        const tier = acct?.tier || 'free';
 
-        console.log(`🔑 License activated: ${tier} for user ${(req as AuthRequest).user.userId.slice(0, 8)} (key: ${key.slice(0, 7)}...)`);
+        console.log(`🔑 License key bound for user ${userId.slice(0, 8)} (key: ${key.slice(0, 7)}...); tier=${tier} (from account)`);
 
         res.json({
             success: true,
@@ -266,8 +271,8 @@ router.post(['/v1/license/heartbeat', '/api/v1/license/heartbeat'], heartbeatLim
 
     try {
         const db = getDb();
-        const row = db.prepare('SELECT id, license_tier FROM users WHERE license_key = ?')
-            .get(key) as { id: string; license_tier: string | null } | undefined;
+        const row = db.prepare('SELECT id, tier, license_tier FROM users WHERE license_key = ?')
+            .get(key) as { id: string; tier: string | null; license_tier: string | null } | undefined;
 
         if (!row) {
             return res.json({ valid: false, reason: 'unknown_token' });
@@ -279,7 +284,9 @@ router.post(['/v1/license/heartbeat', '/api/v1/license/heartbeat'], heartbeatLim
             return res.status(403).json({ valid: false, reason: 'revoked' });
         }
 
-        return res.json({ valid: true, tier: row.license_tier || tierFromKey(key) });
+        // [A1 fix] Report the Stripe-verified account tier, never tierFromKey(key)
+        // (which would echo a fabricated key's prefix back to the client as a paid tier).
+        return res.json({ valid: true, tier: row.tier || 'free' });
     } catch (err: any) {
         console.error('License heartbeat error:', err);
         return res.status(500).json({ valid: false, reason: 'server_error' });
