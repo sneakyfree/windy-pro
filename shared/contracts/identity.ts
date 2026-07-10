@@ -194,7 +194,12 @@ export type IdentityAuditEvent =
   // Wave 8 — Grandma Ribbon (managed-credential broker + Pro-hosted hatch)
   | 'broker_token_issue'
   | 'broker_token_revoke'
-  | 'agent_hatch_complete';
+  | 'agent_hatch_complete'
+  // Commerce — unified wallet + catalog + entitlements (P5 admin surface)
+  | 'commerce_catalog_upsert'
+  | 'commerce_entitlement_grant'
+  | 'commerce_entitlement_revoke'
+  | 'commerce_license_deactivate_device';
 
 /** Audit log entry */
 export interface IdentityAuditEntry {

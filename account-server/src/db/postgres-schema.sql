@@ -39,7 +39,9 @@ CREATE TABLE IF NOT EXISTS users (
     last_login_at TIMESTAMPTZ,
     -- Wave E: windy-connect pair tracking (see migration 004)
     connect_paired_at TIMESTAMPTZ,
-    connect_bundle_version TEXT
+    connect_bundle_version TEXT,
+    -- Commerce (see migration 007): last cloud tier pushed to windy-cloud
+    cloud_tier_pushed TEXT
 );
 
 CREATE TABLE IF NOT EXISTS devices (
@@ -365,3 +367,72 @@ CREATE TABLE IF NOT EXISTS chat_profiles (
     onboarding_complete BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ─── Commerce: unified wallet + server-driven catalog + entitlements ────
+-- Mirrors src/db/schema.ts. Prod applies migrations/007-commerce-2026-07-10.sql.
+
+CREATE TABLE IF NOT EXISTS catalog_skus (
+    sku_id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL DEFAULT 'bundle',
+    billing_mode TEXT NOT NULL DEFAULT 'subscription',
+    price_cents INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'usd',
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    entitlements_json TEXT NOT NULL DEFAULT '{}',
+    active INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 100,
+    stripe_product_id TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS purchases (
+    id TEXT PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sku_id TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    amount_cents INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'usd',
+    stripe_payment_intent_id TEXT,
+    stripe_subscription_id TEXT,
+    error_code TEXT,
+    provision_status TEXT NOT NULL DEFAULT 'none',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_purchases_user ON purchases(user_id);
+CREATE INDEX IF NOT EXISTS idx_purchases_subscription ON purchases(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_purchases_payment_intent ON purchases(stripe_payment_intent_id);
+
+CREATE TABLE IF NOT EXISTS entitlements (
+    id TEXT PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    feature TEXT NOT NULL,
+    limit_value BIGINT NOT NULL DEFAULT 1,
+    source TEXT NOT NULL DEFAULT 'purchase',
+    source_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ,
+    ended_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, feature, source_id)
+);
+CREATE INDEX IF NOT EXISTS idx_entitlements_user ON entitlements(user_id);
+CREATE INDEX IF NOT EXISTS idx_entitlements_user_feature ON entitlements(user_id, feature, status);
+
+CREATE TABLE IF NOT EXISTS license_activations (
+    license_key TEXT NOT NULL,
+    device_fingerprint TEXT NOT NULL,
+    user_id UUID,
+    device_name TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    activated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (license_key, device_fingerprint)
+);
+CREATE INDEX IF NOT EXISTS idx_license_activations_user ON license_activations(user_id);

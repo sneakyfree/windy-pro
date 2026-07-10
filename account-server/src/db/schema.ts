@@ -291,6 +291,12 @@ function initSchema(db: DbAdapter): void {
     "ALTER TABLE users ADD COLUMN connect_paired_at TEXT",                   // ISO-8601 of last successful pair
     "ALTER TABLE users ADD COLUMN connect_bundle_version TEXT",              // Bundle spec version, e.g. \"1.0\"
     "ALTER TABLE users ADD COLUMN admin_role TEXT",                          // Windy Admin RBAC (ADR-WA-001 §6): super_admin|admin|support|analyst; NULL = no admin access
+
+    // ─── Commerce (migration 007) ───
+    // Last cloud tier pushed to windy-cloud's /billing/allocate. The
+    // entitlement sweep converges desired vs pushed, so a cloud outage
+    // during purchase self-heals instead of stranding the quota.
+    "ALTER TABLE users ADD COLUMN cloud_tier_pushed TEXT",
   ];
 
   for (const sql of migrations) {
@@ -670,5 +676,89 @@ function initSchema(db: DbAdapter): void {
     );
     CREATE INDEX IF NOT EXISTS idx_hatch_sessions_identity ON hatch_sessions(windy_identity_id);
     CREATE INDEX IF NOT EXISTS idx_hatch_sessions_status ON hatch_sessions(status);
+
+    -- ─── Commerce: unified wallet + server-driven catalog + entitlements ───
+    -- (mirrored in postgres-schema.sql + migrations/007-commerce-2026-07-10.sql)
+
+    -- SKU catalog. Prices + contents live HERE (server-driven) so bundles
+    -- change without a client release. entitlements_json = {feature: limit}.
+    CREATE TABLE IF NOT EXISTS catalog_skus (
+      sku_id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL DEFAULT 'bundle',                -- 'bundle' | 'alacarte'
+      billing_mode TEXT NOT NULL DEFAULT 'subscription',  -- 'subscription' | 'one_time'
+      price_cents INTEGER NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'usd',
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      entitlements_json TEXT NOT NULL DEFAULT '{}',
+      active INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 100,
+      stripe_product_id TEXT,                             -- lazily created, one per SKU
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_by TEXT
+    );
+
+    -- One row per purchase attempt. (user_id, idempotency_key) is the replay
+    -- guard: a retried request returns the original outcome, never a second
+    -- charge. Entitlements are provisioned ONLY on status='succeeded'.
+    CREATE TABLE IF NOT EXISTS purchases (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      sku_id TEXT NOT NULL,
+      idempotency_key TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',             -- pending|succeeded|failed|refunded|canceled
+      amount_cents INTEGER NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'usd',
+      stripe_payment_intent_id TEXT,
+      stripe_subscription_id TEXT,
+      error_code TEXT,
+      provision_status TEXT NOT NULL DEFAULT 'none',      -- none|provisioned|cloud_retry
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, idempotency_key),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_purchases_user ON purchases(user_id);
+    CREATE INDEX IF NOT EXISTS idx_purchases_subscription ON purchases(stripe_subscription_id);
+    CREATE INDEX IF NOT EXISTS idx_purchases_payment_intent ON purchases(stripe_payment_intent_id);
+
+    -- What actually gates features everywhere. Per-feature rows (P5
+    -- granularity comes free): feature is a namespaced slug — storage.bytes,
+    -- stt.cloud_minutes, translate.chars, agent.messages, feature.<name>.
+    -- source_id ties a row to the purchase/subscription/admin grant that
+    -- created it so refunds/cancellations revoke exactly their own grants.
+    CREATE TABLE IF NOT EXISTS entitlements (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      feature TEXT NOT NULL,
+      limit_value INTEGER NOT NULL DEFAULT 1,
+      source TEXT NOT NULL DEFAULT 'purchase',            -- purchase|subscription|admin_grant
+      source_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',              -- active|expired|revoked
+      starts_at TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at TEXT,                                    -- NULL = until revoked
+      ended_reason TEXT,                                  -- human-readable re-lock message
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, feature, source_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_entitlements_user ON entitlements(user_id);
+    CREATE INDEX IF NOT EXISTS idx_entitlements_user_feature ON entitlements(user_id, feature, status);
+
+    -- License → device-fingerprint bindings. Enforces the 3-activation cap
+    -- AT activation and feeds the admin key-sharing flag (many fingerprints
+    -- / multiple accounts on one key). Never auto-revokes — flag for admin.
+    CREATE TABLE IF NOT EXISTS license_activations (
+      license_key TEXT NOT NULL,
+      device_fingerprint TEXT NOT NULL,
+      user_id TEXT,
+      device_name TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      activated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (license_key, device_fingerprint)
+    );
+    CREATE INDEX IF NOT EXISTS idx_license_activations_user ON license_activations(user_id);
   `);
 }

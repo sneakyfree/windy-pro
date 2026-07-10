@@ -36,6 +36,9 @@ import deviceApprovalRoutes from './routes/device-approval';
 import passwordResetPageRoutes from './routes/password-reset-page';
 import adminConsoleRoutes from './routes/admin-console';
 import { billingRouter, stripeRouter } from './routes/billing';
+import { catalogRouter, walletRouter, entitlementsRouter } from './routes/wallet';
+import { seedCatalogIfEmpty } from './services/commerce/catalog';
+import { expireDueEntitlements, retryPendingCloudPushes } from './services/commerce/entitlements';
 import flyRoutes from './routes/fly';
 import mindRoutes from './routes/mind';
 import voiceRoutes from './routes/voice';
@@ -366,6 +369,13 @@ app.use('/api/v1/me/fleet', meFleetRoutes);
 // Billing
 app.use('/api/v1/billing', billingRouter);
 
+// Commerce — unified wallet + server-driven catalog + entitlements (P1/P2).
+// Catalog is public (clients render whatever it returns — price changes
+// never need a client release); wallet + entitlements are per-account.
+app.use('/api/v1/catalog', catalogRouter);
+app.use('/api/v1/wallet', walletRouter);
+app.use('/api/v1/entitlements', entitlementsRouter);
+
 // Webhooks — inbound notifications from ecosystem services
 // POST /api/v1/webhooks/identity/created — called by Windy Mail on new identity
 app.post('/api/v1/webhooks/identity/created', express.json(), (req, res) => {
@@ -479,6 +489,23 @@ initializeJWKS();
 
 // Phase 4: Start periodic WAL checkpoint to prevent unbounded WAL growth
 startWALCheckpoint();
+
+// Commerce: seed the SKU catalog once (server-driven after that), then run
+// the entitlement expiry + cloud-push convergence sweep every 15 minutes.
+// The sweep is the self-heal path for cloud outages during purchase.
+try { seedCatalogIfEmpty(); } catch (err: any) {
+    console.error('[commerce] catalog seed failed:', err?.message || err);
+}
+if (process.env.NODE_ENV !== 'test') {
+    setInterval(() => {
+        expireDueEntitlements()
+            .then(n => { if (n > 0) console.log(`[commerce] expired ${n} entitlement grant(s)`); })
+            .catch(err => console.error('[commerce] expiry sweep failed:', err?.message || err));
+        retryPendingCloudPushes()
+            .then(n => { if (n > 0) console.log(`[commerce] converged ${n} cloud tier push(es)`); })
+            .catch(err => console.error('[commerce] cloud push sweep failed:', err?.message || err));
+    }, 15 * 60 * 1000).unref();
+}
 
 // Phase 7A: Initialize Redis (non-blocking — falls back to in-memory if unavailable)
 initRedis().catch(err => {
