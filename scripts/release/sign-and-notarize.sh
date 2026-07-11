@@ -72,9 +72,14 @@ case "$TARGET" in
 esac
 run npx electron-builder --mac dmg "$FLAG" --publish never
 
-# ── Verify ────────────────────────────────────────────────────────────
+# ── Notarize + verify ─────────────────────────────────────────────────
 if [ "$DRY_RUN" -eq 0 ]; then
-  APP="$REPO_ROOT/dist/mac/Windy Pro.app"
+  # electron-builder output dir differs per arch; the product is "Windy Word".
+  case "$TARGET" in
+    mac-arm64) APP_DIR="$REPO_ROOT/dist/mac-arm64" ;;
+    mac-x64)   APP_DIR="$REPO_ROOT/dist/mac" ;;
+  esac
+  APP="$APP_DIR/Windy Word.app"
   DMG="$(ls -t "$REPO_ROOT/dist/"*.dmg | head -1)"
   [ -d "$APP" ] || fail "signed .app not found at $APP"
   [ -f "$DMG" ] || fail "signed .dmg not found in dist/"
@@ -84,18 +89,28 @@ if [ "$DRY_RUN" -eq 0 ]; then
   codesign --verify --strict --verbose=2 "$APP" 2>&1 | tail -5 || fail "codesign verify failed"
   ok "codesign OK"
 
-  log "gatekeeper assessment (spctl)"
-  if spctl -a -vv "$APP" 2>&1 | grep -q "accepted"; then
-    ok "gatekeeper: accepted"
-  else
-    fail "gatekeeper refused — notarization must not have completed. Check stapler."
-  fi
+  # identity:null makes electron-builder skip its own signing AND its notarize
+  # step, so the DMG must be notarized explicitly (same lesson as the 7-02
+  # recut: EB left the dmg ticketless). notarytool scans the whole DMG.
+  log "notarytool submit (this takes 5-20 min)"
+  xcrun notarytool submit "$DMG" \
+    --apple-id "$APPLE_ID" \
+    --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+    --team-id "$APPLE_TEAM_ID" \
+    --wait || fail "notarization failed — check notarytool log"
+
+  log "staple DMG"
+  xcrun stapler staple "$DMG" || fail "stapler staple failed"
 
   log "stapler validate"
-  if xcrun stapler validate "$DMG" >/dev/null 2>&1; then
-    ok "stapler: $DMG validated"
+  xcrun stapler validate "$DMG" || fail "stapler validate failed"
+  ok "stapler: $DMG validated"
+
+  log "gatekeeper assessment (spctl, dmg)"
+  if spctl -a -t open --context context:primary-signature -vv "$DMG" 2>&1 | grep -q "accepted"; then
+    ok "gatekeeper: accepted"
   else
-    warn "stapler didn't validate $DMG. Notarization may still be in progress."
+    warn "spctl on the DMG didn't say accepted — verify by mounting and assessing the .app"
   fi
 fi
 
