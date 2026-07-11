@@ -55,7 +55,10 @@ for (const sub of ['python', 'wheels', 'ffmpeg', 'model', 'uv']) {
     continue;
   }
   const subDst = path.join(dst, sub);
-  fs.cpSync(subSrc, subDst, { recursive: true });
+  // verbatimSymlinks keeps the bundle's relative symlinks (python's pkgconfig/man
+  // links) intact — the default resolves them to absolute build-tree paths, which
+  // breaks the codesign resource seal on macOS.
+  fs.cpSync(subSrc, subDst, { recursive: true, verbatimSymlinks: true });
   console.log(`✓ copied ${sub}/`);
 }
 

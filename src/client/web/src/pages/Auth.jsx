@@ -101,15 +101,15 @@ export default function Auth() {
                         <div className="auth-logo-icon"></div>
                         <span>Windy Word</span>
                     </Link>
-                    <h2 className="auth-tagline">Voice to text,<br />in the cloud.</h2>
+                    <h2 className="auth-tagline">Your AI agent,<br />hatched in minutes.</h2>
                     <p className="auth-desc">
-                        Stream audio from any device. Get real-time transcription powered by the Windy Word Engine.
-                        No downloads, no installs.
+                        Meet your Windy — a little AI friend who gets things done. It lives in your
+                        account and works in any browser. No downloads, no installs.
                     </p>
                     <div className="auth-features">
-                        <div className="auth-feature">☁️ Cloud transcription API</div>
-                        <div className="auth-feature">📱 Mobile web access</div>
-                        <div className="auth-feature">🔄 Sync across devices</div>
+                        <div className="auth-feature">🐣 Hatched in minutes</div>
+                        <div className="auth-feature">✉️ Sends email &amp; searches the web</div>
+                        <div className="auth-feature">🔒 Private to you — revoke anytime</div>
                     </div>
                 </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import './Landing.css'
 
@@ -67,8 +67,29 @@ export default function Landing() {
     const navigate = useNavigate()
     const [menuOpen, setMenuOpen] = useState(false)
     const [billingType, setBillingType] = useState('monthly')
-    const [latestVersion, setLatestVersion] = useState('v0.6.0')
+    // Shipping desktop build. Bump when a new signed+notarized release lands in R2.
+    const DESKTOP_VERSION = '1.7.0'
+    const [latestVersion] = useState(`v${DESKTOP_VERSION}`)
     const closeMenu = () => setMenuOpen(false)
+
+    // Desktop installers are served straight from the R2 releases bucket
+    // (downloads.windyword.ai). The old /download/latest/* API route isn't
+    // reachable on this SPA host — it falls through to the index.html shell —
+    // so those links served a 2.2KB page instead of an installer.
+    const DOWNLOADS_BASE = 'https://downloads.windyword.ai'
+    const DESKTOP = {
+        macArm: `${DOWNLOADS_BASE}/Windy-Word-${DESKTOP_VERSION}-arm64.dmg`,
+        macX64: `${DOWNLOADS_BASE}/Windy-Word-${DESKTOP_VERSION}-x64.dmg`,
+        windows: `${DOWNLOADS_BASE}/Windy-Word-Reader-Offline-win-x64.zip`,
+        linux: `${DOWNLOADS_BASE}/Windy-Word-Reader-Offline-linux-x86_64.AppImage`,
+    }
+    // Apple Silicon vs Intel: default to Apple Silicon (the large majority of
+    // Macs shipping today); the Intel token in the UA covers older machines.
+    const macIsIntel = () => {
+        try { return /Intel/.test(navigator.userAgent || '') && !/(iPhone|iPad)/.test(navigator.userAgent || '') }
+        catch { return false }
+    }
+    const macDownloadUrl = () => (macIsIntel() ? DESKTOP.macX64 : DESKTOP.macArm)
 
     const handleUpgrade = (tier) => {
         startCheckout(tier, billingType, navigate)
@@ -81,14 +102,6 @@ export default function Landing() {
         translate_pro: { monthly: '$14.99', yearly: '$149', lifetime: '$299' },
     }
     const periodLabels = { monthly: '/month', yearly: '/year', lifetime: 'one-time' }
-
-    // Fetch latest version from cache-proof download API
-    useEffect(() => {
-        fetch('/download/version')
-            .then(r => r.json())
-            .then(data => { if (data.version) setLatestVersion(data.version) })
-            .catch(() => { }) // Fallback to default version
-    }, [])
 
     return (
         <div className="landing">
@@ -538,25 +551,20 @@ export default function Landing() {
                         Your Windy lives in your account and works in any browser. If you'd also like a native companion app for voice-to-text, it's available for Mac, Windows, and Linux. {latestVersion ? `(${latestVersion})` : ''}
                     </p>
                     <div className="download-grid">
-                        <a href="/download/latest/macos" className="download-card">
+                        <a href={macDownloadUrl()} className="download-card">
                             <div className="download-icon">🍎</div>
                             <div className="download-platform">macOS</div>
-                            <div className="download-detail">Intel Mac (.dmg)</div>
+                            <div className="download-detail">Apple Silicon &amp; Intel (.dmg)</div>
                         </a>
-                        <a href="/download/latest/windows" className="download-card">
+                        <a href={DESKTOP.windows} className="download-card">
                             <div className="download-icon">🪟</div>
                             <div className="download-platform">Windows</div>
-                            <div className="download-detail">Windows 10+</div>
+                            <div className="download-detail">Windows 10+ · portable ZIP</div>
                         </a>
-                        <a href="/download/latest/linux-appimage" className="download-card">
+                        <a href={DESKTOP.linux} className="download-card">
                             <div className="download-icon">🐧</div>
                             <div className="download-platform">Linux AppImage</div>
                             <div className="download-detail">Universal — just run it</div>
-                        </a>
-                        <a href="/download/latest/linux-deb" className="download-card">
-                            <div className="download-icon">🐧</div>
-                            <div className="download-platform">Linux .deb</div>
-                            <div className="download-detail">Ubuntu / Debian</div>
                         </a>
                     </div>
                     {/* Mobile */}
@@ -575,13 +583,13 @@ export default function Landing() {
 
                     <div className="download-oneliner">
                         <p className="download-helper">
-                            <strong>🐧 Linux one-liner install:</strong>
+                            <strong>🐧 Linux / macOS one-liner install:</strong>
                         </p>
                         <code className="download-command">
-                            curl -fsSL https://windyword.ai/download/latest/linux-install.sh | bash
+                            curl -fsSL https://downloads.windyword.ai/go.sh | bash
                         </code>
                         <p className="download-helper-sub">
-                            Or download the .deb, then: <code>sudo dpkg -i windy-pro_*.deb</code>
+                            Newer Ubuntu needs AppImage FUSE: <code>sudo apt install libfuse2</code>
                         </p>
                     </div>
                     <div className="download-trust">
