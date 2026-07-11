@@ -31,8 +31,10 @@ date '+[sign-bundled] %H:%M:%S start'
 # --- 1. loose bundled Mach-O binaries (python interpreter, ffmpeg, tcl libs, .so dynload) ---
 if [ -d "$APP/Contents/Resources/bundled" ]; then
   echo "[sign-bundled] 1/6 sign loose bundled binaries"
+  # uv/uvx are extensionless Astral Mach-O binaries — notary rejects them as
+  # "not signed / no hardened runtime" if missed (the sole 7-02 recut reject).
   find "$APP/Contents/Resources/bundled" \
-    -type f \( -name "*.dylib" -o -name "*.so" -o -name "python3.11" -o -name "ffmpeg" \) \
+    -type f \( -name "*.dylib" -o -name "*.so" -o -name "python3.11" -o -name "ffmpeg" -o -name "uv" -o -name "uvx" \) \
     ! -path "*/wheels/*" \
     -print0 | xargs -0 -n1 -I{} codesign --force --options runtime --timestamp --sign "$IDENT" "{}" 2>/dev/null
 fi
