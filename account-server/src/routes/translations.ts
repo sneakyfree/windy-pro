@@ -203,10 +203,19 @@ router.post('/speech', authenticateToken, upload.single('audio'), validate(Speec
             translatedText = mindTranslated;
         } else if (chatRes && chatRes.ok) {
             const chatData: any = await chatRes.json();
-            translatedText = chatData.choices?.[0]?.message?.content?.trim() || `[${targetLang}] ${transcribedText}`;
+            translatedText = (chatData.choices?.[0]?.message?.content || '').trim();
         } else {
-            translatedText = `[${targetLang}] ${transcribedText}`;
-            engine = 'stub';
+            translatedText = '';
+        }
+
+        // Transcription succeeded but no translation engine answered. Don't
+        // fabricate a bracketed echo at HTTP 200 — fail honestly (see /text).
+        if (!translatedText) {
+            console.error(`❌ Speech translation unavailable (no engine answered): ${sourceLang}→${targetLang}`);
+            return res.status(503).json({
+                error: 'translation_unavailable',
+                message: 'Translation engine is temporarily unavailable. Please try again shortly.',
+            });
         }
 
         const translationId = uuidv4();
@@ -312,9 +321,17 @@ router.post('/text', optionalAuth, validate(TranslateTextRequestSchema), async (
             }
         }
 
-        // Fallback
+        // No real engine produced a translation (Mind unavailable AND no direct
+        // provider configured/reachable). NEVER fabricate a bracketed echo at
+        // HTTP 200 — shipping "[es] <English>" as if it were a real translation
+        // is the 2026-05-08 + 2026-07-10 integrity incident. Fail honestly so
+        // callers can surface an error / retry instead of trusting garbage.
         if (!translatedText) {
-            translatedText = `[${targetLang}] ${text}`;
+            console.error(`❌ Translation unavailable (no engine answered): ${sourceLang}→${targetLang}`);
+            return res.status(503).json({
+                error: 'translation_unavailable',
+                message: 'Translation engine is temporarily unavailable. Please try again shortly.',
+            });
         }
 
         // engine is 'mind:*' (Mind broker) or 'groq' / 'openai' / 'stub' (direct/fallback)
