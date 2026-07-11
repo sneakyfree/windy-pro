@@ -538,6 +538,9 @@
 
     .dash-header-right {
         gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        max-width: 100%;
     }
 
     .dash-stats {
