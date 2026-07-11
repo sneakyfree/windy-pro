@@ -2969,6 +2969,34 @@ function startWaylandControlServer() {
       res.writeHead(403); res.end('Forbidden');
       return;
     }
+    // ── CSRF / DNS-rebinding guard (launch-critical) ──────────────────────
+    // The loopback-IP check above is NOT sufficient: a web page open in the
+    // user's browser can POST to 127.0.0.1 (the request originates FROM
+    // loopback), so absent this guard any site the user visits could drive
+    // this control surface — /paste/auto injects keystrokes into the focused
+    // window, /settings/set mutates config, /clones/scan reads the filesystem
+    // = remote code execution by merely visiting a page. A LEGITIMATE local
+    // caller (the Electron renderer, the GNOME-keybinding curl, the agent's
+    // local client) sends NO Origin header and a loopback Host; a browser
+    // cross-origin request ALWAYS carries an Origin, and a DNS-rebinding
+    // attack carries a non-loopback Host. Reject both, and never honor a CORS
+    // preflight. Modeled on windytalk hands/surface.py (ADR-058).
+    if (req.headers['origin']) {
+      res.writeHead(403, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'forbidden: cross-origin request rejected' }));
+      return;
+    }
+    const _hostHeader = String(req.headers['host'] || '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
+    if (_hostHeader && _hostHeader !== '127.0.0.1' && _hostHeader !== 'localhost' && _hostHeader !== '::1') {
+      res.writeHead(403, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'forbidden host' }));
+      return;
+    }
+    if (req.method === 'OPTIONS') {
+      // Deliberately no Access-Control-Allow-Origin: no site may preflight us.
+      res.writeHead(405); res.end('Method Not Allowed');
+      return;
+    }
     const urlObj = new URL(req.url, 'http://localhost');
     const pathname = urlObj.pathname;
 
