@@ -9,6 +9,7 @@ import { config } from '../config';
 import { isRS256Available } from '../jwks';
 import { authenticateToken, optionalAuth, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validation';
+import { emitAdminEvent } from '../services/admin-telemetry';
 import {
     LicenseActivateRequestSchema,
     AnalyticsRequestSchema,
@@ -242,6 +243,11 @@ router.post('/api/v1/license/activate', authenticateToken, validate(LicenseActiv
 
             const alreadyActive = existing && (existing.active === 1 || existing.active === true);
             if (!alreadyActive && activeCount >= MAX_LICENSE_ACTIVATIONS) {
+                // Intel (CONTRACT §8): activation blocked by the machine cap.
+                emitAdminEvent({
+                    event_type: 'license.activate', actor_type: 'human', actor_id: userId,
+                    metadata: { ok: false, reason: 'device_limit', device_count: activeCount },
+                });
                 return res.status(403).json({
                     error: 'activation_limit',
                     message: `This license is already active on ${MAX_LICENSE_ACTIVATIONS} machines. Deactivate one from your account page (or ask support) and try again.`,
@@ -282,6 +288,13 @@ router.post('/api/v1/license/activate', authenticateToken, validate(LicenseActiv
         const tier = acct?.tier || 'free';
 
         console.log(`🔑 License key bound for user ${userId.slice(0, 8)} (key: ${key.slice(0, 7)}...); tier=${tier} (from account)`);
+
+        // Intel (CONTRACT §8): successful activation. Tier comes from the
+        // Stripe-verified account, never the key (A1 invariant).
+        emitAdminEvent({
+            event_type: 'license.activate', actor_type: 'human', actor_id: userId,
+            metadata: { ok: true, tier },
+        });
 
         res.json({
             success: true,
@@ -334,6 +347,12 @@ router.post(['/v1/license/heartbeat', '/api/v1/license/heartbeat'], heartbeatLim
         // 'revoked' is a deliberate admin sentinel (admin.ts license/revoke)
         // — the ONLY case allowed to trigger the client's delete-on-revoke.
         if (row.license_tier === 'revoked') {
+            // Intel (CONTRACT §8): the DRM kill signal — admin visibility into
+            // every denied heartbeat (this is what deletes the client's models).
+            emitAdminEvent({
+                event_type: 'license.heartbeat_denied', actor_type: 'human',
+                actor_id: row.id, metadata: { reason: 'revoked' },
+            });
             return res.status(403).json({ valid: false, reason: 'revoked' });
         }
 

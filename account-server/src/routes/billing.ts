@@ -16,6 +16,7 @@ import { config } from '../config';
 import { getDb } from '../db/schema';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { trackEvent } from '../services/analytics';
+import { emitAdminEvent } from '../services/admin-telemetry';
 import { BillingTransactionsQuerySchema } from '@windy-pro/contracts';
 import { ZodError } from 'zod';
 
@@ -204,9 +205,29 @@ stripeRouter.post('/webhook', async (req: Request, res: Response) => {
             const tier = data.metadata?.tier;
             if (userId && tier) {
                 trackEvent('subscription_started', userId, { tier });
+                const priorTier = (db.prepare('SELECT tier, windy_identity_id FROM users WHERE id = ?')
+                    .get(userId) as { tier: string | null; windy_identity_id: string } | undefined);
                 const newLimit = TIER_LIMITS[tier] || TIER_LIMITS[tier.replace('_', '-')] || TIER_LIMITS.free;
                 db.prepare('UPDATE users SET tier = ?, storage_limit = ? WHERE id = ?')
                     .run(tier, newLimit, userId);
+
+                // Intel (CONTRACT §8): commerce — the checkout AND the resulting
+                // entitlement change. amount_total is integer cents → microcents.
+                const wid = priorTier?.windy_identity_id || userId;
+                emitAdminEvent({
+                    event_type: 'wallet.purchase', actor_type: 'human', actor_id: wid,
+                    metadata: {
+                        sku: tier, ok: true,
+                        amount_microcents: (data.amount_total || 0) * 10_000,
+                    },
+                });
+                emitAdminEvent({
+                    event_type: 'entitlement.change', actor_type: 'human', actor_id: wid,
+                    metadata: {
+                        tier_from: priorTier?.tier || 'free', tier_to: tier,
+                        initiator: 'billing',
+                    },
+                });
 
                 // Save stripe_customer_id if present
                 const stripeCustomerId = data.customer;

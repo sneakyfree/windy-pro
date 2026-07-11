@@ -28,6 +28,22 @@ export interface AdminEvent {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Map a free-form platform/device string to the ingest's closed `os` enum
+ * (CONTRACT §1). Anything unrecognized is dropped (undefined) rather than
+ * passed through — an off-enum value would 422 the whole event.
+ */
+export function normalizeOs(raw: unknown): string | undefined {
+    const s = String(raw || '').toLowerCase();
+    if (s.includes('mac') || s.includes('darwin')) return 'macos';
+    if (s.includes('win')) return 'windows';
+    if (s.includes('linux')) return 'linux';
+    if (s.includes('ios') || s.includes('iphone') || s.includes('ipad')) return 'ios';
+    if (s.includes('android')) return 'android';
+    if (s.includes('web')) return 'web';
+    return undefined;
+}
+
 export function emitAdminEvent(event: AdminEvent): Promise<number | null> {
   const url = process.env.WINDY_ADMIN_INGEST_URL;
   const token = process.env.WINDY_ADMIN_INGEST_TOKEN;

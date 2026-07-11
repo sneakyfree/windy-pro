@@ -20,7 +20,7 @@ import { blacklistToken as redisBlacklistToken, isRedisAvailable } from '../redi
 import { isRS256Available, getSigningKey } from '../jwks';
 import { provisionEcosystem } from '../services/ecosystem-provisioner';
 import { trackEvent, trackEventAsync } from '../services/analytics';
-import { emitAdminEvent } from '../services/admin-telemetry';
+import { emitAdminEvent, normalizeOs } from '../services/admin-telemetry';
 import { validate } from '../middleware/validation';
 import {
     RegisterRequestSchema,
@@ -394,6 +394,11 @@ router.post('/register', authLimiter, validate(RegisterRequestSchema), async (re
             actor_id: windyIdentityId,
             metadata: { platform_signup: platform || 'unknown' },
         });
+        // Intel (CONTRACT §8): the account-core signup event (typed family).
+        emitAdminEvent({
+            event_type: 'account.signup', actor_type: 'human', actor_id: windyIdentityId,
+            metadata: { method: 'password', tier: 'free' },
+        });
         console.log(`✅ Registered: ${email} (${userId.slice(0, 8)}...)`);
 
         res.status(201).json({
@@ -457,12 +462,22 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
         const user = stmts().findUserByEmail.get(email.toLowerCase()) as any;
         if (!user) {
             logAuditEvent('login_failed', null, { email: email.toLowerCase(), reason: 'user_not_found' }, req.ip, req.get('user-agent'));
+            // Intel (CONTRACT §8): failed login — opaque, no email, closed enum reason.
+            emitAdminEvent({
+                event_type: 'account.login', actor_type: 'system',
+                metadata: { ok: false, method: 'password', reason: 'bad_credentials' },
+            });
             return res.status(401).json({ error: 'Invalid email or password' });
         }
 
         const passwordValid = await bcrypt.compare(password, user.password_hash);
         if (!passwordValid) {
             logAuditEvent('login_failed', user.id, { email: email.toLowerCase(), reason: 'invalid_password' }, req.ip, req.get('user-agent'));
+            emitAdminEvent({
+                event_type: 'account.login', actor_type: 'human',
+                actor_id: user.windy_identity_id,
+                metadata: { ok: false, method: 'password', reason: 'bad_credentials' },
+            });
             return res.status(401).json({ error: 'Invalid email or password' });
         }
 
@@ -478,6 +493,11 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
                     reason: 'email_not_verified',
                     accountAgeHours: Math.round(ageHours),
                 }, req.ip, req.get('user-agent'));
+                emitAdminEvent({
+                    event_type: 'account.login', actor_type: 'human',
+                    actor_id: user.windy_identity_id,
+                    metadata: { ok: false, method: 'password', reason: 'unverified' },
+                });
                 return res.status(403).json({
                     error: 'Please verify your email before logging in.',
                     code: 'email_verification_required',
@@ -563,6 +583,13 @@ router.post('/login', authLimiter, validate(LoginRequestSchema), async (req: Req
         }, req.ip, req.get('user-agent'));
 
         trackEvent('user_logged_in', user.id);
+        // Intel (CONTRACT §8): successful login. `mfa` reflects whether the
+        // account has TOTP enabled; still just password method for the funnel.
+        emitAdminEvent({
+            event_type: 'account.login', actor_type: 'human',
+            actor_id: user.windy_identity_id,
+            metadata: { ok: true, method: 'password', mfa: Boolean(mfa?.enabled_at) },
+        });
         console.log(`🔓 Login: ${email} (${user.id.slice(0, 8)}...)`);
 
         res.json({
@@ -786,6 +813,12 @@ router.post('/devices/register', authenticateToken, validate(RegisterDeviceReque
     const devices = getDeviceList(userId);
 
     logAuditEvent('device_add', userId, { deviceId, deviceName, platform }, req.ip, req.get('user-agent'));
+    // Intel (CONTRACT §8): a new machine bound to the account.
+    emitAdminEvent({
+        event_type: 'device.register', actor_type: 'human', actor_id: userId,
+        metadata: { initiator: 'self', device_count: devices.length,
+            os: normalizeOs(platform) },
+    });
 
     console.log(`📱 Device registered: ${deviceName || deviceId.slice(0, 8)} for user ${userId.slice(0, 8)}`);
 
@@ -812,6 +845,10 @@ router.post('/devices/remove', authenticateToken, validate(RemoveDeviceRequestSc
     const devices = getDeviceList(userId);
 
     logAuditEvent('device_remove', userId, { deviceId }, req.ip, req.get('user-agent'));
+    emitAdminEvent({
+        event_type: 'device.remove', actor_type: 'human', actor_id: userId,
+        metadata: { initiator: 'self', device_count: devices.length },
+    });
 
     console.log(`🗑️  Device removed: ${deviceId.slice(0, 8)} from user ${userId.slice(0, 8)}`);
 
