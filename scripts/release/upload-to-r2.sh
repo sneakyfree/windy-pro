@@ -68,26 +68,38 @@ SIZE_BYTES="$(stat -f%z "$DMG" 2>/dev/null || stat -c%s "$DMG" 2>/dev/null)"
 [ "${SIZE_BYTES:-0}" -gt 1048576 ] || fail ".dmg is suspiciously small ($SIZE_BYTES bytes); aborting"
 log "source: $DMG ($((SIZE_BYTES / 1024 / 1024)) MB)"
 
-# ── Step 2: Verify signed + notarized + stapled ─────────────────────────
-# `spctl --assess --type open --context context:primary-signature` is the
-# Gatekeeper check Apple itself runs on first open. If this passes, the
-# .dmg is fully signed + notarized + ticket-stapled.
+# ── Step 2: Verify notarized + stapled ──────────────────────────────────
+# Our mac pipeline uses `mac.identity:null` (electron-builder signs the .app
+# via the afterPack hook, then we notarize the DMG explicitly). That leaves
+# the DMG *unsigned* but with a stapled notarization ticket — so
+# `spctl --assess -t open` on the DMG reports "no usable signature" even
+# though the artifact is fully notarized. The authoritative check for a
+# stapled DMG is `xcrun stapler validate`; we then mount it and confirm the
+# inner .app assesses as Notarized Developer ID (what Gatekeeper does on the
+# user's machine).
 if [ "$(uname -s)" = "Darwin" ]; then
-  log "verifying Gatekeeper acceptance (spctl --assess)"
-  if SPCTL_OUT="$(spctl -a -t open --context context:primary-signature -vv "$DMG" 2>&1)"; then
-    if echo "$SPCTL_OUT" | grep -qE "(accepted|source=Notarized Developer ID)"; then
-      ok "Gatekeeper: accepted, Notarized Developer ID"
+  log "verifying notarization (stapler validate)"
+  xcrun stapler validate "$DMG" >/dev/null 2>&1 \
+    || fail "stapler validate failed — the .dmg has no stapled ticket. Run scripts/release/sign-and-notarize.sh (it notarizes + staples)."
+  ok "stapler: ticket present + valid"
+
+  log "mounting to assess the inner .app (Gatekeeper's real check)"
+  MNT="$(hdiutil attach "$DMG" -nobrowse -readonly 2>/dev/null | grep -o '/Volumes/.*' | head -1)"
+  if [ -n "$MNT" ]; then
+    APP_IN="$(ls -d "$MNT/"*.app 2>/dev/null | head -1)"
+    SPCTL_OUT="$(spctl -a -vvv "$APP_IN" 2>&1 || true)"
+    hdiutil detach "$MNT" -quiet 2>/dev/null || true
+    if echo "$SPCTL_OUT" | grep -qE "accepted" && echo "$SPCTL_OUT" | grep -qi "Notarized Developer ID"; then
+      ok "Gatekeeper: app accepted, Notarized Developer ID"
     else
-      warn "spctl returned success but couldn't find 'accepted' marker:"
       echo "$SPCTL_OUT" | sed 's/^/    /'
-      fail "refusing to upload an artifact whose notarization status is unclear"
+      fail "the inner .app did not assess as Notarized Developer ID — refusing to upload."
     fi
   else
-    echo "$SPCTL_OUT" | sed 's/^/    /'
-    fail "Gatekeeper rejected the .dmg — not signed/notarized/stapled. Run scripts/release/sign-and-notarize.sh first, then ~/notarize-work/finalize-notarized-dmg.sh to staple."
+    warn "could not mount the .dmg to assess the inner app; stapler ticket is valid, proceeding."
   fi
 else
-  warn "non-Darwin host: skipping spctl verification (no Gatekeeper). Run this script from macOS for full safety."
+  warn "non-Darwin host: skipping notarization verification (no Gatekeeper). Run this script from macOS for full safety."
 fi
 
 # ── Step 3: Determine architecture ──────────────────────────────────────
