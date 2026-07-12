@@ -188,7 +188,10 @@ const store = new Store({
     // fallbackChain: ordered list of strategy names to try if active fails (empty = use defaults)
     paste: {
       strategy: 'auto',
-      fallbackChain: []
+      fallbackChain: [],
+      // Put the user's pre-dictation clipboard back ~2s after each auto-paste
+      // (see the courtesy-restore block in paste-strategies.js).
+      restoreClipboard: true
     },
     engine: {
       model: 'base',
@@ -7180,7 +7183,8 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
     }
     console.info(`[AutoPaste] Strategy chain: ${chain.join(' → ')}`);
 
-    const result = await pasteStrategies.autoExecute(trimmed, chain);
+    const result = await pasteStrategies.autoExecute(trimmed, chain,
+      { restoreClipboard: pasteConfig.restoreClipboard !== false });
 
     if (result.ok) {
       console.info(`[AutoPaste] ✓ "${result.strategy}" succeeded (${trimmed.length} chars)`);

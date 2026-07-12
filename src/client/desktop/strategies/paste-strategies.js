@@ -427,6 +427,63 @@ function setClipboard(text) {
   }
 }
 
+// ── Clipboard courtesy-restore ────────────────────────────────────────────
+// AutoPaste puts the transcript on BOTH clipboards (Electron/X11 via
+// setClipboard, Wayland via the wl-copy strategies) so keystroke strategies
+// can work. Without a restore, every dictation squats on the user's
+// clipboard: whatever they copied before dictating is gone, and Ctrl+Shift+V
+// keeps pasting the transcript instead (bit Grant between-terminal copy/paste
+// on 2026-07-12). Snapshot both clipboards before the paste and put them back
+// RESTORE_MS after the winning strategy fired — the target app reads the
+// clipboard at keystroke time, so 2s later the transcript has long since
+// landed. A newer autoExecute cancels any pending restore so back-to-back
+// dictations can't resurrect a stale clipboard between wl-copy and the paste
+// keystroke.
+const RESTORE_MS = 2000;
+let _pendingRestore = null;
+
+function _cancelPendingRestore() {
+  if (_pendingRestore) { clearTimeout(_pendingRestore); _pendingRestore = null; }
+}
+
+async function _snapshotClipboards() {
+  const snap = { x11: null, wayland: null };
+  try { snap.x11 = clipboard.readText() || null; } catch (_) { /* clipboard unavailable */ }
+  if (process.platform === 'linux' &&
+      (process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' &&
+      hasBinary('wl-paste')) {
+    // Strict timeout: wl-paste blocks forever when the clipboard owner is
+    // unresponsive; losing the snapshot is fine, hanging the paste is not.
+    const { ok, stdout } = await execFilePromise('wl-paste', ['-n', '-t', 'text'], { timeout: 500 });
+    if (ok && stdout) snap.wayland = stdout;
+  }
+  return snap;
+}
+
+function _scheduleClipboardRestore(snap, transcript) {
+  _cancelPendingRestore();
+  // Restoring our own transcript would be a no-op; only put back content the
+  // user actually had there.
+  const restoreX11 = snap.x11 && snap.x11 !== transcript;
+  const restoreWayland = snap.wayland && snap.wayland !== transcript;
+  if (!restoreX11 && !restoreWayland) return;
+  _pendingRestore = setTimeout(() => {
+    _pendingRestore = null;
+    if (restoreX11) {
+      try { clipboard.writeText(snap.x11); } catch (_) { /* best-effort */ }
+    }
+    if (restoreWayland) {
+      try {
+        const proc = spawn('wl-copy', [], { stdio: ['pipe', 'ignore', 'ignore'] });
+        proc.on('error', () => {});
+        proc.stdin.write(snap.wayland);
+        proc.stdin.end();
+      } catch (_) { /* best-effort */ }
+    }
+    console.info('[Clipboard] Restored pre-dictation clipboard contents');
+  }, RESTORE_MS);
+}
+
 /**
  * Execute a single strategy. Handles clipboard prep for strategies that need it.
  * Returns { ok, strategy, error? }.
@@ -461,13 +518,20 @@ async function testStrategy(name) {
  * Auto: run through a list of candidates in priority order until one succeeds.
  * Returns { ok, strategy, tried }. Also records the attempt in history.
  */
-async function autoExecute(text, candidates) {
+async function autoExecute(text, candidates, opts = {}) {
   const tried = [];
   const startedAt = Date.now();
+  // A new paste supersedes any restore still pending from the previous one —
+  // otherwise the old timer could fire between this paste's clipboard write
+  // and its keystroke, pasting stale content.
+  _cancelPendingRestore();
+  const restoreWanted = opts.restoreClipboard !== false;
+  const snap = restoreWanted ? await _snapshotClipboards() : null;
   for (const name of candidates) {
     const result = await executeStrategy(name, text);
     tried.push({ strategy: name, ok: result.ok, error: result.error });
     if (result.ok) {
+      if (snap) _scheduleClipboardRestore(snap, text);
       _recordHistory({
         ts: startedAt,
         elapsedMs: Date.now() - startedAt,
