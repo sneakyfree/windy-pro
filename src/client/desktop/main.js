@@ -697,6 +697,28 @@ function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
 /**
  * Start the Python WebSocket server as a child process
  */
+// True if `model` has an on-disk bundled dir with a model.bin under `root`. Mirrors
+// engine/transcriber.py _resolve_model_ref: windy-*-ct2 load by bare id, stock names
+// (base, small, …) get the faster-whisper- prefix.
+function isBundledModel(model, root) {
+  if (!model || !root) return false;
+  const sub = String(model).endsWith('-ct2') ? model : `faster-whisper-${model}`;
+  try { return fs.existsSync(path.join(root, sub, 'model.bin')); } catch (_) { return false; }
+}
+
+// Pick a bundled windy-*-ct2 engine (prefer the small/fast nano, then lite) from a
+// model root, so a clean/offline first-run has a real on-device model to load when
+// no model is configured yet. Returns null if the root has no bundled engine.
+function firstBundledEngine(root) {
+  if (!root) return null;
+  try {
+    const dirs = fs.readdirSync(root).filter(d => {
+      try { return d.endsWith('-ct2') && fs.existsSync(path.join(root, d, 'model.bin')); } catch (_) { return false; }
+    });
+    return dirs.find(d => /nano/.test(d)) || dirs.find(d => /lite/.test(d)) || dirs[0] || null;
+  } catch (_) { return null; }
+}
+
 function startPythonServer() {
   const serverConfig = store.get('server');
   const appDataDir = path.join(os.homedir(), '.windy-pro');
@@ -762,8 +784,31 @@ function startPythonServer() {
     safeSend('python-loading', true);
   }
 
+  // On-device model roots for the engine's _resolve_model_ref (transcriber.py):
+  // it maps a model name -> a bundled/user dir PATH so windy-*-ct2 engines load
+  // offline. Without these roots set it can't find any bundled model and falls
+  // back to a bare name (HF lookup) — the clean-machine first-run brick.
+  const _modelRootCandidates = [
+    process.resourcesPath && path.join(process.resourcesPath, 'bundled', 'model'),
+    path.join(projectRoot, 'bundled', 'model'),
+    path.join(projectRoot, 'extraResources', 'model'),
+  ].filter(Boolean);
+  const bundledModelRoot = _modelRootCandidates.find(p => { try { return fs.existsSync(p); } catch (_) { return false; } }) || '';
+  const userModelRoot = path.join(appDataDir, 'model');
+
   const engineConfig = store.get('engine', {});
-  const modelSize = engineConfig.model || 'base';
+  let modelSize = engineConfig.model || store.get('defaultModel') || 'base';
+  // If that model is not actually on disk — the common case is the electron-store
+  // schema-default 'base', which the offline builds do NOT ship — but a bundled
+  // windy-*-ct2 IS present, switch to it. Otherwise the engine tries an HF lookup
+  // for 'base' that fails offline ("Server failed to start") and never comes up.
+  if (bundledModelRoot && !isBundledModel(modelSize, bundledModelRoot)) {
+    const bundled = firstBundledEngine(bundledModelRoot);
+    if (bundled) {
+      console.info(`[Engine] "${modelSize}" not bundled — using bundled engine "${bundled}" for offline load`);
+      modelSize = bundled;
+    }
+  }
 
   // Soft performance note — runtime monitoring handles actual detection
   if (!['tiny', 'base'].includes(modelSize)) {
@@ -778,7 +823,13 @@ function startPythonServer() {
   ], {
     cwd: projectRoot,
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, PYTHONUNBUFFERED: '1', KMP_DUPLICATE_LIB_OK: 'TRUE' }
+    env: {
+      ...process.env,
+      PYTHONUNBUFFERED: '1',
+      KMP_DUPLICATE_LIB_OK: 'TRUE',
+      WINDY_BUNDLED_MODEL_DIR: bundledModelRoot,
+      WINDY_USER_MODEL_DIR: userModelRoot,
+    }
   });
 
   pythonProcess.stdout.on('data', (data) => {
@@ -6648,11 +6699,21 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     const pythonPathLocal = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
     console.info('[Batch Local] Using python (fallback):', pythonPathLocal);
 
-    const modelName = store.get('engine.model') || 'base';
-    const localModelDir = path.join(os.homedir(), '.windy-pro', 'model', `faster-whisper-${modelName}`);
+    const _batchBundledRoot = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : '';
+    let modelName = store.get('engine.model') || store.get('defaultModel') || 'base';
+    // Same guard as the warm server: if the configured model (often the schema
+    // default 'base') isn't bundled but a windy-*-ct2 is, use the bundled engine.
+    if (_batchBundledRoot && !isBundledModel(modelName, _batchBundledRoot)) {
+      const bundled = firstBundledEngine(_batchBundledRoot);
+      if (bundled) modelName = bundled;
+    }
+    // windy-*-ct2 engines live under their bare id; stock names get the
+    // faster-whisper- prefix. Mirrors engine/transcriber.py _resolve_model_ref.
+    const modelSub = String(modelName).endsWith('-ct2') ? modelName : `faster-whisper-${modelName}`;
+    const localModelDir = path.join(os.homedir(), '.windy-pro', 'model', modelSub);
     let bundledModelDir = '';
     if (process.resourcesPath) {
-      bundledModelDir = path.join(process.resourcesPath, 'bundled', 'model', `faster-whisper-${modelName}`);
+      bundledModelDir = path.join(process.resourcesPath, 'bundled', 'model', modelSub);
     }
     let modelRef = `"${modelName}"`;
     if (fs.existsSync(path.join(localModelDir, 'model.bin'))) {
