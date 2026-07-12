@@ -261,11 +261,27 @@ const strategies = [
       // the first ydotool keystroke can hit a focus-transition gap and
       // get dropped (KeyPress lost, KeyRelease delivered, first char gone).
       await new Promise(r => setTimeout(r, 100));
-      const timeout = Math.min(300000, Math.max(30000, text.length * 30));
-      // -d 1 -H 1 (1ms between keys, 1ms hold): kernel-friendly throughput
-      // without dropping events on busy systems. Still ~2ms per char.
-      const { ok } = await execFilePromise('ydotool', ['type', '-d', '1', '-H', '1', '--', text], { env, timeout });
-      return ok;
+      // Chunk long texts with drain pauses. One uninterrupted `ydotool type`
+      // of thousands of chars produces uinput events faster than a busy GTK
+      // client can drain its Wayland event queue — the compositor's socket
+      // send hits EAGAIN and the client aborts with "Error flushing display".
+      // Single-process terminals lose EVERY window when that happens (all
+      // Ptyxis terminals died at once on 2026-07-12 from 2.4k/5.5k-char
+      // pastes). Split on code points, not UTF-16 units, so surrogate pairs
+      // (emoji) never get cut in half.
+      const CHUNK_CHARS = 500;
+      const DRAIN_PAUSE_MS = 150;
+      const chars = Array.from(text);
+      for (let i = 0; i < chars.length; i += CHUNK_CHARS) {
+        const part = chars.slice(i, i + CHUNK_CHARS).join('');
+        const timeout = Math.min(300000, Math.max(30000, part.length * 30));
+        // -d 1 -H 1 (1ms between keys, 1ms hold): kernel-friendly throughput
+        // without dropping events on busy systems. Still ~2ms per char.
+        const { ok } = await execFilePromise('ydotool', ['type', '-d', '1', '-H', '1', '--', part], { env, timeout });
+        if (!ok) return false;
+        if (i + CHUNK_CHARS < chars.length) await new Promise(r => setTimeout(r, DRAIN_PAUSE_MS));
+      }
+      return true;
     },
   },
   {

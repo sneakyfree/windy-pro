@@ -159,7 +159,12 @@ const store = new Store({
   defaults: {
     hotkeys: {
       toggleRecording: 'CommandOrControl+Shift+Space',
-      pasteTranscript: 'CommandOrControl+Shift+V',
+      // Linux default is Ctrl+Alt+V, NOT Ctrl+Shift+V: on Wayland the app's own
+      // Ctrl+Shift+V hotkey collides with the Ctrl+Shift+V paste strategies
+      // (CTRL_SHIFT_V_STRATEGIES in paste-strategies.js), demoting AutoPaste to
+      // ydotool_type keystroke flooding — which can crash single-process
+      // terminals on long transcripts. See migrateCollidingPasteHotkey().
+      pasteTranscript: process.platform === 'linux' ? 'CommandOrControl+Alt+V' : 'CommandOrControl+Shift+V',
       pasteClipboard: 'CommandOrControl+Shift+B',
       showHide: 'CommandOrControl+Shift+W',
       quickTranslate: 'CommandOrControl+Shift+T'
@@ -210,6 +215,24 @@ const store = new Store({
     }
   }
 });
+
+// One-time migration (2026-07-12): stored configs that kept the old shipped
+// default pasteTranscript=Ctrl+Shift+V collide with the Ctrl+Shift+V paste
+// strategies on Wayland — Mutter swallows the synthetic keystroke and routes
+// it back to Windy's own paste-transcript action, so the strategy chain
+// demotes to ydotool_type. Typing a multi-thousand-char transcript as raw
+// uinput events overflows the focused client's Wayland event queue; GTK apps
+// abort with "Error flushing display" (this killed every open Ptyxis terminal
+// window at once, twice, on 2026-07-12). Only migrates the exact old default,
+// so a hotkey the user deliberately customized is left alone.
+function migrateCollidingPasteHotkey() {
+  if (process.platform !== 'linux') return;
+  if ((process.env.XDG_SESSION_TYPE || '').toLowerCase() !== 'wayland') return;
+  if (store.get('hotkeys.pasteTranscript') !== 'CommandOrControl+Shift+V') return;
+  store.set('hotkeys.pasteTranscript', 'CommandOrControl+Alt+V');
+  console.info('[Migration] pasteTranscript Ctrl+Shift+V → Ctrl+Alt+V (Wayland paste-strategy collision — see paste-strategies.js CTRL_SHIFT_V_STRATEGIES)');
+}
+migrateCollidingPasteHotkey();
 
 let mainWindow = null;
 let miniWindow = null;
