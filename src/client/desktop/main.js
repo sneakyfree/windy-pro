@@ -782,6 +782,19 @@ function ensureEngineVenv(appDataDir) {
 /**
  * Start the Python WebSocket server as a child process
  */
+function isBundledModel(model, root){
+  if(!model||!root) return false;
+  const sub=String(model).endsWith("-ct2")?model:`faster-whisper-${model}`;
+  try{return fs.existsSync(path.join(root,sub,"model.bin"));}catch(_){return false;}
+}
+function firstBundledEngine(root){
+  if(!root) return null;
+  try{
+    const dirs=fs.readdirSync(root).filter(d=>{try{return d.endsWith("-ct2")&&fs.existsSync(path.join(root,d,"model.bin"));}catch(_){return false;}});
+    return dirs.find(d=>/nano/.test(d))||dirs.find(d=>/lite/.test(d))||dirs[0]||null;
+  }catch(_){return null;}
+}
+
 function startPythonServer() {
   const serverConfig = store.get('server');
   const appDataDir = path.join(os.homedir(), '.windy-pro');
@@ -859,7 +872,9 @@ function startPythonServer() {
   }
 
   const engineConfig = store.get('engine', {});
-  const modelSize = engineConfig.model || 'base';
+  const _bmr = app.isPackaged ? path.join(process.resourcesPath, 'bundled', 'model') : path.join(projectRoot, 'extraResources', 'model');
+  let modelSize = engineConfig.model || store.get('defaultModel') || 'base';
+  if (_bmr && !isBundledModel(modelSize, _bmr)) { const bE = firstBundledEngine(_bmr); if (bE) { console.info('[Engine] '+modelSize+' not bundled -> '+bE); modelSize = bE; } }
 
   // Soft performance note — runtime monitoring handles actual detection
   if (!['tiny', 'base'].includes(modelSize)) {
@@ -2967,6 +2982,34 @@ function startWaylandControlServer() {
     const remote = req.socket.remoteAddress;
     if (remote !== '127.0.0.1' && remote !== '::1' && remote !== '::ffff:127.0.0.1') {
       res.writeHead(403); res.end('Forbidden');
+      return;
+    }
+    // ── CSRF / DNS-rebinding guard (launch-critical) ──────────────────────
+    // The loopback-IP check above is NOT sufficient: a web page open in the
+    // user's browser can POST to 127.0.0.1 (the request originates FROM
+    // loopback), so absent this guard any site the user visits could drive
+    // this control surface — /paste/auto injects keystrokes into the focused
+    // window, /settings/set mutates config, /clones/scan reads the filesystem
+    // = remote code execution by merely visiting a page. A LEGITIMATE local
+    // caller (the Electron renderer, the GNOME-keybinding curl, the agent's
+    // local client) sends NO Origin header and a loopback Host; a browser
+    // cross-origin request ALWAYS carries an Origin, and a DNS-rebinding
+    // attack carries a non-loopback Host. Reject both, and never honor a CORS
+    // preflight. Modeled on windytalk hands/surface.py (ADR-058).
+    if (req.headers['origin']) {
+      res.writeHead(403, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'forbidden: cross-origin request rejected' }));
+      return;
+    }
+    const _hostHeader = String(req.headers['host'] || '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
+    if (_hostHeader && _hostHeader !== '127.0.0.1' && _hostHeader !== 'localhost' && _hostHeader !== '::1') {
+      res.writeHead(403, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'forbidden host' }));
+      return;
+    }
+    if (req.method === 'OPTIONS') {
+      // Deliberately no Access-Control-Allow-Origin: no site may preflight us.
+      res.writeHead(405); res.end('Method Not Allowed');
       return;
     }
     const urlObj = new URL(req.url, 'http://localhost');
@@ -7027,7 +7070,9 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     const pythonPathLocal = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
     console.info('[Batch Local] Using python (fallback):', pythonPathLocal);
 
-    let modelName = store.get('engine.model') || 'base';
+    const _bbr = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : '';
+    let modelName = store.get('engine.model') || store.get('defaultModel') || 'base';
+    if (_bbr && !isBundledModel(modelName, _bbr)) { const bE2 = firstBundledEngine(_bbr); if (bE2) modelName = bE2; }
     // Resolve a model name to its on-disk dir. Lean Windy engines use canonical
     // ids (windy-*-ct2 → bundled/model/<id>/); legacy whisper names use the
     // faster-whisper-<name>/ scheme. Both the bundled (offline) and any
