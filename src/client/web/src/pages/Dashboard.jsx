@@ -143,6 +143,10 @@ export default function Dashboard() {
     // Track per-tile "connecting" state so the Connect-Now badge can show
     // a spinner while a provision call is in flight. Keyed by product key.
     const [provisioning, setProvisioning] = useState({})
+    // Track per-tile provision failures so the badge can say "⚠ Try again"
+    // instead of silently reverting to "⚡ Connect" — a grandma who sees
+    // nothing happen after a tap assumes the whole app is broken.
+    const [provisionError, setProvisionError] = useState({})
 
     const handleProvision = useCallback(async (productKey, provisionPath, event) => {
         // Tile is wrapped in an <a> link; intercept before navigation.
@@ -151,13 +155,19 @@ export default function Dashboard() {
             event.stopPropagation()
         }
         setProvisioning(p => ({ ...p, [productKey]: true }))
+        setProvisionError(e => ({ ...e, [productKey]: false }))
         try {
             const result = await apiFetch(provisionPath, { method: 'POST', body: '{}' })
             if (result && !result._error) {
                 // Refresh ecosystem so the badge flips to Active immediately.
                 const fresh = await apiFetch('/identity/ecosystem-status')
                 if (fresh?.products) setEcosystem(fresh)
+            } else {
+                // network / 5xx / downstream service unavailable — surface it.
+                setProvisionError(e => ({ ...e, [productKey]: true }))
             }
+        } catch {
+            setProvisionError(e => ({ ...e, [productKey]: true }))
         } finally {
             setProvisioning(p => ({ ...p, [productKey]: false }))
         }
@@ -325,10 +335,14 @@ export default function Dashboard() {
                             { key: 'windy_fly', label: 'Windy Fly', icon: '🪰', href: '/app/fly' },
                             // Windy Clone: external — the marketplace SPA is live at the
                             // apex (served by the Clone API container, 2026-07-07). Clone
-                            // validates the same Pro JWT via JWKS, and its web app is built
-                            // for a ?token= handoff (stores to localStorage, strips the
-                            // URL immediately) — pass ours so the user lands signed in.
-                            { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: `https://windyclone.ai/?token=${encodeURIComponent(getToken() || '')}` },
+                            // validates the same Pro JWT via JWKS. The token is handed off in
+                            // the URL *fragment* (#token=), not the querystring, so the live
+                            // credential never lands in windyclone.ai's access logs, the
+                            // Referer header, or CDN query logs (mirrors the admin.windyword.ai
+                            // handoff above). Clone captures it synchronously on load, stores
+                            // it to localStorage, and strips the URL. (Clone still accepts
+                            // ?token= for backward compat — sneakyfree/Windy-Clone#55/#56.)
+                            { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: `https://windyclone.ai/#token=${encodeURIComponent(getToken() || '')}` },
                             { key: 'windy_traveler', label: 'Windy Traveler', icon: '🌍', href: '/translate' },
                             // Windy Code — VS Code soft-fork; windycode.org has no public
                             // web surface (401 behind Cloudflare Access). Render as a
@@ -430,6 +444,7 @@ export default function Dashboard() {
                             const showConnect = p.provisionPath
                                 && (status === 'not_provisioned' || status === 'pending' || status === 'available')
                             const isConnecting = provisioning[p.key]
+                            const connectFailed = provisionError[p.key]
                             return (
                                 <a
                                     key={p.key}
@@ -444,11 +459,11 @@ export default function Dashboard() {
                                             type="button"
                                             onClick={(e) => handleProvision(p.key, p.provisionPath, e)}
                                             disabled={isConnecting}
-                                            className={`dash-eco-badge eco-available`}
+                                            className={`dash-eco-badge ${connectFailed ? 'eco-upgrade' : 'eco-available'}`}
                                             style={{ cursor: 'pointer', border: 'none', opacity: isConnecting ? 0.6 : 1 }}
-                                            title={`Connect ${p.label} now`}
+                                            title={connectFailed ? `${p.label} couldn't connect just now — tap to try again` : `Connect ${p.label} now`}
                                         >
-                                            {isConnecting ? 'Connecting…' : '⚡ Connect'}
+                                            {isConnecting ? 'Connecting…' : connectFailed ? '⚠ Try again' : '⚡ Connect'}
                                         </button>
                                     ) : (
                                         <span className={`dash-eco-badge ${badgeClass}`}>{badgeLabel}</span>
