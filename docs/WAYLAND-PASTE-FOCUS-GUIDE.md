@@ -678,3 +678,55 @@ This is the order in which issues were discovered and fixed during the
 7. **Test on Wayland-native AND XWayland apps.** It's easy to think "it works" when you only test in Firefox (XWayland). Always test in GNOME Terminal or ptyxis (Wayland-native) too.
 
 8. **This is Linux-Wayland-specific.** macOS, Windows, and Linux X11 don't need any of these workarounds. All Wayland-specific code is gated behind `PLATFORM.isWayland` checks and won't execute on other platforms.
+
+---
+
+## Incident: ydotool_type keystroke flood crashes single-process terminals (2026-07-12)
+
+**Symptom:** Mid-dictation, EVERY open terminal window vanished at once — twice in
+10 minutes (14:36 and 14:52 local). Sessions working on PRs died with them. The
+Windy Word app itself stayed up.
+
+**What actually crashed:** Ptyxis (Fedora's default terminal). It runs every window
+and tab in ONE process. The user journal showed:
+
+```
+ptyxis[…]: Error flushing display: Resource temporarily unavailable
+dbus-:1.2-org.gnome.Ptyxis@1.service: Main process exited, code=exited, status=1/FAILURE
+```
+
+**Root cause chain:**
+
+1. The user's `pasteTranscript` hotkey was the old default `Ctrl+Shift+V`.
+2. That collides with `CTRL_SHIFT_V_STRATEGIES` (see `_hasCtrlShiftVCollision` in
+   `paste-strategies.js`) — Mutter swallows any synthetic Ctrl+Shift+V and routes it
+   back to Windy's own paste-transcript action, so the chain correctly demotes the
+   clipboard strategies and lands on `ydotool_type`.
+3. `ydotool_type` typed the whole transcript as raw uinput events. A 5,478-char
+   transcript ≈ 11,000 key events at ~2ms spacing.
+4. The focused client (Ptyxis, busy re-rendering a TUI on every keystroke) couldn't
+   drain its Wayland event queue fast enough. The compositor's socket write hit
+   EAGAIN, GTK treats a failed display flush as fatal, and the process exited —
+   taking every terminal window with it.
+5. Crash probability scales with transcript length: 2,388 chars crashed it once,
+   2,174 didn't, 5,478 crashed it instantly. Short dictations never trigger it,
+   which is why the app worked fine "for days" before long-form dictation began.
+
+**Fixes shipped (both, belt and suspenders):**
+
+1. **Remove the collision:** Linux default `pasteTranscript` is now `Ctrl+Alt+V`
+   (`main.js` store defaults) plus a one-time Wayland-gated migration
+   (`migrateCollidingPasteHotkey()`) for stored configs still on the exact old
+   default. With no collision, the auto chain prefers `wlcopy_then_ctrl_shift_v` —
+   clipboard + 6 key events regardless of text length.
+2. **Defuse the flood:** `ydotool_type` now types in 500-char chunks with a 150ms
+   drain pause between chunks (split on code points so emoji surrogate pairs never
+   get cut). Still the universal last resort; can no longer overrun a client's
+   event queue.
+
+**Do not regress:**
+- Never re-bind `pasteTranscript` to Ctrl+Shift+V on Linux.
+- Never remove the chunking from `ydotool_type` "for speed."
+- Remember the paste *keystroke* the strategies fire is still Ctrl+Shift+V — that's
+  correct and unchanged (Key Takeaway #5). The collision was with the app's own
+  *hotkey* for the same combo.
