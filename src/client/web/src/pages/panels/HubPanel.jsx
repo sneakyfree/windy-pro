@@ -33,7 +33,9 @@ const PRODUCTS = [
         name: 'Windy Mail',
         description: 'Your email inbox',
         icon: '\uD83D\uDCE7',
-        href: 'https://windymail.ai',
+        // Bare apex (windymail.ai) is behind a Cloudflare Access wall and 401s
+        // for a signed-in Pro user. app.windymail.ai is the public webmail app.
+        href: 'https://app.windymail.ai',
         internal: false,
     },
     {
@@ -41,7 +43,8 @@ const PRODUCTS = [
         name: 'Windy Cloud',
         description: 'Your files and storage',
         icon: '\u2601\uFE0F',
-        href: 'https://windycloud.com',
+        // Bare apex 401s behind Access; cloud.windycloud.com is the live portal.
+        href: 'https://cloud.windycloud.com',
         internal: false,
     },
     {
@@ -49,8 +52,10 @@ const PRODUCTS = [
         name: 'Windy Fly',
         description: 'Your AI agent',
         icon: '\uD83E\uDEB0',
-        href: 'https://windyfly.ai',
-        internal: false,
+        // windyfly.ai has no public web surface (401 behind Access); the agent
+        // lives in-app. Route to the in-product Fly panel like Eternitas does.
+        href: '/app/fly',
+        internal: true,
     },
     {
         // Eternitas: in-product Passport panel rather than the external app

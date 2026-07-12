@@ -569,16 +569,18 @@ export default function Landing() {
                     </div>
                     {/* Mobile */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', maxWidth: '480px', margin: '24px auto 0' }}>
-                        <a href="https://apps.apple.com/app/windy-pro" target="_blank" rel="noopener noreferrer" className="download-card" style={{ background: 'rgba(30,30,40,0.8)', textAlign: 'center' }}>
+                        {/* Mobile apps not yet published — render as non-clickable
+                            "coming soon" cards rather than links that 404 on the stores. */}
+                        <div className="download-card" style={{ background: 'rgba(30,30,40,0.5)', textAlign: 'center', opacity: 0.6, cursor: 'default' }}>
                             <div className="download-icon">📱</div>
                             <div className="download-platform">iOS</div>
-                            <div className="download-detail">App Store</div>
-                        </a>
-                        <a href="https://play.google.com/store/apps/details?id=pro.windy.app" target="_blank" rel="noopener noreferrer" className="download-card" style={{ background: 'rgba(30,30,40,0.8)', textAlign: 'center' }}>
+                            <div className="download-detail">Coming soon</div>
+                        </div>
+                        <div className="download-card" style={{ background: 'rgba(30,30,40,0.5)', textAlign: 'center', opacity: 0.6, cursor: 'default' }}>
                             <div className="download-icon">🤖</div>
                             <div className="download-platform">Android</div>
-                            <div className="download-detail">Google Play</div>
-                        </a>
+                            <div className="download-detail">Coming soon</div>
+                        </div>
                     </div>
 
                     <div className="download-oneliner">

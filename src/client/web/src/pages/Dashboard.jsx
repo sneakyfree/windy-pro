@@ -330,9 +330,10 @@ export default function Dashboard() {
                             // URL immediately) — pass ours so the user lands signed in.
                             { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: `https://windyclone.ai/?token=${encodeURIComponent(getToken() || '')}` },
                             { key: 'windy_traveler', label: 'Windy Traveler', icon: '🌍', href: '/translate' },
-                            // Marketing / external sites (still navigable, broken CTAs tracked
-                            // separately in docs/ballroom-blockers-2026-05-08.md).
-                            { key: 'windy_code', label: 'Windy Code', icon: '💻', href: 'https://windycode.org' },
+                            // Windy Code — VS Code soft-fork; windycode.org has no public
+                            // web surface (401 behind Cloudflare Access). Render as a
+                            // dimmed "Coming Soon" chip rather than a dead login-wall link.
+                            { key: 'windy_code', label: 'Windy Code', icon: '💻', comingSoon: true },
                             // Eternitas: in-product Passport panel, not the external app
                             // host (app.eternitas.ai was NXDOMAIN as of 2026-05-17).
                             { key: 'eternitas', label: 'Eternitas', icon: '🛡️', href: '/app/passport' },
@@ -489,7 +490,7 @@ export default function Dashboard() {
                         <div style={{ textAlign: 'left', margin: '16px auto', maxWidth: '360px', lineHeight: '2' }}>
                             <div>1. <Link to="/transcribe" style={{ color: '#3B82F6' }}>Try cloud transcription</Link> — speak and see text in real-time</div>
                             <div>2. <a href="#download" style={{ color: '#3B82F6' }}>Download the desktop app</a> — for local, private transcription</div>
-                            <div>3. Get the mobile app — <a href="https://apps.apple.com/app/windy-pro" target="_blank" rel="noopener noreferrer" style={{ color: '#3B82F6' }}>iOS</a> / <a href="https://play.google.com/store/apps/details?id=pro.windy.app" target="_blank" rel="noopener noreferrer" style={{ color: '#3B82F6' }}>Android</a></div>
+                            <div style={{ color: '#64748B' }}>3. Mobile apps for iOS &amp; Android — <span style={{ color: '#94A3B8' }}>coming soon</span></div>
                         </div>
                     </div>
                 ) : (

@@ -24,7 +24,7 @@ export default function MailPanel({ apiFetch }) {
                 </ul>
             </div>
 
-            <a href="https://windymail.ai" target="_blank" rel="noopener noreferrer" className="panel-btn" style={{ marginTop: '12px' }}>
+            <a href="https://app.windymail.ai" target="_blank" rel="noopener noreferrer" className="panel-btn" style={{ marginTop: '12px' }}>
                 Open Windy Mail
             </a>
         </div>
