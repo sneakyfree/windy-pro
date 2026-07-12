@@ -782,6 +782,19 @@ function ensureEngineVenv(appDataDir) {
 /**
  * Start the Python WebSocket server as a child process
  */
+function isBundledModel(model, root){
+  if(!model||!root) return false;
+  const sub=String(model).endsWith("-ct2")?model:`faster-whisper-${model}`;
+  try{return fs.existsSync(path.join(root,sub,"model.bin"));}catch(_){return false;}
+}
+function firstBundledEngine(root){
+  if(!root) return null;
+  try{
+    const dirs=fs.readdirSync(root).filter(d=>{try{return d.endsWith("-ct2")&&fs.existsSync(path.join(root,d,"model.bin"));}catch(_){return false;}});
+    return dirs.find(d=>/nano/.test(d))||dirs.find(d=>/lite/.test(d))||dirs[0]||null;
+  }catch(_){return null;}
+}
+
 function startPythonServer() {
   const serverConfig = store.get('server');
   const appDataDir = path.join(os.homedir(), '.windy-pro');
@@ -859,7 +872,9 @@ function startPythonServer() {
   }
 
   const engineConfig = store.get('engine', {});
-  const modelSize = engineConfig.model || 'base';
+  const _bmr = app.isPackaged ? path.join(process.resourcesPath, 'bundled', 'model') : path.join(projectRoot, 'extraResources', 'model');
+  let modelSize = engineConfig.model || store.get('defaultModel') || 'base';
+  if (_bmr && !isBundledModel(modelSize, _bmr)) { const bE = firstBundledEngine(_bmr); if (bE) { console.info('[Engine] '+modelSize+' not bundled -> '+bE); modelSize = bE; } }
 
   // Soft performance note — runtime monitoring handles actual detection
   if (!['tiny', 'base'].includes(modelSize)) {
@@ -7055,7 +7070,9 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     const pythonPathLocal = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
     console.info('[Batch Local] Using python (fallback):', pythonPathLocal);
 
-    let modelName = store.get('engine.model') || 'base';
+    const _bbr = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : '';
+    let modelName = store.get('engine.model') || store.get('defaultModel') || 'base';
+    if (_bbr && !isBundledModel(modelName, _bbr)) { const bE2 = firstBundledEngine(_bbr); if (bE2) modelName = bE2; }
     // Resolve a model name to its on-disk dir. Lean Windy engines use canonical
     // ids (windy-*-ct2 → bundled/model/<id>/); legacy whisper names use the
     // faster-whisper-<name>/ scheme. Both the bundled (offline) and any
