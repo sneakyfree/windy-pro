@@ -41,6 +41,16 @@ export default function Auth() {
     const handleSubmit = async (e) => {
         e.preventDefault()
         setError('')
+
+        // Signing up requires agreeing to the terms. Surface this as a clear
+        // message instead of silently disabling the button — a greyed-out
+        // Create Account with no explanation reads as "the button is broken"
+        // to a non-technical user.
+        if (!isLogin && !agreedToTerms) {
+            setError('Please agree to the Terms of Service and Privacy Policy to continue.')
+            return
+        }
+
         setLoading(true)
 
         try {
@@ -217,7 +227,7 @@ export default function Auth() {
                         <button
                             type="submit"
                             className="btn btn-primary auth-submit"
-                            disabled={loading || (!isLogin && !agreedToTerms)}
+                            disabled={loading}
                         >
                             {loading ? (
                                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
