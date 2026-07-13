@@ -27,6 +27,9 @@ const PORT = process.env.PORT || 8099;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'cache.db');
 const MODEL_PATH = process.env.MODEL_PATH || path.join(__dirname, 'models', 'nllb-200-600M');
 const PYTHON_BIN = process.env.PYTHON_BIN || 'python3';
+const SERVICE_NAME = 'windy-translate';
+const SERVICE_VERSION = require('./package.json').version;
+const STARTED_AT = new Date().toISOString();
 const ALLOWED_ORIGINS = [
     'https://windyword.ai',
     'https://windyword.ai', // legacy — remove after full migration
@@ -105,6 +108,31 @@ function setCache(text, targetLang, translated) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// OPS LOG RING (ADR-060 get_logs — content-free BY CONSTRUCTION)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Entries are {ts, level, event, code?} with event drawn from a fixed
+// vocabulary and code a number/short enum — never free text. Worker errors
+// and tracebacks can embed the text being translated, so raw messages are
+// CATEGORIZED here, never stored (privacy hard line: no user content in logs).
+
+const OPS_LOG_MAX = 500;
+const opsLogRing = [];
+
+function opsLog(level, event, code) {
+    const entry = { ts: new Date().toISOString(), level, event };
+    if (code !== undefined) entry.code = code;
+    opsLogRing.push(entry);
+    if (opsLogRing.length > OPS_LOG_MAX) opsLogRing.shift();
+}
+
+function categorizeTranslationError(message) {
+    if (/timeout/i.test(message)) return 'timeout';
+    if (/not ready/i.test(message)) return 'worker_not_ready';
+    if (/crashed/i.test(message)) return 'worker_crashed';
+    return 'other';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // PYTHON TRANSLATION WORKER
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -119,6 +147,7 @@ function startWorker() {
         env: { ...process.env, MODEL_PATH },
         stdio: ['pipe', 'pipe', 'pipe']
     });
+    opsLog('info', 'worker_start');
 
     let buffer = '';
     worker.stdout.on('data', (data) => {
@@ -133,6 +162,7 @@ function startWorker() {
                 if (msg.type === 'ready') {
                     workerReady = true;
                     console.log('✅ Translation worker ready — model loaded');
+                    opsLog('info', 'worker_ready');
                 } else if (msg.type === 'result' && pendingRequests.has(msg.id)) {
                     const { resolve } = pendingRequests.get(msg.id);
                     pendingRequests.delete(msg.id);
@@ -156,6 +186,7 @@ function startWorker() {
 
     worker.on('exit', (code) => {
         console.error(`❌ Worker exited with code ${code}. Restarting in 3s...`);
+        opsLog('error', 'worker_exit', code === null ? 'signal' : code);
         workerReady = false;
         // Reject all pending requests
         for (const [id, { reject }] of pendingRequests) {
@@ -196,6 +227,10 @@ function translate(text, sourceLang, targetLang) {
     });
 }
 
+// Indirection so the selftest and tests can exercise the pipeline without a
+// resident NLLB model; production always uses the real worker path.
+let translateImpl = translate;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // EXPRESS APP
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -233,6 +268,44 @@ app.get('/health', (req, res) => {
     });
 });
 
+// ─── GET /version — MF1 deployment identity (no auth, no DB, no worker) ───
+app.get('/version', (req, res) => {
+    const commitSha = process.env.COMMIT_SHA || null;
+    res.json({
+        service: SERVICE_NAME,
+        version: SERVICE_VERSION,
+        commit_sha: commitSha,
+        commit_sha_short: commitSha ? commitSha.slice(0, 7) : null,
+        build_timestamp: process.env.BUILD_TIMESTAMP || null,
+        started_at: STARTED_AT,
+        environment: process.env.ENVIRONMENT || process.env.NODE_ENV || 'unknown',
+    });
+});
+
+// ─── Bearer-token wall (ADR-060 §3.3) — everything below this point ───
+// Opt-in: enforced only when WINDY_TRANSLATE_TOKEN is set (read per-request,
+// constant-time compare). Unset = today's open-loopback behavior, so turning
+// the wall on is a deploy-env decision, not a code change. /health and
+// /version stay tokenless above (orchestrator probes + MF1 must never
+// depend on auth).
+const crypto = require('crypto');
+app.use((req, res, next) => {
+    const expected = process.env.WINDY_TRANSLATE_TOKEN;
+    if (!expected) return next();
+    const match = (req.headers.authorization || '').match(/^Bearer\s+(.+)$/i);
+    const presented = match ? match[1] : '';
+    const a = crypto.createHash('sha256').update(presented).digest();
+    const b = crypto.createHash('sha256').update(expected).digest();
+    if (!match || !crypto.timingSafeEqual(a, b)) {
+        return res.status(401).json({
+            ok: false,
+            error: match ? 'invalid_token' : 'missing_authorization',
+            remediation: 'Send `Authorization: Bearer <token>` matching this service\'s WINDY_TRANSLATE_TOKEN (set in its systemd/service environment).',
+        });
+    }
+    next();
+});
+
 // ─── POST /translate ───
 app.post('/translate', async (req, res) => {
     try {
@@ -255,12 +328,13 @@ app.post('/translate', async (req, res) => {
         }
 
         // Translate via Python worker
-        const result = await translate(text, sourceLang, targetLang);
+        const result = await translateImpl(text, sourceLang, targetLang);
         setCache(text, targetLang, result.translated);
 
         res.json({ translated: result.translated, cached: false, lang: targetLang });
     } catch (err) {
         console.error('Translation error:', err.message);
+        opsLog('error', 'translation_error', categorizeTranslationError(err.message));
         res.status(503).json({ error: err.message });
     }
 });
@@ -300,7 +374,7 @@ app.post('/translate/batch', async (req, res) => {
         // Translate uncached items
         if (toTranslate.length > 0) {
             const translations = await Promise.all(
-                toTranslate.map(({ text }) => translate(text, sourceLang, targetLang))
+                toTranslate.map(({ text }) => translateImpl(text, sourceLang, targetLang))
             );
 
             for (let j = 0; j < toTranslate.length; j++) {
@@ -321,6 +395,7 @@ app.post('/translate/batch', async (req, res) => {
         });
     } catch (err) {
         console.error('Batch translation error:', err.message);
+        opsLog('error', 'translation_error', categorizeTranslationError(err.message));
         res.status(503).json({ error: err.message });
     }
 });
@@ -375,6 +450,72 @@ app.get('/languages', (req, res) => {
     });
 });
 
+// ─── GET /ops/logs — recent ops events (ADR-060 get_logs) ───
+// Content-free by construction: the ring only ever holds fixed-vocabulary
+// events + numeric/enum codes (see opsLog above) — no message text, ever.
+app.get('/ops/logs', (req, res) => {
+    res.json({
+        service: SERVICE_NAME,
+        count: opsLogRing.length,
+        max: OPS_LOG_MAX,
+        entries: opsLogRing,
+    });
+});
+
+// ─── POST /ops/selftest — exercise the core path (ADR-060 run_selftest) ───
+// Canary-translates a fixed constant phrase through the REAL pipeline and
+// round-trips the SQLite cache; pass/fail per stage so an agent sees WHERE
+// it broke (worker loading vs translation vs cache).
+const SELFTEST_PHRASE = 'hello world';
+app.post('/ops/selftest', async (req, res) => {
+    const startedAt = Date.now();
+    const stages = [];
+
+    const workerOk = workerReady;
+    stages.push({
+        name: 'worker',
+        ok: workerOk,
+        detail: workerOk ? 'ready' : 'loading — model not resident yet',
+    });
+
+    if (workerOk) {
+        try {
+            const result = await translateImpl(SELFTEST_PHRASE, 'en', 'es');
+            stages.push({
+                name: 'translate',
+                ok: typeof result.translated === 'string' && result.translated.length > 0,
+                detail: `canary '${SELFTEST_PHRASE}' → '${result.translated}'`,
+            });
+        } catch (err) {
+            stages.push({
+                name: 'translate',
+                ok: false,
+                detail: categorizeTranslationError(err.message),
+            });
+        }
+    } else {
+        stages.push({ name: 'translate', ok: false, detail: 'skipped — worker not ready' });
+    }
+
+    try {
+        const key = '__selftest__||xx';
+        stmtSet.run(key, '__selftest__', 'xx', 'ok');
+        const row = stmtGet.get(key);
+        db.prepare('DELETE FROM translations WHERE cache_key = ?').run(key);
+        stages.push({ name: 'cache', ok: !!row && row.translated_text === 'ok' });
+    } catch (err) {
+        stages.push({ name: 'cache', ok: false, detail: 'sqlite error' });
+    }
+
+    const passed = stages.every(s => s.ok);
+    opsLog(passed ? 'info' : 'error', 'selftest', passed ? 'pass' : 'fail');
+    // `passed`, not `ok`: the ADR-060 invoke envelope reserves top-level `ok`
+    // for call success — a failing canary is still a SUCCESSFUL observation,
+    // and a top-level `ok:false` here would make the woven MCP packet report
+    // the tool call itself as errored.
+    res.json({ passed, stages, duration_ms: Date.now() - startedAt });
+});
+
 // ─── GET /cache/stats ───
 app.get('/cache/stats', (req, res) => {
     const stats = db.prepare(`
@@ -389,16 +530,25 @@ app.get('/cache/stats', (req, res) => {
 // START
 // ═══════════════════════════════════════════════════════════════════════════════
 
-startWorker();
+if (require.main === module) {
+    opsLog('info', 'server_start');
+    if (!process.env.WINDY_TRANSLATE_TOKEN) {
+        console.warn('⚠️  WINDY_TRANSLATE_TOKEN not set — API is open on loopback (set it to enforce bearer auth)');
+    }
+    startWorker();
 
-app.listen(PORT, () => {
-    console.log(`🌪️  Windy Translate API running on http://localhost:${PORT}`);
-    console.log(`   POST /translate       — single translation`);
-    console.log(`   POST /translate/batch — batch translation`);
-    console.log(`   GET  /health          — status check`);
-    console.log(`   GET  /languages       — supported languages`);
-    console.log(`   GET  /cache/stats     — cache statistics`);
-});
+    app.listen(PORT, () => {
+        console.log(`🌪️  Windy Translate API running on http://localhost:${PORT}`);
+        console.log(`   POST /translate       — single translation`);
+        console.log(`   POST /translate/batch — batch translation`);
+        console.log(`   GET  /health          — status check`);
+        console.log(`   GET  /version         — deployment identity (MF1)`);
+        console.log(`   GET  /languages       — supported languages`);
+        console.log(`   GET  /cache/stats     — cache statistics`);
+        console.log(`   GET  /ops/logs        — recent ops events (content-free)`);
+        console.log(`   POST /ops/selftest    — canary self-test`);
+    });
+}
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
@@ -412,3 +562,13 @@ process.on('SIGINT', () => {
     db.close();
     process.exit(0);
 });
+
+// Exported for tests (node --test); production entry is `node server.js`.
+module.exports = {
+    app,
+    _internals: {
+        setTranslate(fn) { translateImpl = fn || translate; },
+        setWorkerReady(v) { workerReady = !!v; },
+        opsLog,
+    },
+};
