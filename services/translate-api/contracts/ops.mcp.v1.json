@@ -4,20 +4,20 @@
   "product": "windy-translate",
   "class": "cloud",
   "mcp_protocol": "2025-06-18",
-  "$comment": "Windy Translate ops surface — Class C, but an INTERNAL support service (Node on loopback:8099, consumed by windy-pro; not directly grandma-facing). Two honest findings: (1) no /version endpoint → MF1 non-compliant (get_status is a gap); (2) no auth today → the ops shim's EPT passthrough is aspirational (the service currently ignores it, like a pre-token desktop app — add the EPT gate when/if exposed). Product API (/translate, /translate/batch, /detect) stays out per §2. get_capabilities → /languages: a translation service IS its language coverage.",
+  "$comment": "Windy Translate ops surface — Class C, but an INTERNAL support service (Node on loopback:8099, consumed by windy-pro; not directly grandma-facing). Product API (/translate, /translate/batch, /detect) stays out per §2. Rev 2026-07-13 (gap-closing): (1) /version SHIPPED — MF1 compliant; (2) auth SHIPPED as an opt-in static bearer wall (install_token-style, fits a loopback service better than EPT): WINDY_TRANSLATE_TOKEN env, constant-time compare, gates everything EXCEPT /health + /version (probes and MF1 never depend on auth) — enforcement activates when the deploy env sets the token (Grant-gated); (3) get_logs SHIPPED — /ops/logs ring is content-free BY CONSTRUCTION (fixed event vocabulary + numeric/enum codes; raw worker errors are categorized, never stored, because tracebacks can embed the text being translated); (4) run_selftest SHIPPED — /ops/selftest canary-translates a fixed constant phrase through the real NLLB pipeline + SQLite round-trip, pass/fail per stage. DEPLOY STATUS: merged; live after the Grant-gated service restart — probe before trusting mid-incident.",
   "baseline_mapping": {
-    "get_health": { "status": "implemented", "maps_to": "GET /health", "note": "rich: status + NLLB worker ready|loading + cache_size + uptime — doubles as status until /version exists." },
-    "get_status": { "status": "gap", "note": "NO /version endpoint — MF1 non-compliant; add the canonical {service,version,commit_sha,started_at,environment} shape." },
+    "get_health": { "status": "implemented", "maps_to": "GET /health", "note": "rich: status + NLLB worker ready|loading + cache_size + uptime." },
+    "get_status": { "status": "implemented", "maps_to": "GET /version", "note": "MF1 canonical {service,version,commit_sha,started_at,environment} — closed 2026-07-13." },
     "get_capabilities": { "status": "implemented", "maps_to": "GET /languages", "note": "supported language list — the honest capability probe for a translator." },
     "get_config": { "status": "gap" },
-    "get_logs": { "status": "gap" },
-    "run_selftest": { "status": "gap", "note": "canary: translate a fixed phrase and verify output." },
+    "get_logs": { "status": "implemented", "maps_to": "GET /ops/logs", "note": "content-free by construction: fixed event vocabulary only — closed 2026-07-13." },
+    "run_selftest": { "status": "implemented", "maps_to": "POST /ops/selftest", "note": "canary phrase through the real worker + cache round-trip, per-stage results — closed 2026-07-13." },
     "reconnect": { "status": "unsupported" },
     "restart_app": { "status": "gap", "note": "out-of-band (systemd windy-translate.service)." },
     "enter_safe_mode": { "status": "unsupported" },
     "exit_safe_mode": { "status": "unsupported" },
     "set_setting": { "status": "gap" },
-    "check_for_update": { "status": "gap", "note": "wire to the Steamroller (L2)." },
+    "check_for_update": { "status": "gap", "note": "wire to the Steamroller (admin /v1/fleet-versions is live)." },
     "apply_update": { "status": "gap", "note": "SSH-free redeploy hook; §7." },
     "reset_to_defaults": { "status": "unsupported", "note": "holds the translation cache; clearing is a different, explicit action." }
   },
@@ -31,12 +31,61 @@
       "transport": { "method": "GET", "path": "/health" }
     },
     {
+      "name": "get_status",
+      "tier": "auto_allow",
+      "baseline_status": "implemented",
+      "description": "Read Windy Translate's deployment identity: which build is actually serving right now (service name, package version, commit sha, when it started). Use this to tell whether a fix that was supposed to deploy is really live.",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "service": { "type": "string" },
+          "version": { "type": "string" },
+          "commit_sha": { "type": ["string", "null"] },
+          "started_at": { "type": "string" },
+          "environment": { "type": "string" }
+        }
+      },
+      "transport": { "method": "GET", "path": "/version" }
+    },
+    {
       "name": "get_capabilities",
       "tier": "auto_allow",
       "baseline_status": "implemented",
       "description": "List the languages Windy Translate can actually translate between right now. Use this when a user's target language 'isn't working' — it may simply not be in the supported set.",
       "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
       "transport": { "method": "GET", "path": "/languages" }
+    },
+    {
+      "name": "get_logs",
+      "tier": "auto_allow",
+      "baseline_status": "implemented",
+      "description": "Read Windy Translate's recent operational events — worker started, worker ready, worker crashed, translation errors by category (timeout / worker not ready / crashed), self-test results. Content-free by construction: the log can only ever hold fixed event names and codes, never any text that was translated.",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "number" },
+          "entries": { "type": "array", "description": "[{ts, level, event, code?}] — fixed vocabulary only" }
+        }
+      },
+      "transport": { "method": "GET", "path": "/ops/logs" }
+    },
+    {
+      "name": "run_selftest",
+      "tier": "auto_allow",
+      "baseline_status": "implemented",
+      "description": "Actively exercise Windy Translate's core path: canary-translate a fixed test phrase through the real NLLB worker and round-trip the cache database. Returns pass/fail PER STAGE (worker / translate / cache) so you can see exactly where it broke — a loading model looks very different from a corrupt cache.",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "passed": { "type": "boolean", "description": "true only when every stage passed ('passed', not 'ok' — top-level ok is reserved for the invoke envelope)" },
+          "stages": { "type": "array", "description": "[{name: worker|translate|cache, ok, detail?}]" },
+          "duration_ms": { "type": "number" }
+        }
+      },
+      "transport": { "method": "POST", "path": "/ops/selftest" }
     },
     {
       "name": "get_cache_stats",

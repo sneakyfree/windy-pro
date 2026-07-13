@@ -2,6 +2,6 @@
   "product": "windy-translate",
   "class": "cloud",
   "http": {"base_default": "http://127.0.0.1:8099", "base_env": "WINDY_TRANSLATE_URL"},
-  "auth": {"kind": "ept", "token_env": "WINDY_EPT"},
+  "auth": {"kind": "install_token", "token_env": "WINDY_TRANSLATE_TOKEN"},
   "package": {"name": "windy-translate-mcp", "version": "0.1.0-loom-preview", "description": "Windy Translate ops MCP — Loom-generated Class C shim."}
 }
