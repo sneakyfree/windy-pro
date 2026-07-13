@@ -118,6 +118,7 @@ in the "Dead Ends" section of `docs/WAYLAND-PASTE-FOCUS-GUIDE.md`. Do not retry 
 - **Assuming `ydotool` works if `which ydotool` succeeds** — it needs a running ydotoold daemon AND write access to /dev/uinput
 - **Editing the `ydotool` paste branch when `PLATFORM.pasteStrategy === 'xdotool'`** — check which branch actually runs on the target system
 - **Pre-warming audio but not video** — the video getUserMedia also steals focus
+- **Binding the app's `pasteTranscript` hotkey to Ctrl+Shift+V on Linux** — it collides with the Ctrl+Shift+V paste *strategies* (Mutter swallows the synthetic keystroke and routes it back to Windy), so the chain demotes to `ydotool_type`. Typing a multi-thousand-char transcript as raw uinput events overflows the focused client's Wayland event queue → GTK apps abort with `Error flushing display` → single-process terminals (Ptyxis) lose EVERY window at once. This killed all of Grant's terminals twice on 2026-07-12. Linux default is now **Ctrl+Alt+V** with a one-time migration (`migrateCollidingPasteHotkey()` in main.js); `ydotool_type` is also chunked (500 chars + 150ms drain pause) as a backstop. See the guide's "Incident: ydotool_type keystroke flood" section.
 
 ### Key Files
 

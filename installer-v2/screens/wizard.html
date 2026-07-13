@@ -4844,6 +4844,10 @@
           document.getElementById('key-show').textContent = '⌘+Shift+W';
           document.getElementById('key-model').textContent = '⌘+Shift+M';
           document.getElementById('nxt-key-record').textContent = '⌘+Shift+Space';
+        } else if (hardwareData?.platform === 'linux') {
+          // Linux pasteTranscript default is Ctrl+Alt+V — Ctrl+Shift+V collides
+          // with the Wayland paste strategies (see paste-strategies.js).
+          document.getElementById('key-paste').textContent = 'Ctrl+Alt+V';
         }
 
         // Phase 4: route through permission verification before celebrating.
