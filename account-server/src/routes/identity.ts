@@ -36,6 +36,7 @@ import {
 } from '../identity-service';
 import { normalizeProductTier } from '@windy-pro/contracts';
 import { provisionAgent, cascadeRevocation } from '../services/ecosystem-provisioner';
+import { opsSurfacesForProducts } from '../services/agent-surfaces';
 import { trackEvent } from '../services/analytics';
 
 const router = Router();
@@ -1854,6 +1855,47 @@ router.get('/ecosystem-status', authenticateToken, async (req: Request, res: Res
   } catch (err: any) {
     console.error('[identity] ecosystem-status error:', err);
     res.status(500).json({ error: 'Failed to fetch ecosystem status' });
+  }
+});
+
+// ─── GET /api/v1/identity/agent-surfaces ────────────────────
+// The cloud twin of ~/.windy/surfaces.json (ADR-060 §3.8). A hosted agent
+// can't read a file on the user's box, so account-server — the identity
+// spine — answers "what cloud ops surfaces does this human run?" in one
+// authenticated call. The agent then enumerates + drives each product's
+// Loom-woven ops MCP shim. Read-only; reuses the ecosystem-status
+// product_accounts query (direct-holder OR operator relationship, ADR-050).
+
+router.get('/agent-surfaces', authenticateToken, (req: Request, res: Response) => {
+  try {
+    const db = getDb();
+    const userId = (req as AuthRequest).user.userId;
+
+    const rows = db.prepare(
+      'SELECT product, status FROM product_accounts WHERE identity_id = ? OR operator_identity_id = ?',
+    ).all(userId, userId) as { product: string; status: string }[];
+
+    // Dedupe by product, preferring an active row (same "is it usable"
+    // semantic as ecosystem-status).
+    const byProduct = new Map<string, { product: string; status: string }>();
+    for (const row of rows) {
+      const existing = byProduct.get(row.product);
+      if (!existing || (row.status === 'active' && existing.status !== 'active')) {
+        byProduct.set(row.product, row);
+      }
+    }
+
+    const surfaces = opsSurfacesForProducts(Array.from(byProduct.values()));
+    // Content-free: product + contract + endpoint only, no user data.
+    res.json({
+      ok: true,
+      discovery: 'agent-surfaces.v1',
+      note: 'Cloud ops surfaces this identity runs. Probe each before trusting; auth each with your EPT.',
+      surfaces,
+    });
+  } catch (err) {
+    console.error('[identity] agent-surfaces error:', err);
+    res.status(500).json({ error: 'Failed to fetch agent surfaces' });
   }
 });
 
