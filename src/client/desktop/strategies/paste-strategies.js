@@ -545,6 +545,18 @@ async function testStrategy(name) {
   return await executeStrategy(name, 'wtest');
 }
 
+// ── Adaptive demotion ─────────────────────────────────────────────────────
+// The app must adapt to the platform, not the other way around: a strategy
+// that keeps failing on THIS system (wrong compositor, denied clipboard,
+// missing daemon) gets skipped after MAX_FAIL_STREAK consecutive failures
+// instead of being re-tried — and re-failing — on every paste. Session-scoped
+// on purpose: an app restart or a single success resets the streak, so a
+// changed environment (daemon installed, desktop relaunch) self-heals with no
+// config surgery. If demotion would leave NO candidates, it is ignored — we
+// never strand the user with zero strategies.
+const MAX_FAIL_STREAK = 3;
+const _failStreaks = new Map();
+
 /**
  * Auto: run through a list of candidates in priority order until one succeeds.
  * Returns { ok, strategy, tried }. Also records the attempt in history.
@@ -552,14 +564,21 @@ async function testStrategy(name) {
 async function autoExecute(text, candidates, opts = {}) {
   const tried = [];
   const startedAt = Date.now();
+  let runnable = candidates.filter(n => (_failStreaks.get(n) || 0) < MAX_FAIL_STREAK);
+  if (runnable.length === 0) runnable = candidates;
+  const demoted = candidates.filter(n => !runnable.includes(n));
+  if (demoted.length) {
+    console.info(`[AutoPaste] Adaptive skip (${MAX_FAIL_STREAK}+ consecutive failures on this system): ${demoted.join(', ')}`);
+  }
   // A new paste supersedes any restore still pending from the previous one —
   // otherwise the old timer could fire between this paste's clipboard write
   // and its keystroke, pasting stale content.
   _cancelPendingRestore();
   const restoreWanted = opts.restoreClipboard !== false;
   const snap = restoreWanted ? await _snapshotClipboards() : null;
-  for (const name of candidates) {
+  for (const name of runnable) {
     const result = await executeStrategy(name, text);
+    _failStreaks.set(name, result.ok ? 0 : (_failStreaks.get(name) || 0) + 1);
     tried.push({ strategy: name, ok: result.ok, error: result.error });
     if (result.ok) {
       if (snap) _scheduleClipboardRestore(snap, text);
