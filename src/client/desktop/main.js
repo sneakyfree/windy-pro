@@ -2646,6 +2646,32 @@ const WAYLAND_CONTROL_PORT = 18765;
 let _waylandControlServer = null;
 let _savedWaylandFocusTarget = null;  // Forward-compat slot (for Scope C focus restore)
 
+// Per-install bearer token for the control server (third leg of the wall
+// after Origin-reject + Host check — see control-auth.js for why the token
+// is required even behind those two). Populated in startWaylandControlServer.
+const controlAuth = require('./control-auth');
+let _controlToken = null;      // hex token every request must present
+let _controlTokenPath = null;  // where agent clients read it from
+
+function ensureControlTokenLoaded() {
+  if (_controlToken) return _controlToken;
+  try {
+    const { token, tokenPath } = controlAuth.ensureControlToken();
+    _controlToken = token;
+    _controlTokenPath = tokenPath;
+  } catch (e) {
+    // Degraded mode: filesystem refused the token file (disk full, weird
+    // perms). Fail CLOSED for externals but keep hotkeys alive: mint an
+    // in-memory token — the GNOME keybinding curls registered this run use
+    // the same value, so hotkeys keep working; external agents can't read
+    // a file that doesn't exist and stay locked out until the fs heals.
+    _controlToken = controlAuth.generateToken();
+    _controlTokenPath = null;
+    console.error(`[AgentCtrl] control token file unavailable (${e.message}) — in-memory token this run; external agent clients will 401`);
+  }
+  return _controlToken;
+}
+
 // ── Settings change history (in-memory, this session only) ─────────────
 // Capped ring-buffer of catalog-validated setting writes so the agent can
 // answer "what did I just change?" and "undo my last change". Entries are
@@ -2856,6 +2882,7 @@ function startWaylandControlServer() {
   // also serves the agent-control surface (paste strategies, settings) so we
   // start it on ALL platforms — agents need it on macOS/Windows/X11 too.
   const http = require('http');
+  ensureControlTokenLoaded(); // mint/read the install token before first request
   const actionHandlers = {
     'toggle-recording': () => toggleRecording(),
     'paste-transcript': () => pasteTranscript(),
@@ -2919,6 +2946,35 @@ function startWaylandControlServer() {
     }
     const urlObj = new URL(req.url, 'http://localhost');
     const pathname = urlObj.pathname;
+
+    // ── Per-install bearer token (launch-critical) ────────────────────────
+    // The Origin/Host guards above do NOT stop no-Origin browser GETs
+    // (<img src="http://127.0.0.1:18765/paste-transcript"> carries no Origin
+    // and a loopback Host, yet executes a side effect). Every route except
+    // GET /control/info requires the install token; the legacy GNOME action
+    // routes may carry it as ?t= (quote-free gsettings command — see
+    // control-auth.js). Agent-readable 401 tells the caller where the token
+    // lives and how to update an old client.
+    if (req.method === 'GET' && pathname === '/control/info') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        ok: true,
+        product: 'windy-word',
+        version: app.getVersion(),
+        token_required: true,
+        token_path: _controlTokenPath,
+        contract: 'agent-control/http-v1',
+      }, null, 2));
+      return;
+    }
+    const authResult = controlAuth.verifyControlAuth(
+      req, pathname, urlObj.searchParams, ensureControlTokenLoaded()
+    );
+    if (!authResult.ok) {
+      res.writeHead(authResult.status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(authResult.body, null, 2));
+      return;
+    }
 
     // ── Agent-control endpoints (paste strategy registry) ──
     try {
@@ -5685,11 +5741,15 @@ function registerGnomeKeybindings() {
       return nextSlot;
     };
 
-    // Register each binding (plain curl — no nested-quote bash -c)
+    // Register each binding (plain curl — no nested-quote bash -c).
+    // The install token rides as ?t= so the gsettings command stays a
+    // quote-free single-level string (g_shell_parse_argv-safe — do NOT
+    // switch this to a -H "Authorization: …" header; see control-auth.js).
+    const kbToken = ensureControlTokenLoaded();
     for (const b of bindings) {
       const slot = getNextSlot();
       const kbPath = `${basePath}/custom${slot}/`;
-      const cmd = `curl -s http://127.0.0.1:${WAYLAND_CONTROL_PORT}/${b.action}`;
+      const cmd = `curl -s http://127.0.0.1:${WAYLAND_CONTROL_PORT}/${b.action}?t=${kbToken}`;
       execSync(`gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${kbPath} name '${b.name}'`, { timeout: 2000 });
       execSync(`gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${kbPath} command '${cmd}'`, { timeout: 2000 });
       execSync(`gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${kbPath} binding '${b.binding}'`, { timeout: 2000 });
