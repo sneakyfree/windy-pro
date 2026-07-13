@@ -1,0 +1,49 @@
+{
+  "contract": "ops.mcp.v1",
+  "doctrine": "ADR-060 v1.0",
+  "product": "windy-translate",
+  "class": "cloud",
+  "mcp_protocol": "2025-06-18",
+  "$comment": "Windy Translate ops surface — Class C, but an INTERNAL support service (Node on loopback:8099, consumed by windy-pro; not directly grandma-facing). Two honest findings: (1) no /version endpoint → MF1 non-compliant (get_status is a gap); (2) no auth today → the ops shim's EPT passthrough is aspirational (the service currently ignores it, like a pre-token desktop app — add the EPT gate when/if exposed). Product API (/translate, /translate/batch, /detect) stays out per §2. get_capabilities → /languages: a translation service IS its language coverage.",
+  "baseline_mapping": {
+    "get_health": { "status": "implemented", "maps_to": "GET /health", "note": "rich: status + NLLB worker ready|loading + cache_size + uptime — doubles as status until /version exists." },
+    "get_status": { "status": "gap", "note": "NO /version endpoint — MF1 non-compliant; add the canonical {service,version,commit_sha,started_at,environment} shape." },
+    "get_capabilities": { "status": "implemented", "maps_to": "GET /languages", "note": "supported language list — the honest capability probe for a translator." },
+    "get_config": { "status": "gap" },
+    "get_logs": { "status": "gap" },
+    "run_selftest": { "status": "gap", "note": "canary: translate a fixed phrase and verify output." },
+    "reconnect": { "status": "unsupported" },
+    "restart_app": { "status": "gap", "note": "out-of-band (systemd windy-translate.service)." },
+    "enter_safe_mode": { "status": "unsupported" },
+    "exit_safe_mode": { "status": "unsupported" },
+    "set_setting": { "status": "gap" },
+    "check_for_update": { "status": "gap", "note": "wire to the Steamroller (L2)." },
+    "apply_update": { "status": "gap", "note": "SSH-free redeploy hook; §7." },
+    "reset_to_defaults": { "status": "unsupported", "note": "holds the translation cache; clearing is a different, explicit action." }
+  },
+  "tools": [
+    {
+      "name": "get_health",
+      "tier": "auto_allow",
+      "baseline_status": "implemented",
+      "description": "The FIRST call when translation is failing. Health of the Windy Translate service: whether the NLLB translation worker is ready or still loading, how big the cache is, and uptime. If the worker says 'loading', translations aren't ready yet.",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+      "transport": { "method": "GET", "path": "/health" }
+    },
+    {
+      "name": "get_capabilities",
+      "tier": "auto_allow",
+      "baseline_status": "implemented",
+      "description": "List the languages Windy Translate can actually translate between right now. Use this when a user's target language 'isn't working' — it may simply not be in the supported set.",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+      "transport": { "method": "GET", "path": "/languages" }
+    },
+    {
+      "name": "get_cache_stats",
+      "tier": "auto_allow",
+      "description": "Read Windy Translate's cache statistics — how many translations are cached and how often each language is hit. A diagnostic for 'is caching working' and which languages are in demand. Counts only, no translated content.",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+      "transport": { "method": "GET", "path": "/cache/stats" }
+    }
+  ]
+}
