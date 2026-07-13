@@ -1,0 +1,7 @@
+{
+  "product": "windy-word",
+  "class": "desktop",
+  "http": {"base_default": "http://127.0.0.1:18765", "base_env": "WINDY_WORD_URL"},
+  "auth": {"kind": "install_token", "token_path_default": "~/.windy-word/control.token", "token_env": "WINDY_WORD_CONTROL_TOKEN", "token_path_env": "WINDY_WORD_CONTROL_TOKEN_PATH"},
+  "package": {"name": "windy-word-mcp", "version": "2.0.0-loom-preview", "description": "Windy Word MCP server — Loom-generated successor to the hand-written 1.x packet."}
+}
