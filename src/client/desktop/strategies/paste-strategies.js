@@ -453,27 +453,49 @@ async function _snapshotClipboards() {
   return snap;
 }
 
+function _wlCopy(text) {
+  try {
+    if (text === null) {
+      spawn('wl-copy', ['--clear'], { stdio: 'ignore' }).on('error', () => {});
+      return;
+    }
+    const proc = spawn('wl-copy', [], { stdio: ['pipe', 'ignore', 'ignore'] });
+    proc.on('error', () => {});
+    proc.stdin.write(text);
+    proc.stdin.end();
+  } catch (_) { /* best-effort */ }
+}
+
+// Put the snapshot back — but ONLY on sides where the clipboard still holds
+// OUR transcript. If the user copied something new in the meantime, their
+// copy wins; blindly restoring would clobber it, which is the exact bug this
+// feature exists to prevent. A side whose snapshot was empty gets cleared
+// rather than left holding the transcript.
+async function _restoreClipboards(snap, transcript) {
+  let touched = false;
+  try {
+    if (clipboard.readText() === transcript) {
+      if (snap.x11) clipboard.writeText(snap.x11); else clipboard.clear();
+      touched = true;
+    }
+  } catch (_) { /* best-effort */ }
+  if (process.platform === 'linux' &&
+      (process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' &&
+      hasBinary('wl-paste')) {
+    const { ok, stdout } = await execFilePromise('wl-paste', ['-n', '-t', 'text'], { timeout: 500 });
+    if (ok && stdout === transcript) {
+      _wlCopy(snap.wayland);
+      touched = true;
+    }
+  }
+  if (touched) console.info('[Clipboard] Restored pre-dictation clipboard contents');
+}
+
 function _scheduleClipboardRestore(snap, transcript) {
   _cancelPendingRestore();
-  // Restoring our own transcript would be a no-op; only put back content the
-  // user actually had there.
-  const restoreX11 = snap.x11 && snap.x11 !== transcript;
-  const restoreWayland = snap.wayland && snap.wayland !== transcript;
-  if (!restoreX11 && !restoreWayland) return;
   _pendingRestore = setTimeout(() => {
     _pendingRestore = null;
-    if (restoreX11) {
-      try { clipboard.writeText(snap.x11); } catch (_) { /* best-effort */ }
-    }
-    if (restoreWayland) {
-      try {
-        const proc = spawn('wl-copy', [], { stdio: ['pipe', 'ignore', 'ignore'] });
-        proc.on('error', () => {});
-        proc.stdin.write(snap.wayland);
-        proc.stdin.end();
-      } catch (_) { /* best-effort */ }
-    }
-    console.info('[Clipboard] Restored pre-dictation clipboard contents');
+    _restoreClipboards(snap, transcript);
   }, RESTORE_MS);
 }
 
@@ -487,14 +509,23 @@ async function executeStrategy(name, text) {
   const available = await s.detect();
   if (!available) return { ok: false, strategy: name, error: 'detect() returned false (requirements not met)' };
 
+  // Clipboard prep leaks: if we set the clipboard for a strategy that then
+  // FAILS, the transcript squats on the user's clipboard with no keystroke
+  // ever consuming it (this clobbered Grant's copy/paste on every dictation
+  // when wlcopy_then_ctrl_shift_v was failing silently, 2026-07-12). Snapshot
+  // first and restore immediately on failure so a failed attempt is invisible.
+  let prepSnap = null;
   if (s.needsClipboard) {
+    prepSnap = await _snapshotClipboards();
     setClipboard(text);
     await new Promise(r => setTimeout(r, 50)); // small settle
   }
   try {
     const ok = await s.paste(text);
+    if (!ok && prepSnap) await _restoreClipboards(prepSnap, text);
     return { ok: !!ok, strategy: name };
   } catch (e) {
+    if (prepSnap) await _restoreClipboards(prepSnap, text);
     return { ok: false, strategy: name, error: e?.message || String(e) };
   }
 }
