@@ -340,6 +340,37 @@
         "path": "/control/selftest",
         "arg_mapping": "none"
       }
+    },
+    {
+      "name": "reconnect",
+      "tier": "auto_allow",
+      "description": "Re-establish Windy Word's connection to its transcription engine without restarting the whole app. If the engine has died it's started back up; then a quick handshake confirms the link is live. Use this when transcription stopped working but the app is otherwise fine — a lighter fix than a full restart. Reports pass/fail per stage (engine start, connect).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "passed": {
+            "type": "boolean",
+            "description": "true only when every stage passed ('passed', not 'ok')"
+          },
+          "stages": {
+            "type": "array",
+            "description": "[{name: engine_start|connect, ok, detail}]"
+          },
+          "duration_ms": {
+            "type": "number"
+          }
+        }
+      },
+      "transport": {
+        "method": "POST",
+        "path": "/control/reconnect",
+        "arg_mapping": "none"
+      }
     }
   ]
 }
