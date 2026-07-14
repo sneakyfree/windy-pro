@@ -371,6 +371,64 @@
         "path": "/control/reconnect",
         "arg_mapping": "none"
       }
+    },
+    {
+      "name": "enter_safe_mode",
+      "tier": "auto_allow",
+      "description": "Put Windy Word's transcription engine into a minimal known-good state — bundled local Whisper with a reliable model, no cloud and no auto-tuning — after saving the current settings. Use this when transcription is misbehaving and you want a clean baseline to test against. Fully reversible with exit_safe_mode, which restores exactly what was there before.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "applied": {
+            "type": "object",
+            "description": "the known-good engine settings applied"
+          },
+          "snapshot": {
+            "type": "object",
+            "description": "the settings saved for restore"
+          }
+        }
+      },
+      "transport": {
+        "method": "POST",
+        "path": "/control/safe-mode/enter",
+        "arg_mapping": "none"
+      }
+    },
+    {
+      "name": "exit_safe_mode",
+      "tier": "ask_first",
+      "description": "Leave safe mode and restore the transcription engine settings exactly as they were before enter_safe_mode was called. Ask first — the user may have relied on the safe defaults; confirm before switching them back.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "restored": {
+            "type": "object",
+            "description": "the settings restored"
+          }
+        }
+      },
+      "transport": {
+        "method": "POST",
+        "path": "/control/safe-mode/exit",
+        "arg_mapping": "none"
+      }
     }
   ]
 }
