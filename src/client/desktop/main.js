@@ -3000,6 +3000,27 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true, service: 'windy-word', capabilities }, null, 2));
         return;
       }
+      // POST /control/safe-mode/enter | /exit — the ADR-060 safe-mode knobs.
+      // A REVERSIBLE known-good overlay on the transcription ENGINE config
+      // (local Whisper + reliable model); snapshots current settings on enter,
+      // restores them on exit. Scoped to the engine — touches NOTHING in
+      // paste/recording/Wayland/focus. Logic in doctor/safe-mode.js; here we
+      // just wire the store + the existing applySettingChange (hot-reloads).
+      if (req.method === 'POST' && (pathname === '/control/safe-mode/enter' || pathname === '/control/safe-mode/exit')) {
+        const safeMode = require('./doctor/safe-mode');
+        const io = {
+          getSetting: (p) => store.get(p),
+          applySetting: (p, v) => { applySettingChange(p, v, 'safe-mode'); },
+          getSafeState: () => store.get('safeMode'),
+          setSafeState: (s) => store.set('safeMode', s),
+        };
+        const result = pathname.endsWith('/enter')
+          ? safeMode.enterSafeMode(io)
+          : safeMode.exitSafeMode(io);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ service: 'windy-word', ...result }, null, 2));
+        return;
+      }
       // POST /control/reconnect — the ADR-060 reconnect knob. Re-establishes
       // the primary connection: the Python transcription engine. Starts it if
       // dead (the same startPythonServer the app uses on crash-recovery), then
