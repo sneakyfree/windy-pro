@@ -3000,6 +3000,39 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true, service: 'windy-word', capabilities }, null, 2));
         return;
       }
+      // POST /control/reconnect — the ADR-060 reconnect knob. Re-establishes
+      // the primary connection: the Python transcription engine. Starts it if
+      // dead (the same startPythonServer the app uses on crash-recovery), then
+      // verifies a WebSocket handshake. Touches ONLY the engine link — nothing
+      // in recording/paste/Wayland/focus.
+      if (req.method === 'POST' && pathname === '/control/reconnect') {
+        const cfg = store.get('server', { host: '127.0.0.1', port: 9876 });
+        const probeConnection = () => new Promise((resolve) => {
+          let settled = false;
+          const done = (v) => { if (!settled) { settled = true; resolve(v); } };
+          let attempts = 0;
+          const tryOnce = () => {
+            attempts++;
+            try {
+              const WebSocket = require('ws');
+              const ws = new WebSocket(`ws://${cfg.host}:${cfg.port}`);
+              const t = setTimeout(() => { try { ws.terminate(); } catch (_) {} retry(); }, 2000);
+              ws.on('open', () => { clearTimeout(t); try { ws.close(); } catch (_) {} done(true); });
+              ws.on('error', () => { clearTimeout(t); retry(); });
+            } catch (_) { retry(); }
+          };
+          const retry = () => { if (attempts >= 4) return done(false); setTimeout(tryOnce, 750); };
+          tryOnce();
+        });
+        const verdict = await require('./doctor/reconnect').reconnect({
+          engineRunning: !!(pythonProcess && !pythonProcess.killed),
+          startEngine: () => startPythonServer(),
+          probeConnection,
+        });
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ service: 'windy-word', ...verdict }, null, 2));
+        return;
+      }
       // POST /control/selftest — the ADR-060 run_selftest knob. Actively
       // transcribes a BUNDLED test clip through the real FILE-based engine
       // path (_transcribeAudioFile: ffmpeg → WebSocket engine) and verifies
