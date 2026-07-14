@@ -2978,6 +2978,18 @@ function startWaylandControlServer() {
 
     // ── Agent-control endpoints (paste strategy registry) ──
     try {
+      // GET /control/logs — recent app logs for the ADR-060 get_logs knob.
+      // Additive, read-only, token-gated. Content-free BY CONSTRUCTION:
+      // logger.readRecent() returns only {ts, level, component, event} and
+      // drops every record's `data` payload, so no transcript/clip/settings
+      // value can leak (the doctrine privacy hard line).
+      if (req.method === 'GET' && pathname === '/control/logs') {
+        const limit = Number(urlObj.searchParams.get('limit')) || 200;
+        const entries = require('./logger').readRecent(limit);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, service: 'windy-word', count: entries.length, entries }, null, 2));
+        return;
+      }
       // GET /paste/strategies — list all strategies with capability metadata
       if (req.method === 'GET' && pathname === '/paste/strategies') {
         const all = pasteStrategies.listStrategies();

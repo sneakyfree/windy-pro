@@ -20,5 +20,9 @@ module.exports = {
     '/build/',
     '/.venv/',
     '<rootDir>/tests/ecosystem-smoke\\.test\\.js$',
+    // services/translate-api ships its own node:test suite (node --test),
+    // run by its own `npm test` — not jest. Exclude so root jest doesn't
+    // mis-run it (ADR-060 translate ops work, 2026-07-13).
+    '/services/translate-api/',
   ],
 };

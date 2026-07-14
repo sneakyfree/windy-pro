@@ -33,6 +33,11 @@ const MAX_BYTES_PER_FILE = 10 * 1024 * 1024; // 10 MB
 const MAX_ROTATIONS = 5;
 
 function resolveLogDir() {
+  // Explicit override wins on every platform — lets tests fully isolate the
+  // sink (the darwin/win branches below use os.homedir(), which ignores a
+  // test's $HOME/$XDG swap). Prod never sets WINDY_LOG_DIR, so behavior is
+  // unchanged there.
+  if (process.env.WINDY_LOG_DIR) return process.env.WINDY_LOG_DIR;
   // Mirrors wizard-logger.getLogDir so support can find both files in
   // the same place.
   if (process.platform === 'darwin') {
@@ -239,10 +244,45 @@ function createLogger(serviceName) {
   };
 }
 
+/**
+ * Read recent log records for the agent-control `get_logs` knob (ADR-060).
+ *
+ * CONTENT-FREE BY CONSTRUCTION: returns only {ts, level, component, event}
+ * from each JSON-lines record and DROPS the `data` payload entirely. `event`
+ * and `component` are fixed-vocabulary strings the code emits (e.g.
+ * "recording.start", "engine"), never user transcripts, clips, or settings
+ * values. This is the doctrine privacy hard line — get_logs never exposes
+ * transcript/content, so we don't hand back `data` at all.
+ *
+ * Best-effort and never throws: a missing/rotated/corrupt log yields [].
+ *
+ * @param {number} limit  max records to return (newest last), capped at 500.
+ * @returns {Array<{ts,level,component,event}>}
+ */
+function readRecent(limit = 200) {
+  const cap = Math.max(1, Math.min(Number(limit) || 200, 500));
+  try {
+    const raw = fs.readFileSync(LOG_PATH_NOW(), 'utf8');
+    const lines = raw.split('\n').filter(Boolean);
+    const out = [];
+    for (const line of lines.slice(-cap)) {
+      try {
+        const r = JSON.parse(line);
+        // Whitelist ONLY these four fields — `data` is deliberately dropped.
+        out.push({ ts: r.ts, level: r.level, component: r.component, event: r.event });
+      } catch (_) { /* skip an unparseable line */ }
+    }
+    return out;
+  } catch (_) {
+    return [];
+  }
+}
+
 // Exposed for diagnostics / tests
 Object.defineProperty(createLogger, 'LOG_PATH', { get: () => LOG_PATH_NOW() });
 Object.defineProperty(createLogger, 'LOG_DIR', { get: () => LOG_DIR_NOW() });
 createLogger._rotateIfNeeded = rotateIfNeeded;
 createLogger._emitEvent = emitEvent;
+createLogger.readRecent = readRecent;
 
 module.exports = createLogger;
