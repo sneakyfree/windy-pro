@@ -11,47 +11,91 @@
       "tier": "auto_allow",
       "baseline_status": "implemented",
       "description": "The FIRST tool to call when the user says Windy Word is acting up. Runs the built-in doctor and returns a full diagnostic snapshot — what's healthy, what's broken, and a plain-English read on each finding so you can tell the user what's wrong.",
-      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
-      "transport": { "method": "GET", "path": "/doctor/diagnose" }
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "transport": {
+        "method": "GET",
+        "path": "/doctor/diagnose"
+      }
     },
     {
       "name": "get_status",
       "tier": "auto_allow",
       "baseline_status": "implemented",
       "description": "Read what Windy Word is doing right now: whether it's recording, idle, or busy, and its current runtime state. Use this before changing anything so you know the starting point.",
-      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
-      "transport": { "method": "GET", "path": "/recording/state" }
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "transport": {
+        "method": "GET",
+        "path": "/recording/state"
+      }
     },
     {
       "name": "get_config",
       "tier": "auto_allow",
       "baseline_status": "implemented",
       "description": "Read Windy Word's full current configuration (secrets omitted). Use this to see how the app is set up before you diagnose a problem or change a setting.",
-      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
-      "transport": { "method": "GET", "path": "/config" }
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "transport": {
+        "method": "GET",
+        "path": "/config"
+      }
     },
     {
       "name": "check_for_update",
       "tier": "auto_allow",
       "baseline_status": "implemented",
       "description": "Ask whether a newer version of Windy Word is available to install. Read-only — this only checks, it does not download or apply anything.",
-      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
-      "transport": { "method": "POST", "path": "/updates/check", "arg_mapping": "none" }
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "transport": {
+        "method": "POST",
+        "path": "/updates/check",
+        "arg_mapping": "none"
+      }
     },
     {
       "name": "restart_app",
       "tier": "ask_first",
       "baseline_status": "implemented",
       "description": "Restart the whole Windy Word app — the standard fix when it's wedged and reconnecting or safe mode won't cut it. Confirm with the user first; unsaved in-flight recording is lost.",
-      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
-      "transport": { "method": "POST", "path": "/app/restart", "arg_mapping": "none" }
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "transport": {
+        "method": "POST",
+        "path": "/app/restart",
+        "arg_mapping": "none"
+      }
     },
     {
       "name": "list_settings",
       "tier": "auto_allow",
       "description": "List every setting Windy Word exposes, each with its type, current value, allowed values, and a plain description. Read this before set_setting so you change the right knob to a valid value.",
-      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
-      "transport": { "method": "GET", "path": "/settings/catalog" }
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "transport": {
+        "method": "GET",
+        "path": "/settings/catalog"
+      }
     },
     {
       "name": "set_setting",
@@ -60,34 +104,67 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "path": { "type": "string", "description": "The setting path from list_settings, e.g. appearance.theme." },
-          "value": { "description": "The new value; must match the setting's type and allowed values." }
+          "path": {
+            "type": "string",
+            "description": "The setting path from list_settings, e.g. appearance.theme."
+          },
+          "value": {
+            "description": "The new value; must match the setting's type and allowed values."
+          }
         },
-        "required": ["path", "value"],
+        "required": [
+          "path",
+          "value"
+        ],
         "additionalProperties": false
       },
-      "transport": { "method": "POST", "path": "/settings/set" }
+      "transport": {
+        "method": "POST",
+        "path": "/settings/set"
+      }
     },
     {
       "name": "undo_last_change",
       "tier": "ask_first",
       "description": "Undo the most recent setting change, stepping back through Windy Word's change history. Use this the moment a setting you changed made things worse — a firefighter that can't un-break what it just tried is dangerous.",
-      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
-      "transport": { "method": "POST", "path": "/settings/undo", "arg_mapping": "none" }
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "transport": {
+        "method": "POST",
+        "path": "/settings/undo",
+        "arg_mapping": "none"
+      }
     },
     {
       "name": "get_sound_state",
       "tier": "auto_allow",
       "description": "Read the current state of Windy Word's sound effects: which sound pack is active, the master volume, and whether each per-stage sound is on. Use this before turning sounds up, down, or off.",
-      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
-      "transport": { "method": "GET", "path": "/sound-effects/state" }
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "transport": {
+        "method": "GET",
+        "path": "/sound-effects/state"
+      }
     },
     {
       "name": "list_sound_packs",
       "tier": "auto_allow",
       "description": "List the sound packs the user can switch Windy Word to, each with its id and friendly name. Read this before set_sound_pack so you pick a pack that actually exists.",
-      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
-      "transport": { "method": "GET", "path": "/sound-effects/packs" }
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "transport": {
+        "method": "GET",
+        "path": "/sound-effects/packs"
+      }
     },
     {
       "name": "set_master_volume",
@@ -95,11 +172,23 @@
       "description": "Set how loud Windy Word's sound effects are overall, from 0 (silent) to 100 (full). Use this when the user says the app is too loud or too quiet.",
       "inputSchema": {
         "type": "object",
-        "properties": { "volume": { "type": "integer", "minimum": 0, "maximum": 100, "description": "0 = silent, 100 = loudest." } },
-        "required": ["volume"],
+        "properties": {
+          "volume": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "0 = silent, 100 = loudest."
+          }
+        },
+        "required": [
+          "volume"
+        ],
         "additionalProperties": false
       },
-      "transport": { "method": "POST", "path": "/sound-effects/master-volume" }
+      "transport": {
+        "method": "POST",
+        "path": "/sound-effects/master-volume"
+      }
     },
     {
       "name": "set_sound",
@@ -108,14 +197,38 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "hook": { "type": "string", "enum": ["start", "during", "stop", "process", "warning", "paste"], "description": "Which stage's sound to change." },
-          "enabled": { "type": "boolean", "description": "Turn this sound on or off." },
-          "volume": { "type": "integer", "minimum": 0, "maximum": 100, "description": "This sound's volume." }
+          "hook": {
+            "type": "string",
+            "enum": [
+              "start",
+              "during",
+              "stop",
+              "process",
+              "warning",
+              "paste"
+            ],
+            "description": "Which stage's sound to change."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Turn this sound on or off."
+          },
+          "volume": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "This sound's volume."
+          }
         },
-        "required": ["hook"],
+        "required": [
+          "hook"
+        ],
         "additionalProperties": false
       },
-      "transport": { "method": "POST", "path": "/sound-effects/hook" }
+      "transport": {
+        "method": "POST",
+        "path": "/sound-effects/hook"
+      }
     },
     {
       "name": "set_sound_pack",
@@ -123,11 +236,54 @@
       "description": "Switch Windy Word to a different sound pack by its id or friendly name (from list_sound_packs) — for example a quieter pack, or the silent one to turn all effects off.",
       "inputSchema": {
         "type": "object",
-        "properties": { "packId": { "type": "string", "description": "The pack id (or friendly name) from list_sound_packs." } },
-        "required": ["packId"],
+        "properties": {
+          "packId": {
+            "type": "string",
+            "description": "The pack id (or friendly name) from list_sound_packs."
+          }
+        },
+        "required": [
+          "packId"
+        ],
         "additionalProperties": false
       },
-      "transport": { "method": "POST", "path": "/sound-effects/active-pack" }
+      "transport": {
+        "method": "POST",
+        "path": "/sound-effects/active-pack"
+      }
+    },
+    {
+      "name": "get_logs",
+      "tier": "auto_allow",
+      "baseline_status": "implemented",
+      "description": "Read Windy Word's recent app logs when something's misbehaving — server starts, recording/paste/engine events, errors — as a timeline of what happened. Content-free by design: each entry is just a timestamp, level, component, and event name; transcripts, clip audio, and settings values are never included.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "How many recent entries to return (newest last); default 200, max 500."
+          }
+        },
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "entries": {
+            "type": "array",
+            "description": "[{ts, level, component, event}] — no content/data payload"
+          }
+        }
+      },
+      "transport": {
+        "method": "GET",
+        "path": "/control/logs",
+        "arg_mapping": "query"
+      }
     }
   ]
 }

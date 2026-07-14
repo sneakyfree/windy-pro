@@ -18,6 +18,9 @@ function freshLogger(env = {}) {
   tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'logger-'));
   process.env.HOME = tmpHome;
   process.env.XDG_STATE_HOME = path.join(tmpHome, '.local', 'state');
+  // Explicit sink dir so tests isolate on every platform (the darwin/win
+  // log-dir branches ignore $HOME). Prod never sets WINDY_LOG_DIR.
+  process.env.WINDY_LOG_DIR = path.join(tmpHome, 'logs');
   Object.assign(process.env, env);
   jest.resetModules();
   createLogger = require('../src/client/desktop/logger');
@@ -25,6 +28,7 @@ function freshLogger(env = {}) {
 
 afterEach(() => {
   delete process.env.WINDY_LOG_FILE;
+  delete process.env.WINDY_LOG_DIR;
   try { fs.rmSync(tmpHome, { recursive: true, force: true }); } catch (_) {}
 });
 
@@ -121,5 +125,65 @@ describe('opt-out', () => {
     const log = createLogger('OptOut');
     log.state('x', 'y');
     expect(fs.existsSync(createLogger.LOG_PATH)).toBe(false);
+  });
+});
+
+describe('readRecent — ADR-060 get_logs (content-free by construction)', () => {
+  // Platform-robust: write directly to the resolved LOG_PATH and clear it
+  // first, so we don't depend on the file-sink's env isolation (the darwin
+  // path ignores $HOME/XDG — a pre-existing macOS test artifact).
+  function seed(lines) {
+    freshLogger({ WINDY_LOG_FILE: '1' });
+    const p = createLogger.LOG_PATH;
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, lines.map(l => (typeof l === 'string' ? l : JSON.stringify(l))).join('\n') + '\n');
+    return p;
+  }
+
+  test('returns only {ts,level,component,event}; drops the data payload', () => {
+    seed([
+      { ts: 't1', level: 'info', component: 'engine', event: 'recording.start',
+        data: { clip: 'SECRET TRANSCRIPT TEXT', token: 'abc123', body: 'user content' } },
+      { ts: 't2', level: 'error', component: 'paste', event: 'paste.fail', data: { note: 'more content' } },
+    ]);
+    const recent = createLogger.readRecent(50);
+    expect(recent.length).toBe(2);
+    for (const r of recent) {
+      expect(Object.keys(r).sort()).toEqual(['component', 'event', 'level', 'ts']);
+    }
+    const dump = JSON.stringify(recent);
+    expect(dump).not.toContain('SECRET TRANSCRIPT');
+    expect(dump).not.toContain('user content');
+    expect(dump).not.toContain('abc123');
+    expect(dump).not.toContain('more content');
+  });
+
+  test('emit → read roundtrip surfaces the fixed-vocabulary fields', () => {
+    freshLogger({ WINDY_LOG_FILE: '1' });
+    try { fs.unlinkSync(createLogger.LOG_PATH); } catch (_) {}
+    createLogger._emitEvent('info', 'engine', 'recording.start', { clip: 'x' });
+    const recent = createLogger.readRecent(50);
+    const last = recent[recent.length - 1];
+    expect(last.event).toBe('recording.start');
+    expect(last.component).toBe('engine');
+    expect('data' in last).toBe(false);
+  });
+
+  test('honors the limit (newest last) and caps at 500', () => {
+    const many = [];
+    for (let i = 0; i < 10; i++) many.push({ ts: `t${i}`, level: 'info', component: 'c', event: `e${i}` });
+    seed(many);
+    const three = createLogger.readRecent(3);
+    expect(three.length).toBe(3);
+    expect(three[three.length - 1].event).toBe('e9');
+    expect(createLogger.readRecent(9999).length).toBeLessThanOrEqual(500);
+  });
+
+  test('missing log → []; corrupt lines are skipped, never thrown', () => {
+    freshLogger({ WINDY_LOG_FILE: '1' });
+    try { fs.unlinkSync(createLogger.LOG_PATH); } catch (_) {}
+    expect(createLogger.readRecent()).toEqual([]);
+    seed(['not-json', '{"ts":"t","level":"info","component":"c","event":"e"}']);
+    expect(createLogger.readRecent()).toEqual([{ ts: 't', level: 'info', component: 'c', event: 'e' }]);
   });
 });
