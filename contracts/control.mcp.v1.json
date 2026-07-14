@@ -284,6 +284,30 @@
         "path": "/control/logs",
         "arg_mapping": "query"
       }
+    },
+    {
+      "name": "get_capabilities",
+      "tier": "auto_allow",
+      "baseline_status": "implemented",
+      "description": "Probe which Windy Word features actually work on this machine right now — recording, paste, text-to-speech, translation, and voice cloning — each reported as supported, unsupported, or unknown (probed, never assumed). Use this when a user says a feature 'isn't working' to see whether it's even available before digging deeper. Note: this is about FEATURES; /install/capabilities is about installable system dependencies.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "capabilities": {
+            "type": "object",
+            "description": "{feature: {status: supported|unsupported|unknown, detail?}}"
+          }
+        }
+      },
+      "transport": {
+        "method": "GET",
+        "path": "/control/capabilities"
+      }
     }
   ]
 }

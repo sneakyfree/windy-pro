@@ -2990,6 +2990,16 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true, service: 'windy-word', count: entries.length, entries }, null, 2));
         return;
       }
+      // GET /control/capabilities — tri-state per-feature probe for the
+      // ADR-060 get_capabilities knob. Additive, read-only, token-gated.
+      // Distinct from /install/capabilities (installable deps). The probe
+      // module touches NOTHING in recording/paste/Wayland/focus.
+      if (req.method === 'GET' && pathname === '/control/capabilities') {
+        const capabilities = await require('./doctor/capabilities').probeCapabilities();
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, service: 'windy-word', capabilities }, null, 2));
+        return;
+      }
       // GET /paste/strategies — list all strategies with capability metadata
       if (req.method === 'GET' && pathname === '/paste/strategies') {
         const all = pasteStrategies.listStrategies();
