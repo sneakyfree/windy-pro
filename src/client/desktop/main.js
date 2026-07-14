@@ -3000,6 +3000,28 @@ function startWaylandControlServer() {
         res.end(JSON.stringify({ ok: true, service: 'windy-word', capabilities }, null, 2));
         return;
       }
+      // POST /control/selftest — the ADR-060 run_selftest knob. Actively
+      // transcribes a BUNDLED test clip through the real FILE-based engine
+      // path (_transcribeAudioFile: ffmpeg → WebSocket engine) and verifies
+      // text comes back, pass/fail per stage. Uses the file path only —
+      // NOTHING in recording/paste/Wayland/focus. Content-free (reports the
+      // transcript LENGTH, never the transcript).
+      if (req.method === 'POST' && pathname === '/control/selftest') {
+        const clipCandidates = [
+          path.join(path.dirname(process.execPath), 'resources', 'app', 'assets', 'selftest-clip.wav'),
+          path.join(path.dirname(process.execPath), 'resources', 'assets', 'selftest-clip.wav'),
+          path.join(__dirname, '..', '..', '..', 'assets', 'selftest-clip.wav'),
+        ];
+        const clipPath = clipCandidates.find(p => fs.existsSync(p)) || clipCandidates[clipCandidates.length - 1];
+        const verdict = await require('./doctor/selftest').runSelftest({
+          engineRunning: !!(pythonProcess && !pythonProcess.killed),
+          clipPath,
+          transcribe: (p) => _transcribeAudioFile(p, { language: 'en' }),
+        });
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ service: 'windy-word', ...verdict }, null, 2));
+        return;
+      }
       // GET /paste/strategies — list all strategies with capability metadata
       if (req.method === 'GET' && pathname === '/paste/strategies') {
         const all = pasteStrategies.listStrategies();
