@@ -406,6 +406,16 @@ export default function Dashboard() {
                             // returns windy_drops: { status: 'available' } matching
                             // the windy_connect/windy_mind/windy_search pattern.
                             { key: 'windy_drops', label: 'Windy Drops', icon: '🌀', href: 'https://windydrops.com' },
+                            // Windy Calendar — the born-installed scheduler + calendar
+                            // view (repo sneakyfree/windy-calendar; windycalendar.com being
+                            // acquired). Steps 1–6 built + adversarially reviewed on OC5
+                            // (atomic slot lock proven, ADR-060 Class C control surface,
+                            // local wrangler smoke green — see that repo's HANDOFF.md);
+                            // first shipped job is replacing the Calendly embed on
+                            // grantwhitmer.com. Coming-soon chip until that customer-zero
+                            // cutover — no account-server product row needed (comingSoon
+                            // forces the badge, windy_hand pattern).
+                            { key: 'windy_calendar', label: 'Windy Calendar', icon: '📅', comingSoon: true },
                         ].map(p => {
                             const product = ecosystem.products?.[p.key] || {}
                             const status = p.comingSoon ? 'coming_soon' : (product.status || 'not_provisioned')
