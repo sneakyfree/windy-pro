@@ -412,10 +412,10 @@ export default function Dashboard() {
                             // (atomic slot lock proven, ADR-060 Class C control surface,
                             // local wrangler smoke green — see that repo's HANDOFF.md);
                             // first shipped job is replacing the Calendly embed on
-                            // grantwhitmer.com. Coming-soon chip until that customer-zero
-                            // cutover — no account-server product row needed (comingSoon
-                            // forces the badge, windy_hand pattern).
-                            { key: 'windy_calendar', label: 'Windy Calendar', icon: '📅', comingSoon: true },
+                            // grantwhitmer.com — CUTOVER DONE 2026-07-14: the Calendly embed
+                            // is replaced and windycalendar.com is live, so the tile links out
+                            // (external-link pattern like windy_mind/windy_search).
+                            { key: 'windy_calendar', label: 'Windy Calendar', icon: '📅', href: 'https://windycalendar.com' },
                         ].map(p => {
                             const product = ecosystem.products?.[p.key] || {}
                             const status = p.comingSoon ? 'coming_soon' : (product.status || 'not_provisioned')
