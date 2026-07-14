@@ -30,6 +30,11 @@ const PYTHON_BIN = process.env.PYTHON_BIN || 'python3';
 const SERVICE_NAME = 'windy-translate';
 const SERVICE_VERSION = require('./package.json').version;
 const STARTED_AT = new Date().toISOString();
+// Steamroller (ADR-060 §5) — check_for_update resolves this deployment's
+// version against admin's fleet-version manifest.
+const FLEET_VERSIONS_URL = process.env.FLEET_VERSIONS_URL || 'https://admin.windyword.ai/v1/fleet-versions';
+const FLEET_PRODUCT = process.env.FLEET_PRODUCT || 'windy-translate';
+const FLEET_CHANNEL = process.env.FLEET_CHANNEL || 'stable';
 const ALLOWED_ORIGINS = [
     'https://windyword.ai',
     'https://windyword.ai', // legacy — remove after full migration
@@ -448,6 +453,51 @@ app.get('/languages', (req, res) => {
         supported: Object.keys(LANG_TO_NLLB),
         total: Object.keys(LANG_TO_NLLB).length
     });
+});
+
+// ─── Steamroller: check_for_update (ADR-060 §5) ───
+// Semver-lenient compare (mirrors windy-contracts loom/discovery.py so the
+// whole fleet agrees on what "newer" means).
+function semverTuple(v) {
+    return String(v).replace(/-/g, '.').split('.').map((p) => (/^\d+$/.test(p) ? [0, parseInt(p, 10)] : [1, p]));
+}
+function semverLess(a, b) {
+    const ta = semverTuple(a), tb = semverTuple(b);
+    for (let i = 0; i < Math.max(ta.length, tb.length); i++) {
+        const x = ta[i] || [0, 0], y = tb[i] || [0, 0];
+        if (x[0] !== y[0]) return x[0] < y[0];
+        if (x[1] !== y[1]) return x[1] < y[1];
+    }
+    return false;
+}
+function compareVersion(installed, current, minimum) {
+    try {
+        if (minimum && semverLess(installed, minimum)) return 'must-update';
+        if (semverLess(installed, current)) return 'update-available';
+        return 'current';
+    } catch { return 'unknown'; }
+}
+
+app.get('/ops/check-update', async (req, res) => {
+    const result = { service: FLEET_PRODUCT, installed: SERVICE_VERSION, status: 'unknown' };
+    let manifest;
+    try {
+        const r = await fetch(FLEET_VERSIONS_URL, { signal: AbortSignal.timeout(4000) });
+        if (r.status !== 200) { result.detail = `fleet manifest http ${r.status}`; return res.json(result); }
+        manifest = await r.json();
+    } catch (err) {
+        result.detail = `fleet manifest unreachable: ${err.name || err.message}`;
+        return res.json(result);
+    }
+    const chan = manifest?.products?.[FLEET_PRODUCT]?.channels?.[FLEET_CHANNEL];
+    if (!chan || !chan.current) { result.detail = 'no fleet-version entry for this product/channel'; return res.json(result); }
+    const status = compareVersion(SERVICE_VERSION, chan.current, chan.minimum);
+    Object.assign(result, { status, current: chan.current, minimum: chan.minimum || null,
+        kind: chan.kind || null, source: chan.source || null, notes: chan.notes || null });
+    if (status === 'update-available' || status === 'must-update') {
+        result.remediation = `redeploy windy-translate (Grant-gated restart) to move from ${SERVICE_VERSION} to ${chan.current}`;
+    }
+    res.json(result);
 });
 
 // ─── GET /ops/logs — recent ops events (ADR-060 get_logs) ───

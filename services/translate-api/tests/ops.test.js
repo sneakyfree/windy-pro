@@ -141,3 +141,49 @@ test('token wall off (env unset) — routes stay open (compat)', async () => {
     const body = await res.json();
     assert.ok(body.total > 90, 'language map intact');
 });
+
+// ── check_for_update (Steamroller) — mock the fleet manifest by URL so the
+// test's own requests to baseURL still reach the real server. ──
+function withFleet(manifestOrError, fn) {
+    return async () => {
+        const orig = global.fetch;
+        global.fetch = async (url, opts) => {
+            if (String(url).includes('/v1/fleet-versions')) {
+                if (manifestOrError instanceof Error) throw manifestOrError;
+                return { status: 200, json: async () => manifestOrError };
+            }
+            return orig(url, opts);
+        };
+        try { await fn(orig); } finally { global.fetch = orig; }
+    };
+}
+
+function fleetDoc(current, minimum) {
+    const stable = { current, kind: 'image', source: 'windy-translate-api:local', notes: 't' };
+    if (minimum) stable.minimum = minimum;
+    return { schema_version: 'fleet-version.v1', products: { 'windy-translate': { channels: { stable } } } };
+}
+
+test('GET /ops/check-update — current when fleet == running version', withFleet(fleetDoc('1.0.0'), async (realFetch) => {
+    const res = await realFetch(`${baseURL}/ops/check-update`);
+    const body = await res.json();
+    assert.strictEqual(body.status, 'current');
+    assert.ok(!('remediation' in body));
+}));
+
+test('GET /ops/check-update — update-available with remediation', withFleet(fleetDoc('99.0.0'), async (realFetch) => {
+    const body = await (await realFetch(`${baseURL}/ops/check-update`)).json();
+    assert.strictEqual(body.status, 'update-available');
+    assert.match(body.remediation, /redeploy windy-translate/);
+}));
+
+test('GET /ops/check-update — must-update below minimum', withFleet(fleetDoc('99.0.0', '99.0.0'), async (realFetch) => {
+    const body = await (await realFetch(`${baseURL}/ops/check-update`)).json();
+    assert.strictEqual(body.status, 'must-update');
+}));
+
+test('GET /ops/check-update — unreachable manifest is honest', withFleet(new Error('boom'), async (realFetch) => {
+    const body = await (await realFetch(`${baseURL}/ops/check-update`)).json();
+    assert.strictEqual(body.status, 'unknown');
+    assert.match(body.detail, /unreachable/);
+}));
