@@ -308,6 +308,38 @@
         "method": "GET",
         "path": "/control/capabilities"
       }
+    },
+    {
+      "name": "run_selftest",
+      "tier": "auto_allow",
+      "baseline_status": "implemented",
+      "description": "Actively test whether Windy Word's core transcription actually works right now: it transcribes a small bundled audio clip through the real engine and checks that text comes back. Reports pass/fail per stage (engine running, test clip present, transcription produced text) so you can tell whether 'nothing happens when I speak' is the engine being down versus something else. Reports only the transcript's length, never its text.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "passed": {
+            "type": "boolean",
+            "description": "true only when every stage passed ('passed', not 'ok' — top-level ok is reserved for the invoke envelope)"
+          },
+          "stages": {
+            "type": "array",
+            "description": "[{name: engine|clip|transcribe, ok, detail}] — never the transcript text"
+          },
+          "duration_ms": {
+            "type": "number"
+          }
+        }
+      },
+      "transport": {
+        "method": "POST",
+        "path": "/control/selftest",
+        "arg_mapping": "none"
+      }
     }
   ]
 }
