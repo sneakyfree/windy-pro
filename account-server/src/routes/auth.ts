@@ -52,7 +52,7 @@ function stmts() { return getStatements(); }
 // Rate limit on auth endpoints: 5 attempts per minute (disabled in test env)
 const authLimiter = makeRateLimiter('auth', {
     windowMs: 60 * 1000,
-    max: process.env.NODE_ENV === 'test' ? 10000 : 5,
+    max: process.env.NODE_ENV === 'test' ? 10000 : parseInt(process.env.AUTH_RATE_LIMIT_MAX || '5', 10),
     message: { error: 'Too many attempts, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
