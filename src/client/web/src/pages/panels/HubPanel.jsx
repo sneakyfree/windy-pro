@@ -41,11 +41,25 @@ const PRODUCTS = [
     {
         key: 'windy_cloud',
         name: 'Windy Cloud',
-        description: 'Your files and storage',
+        description: 'Your websites and domains',
         icon: '\u2601\uFE0F',
-        // Bare apex 401s behind Access; cloud.windycloud.com is the live portal.
-        href: 'https://cloud.windycloud.com',
+        // The portal ROOT serves the migration placeholder (503) — land on
+        // the Websites page, signed in via the fragment handoff (the twins
+        // portals read #token= per the Clone #55/#56 law).
+        href: 'https://cloud.windycloud.com/websites',
         internal: false,
+        ssoHandoff: true,
+    },
+    {
+        key: 'windy_code',
+        name: 'Windy Code',
+        description: 'Build a website with your helper',
+        icon: '\uD83D\uDEE0\uFE0F',
+        // The browser builder — same-origin under the Cloud portal.
+        // Fragment handoff signs grandma straight in.
+        href: 'https://cloud.windycloud.com/build',
+        internal: false,
+        ssoHandoff: true,
     },
     {
         key: 'windy_fly',
