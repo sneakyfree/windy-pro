@@ -124,8 +124,27 @@ function hashOtp(code: string): string {
 async function issueAndSendVerificationCode(
     userId: string,
     email: string,
-): Promise<{ stub: boolean; code?: string }> {
+    opts: { force?: boolean } = {},
+): Promise<{ stub: boolean; code?: string; reused?: boolean }> {
     const db = getDb();
+
+    // Idempotency: unless the caller explicitly forces a new code (the user
+    // clicked "Send another one"), reuse an existing still-valid code instead
+    // of minting a fresh one. This is what makes a page reload safe — the
+    // /verify-email page auto-sends on every mount, and minting+invalidating
+    // each time would kill the code already sitting in the user's inbox, so a
+    // reload would silently break the code they're about to type. We can't
+    // re-email the existing code (only its hash is stored), but leaving it
+    // valid and telling them "check your inbox" is the correct behavior.
+    if (!opts.force) {
+        const existing = db.prepare(
+            "SELECT id FROM otp_codes WHERE user_id = ? AND purpose = 'email_verification' AND consumed_at IS NULL AND expires_at > datetime('now') ORDER BY created_at DESC LIMIT 1",
+        ).get(userId) as { id: string } | undefined;
+        if (existing) {
+            return { stub: false, reused: true };
+        }
+    }
+
     const code = generateOtpCode();
     const codeHash = hashOtp(code);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
@@ -989,7 +1008,14 @@ router.post('/send-verification', authenticateToken, sendVerificationLimiter, as
         if (!user) return res.status(404).json({ error: 'User not found' });
         if (user.email_verified) return res.json({ success: true, alreadyVerified: true });
 
-        const result = await issueAndSendVerificationCode(userId, user.email);
+        // `force` (from an explicit "Send another one" click) mints a fresh
+        // code; the default (auto-send on page mount) reuses a still-valid one.
+        const force = req.body?.force === true;
+        const result = await issueAndSendVerificationCode(userId, user.email, { force });
+
+        if (result.reused) {
+            return res.json({ success: true, reused: true, expiresInSeconds: 15 * 60 });
+        }
 
         logAuditEvent('verification_email_sent', userId, { stub: result.stub }, req.ip, req.get('user-agent'));
 

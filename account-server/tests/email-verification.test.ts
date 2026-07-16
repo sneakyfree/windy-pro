@@ -41,11 +41,11 @@ async function registerUser(overrides: Partial<{ email: string; name: string; pa
   return { ...body, token: res.body.token, userId: res.body.userId };
 }
 
-async function sendVerification(token: string) {
+async function sendVerification(token: string, force = false) {
   const res = await request(app)
     .post('/api/v1/auth/send-verification')
     .set('Authorization', `Bearer ${token}`)
-    .send();
+    .send(force ? { force: true } : {});
   return res;
 }
 
@@ -90,14 +90,35 @@ describe('PR1 — Email Verification', () => {
       expect(res.body.sent).toBeUndefined();
     });
 
-    it('invalidates the previous unconsumed code on resend', async () => {
+    it('reuses the still-valid code on auto-resend (no force) so a reload does not break the inbox code', async () => {
       const u = await registerUser();
       const r1 = await sendVerification(u.token);
       const code1 = r1.body._devCode;
-      await sendVerification(u.token); // resend
-      const wrong = await verifyEmail(u.token, code1);
-      // The original code's row should now be consumed_at != NULL
-      expect(wrong.status).toBe(400); // hash won't match the latest unconsumed row
+      // Auto-send on page mount/reload — must NOT mint a new code or invalidate code1.
+      const r2 = await sendVerification(u.token);
+      expect(r2.status).toBe(200);
+      expect(r2.body.reused).toBe(true);
+      expect(r2.body._devCode).toBeUndefined();
+      // The code already in the inbox still verifies.
+      const ok = await verifyEmail(u.token, code1);
+      expect(ok.status).toBe(200);
+      expect(ok.body.verified).toBe(true);
+    });
+
+    it('force=true mints a new code and invalidates the previous one', async () => {
+      const u = await registerUser();
+      const r1 = await sendVerification(u.token);
+      const code1 = r1.body._devCode;
+      const r2 = await sendVerification(u.token, true); // explicit "Send another one"
+      const code2 = r2.body._devCode;
+      expect(code2).toMatch(/^\d{6}$/);
+      expect(code2).not.toBe(code1);
+      // The old code is now consumed; the fresh one works.
+      const stale = await verifyEmail(u.token, code1);
+      expect(stale.status).toBe(400);
+      const ok = await verifyEmail(u.token, code2);
+      expect(ok.status).toBe(200);
+      expect(ok.body.verified).toBe(true);
     });
   });
 
