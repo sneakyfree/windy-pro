@@ -137,10 +137,13 @@ async function issueAndSendVerificationCode(
     // re-email the existing code (only its hash is stored), but leaving it
     // valid and telling them "check your inbox" is the correct behavior.
     if (!opts.force) {
+        // Expiry is checked in JS, not SQL: expires_at is stored as TEXT and
+        // Postgres refuses `text > timestamp` (operator does not exist). The
+        // verify-email handler compares the same way (new Date(...) < new Date()).
         const existing = db.prepare(
-            "SELECT id FROM otp_codes WHERE user_id = ? AND purpose = 'email_verification' AND consumed_at IS NULL AND expires_at > datetime('now') ORDER BY created_at DESC LIMIT 1",
-        ).get(userId) as { id: string } | undefined;
-        if (existing) {
+            "SELECT id, expires_at FROM otp_codes WHERE user_id = ? AND purpose = 'email_verification' AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1",
+        ).get(userId) as { id: string; expires_at: string } | undefined;
+        if (existing && new Date(existing.expires_at) > new Date()) {
             return { stub: false, reused: true };
         }
     }
