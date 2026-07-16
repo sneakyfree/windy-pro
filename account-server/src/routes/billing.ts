@@ -76,12 +76,42 @@ const TIER_LIMITS: Record<string, number> = {
     'translate-pro': 50 * 1024 * 1024 * 1024, // 50 GB
 };
 
+// Full published price matrix (monthly / yearly / lifetime per tier), plus
+// legacy amounts still live on old subscriptions (799 was the pre-rebrand
+// "Windy Translate" monthly). invoice.paid and subscription.updated use this
+// as a fallback classifier when metadata.tier is absent.
 const TIER_BY_AMOUNT: Record<number, string> = {
+    499: 'pro',
     4900: 'pro',
-    799: 'translate',
+    9900: 'pro',
+    799: 'translate',   // legacy monthly price
+    899: 'translate',
     7900: 'translate',
+    19900: 'translate',
+    1499: 'translate-pro',
     14900: 'translate-pro',
+    29900: 'translate-pro',
 };
+
+// One plan per customer: when a checkout completes for a new subscription,
+// cancel every OTHER active subscription on that Stripe customer (upgrade or
+// downgrade — the newest purchase is the intended plan). Without this a
+// Pro→Ultra upgrade left BOTH subscriptions billing. Proration credit for the
+// unused time on the old plan lands on the customer's balance.
+// Lifetime (mode=payment) purchases deliberately do NOT cancel subscriptions —
+// lifetime covers local engines only; a cloud subscription remains valid.
+async function cancelSupersededSubscriptions(stripe: Stripe, customerId: string, keepSubscriptionId: string): Promise<void> {
+    const subs = await stripe.subscriptions.list({ customer: customerId, status: 'active', limit: 20 });
+    for (const sub of subs.data) {
+        if (sub.id === keepSubscriptionId) continue;
+        try {
+            await stripe.subscriptions.cancel(sub.id, { prorate: true });
+            console.log(`[Billing] Cancelled superseded subscription ${sub.id} (kept ${keepSubscriptionId}) for customer ${customerId}`);
+        } catch (err: any) {
+            console.error(`[Billing] Failed to cancel superseded subscription ${sub.id}:`, err?.message || err);
+        }
+    }
+}
 
 // ─── Stripe Webhook Router (mounted at /api/v1/stripe) ───────
 
@@ -251,6 +281,15 @@ stripeRouter.post('/webhook', async (req: Request, res: Response) => {
                     'paid',
                     data.payment_intent || data.subscription || data.id || '',
                 );
+
+                // One plan per customer — retire whatever this purchase replaces.
+                if (data.mode === 'subscription' && data.subscription && data.customer) {
+                    try {
+                        await cancelSupersededSubscriptions(getStripe(), data.customer, data.subscription);
+                    } catch (err: any) {
+                        console.error('[Billing] cancelSupersededSubscriptions failed:', err?.message || err);
+                    }
+                }
             }
         } else if (type === 'customer.subscription.updated') {
             // Handles plan changes (upgrades/downgrades) mid-subscription
@@ -274,12 +313,42 @@ stripeRouter.post('/webhook', async (req: Request, res: Response) => {
                     .run(TIER_LIMITS.free, user.id);
             }
         } else if (type === 'customer.subscription.deleted') {
-            const email = data.customer_email || '';
-            if (email) {
-                const deletedUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as any;
-                if (deletedUser) trackEvent('subscription_cancelled', deletedUser.id);
-                db.prepare("UPDATE users SET tier = 'free', storage_limit = ? WHERE email = ?")
-                    .run(TIER_LIMITS.free, email);
+            // Subscription objects carry `customer`, not `customer_email` —
+            // the old email lookup matched nothing, so cancellations never
+            // actually downgraded anyone. Resolve the user by customer id
+            // (email kept as a fallback for old replayed events).
+            const customerId = data.customer || '';
+            let deletedUser = (customerId
+                ? db.prepare('SELECT id FROM users WHERE stripe_customer_id = ?').get(customerId)
+                : null) as any;
+            if (!deletedUser && data.customer_email) {
+                deletedUser = db.prepare('SELECT id FROM users WHERE email = ?').get(data.customer_email) as any;
+            }
+            if (deletedUser) {
+                trackEvent('subscription_cancelled', deletedUser.id);
+                // Only downgrade when NO other subscription remains active —
+                // upgrades cancel the superseded plan, and that deletion event
+                // must not clobber the tier the customer just paid for.
+                let remainingTier: string | null = null;
+                if (customerId && config.STRIPE_SECRET_KEY) {
+                    try {
+                        const subs = await getStripe().subscriptions.list({ customer: customerId, status: 'active', limit: 20 });
+                        const remaining = subs.data.find((s) => s.id !== data.id);
+                        const amount = remaining?.items?.data?.[0]?.price?.unit_amount;
+                        if (amount && TIER_BY_AMOUNT[amount]) remainingTier = TIER_BY_AMOUNT[amount];
+                        else if (remaining) remainingTier = 'keep'; // active sub we can't classify — don't touch tier
+                    } catch (err: any) {
+                        console.error('[Billing] subscription.deleted: could not list remaining subs:', err?.message || err);
+                        remainingTier = 'keep'; // fail safe — never downgrade on a Stripe API hiccup
+                    }
+                }
+                if (remainingTier === null) {
+                    db.prepare("UPDATE users SET tier = 'free', storage_limit = ? WHERE id = ?")
+                        .run(TIER_LIMITS.free, deletedUser.id);
+                } else if (remainingTier !== 'keep') {
+                    db.prepare('UPDATE users SET tier = ?, storage_limit = ? WHERE id = ?')
+                        .run(remainingTier, TIER_LIMITS[remainingTier] || TIER_LIMITS.free, deletedUser.id);
+                }
             }
         } else if (type === 'charge.refunded') {
             const pid = data.payment_intent;

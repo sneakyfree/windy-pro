@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { authFetch, clearTokens, getValidAccessToken } from '../lib/authFetch'
 import './Transcribe.css'
 
 export default function Transcribe() {
@@ -13,6 +14,7 @@ export default function Transcribe() {
     const [copyMsg, setCopyMsg] = useState('')
     const [reconnectCount, setReconnectCount] = useState(0)
     const [authStatus, setAuthStatus] = useState('pending') // pending | authenticated | failed
+    const [micError, setMicError] = useState(null)
     const navigate = useNavigate()
 
     const wsRef = useRef(null)
@@ -27,9 +29,13 @@ export default function Transcribe() {
     // and cannot proxy WebSocket upgrades. Target account-server
     // directly — it is the canonical WS host for transcribe + future
     // streaming surfaces. ADR-009 M1.
-    const connect = useCallback(() => {
+    const connect = useCallback(async () => {
         const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-        const token = localStorage.getItem('windy_token')
+        // The socket auths with a first message, outside authFetch's
+        // 401-retry — so hand it a token that is verified fresh. An idle tab
+        // can hold one past its 15-minute expiry, and reconnecting with it
+        // fails auth until a manual reload.
+        const token = await getValidAccessToken()
         // In dev (Vite), window.location.host is localhost:5173 — keep that
         // path so the local mock or local account-server hits the same
         // origin. In prod, hardcode account.windyword.ai.
@@ -175,6 +181,7 @@ export default function Transcribe() {
 
             // Tell server to start
             wsRef.current?.send(JSON.stringify({ type: 'config' }))
+            setMicError(null)
             setIsRecording(true)
             setSessionStart(Date.now())
 
@@ -182,6 +189,13 @@ export default function Transcribe() {
             if (navigator.vibrate) navigator.vibrate(50)
         } catch (err) {
             setState('error')
+            // Say it in plain language — the state pill alone reads as a
+            // silent no-op when there is no microphone or access was denied.
+            setMicError(
+                err?.name === 'NotAllowedError'
+                    ? 'Windy Word needs permission to use your microphone. Click the 🔒 or 🎤 icon in your browser\'s address bar to allow it, then try again.'
+                    : 'We couldn\'t find a working microphone. Check that one is plugged in and not in use by another app, then try again.'
+            )
             console.error('[Audio] Mic access denied:', err)
         }
     }
@@ -242,7 +256,11 @@ export default function Transcribe() {
     }
 
     const handleLogout = () => {
-        localStorage.removeItem('windy_token')
+        // Revoke server-side, then clear BOTH tokens — leaving the refresh
+        // token behind let silent-refresh resurrect the session (PR #249
+        // fixed the other pages; this handler was missed).
+        authFetch('/api/v1/auth/logout', { method: 'POST' }).catch(() => { })
+        clearTokens()
         localStorage.removeItem('windy_user')
         navigate('/auth')
     }
@@ -276,6 +294,16 @@ export default function Transcribe() {
                 )}
                 {wordCount > 0 && <span className="word-count">{wordCount} words</span>}
             </div>
+
+            {micError && (
+                <div role="alert" style={{
+                    margin: '10px 16px 0', padding: '10px 14px', borderRadius: '10px',
+                    background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)',
+                    color: '#FCA5A5', fontSize: '14px', lineHeight: 1.4,
+                }}>
+                    🎤 {micError}
+                </div>
+            )}
 
             {/* Transcript area */}
             <div className="transcript-area" ref={transcriptRef}>

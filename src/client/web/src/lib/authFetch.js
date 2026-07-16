@@ -108,6 +108,12 @@ export function ensureProactiveRefresh() {
     try { hasRefresh = !!localStorage.getItem(REFRESH_KEY) } catch { hasRefresh = false }
     if (!hasRefresh) return
 
+    // Refresh immediately, not only on the first 12-minute tick — a token in
+    // its last minutes would otherwise lapse before the interval first fires
+    // (seen live: idle /transcribe held an expired token, so WS reconnects
+    // auth'd with a stale token until a manual reload).
+    void refreshAccessToken()
+
     proactiveTimer = setInterval(() => {
         try {
             if (!localStorage.getItem(REFRESH_KEY)) { stopProactiveRefresh(); return }
@@ -121,4 +127,20 @@ export function stopProactiveRefresh() {
         clearInterval(proactiveTimer)
         proactiveTimer = null
     }
+}
+
+// Return an access token that is valid for at least the next 60 seconds,
+// refreshing first when the stored one is missing/near expiry. For callers
+// that hand the token to a non-HTTP channel (the /ws/transcribe socket sends
+// it as a first-message auth), where authFetch's 401-retry can't help.
+export async function getValidAccessToken() {
+    const token = getAccessToken()
+    if (token) {
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+            const expMs = typeof payload.exp === 'number' ? payload.exp * 1000 : new Date(payload.exp).getTime()
+            if (expMs - Date.now() > 60_000) return token
+        } catch { /* undecodable — fall through to refresh */ }
+    }
+    return (await refreshAccessToken()) || token
 }

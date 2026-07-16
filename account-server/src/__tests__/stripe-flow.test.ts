@@ -232,12 +232,17 @@ const mockCustomerCreate = jest.fn().mockResolvedValue({
 const mockPortalSessionCreate = jest.fn().mockResolvedValue({
   url: 'https://billing.stripe.com/session/test_portal',
 });
+// Default: customer has no OTHER active subscription. Tests that exercise the
+// upgrade/superseded path override mockSubscriptionsList per-case.
+const mockSubscriptionsList = jest.fn().mockResolvedValue({ data: [] });
+const mockSubscriptionsCancel = jest.fn().mockResolvedValue({ id: 'sub_cancelled', status: 'canceled' });
 
 jest.mock('stripe', () => {
   return jest.fn().mockImplementation(() => ({
     customers: { create: mockCustomerCreate },
     checkout: { sessions: { create: mockCheckoutSessionCreate } },
     billingPortal: { sessions: { create: mockPortalSessionCreate } },
+    subscriptions: { list: mockSubscriptionsList, cancel: mockSubscriptionsCancel },
   }));
 });
 
@@ -444,6 +449,64 @@ describe('Stripe Payment Flow — End to End', () => {
     expect(res.status).toBe(200);
     expect(user.tier).toBe('free');
     expect(user.storage_limit).toBe(500 * 1024 * 1024);
+  });
+
+  // ─── 4b. Upgrade cancels the superseded subscription (no double-bill) ─
+  it('checkout.session.completed cancels the customer\'s other active subscriptions', async () => {
+    const user = users.get(TEST_USER_ID)!;
+    user.stripe_customer_id = 'cus_upgrade';
+    user.tier = 'pro';
+    // Customer already has an active Pro sub; the new checkout is for Ultra.
+    mockSubscriptionsList.mockResolvedValueOnce({
+      data: [
+        { id: 'sub_new_ultra', items: { data: [{ price: { unit_amount: 899 } }] } },
+        { id: 'sub_old_pro', items: { data: [{ price: { unit_amount: 499 } }] } },
+      ],
+    });
+
+    const event = webhookEvent('checkout.session.completed', {
+      id: 'cs_upgrade',
+      mode: 'subscription',
+      customer: 'cus_upgrade',
+      customer_email: TEST_USER_EMAIL,
+      subscription: 'sub_new_ultra',
+      amount_total: 899,
+      currency: 'usd',
+      metadata: { windy_user_id: TEST_USER_ID, tier: 'translate' },
+    });
+
+    const res = await sendWebhook(app, event);
+
+    expect(res.status).toBe(200);
+    // Only the OLD subscription is cancelled; the just-purchased one is kept.
+    expect(mockSubscriptionsCancel).toHaveBeenCalledWith('sub_old_pro', { prorate: true });
+    expect(mockSubscriptionsCancel).not.toHaveBeenCalledWith('sub_new_ultra', expect.anything());
+    expect(user.tier).toBe('translate');
+  });
+
+  // ─── 4c. subscription.deleted keeps tier when another sub still active ─
+  it('customer.subscription.deleted keeps paid tier if another subscription remains', async () => {
+    const user = users.get(TEST_USER_ID)!;
+    user.stripe_customer_id = 'cus_multi';
+    user.tier = 'translate';
+    user.storage_limit = 10 * 1024 * 1024 * 1024;
+    // The deleted sub is the old Pro; an Ultra sub remains active.
+    mockSubscriptionsList.mockResolvedValueOnce({
+      data: [{ id: 'sub_still_ultra', items: { data: [{ price: { unit_amount: 899 } }] } }],
+    });
+
+    const event = webhookEvent('customer.subscription.deleted', {
+      id: 'sub_old_pro',
+      customer: 'cus_multi',
+      status: 'canceled',
+    });
+
+    const res = await sendWebhook(app, event);
+
+    expect(res.status).toBe(200);
+    // Must NOT downgrade — the superseded-cancel from an upgrade fires this event.
+    expect(user.tier).toBe('translate');
+    expect(user.storage_limit).toBe(10 * 1024 * 1024 * 1024);
   });
 
   // ─── 5. invoice.payment_failed → failed transaction recorded ─
