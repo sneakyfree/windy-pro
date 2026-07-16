@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { clearTokens } from '../lib/authFetch'
 import HatchCard from '../components/HatchCard'
 import VoiceButton from '../components/VoiceButton'
 import './Dashboard.css'
@@ -195,7 +196,9 @@ export default function Dashboard() {
 
     const handleLogout = () => {
         apiFetch('/auth/logout', { method: 'POST' }).catch(err => console.warn('Logout error:', err.message))
-        localStorage.removeItem('windy_token')
+        // clearTokens also drops windy_refresh_token — leaving it behind let
+        // the silent-refresh machinery resurrect the session after Sign Out.
+        clearTokens()
         localStorage.removeItem('windy_user')
         navigate('/auth')
     }
