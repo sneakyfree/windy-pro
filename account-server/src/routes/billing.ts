@@ -195,9 +195,15 @@ stripeRouter.post('/webhook', async (req: Request, res: Response) => {
     try {
         if (type === 'payment_intent.succeeded' || type === 'invoice.paid') {
             const email = data.receipt_email || data.customer_email || data.billing_details?.email;
-            const user = email
+            let user = email
                 ? db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any
                 : null;
+            // Subscription invoices often omit the email — fall back to the
+            // Stripe customer id so this (now sole) subscription record still
+            // attaches to the user and shows in Billing History.
+            if (!user && data.customer) {
+                user = db.prepare('SELECT * FROM users WHERE stripe_customer_id = ?').get(data.customer) as any;
+            }
 
             const txId = uuidv4();
             db.prepare(
@@ -267,20 +273,26 @@ stripeRouter.post('/webhook', async (req: Request, res: Response) => {
                         .run(stripeCustomerId, userId);
                 }
 
-                // Record the transaction
-                const txId = uuidv4();
-                db.prepare(
-                    'INSERT INTO transactions (id, user_id, email, amount, currency, type, status, stripe_payment_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-                ).run(
-                    txId,
-                    userId,
-                    data.customer_email || '',
-                    data.amount_total || 0,
-                    data.currency || 'usd',
-                    data.mode === 'subscription' ? 'subscription' : 'one_time',
-                    'paid',
-                    data.payment_intent || data.subscription || data.id || '',
-                );
+                // Record the transaction — but ONLY for one-time (lifetime)
+                // purchases. Subscription payments are recorded by the
+                // invoice.paid handler (which also fires on every renewal), so
+                // recording here too double-listed each subscription payment in
+                // Billing History.
+                if (data.mode !== 'subscription') {
+                    const txId = uuidv4();
+                    db.prepare(
+                        'INSERT INTO transactions (id, user_id, email, amount, currency, type, status, stripe_payment_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                    ).run(
+                        txId,
+                        userId,
+                        data.customer_email || '',
+                        data.amount_total || 0,
+                        data.currency || 'usd',
+                        'one_time',
+                        'paid',
+                        data.payment_intent || data.id || '',
+                    );
+                }
 
                 // One plan per customer — retire whatever this purchase replaces.
                 if (data.mode === 'subscription' && data.subscription && data.customer) {

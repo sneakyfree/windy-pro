@@ -372,7 +372,25 @@ describe('Stripe Payment Flow — End to End', () => {
     expect(user.storage_limit).toBe(5 * 1024 * 1024 * 1024); // 5 GB
     expect(user.stripe_customer_id).toBe('cus_checkout_test');
 
-    // Verify transaction was recorded
+    // A subscription checkout flips the tier but does NOT itself record a
+    // transaction — the invoice.paid event is the single source of truth for
+    // subscription payments (and fires on every renewal). Recording here too
+    // double-listed each payment in Billing History.
+    expect(transactions.size).toBe(0);
+  });
+
+  it('subscription payment is recorded once, by invoice.paid', async () => {
+    const user = users.get(TEST_USER_ID)!;
+    user.stripe_customer_id = 'cus_invoice_test';
+
+    await sendWebhook(app, webhookEvent('invoice.paid', {
+      id: 'in_001',
+      customer: 'cus_invoice_test',
+      customer_email: TEST_USER_EMAIL,
+      amount_paid: 499,
+      currency: 'usd',
+    }));
+
     expect(transactions.size).toBe(1);
     const tx = [...transactions.values()][0];
     expect(tx.user_id).toBe(TEST_USER_ID);
