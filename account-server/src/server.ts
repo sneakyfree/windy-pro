@@ -131,8 +131,13 @@ app.use(cors({
 }));
 app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response-time ms'));
 
-// Stripe webhook needs raw body — must come BEFORE express.json()
-app.use('/api/v1/stripe', express.raw({ type: 'application/json' }), stripeRouter);
+// Stripe webhook needs raw body — must come BEFORE express.json().
+// Only /webhook gets the raw buffer; every other stripe route (e.g.
+// create-checkout-session) needs parsed JSON, so mount raw on the exact
+// webhook path and json on the router. body-parser skips re-parsing when
+// req._body is already set, so the webhook keeps its Buffer.
+app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/v1/stripe', express.json(), stripeRouter);
 
 // Wave 13 — Eternitas firehose also needs raw body for HMAC verify,
 // so mount it before the global express.json() body parser (same
