@@ -140,15 +140,20 @@ export function setupTranscribeStreamWS(server: http.Server): void {
             }
         }, 10000);
 
-        ws.on('message', async (data: Buffer | ArrayBuffer | string) => {
-            // Binary audio chunk — feed to the AWS stream.
-            if (Buffer.isBuffer(data) || data instanceof ArrayBuffer) {
+        ws.on('message', async (data: Buffer | ArrayBuffer | string, isBinary: boolean) => {
+            // Binary audio chunk — feed to the AWS stream. ws v8 delivers
+            // TEXT frames as Buffers too, so Buffer.isBuffer() alone routed
+            // the client's {type:'auth'} JSON down this audio path and auth
+            // could never complete — discriminate on the isBinary flag.
+            if (isBinary) {
                 if (!state.authenticated) {
                     ws.send(JSON.stringify({ type: 'error', message: 'Authentication required before sending audio' }));
                     return;
                 }
                 state.chunkCount++;
-                const chunk = Buffer.isBuffer(data) ? new Uint8Array(data) : new Uint8Array(data);
+                const chunk = Buffer.isBuffer(data)
+                    ? new Uint8Array(data)
+                    : new Uint8Array(data as ArrayBuffer);
                 state.audioQueue.push(chunk);
                 if (state.resolveNextChunk) {
                     const r = state.resolveNextChunk;
