@@ -43,6 +43,18 @@ export default function VerifyEmail() {
         if (!token) return
         if (didAutoSendRef.current) return
         didAutoSendRef.current = true
+        // Don't re-request on every reload/remount. A code we sent in the last
+        // ~14 min is still valid (they expire at 15), so re-requesting would just
+        // burn the resend budget for no benefit. Skip the network call and point
+        // the user at the code already in their inbox.
+        try {
+            const lastSent = Number(sessionStorage.getItem('windy_verify_sent_at') || 0)
+            if (lastSent && Date.now() - lastSent < 14 * 60 * 1000) {
+                setMessageTone('info')
+                setMessage(`Look for the 6-digit code we emailed to ${email || 'your email'}.`)
+                return
+            }
+        } catch { /* sessionStorage disabled — fall through and just send */ }
         void sendCode({ silentOnRateLimit: true })
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
@@ -76,6 +88,10 @@ export default function VerifyEmail() {
 
             if (res.ok) {
                 const data = await res.json().catch(() => ({}))
+                // Remember we have a live code so reloads don't re-request it.
+                if (data.sent || data.reused) {
+                    try { sessionStorage.setItem('windy_verify_sent_at', String(Date.now())) } catch { /* noop */ }
+                }
                 if (data.alreadyVerified) {
                     setMessageTone('success')
                     setMessage("You're already verified! Taking you to your dashboard…")
