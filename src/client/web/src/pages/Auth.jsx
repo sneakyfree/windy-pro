@@ -78,6 +78,9 @@ export default function Auth() {
             // top-level fields so /verify-email can display the email back to
             // the user.
             localStorage.setItem('windy_token', data.token)
+            // Keep the refresh token so the session can silently renew the 15m
+            // access token instead of dead-ending at a mid-flow 401.
+            if (data.refreshToken) localStorage.setItem('windy_refresh_token', data.refreshToken)
             const cachedUser = data.user || {
                 userId: data.userId,
                 name: data.name,

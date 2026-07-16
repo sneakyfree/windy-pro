@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { authFetch } from '../lib/authFetch'
 import './Auth.css'
 import './VerifyEmail.css'
 
@@ -58,16 +59,19 @@ export default function VerifyEmail() {
         if (inputRef.current) inputRef.current.focus()
     }, [])
 
-    async function sendCode({ silentOnRateLimit = false } = {}) {
+    async function sendCode({ silentOnRateLimit = false, force = false } = {}) {
         if (!token) return
         try {
             setStatus(prev => (prev === 'submitting' ? prev : 'resending'))
-            const res = await fetch('/api/v1/auth/send-verification', {
+            // authFetch attaches the token and refreshes-then-retries on a 401,
+            // so a lapsed access token here no longer dead-ends the page.
+            const res = await authFetch('/api/v1/auth/send-verification', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
+                headers: { 'Content-Type': 'application/json' },
+                // Auto-send on mount omits force → the server reuses a still-valid
+                // code so a page reload never invalidates the one already in the
+                // inbox. Only an explicit "Send another one" click forces a new code.
+                body: JSON.stringify({ force }),
             })
 
             if (res.ok) {
@@ -121,12 +125,9 @@ export default function VerifyEmail() {
         try {
             setStatus('submitting')
             setMessage('')
-            const res = await fetch('/api/v1/auth/verify-email', {
+            const res = await authFetch('/api/v1/auth/verify-email', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code }),
             })
             const data = await res.json().catch(() => ({}))
@@ -145,13 +146,14 @@ export default function VerifyEmail() {
                 setMessageTone('error')
                 setMessage('That code expired. We just sent a new one — check your inbox.')
                 setCode('')
-                // Auto-resend so the next code is already en route
-                void sendCode({ silentOnRateLimit: true })
+                // Force a fresh code — the old one is expired, so idempotent reuse
+                // would hand back nothing. Mint and email a new one.
+                void sendCode({ force: true, silentOnRateLimit: true })
             } else if (/already used/i.test(errText)) {
                 setMessageTone('error')
                 setMessage('That code was already used. We just sent a new one — check your inbox.')
                 setCode('')
-                void sendCode({ silentOnRateLimit: true })
+                void sendCode({ force: true, silentOnRateLimit: true })
             } else if (res.status === 429) {
                 setMessageTone('error')
                 setMessage('Too many wrong tries. Send yourself a new code.')
@@ -259,7 +261,7 @@ export default function VerifyEmail() {
                         <button
                             type="button"
                             className="auth-switch"
-                            onClick={() => sendCode()}
+                            onClick={() => sendCode({ force: true })}
                             disabled={resendDisabled}
                         >
                             {resendCooldown > 0
