@@ -1436,16 +1436,37 @@ router.delete('/delete-account', authenticateToken, handleAccountDeletion);
 router.get('/billing', authenticateToken, (req: Request, res: Response) => {
     try {
         const db = getDb();
+        const userId = (req as AuthRequest).user.userId;
         const user = db.prepare('SELECT email, tier, created_at, stripe_customer_id FROM users WHERE id = ?')
-            .get((req as AuthRequest).user.userId) as any;
+            .get(userId) as any;
         if (!user) return res.status(404).json({ error: 'User not found' });
+
+        // Paid rows from the webhook-populated transactions table. Both the
+        // invoice.paid and checkout.session.completed handlers record the same
+        // payment, so dedupe on stripe_payment_id (falling back to
+        // amount+timestamp for rows without one).
+        const rows = db.prepare(
+            "SELECT amount, currency, type, status, stripe_payment_id, created_at FROM transactions WHERE user_id = ? AND status = 'paid' ORDER BY created_at DESC LIMIT 50"
+        ).all(userId) as any[];
+        const seen = new Set<string>();
+        const payments = rows.filter((r) => {
+            const key = r.stripe_payment_id || `${r.amount}-${r.created_at}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        }).slice(0, 24).map((r) => ({
+            date: r.created_at,
+            description: r.type === 'subscription' ? 'Subscription payment' : 'One-time purchase',
+            amount: r.amount,
+            currency: r.currency || 'usd',
+        }));
 
         res.json({
             email: user.email,
             tier: user.tier || 'free',
             createdAt: user.created_at,
             stripeCustomerId: user.stripe_customer_id || null,
-            payments: [],
+            payments,
         });
     } catch (err: any) {
         res.status(500).json({ error: 'Failed to fetch billing info' });
