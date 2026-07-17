@@ -89,7 +89,11 @@ export interface AgentHatchedDetails {
   agentName: string;
   agentEmail: string | null;
   passportNumber: string;
-  certificateNo: string;
+  // ADR-064: issued by Eternitas — null when the mint failed open and the
+  // certificate is still pending (the line is omitted, never fabricated).
+  certificateNo: string | null;
+  // ADR-064: absolute URL to the official Eternitas certificate PDF.
+  certificatePdfUrl?: string | null;
   ownerName: string;
   flyUrl?: string;
 }
@@ -100,6 +104,14 @@ export function agentHatchedEmail(d: AgentHatchedDetails): SendMailArgs {
     ? `<p style="color:#555;font-size:15px;margin:8px 0;">Email: <code style="background:#f0f0f5;padding:4px 10px;border-radius:6px;">${d.agentEmail}</code></p>`
     : '';
   const inboxText = d.agentEmail ? `\nEmail: ${d.agentEmail}` : '';
+  const certText = d.certificateNo ? `\nBirth certificate: ${d.certificateNo}` : '';
+  const certLine = d.certificateNo
+    ? `<p style="color:#555;font-size:15px;margin:8px 0;">Certificate: <code style="background:#f0f0f5;padding:4px 10px;border-radius:6px;">${d.certificateNo}</code></p>`
+    : '';
+  const pdfText = d.certificatePdfUrl ? `\nDownload the official certificate: ${d.certificatePdfUrl}` : '';
+  const pdfLine = d.certificatePdfUrl
+    ? `<p style="margin:8px 0 0 0;"><a href="${d.certificatePdfUrl}" style="color:#1a1a2e;font-size:14px;font-weight:600;">Download the official certificate</a></p>`
+    : '';
   const flyBlock = d.flyUrl
     ? `<p style="margin:24px 0 0 0;"><a href="${d.flyUrl}" style="display:inline-block;padding:14px 28px;background:#1a1a2e;color:#fff;border-radius:10px;text-decoration:none;font-weight:600;">Meet ${d.agentName}</a></p>`
     : '';
@@ -110,8 +122,7 @@ export function agentHatchedEmail(d: AgentHatchedDetails): SendMailArgs {
     text:
       `Hi ${greetName},\n\n` +
       `${d.agentName} just hatched. Your agent is alive and ready to work for you.\n\n` +
-      `Passport: ${d.passportNumber}\n` +
-      `Birth certificate: ${d.certificateNo}${inboxText}${flyTextLine}\n\n` +
+      `Passport: ${d.passportNumber}${certText}${inboxText}${pdfText}${flyTextLine}\n\n` +
       `Every email and chat your agent sends carries its Eternitas passport, so the people it talks to know it's a verified agent acting on your behalf.\n\n` +
       `— Windy`,
     html:
@@ -121,8 +132,9 @@ export function agentHatchedEmail(d: AgentHatchedDetails): SendMailArgs {
       `  <p style="color:#555;font-size:16px;margin:0 0 16px 0;">Hi ${greetName} — your agent just hatched. It's ready to work for you.</p>` +
       `  <div style="background:#f9f9fc;border-radius:12px;padding:20px;margin:20px 0;">` +
       `    <p style="color:#555;font-size:15px;margin:0 0 8px 0;">Passport: <code style="background:#f0f0f5;padding:4px 10px;border-radius:6px;">${d.passportNumber}</code></p>` +
-      `    <p style="color:#555;font-size:15px;margin:8px 0;">Certificate: <code style="background:#f0f0f5;padding:4px 10px;border-radius:6px;">${d.certificateNo}</code></p>` +
+      `    ${certLine}` +
       `    ${inboxLine}` +
+      `    ${pdfLine}` +
       `  </div>` +
       `  <p style="color:#888;font-size:14px;margin:0;">Every email and chat your agent sends carries its Eternitas passport, so the people it talks to know it's a verified agent acting on your behalf.</p>` +
       `  ${flyBlock}` +

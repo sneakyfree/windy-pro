@@ -87,7 +87,27 @@ describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
 
             if (url.includes('eternitas') && url.includes('auto-hatch')) {
                 calls.eternitas = body;
-                return { ok: true, status: 200, json: async () => ({ passport_number: 'ET26-8A3F-2B1C' }) };
+                // ADR-064: auto-hatch mints the certificate of record and
+                // returns it (plus the bot api_key) alongside the passport.
+                return { ok: true, status: 200, json: async () => ({
+                    passport_number: 'ET26-8A3F-2B1C',
+                    api_key: 'ek_bot_test_key_abc123',
+                    certificate: {
+                        id: 'cert-uuid-1',
+                        certificate_no: 'ET-2026-000123',
+                        passport: 'ET26-8A3F-2B1C',
+                        signed_at: '2026-07-16T12:00:00.000Z',
+                        json_url: '/api/v1/certificates/ET26-8A3F-2B1C',
+                        pdf_url: '/api/v1/certificates/ET26-8A3F-2B1C/pdf',
+                        qr_url: '/api/v1/certificates/ET26-8A3F-2B1C/qr',
+                        verify_url: '/verify/ET26-8A3F-2B1C',
+                    },
+                }) };
+            }
+            if (url.includes('eternitas') && url.includes('/generate')) {
+                // ADR-064 enrich — idempotent, bot-key-authed.
+                calls.enrich = { url, body, apiKey: (init.headers as any)?.['X-API-Key'] || null };
+                return { ok: true, status: 201, json: async () => ({ certificate_no: 'ET-2026-000123' }) };
             }
             if (url.includes('agent.test/hatch/remote')) {
                 calls.hatchRemote = body;
@@ -151,9 +171,25 @@ describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
         expect(order).not.toContain('ceremony.complete');
 
         const cert = events.find(e => e.event === 'birth_certificate.ready')!.data;
-        expect(cert.data.certificate_no).toMatch(/^WF-/);
+        // ADR-064: the number comes from Eternitas verbatim — never a
+        // locally fabricated WF- value.
+        expect(cert.status).toBe('ok');
+        expect(cert.data.certificate_no).toBe('ET-2026-000123');
+        expect(cert.data.certificate_no).not.toMatch(/^WF-/);
+        expect(cert.data.pdf_url).toBe('http://eternitas.test/api/v1/certificates/ET26-8A3F-2B1C/pdf');
+        expect(cert.data.verify_url).toBe('http://eternitas.test/verify/ET26-8A3F-2B1C');
         expect(cert.data.passport_number).toBe('ET26-8A3F-2B1C');
         expect(cert.data.brain.provider).toBe('gemini');
+
+        // ADR-064: auto-hatch body carries the printed cloud allocation.
+        expect(calls.eternitas.cloud_storage).toBe('5 GB — Windy Cloud');
+
+        // ADR-064: after mail provisioning the certificate is enriched with
+        // the agent's mail address, authed by the bot api_key.
+        expect(calls.enrich).toBeDefined();
+        expect(calls.enrich.url).toBe('http://eternitas.test/api/v1/certificates/ET26-8A3F-2B1C/generate');
+        expect(calls.enrich.apiKey).toBe('ek_bot_test_key_abc123');
+        expect(calls.enrich.body).toEqual({ windy_mail_address: 'noras-agent@windymail.ai' });
 
         const complete = events.find(e => e.event === 'hatch.complete')!.data;
         expect(complete.status).toBe('ok');
@@ -210,6 +246,15 @@ describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
             const events = parseSse(res.body as unknown as string);
             const mail = events.find(e => e.event === 'mail.provisioned')!.data;
             expect(mail.status).toBe('skipped');
+            // ADR-064: Eternitas returned no certificate (fail-open mint /
+            // old server) — the event reports pending honestly and NEVER
+            // fabricates a WF- number.
+            const cert = events.find(e => e.event === 'birth_certificate.ready')!.data;
+            expect(cert.status).toBe('partial');
+            expect(cert.label).toBe('Birth certificate pending — Eternitas will issue it shortly.');
+            expect(cert.data.certificate_no).toBeNull();
+            expect(cert.data.pdf_url).toBeNull();
+            expect(cert.data.verify_url).toBeNull();
             const complete = events.find(e => e.event === 'hatch.complete')!.data;
             expect(complete.status).toBe('partial');
             expect(complete.data.degraded).toContain('mail');
