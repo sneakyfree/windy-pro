@@ -101,10 +101,13 @@ async function buildHealthResult(): Promise<HealthResult> {
     const jwksStatus = isRS256Available() ? 'ok' : 'error';
 
     // 3. Ecosystem service checks (parallel, 3s timeout each)
-    //    chat = Matrix homeserver, probe /_matrix/client/versions (Synapse
-    //    doesn't expose /health). The rest expose /health and return 200.
+    //    All targets expose /health — including Synapse (GET /health → 200
+    //    "OK") AND chat-onboarding. WINDY_CHAT_URL points at chat-onboarding
+    //    (:8101) in prod for the provisioning calls, so probing
+    //    /_matrix/client/versions here 404'd and /health reported
+    //    windy_chat:"error" while chat was fine (chat stress pass 2026-07-16).
     const [windyChat, windyMail, windyCloud, eternitas] = await Promise.all([
-        checkService(config.WINDY_CHAT_URL, '/_matrix/client/versions'),
+        checkService(config.WINDY_CHAT_URL),
         checkService(config.WINDY_MAIL_URL),
         checkService(config.WINDY_CLOUD_URL),
         checkService(config.ETERNITAS_URL),
