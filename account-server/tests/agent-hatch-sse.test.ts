@@ -176,8 +176,11 @@ describe('POST /api/v1/agent/hatch — SSE ceremony ordering', () => {
         expect(cert.status).toBe('ok');
         expect(cert.data.certificate_no).toBe('ET-2026-000123');
         expect(cert.data.certificate_no).not.toMatch(/^WF-/);
-        expect(cert.data.pdf_url).toBe('http://eternitas.test/api/v1/certificates/ET26-8A3F-2B1C/pdf');
-        expect(cert.data.verify_url).toBe('http://eternitas.test/verify/ET26-8A3F-2B1C');
+        // ADR-064 follow-up: user-facing links use the PUBLIC host (ETERNITAS_PUBLIC_URL
+        // default), never the server-to-server ETERNITAS_URL — that leaked
+        // host.docker.internal into grandma's browser on the first live hatch.
+        expect(cert.data.pdf_url).toBe('https://api.eternitas.ai/api/v1/certificates/ET26-8A3F-2B1C/pdf');
+        expect(cert.data.verify_url).toBe('https://api.eternitas.ai/verify/ET26-8A3F-2B1C');
         expect(cert.data.passport_number).toBe('ET26-8A3F-2B1C');
         expect(cert.data.brain.provider).toBe('gemini');
 

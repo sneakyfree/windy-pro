@@ -748,8 +748,8 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
         chat: { matrix_user_id: matrixUserId, dm_room_id: dmRoomId },
         // ADR-064 additions — absolute URLs into Eternitas (null when the
         // certificate is still pending).
-        pdf_url: eternitasCertificate?.pdf_url ? `${config.ETERNITAS_URL}${eternitasCertificate.pdf_url}` : null,
-        verify_url: eternitasCertificate?.verify_url ? `${config.ETERNITAS_URL}${eternitasCertificate.verify_url}` : null,
+        pdf_url: eternitasCertificate?.pdf_url ? `${config.ETERNITAS_PUBLIC_URL}${eternitasCertificate.pdf_url}` : null,
+        verify_url: eternitasCertificate?.verify_url ? `${config.ETERNITAS_PUBLIC_URL}${eternitasCertificate.verify_url}` : null,
     };
     emit({
         type: 'birth_certificate.ready',
@@ -827,7 +827,7 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
                 agentEmail,
                 passportNumber: passportNumber || '',
                 certificateNo: eternitasCertificate?.certificate_no || null,
-                certificatePdfUrl: eternitasCertificate?.pdf_url ? `${config.ETERNITAS_URL}${eternitasCertificate.pdf_url}` : null,
+                certificatePdfUrl: eternitasCertificate?.pdf_url ? `${config.ETERNITAS_PUBLIC_URL}${eternitasCertificate.pdf_url}` : null,
                 ownerName: owner.name || owner.email.split('@')[0],
             });
             args.to = owner.email;
