@@ -334,7 +334,13 @@ export default function Dashboard() {
                             { key: 'windy_word', label: 'Windy Word', icon: '🎙️', href: '/transcribe' },
                             { key: 'windy_chat', label: 'Windy Chat', icon: '💬', href: '/app/chat', provisionPath: '/identity/chat/provision' },
                             { key: 'windy_mail', label: 'Windy Mail', icon: '📧', href: '/app/mail', provisionPath: '/identity/mail/provision' },
-                            { key: 'windy_cloud', label: 'Windy Cloud', icon: '☁️', href: '/vault' },
+                            // Windy Cloud: the Websites/Domains portal on
+                            // cloud.windycloud.com (portal ROOT is a landing;
+                            // land on Websites signed-in via the fragment
+                            // handoff — Clone #55/#56 law, same as HubPanel).
+                            // The old '/vault' target was Word's local vault
+                            // page, not Cloud (stale since the twins shipped).
+                            { key: 'windy_cloud', label: 'Windy Cloud', icon: '☁️', href: `https://cloud.windycloud.com/websites/#token=${encodeURIComponent(getToken() || '')}` },
                             { key: 'windy_fly', label: 'Windy Fly', icon: '🪰', href: '/app/fly' },
                             // Windy Clone: external — the marketplace SPA is live at the
                             // apex (served by the Clone API container, 2026-07-07). Clone
@@ -347,10 +353,13 @@ export default function Dashboard() {
                             // ?token= for backward compat — sneakyfree/Windy-Clone#55/#56.)
                             { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: `https://windyclone.ai/#token=${encodeURIComponent(getToken() || '')}` },
                             { key: 'windy_traveler', label: 'Windy Traveler', icon: '🌍', href: '/translate' },
-                            // Windy Code — VS Code soft-fork; windycode.org has no public
-                            // web surface (401 behind Cloudflare Access). Render as a
-                            // dimmed "Coming Soon" chip rather than a dead login-wall link.
-                            { key: 'windy_code', label: 'Windy Code', icon: '💻', comingSoon: true },
+                            // Windy Code — the browser builder is LIVE at
+                            // cloud.windycloud.com/build (same-origin under the
+                            // Cloud portal, deployed 2026-07-15). Fragment
+                            // handoff signs the user straight in. The old
+                            // "Coming Soon" chip was stale — HubPanel gained
+                            // the live tile in PR #245 but this grid was missed.
+                            { key: 'windy_code', label: 'Windy Code', icon: '🛠️', href: `https://cloud.windycloud.com/build/#token=${encodeURIComponent(getToken() || '')}` },
                             // Eternitas: in-product Passport panel, not the external app
                             // host (app.eternitas.ai was NXDOMAIN as of 2026-05-17).
                             { key: 'eternitas', label: 'Eternitas', icon: '🛡️', href: '/app/passport' },
