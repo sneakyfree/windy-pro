@@ -202,6 +202,7 @@ class HatchCeremony {
   Phone: <span data-cert="phone">—</span>
   Cloud Storage: <span data-cert="cloud">—</span>
   Brain: <span data-cert="brain">—</span>
+  Verify: <span data-cert="verify_url">—</span>
 
   🪰
                     </pre>
@@ -271,6 +272,8 @@ class HatchCeremony {
         set('phone', data.phone);
         set('cloud', cloud);
         set('brain', brain);
+        // ADR-064: Eternitas verify link (plain text; '—' when pending).
+        set('verify_url', data.verify_url);
         this.certFrame.hidden = false;
     }
 

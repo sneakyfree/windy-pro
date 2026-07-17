@@ -391,6 +391,22 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
 
     // ── Step 2: Eternitas passport registration ───────────────
     let passportNumber: string | null = null;
+    // ADR-064: Eternitas is the ONE birth-certificate authority. auto-hatch
+    // now returns a signed `certificate` object — which may be null (fail-open
+    // mint) or absent entirely (older server) — plus the bot's api_key, which
+    // authorises the idempotent certificate-enrich call after mail
+    // provisioning. We never fabricate a certificate number locally.
+    let eternitasCertificate: {
+        id?: string;
+        certificate_no?: string | null;
+        passport?: string;
+        signed_at?: string;
+        json_url?: string;
+        pdf_url?: string;
+        qr_url?: string;
+        verify_url?: string;
+    } | null = null;
+    let botApiKey: string | null = null;
     emit({ type: 'eternitas.registering', status: 'pending', label: 'Registering passport with Eternitas…' });
     try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -408,6 +424,9 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
                 creator_email: owner.email,
                 creator_name: owner.name || owner.email.split('@')[0],
                 operator_windy_identity_id: windyIdentityId,
+                // ADR-064: printed on the certificate — matches the 5 GiB
+                // quota actually provisioned in step 7.
+                cloud_storage: '5 GB — Windy Cloud',
                 // ADR-056: empty strings = free hatch (Eternitas ignores them).
                 verified_payment_intent_id: verifiedPaymentIntentId,
                 comp_code: compCode,
@@ -433,6 +452,11 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
             res.end();
             return;
         }
+
+        // ADR-064: capture the authoritative certificate + bot api_key.
+        // Both are handled honestly when missing — see steps 5 and 9.
+        eternitasCertificate = result.data?.certificate || null;
+        botApiKey = result.data?.api_key || result.data?.bot?.api_key || null;
 
         db.prepare(
             `INSERT OR REPLACE INTO eternitas_passports (id, identity_id, passport_number, status, operator_identity_id, registered_at)
@@ -590,6 +614,28 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
         emit({ type: 'mail.provisioned', status: 'failed', label: 'Mail inbox call threw.', data: { error: String(err?.message || err) } });
     }
 
+    // ADR-064: enrich the Eternitas certificate of record with the agent's
+    // mail address. Idempotent on the Eternitas side (signature untouched)
+    // and strictly best-effort here — an enrich failure must never fail the
+    // hatch. Requires the certificate from auto-hatch, the bot api_key
+    // (X-API-Key auth) and a successfully provisioned address.
+    if (eternitasCertificate && botApiKey && agentEmail) {
+        try {
+            const enrich = await fetchJson(
+                `${config.ETERNITAS_URL}/api/v1/certificates/${passportNumber}/generate`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': botApiKey },
+                    body: JSON.stringify({ windy_mail_address: agentEmail }),
+                },
+                5_000,
+            );
+            logInternal('eternitas.certificate_enriched', { ok: enrich.ok, http_status: enrich.status });
+        } catch (err: any) {
+            logInternal('eternitas.certificate_enrich_error', { error: String(err?.message || err) });
+        }
+    }
+
     // ── Step 6: Chat onboarding (Matrix DM room) ──────────────
     emit({ type: 'chat.provisioning', status: 'pending', label: 'Opening your chat with the agent…' });
     let matrixUserId: string | null = null;
@@ -683,12 +729,16 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
 
     // ── Step 9: Birth certificate ─────────────────────────────
     emit({ type: 'birth_certificate.generating', status: 'pending', label: 'Generating birth certificate…' });
-    const certificateNo = `WF-${(passportNumber || 'XXXX-XXXX').replace(/[^A-Z0-9]/gi, '').slice(-8).toUpperCase()}`;
+    // ADR-064: the certificate number comes from Eternitas, full stop. If the
+    // mint failed open (certificate: null) or the server predates ADR-064
+    // (field absent), report the pending state honestly — never fabricate a
+    // number locally.
+    const eternitasCertNo = eternitasCertificate?.certificate_no || null;
     const certificate = {
-        certificate_no: certificateNo,
+        certificate_no: eternitasCertNo,
         agent_name: agentName,
         passport_number: passportNumber,
-        born_at: new Date().toISOString(),
+        born_at: eternitasCertificate?.signed_at || new Date().toISOString(),
         creator: owner.name || owner.email.split('@')[0],
         creator_email: owner.email,
         email: agentEmail,
@@ -696,11 +746,17 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
         cloud_storage_bytes: 5 * 1024 * 1024 * 1024,
         brain: { provider: brokerProvider, model: brokerModel },
         chat: { matrix_user_id: matrixUserId, dm_room_id: dmRoomId },
+        // ADR-064 additions — absolute URLs into Eternitas (null when the
+        // certificate is still pending).
+        pdf_url: eternitasCertificate?.pdf_url ? `${config.ETERNITAS_URL}${eternitasCertificate.pdf_url}` : null,
+        verify_url: eternitasCertificate?.verify_url ? `${config.ETERNITAS_URL}${eternitasCertificate.verify_url}` : null,
     };
     emit({
         type: 'birth_certificate.ready',
-        status: 'ok',
-        label: 'Birth certificate issued.',
+        status: eternitasCertNo ? 'ok' : 'partial',
+        label: eternitasCertNo
+            ? 'Birth certificate issued.'
+            : 'Birth certificate pending — Eternitas will issue it shortly.',
         data: certificate,
     });
 
@@ -763,12 +819,15 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
     (async () => {
         try {
             const { sendMail, agentHatchedEmail } = await import('../services/mailer');
-            const certificateNo = `WF-${(passportNumber || '').replace(/-/g, '').slice(2, 10)}`;
+            // ADR-064: the SAME Eternitas-issued number as the SSE
+            // certificate — never recomputed locally. Null → the template
+            // omits the certificate line.
             const args = agentHatchedEmail({
                 agentName,
                 agentEmail,
                 passportNumber: passportNumber || '',
-                certificateNo,
+                certificateNo: eternitasCertificate?.certificate_no || null,
+                certificatePdfUrl: eternitasCertificate?.pdf_url ? `${config.ETERNITAS_URL}${eternitasCertificate.pdf_url}` : null,
                 ownerName: owner.name || owner.email.split('@')[0],
             });
             args.to = owner.email;

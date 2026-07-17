@@ -142,6 +142,16 @@ function BirthCertificate({ data }) {
                     </div>
                 ))}
             </dl>
+            {data.pdf_url ? (
+                <a
+                    className="hatch-cert-download"
+                    href={data.pdf_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Download official certificate (PDF)
+                </a>
+            ) : null}
         </section>
     )
 }
