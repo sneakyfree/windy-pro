@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { openHandoff } from '../../lib/ssoHandoff'
 
 export default function ChatPanel({ apiFetch }) {
     const [chatProfile, setChatProfile] = useState(null)
@@ -95,24 +96,14 @@ export default function ChatPanel({ apiFetch }) {
                 className="panel-btn"
                 style={{ marginTop: '12px' }}
                 onClick={(e) => {
-                    // SSO handoff — append the current Pro JWT as a
-                    // URL fragment so the chat app can skip its login
-                    // screen and exchange directly for a Matrix
-                    // access_token. The fragment never leaves the
-                    // browser; the chat app strips it from history on
-                    // arrival. Tactical bridge until the proper OAuth
-                    // endpoint on account.windyword.ai/oauth/authorize
-                    // lands; remove the onClick once OAuth is live.
+                    // SSO handoff — mint a fresh access+refresh pair and pass
+                    // both in the URL fragment so the chat session survives
+                    // past the 15-minute access token. Tactical bridge until
+                    // the proper OAuth endpoint on
+                    // account.windyword.ai/oauth/authorize lands.
                     try {
-                        const jwt = localStorage.getItem('windy_token')
-                        if (jwt) {
-                            e.preventDefault()
-                            window.open(
-                                `https://app.windychat.ai/#token=${encodeURIComponent(jwt)}`,
-                                '_blank',
-                                'noopener,noreferrer'
-                            )
-                        }
+                        e.preventDefault()
+                        openHandoff('https://app.windychat.ai/')
                     } catch {
                         // Fall through to the default href if anything
                         // goes wrong — better to land on the login page

@@ -937,6 +937,47 @@ router.post('/refresh', authLimiter, validate(RefreshRequestSchema), (req: Reque
     });
 });
 
+// ─── POST /api/v1/auth/handoff ───────────────────────────────
+//
+// Mint a fresh {token, refreshToken} pair for a cross-app tile handoff
+// (dashboard → chat/mail/cloud/clone/admin via URL fragment). Without this,
+// tile handoffs carried only the 15-minute access token and the receiving
+// app's session died at expiry even though direct logins silently refresh.
+//
+// Caller authenticates with its own Bearer access token. The pair is minted
+// under a unique per-handoff device id — generateTokens deletes existing
+// refresh rows for (user, device) before inserting, so reusing the caller's
+// device id would evict the dashboard's own session.
+//
+// The refresh token rides in a URL fragment, so its un-rotated copy is kept
+// short-lived (30 min) instead of the normal 30 days. The receiving app's
+// first /auth/refresh consumes it (single-use rotation) and gets a standard
+// 30-day replacement, so session longevity still matches a direct login
+// while a leaked fragment goes stale within minutes.
+
+router.post('/handoff', authLimiter, authenticateToken, (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).user.userId;
+    const user = stmts().findUserById.get(userId) as any;
+    if (!user) {
+        return res.status(401).json({ error: 'User not found' });
+    }
+
+    const handoffDevice = `handoff-${uuidv4()}`;
+    const tokens = generateTokens(user, handoffDevice);
+
+    const shortExpiry = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    try {
+        getDb().prepare('UPDATE refresh_tokens SET expires_at = ? WHERE token = ?')
+            .run(shortExpiry, tokens.refreshToken);
+    } catch { /* worst case the default 30d expiry stands — never fail the handoff */ }
+
+    // 'token_handoff' isn't in the shared IdentityAuditEvent union; the kind
+    // marker keeps handoff mints distinguishable from ordinary refreshes.
+    logAuditEvent('token_refresh', user.id, { kind: 'handoff', deviceId: handoffDevice }, req.ip, req.get('user-agent'));
+
+    res.json({ token: tokens.token, refreshToken: tokens.refreshToken });
+});
+
 // ─── POST /api/v1/auth/logout ────────────────────────────────
 
 router.post('/logout', authenticateToken, (req: Request, res: Response) => {

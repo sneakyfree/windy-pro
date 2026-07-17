@@ -1,3 +1,5 @@
+import { openHandoff } from '../../lib/ssoHandoff'
+
 export default function MailPanel({ apiFetch }) {
     return (
         <div className="panel">
@@ -24,7 +26,22 @@ export default function MailPanel({ apiFetch }) {
                 </ul>
             </div>
 
-            <a href="https://app.windymail.ai" target="_blank" rel="noopener noreferrer" className="panel-btn" style={{ marginTop: '12px' }}>
+            <a
+                href="https://app.windymail.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="panel-btn"
+                style={{ marginTop: '12px' }}
+                onClick={(e) => {
+                    // SSO handoff — without it a signed-in Pro user landed on
+                    // mail's login screen; with only #token= the session died
+                    // at the 15-minute access-token expiry.
+                    try {
+                        e.preventDefault()
+                        openHandoff('https://app.windymail.ai/')
+                    } catch { /* default navigation proceeds */ }
+                }}
+            >
                 Open Windy Mail
             </a>
         </div>

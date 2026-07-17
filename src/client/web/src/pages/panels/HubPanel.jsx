@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { openHandoff } from '../../lib/ssoHandoff'
 
 const PRODUCTS = [
     {
@@ -37,6 +38,9 @@ const PRODUCTS = [
         // for a signed-in Pro user. app.windymail.ai is the public webmail app.
         href: 'https://app.windymail.ai',
         internal: false,
+        // The webmail app ingests #token= (mail#88) — without the handoff
+        // a signed-in Pro user landed on mail's login screen.
+        ssoHandoff: true,
     },
     {
         key: 'windy_cloud',
@@ -260,25 +264,16 @@ export default function HubPanel({ apiFetch }) {
 
                         const onClickHandler = product.ssoHandoff
                             ? (e) => {
-                                // SSO handoff — append Pro JWT as URL fragment
-                                // so the target app can skip its login screen.
-                                // Fragment never leaves the browser; the target
-                                // strips it from history on arrival.
+                                // SSO handoff — mint a fresh access+refresh
+                                // pair and pass both in the URL fragment so
+                                // the target session survives past the 15-min
+                                // access token (falls back to the plain href
+                                // on any error — better to land on login than
+                                // to fail the click).
                                 try {
-                                    const jwt = localStorage.getItem('windy_token')
-                                    if (jwt) {
-                                        e.preventDefault()
-                                        window.open(
-                                            `${product.href}/#token=${encodeURIComponent(jwt)}`,
-                                            '_blank',
-                                            'noopener,noreferrer'
-                                        )
-                                    }
-                                } catch {
-                                    // Fall through to the default href on any
-                                    // error — better to land on login than to
-                                    // fail the click.
-                                }
+                                    e.preventDefault()
+                                    openHandoff(`${product.href}/`)
+                                } catch { /* default navigation proceeds */ }
                             }
                             : undefined
 

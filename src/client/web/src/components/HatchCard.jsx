@@ -20,6 +20,7 @@
  */
 import { useNavigate } from 'react-router-dom'
 import { getHatchedAt, loadSavedHatch } from '../utils/hatchStorage'
+import { openHandoff } from '../lib/ssoHandoff'
 
 export default function HatchCard({ ecosystem = null }) {
     const navigate = useNavigate()
@@ -68,14 +69,14 @@ export default function HatchCard({ ecosystem = null }) {
             // local "runtime online" check that never comes up, and
             // grandma ends up staring at "Hatched — runtime offline."
             //
-            // SSO handoff: the chat web app reads #token=<pro_jwt> and
-            // calls /unified-login. The agent_room query param tells
-            // ChatPage to auto-select the DM room with the agent.
-            const jwt = localStorage.getItem('windy_token') || ''
-            const url = new URL('https://app.windychat.ai/')
-            if (dmRoomId) url.searchParams.set('agent_room', dmRoomId)
-            if (jwt) url.hash = `token=${encodeURIComponent(jwt)}`
-            window.location.href = url.toString()
+            // SSO handoff: the chat web app reads #token= (+ refreshToken=)
+            // and calls /unified-login. The agent_room query param tells
+            // ChatPage to auto-select the DM room with the agent. Minting a
+            // fresh access+refresh pair keeps the chat session alive past
+            // the 15-minute access token. Same-tab navigation, so the async
+            // mint can simply precede the redirect.
+            const search = dmRoomId ? `agent_room=${encodeURIComponent(dmRoomId)}` : undefined
+            openHandoff('https://app.windychat.ai/', { newTab: false, search })
         } else {
             navigate('/hatch')
         }
