@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { clearTokens } from '../lib/authFetch'
+import { openHandoff } from '../lib/ssoHandoff'
 import HatchCard from '../components/HatchCard'
 import VoiceButton from '../components/VoiceButton'
 import './Dashboard.css'
@@ -296,10 +297,16 @@ export default function Dashboard() {
                     <div className="dash-ecosystem-grid">
                         <a
                             className="dash-eco-card"
-                            href={`https://admin.windyword.ai/#token=${encodeURIComponent(getToken() || '')}`}
+                            href="https://admin.windyword.ai/"
                             target="_blank"
                             rel="noopener noreferrer"
                             title="Open the Windy Admin super-admin panel"
+                            onClick={(e) => {
+                                try {
+                                    e.preventDefault()
+                                    openHandoff('https://admin.windyword.ai/')
+                                } catch { /* default navigation proceeds */ }
+                            }}
                         >
                             <span className="dash-eco-icon">🛠️</span>
                             <span className="dash-eco-label">Admin Panel</span>
@@ -340,7 +347,11 @@ export default function Dashboard() {
                             // handoff — Clone #55/#56 law, same as HubPanel).
                             // The old '/vault' target was Word's local vault
                             // page, not Cloud (stale since the twins shipped).
-                            { key: 'windy_cloud', label: 'Windy Cloud', icon: '☁️', href: `https://cloud.windycloud.com/websites/#token=${encodeURIComponent(getToken() || '')}` },
+                            // ssoHandoff tiles: the click mints a fresh access+refresh
+                            // pair (POST /auth/handoff) and passes both in the URL
+                            // fragment — `#token=` alone stranded the target session
+                            // at the 15-minute access-token expiry.
+                            { key: 'windy_cloud', label: 'Windy Cloud', icon: '☁️', href: 'https://cloud.windycloud.com/websites/', ssoHandoff: true },
                             { key: 'windy_fly', label: 'Windy Fly', icon: '🪰', href: '/app/fly' },
                             // Windy Clone: external — the marketplace SPA is live at the
                             // apex (served by the Clone API container, 2026-07-07). Clone
@@ -351,7 +362,7 @@ export default function Dashboard() {
                             // handoff above). Clone captures it synchronously on load, stores
                             // it to localStorage, and strips the URL. (Clone still accepts
                             // ?token= for backward compat — sneakyfree/Windy-Clone#55/#56.)
-                            { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: `https://windyclone.ai/#token=${encodeURIComponent(getToken() || '')}` },
+                            { key: 'windy_clone', label: 'Windy Clone', icon: '🧬', href: 'https://windyclone.ai/', ssoHandoff: true },
                             { key: 'windy_traveler', label: 'Windy Traveler', icon: '🌍', href: '/translate' },
                             // Windy Code — the browser builder is LIVE at
                             // cloud.windycloud.com/build (same-origin under the
@@ -359,7 +370,7 @@ export default function Dashboard() {
                             // handoff signs the user straight in. The old
                             // "Coming Soon" chip was stale — HubPanel gained
                             // the live tile in PR #245 but this grid was missed.
-                            { key: 'windy_code', label: 'Windy Code', icon: '🛠️', href: `https://cloud.windycloud.com/build/#token=${encodeURIComponent(getToken() || '')}` },
+                            { key: 'windy_code', label: 'Windy Code', icon: '🛠️', href: 'https://cloud.windycloud.com/build/', ssoHandoff: true },
                             // Eternitas: in-product Passport panel, not the external app
                             // host (app.eternitas.ai was NXDOMAIN as of 2026-05-17).
                             { key: 'eternitas', label: 'Eternitas', icon: '🛡️', href: '/app/passport' },
@@ -473,6 +484,14 @@ export default function Dashboard() {
                                     href={p.href}
                                     className="dash-eco-card"
                                     {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                                    {...(p.ssoHandoff ? {
+                                        onClick: (e) => {
+                                            try {
+                                                e.preventDefault()
+                                                openHandoff(p.href)
+                                            } catch { /* default navigation proceeds */ }
+                                        },
+                                    } : {})}
                                 >
                                     <span className="dash-eco-icon">{p.icon}</span>
                                     <span className="dash-eco-label">{p.label}</span>
