@@ -89,6 +89,8 @@ function statusColor(status) {
         case 'active':
         case 'healthy':
             return '#22C55E'
+        case 'available':
+            return '#A78BFA'
         case 'pending':
             return '#EAB308'
         case 'error':
@@ -104,6 +106,10 @@ function statusLabel(status) {
         case 'active':
         case 'healthy':
             return 'Active'
+        case 'available':
+            // account-server marks always-on products 'available' — the
+            // old fall-through rendered them as a scary "Not provisioned".
+            return 'Available'
         case 'pending':
             return 'Pending'
         case 'error':
