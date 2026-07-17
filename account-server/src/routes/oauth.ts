@@ -1428,7 +1428,7 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
   const db = getDb();
 
   // Fetch user info for token payload
-  const user = db.prepare('SELECT email, tier, identity_type, windy_identity_id FROM users WHERE id = ?').get(identityId) as any;
+  const user = db.prepare('SELECT email, tier, identity_type, windy_identity_id, name, display_name FROM users WHERE id = ?').get(identityId) as any;
   if (!user) throw new Error('User not found');
 
   // Fetch scopes from identity_scopes table
@@ -1482,6 +1482,18 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
     scope,
   };
   if (passportNumber) tokenPayload.eternitas_passport = passportNumber;
+  // display_name claim — parity with auth.ts generateTokens. chat_profiles
+  // is the richer source (matrix-aligned), users.display_name/name the
+  // fallback; without this the SSO-login path minted tokens with no name
+  // and chat rendered raw UUIDs (see auth.ts for the full story).
+  try {
+    const cp = db.prepare('SELECT chat_user_id, display_name FROM chat_profiles WHERE identity_id = ? LIMIT 1').get(identityId) as any;
+    const dn = (cp?.display_name && cp.display_name !== identityId && cp.display_name !== user.windy_identity_id)
+      ? cp.display_name
+      : (user.display_name || user.name || cp?.display_name);
+    if (cp?.chat_user_id) tokenPayload.chat_user_id = cp.chat_user_id;
+    if (dn) tokenPayload.display_name = dn;
+  } catch { /* chat_profiles may not exist on first-run */ }
 
   let accessToken: string;
   const signingKey = getSigningKey();
