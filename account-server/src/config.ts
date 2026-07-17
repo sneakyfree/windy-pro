@@ -80,6 +80,11 @@ export const config = {
     WINDY_MAIL_URL: process.env.WINDY_MAIL_URL || 'http://localhost:8200',
     WINDY_CLOUD_URL: process.env.WINDY_CLOUD_URL || 'http://localhost:8103',
     ETERNITAS_URL: process.env.ETERNITAS_URL || 'http://localhost:8500',
+    // ADR-064 follow-up: user-facing certificate links (SSE payload, welcome
+    // email) must use the PUBLIC Eternitas host — ETERNITAS_URL is the
+    // server-to-server address (host.docker.internal in prod), which leaked
+    // into grandma-clickable pdf_url/verify_url on the first live hatch.
+    ETERNITAS_PUBLIC_URL: process.env.ETERNITAS_PUBLIC_URL || 'https://api.eternitas.ai',
     // Eternitas — bot identity & trust registry
     ETERNITAS_API_KEY: process.env.ETERNITAS_API_KEY || '',           // et_plt_xxx (platform API key)
     ETERNITAS_WEBHOOK_SECRET: process.env.ETERNITAS_WEBHOOK_SECRET || '', // For verifying inbound webhooks
