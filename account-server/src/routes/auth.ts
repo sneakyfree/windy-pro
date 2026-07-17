@@ -194,13 +194,15 @@ export function generateTokens(user: { id: string; email: string; tier: string }
     let identityType = 'human';
     let windyIdentityId: string | undefined;
     let adminRole: string | undefined;
+    let accountName: string | undefined;
     try {
         const identity = db.prepare(
-            'SELECT identity_type, windy_identity_id, admin_role FROM users WHERE id = ?',
-        ).get(user.id) as { identity_type: string; windy_identity_id: string; admin_role: string | null } | undefined;
+            'SELECT identity_type, windy_identity_id, admin_role, name, display_name FROM users WHERE id = ?',
+        ).get(user.id) as { identity_type: string; windy_identity_id: string; admin_role: string | null; name: string | null; display_name: string | null } | undefined;
         identityType = identity?.identity_type || 'human';
         windyIdentityId = identity?.windy_identity_id;
         adminRole = identity?.admin_role || undefined;
+        accountName = identity?.display_name || identity?.name || undefined;
     } catch { /* default human */ }
 
     // Fetch active Eternitas passport (if any). Kept in sync with the same
@@ -237,6 +239,15 @@ export function generateTokens(user: { id: string; email: string; tier: string }
         chatUserId = row?.chat_user_id || undefined;
         displayNameClaim = row?.display_name || undefined;
     } catch { /* table may not exist on first-run */ }
+    // Fall back to the account's own name (users.display_name || users.name).
+    // Without this, accounts that never went through chat provisioning (or
+    // whose chat_profiles row predates naming and stored the raw identity id)
+    // get NO usable display_name claim and every downstream consumer (chat
+    // unified-login, social profile, agent greeting) renders the raw UUID —
+    // the "Welcome, 11437b90-…" grandma bug.
+    if (!displayNameClaim || displayNameClaim === user.id || (windyIdentityId && displayNameClaim === windyIdentityId)) {
+        displayNameClaim = accountName || displayNameClaim;
+    }
 
     // Phase 4: Sign with RS256 if available, HS256 fallback
     const tokenPayload: Record<string, any> = {
