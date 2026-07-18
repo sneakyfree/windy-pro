@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { clearTokens } from '../lib/authFetch'
+import { logout } from '../lib/authFetch'
 import './Dashboard.css'
 
 const API_BASE = '/api/v1'
@@ -77,11 +77,10 @@ export default function Settings() {
     }
 
     const handleLogout = () => {
-        apiFetch('/auth/logout', { method: 'POST' }).catch(() => { })
-        // clearTokens also drops windy_refresh_token — leaving it behind let
-        // the silent-refresh machinery resurrect the session after Sign Out.
-        clearTokens()
-        localStorage.removeItem('windy_user')
+        // logout() revokes server-side and wipes ALL session state (tokens +
+        // user + license + agent + cloud caches). Clearing only the tokens left
+        // ecosystem caches behind for the next user on a shared browser.
+        logout()
         navigate('/auth')
     }
 

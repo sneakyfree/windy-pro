@@ -40,6 +40,49 @@ export function clearTokens() {
     } catch { /* noop */ }
 }
 
+// Client-side session artifacts beyond the two auth tokens. A complete sign-out
+// must drop ALL of these so the next user on a shared browser inherits no
+// identity, entitlement, or agent/cloud credential. Language stays — it's a
+// device preference, not session state.
+const SESSION_ARTIFACT_KEYS = [
+    'windy_user',
+    'windy_license_tier',
+    'windy_license_key',
+    'windy_license_activated',
+    'windy_agent_hatched_at',
+    'windy_agent_saved',
+    'windy_hatch_audio',
+    'windy_cloud_token',
+]
+
+// Wipe every client-side session artifact (tokens + user + license + agent +
+// cloud caches) and stop the silent-refresh timer. Does NOT call the server.
+export function clearSession() {
+    clearTokens()
+    stopProactiveRefresh()
+    try {
+        for (const key of SESSION_ARTIFACT_KEYS) localStorage.removeItem(key)
+        sessionStorage.removeItem('windy_verify_sent_at')
+    } catch { /* storage disabled — noop */ }
+}
+
+// Complete sign-out. Revoke the refresh token on the server (best-effort,
+// fire-and-forget — the browser lets the in-flight POST finish across the SPA
+// navigation) then wipe all client session state. EVERY Sign Out / Log Out
+// handler must call this: clearing only windy_token leaves the 30-day refresh
+// token behind, which the silent-refresh machinery uses to resurrect the
+// session after "sign out" (the WW-11 / session-hygiene leak class).
+export function logout() {
+    try {
+        const token = getAccessToken()
+        fetch('/api/v1/auth/logout', {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }).catch(() => { /* revoke is best-effort; local wipe still happens */ })
+    } catch { /* noop */ }
+    clearSession()
+}
+
 // Exchange the refresh token for a new access token. Concurrent callers share
 // one in-flight request. Returns the new access token, or null if refresh
 // failed (caller should then send the user to sign in).

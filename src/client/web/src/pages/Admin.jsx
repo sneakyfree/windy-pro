@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { logout } from '../lib/authFetch'
 import './Dashboard.css'
 
 const API_BASE = '/api/v1'
@@ -106,8 +107,7 @@ export default function Admin() {
     }, [loadUsers, loadAnalytics])
 
     const handleLogout = () => {
-        localStorage.removeItem('windy_token')
-        localStorage.removeItem('windy_user')
+        logout()
         navigate('/auth')
     }
 
