@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { authFetch, clearTokens, getValidAccessToken } from '../lib/authFetch'
+import { authFetch, logout, getValidAccessToken } from '../lib/authFetch'
 import './Transcribe.css'
 
 export default function Transcribe() {
@@ -256,12 +256,10 @@ export default function Transcribe() {
     }
 
     const handleLogout = () => {
-        // Revoke server-side, then clear BOTH tokens — leaving the refresh
-        // token behind let silent-refresh resurrect the session (PR #249
-        // fixed the other pages; this handler was missed).
-        authFetch('/api/v1/auth/logout', { method: 'POST' }).catch(() => { })
-        clearTokens()
-        localStorage.removeItem('windy_user')
+        // logout() revokes server-side and wipes ALL session state (tokens +
+        // user + license + agent + cloud caches) so nothing leaks to the next
+        // user on a shared browser.
+        logout()
         navigate('/auth')
     }
 

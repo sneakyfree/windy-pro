@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { clearTokens } from '../lib/authFetch'
+import { logout } from '../lib/authFetch'
 import './Dashboard.css'
 
 const API_BASE = '/api/v1'
@@ -46,13 +46,10 @@ export default function Profile() {
     }, [])
 
     const handleLogout = () => {
-        // Revoke server-side (deletes refresh tokens + blacklists the access
-        // token) — the other pages already did this; Profile never did.
-        apiFetch('/auth/logout', { method: 'POST' }).catch(() => { })
-        // clearTokens also drops windy_refresh_token — leaving it behind let
-        // the silent-refresh machinery resurrect the session after Sign Out.
-        clearTokens()
-        localStorage.removeItem('windy_user')
+        // logout() revokes server-side (deletes refresh tokens + blacklists the
+        // access token) and wipes ALL session state (tokens + user + license +
+        // agent + cloud caches) so nothing leaks to the next user.
+        logout()
         navigate('/auth')
     }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { clearTokens } from '../lib/authFetch'
+import { logout } from '../lib/authFetch'
 import { openHandoff } from '../lib/ssoHandoff'
 import HatchCard from '../components/HatchCard'
 import VoiceButton from '../components/VoiceButton'
@@ -196,11 +196,11 @@ export default function Dashboard() {
     }
 
     const handleLogout = () => {
-        apiFetch('/auth/logout', { method: 'POST' }).catch(err => console.warn('Logout error:', err.message))
-        // clearTokens also drops windy_refresh_token — leaving it behind let
-        // the silent-refresh machinery resurrect the session after Sign Out.
-        clearTokens()
-        localStorage.removeItem('windy_user')
+        // logout() revokes the refresh token server-side and wipes ALL session
+        // state (tokens + user + license + agent + cloud caches). Clearing only
+        // windy_token/windy_user left the 30-day refresh token + ecosystem
+        // caches behind — the WW-11 / session-hygiene leak.
+        logout()
         navigate('/auth')
     }
 

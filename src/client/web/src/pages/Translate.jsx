@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { logout } from '../lib/authFetch'
 import './Dashboard.css'
 
 const POPULAR_LANGS = [
@@ -150,8 +151,7 @@ export default function Translate() {
     }
 
     const handleSignOut = () => {
-        localStorage.removeItem('windy_token')
-        localStorage.removeItem('windy_user')
+        logout()
         navigate('/')
     }
 

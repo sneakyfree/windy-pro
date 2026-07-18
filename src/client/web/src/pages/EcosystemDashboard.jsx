@@ -1,5 +1,6 @@
 import { Suspense, lazy, useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { logout } from '../lib/authFetch'
 import './EcosystemDashboard.css'
 
 const HubPanel = lazy(() => import('./panels/HubPanel'))
@@ -72,12 +73,11 @@ export default function EcosystemDashboard() {
     }, [navigate])
 
     const handleLogout = () => {
-        fetch('/api/v1/auth/logout', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${getToken()}` },
-        }).catch(() => {})
-        localStorage.removeItem('windy_token')
-        localStorage.removeItem('windy_user')
+        // logout() revokes server-side and wipes ALL session state (both tokens
+        // + user + license + agent + cloud caches). This handler previously left
+        // windy_refresh_token behind, so silent-refresh could resurrect the
+        // session after "sign out".
+        logout()
         navigate('/auth')
     }
 
