@@ -640,6 +640,14 @@ router.post('/authorize', express.urlencoded({ extended: false }), authenticateT
       return res.status(400).json({ error: 'invalid_client' });
     }
 
+    // RFC 6749 §4.1.3: the redirect_uri MUST match one the client registered.
+    // GET /authorize and POST /login enforce this via validateAuthorizeRequest;
+    // this consent-submit path did not, letting an authenticated caller mint a
+    // code to an arbitrary URL. Mirror the same allowlist check.
+    if (!parseJsonArrayColumn(client.redirect_uris).includes(redirect_uri)) {
+      return res.status(400).json({ error: 'invalid_request', error_description: 'redirect_uri not registered for this client' });
+    }
+
     const userId = (req as AuthRequest).user.userId;
 
     // Handle both boolean and string "true"/"false" (form data sends strings)
