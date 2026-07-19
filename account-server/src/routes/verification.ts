@@ -1,13 +1,19 @@
 /**
  * Verification routes — Identity-level OTP verification (Phase 1)
  *
- * Promotes the chat-onboarding OTP verification (Twilio SMS + SendGrid email)
- * to a shared identity-level service that any product can use.
+ * Promotes the chat-onboarding OTP verification (Twilio SMS) to a shared
+ * identity-level service that any product can use.
+ *
+ * EMAIL IS PHONE-ONLY HERE AS OF 2026-07-19 (GAP_ANALYSIS P2-5): email
+ * verification is consolidated onto the canonical account flow
+ * (POST /api/v1/auth/send-verification + /verify-email — otp_codes table,
+ * sha256-hashed codes). The /send and /check handlers return 410 for
+ * type:'email' with a pointer there. This router now owns PHONE only.
  *
  * Endpoints:
- *   POST /api/v1/identity/verify/send   — Send 6-digit OTP via SMS or email
- *   POST /api/v1/identity/verify/check  — Validate OTP, mark identity as verified
- *   GET  /api/v1/identity/verify/status — Check verification status
+ *   POST /api/v1/identity/verify/send   — Send 6-digit OTP via SMS (phone only)
+ *   POST /api/v1/identity/verify/check  — Validate phone OTP, mark phone verified
+ *   GET  /api/v1/identity/verify/status — Check verification status (email + phone)
  *
  * Security:
  *   - Rate limited: 5/min, 10/hour per identifier
@@ -154,6 +160,17 @@ router.post('/send', authenticateToken, sendLimiter, hourlyLimiter, validate(Ver
     const { type, identifier, countryCode } = req.body;
     const userId = (req as AuthRequest).user.userId;
 
+    // Consolidation (GAP_ANALYSIS P2-5): email verification lives on the
+    // canonical account flow. This identity-level path now handles phone only.
+    if (type === 'email') {
+      return res.status(410).json({
+        error: 'Email verification has moved.',
+        code: 'EMAIL_VERIFICATION_MOVED',
+        canonical: '/api/v1/auth/send-verification',
+        message: 'Verify email via POST /api/v1/auth/send-verification. This endpoint now handles phone verification only.',
+      });
+    }
+
     // Normalize identifier
     let normalizedId: string;
     if (type === 'phone') {
@@ -229,6 +246,17 @@ router.post('/check', authenticateToken, validate(VerificationCheckSchema), asyn
   try {
     const { identifier, code, type, countryCode } = req.body;
     const userId = (req as AuthRequest).user.userId;
+
+    // Consolidation (GAP_ANALYSIS P2-5): email verification lives on the
+    // canonical account flow. This identity-level path now handles phone only.
+    if (type === 'email') {
+      return res.status(410).json({
+        error: 'Email verification has moved.',
+        code: 'EMAIL_VERIFICATION_MOVED',
+        canonical: '/api/v1/auth/verify-email',
+        message: 'Confirm an email code via POST /api/v1/auth/verify-email. This endpoint now handles phone verification only.',
+      });
+    }
 
     // Normalize identifier
     let normalizedId: string;
