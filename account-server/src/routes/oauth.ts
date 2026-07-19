@@ -134,12 +134,20 @@ router.get('/clients', authenticateToken, adminOnly, (_req: Request, res: Respon
 /**
  * POST /api/v1/oauth/register-client — Register an ecosystem service as an OAuth client
  *
- * Allows Windy ecosystem services (Chat, Mail, Fly, Eternitas) to register
- * themselves as OAuth clients for "Sign in with Windy" flows.
+ * ADMIN ONLY (SEC 2026-07-19). This endpoint mints a FIRST-PARTY client, and
+ * first-party clients skip the user-consent screen in the authorize flow
+ * (oauth.ts handleAuthorizeGet). Left unauthenticated, anyone could register a
+ * client with a name like "Windy Cloud" + an attacker-controlled redirect_uri
+ * and self-known client_secret, phish a victim through the REAL Windy login
+ * page, receive an auto-consented auth code, and exchange it for the victim's
+ * tokens — full account takeover. Gating it behind adminOnly (mirroring the
+ * sibling POST /clients) closes the vector. Ecosystem clients are provisioned
+ * server-side by seedEcosystemClients() at boot, not via this endpoint, so no
+ * legitimate caller is affected (verified: zero callers across all Windy repos).
  *
  * Body: { client_id, client_name, redirect_uris[], allowed_scopes[], client_secret }
  */
-router.post('/register-client', oauthLimiter, (req: Request, res: Response) => {
+router.post('/register-client', authenticateToken, adminOnly, oauthLimiter, (req: Request, res: Response) => {
   try {
     const { client_id, client_name, redirect_uris, allowed_scopes, client_secret } = req.body;
 
@@ -170,15 +178,20 @@ router.post('/register-client', oauthLimiter, (req: Request, res: Response) => {
     const secretHash = bcrypt.hashSync(client_secret, 12);
 
     db.prepare(`
-      INSERT INTO oauth_clients (client_id, client_secret_hash, name, redirect_uris, allowed_scopes, is_first_party, is_public)
-      VALUES (?, ?, ?, ?, ?, 1, 0)
+      INSERT INTO oauth_clients (client_id, client_secret_hash, name, redirect_uris, allowed_scopes, owner_identity_id, is_first_party, is_public)
+      VALUES (?, ?, ?, ?, ?, ?, 1, 0)
     `).run(
       client_id,
       secretHash,
       client_name,
       JSON.stringify(redirect_uris),
       JSON.stringify(allowed_scopes),
+      (req as AuthRequest).user.userId,
     );
+
+    logAuditEvent('oauth_client_register' as any, (req as AuthRequest).user.userId, {
+      clientId: client_id, name: client_name, isFirstParty: true, isPublic: false, via: 'register-client',
+    });
 
     res.status(201).json({
       client_id,
