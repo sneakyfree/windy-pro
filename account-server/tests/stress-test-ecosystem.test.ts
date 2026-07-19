@@ -398,6 +398,7 @@ describe('Category 5: OAuth2 Flow', () => {
 
         const res = await request(app)
             .post('/api/v1/oauth/register-client')
+            .set('Authorization', `Bearer ${authToken}`)
             .send({
                 client_id: clientId,
                 client_name: 'Stress Test Client',
