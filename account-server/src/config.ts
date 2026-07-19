@@ -60,6 +60,10 @@ export const config = {
     // Stripe billing — set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET in .env or system env
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
+    // RevenueCat mobile IAP webhook — the exact Authorization header value
+    // RevenueCat sends (configure the same string in the RC dashboard
+    // webhook settings). Unset ⇒ the webhook endpoint is inert (503, no writes).
+    REVENUECAT_WEBHOOK_AUTH: process.env.REVENUECAT_WEBHOOK_AUTH || '',
     // Phase 7A: PostgreSQL + Redis (optional — omit for SQLite + in-memory defaults)
     DATABASE_URL: process.env.DATABASE_URL || '',   // postgres://... or '' for SQLite
     REDIS_URL: process.env.REDIS_URL || '',          // redis://... or '' for in-memory
