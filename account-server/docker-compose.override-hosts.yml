@@ -1,0 +1,4 @@
+services:
+  account-server:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

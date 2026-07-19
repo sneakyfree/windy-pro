@@ -15,7 +15,12 @@ services:
       context: ..
       dockerfile: account-server/Dockerfile
     ports:
-      - "${PORT:-8098}:8098"
+      # Dual-bind (windy-chat #155 pattern): host loopback for nginx, docker
+      # bridge gateway for cross-stack consumers (host.docker.internal /
+      # 172.17.0.1). NEVER 0.0.0.0 (Docker bypasses ufw -> internet-exposed)
+      # and NEVER loopback-only (breaks host.docker.internal consumers).
+      - "127.0.0.1:${PORT:-8098}:8098"
+      - "172.17.0.1:${PORT:-8098}:8098"
     env_file:
       - .env.production
     environment:
