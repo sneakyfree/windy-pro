@@ -469,6 +469,30 @@ export function createHatchSession(windyIdentityId: string): {
     ).get(windyIdentityId) as { id: string; status: string; events: string } | undefined;
 
     if (existing) {
+        // Failure recovery — a prior FAILED hatch must not brick the
+        // identity forever behind a false "already hatched" replay.
+        // Reset the row to a fresh 'running' state (clearing stale
+        // ceremony fields + events) and report existing:false so the
+        // route runs the real hatch again. Genuinely completed sessions
+        // still replay, and an in-flight ('running') session is returned
+        // as-is — both paths unchanged. The UNIQUE(windy_identity_id)
+        // row is reused, never deleted.
+        if (existing.status === 'failed' || existing.status === 'error') {
+            db.prepare(
+                `UPDATE hatch_sessions
+                 SET status = 'running',
+                     last_event_seq = 0,
+                     events = '[]',
+                     bot_identity_id = NULL,
+                     agent_name = NULL,
+                     passport_number = NULL,
+                     broker_token_id = NULL,
+                     error = NULL,
+                     completed_at = NULL
+                 WHERE id = ?`,
+            ).run(existing.id);
+            return { id: existing.id, existing: false, events: [], status: 'running' };
+        }
         return {
             id: existing.id,
             existing: true,
