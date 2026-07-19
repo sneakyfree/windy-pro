@@ -68,6 +68,15 @@ export default function Auth() {
             const data = await res.json()
 
             if (!res.ok) {
+                // Locked-out unverified account: the login gate answers 403
+                // with code:email_verification_required (account-server/src/
+                // routes/auth.ts login handler). Route to /verify-email with
+                // the email — that page has an unauthenticated recovery path
+                // (resend-verification + verify-email-code).
+                if (res.status === 403 && data.code === 'email_verification_required') {
+                    navigate('/verify-email', { state: { email: data.email || email } })
+                    return
+                }
                 setError(data.error || 'Something went wrong')
                 return
             }

@@ -106,6 +106,33 @@ const verifyEmailLimiter = makeRateLimiter('verify-email', {
     legacyHeaders: false,
 });
 
+// Lockout recovery (unauthenticated resend) — same 3/hr budget as
+// sendVerificationLimiter, but the caller has no token: an unverified
+// account >24h old is refused login (403 email_verification_required) and
+// so can never reach the authed /send-verification. Keyed by normalized
+// email + IP; keyGenerator mirrors forgotPasswordLimiter's normalizeEmail()
+// so the bucket can't be evaded by case/whitespace permutations.
+const resendVerificationLimiter = makeRateLimiter('resend-verification', {
+    windowMs: 60 * 60 * 1000,
+    max: process.env.NODE_ENV === 'test' ? 10000 : 3,
+    keyGenerator: (req) => `${normalizeEmail((req.body as any)?.email) || 'noemail'}|${req.ip || 'unknown'}`,
+    message: { error: 'Too many verification emails sent. Try again in an hour.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Lockout recovery (unauthenticated verify) — same 30/hr outer cap as
+// verifyEmailLimiter (the Wave 7 P1-9 amplification rationale applies
+// identically), keyed by email + IP since there is no authed user.
+const verifyEmailCodeLimiter = makeRateLimiter('verify-email-code', {
+    windowMs: 60 * 60 * 1000,
+    max: process.env.NODE_ENV === 'test' ? 10000 : 30,
+    keyGenerator: (req) => `${normalizeEmail((req.body as any)?.email) || 'noemail'}|${req.ip || 'unknown'}`,
+    message: { error: 'Too many verification attempts. Try again in an hour.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 // ─── PR1 helpers — email verification OTP lifecycle ───
 //
 // Stored as sha256(code) so the raw code is never persisted. 6-digit numeric
@@ -1147,6 +1174,124 @@ router.post('/verify-email', authenticateToken, verifyEmailLimiter, validate(Ver
         res.json({ success: true, verified: true });
     } catch (err: any) {
         console.error('Verify email error:', err);
+        res.status(500).json({ error: 'Verification failed' });
+    }
+});
+
+// ─── POST /api/v1/auth/resend-verification ───────────────────
+//
+// LAUNCH-BLOCKER recovery path (unauthenticated). An unverified account
+// older than 24h is refused login with 403 email_verification_required,
+// so it can never obtain the Bearer token /send-verification requires —
+// a chicken-and-egg lockout with no exit (password reset does not set
+// email_verified). Possession of the emailed code proves control of the
+// address, so no token is needed here.
+//
+// Anti-enumeration: ALWAYS answers a generic 200 {ok:true} — unknown
+// email, already-verified account, and successful send are shape-identical
+// (same posture as /forgot-password). Rate limited 3/hr per email+IP.
+
+router.post('/resend-verification', resendVerificationLimiter, async (req: Request, res: Response) => {
+    try {
+        const email = normalizeEmail(req.body?.email);
+        if (email) {
+            const db = getDb();
+            const user = db.prepare('SELECT id, email, email_verified FROM users WHERE email = ?').get(email) as any;
+            if (user && !user.email_verified) {
+                // Reuse the authed-path helper verbatim — idempotent (keeps a
+                // still-valid code alive rather than minting over the one
+                // already sitting in the inbox). Never expose _devCode here:
+                // this endpoint is unauthenticated.
+                const result = await issueAndSendVerificationCode(user.id, user.email);
+                logAuditEvent('verification_email_sent', user.id, { stub: result.stub, unauthenticated: true }, req.ip, req.get('user-agent'));
+            } else {
+                // Log for abuse review without leaking via the response shape.
+                logAuditEvent('verification_email_sent', null, { reason: user ? 'already_verified' : 'email_not_found', unauthenticated: true }, req.ip, req.get('user-agent'));
+            }
+        }
+        res.json({ ok: true });
+    } catch (err: any) {
+        console.error('Resend verification error:', err);
+        // Generic 200 even on internal error — keep the email-existence
+        // oracle closed (same posture as /forgot-password).
+        res.json({ ok: true });
+    }
+});
+
+// ─── POST /api/v1/auth/verify-email-code ─────────────────────
+//
+// Unauthenticated companion to /verify-email for locked-out users (see
+// /resend-verification above). The user is looked up by email instead of
+// Bearer token; the OTP validation below mirrors the authed handler
+// EXACTLY — same otp_codes row, same sha256 hash, same expiry semantics,
+// same 5-wrong-attempts invalidation. Keep the two handlers in sync.
+//
+// Anti-enumeration: an unknown email answers the same generic 400 as a
+// wrong code. Rate limited 30/hr per email+IP.
+
+router.post('/verify-email-code', verifyEmailCodeLimiter, (req: Request, res: Response) => {
+    try {
+        const email = normalizeEmail(req.body?.email);
+        const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+        if (!email || !/^\d{6}$/.test(code)) {
+            return res.status(400).json({ error: 'Invalid verification code' });
+        }
+        const db = getDb();
+        const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as { id: string } | undefined;
+        if (!user) {
+            // Same generic error as a wrong code — no email-existence oracle.
+            return res.status(400).json({ error: 'Invalid verification code' });
+        }
+        const userId = user.id;
+        const codeHash = hashOtp(code);
+
+        const row = db.prepare(
+            "SELECT id, expires_at, consumed_at, attempts FROM otp_codes WHERE user_id = ? AND purpose = 'email_verification' AND code_hash = ? ORDER BY created_at DESC LIMIT 1",
+        ).get(userId, codeHash) as { id: string; expires_at: string; consumed_at: string | null; attempts: number } | undefined;
+
+        if (!row) {
+            // Wrong code — bump attempts on the latest unconsumed row to bound
+            // brute force. After 5 wrong attempts, invalidate the outstanding
+            // code. (Mirrors /verify-email.)
+            const latest = db.prepare(
+                "SELECT id, attempts FROM otp_codes WHERE user_id = ? AND purpose = 'email_verification' AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1",
+            ).get(userId) as { id: string; attempts: number } | undefined;
+            if (latest) {
+                const newAttempts = latest.attempts + 1;
+                if (newAttempts >= 5) {
+                    db.prepare("UPDATE otp_codes SET consumed_at = datetime('now'), attempts = ? WHERE id = ?")
+                        .run(newAttempts, latest.id);
+                    return res.status(429).json({ error: 'Too many incorrect attempts. Request a new code.' });
+                }
+                db.prepare('UPDATE otp_codes SET attempts = ? WHERE id = ?').run(newAttempts, latest.id);
+            }
+            return res.status(400).json({ error: 'Invalid verification code' });
+        }
+
+        if (row.consumed_at) {
+            return res.status(400).json({ error: 'Code already used. Request a new one.' });
+        }
+        if (new Date(row.expires_at) < new Date()) {
+            return res.status(400).json({ error: 'Code expired. Request a new one.' });
+        }
+
+        db.prepare("UPDATE otp_codes SET consumed_at = datetime('now') WHERE id = ?").run(row.id);
+        db.prepare("UPDATE users SET email_verified = 1, updated_at = datetime('now') WHERE id = ?").run(userId);
+
+        logAuditEvent('email_verified', userId, { unauthenticated: true }, req.ip, req.get('user-agent'));
+
+        const verifiedUser = db.prepare('SELECT windy_identity_id FROM users WHERE id = ?')
+            .get(userId) as { windy_identity_id: string } | undefined;
+        emitAdminEvent({
+            event_type: 'funnel.email_verified',
+            actor_type: 'human',
+            actor_id: verifiedUser?.windy_identity_id || userId,
+            metadata: {},
+        });
+
+        res.json({ success: true, verified: true });
+    } catch (err: any) {
+        console.error('Verify email code error:', err);
         res.status(500).json({ error: 'Verification failed' });
     }
 });
