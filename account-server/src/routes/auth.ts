@@ -1180,8 +1180,22 @@ router.post('/mfa/setup', authenticateToken, async (req: Request, res: Response)
         const backupCodes = generateBackupCodes();
         const backupHashes = await hashBackupCodes(backupCodes);
 
+        // Explicit upsert: `INSERT OR REPLACE` is rewritten to `ON CONFLICT DO
+        // NOTHING` by the Postgres adapter, so re-setup on prod kept the stale
+        // secret and every subsequent TOTP code was rejected. The DO UPDATE is
+        // guarded by enabled_at IS NULL: an already-enabled secret is never
+        // silently overwritten (the 409 above enforces this too — defense in
+        // depth). Valid + identical on SQLite 3.24+ and Postgres.
         db.prepare(
-            "INSERT OR REPLACE INTO mfa_secrets (user_id, totp_secret_encrypted, totp_secret_iv, totp_secret_tag, backup_codes_hash, enabled_at, created_at) VALUES (?, ?, ?, ?, ?, NULL, datetime('now'))",
+            "INSERT INTO mfa_secrets (user_id, totp_secret_encrypted, totp_secret_iv, totp_secret_tag, backup_codes_hash, enabled_at, created_at) VALUES (?, ?, ?, ?, ?, NULL, datetime('now')) " +
+            'ON CONFLICT (user_id) DO UPDATE SET ' +
+            'totp_secret_encrypted = excluded.totp_secret_encrypted, ' +
+            'totp_secret_iv = excluded.totp_secret_iv, ' +
+            'totp_secret_tag = excluded.totp_secret_tag, ' +
+            'backup_codes_hash = excluded.backup_codes_hash, ' +
+            'enabled_at = excluded.enabled_at, ' +
+            'created_at = excluded.created_at ' +
+            'WHERE mfa_secrets.enabled_at IS NULL',
         ).run(userId, enc.ciphertext, enc.iv, enc.tag, JSON.stringify(backupHashes));
 
         // Lazy-load qrcode so test envs without it don't crash. PNG data URL

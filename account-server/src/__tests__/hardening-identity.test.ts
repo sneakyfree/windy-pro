@@ -255,7 +255,9 @@ jest.mock('../db/schema', () => ({
           });
           return { changes: 1, lastInsertRowid: 0 };
         }
-        if (sql.includes('INSERT OR REPLACE INTO devices')) {
+        // Matches both the legacy INSERT OR REPLACE form and the explicit
+        // ON CONFLICT DO UPDATE upsert (statements.ts addDevice).
+        if (sql.includes('INSERT') && sql.includes('INTO devices')) {
           const [deviceId, userId, deviceName, platform] = args;
           const userDevices = devices.get(userId) || [];
           const idx = userDevices.findIndex(d => d.id === deviceId);

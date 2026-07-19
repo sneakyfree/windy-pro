@@ -73,7 +73,9 @@ function mockDbPrepare(sql: string) {
       if (sql.includes('UPDATE users SET storage_limit')) {
         return { changes: 1 };
       }
-      if (sql.includes('INSERT OR REPLACE INTO eternitas_passports')) {
+      // Matches both the legacy INSERT OR REPLACE form and any explicit
+      // ON CONFLICT DO UPDATE upsert conversion of this statement.
+      if (sql.includes('INSERT') && sql.includes('INTO eternitas_passports')) {
         const [identityId, passportNumber, , operatorId] = args;
         eternitasPassports.set(identityId, {
           identity_id: identityId, passport_number: passportNumber,

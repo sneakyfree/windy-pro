@@ -232,9 +232,21 @@ export async function provisionAgent(
         // Update product_accounts for chat.
         // ADR-050: windy_chat is Category 2 (chat handle belongs to bot).
         // identity_id = bot, operator_identity_id = human operator.
+        // Explicit upsert: `INSERT OR REPLACE` is rewritten to `ON CONFLICT DO
+        // NOTHING` by the Postgres adapter, so on prod the pre-created pending
+        // row silently kept status='pending' and external_id=NULL (the hatched
+        // agent's chat became unreachable). ON CONFLICT ... DO UPDATE runs
+        // identically on SQLite 3.24+ and Postgres. The existing row's id is
+        // deliberately kept stable.
         db.prepare(
-            `INSERT OR REPLACE INTO product_accounts (id, identity_id, operator_identity_id, product, status, external_id, metadata, provisioned_at)
-             VALUES (?, ?, ?, 'windy_chat', 'active', ?, ?, datetime('now'))`,
+            `INSERT INTO product_accounts (id, identity_id, operator_identity_id, product, status, external_id, metadata, provisioned_at)
+             VALUES (?, ?, ?, 'windy_chat', 'active', ?, ?, datetime('now'))
+             ON CONFLICT (identity_id, product) DO UPDATE SET
+               operator_identity_id = excluded.operator_identity_id,
+               status = excluded.status,
+               external_id = excluded.external_id,
+               metadata = excluded.metadata,
+               provisioned_at = excluded.provisioned_at`,
         ).run(
             crypto.randomUUID(), botUserId, ownerUserId, chatData.matrix_user_id,
             JSON.stringify({ dm_room_id: chatData.dm_room_id, passport_number: passportNumber }),
