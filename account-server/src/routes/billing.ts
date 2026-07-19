@@ -69,11 +69,16 @@ function getPriceIds(tier: string): PriceConfig {
 
 // ─── Tier → storage limit mapping ────────────────────────────
 
+// Tier strings are the CANONICAL underscore spellings from
+// shared/contracts/license.ts (CanonicalTier): 'translate_pro', never
+// 'translate-pro'. Both webhook write paths (the TIER_BY_AMOUNT classifier
+// and checkout.session metadata) must put the SAME string in users.tier —
+// downstream consumers key off the exact string.
 const TIER_LIMITS: Record<string, number> = {
     free: 500 * 1024 * 1024,              // 500 MB
     pro: 5 * 1024 * 1024 * 1024,           // 5 GB
     translate: 10 * 1024 * 1024 * 1024,    // 10 GB
-    'translate-pro': 50 * 1024 * 1024 * 1024, // 50 GB
+    translate_pro: 50 * 1024 * 1024 * 1024, // 50 GB
 };
 
 // Full published price matrix (monthly / yearly / lifetime per tier), plus
@@ -88,9 +93,9 @@ const TIER_BY_AMOUNT: Record<number, string> = {
     899: 'translate',
     7900: 'translate',
     19900: 'translate',
-    1499: 'translate-pro',
-    14900: 'translate-pro',
-    29900: 'translate-pro',
+    1499: 'translate_pro',
+    14900: 'translate_pro',
+    29900: 'translate_pro',
 };
 
 // One plan per customer: when a checkout completes for a new subscription,

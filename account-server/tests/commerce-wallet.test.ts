@@ -697,3 +697,120 @@ describe('privacy: no PAN/CVV/PII beyond opaque ids anywhere', () => {
         expect(JSON.stringify(wallet.body)).not.toMatch(/\d{13,19}/);
     });
 });
+
+describe('double-billing guards (supersede-cancel + duplicate SKU)', () => {
+    it('upgrading Breeze→Gale cancels the superseded Breeze subscription and revokes its grants', async () => {
+        const { token, userId } = await registerUser();
+        await addCard(token);
+        const breeze = await buy(token, 'bundle_breeze');
+        expect(breeze.body.status).toBe('succeeded');
+        const breezeSub = breeze.body.subscription_id;
+
+        const gale = await buy(token, 'bundle_gale');
+        expect(gale.status).toBe(200);
+        expect(gale.body.status).toBe('succeeded');
+
+        // Stripe was told to cancel the old subscription…
+        expect(fakeStripe._state.calls['subscriptions.cancel']).toBe(1);
+        expect(fakeStripe._state.subscriptions.get(breezeSub).status).toBe('canceled');
+        // …the old purchase row is retired…
+        const oldRow = getDb().get('SELECT status FROM purchases WHERE id = ?', breeze.body.purchase_id) as any;
+        expect(oldRow.status).toBe('canceled');
+        // …its entitlements are revoked with a human-readable reason…
+        const oldEnts = getDb().all('SELECT status, ended_reason FROM entitlements WHERE source_id = ?', breezeSub) as any[];
+        expect(oldEnts.length).toBeGreaterThan(0);
+        expect(oldEnts.every((e: any) => e.status === 'revoked')).toBe(true);
+        expect(oldEnts[0].ended_reason).toMatch(/Gale/);
+        // …and effective limits are exactly Gale's. stt.cloud_minutes is
+        // sum-resolved, so a lingering Breeze grant would show up as +300.
+        const limits = await request(app).get('/api/v1/entitlements/limits').set('Authorization', `Bearer ${token}`);
+        expect(limits.body.limits['storage.bytes']).toBe(1024 * 1024 * 1024 * 1024);
+        expect(limits.body.limits['stt.cloud_minutes']).toBe(15 + 1500);
+        expect(userId).toBeTruthy();
+    });
+
+    it('buying a SKU already actively held does NOT create a second subscription (409, one charge only)', async () => {
+        const { token, userId } = await registerUser();
+        await addCard(token);
+        const first = await buy(token, 'bundle_breeze');
+        expect(first.body.status).toBe('succeeded');
+        expect(fakeStripe._state.calls['subscriptions.create']).toBe(1);
+
+        // Fresh idempotency key — the two-devices / double-tap case.
+        const dup = await buy(token, 'bundle_breeze');
+        expect(dup.status).toBe(409);
+        expect(dup.body.error).toBe('already_subscribed');
+        expect(dup.body.message).toMatch(/nothing was charged/i);
+        expect(fakeStripe._state.calls['subscriptions.create']).toBe(1); // no second Stripe subscription
+        const succeeded = getDb().all(
+            "SELECT id FROM purchases WHERE user_id = ? AND sku_id = 'bundle_breeze' AND status = 'succeeded'", userId,
+        );
+        expect(succeeded.length).toBe(1);
+    });
+
+    it('after cancelling, the same SKU can be bought again', async () => {
+        const { token } = await registerUser();
+        await addCard(token);
+        const first = await buy(token, 'bundle_breeze');
+        const cancel = await request(app)
+            .post(`/api/v1/wallet/subscriptions/${first.body.subscription_id}/cancel`)
+            .set('Authorization', `Bearer ${token}`);
+        expect(cancel.status).toBe(200);
+        const again = await buy(token, 'bundle_breeze');
+        expect(again.status).toBe(200);
+        expect(again.body.status).toBe('succeeded');
+    });
+
+    it('one_time top-ups stay repeatable (duplicate guard covers subscriptions only)', async () => {
+        const { token } = await registerUser();
+        await addCard(token);
+        expect((await buy(token, 'alacarte_stt_600')).body.status).toBe('succeeded');
+        expect((await buy(token, 'alacarte_stt_600')).body.status).toBe('succeeded');
+        const limits = await request(app).get('/api/v1/entitlements/limits').set('Authorization', `Bearer ${token}`);
+        expect(limits.body.limits['stt.cloud_minutes']).toBe(15 + 600 + 600);
+    });
+
+    it('à-la-carte subscriptions and bundles coexist — only bundles supersede bundles', async () => {
+        const { token } = await registerUser();
+        await addCard(token);
+        const bundle = await buy(token, 'bundle_breeze');
+        const addon = await buy(token, 'alacarte_translate_1m');
+        expect(addon.body.status).toBe('succeeded');
+        // Add-on purchase cancels nothing.
+        expect(fakeStripe._state.calls['subscriptions.cancel'] || 0).toBe(0);
+        expect(fakeStripe._state.subscriptions.get(bundle.body.subscription_id).status).toBe('active');
+        // Bundle upgrade cancels the old bundle but leaves the add-on alone.
+        const gale = await buy(token, 'bundle_gale');
+        expect(gale.body.status).toBe('succeeded');
+        expect(fakeStripe._state.calls['subscriptions.cancel']).toBe(1);
+        expect(fakeStripe._state.subscriptions.get(bundle.body.subscription_id).status).toBe('canceled');
+        expect(fakeStripe._state.subscriptions.get(addon.body.subscription_id).status).toBe('active');
+    });
+});
+
+describe('canonical tier string — translate_pro on every users.tier write path', () => {
+    it('legacy amount classifier (payment_intent.succeeded) writes translate_pro', async () => {
+        const { email, userId } = await registerUser();
+        const res = await signedWebhook({
+            type: 'payment_intent.succeeded',
+            data: { object: { receipt_email: email, amount: 1499, currency: 'usd', id: 'pi_legacy_tier_1' } },
+        });
+        expect(res.status).toBe(200);
+        const user = getDb().get('SELECT tier, storage_limit FROM users WHERE id = ?', userId) as any;
+        expect(user.tier).toBe('translate_pro');
+        expect(Number(user.storage_limit)).toBe(50 * 1024 * 1024 * 1024);
+    });
+
+    it('checkout.session.completed metadata path writes the SAME spelling (paths agree)', async () => {
+        const { userId } = await registerUser();
+        const res = await signedWebhook({
+            type: 'checkout.session.completed',
+            data: { object: { metadata: { windy_user_id: userId, tier: 'translate_pro' }, mode: 'subscription', amount_total: 1499, currency: 'usd' } },
+        });
+        expect(res.status).toBe(200);
+        const user = getDb().get('SELECT tier, storage_limit FROM users WHERE id = ?', userId) as any;
+        expect(user.tier).toBe('translate_pro');
+        // Storage limit resolves via the canonical key, not the free fallback.
+        expect(Number(user.storage_limit)).toBe(50 * 1024 * 1024 * 1024);
+    });
+});

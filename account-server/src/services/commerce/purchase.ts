@@ -173,6 +173,26 @@ export async function purchaseSku(user: any, skuId: string, idempotencyKey: stri
     );
     if (prior) return replayResponse(prior);
 
+    // Duplicate-SKU guard: the user already actively holds this exact
+    // subscription SKU — a second identical subscription would bill the same
+    // thing twice (two devices, a retry with a fresh idempotency key, a
+    // double-tap). One-time top-ups are legitimately repeatable and are not
+    // guarded. Best-effort (no DB unique constraint on active SKU): a truly
+    // concurrent pair can still race past this check; for bundles the
+    // supersede pass below converges to at most one billing.
+    if (sku.billing_mode === 'subscription') {
+        const alreadyHeld = await db.getAsync<PurchaseRow>(
+            "SELECT * FROM purchases WHERE user_id = ? AND sku_id = ? AND status = 'succeeded' AND stripe_subscription_id IS NOT NULL",
+            user.id, skuId,
+        );
+        if (alreadyHeld) {
+            throw new PurchaseError(
+                409, 'already_subscribed',
+                `You already have ${sku.name} on this account — nothing was charged. Manage it from your wallet.`,
+            );
+        }
+    }
+
     const customerId = await ensureStripeCustomer(user);
     const pm = await defaultPaymentMethod({ ...user, stripe_customer_id: customerId });
     if (!pm) {
@@ -270,6 +290,17 @@ export async function purchaseSku(user: any, skuId: string, idempotencyKey: stri
             );
         });
 
+        // One bundle per account: retire whatever this purchase replaces.
+        // Mirrors the legacy checkout webhook's cancelSupersededSubscriptions
+        // (routes/billing.ts) — without this, a Breeze→Gale upgrade left BOTH
+        // subscriptions billing forever. Runs strictly AFTER the new
+        // subscription is active and its entitlements committed, so a failed
+        // upgrade can never cost the user their old plan. Fail-soft, exactly
+        // like the legacy helper.
+        if (subscriptionId && sku.kind === 'bundle') {
+            await cancelSupersededWalletSubscriptions(user.id, sku, purchaseId, subscriptionId);
+        }
+
         // Derived gates (account storage_limit + cloud tier). The purchase +
         // entitlements are already COMMITTED and the money is captured — this
         // must NEVER throw into the catch below (which would mislabel a paid,
@@ -322,6 +353,66 @@ export async function purchaseSku(user: any, skuId: string, idempotencyKey: stri
             ? 'Your card was declined — nothing was charged. Try another card in your Windy wallet.'
             : 'The payment didn\'t go through — nothing was charged and nothing changed on your account.';
         throw new PurchaseError(402, String(code), friendly);
+    }
+}
+
+/**
+ * Wallet-path counterpart of routes/billing.ts's
+ * cancelSupersededSubscriptions ("one plan per customer"): after a NEW
+ * bundle subscription is live, cancel every OTHER active bundle
+ * subscription this user holds — the newest purchase is the intended plan.
+ * Differences from the legacy helper are deliberate and conservative:
+ *  - Scoped to purchases rows OWNED by this user (never another account's,
+ *    never a non-wallet Stripe subscription on a shared/legacy customer).
+ *  - Only bundles supersede bundles — à-la-carte add-ons coexist with a
+ *    bundle by design and are left alone.
+ *  - Each superseded sub's entitlements are revoked inline (same pattern as
+ *    cancelSubscription below) so the old grants don't linger until the
+ *    customer.subscription.deleted webhook.
+ * Proration credit for unused time lands on the customer balance, as in the
+ * legacy path. Fail-soft throughout: a cancel failure is logged and never
+ * breaks the purchase that just succeeded (money captured + provisioned).
+ */
+async function cancelSupersededWalletSubscriptions(
+    userId: string,
+    newSku: CatalogSku,
+    newPurchaseId: string,
+    keepSubscriptionId: string,
+): Promise<void> {
+    const db = getDb();
+    let superseded: PurchaseRow[] = [];
+    try {
+        superseded = await db.allAsync<PurchaseRow>(
+            `SELECT * FROM purchases
+             WHERE user_id = ? AND status = 'succeeded' AND stripe_subscription_id IS NOT NULL
+               AND id != ? AND stripe_subscription_id != ?`,
+            userId, newPurchaseId, keepSubscriptionId,
+        );
+    } catch (err: any) {
+        console.error('[Commerce] supersede lookup failed (a replaced subscription may still be billing):', err?.message || err);
+        return;
+    }
+    for (const row of superseded) {
+        const oldSku = getSku(row.sku_id);
+        // Only a bundle supersedes a bundle — everything else coexists.
+        if (!oldSku || oldSku.kind !== 'bundle' || oldSku.billing_mode !== 'subscription') continue;
+        try {
+            try {
+                await getStripeClient().subscriptions.cancel(row.stripe_subscription_id as string, { prorate: true });
+            } catch (err: any) {
+                // Already gone on Stripe → still retire it locally.
+                if (err?.code !== 'resource_missing') throw err;
+            }
+            await db.runAsync("UPDATE purchases SET status = 'canceled', updated_at = ? WHERE id = ?", nowIso(), row.id);
+            await revokeBySource(
+                row.stripe_subscription_id as string,
+                `You switched to ${newSku.name} — your ${oldSku.name} plan was replaced and is off your bill.`,
+                userId,
+            );
+            console.log(`[Commerce] Cancelled superseded subscription ${row.stripe_subscription_id} (kept ${keepSubscriptionId}) for user ${userId}`);
+        } catch (err: any) {
+            console.error(`[Commerce] Failed to cancel superseded subscription ${row.stripe_subscription_id}:`, err?.message || err);
+        }
     }
 }
 
