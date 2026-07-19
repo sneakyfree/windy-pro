@@ -21,7 +21,7 @@ async function makeAdmin() {
   const body = { name: 'Dev Admin', email: uniqueEmail('devadmin'), password: 'SecurePass1' };
   const res = await request(app).post('/api/v1/auth/register').send(body);
   const token = res.body.token || res.body.accessToken;
-  getDb().prepare("UPDATE users SET role = 'admin', email_verified = 1 WHERE id = ?")
+  getDb().prepare("UPDATE users SET role = 'admin', admin_role = 'super_admin', email_verified = 1 WHERE id = ?")
     .run(res.body.userId);
   return { token, userId: res.body.userId };
 }

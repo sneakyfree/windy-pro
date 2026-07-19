@@ -389,7 +389,7 @@ describe('Category 5: OAuth2 Flow', () => {
         // Make test user admin for OAuth client management
         const { getDb } = require('../src/db/schema');
         const db = getDb();
-        db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(userId);
+        db.prepare("UPDATE users SET role = 'admin', admin_role = 'super_admin' WHERE id = ?").run(userId);
     });
 
     test('Register OAuth client via /register-client → returns client_id', async () => {

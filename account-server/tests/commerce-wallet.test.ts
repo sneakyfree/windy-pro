@@ -619,7 +619,7 @@ describe('license activations (P5: 3-machine cap AT activation)', () => {
 describe('admin commerce surface', () => {
     async function makeAdmin(): Promise<{ token: string; userId: string }> {
         const u = await registerUser();
-        getDb().run("UPDATE users SET role = 'admin' WHERE id = ?", u.userId);
+        getDb().run("UPDATE users SET role = 'admin', admin_role = 'super_admin' WHERE id = ?", u.userId);
         // Re-login so the JWT reflects nothing new (adminOnly reads DB role) —
         // existing token is fine.
         return u;

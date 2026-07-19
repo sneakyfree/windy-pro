@@ -52,7 +52,7 @@ router.get('/me', authenticateToken, (req: Request, res: Response) => {
       SELECT id, email, name, tier, identity_type, phone, display_name,
              avatar_url, email_verified, phone_verified, passport_id,
              preferred_lang, last_login_at, windy_identity_id, created_at, updated_at,
-             storage_used, storage_limit, role
+             storage_used, storage_limit, role, admin_role
       FROM users WHERE id = ?
     `).get(userId) as any;
 
@@ -104,7 +104,7 @@ router.get('/me', authenticateToken, (req: Request, res: Response) => {
         storageLimit: user.storage_limit ?? 0,
         // Client role gate (e.g. the /admin route). Server routes still
         // enforce admin independently — this is UX, not the security boundary.
-        isAdmin: user.role === 'admin',
+        isAdmin: user.admin_role === 'super_admin' || user.admin_role === 'admin',
       },
       products,
       scopes,
@@ -316,8 +316,8 @@ router.get('/audit', authenticateToken, (req: Request, res: Response) => {
     // Non-admins can only view their own audit log
     if (targetId !== userId) {
       const db = getDb();
-      const user = db.prepare('SELECT role FROM users WHERE id = ?').get(userId) as any;
-      if (!user || user.role !== 'admin') {
+      const user = db.prepare('SELECT admin_role FROM users WHERE id = ?').get(userId) as any;
+      if (!user || !['super_admin', 'admin'].includes(user.admin_role)) {
         return res.status(403).json({ error: 'Admin access required to view other users\' audit logs' });
       }
     }
@@ -1048,10 +1048,10 @@ router.post('/api-keys', authenticateToken, (req: Request, res: Response) => {
     }
 
     // Verify the creator is the operator or an admin
-    const creator = db.prepare('SELECT role FROM users WHERE id = ?').get(creatorId) as any;
+    const creator = db.prepare('SELECT admin_role FROM users WHERE id = ?').get(creatorId) as any;
     const passport = db.prepare('SELECT operator_identity_id FROM eternitas_passports WHERE identity_id = ?').get(identityId) as any;
 
-    const isAdmin = creator?.role === 'admin';
+    const isAdmin = creator?.admin_role === 'super_admin' || creator?.admin_role === 'admin';
     const isOperator = passport?.operator_identity_id === creatorId;
 
     if (!isAdmin && !isOperator) {
@@ -1256,7 +1256,7 @@ router.get('/resolve/:windyIdentityId', authenticateToken, (req: Request, res: R
     }
 
     // Authorization: only the identity owner or an admin can resolve
-    const isAdmin = requestingUser.role === 'admin' || (requestingUser.scopes || []).some(
+    const isAdmin = ['super_admin', 'admin'].includes(requestingUser.admin_role || '') || (requestingUser.scopes || []).some(
       (s: string) => s === 'admin:*',
     );
     if (user.id !== requestingUser.userId && !isAdmin) {
@@ -1373,7 +1373,7 @@ router.post('/provision-all', authenticateToken, async (req: Request, res: Respo
     }
 
     // Authorization: only self or admin
-    const isAdmin = requestingUser.role === 'admin' || (requestingUser.scopes || []).some(
+    const isAdmin = ['super_admin', 'admin'].includes(requestingUser.admin_role || '') || (requestingUser.scopes || []).some(
       (s: string) => s === 'admin:*',
     );
     if (user.id !== requestingUser.userId && !isAdmin) {
@@ -2080,7 +2080,7 @@ router.get('/provisioning-status/:identity_id', authenticateToken, (req: Request
     const { identity_id } = req.params;
 
     // Only allow viewing own status or admin
-    const isAdmin = requestingUser.role === 'admin' || (requestingUser.scopes || []).some(
+    const isAdmin = ['super_admin', 'admin'].includes(requestingUser.admin_role || '') || (requestingUser.scopes || []).some(
       (s: string) => s === 'admin:*',
     );
     if (identity_id !== requestingUser.userId && !isAdmin) {

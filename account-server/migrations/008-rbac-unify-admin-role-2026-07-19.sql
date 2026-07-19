@@ -1,0 +1,20 @@
+-- RBAC unification (2026-07-19): users.admin_role (ADR-WA-001 §6) is now the
+-- ONE source of truth for admin access everywhere. Previously two brains:
+--   * account-server's adminOnly + inline checks read users.role = 'admin'
+--   * windy-admin (and the web staff tile) gate on the admin_role JWT claim,
+--     minted from users.admin_role — a column NO app code ever wrote.
+-- A human could hold one but not the other and get half-working admin access
+-- (e.g. windy-admin's federated Accounts actions 403ing upstream).
+--
+-- This backfill grants legacy role='admin' rows (the bootstrap path) the
+-- super_admin tier so they keep access when the code switches to admin_role.
+-- Launch is super_admin-only (Grant), matching 006's intent.
+--
+-- ORDER MATTERS: apply this BEFORE (or in the same window as) deploying the
+-- code that reads admin_role — a legacy role-only admin loses /admin access
+-- between code deploy and backfill. SQLite dev needs nothing (initSchema
+-- runs the same idempotent UPDATE at boot).
+--
+-- Apply manually on prod (auto-deploy runs code only):
+--   sudo docker exec -i windypro-prod-pro-postgres-1 psql -U <user> -d <db> < 008-rbac-unify-admin-role-2026-07-19.sql
+UPDATE users SET admin_role = 'super_admin' WHERE role = 'admin' AND admin_role IS NULL;

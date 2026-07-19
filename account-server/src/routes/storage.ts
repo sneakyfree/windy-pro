@@ -207,8 +207,8 @@ router.get('/:fileId', authenticateToken, async (req: Request, res: Response) =>
         }
 
         // Check ownership (admins can access any file)
-        const userRow = db.prepare('SELECT role FROM users WHERE id = ?').get(user.userId) as { role: string } | undefined;
-        if (file.user_id !== user.userId && userRow?.role !== 'admin') {
+        const userRow = db.prepare('SELECT admin_role FROM users WHERE id = ?').get(user.userId) as { admin_role: string | null } | undefined;
+        if (file.user_id !== user.userId && !['super_admin', 'admin'].includes(userRow?.admin_role || '')) {
             res.status(403).json({ error: 'Access denied' });
             return;
         }
@@ -250,8 +250,8 @@ router.delete('/:fileId', authenticateToken, async (req: Request, res: Response)
         }
 
         // Check ownership
-        const userRow = db.prepare('SELECT role FROM users WHERE id = ?').get(user.userId) as { role: string } | undefined;
-        if (file.user_id !== user.userId && userRow?.role !== 'admin') {
+        const userRow = db.prepare('SELECT admin_role FROM users WHERE id = ?').get(user.userId) as { admin_role: string | null } | undefined;
+        if (file.user_id !== user.userId && !['super_admin', 'admin'].includes(userRow?.admin_role || '')) {
             res.status(403).json({ error: 'Access denied' });
             return;
         }

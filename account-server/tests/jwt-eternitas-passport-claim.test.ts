@@ -260,7 +260,7 @@ describe('GET /api/v1/identity/me passport + isAdmin', () => {
 
   it('exposes isAdmin=true for an admin user', async () => {
     const u = await registerUser();
-    getDb().prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(u.userId);
+    getDb().prepare("UPDATE users SET role = 'admin', admin_role = 'super_admin' WHERE id = ?").run(u.userId);
     const res = await request(app)
       .get('/api/v1/identity/me')
       .set('Authorization', `Bearer ${u.token}`);
