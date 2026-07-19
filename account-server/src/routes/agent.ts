@@ -40,6 +40,11 @@ import {
     type HatchEvent,
 } from '../services/credential-broker';
 import { logAuditEvent } from '../identity-service';
+// Partial-hatch heal: failed chat/mail ceremony steps are handed to the
+// ecosystem-provisioner's EXISTING pending_provisions queue, which the
+// retry worker started in server.ts (startRetryWorker) drains every 5
+// minutes. Reuse only — no new retry machinery lives in this file.
+import { queuePending } from '../services/ecosystem-provisioner';
 
 const router = Router();
 
@@ -564,6 +569,33 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
     // report an honest partial birth instead of a blanket "ok". A skipped or
     // failed mailbox/chat used to be swallowed under a green hatch.complete.
     let mailOk = false;
+    // Partial-hatch heal: the mail failure branches below used to say
+    // "will retry" while nothing ever retried — pending_provisions was only
+    // wired into the OLD provisioning path. Queue the failed step so the
+    // existing worker (startRetryWorker in server.ts) heals it. Payload
+    // mirrors the live webhook body (drift-#3 bot fields included); the
+    // dedupe guard keeps a spam-clicked ceremony from stacking rows.
+    // NOT called on the happy path or when mail is unconfigured (skipped).
+    const queueMailRetryForHeal = () => {
+        try {
+            const alreadyQueued = db.prepare(
+                `SELECT id FROM pending_provisions WHERE identity_id = ? AND product = 'windy_mail' AND action = 'provision_user' LIMIT 1`,
+            ).get(botUserId) as { id: string } | undefined;
+            if (alreadyQueued) return;
+            queuePending(botUserId, 'windy_mail', 'provision_user', {
+                email: `${agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}@windymail.ai`,
+                name: agentName,
+                identity_type: 'bot',
+                passport_number: passportNumber,
+                bot_type: 'agent',
+                owner_email: owner.email,
+                ownerUserId: userId,
+                phone: null,
+            });
+        } catch (healErr: any) {
+            logInternal('mail.heal_queue_error', { error: String(healErr?.message || healErr) });
+        }
+    };
     try {
         if (process.env.WINDYMAIL_API_URL) {
             const mailResult = await fetchJson(`${process.env.WINDYMAIL_API_URL}/api/v1/webhooks/identity/created`, {
@@ -611,6 +643,7 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
                 label: mailResult.ok ? `Inbox: ${agentEmail}` : 'Mail inbox pending — will retry.',
                 data: { email: agentEmail },
             });
+            if (!mailOk) queueMailRetryForHeal();
         } else {
             // Mail service not configured — this is a real gap, not an "ok".
             // Report it as skipped so the client renders a warning and
@@ -619,6 +652,8 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
         }
     } catch (err: any) {
         emit({ type: 'mail.provisioned', status: 'failed', label: 'Mail inbox call threw.', data: { error: String(err?.message || err) } });
+        // Reaching here means the configured mail call was attempted and threw.
+        if (process.env.WINDYMAIL_API_URL) queueMailRetryForHeal();
     }
 
     // ADR-064: enrich the Eternitas certificate of record with the agent's
@@ -647,6 +682,60 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
     emit({ type: 'chat.provisioning', status: 'pending', label: 'Opening your chat with the agent…' });
     let matrixUserId: string | null = null;
     let dmRoomId: string | null = null;
+    // Partial-hatch heal (grandma-critical): on a chat failure this ceremony
+    // used to say "will retry" with no retry wired, AND the owner's windy_fly
+    // product_accounts row was only written inside the chat-SUCCESS branch —
+    // so the dashboard/fleet had no record she has an agent and the bot-dedupe
+    // lookup in step 1 could never find it. On failure we now:
+    //   1. write the owner's windy_fly row in a 'pending' state (same
+    //      INSERT OR REPLACE shape as the success branch, matrix ids null,
+    //      `owner` metadata key preserved for the dedupe LIKE) — but never
+    //      clobber an already-'active' row, and
+    //   2. enqueue the chat step on the provisioner's existing
+    //      pending_provisions queue ('provision_agent_chat' — the exact
+    //      action processPendingProvisions already drains).
+    // Never called on the happy path; guarded so bookkeeping can't kill the
+    // SSE stream.
+    const recordChatFailureForHeal = () => {
+        try {
+            const existingFly = db.prepare(
+                `SELECT status FROM product_accounts WHERE identity_id = ? AND product = 'windy_fly'`,
+            ).get(userId) as { status: string } | undefined;
+            if (!existingFly || existingFly.status !== 'active') {
+                db.prepare(
+                    `INSERT OR REPLACE INTO product_accounts (id, identity_id, product, status, external_id, metadata, provisioned_at)
+                     VALUES (?, ?, 'windy_fly', 'pending', ?, ?, datetime('now'))`,
+                ).run(
+                    crypto.randomUUID(), userId, null,
+                    JSON.stringify({
+                        owner: userId,
+                        agent_name: agentName,
+                        passport_number: passportNumber,
+                        dm_room_id: null,
+                        matrix_user_id: null,
+                        broker_token_id: brokerTokenId,
+                        chat: 'pending',
+                    }),
+                );
+            }
+            const alreadyQueued = db.prepare(
+                `SELECT id FROM pending_provisions WHERE identity_id = ? AND product = 'windy_chat' AND action = 'provision_agent_chat' LIMIT 1`,
+            ).get(botUserId) as { id: string } | undefined;
+            if (!alreadyQueued) {
+                queuePending(botUserId, 'windy_chat', 'provision_agent_chat', {
+                    passportNumber,
+                    agentName,
+                    // ownerUserId: internal id — what the worker writes into
+                    // product_accounts on heal. ownerWindyIdentityId: what it
+                    // sends to chat as owner_windy_identity_id.
+                    ownerUserId: userId,
+                    ownerWindyIdentityId: windyIdentityId,
+                });
+            }
+        } catch (healErr: any) {
+            logInternal('chat.heal_queue_error', { error: String(healErr?.message || healErr) });
+        }
+    };
     try {
         const chatResult = await fetchJson(`${config.WINDY_CHAT_URL}/api/v1/onboarding/agent`, {
             method: 'POST',
@@ -693,6 +782,7 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
                 data: { matrix_user_id: matrixUserId, dm_room_id: dmRoomId },
             });
         } else {
+            recordChatFailureForHeal();
             emit({
                 type: 'chat.provisioned',
                 status: 'failed',
@@ -701,6 +791,7 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
             });
         }
     } catch (err: any) {
+        recordChatFailureForHeal();
         emit({
             type: 'chat.provisioned',
             status: 'failed',
