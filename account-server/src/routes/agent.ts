@@ -260,17 +260,24 @@ router.post('/hatch', hatchIpLimiter, authenticateToken, hatchUserLimiter, async
     // Replay prior events (either a resume, or "here is the whole finished ceremony").
     for (const ev of session.events) writeSse(res, ev);
 
-    // If the session is already done or a hatch is in-flight in another
-    // request, emit a terminal hatch.complete frame with resumed:true so
-    // the client can render the existing state without double-hatching.
+    // If the session is already done, emit a terminal hatch.complete frame
+    // with resumed:true so the client can render the existing state without
+    // double-hatching. HONEST replay: only a session that actually reached
+    // 'complete' replays status:'ok'. Failed sessions are reset inside
+    // createHatchSession (returned with existing:false) and never take this
+    // branch — the guard below keeps the frame truthful even if an
+    // unexpected status ever slips through.
     if (session.existing && session.status !== 'running') {
         const snap = getHatchSession(session.id);
+        const replayOk = snap?.status === 'complete';
         writeSse(res, {
             seq: (snap?.events.length ?? 0) + 1,
             at: new Date().toISOString(),
             type: 'hatch.complete',
-            status: 'ok',
-            label: 'Agent already hatched — here is the existing session.',
+            status: replayOk ? 'ok' : 'failed',
+            label: replayOk
+                ? 'Agent already hatched — here is the existing session.'
+                : 'Previous hatch did not complete — please try again.',
             data: {
                 resumed: true,
                 session_id: session.id,
