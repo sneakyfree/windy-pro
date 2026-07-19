@@ -46,6 +46,7 @@ import agentRoutes from './routes/agent';
 import vitalsRoutes from './routes/vitals';
 import meFleetRoutes from './routes/me-fleet';
 import webhooksEternitasRoutes from './routes/webhooks-eternitas';
+import revenuecatWebhookRoutes from './routes/revenuecat';
 import { authenticateToken } from './middleware/auth';
 import { initErrorReporting, reportError } from './services/error-reporter';
 
@@ -380,6 +381,12 @@ app.use('/api/v1/billing', billingRouter);
 app.use('/api/v1/catalog', catalogRouter);
 app.use('/api/v1/wallet', walletRouter);
 app.use('/api/v1/entitlements', entitlementsRouter);
+
+// RevenueCat webhook — mobile App Store / Play Store purchase
+// provisioning (routes/revenuecat.ts). Auth is the shared-secret
+// Authorization header RevenueCat sends verbatim; fail-closed 503
+// when REVENUECAT_WEBHOOK_AUTH is unset. JSON body (global parser).
+app.use('/api/v1/webhooks/revenuecat', revenuecatWebhookRoutes);
 
 // Webhooks — inbound notifications from ecosystem services
 // POST /api/v1/webhooks/identity/created — called by Windy Mail on new identity

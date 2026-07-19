@@ -69,7 +69,7 @@ function getPriceIds(tier: string): PriceConfig {
 
 // ─── Tier → storage limit mapping ────────────────────────────
 
-const TIER_LIMITS: Record<string, number> = {
+export const TIER_LIMITS: Record<string, number> = {
     free: 500 * 1024 * 1024,              // 500 MB
     pro: 5 * 1024 * 1024 * 1024,           // 5 GB
     translate: 10 * 1024 * 1024 * 1024,    // 10 GB
