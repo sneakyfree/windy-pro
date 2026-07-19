@@ -40,7 +40,10 @@ export default function VerifyEmail() {
     // /send-verification (see account-server/src/routes/auth.ts:392). So this
     // page's mount IS the trigger that causes grandma's inbox to light up.
     useEffect(() => {
-        if (!token) return
+        // Lockout recovery: no token but a known email (routed here from a
+        // 403 email_verification_required login) still auto-sends via the
+        // unauthenticated resend endpoint.
+        if (!token && !email) return
         if (didAutoSendRef.current) return
         didAutoSendRef.current = true
         // Don't re-request on every reload/remount. A code we sent in the last
@@ -72,24 +75,33 @@ export default function VerifyEmail() {
     }, [])
 
     async function sendCode({ silentOnRateLimit = false, force = false } = {}) {
-        if (!token) return
+        if (!token && !email) return
         try {
             setStatus(prev => (prev === 'submitting' ? prev : 'resending'))
             // authFetch attaches the token and refreshes-then-retries on a 401,
             // so a lapsed access token here no longer dead-ends the page.
-            const res = await authFetch('/api/v1/auth/send-verification', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                // Auto-send on mount omits force → the server reuses a still-valid
-                // code so a page reload never invalidates the one already in the
-                // inbox. Only an explicit "Send another one" click forces a new code.
-                body: JSON.stringify({ force }),
-            })
+            // Lockout recovery: with no session at all, fall back to the
+            // UNAUTHENTICATED resend endpoint — the server keys it by email
+            // and always answers a generic 200 (no enumeration).
+            const res = token
+                ? await authFetch('/api/v1/auth/send-verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    // Auto-send on mount omits force → the server reuses a still-valid
+                    // code so a page reload never invalidates the one already in the
+                    // inbox. Only an explicit "Send another one" click forces a new code.
+                    body: JSON.stringify({ force }),
+                })
+                : await fetch('/api/v1/auth/resend-verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email }),
+                })
 
             if (res.ok) {
                 const data = await res.json().catch(() => ({}))
                 // Remember we have a live code so reloads don't re-request it.
-                if (data.sent || data.reused) {
+                if (data.sent || data.reused || (!token && data.ok)) {
                     try { sessionStorage.setItem('windy_verify_sent_at', String(Date.now())) } catch { /* noop */ }
                 }
                 if (data.alreadyVerified) {
@@ -141,18 +153,33 @@ export default function VerifyEmail() {
         try {
             setStatus('submitting')
             setMessage('')
-            const res = await authFetch('/api/v1/auth/verify-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code }),
-            })
+            // Lockout recovery: with no session, verify by {email, code} via
+            // the unauthenticated endpoint; otherwise the normal authed path.
+            const res = token
+                ? await authFetch('/api/v1/auth/verify-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code }),
+                })
+                : await fetch('/api/v1/auth/verify-email-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, code }),
+                })
             const data = await res.json().catch(() => ({}))
 
             if (res.ok && data.verified) {
                 setStatus('success')
                 setMessageTone('success')
-                setMessage("You're in!")
-                setTimeout(() => navigate('/dashboard', { replace: true }), 1500)
+                if (token) {
+                    setMessage("You're in!")
+                    setTimeout(() => navigate('/dashboard', { replace: true }), 1500)
+                } else {
+                    // Recovered from lockout with no session — send them to
+                    // sign in now that the login gate will let them through.
+                    setMessage("You're verified! Taking you to sign in…")
+                    setTimeout(() => navigate('/auth', { replace: true }), 1500)
+                }
                 return
             }
 
@@ -192,7 +219,10 @@ export default function VerifyEmail() {
         }
     }
 
-    if (!token) {
+    // Lockout recovery: a locked-out user has no token but arrives with an
+    // email from the login 403 — let them verify. Only bounce to /auth when
+    // we have neither a session nor an email to verify against.
+    if (!token && !email) {
         return <Navigate to="/auth" replace />
     }
 
