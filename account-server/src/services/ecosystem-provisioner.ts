@@ -341,7 +341,7 @@ export async function cascadeRevocation(passportNumber: string): Promise<void> {
 
 // ─── Pending Provisions Queue ───────────────────────────────────
 
-function queuePending(
+export function queuePending(
     identityId: string,
     product: string,
     action: string,
@@ -389,9 +389,36 @@ export async function processPendingProvisions(): Promise<number> {
                             email: payload.email,
                             display_name: payload.name,
                             creator_name: payload.name,
+                            // Agent-mail retries (queued by routes/agent.ts on a
+                            // failed hatch step) carry the drift-#3 bot fields.
+                            // JSON.stringify drops undefined keys, so plain human
+                            // retries serialize byte-identically to before.
+                            identity_type: payload.identity_type,
+                            passport_number: payload.passport_number,
+                            bot_type: payload.bot_type,
+                            owner_email: payload.owner_email,
+                            phone: payload.phone,
                         }),
                     }, 1); // Single attempt per retry cycle
                     success = resp.ok;
+                    if (resp.ok && payload.identity_type === 'bot') {
+                        // Mirror the hatch success-branch write so the dashboard's
+                        // Mail tile flips once the retry lands. Best-effort — the
+                        // mailbox exists either way; never re-queue on a row error.
+                        try {
+                            const mailData = await resp.json() as any;
+                            const mailAddr = mailData?.email || payload.email;
+                            db.prepare(
+                                `INSERT OR REPLACE INTO product_accounts (id, identity_id, operator_identity_id, product, status, external_id, metadata, provisioned_at)
+                                 VALUES (?, ?, ?, 'windy_mail', 'active', ?, ?, datetime('now'))`,
+                            ).run(
+                                crypto.randomUUID(), item.identity_id, payload.ownerUserId || null, mailAddr,
+                                JSON.stringify({ passport_number: payload.passport_number, agent_name: payload.name }),
+                            );
+                        } catch (rowErr) {
+                            console.error('[Ecosystem] provision_user mail healed but row update failed:', rowErr);
+                        }
+                    }
                 } else if (item.action === 'provision_agent') {
                     // Re-attempt full agent provision
                     const result = await provisionAgent(
@@ -410,10 +437,50 @@ export async function processPendingProvisions(): Promise<number> {
                         body: JSON.stringify({
                             passport_number: payload.passportNumber,
                             agent_name: payload.agentName,
-                            owner_windy_identity_id: payload.ownerUserId,
+                            // Live-path (routes/agent.ts) enqueues carry the owner's
+                            // windy_identity_id explicitly; legacy rows only have the
+                            // internal ownerUserId — accept both, newest first.
+                            owner_windy_identity_id: payload.ownerWindyIdentityId || payload.ownerUserId,
                         }),
                     }, 1);
                     success = chatRes.ok;
+                    if (chatRes.ok) {
+                        // The heal is only complete once Pro's own records reflect
+                        // it. Mirror the SUCCESS-branch writes (provisionAgent above
+                        // / routes/agent.ts step 6): bot's windy_chat row + owner's
+                        // windy_fly row, keyed on UNIQUE(identity_id, product).
+                        // Best-effort: the chat side is provisioned either way, so a
+                        // row-write error must not re-queue the item.
+                        try {
+                            const chatData = await chatRes.json() as any;
+                            if (chatData?.matrix_user_id) {
+                                db.prepare(
+                                    `INSERT OR REPLACE INTO product_accounts (id, identity_id, operator_identity_id, product, status, external_id, metadata, provisioned_at)
+                                     VALUES (?, ?, ?, 'windy_chat', 'active', ?, ?, datetime('now'))`,
+                                ).run(
+                                    crypto.randomUUID(), item.identity_id, payload.ownerUserId || null, chatData.matrix_user_id,
+                                    JSON.stringify({ dm_room_id: chatData.dm_room_id, passport_number: payload.passportNumber }),
+                                );
+                                if (payload.ownerUserId) {
+                                    db.prepare(
+                                        `INSERT OR REPLACE INTO product_accounts (id, identity_id, product, status, external_id, metadata, provisioned_at)
+                                         VALUES (?, ?, 'windy_fly', 'active', ?, ?, datetime('now'))`,
+                                    ).run(
+                                        crypto.randomUUID(), payload.ownerUserId, chatData.matrix_user_id,
+                                        JSON.stringify({
+                                            owner: payload.ownerUserId,
+                                            agent_name: payload.agentName,
+                                            passport_number: payload.passportNumber,
+                                            dm_room_id: chatData.dm_room_id,
+                                            matrix_user_id: chatData.matrix_user_id,
+                                        }),
+                                    );
+                                }
+                            }
+                        } catch (rowErr) {
+                            console.error('[Ecosystem] provision_agent_chat healed but row update failed:', rowErr);
+                        }
+                    }
                 }
             } catch {
                 success = false;
