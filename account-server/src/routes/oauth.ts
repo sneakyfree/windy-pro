@@ -1482,9 +1482,11 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
   // oauth_clients row (e.g. 'windy-identity' refresh mints) keep the full set —
   // first-party session semantics are explicitly out of scope here.
   let effectiveScopes = identityScopes;
+  let isThirdParty = false;
   try {
     const clientRow = db.prepare('SELECT is_first_party FROM oauth_clients WHERE client_id = ?').get(clientId) as any;
     if (clientRow && !clientRow.is_first_party) {
+      isThirdParty = true;
       const granted = (scope || '').split(' ').filter(Boolean);
       // OIDC identity scopes (openid/profile/email — no product prefix) live in
       // the `scope` string claim; only product:action scopes belong in `scopes`.
@@ -1493,6 +1495,16 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
         .filter(s => _identityHoldsScope(identityScopes, s));
     }
   } catch { /* oauth_clients may not exist on first-run SQLite bootstrap */ }
+
+  // Audience isolation, stage 1 (emit-only): third-party tokens declare which
+  // surfaces they are FOR — the unique product prefixes of their effective
+  // scopes (e.g. ['windy_chat']). No service verifies aud yet (they all
+  // disabled it), so this is inert until each consumer turns on enforcement
+  // of its own product id; first-party tokens intentionally carry no aud
+  // until that enforcement rollout is coordinated.
+  const audience = isThirdParty
+    ? [...new Set(effectiveScopes.map(s => s.split(':')[0]))].sort()
+    : [];
 
   // Fetch products
   let products: string[];
@@ -1538,6 +1550,7 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
     scope,
   };
   if (passportNumber) tokenPayload.eternitas_passport = passportNumber;
+  if (audience.length > 0) tokenPayload.aud = audience;
   // display_name claim — parity with auth.ts generateTokens. chat_profiles
   // is the richer source (matrix-aligned), users.display_name/name the
   // fallback; without this the SSO-login path minted tokens with no name
