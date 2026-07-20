@@ -1304,3 +1304,76 @@ describe('Client-bound refresh tokens', () => {
     expect(decoded.scopes).toEqual(['windy_pro:*']);
   });
 });
+
+// ═══════════════════════════════════════════
+//  AUDIENCE EMISSION (stage 1 — emit-only)
+// ═══════════════════════════════════════════
+
+describe('Per-surface audience (aud) emission', () => {
+  afterEach(() => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*'];
+  });
+
+  async function mintViaCode(clientId: string, clientSecret: string | null, code: string) {
+    const res = await request(app)
+      .post('/api/v1/oauth/token')
+      .send({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: 'https://app.test.com/callback',
+        client_id: clientId,
+        client_secret: clientSecret,
+      });
+    expect(res.status).toBe(200);
+    return res.body;
+  }
+
+  it('third-party token carries aud = unique product prefixes of its scopes', async () => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*', 'windy_chat:read', 'windy_mail:send'];
+    const { clientId, clientSecret } = registerClient({ isFirstParty: false });
+    insertAuthCode({ code: 'aud-1', clientId, scope: 'openid windy_chat:read windy_mail:send' });
+
+    const body = await mintViaCode(clientId, clientSecret, 'aud-1');
+    const decoded = jwt.decode(body.access_token) as any;
+    expect(decoded.aud).toEqual(['windy_chat', 'windy_mail']);
+  });
+
+  it('first-party token carries NO aud (enforcement rollout not coordinated yet)', async () => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*', 'windy_chat:read'];
+    const { clientId, clientSecret } = registerClient({ isFirstParty: true });
+    insertAuthCode({ code: 'aud-fp', clientId, scope: 'openid profile' });
+
+    const body = await mintViaCode(clientId, clientSecret, 'aud-fp');
+    const decoded = jwt.decode(body.access_token) as any;
+    expect(decoded.aud).toBeUndefined();
+  });
+
+  it('refresh re-mint preserves the narrow audience', async () => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*', 'windy_chat:read'];
+    const { clientId, clientSecret } = registerClient({ isFirstParty: false });
+    insertAuthCode({ code: 'aud-rt', clientId, scope: 'windy_chat:read' });
+
+    const first = await mintViaCode(clientId, clientSecret, 'aud-rt');
+    const refresh = await request(app)
+      .post('/api/v1/oauth/token')
+      .send({
+        grant_type: 'refresh_token',
+        refresh_token: first.refresh_token,
+        client_id: clientId,
+        client_secret: clientSecret,
+      });
+    expect(refresh.status).toBe(200);
+    const decoded = jwt.decode(refresh.body.access_token) as any;
+    expect(decoded.aud).toEqual(['windy_chat']);
+  });
+
+  it('a token whose consent granted no product scopes has no aud', async () => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*'];
+    const { clientId, clientSecret } = registerClient({ isFirstParty: false });
+    insertAuthCode({ code: 'aud-empty', clientId, scope: 'openid profile' });
+
+    const body = await mintViaCode(clientId, clientSecret, 'aud-empty');
+    const decoded = jwt.decode(body.access_token) as any;
+    expect(decoded.aud).toBeUndefined();
+  });
+});
