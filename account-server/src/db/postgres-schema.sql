@@ -59,7 +59,9 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     device_id TEXT,
     expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    client_id TEXT,                -- OAuth client the token was issued to; NULL = first-party /auth flow
+    scope TEXT                     -- consented scope of the originating grant; NULL = first-party full session
 );
 
 CREATE TABLE IF NOT EXISTS translations (

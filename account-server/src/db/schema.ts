@@ -92,6 +92,8 @@ function initSchema(db: DbAdapter): void {
       device_id TEXT,
       expires_at TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      client_id TEXT,                -- OAuth client the token was issued to; NULL = first-party /auth flow
+      scope TEXT,                    -- consented scope of the originating grant; NULL = first-party full session
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
@@ -297,6 +299,14 @@ function initSchema(db: DbAdapter): void {
     // entitlement sweep converges desired vs pushed, so a cloud outage
     // during purchase self-heals instead of stranding the quota.
     "ALTER TABLE users ADD COLUMN cloud_tier_pushed TEXT",
+
+    // ─── OAuth refresh-token binding (migration 009) ───
+    // Binds each OAuth-issued refresh token to the client it was minted for
+    // and the scope the user consented to, so the refresh grant can't be
+    // replayed by a different client or re-mint broader scopes. NULL on both
+    // for tokens minted by the first-party /auth login flow (unchanged).
+    "ALTER TABLE refresh_tokens ADD COLUMN client_id TEXT",
+    "ALTER TABLE refresh_tokens ADD COLUMN scope TEXT",
   ];
 
   for (const sql of migrations) {
