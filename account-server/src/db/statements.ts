@@ -17,7 +17,14 @@ export function getStatements(): Record<string, any> {
         getDevices: db.prepare('SELECT id, name, platform, registered_at, last_seen FROM devices WHERE user_id = ?'),
         findDevice: db.prepare('SELECT * FROM devices WHERE id = ? AND user_id = ?'),
         countDevices: db.prepare('SELECT COUNT(*) as count FROM devices WHERE user_id = ?'),
-        addDevice: db.prepare("INSERT OR REPLACE INTO devices (id, user_id, name, platform, last_seen) VALUES (?, ?, ?, ?, datetime('now'))"),
+        // Explicit upsert: `INSERT OR REPLACE` is rewritten to `ON CONFLICT DO
+        // NOTHING` by the Postgres adapter, so last_seen never updated on prod.
+        // ON CONFLICT ... DO UPDATE runs identically on SQLite 3.24+ and
+        // Postgres, and preserves registered_at (REPLACE reset it).
+        addDevice: db.prepare(
+            "INSERT INTO devices (id, user_id, name, platform, last_seen) VALUES (?, ?, ?, ?, datetime('now')) " +
+            'ON CONFLICT (id, user_id) DO UPDATE SET name = excluded.name, platform = excluded.platform, last_seen = excluded.last_seen'
+        ),
         removeDevice: db.prepare('DELETE FROM devices WHERE id = ? AND user_id = ?'),
         touchDevice: db.prepare("UPDATE devices SET last_seen = datetime('now') WHERE id = ? AND user_id = ?"),
 
