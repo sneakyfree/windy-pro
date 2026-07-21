@@ -3345,20 +3345,26 @@ class WindyApp {
               clearAfterPaste = settings.clearOnPaste === true;
             } catch (_) { }
           }
+          // Platform-correct manual-paste hint: macOS pastes with Cmd+V, but
+          // Windows/Linux use Ctrl+V. Showing "Cmd V" to a Windows/Linux user
+          // (the 80%+ majority) is a confusing dead instruction. (Found via the
+          // headless screenshot rig 2026-07-21 — the Linux build's toast said
+          // "Cmd V".)
+          const pasteKey = window.windyAPI?.platform === 'darwin' ? 'Cmd+V' : 'Ctrl+V';
           const pasteResult = await window.windyAPI.autoPasteText(text.trim());
           if (!pasteResult) {
             // Paste failed (no target PID or target not reachable)
             // Text is already archived and on clipboard — show toast
-            console.warn('[AutoPaste] Paste returned false — text on clipboard and archived. Use Cmd+V to paste.');
-            this.showReconnectToast('📋 Text copied to clipboard — use Cmd+V to paste');
+            console.warn(`[AutoPaste] Paste returned false — text on clipboard and archived. Use ${pasteKey} to paste.`);
+            this.showReconnectToast(`📋 Text copied to clipboard — use ${pasteKey} to paste`);
             if (clearAfterPaste) setTimeout(() => this.clearTranscript(), 3000);
           } else {
             // A3: paste succeeded — reassure the user the transcript is also on
-            // the clipboard. The macOS paste keystroke can rarely drop Cmd and
+            // the clipboard. The paste keystroke can rarely drop the modifier and
             // type a literal "v"; since the real text is always on the clipboard
             // (tank rule), a stray "v" never means the app is broken.
             const pastedWords = text.trim().split(/\s+/).filter(Boolean).length;
-            this.showReconnectToast(`✓ Pasted ${pastedWords} word${pastedWords === 1 ? '' : 's'} · also on clipboard (Cmd V if needed)`);
+            this.showReconnectToast(`✓ Pasted ${pastedWords} word${pastedWords === 1 ? '' : 's'} · also on clipboard (${pasteKey} if needed)`);
           }
           // Strand I: trigger paste effect with word count for dynamic scaling
           try { if (this.effectsEngine) this.effectsEngine.trigger('paste', { wordCount: text.trim().split(/\s+/).length }); } catch (_) { }
@@ -3367,8 +3373,9 @@ class WindyApp {
             this.clearTranscript();
           }
         } catch (err) {
-          console.warn('[AutoPaste] Failed, use Ctrl+Shift+V to paste manually');
-          this.showReconnectToast('📋 Text on clipboard — use Cmd+V to paste manually');
+          const pk = window.windyAPI?.platform === 'darwin' ? 'Cmd+V' : 'Ctrl+V';
+          console.warn(`[AutoPaste] Failed, use ${pk} to paste manually`);
+          this.showReconnectToast(`📋 Text on clipboard — use ${pk} to paste manually`);
         }
       }, 500);
     }

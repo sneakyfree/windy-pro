@@ -2032,7 +2032,15 @@ function createVideoWindow() {
     resizable: false, // We handle resize manually via IPC
     skipTaskbar: true,
     hasShadow: false,
-    focusable: true,
+    // focusable:false is LOAD-BEARING, not cosmetic. This is a passive webcam
+    // preview (no interaction) that is also alwaysOnTop. If it can take input
+    // focus, it STEALS keyboard focus from the user's cursor target, so the
+    // post-transcription auto-paste (Ctrl+V / Cmd+V) lands in THIS window
+    // instead of where the user was typing — the transcript silently goes
+    // nowhere while the app reports "Pasted N words". Root-caused via the
+    // headless screenshot rig 2026-07-21 (video-preview held X input focus →
+    // paste missed the target). A preview never needs keystrokes; keep it false.
+    focusable: false,
     backgroundColor: '#00000000',
     minWidth: 120,
     minHeight: 90,

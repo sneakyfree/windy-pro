@@ -6,7 +6,7 @@ class ChangelogPopup {
   constructor() {
     // Real app version (package.json), not a hardcode — the old '0.4.0' shipped as a stale
     // literal and showed up in the UI as "Windy Word v0.4.0" while the app was actually 1.7.0.
-    this.currentVersion = '1.7.0';
+    this.currentVersion = '1.8.0';
     this._setVersionWatermark(this.currentVersion);
     if (window.windyAPI?.getAppVersion) {
       window.windyAPI.getAppVersion().then(v => {
@@ -43,29 +43,29 @@ class ChangelogPopup {
           <div class="changelog-item">
             <span class="changelog-icon">✨</span>
             <div>
-              <strong>Batch Mode</strong>
-              <p>Record first, get polished text on stop. GPU-accelerated transcription with LLM cleanup for perfect punctuation and paragraphs.</p>
+              <strong>Record → Speak → Paste</strong>
+              <p>Press the hotkey (or the Record button), talk, and your words land wherever your cursor is — instantly, on your machine. Nothing is ever uploaded.</p>
             </div>
           </div>
           <div class="changelog-item">
             <span class="changelog-icon">🔧</span>
             <div>
-              <strong>Multi-Engine Support</strong>
-              <p>Choose from 15 Windy Word engines: Core (GPU), Edge (CPU), and Lingua (language specialists). Each with different strengths.</p>
+              <strong>Seven engines, your pick</strong>
+              <p>Seven on-device speech engines are bundled — from the tiny, instant Nano to the flagship Pro. WindyTune auto-picks the best for your machine, or choose your own from the dropdown.</p>
             </div>
           </div>
           <div class="changelog-item">
-            <span class="changelog-icon">⏱️</span>
+            <span class="changelog-icon">🌐</span>
             <div>
-              <strong>Configurable Duration</strong>
-              <p>Record up to 30 minutes in one go with configurable limits (5/10/15/30 min).</p>
+              <strong>On-device translation</strong>
+              <p>Speak in one language, get text in another — a bundled translation model runs fully offline. Works on a plane or a mountain bus.</p>
             </div>
           </div>
           <div class="changelog-item">
-            <span class="changelog-icon">🧠</span>
+            <span class="changelog-icon">🔒</span>
             <div>
-              <strong>LLM Cleanup</strong>
-              <p>AI-powered text cleanup fixes punctuation, capitalization, removes filler words, and adds natural paragraph breaks.</p>
+              <strong>Unlimited & private</strong>
+              <p>Record as long as you like — dictate a whole book. No account required, no time limit, and your audio never leaves your computer.</p>
             </div>
           </div>
         </div>
