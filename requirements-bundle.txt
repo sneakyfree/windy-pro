@@ -24,3 +24,4 @@ numpy==1.26.4
 
 # On-device translation (NLLB-200 via CTranslate2) needs the SentencePiece tokenizer.
 sentencepiece==0.2.1
+colorama>=0.4.6  # win32 dep of tqdm — cross-built ZIPs missed it (pip download --platform gap, 2026-07-21)
