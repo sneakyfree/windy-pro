@@ -236,12 +236,34 @@ async function buildPython(t, targetOut) {
   };
 }
 
+// Write wheels/CHECKSUMS.sha256 (sha256sum format: "<hex>  <filename>"). The first-run
+// engine-venv build (main.js ensureEngineVenv) fail-CLOSES on any wheel whose hash doesn't
+// match this manifest — but it SILENTLY SKIPS the whole check when the manifest is absent.
+// The build never emitted one, so the supply-chain guard shipped inert. Generate it here so
+// every recut arms it. Idempotent; safe to call on the cached path too.
+function writeWheelChecksums(wheelsOut) {
+  try {
+    const crypto = require('crypto');
+    const files = fs.readdirSync(wheelsOut)
+      .filter(f => (f.endsWith('.whl') || f.endsWith('.tar.gz')) && f !== 'CHECKSUMS.sha256')
+      .sort();
+    if (files.length === 0) return;
+    const lines = files.map(f =>
+      `${crypto.createHash('sha256').update(fs.readFileSync(path.join(wheelsOut, f))).digest('hex')}  ${f}`);
+    fs.writeFileSync(path.join(wheelsOut, 'CHECKSUMS.sha256'), lines.join('\n') + '\n');
+    ok(`wrote wheels/CHECKSUMS.sha256 (${files.length} wheels)`);
+  } catch (e) {
+    warn(`could not write wheel checksum manifest: ${e.message}`);
+  }
+}
+
 function buildWheels(t, targetOut, hostPython) {
   const wheelsOut = path.join(targetOut, 'wheels');
   if (fs.existsSync(wheelsOut) && !force) {
     const count = fs.readdirSync(wheelsOut).filter(f => f.endsWith('.whl') || f.endsWith('.tar.gz')).length;
     if (count > 0) {
       ok(`wheels already downloaded: ${count} files in ${path.relative(repoRoot, wheelsOut)}`);
+      if (!fs.existsSync(path.join(wheelsOut, 'CHECKSUMS.sha256'))) writeWheelChecksums(wheelsOut);
       return wheelsOut;
     }
   }
@@ -285,14 +307,15 @@ function buildWheels(t, targetOut, hostPython) {
     }
     throw e;
   }
+  writeWheelChecksums(wheelsOut);
   return wheelsOut;
 }
 
 // Pinned, checksum-verified static ffmpeg per platform. The win/linux binaries are
 // mirrored to R2 (downloads.windyword.ai) so a fresh CI checkout — which has NO
 // bundled/ffmpeg/ dir (gitignored) — still produces a bundle that actually contains
-// ffmpeg. Without this a portable win/linux bundle ships with no ffmpeg and every
-// transcription fails at runtime with `spawn ffmpeg ENOENT`. macOS uses the
+// ffmpeg. Without this the Windows/Linux offline builds shipped with no ffmpeg and
+// every transcription failed at runtime with `spawn ffmpeg ENOENT`. macOS uses the
 // pre-extracted local binary (there is no macOS CI job; DMGs are built locally).
 const FFMPEG_ASSETS = {
   'win-x64':   { url: 'https://downloads.windyword.ai/bin/ffmpeg/ffmpeg-8.0.1-win-x64.exe', sha256: '5af82a0d4fe2b9eae211b967332ea97edfc51c6b328ca35b827e73eac560dc0d' },
@@ -417,22 +440,34 @@ function findRecursive(dir, name) {
 }
 
 function buildModel(targetOut) {
-  const modelOut = path.join(targetOut, 'model', 'faster-whisper-base');
-  if (fs.existsSync(modelOut) && !force) {
-    ok(`model already present: ${path.relative(repoRoot, modelOut)}`);
-    return modelOut;
-  }
-  if (!fs.existsSync(existingModelDir)) {
-    warn(`source model not found: ${existingModelDir} — skipping`);
+  // Bundle EVERY model dir present in bundled/model/ — the Windy Core base PLUS
+  // all lean windy-*-ct2 engines fetched by scripts/fetch-lean-engines.sh — so the
+  // Reader edition ships all 7 engines fully offline. Each dir must contain model.bin.
+  const srcModelRoot = path.join(repoRoot, 'bundled', 'model');
+  const outModelRoot = path.join(targetOut, 'model');
+  if (!fs.existsSync(srcModelRoot)) {
+    warn(`source model dir not found: ${srcModelRoot} — skipping`);
     return null;
   }
-  fs.mkdirSync(path.dirname(modelOut), { recursive: true });
-  log(`copying model: ${path.relative(repoRoot, existingModelDir)} → ${path.relative(repoRoot, modelOut)}`);
-  // fs.cpSync (not `cp -r`) so this works on Windows too — `cp` doesn't exist in cmd.exe,
-  // which broke every native Windows build that had a source model present (Mission 10b).
-  fs.cpSync(existingModelDir, modelOut, { recursive: true, verbatimSymlinks: true });
-  ok(`model copied (${du(modelOut)})`);
-  return modelOut;
+  const dirs = fs.readdirSync(srcModelRoot)
+    .filter((d) => fs.existsSync(path.join(srcModelRoot, d, 'model.bin')));
+  if (dirs.length === 0) {
+    warn(`no model dirs with model.bin under ${srcModelRoot} — skipping (run scripts/fetch-lean-engines.sh)`);
+    return null;
+  }
+  fs.mkdirSync(outModelRoot, { recursive: true });
+  for (const d of dirs) {
+    const src = path.join(srcModelRoot, d);
+    const dst = path.join(outModelRoot, d);
+    if (fs.existsSync(dst) && !force) { ok(`model already present: ${path.relative(repoRoot, dst)}`); continue; }
+    if (fs.existsSync(dst)) fs.rmSync(dst, { recursive: true, force: true });
+    log(`copying model: bundled/model/${d} → ${path.relative(repoRoot, dst)}`);
+    // fs.cpSync (not `cp -r`) so this works on Windows too — `cp` doesn't exist in cmd.exe,
+    // which broke every native Windows build that had a source model present (Mission 10b).
+    fs.cpSync(src, dst, { recursive: true, verbatimSymlinks: true });
+    ok(`model copied: ${d} (${du(dst)})`);
+  }
+  return outModelRoot;
 }
 
 /**

@@ -214,9 +214,9 @@ class ConversationMode {
             const timestamp = window.WindyDateUtils ? WindyDateUtils.formatTime(new Date()) : new Date().toLocaleTimeString();
             (side === 'a' ? this.transcriptA : this.transcriptB).push({ text, lang: sourceLang, time: timestamp });
 
-            // Translate to other language
-            const translated = await window.windyAPI.translateOffline(text, sourceLang, targetLang);
-            const translatedText = translated?.text || translated || text;
+            // Translate to other language (on-device NLLB)
+            const trResult = await window.windyAPI.translateLocal(text, sourceLang, targetLang);
+            const translatedText = (trResult?.ok && trResult.translatedText) ? trResult.translatedText : text;
 
             // Show translation in the other pane
             const transEl = document.createElement('div');

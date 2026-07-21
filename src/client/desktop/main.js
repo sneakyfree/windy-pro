@@ -396,6 +396,7 @@ const store = new Store({
     },
     engine: {
       model: 'base',
+      saveVideo: false,
       clearOnPaste: false,
       livePreview: true,
       autoArchive: true,
@@ -424,6 +425,7 @@ const store = new Store({
 try { require('./commerce').registerCommerceIpc(store); } catch (err) {
   console.error('[commerce] IPC registration failed:', err?.message || err);
 }
+
 
 // One-time migration (2026-07-12): stored configs that kept the old shipped
 // default pasteTranscript=Ctrl+Shift+V collide with the Ctrl+Shift+V paste
@@ -455,6 +457,53 @@ let userHiddenWindow = false;  // Tracks if user intentionally hid everything vi
 let pythonProcess = null;
 let pythonRestartCount = 0;
 const MAX_PYTHON_RESTARTS = 3;
+// Startup watchdog: if the engine never signals ready (hangs) or keeps crashing, surface
+// a clear, actionable error to non-technical users instead of a frozen UI / silent fail.
+let pythonReady = false;
+let pythonStartupTimer = null;
+let engineFailureShown = false;
+const PYTHON_STARTUP_TIMEOUT_MS = 120000; // generous: the 1.5GB engine loads ~30s on old CPUs
+
+// One-time, user-facing "engine couldn't start" dialog with Retry / Quit. Covers every
+// failure mode uniformly: missing venv, model-load failure, hung startup, repeated crashes.
+function showEngineFailure(detail) {
+  if (engineFailureShown) return;
+  engineFailureShown = true;
+  try { safeSend('python-loading', false); safeSend('state-change', 'error'); } catch (_) { /* window may be gone */ }
+  try {
+    const choice = dialog.showMessageBoxSync({
+      type: 'error',
+      title: 'Windy Word — Speech Engine',
+      message: "Windy Word's speech engine couldn't start.",
+      // Show the specific reason the caller gave (disk space / integrity / timeout / kept-
+      // failing) and an honest action line. The old blanket "this is usually a disk-space
+      // issue" was appended to EVERY failure — including the integrity-check and timeout
+      // paths, where it misattributes the cause. Retry genuinely rebuilds the engine venv
+      // from scratch (see the ensureEngineVenv call below), so say that instead.
+      detail: (detail ? detail + '\n\n' : "The speech engine couldn't finish setting up.\n\n")
+        + 'Click Retry to rebuild it from scratch (this fixes most first-run problems), or Quit and reopen the app.',
+      buttons: ['Retry', 'Quit'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (choice === 0) {
+      engineFailureShown = false;
+      pythonReady = false;
+      pythonRestartCount = 0;
+      // Self-heal: if the engine venv is missing/broken, rebuild it rather than just
+      // re-spawning against it (which would fail again). ensureEngineVenv() scrubs a
+      // broken venv, rebuilds from bundled wheels, and starts the server itself when
+      // ready; it returns false (start now) when the venv is already good or absent.
+      const appDataDir = path.join(os.homedir(), '.windy-pro');
+      if (!ensureEngineVenv(appDataDir)) startPythonServer();
+    } else {
+      app.isQuitting = true;
+      app.quit();
+    }
+  } catch (e) {
+    console.error('[Python] showEngineFailure dialog error:', e.message);
+  }
+}
 
 // ═══ Model Download Manifest ═══
 const MODEL_MANIFEST = {
@@ -664,7 +713,7 @@ function _startArchiveRetryTimer() {
 
 function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
   const engine = store.get('engine', {});
-  if (!engine.autoArchive || !engine.archiveLocalEnabled || !text || !text.trim()) return { archived: false };
+  if (!store.get('engine.autoArchive', true) || !store.get('engine.archiveLocalEnabled', true) || !text || !text.trim()) return { archived: false };
 
   try {
     const archiveRoot = getArchiveFolder();
@@ -686,7 +735,10 @@ function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
 
     const safeText = text.trim();
     const mode = engine.archiveMode || 'both';
-    const meta = `Start: ${start.toISOString()}\nEnd: ${end.toISOString()}\nWords: ${safeText.split(/\s+/).filter(Boolean).length}`;
+    // Record the app that had focus (future-proofs per-app insights — "you dictate most
+    // into VS Code"). Strip newlines and '|' so it can't break the daily-aggregate format.
+    const appName = String(global._lastFocusedApp || 'unknown').replace(/[\r\n|]/g, ' ').slice(0, 80);
+    const meta = `Start: ${start.toISOString()}\nEnd: ${end.toISOString()}\nWords: ${safeText.split(/\s+/).filter(Boolean).length}\nApp: ${appName}`;
 
     const wrote = [];
 
@@ -717,6 +769,247 @@ function appendArchiveEntry({ text, startedAt, endedAt }, isRetry = false) {
       console.warn('[Archive] Entry queued for retry. Queue size:', _archiveRetryQueue.length);
     }
     return { archived: false, error: err.message };
+  }
+}
+
+/**
+ * First-run (book-launch bypass): build the offline engine venv from bundled wheels.
+ *
+ * The installer-v2 wizard normally creates ~/.windy-pro/venv and pip-installs the
+ * bundled wheels into it — the engine server imports faster_whisper/websockets/etc.,
+ * which are NOT present in the read-only bundled Python inside the .app. The
+ * book-launch fast path skips the wizard, so we replicate just that one step here.
+ *
+ * Fully offline (`pip install --no-index --find-links <bundled/wheels>`), arch-native
+ * (runs the user's own matching bundled Python — no cross-arch issue), and first-run
+ * only: the venv persists, so later launches are instant. Runs ASYNC so the window +
+ * welcome panel paint immediately; startPythonServer() is deferred and invoked when the
+ * venv is ready (or, on failure, as a best-effort fallback to bundled/system Python).
+ *
+ * Returns true if a build was started (caller should defer startPythonServer); false if
+ * the venv already exists or required assets are missing (caller should start now).
+ */
+// Written into the venv ONLY after it is built, pip-installed, AND proven to import the
+// engine deps. Its presence is the single source of truth for "this venv is usable" —
+// used by both ensureEngineVenv() and startPythonServer(). A venv with bin/python but no
+// marker is a half-built/interrupted first run and must be rebuilt, never trusted.
+const ENGINE_VENV_READY_MARKER = '.windy-engine-ready';
+
+// True if a venv already has the engine's Python deps installed. Fast filesystem check (no
+// python spawn → never blocks the main process / window paint), used to ADOPT a marker-less
+// venv (e.g. one the installer-v2 wizard built) instead of destroying it.
+function _venvHasEngineDeps(venvDir) {
+  try {
+    let roots;
+    if (process.platform === 'win32') {
+      roots = [path.join(venvDir, 'Lib', 'site-packages')];
+    } else {
+      const lib = path.join(venvDir, 'lib');
+      roots = fs.existsSync(lib) ? fs.readdirSync(lib).map(d => path.join(lib, d, 'site-packages')) : [];
+    }
+    return roots.some(sp => fs.existsSync(path.join(sp, 'faster_whisper')) && fs.existsSync(path.join(sp, 'websockets')));
+  } catch (_) { return false; }
+}
+
+// Linux AppImage: process.resourcesPath lives inside an EPHEMERAL FUSE mount
+// (/tmp/.mount_XXXXXX) that changes every launch and dies with the process. A venv created
+// from the bundled python in that mount dangles on every later launch (pyvenv.cfg `home` +
+// bin/python symlink both point into the dead mount) — so each relaunch either rebuilt the
+// whole venv from scratch ("First run" every launch) or, after a crash left a zombie mount,
+// started a session with a permanently dead engine. Copy the bundled runtime ONCE to a
+// stable per-user path and build the venv from the copy. mac (.app) and Windows
+// (LOCALAPPDATA) install paths are stable, so they keep using the bundled tree in place.
+function _stableEnginePythonRoot(bundledPyRoot, appDataDir) {
+  if (process.platform !== 'linux') return bundledPyRoot;
+  if (!/^\/tmp\/\.mount_/.test(process.resourcesPath || '')) return bundledPyRoot; // .deb/dev tree: stable
+  const stableRoot = path.join(appDataDir, 'python-runtime');
+  const stamp = path.join(stableRoot, '.windy-runtime-stamp');
+  const want = `${app.getVersion()} ${process.arch}`;
+  try {
+    if (fs.existsSync(stamp)
+        && fs.readFileSync(stamp, 'utf-8').trim() === want
+        && fs.existsSync(path.join(stableRoot, 'bin', 'python3'))) {
+      return stableRoot;
+    }
+    fs.rmSync(stableRoot, { recursive: true, force: true });
+    fs.cpSync(bundledPyRoot, stableRoot, { recursive: true, verbatimSymlinks: true });
+    fs.writeFileSync(stamp, want + '\n');
+    console.info('[Python] bundled runtime copied to stable path:', stableRoot);
+    return stableRoot;
+  } catch (e) {
+    console.warn('[Python] stable runtime copy failed — using bundled python in place (venv will not survive relaunch):', e.message);
+    return bundledPyRoot;
+  }
+}
+
+// Free bytes available on the volume holding `dir` (or its nearest existing parent), or null
+// if it can't be determined (older Node without statfsSync, or an error) → callers fail open.
+function _freeSpaceBytes(dir) {
+  try {
+    if (typeof fs.statfsSync !== 'function') return null;
+    let target = dir;
+    while (target && !fs.existsSync(target)) target = path.dirname(target);
+    const s = fs.statfsSync(target || '/');
+    return s.bavail * s.bsize;
+  } catch (_) { return null; }
+}
+
+function ensureEngineVenv(appDataDir) {
+  try {
+    const venvDir = path.join(appDataDir, 'venv');
+    const venvPy = process.platform === 'win32'
+      ? path.join(venvDir, 'Scripts', 'python.exe')
+      : path.join(venvDir, 'bin', 'python');
+    const readyMarker = path.join(venvDir, ENGINE_VENV_READY_MARKER);
+
+    // Complete iff the interpreter exists AND we previously proved it can run the engine.
+    if (fs.existsSync(venvPy) && fs.existsSync(readyMarker)) return false; // normal start handles it
+
+    // A venv dir with no ready-marker is EITHER a good venv the installer-v2 wizard built
+    // (it uses this SAME ~/.windy-pro/venv path and never writes our marker) / a pre-marker
+    // build, OR a half-built one from an interrupted first run. Do NOT blindly scrub — that
+    // would destroy the wizard's work and force a redundant multi-minute rebuild (or, for a
+    // build lacking bundled wheels, brick it). ADOPT it if it already has the engine deps;
+    // only scrub+rebuild a genuinely broken/incomplete venv. This keeps the anti-brick
+    // guarantee (config.json is written before the async build finishes and needsSetup()
+    // only checks config.json, so an interrupted first run would otherwise never rebuild)
+    // without clobbering a working venv from another code path.
+    if (fs.existsSync(venvDir)) {
+      if (fs.existsSync(venvPy) && _venvHasEngineDeps(venvDir)) {
+        try { fs.writeFileSync(readyMarker, `${app.getVersion()} ${new Date().toISOString()} adopted\n`); }
+        catch (e) { console.warn('[Python] adopted existing engine venv but could not write ready marker:', e.message); }
+        return false; // usable venv (e.g. wizard-built) — normal start handles it
+      }
+      let why = 'missing deps / not usable (interrupted setup)';
+      try {
+        const cfg = path.join(venvDir, 'pyvenv.cfg');
+        if (fs.existsSync(cfg)) {
+          const home = (fs.readFileSync(cfg, 'utf-8').match(/^home\s*=\s*(.+)$/m) || [])[1];
+          if (home && !fs.existsSync(home.trim())) why = `bound to a vanished python at ${home.trim()} (stale AppImage mount)`;
+        }
+      } catch (_) { /* keep generic reason */ }
+      console.warn(`[Python] engine venv present but ${why} — rebuilding clean`);
+      try { fs.rmSync(venvDir, { recursive: true, force: true }); }
+      catch (e) { console.error('[Python] could not remove incomplete venv:', e.message); }
+    }
+
+    const bundledRoot = process.resourcesPath ? path.join(process.resourcesPath, 'bundled') : null;
+    if (!bundledRoot) return false;
+    // Universal (multi-arch) bundles stage per-arch native payloads as
+    // `python-<arch>` / `wheels-<arch>` next to the shared model/. Single-arch
+    // bundles ship the plain `python` / `wheels`. Resolve the arch match first
+    // and fall back to the flat legacy layout (mirrors startPythonServer +
+    // installer-v2/core/bundled-assets.js#_archDir).
+    const archDir = (name) => {
+      const suffixed = path.join(bundledRoot, `${name}-${process.arch}`);
+      return fs.existsSync(suffixed) ? suffixed : path.join(bundledRoot, name);
+    };
+    // On Linux AppImage this is a stable per-user COPY of the bundled runtime (see
+    // _stableEnginePythonRoot) — a venv built from the in-mount python breaks on relaunch.
+    const bundledPyRoot = _stableEnginePythonRoot(archDir('python'), appDataDir);
+    const bundledPy = process.platform === 'win32'
+      ? path.join(bundledPyRoot, 'python.exe')
+      : path.join(bundledPyRoot, 'bin', 'python3');
+    const wheelsDir = archDir('wheels');
+    const reqFile = path.join(bundledRoot, 'requirements-bundle.txt');
+    if (!fs.existsSync(bundledPy) || !fs.existsSync(wheelsDir) || !fs.existsSync(reqFile)) return false;
+
+    // Disk preflight: the venv + offline wheel install needs ~2 GB in ~/.windy-pro. On a full
+    // disk pip fails with ENOSPC, we scrub, and the next launch retries the same doomed build —
+    // a confusing multi-minute stall loop. Bail early with a specific message instead. This
+    // covers the first-LAUNCH moment (the go.sh/go.ps1 preflight is install-time only, and
+    // off-installer paths — manual copy / USB hand-off — have no preflight at all). Fail-open
+    // if free space can't be read.
+    const _free = _freeSpaceBytes(appDataDir);
+    if (_free !== null && _free < 2 * 1024 * 1024 * 1024) {
+      const gb = Math.max(0, _free / (1024 * 1024 * 1024)).toFixed(1);
+      console.error(`[Python] Not enough disk space to build the engine (~${gb} GB free in ~/.windy-pro, need ~2 GB).`);
+      showEngineFailure(`Not enough free disk space to set up the speech engine — about ${gb} GB free, but ~2 GB is needed in your home folder. Free up some space and reopen Windy Word.`);
+      return true; // dialog shown; defer (do NOT fall through to a doomed normal start)
+    }
+
+    console.info('[Python] First run: building offline engine venv from bundled wheels…');
+    const { execFile } = require('child_process');
+    // Any failure below removes the half-built venv so the NEXT launch retries cleanly
+    // instead of adopting a broken venv forever (the original brick).
+    const scrubVenv = () => { try { fs.rmSync(venvDir, { recursive: true, force: true }); } catch (_) { /* best effort */ } };
+    const startServer = () => {
+      try { pythonRestartCount = 0; startPythonServer(); }
+      catch (e) { console.error('[Python] start after venv failed:', e.message); }
+    };
+    execFile(bundledPy, ['-m', 'venv', venvDir], { timeout: 120000 }, (e1) => {
+      if (e1) { console.error('[Python] venv create failed — falling back:', e1.message); scrubVenv(); startServer(); return; }
+      // Supply-chain: verify bundled wheels against the build-time checksum manifest before
+      // installing. Fail-closed on mismatch (possible tampering); skip if no manifest so a
+      // build without one can never be bricked by this check.
+      try {
+        const manifest = path.join(wheelsDir, 'CHECKSUMS.sha256');
+        if (fs.existsSync(manifest)) {
+          const crypto = require('crypto');
+          let n = 0;
+          for (const line of fs.readFileSync(manifest, 'utf-8').split('\n')) {
+            const m = line.trim().match(/^([a-f0-9]{64})\s+\*?(.+)$/i);
+            if (!m) continue;
+            const wp = path.join(wheelsDir, path.basename(m[2]));
+            if (!fs.existsSync(wp)) continue;
+            const actual = crypto.createHash('sha256').update(fs.readFileSync(wp)).digest('hex');
+            if (actual.toLowerCase() !== m[1].toLowerCase()) {
+              console.error('[Python] Wheel checksum MISMATCH:', m[2], '— refusing to install (possible tampering)');
+              scrubVenv();
+              showEngineFailure('A bundled component failed its integrity check.');
+              return;
+            }
+            n++;
+          }
+          console.info('[Python] ✓ wheel checksums verified (' + n + ')');
+        }
+      } catch (ve) { console.warn('[Python] wheel checksum verify skipped:', ve.message); }
+      // Generous timeout: this is an offline `--no-index` local-wheel install, so it is
+      // disk-bound, not network-bound; slow HDDs on launch-day consumer machines can take
+      // several minutes. The old 5-min cap could fire mid-install and brick the venv.
+      execFile(venvPy, ['-m', 'pip', 'install', '--no-index', '--no-cache-dir', '--find-links', wheelsDir, '-r', reqFile],
+        { timeout: 900000, maxBuffer: 64 * 1024 * 1024 }, (e2) => {
+          if (e2) {
+            console.error('[Python] venv pip install failed — scrubbing so next launch retries:', e2.message);
+            scrubVenv();
+            startServer();
+            return;
+          }
+          // pip can exit 0 yet leave an unusable venv (a bad/partial wheel). Prove the venv
+          // can actually import the engine deps BEFORE marking it ready — the marker is what
+          // every later launch and startPythonServer() trust. Async so the event loop is
+          // never blocked. On failure, scrub so the next launch rebuilds cleanly.
+          // Probe timeout is 5 min for the same reason as the pip timeout above: the FIRST
+          // import of faster_whisper/ctranslate2/onnxruntime is disk-bound (measured 60s
+          // wall at ~1% CPU on a loaded 2017 iMac), and a 60s cap killed a HEALTHY venv at
+          // the finish line — then the scrub forced the identical doomed rebuild on every
+          // launch, an infinite first-run failure loop.
+          execFile(venvPy, ['-c', 'import faster_whisper, websockets'], { timeout: 300000 }, (e3) => {
+            if (e3 && e3.killed) {
+              // Timed out ≠ broken. pip succeeded and the deps are on disk — the machine is
+              // just slow/thrashing. Do NOT scrub: the next launch ADOPTS this venv via the
+              // _venvHasEngineDeps fast path (no import needed) instead of rebuilding forever.
+              console.warn('[Python] venv import probe timed out (slow/loaded disk) — keeping venv; next launch adopts it');
+              startServer();
+              return;
+            }
+            if (e3 || !fs.existsSync(venvPy)) {
+              console.error('[Python] venv built but engine deps not importable — scrubbing so next launch retries:', e3 ? e3.message : 'venv python missing');
+              scrubVenv();
+              startServer();
+              return;
+            }
+            try { fs.writeFileSync(readyMarker, `${app.getVersion()} ${new Date().toISOString()}\n`); }
+            catch (me) { console.warn('[Python] could not write venv ready marker:', me.message); }
+            console.info('[Python] ✓ engine venv ready (verified)');
+            startServer();
+          });
+        });
+    });
+    return true;
+  } catch (e) {
+    console.error('[Python] ensureEngineVenv error:', e.message);
+    return false;
   }
 }
 
@@ -759,18 +1052,29 @@ function startPythonServer() {
   const userVenvPython = process.platform === 'win32'
     ? path.join(appDataDir, 'venv', 'Scripts', 'python.exe')
     : path.join(appDataDir, 'venv', 'bin', 'python');
-  const bundledPython = process.resourcesPath
+  // Universal (multi-arch) builds ship the runtime as `python-<arch>`; single-arch
+  // builds ship plain `python`. Prefer the arch match, fall back to legacy.
+  const bundledPythonRoot = process.resourcesPath
+    ? (fs.existsSync(path.join(process.resourcesPath, 'bundled', `python-${process.arch}`))
+        ? path.join(process.resourcesPath, 'bundled', `python-${process.arch}`)
+        : path.join(process.resourcesPath, 'bundled', 'python'))
+    : null;
+  const bundledPython = bundledPythonRoot
     ? (process.platform === 'win32'
-        ? path.join(process.resourcesPath, 'bundled', 'python', 'python.exe')
-        : path.join(process.resourcesPath, 'bundled', 'python', 'bin', 'python3'))
+        ? path.join(bundledPythonRoot, 'python.exe')
+        : path.join(bundledPythonRoot, 'bin', 'python3'))
     : null;
 
   let pythonPath;
-  if (fs.existsSync(userVenvPython)) {
+  // Prefer the user venv ONLY if ensureEngineVenv() marked it ready. A marker-less venv is
+  // a half-built/interrupted first run; using it here would shadow bundled Python and fail
+  // every transcription. ensureEngineVenv() rebuilds such a venv — until then, use bundled.
+  const userVenvReady = fs.existsSync(path.join(appDataDir, 'venv', ENGINE_VENV_READY_MARKER));
+  if (fs.existsSync(userVenvPython) && userVenvReady) {
     pythonPath = userVenvPython;
   } else if (bundledPython && fs.existsSync(bundledPython)) {
     pythonPath = bundledPython;
-    console.info('[Python] Using bundled Python (wizard venv not yet created)');
+    console.info('[Python] Using bundled Python (engine venv not present/ready)');
   } else {
     pythonPath = 'python3';
     console.warn('[Python] Falling back to system python3 — bundled assets not detected');
@@ -853,16 +1157,33 @@ function startPythonServer() {
       ...process.env,
       PYTHONUNBUFFERED: '1',
       KMP_DUPLICATE_LIB_OK: 'TRUE',
+      // Resolve engine NAMES (base, windy-*-ct2) to bundled local dirs so the warm
+      // server can actually load + hot-swap any engine — fully offline. Without these
+      // the server tried to load 'windy-*-ct2' as a HuggingFace name (rejected) and
+      // stayed stuck on whatever it first loaded (the engine-switch bug).
+      HF_HUB_OFFLINE: '1',
       WINDY_BUNDLED_MODEL_DIR: bundledModelRoot,
       WINDY_USER_MODEL_DIR: userModelRoot,
     }
   });
+
+  // Arm the startup watchdog — cleared once the engine signals ready or the process exits.
+  pythonReady = false;
+  clearTimeout(pythonStartupTimer);
+  pythonStartupTimer = setTimeout(() => {
+    if (pythonReady) return;
+    console.error(`[Python] Startup watchdog fired — engine did not signal ready within ${PYTHON_STARTUP_TIMEOUT_MS}ms`);
+    try { pythonProcess && pythonProcess.kill(); } catch (_) {}
+    showEngineFailure('It took too long to start.');
+  }, PYTHON_STARTUP_TIMEOUT_MS);
 
   pythonProcess.stdout.on('data', (data) => {
     const msg = data.toString().trim();
     console.log(`[Python] ${msg}`);
     // Detect server ready
     if (msg.includes('Waiting for connections') || msg.includes('Server running')) {
+      pythonReady = true;
+      clearTimeout(pythonStartupTimer);
       if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
         safeSend('python-loading', false);
       }
@@ -876,6 +1197,8 @@ function startPythonServer() {
   pythonProcess.on('close', (code) => {
     console.info(`[Python] Server exited with code ${code}`);
     pythonProcess = null;
+    clearTimeout(pythonStartupTimer);
+    if (engineFailureShown) return; // failure dialog already owns the recovery flow
 
     // Auto-restart on unexpected exit with exponential backoff
     if (code !== 0 && !app.isQuitting && pythonRestartCount < MAX_PYTHON_RESTARTS) {
@@ -885,10 +1208,7 @@ function startPythonServer() {
       setTimeout(() => startPythonServer(), delay);
     } else if (code !== 0 && pythonRestartCount >= MAX_PYTHON_RESTARTS) {
       console.error('[Python] Max restarts reached. Server will not restart.');
-      if (mainWindow) {
-        safeSend('state-change', 'error');
-        safeSend('python-loading', false);
-      }
+      showEngineFailure('The speech engine kept failing to start.');
     }
   });
 
@@ -954,7 +1274,10 @@ function createWindow() {
     },
 
     // Visual
-    backgroundColor: '#0B0F1A',  // Opaque dark (temp Linux tweak)
+    // Match the in-app .window background (--bg-primary #1F2937) so any pixels the
+    // page hasn't painted (e.g. a brief gap after zoom/resize) blend seamlessly
+    // instead of showing as a near-black strip below the UI.
+    backgroundColor: '#1F2937',
     hasShadow: true,
     opacity: appearance.opacity,
 
@@ -973,6 +1296,12 @@ function createWindow() {
   ipcMain.on('request-focus', () => {
     if (mainWindow && !mainWindow.isDestroyed() && process.platform === 'darwin') {
       mainWindow.setFocusable(true);
+      // A window created focusable:false at a 'floating' panel level often won't
+      // become the KEY window from setFocusable+focus alone — so keyboard events
+      // (e.g. rebinding a shortcut, typing in a field) never arrive. Steal app
+      // focus + move to top so the window actually becomes key and receives keys.
+      try { app.focus({ steal: true }); } catch (_) { /* best-effort */ }
+      mainWindow.moveTop();
       mainWindow.focus();
     }
   });
@@ -1040,7 +1369,7 @@ function createWindow() {
           "connect-src 'self' ws://127.0.0.1:* wss://*.windyword.ai https://*.windyword.ai https://api.groq.com https://api.openai.com https://api.deepgram.com wss://api.deepgram.com; " +
           "img-src 'self' data:; " +
           "media-src 'self' blob: data:; " +
-          "base-src 'self'; " +
+          "base-uri 'self'; " +
           "object-src 'none';"
         ]
       }
@@ -2397,6 +2726,12 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   const rendererKeys = apiKeys || {};
   const groqKey = rendererKeys.groq || store.get('engine.groqApiKey', '') || process.env.GROQ_API_KEY || '';
   const openaiKey = rendererKeys.openai || store.get('engine.openaiApiKey', '') || process.env.OPENAI_API_KEY || '';
+  // With no cloud key the cloud path can never succeed — route those chunks to the
+  // local engine instead of failing every one with "No API key" (the free offline
+  // build has no key UI, and the Settings → Transcription Engine section the old
+  // error pointed at is hidden there).
+  const hasCloudKey = !!(groqKey || openaiKey);
+  const effectiveLocalOnly = !!localOnly || !hasCloudKey;
 
   // Use the model the user selected in the cockpit (not the global store)
   const engineId = listeningModel === 'windytune'
@@ -2443,8 +2778,9 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
   const mi = MODEL_INFO[engineId] || { name: engineId, size: '', specialty: '' };
   const modelInfo = { model: mi.name, size: mi.size, windyTune, engineId, specialty: mi.specialty };
 
-  // If user explicitly selected cloud for listening, skip local and go straight to cloud
-  if (userWantsCloud && !localOnly) {
+  // If user explicitly selected cloud for listening (and actually has a key),
+  // skip local and go straight to cloud
+  if (userWantsCloud && !effectiveLocalOnly) {
     // Jump directly to cloud section below
   } else {
 
@@ -2461,8 +2797,14 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
 
         const localResult = await new Promise((resolve, reject) => {
           const ws = new WebSocket(wsUrl);
-          // Flat 8s timeout — chunks are capped at 10s (~165KB), server processes in ~5-6s
-          let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, 8000);
+          // Adaptive timeout. The old flat 8s cap assumed "server processes in ~5-6s",
+          // but on a slow machine or with a large engine pinned even the BASE model
+          // takes >10s for a 10s chunk (measured 11.1s on a 2017 iMac) — every chunk
+          // timed out and Live Listen was dead. Estimate duration from the opus blob
+          // (~16.5 KB/s) and allow 12x realtime, floor 60s / cap 180s.
+          const estAudioSec = Math.max(1, audioBuffer.length / 16500);
+          const localTimeoutMs = Math.max(60000, Math.min(180000, Math.round(estAudioSec * 12000)));
+          let timeout = setTimeout(() => { ws.close(); reject(new Error('local timeout')); }, localTimeoutMs);
 
           ws.on('open', () => {
             ws.send(JSON.stringify({
@@ -2480,7 +2822,7 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
                 clearTimeout(timeout);
                 ws.close();
                 if (msg.error) reject(new Error(msg.error));
-                else resolve({ text: msg.text || '', detectedLang: msg.language || sourceLang, engine: 'local', modelInfo });
+                else resolve({ text: msg.text || '', detectedLang: msg.detected_language || msg.language || sourceLang, engine: 'local', modelInfo });
               }
             } catch (e) {
               // Non-JSON message, ignore
@@ -2495,9 +2837,9 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
 
         // If target is NOT English, translate English → target
         if (localResult.text && localResult.text.trim()) {
-          const textResult = await translateTextViaAI(localResult.text, 'en', targetLang);
+          const textResult = await nllbTranslate(localResult.text, 'en', targetLang);
           if (textResult && textResult.ok) {
-            return { text: textResult.translatedText, detectedLang: localResult.detectedLang, engine: textResult.engine || 'groq', modelInfo };
+            return { text: textResult.translatedText, detectedLang: localResult.detectedLang, engine: textResult.engine || 'nllb-local', modelInfo };
           }
           return { ...localResult, modelInfo };
         }
@@ -2513,8 +2855,11 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     }
 
     // All retries exhausted
-    if (localOnly) {
-      return { error: '🔒 Local Only mode: No local engine available after ' + MAX_RETRIES + ' attempts. Server may be overloaded — try a longer chunk duration.' };
+    if (effectiveLocalOnly) {
+      const timedOut = lastLocalErr && /local timeout/.test(lastLocalErr.message || '');
+      return { error: timedOut
+        ? '🏠 The local engine didn\'t finish this chunk in time — it may be busy or the selected engine is too large for live listening on this machine. Try a smaller engine (Nano/Lite) or a longer chunk duration.'
+        : '🏠 Couldn\'t reach the local engine (' + ((lastLocalErr && lastLocalErr.message) || 'unavailable') + '). If the app just started, give it a few seconds and try again.' };
     }
   } // end else (not userWantsCloud)
 
@@ -2883,6 +3228,22 @@ function startWaylandControlServer() {
   // start it on ALL platforms — agents need it on macOS/Windows/X11 too.
   const http = require('http');
   ensureControlTokenLoaded(); // mint/read the install token before first request
+  // Edition gate. The FULL agent-control surface (AGENT_CONTROL) — /config
+  // raw-mutate, /install, /transcribe-file, cloud upload, paste injection — stays
+  // OFF in reader/lite (book-launch). But a co-located Windy Fly agent still needs
+  // to turn the SAFE knobs by voice for a grandma ("turn the sounds down", "make
+  // the window bigger"): the sound/settings/widget/window surface. Those are served
+  // in every edition, on every platform, via the SAFE_KNOB allowlist in the route
+  // guard below — so the server now starts everywhere (macOS/Windows included, where
+  // it previously never started). AGENT_CONTROL_KNOBS=false in edition.js turns even
+  // the knobs off. Dangerous routes remain 404'd regardless.
+  const _edition = require('./edition');
+  const agentControl = _edition.AGENT_CONTROL !== false;
+  const safeKnobs = _edition.AGENT_CONTROL_KNOBS !== false;
+  if (!agentControl && !safeKnobs && !PLATFORM.isWayland) {
+    console.info('[AgentCtrl] disabled in this edition — control server not started (no Wayland paste need on this platform)');
+    return;
+  }
   const actionHandlers = {
     'toggle-recording': () => toggleRecording(),
     'paste-transcript': () => pasteTranscript(),
@@ -2974,6 +3335,47 @@ function startWaylandControlServer() {
       res.writeHead(authResult.status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(authResult.body, null, 2));
       return;
+    }
+
+    // Reader/lite editions: ALLOWLIST. Two safe tiers are served; everything else 404s.
+    //   1. Legacy Wayland-paste actions (GNOME keybindings on Linux).
+    //   2. SAFE KNOBS — the dials a grandma turns by voice through her co-located
+    //      Windy Fly agent: sounds, on-screen widget, catalog-validated settings, and
+    //      window geometry. These only change the app's own preferences.
+    // Deliberately STILL 404'd (the dangerous surface): /config (raw store dump +
+    // arbitrary mutate), /install (binary installs), /transcribe-file (arbitrary file
+    // read), /clones/cloud/* (uploads voice off-device), /paste/* strategy mutation +
+    // injection, /open-url, /updates/check, /models mutation. Allowlist by design:
+    // any FUTURE route is off until explicitly added here.
+    if (!agentControl) {
+      const LEGACY_PASTE_ACTIONS = ['toggle-recording', 'paste-transcript', 'show-hide', 'quick-translate'];
+      const SAFE_KNOB_PATHS = new Set([
+        '/platform',
+        // sounds
+        '/sound-effects/state', '/sound-effects/packs', '/sound-effects/hook',
+        '/sound-effects/active-pack', '/sound-effects/master-volume', '/sound-effects/mode',
+        // on-screen widget
+        '/widget/state',
+        // catalog-validated settings (only known paths; no raw /config)
+        '/settings/catalog', '/settings/describe', '/settings/set',
+        '/settings/history', '/settings/undo',
+        // window geometry / appearance
+        '/window', '/window/minimize', '/window/maximize', '/window/unmaximize',
+        '/window/bring-to-front', '/window/geometry', '/window/font-size',
+        '/window/video-fullscreen',
+        // hotkeys + read-only status
+        '/hotkeys', '/hotkeys/reset', '/windytune/state',
+        '/recording/state', '/audio/devices',
+      ]);
+      const bare = pathname.replace(/^\//, '');
+      const allowed = safeKnobs
+        ? (LEGACY_PASTE_ACTIONS.includes(bare) || SAFE_KNOB_PATHS.has(pathname))
+        : LEGACY_PASTE_ACTIONS.includes(bare);
+      if (!allowed) {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'this endpoint is disabled in the book-launch edition' }));
+        return;
+      }
     }
 
     // ── Agent-control endpoints (paste strategy registry) ──
@@ -3278,13 +3680,17 @@ function startWaylandControlServer() {
           current: store.get('engine.model'),
           engine: store.get('engine.engine'),
           ladder: WINDYTUNE_MODEL_LADDER,
+          // Advertise the same ct2 engine ids the ladder validates against, so
+          // /models GET and POST agree. fastest/lightest → most accurate.
           available: [
-            { id: 'tiny',     size_mb: 73,   speed: 'fastest',  accuracy: 'basic' },
-            { id: 'base',     size_mb: 462,  speed: 'fast',     accuracy: 'good' },
-            { id: 'small',    size_mb: 140,  speed: 'medium',   accuracy: 'better' },
-            { id: 'medium',   size_mb: 1444, speed: 'slow',     accuracy: 'high' },
-            { id: 'large-v3', size_mb: 2945, speed: 'slowest',  accuracy: 'best' },
-          ],
+            { id: 'windy-nano-ct2',       speed: 'fastest',  accuracy: 'basic' },
+            { id: 'windy-lite-ct2',       speed: 'fast',     accuracy: 'good' },
+            { id: 'windy-core-ct2',       speed: 'medium',   accuracy: 'better' },
+            { id: 'windy-edge-ct2',       speed: 'medium',   accuracy: 'better' },
+            { id: 'windy-plus-ct2',       speed: 'slow',     accuracy: 'high' },
+            { id: 'windy-turbo-ct2',      speed: 'slow',     accuracy: 'high' },
+            { id: 'windy-pro-engine-ct2', speed: 'slowest',  accuracy: 'best' },
+          ].filter(m => WINDYTUNE_ALL_LADDER.includes(m.id)),
         }, null, 2));
         return;
       }
@@ -4109,7 +4515,7 @@ function startWaylandControlServer() {
           const archiveRoot = getArchiveFolder();
           try { await fsp.access(archiveRoot); } catch {
             res.writeHead(200, { 'content-type': 'application/json' });
-            res.end(JSON.stringify({ totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0 }));
+            res.end(JSON.stringify({ totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0, wpm: 0, streak: 0 }));
             return;
           }
           if (_archiveStatsCache && Date.now() - _archiveStatsCacheTime < ARCHIVE_STATS_CACHE_TTL) {
@@ -5887,7 +6293,18 @@ function startUserYdotoold() {
     console.warn('[ydotool] /dev/uinput not writable — paste to Wayland-native apps unavailable.');
     console.warn('[ydotool] Fix: add user to "input" group + udev rule KERNEL=="uinput", GROUP="input", MODE="0660"');
     if (fs.existsSync('/tmp/.ydotool_socket')) {
-      try { fs.accessSync('/tmp/.ydotool_socket', fs.constants.W_OK); _ydotoolSocket = '/tmp/.ydotool_socket'; } catch { }
+      try {
+        // Only trust the well-known socket if it's owned by root or us — otherwise another
+        // local user could pre-plant a rogue socket at this predictable path and intercept
+        // our injected keystrokes.
+        const st = fs.statSync('/tmp/.ydotool_socket');
+        const me = process.getuid ? process.getuid() : -1;
+        if (st.uid === 0 || st.uid === me) {
+          fs.accessSync('/tmp/.ydotool_socket', fs.constants.W_OK); _ydotoolSocket = '/tmp/.ydotool_socket';
+        } else {
+          console.warn('[ydotool] ignoring /tmp/.ydotool_socket — not owned by root or current user (uid ' + st.uid + ')');
+        }
+      } catch { }
     }
     return;
   }
@@ -5922,13 +6339,28 @@ function registerHotkeys() {
   if (!app.isReady()) return;
   const hotkeys = store.get('hotkeys');
 
+  // Throw-safe registration. globalShortcut.register() throws synchronously on an
+  // unparseable accelerator (e.g. a macOS Option dead-key like "Alt+®"). If that
+  // escapes — at rebind OR at startup when a bad value was persisted — it crashes the
+  // whole app. Wrap each one so a single bad accelerator is skipped, never fatal, and
+  // never blocks the remaining (good) shortcuts from registering.
+  const safeRegister = (accel, cb) => {
+    if (!accel || typeof accel !== 'string') return false;
+    try {
+      return globalShortcut.register(accel, cb);
+    } catch (err) {
+      console.warn(`[Hotkey] skipped invalid accelerator "${accel}": ${err.message}`);
+      return false;
+    }
+  };
+
   // Log platform strategy for debugging
   if (PLATFORM.isLinux) {
     console.info(`[Hotkey] Platform: ${PLATFORM.displayServer}/${PLATFORM.desktop}, strategy: ${PLATFORM.hotkeyStrategy}`);
   }
 
   // Toggle recording — save & restore focus so cursor stays in target app
-  const regToggle = globalShortcut.register(hotkeys.toggleRecording, () => {
+  const regToggle = safeRegister(hotkeys.toggleRecording, () => {
     // Only capture the focused app when STARTING recording (not when stopping).
     let savedWindowId = null;
     if (!isRecording) {
@@ -6000,14 +6432,14 @@ function registerHotkeys() {
   console.info(`[Hotkey] Toggle recording (${hotkeys.toggleRecording}): ${regToggle ? 'OK' : 'FAILED'}`);
 
   // Paste transcript
-  const regPaste = globalShortcut.register(hotkeys.pasteTranscript, () => {
+  const regPaste = safeRegister(hotkeys.pasteTranscript, () => {
     pasteTranscript();
   });
   console.info(`[Hotkey] Paste transcript (${hotkeys.pasteTranscript}): ${regPaste ? 'OK' : 'FAILED'}`);
 
   // Paste clipboard (screenshots, copied text, etc.) via simulated Ctrl+V
   const pasteClipAccel = hotkeys.pasteClipboard || 'CommandOrControl+Shift+B';
-  const regClipboard = globalShortcut.register(pasteClipAccel, () => {
+  const regClipboard = safeRegister(pasteClipAccel, () => {
     // Small delay to let modifier keys release, then simulate Ctrl+V
     // CR-005: replace `exec('sleep … && …')` with execFile + setTimeout.
     // The literal strings were safe (no renderer input interpolated),
@@ -6036,7 +6468,7 @@ function registerHotkeys() {
   console.info(`[Hotkey] Paste clipboard (${pasteClipAccel}): ${regClipboard ? 'OK' : 'FAILED'}`);
 
   // Show/hide window — three-state cycle: Full Window → Tornado → Hidden → Full Window
-  const regShow = globalShortcut.register(hotkeys.showHide, () => {
+  const regShow = safeRegister(hotkeys.showHide, () => {
     const mainVisible = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible();
     const miniVisible = miniWindow && !miniWindow.isDestroyed() && miniWindow.isVisible();
 
@@ -6057,12 +6489,19 @@ function registerHotkeys() {
   });
   console.info(`[Hotkey] Show/Hide (${hotkeys.showHide}): ${regShow ? 'OK' : 'FAILED'}`);
 
-  // Quick Translate hotkey
-  const qtAccel = hotkeys.quickTranslate || 'CommandOrControl+Shift+T';
-  const regTranslate = globalShortcut.register(qtAccel, () => {
-    showMiniTranslateWindow();
-  });
-  console.info(`[Hotkey] Quick Translate (${qtAccel}): ${regTranslate ? 'OK' : 'FAILED'}`);
+  // Quick Translate hotkey — skip when Translate is hidden (book-launch), so the
+  // global Ctrl+Shift+T can't summon a hidden, cloud-only feature.
+  let translationOn = true;
+  try { translationOn = require('./edition').TRANSLATION_UI !== false; } catch (_) {}
+  if (translationOn) {
+    const qtAccel = hotkeys.quickTranslate || 'CommandOrControl+Shift+T';
+    const regTranslate = safeRegister(qtAccel, () => {
+      showMiniTranslateWindow();
+    });
+    console.info(`[Hotkey] Quick Translate (${qtAccel}): ${regTranslate ? 'OK' : 'FAILED'}`);
+  } else {
+    console.info('[Hotkey] Quick Translate skipped (Translate hidden in this edition)');
+  }
 }
 
 /**
@@ -6081,7 +6520,8 @@ const HOTKEY_DEFAULTS = {
   toggleRecording: 'CommandOrControl+Shift+Space',
   pasteTranscript: 'CommandOrControl+Shift+V',
   pasteClipboard: 'CommandOrControl+Shift+B',
-  showHide: 'CommandOrControl+Shift+W'
+  showHide: 'CommandOrControl+Shift+W',
+  quickTranslate: 'CommandOrControl+Shift+T'
 };
 
 // Startup: sanitize any reserved shortcuts that were accidentally bound
@@ -6141,7 +6581,7 @@ function toggleRecording() {
 
   // Update tray icon color based on state
   if (tray) {
-    tray.setToolTip(isRecording ? 'Windy Word - Recording...' : 'Windy Word');
+    tray.setToolTip(isRecording ? 'Windy Word — Recording (click the tray icon to stop)' : 'Windy Word');
   }
 
   // macOS: getUserMedia/AudioContext in Chromium steal focus even with focusable:false.
@@ -6260,6 +6700,25 @@ registerSettingsIpc({
   registerHotkeys,
   mainWindowRef: _mainWindowRefForSettings,
   reservedShortcuts: RESERVED_SHORTCUTS,
+});
+
+// Edition flags for the renderer. With `sandbox: true`, the preload CANNOT
+// require() local modules — so it can't read edition.js directly. The main
+// process can, and exposes the book-launch flags synchronously via sendSync so
+// the renderer has them before first paint (used by edition-ui.js + settings.js).
+ipcMain.on('get-edition-flags', (event) => {
+  try {
+    const ed = require('./edition');
+    event.returnValue = {
+      edition: ed.EDITION,
+      ecosystemUI: ed.ECOSYSTEM_UI !== false,
+      translationUI: ed.TRANSLATION_UI !== false,
+      unlimitedRecording: ed.UNLIMITED_RECORDING === true,
+      cloudStorage: ed.CLOUD_STORAGE !== false,
+    };
+  } catch (_) {
+    event.returnValue = { edition: 'reader', ecosystemUI: true, translationUI: true, unlimitedRecording: false, cloudStorage: true };
+  }
 });
 
 // SEC-P0: Encrypted API key storage via safeStorage (replaces plaintext localStorage)
@@ -6463,6 +6922,15 @@ ipcMain.handle('open-external-url', async (event, url) => {
 
   // Linux: BrowserWindow is the most reliable on AppImage
   if (process.platform === 'linux') {
+    // mailto: can't be loaded into a BrowserWindow (no navigation, false success).
+    // Hand it to the system default mail handler instead.
+    {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'mailto:') {
+        await shell.openExternal(url);
+        return { ok: true };
+      }
+    }
     // Method 1: BrowserWindow (opens inside app — with OAuth support)
     try {
       const extWin = new BrowserWindow({
@@ -6558,15 +7026,61 @@ ipcMain.handle('open-external-url', async (event, url) => {
   }
 });
 
+// Reveal a file in the OS file manager (Finder/Explorer) — used by the Share feature.
+// The preload bridge + UI button are wired by another agent.
+ipcMain.handle('reveal-in-folder', (e, filePath) => {
+  try {
+    require('electron').shell.showItemInFolder(filePath);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════
 // WindyTune Adaptive Model Tracker
 // ═══════════════════════════════════════════════════════════════════
 const _windyTuneHistory = [];          // Rolling window of last 10 transcription timings
-const WINDYTUNE_MODEL_LADDER = ['tiny', 'base', 'small', 'medium', 'large-v3']; // fastest → most accurate
+// The exact ct2 engine ids, ascending accuracy/cost. These are the model ids the
+// engine actually reports + accepts, so indexOf() against the running model id works.
+const WINDYTUNE_ALL_LADDER = [
+  'windy-nano-ct2',
+  'windy-lite-ct2',
+  'windy-core-ct2',
+  'windy-edge-ct2',
+  'windy-plus-ct2',
+  'windy-turbo-ct2',
+  'windy-pro-engine-ct2',
+]; // fastest/lightest → most accurate
+
+// Resolve a model id to its on-disk dir (user-downloaded OR bundled). Mirrors the
+// per-batch findModelDir helper but at module scope so the ladder can be derived
+// from what's actually present. Lean Windy engines use canonical ct2 ids
+// (bundled/model/<id>/); legacy whisper names use faster-whisper-<name>/.
+function _windyTuneModelDir(m) {
+  const dirFor = (n) => (/-ct2$/.test(n) ? n : `faster-whisper-${n}`);
+  const userRoot = path.join(os.homedir(), '.windy-pro', 'model');
+  const u = path.join(userRoot, dirFor(m));
+  if (fs.existsSync(path.join(u, 'model.bin'))) return u;
+  const bundledRoot = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : '';
+  if (bundledRoot) {
+    const b = path.join(bundledRoot, dirFor(m));
+    if (fs.existsSync(path.join(b, 'model.bin'))) return b;
+  }
+  return null;
+}
+
+// Tank-proof: WindyTune may only move among models that are actually present on the
+// machine — it can never auto-switch to an absent model and trigger a silent multi-GB
+// download (the wobble we're killing). Derive the bundled set from on-disk model.bin
+// presence instead of hardcoding it. With one present model the ladder has a single
+// rung, so Auto simply stays put; the full engine pack lights up extra rungs.
+const WINDYTUNE_MODEL_LADDER = WINDYTUNE_ALL_LADDER.filter(m => _windyTuneModelDir(m) !== null);
 const WINDYTUNE_THRESHOLDS = {
   DOWNGRADE_RATIO: 2.0,       // transcription_time / audio_duration > 2x → too slow
   UPGRADE_RATIO: 0.3,         // ratio < 0.3 → model is fast enough to try bigger
-  CRITICAL_SECONDS: 30,       // single transcription > 30s → immediate downgrade
+  CRITICAL_RATIO: 4.0,        // a single transcription > 4x slower than real-time → immediate downgrade
+  CRITICAL_MIN_AUDIO_S: 5,    // ...but only with ≥5s of audio, so a short-clip cold-start outlier can't false-trigger
   AUTO_DOWNGRADE_AFTER: 2,    // consecutive slow transcriptions before auto-switch
   PROMPT_UPGRADE_AFTER: 3,    // consecutive fast transcriptions before suggesting upgrade
 };
@@ -6580,14 +7094,29 @@ function _windyTuneRecord(elapsed, audioDuration, model) {
   const isWindyTune = store.get('engine.engine') === 'windytune';
   if (!isWindyTune) return; // Only adapt in WindyTune auto mode
 
-  const currentIdx = WINDYTUNE_MODEL_LADDER.indexOf(model);
-  if (currentIdx < 0) return; // Unknown model, skip
+  // Map the running model id onto the ct2 ladder so indexOf is never -1.
+  // Legacy whisper names ('base' / 'faster-whisper-base') and any model not on the
+  // ladder anchor at 'windy-lite-ct2' so downgrade (toward nano) + upgrade can fire.
+  let ladderModel = model;
+  if (WINDYTUNE_MODEL_LADDER.indexOf(ladderModel) < 0) {
+    ladderModel = WINDYTUNE_MODEL_LADDER.indexOf('windy-lite-ct2') >= 0
+      ? 'windy-lite-ct2'
+      : (WINDYTUNE_MODEL_LADDER[0] || null);
+  }
+  const currentIdx = ladderModel === null ? -1 : WINDYTUNE_MODEL_LADDER.indexOf(ladderModel);
+  if (currentIdx < 0) return; // No present model on the ladder, can't adapt
+  model = ladderModel; // downstream switch/messages use the ladder id
 
-  // ── Critical: single transcription > 30s → immediate downgrade ──
-  if (elapsed > WINDYTUNE_THRESHOLDS.CRITICAL_SECONDS && currentIdx > 0) {
+  // ── Critical: a single transcription far slower than real-time → immediate downgrade.
+  // Uses RATIO, not absolute elapsed. A long (dictate-a-whole-book) recording legitimately
+  // takes many seconds to transcribe, so the old `elapsed > 30s` rule wrongly pinned whole
+  // sessions down to the lowest-accuracy engine. Ratio is length-independent; the min-audio
+  // guard keeps a short-clip cold-start outlier from tripping it. ──
+  if (audioDuration >= WINDYTUNE_THRESHOLDS.CRITICAL_MIN_AUDIO_S &&
+      ratio > WINDYTUNE_THRESHOLDS.CRITICAL_RATIO && currentIdx > 0) {
     const newModel = WINDYTUNE_MODEL_LADDER[currentIdx - 1];
-    console.warn(`[WindyTune] ⚡ CRITICAL: ${elapsed.toFixed(1)}s transcription → auto-switching ${model} → ${newModel}`);
-    _windyTuneSwitch(newModel, `Transcription took ${elapsed.toFixed(0)}s — switched to ${newModel} for speed`);
+    console.warn(`[WindyTune] ⚡ CRITICAL: ${ratio.toFixed(1)}x slower than real-time (${elapsed.toFixed(1)}s / ${audioDuration.toFixed(1)}s) → auto-switching ${model} → ${newModel}`);
+    _windyTuneSwitch(newModel, `Transcription ran ${ratio.toFixed(1)}× slower than real time — switched to ${newModel} for speed`);
     return;
   }
 
@@ -6668,39 +7197,97 @@ async function _transcribeViaWS(wavPath) {
   const serverConfig = store.get('server', { host: '127.0.0.1', port: 9876 });
   const wsUrl = `ws://${serverConfig.host}:${serverConfig.port}`;
 
+  const SAFE_FRAME = 45 * 1024 * 1024;   // stay safely under the server's 50MB frame limit
+  const UPLOAD_CHUNK = 8 * 1024 * 1024;  // sub-frame chunk size for large recordings
+
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(wsUrl, { maxPayload: 64 * 1024 * 1024 });
     let responded = false;
-    const timeout = setTimeout(() => {
-      if (!responded) {
-        responded = true;
-        ws.close();
-        reject(new Error('WS transcription timeout (120s)'));
-      }
-    }, 120000); // 120s — covers up to ~4 min recordings on CPU
+    let pendingTranscribe = null; // set when we must load the selected model before transcribing
+
+    // Self-renewing idle timeout. Long recordings on a slow CPU can take many
+    // minutes to transcribe; a fixed 120s wrongly aborted them (and a >50MB blob
+    // used to be rejected outright). We now give up only after a long stretch with
+    // NO message from the server, resetting the clock on every message received.
+    let timer = null;
+    const IDLE_MS = 15 * 60 * 1000; // 15 min of total server silence => give up
+    const fail = (err) => {
+      if (responded) return;
+      responded = true;
+      if (timer) clearTimeout(timer);
+      try { ws.close(); } catch (_) {}
+      reject(err);
+    };
+    const arm = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => fail(new Error('WS transcription timeout (no progress for 15m)')), IDLE_MS);
+    };
+    arm();
 
     ws.on('open', async () => {
       try {
-        // Send the command
-        ws.send(JSON.stringify({ action: 'transcribe_blob', language: 'en', format: 'wav' }));
-        // Send the audio data as binary
         const audioData = await fsp.readFile(wavPath);
-        ws.send(audioData);
+        const ext = (_path.extname(wavPath) || '.wav').slice(1) || 'wav';
+
+        // Actually send the audio for transcription (may run now, or after a model swap).
+        const sendTranscribe = () => {
+          if (audioData.length <= SAFE_FRAME) {
+            // Common path — unchanged: one command + one binary frame.
+            ws.send(JSON.stringify({ action: 'transcribe_blob', language: 'auto', format: ext }));
+            ws.send(audioData);
+          } else {
+            // Large recording — stream in sub-frame chunks so we never hit the 50MB
+            // WS frame limit, then signal end. The server reassembles to disk and
+            // transcribes the whole file (bounded RAM). This is what makes the
+            // "unlimited recording" promise actually deliverable.
+            ws.send(JSON.stringify({ action: 'transcribe_upload', language: 'auto', format: ext }));
+            for (let off = 0; off < audioData.length; off += UPLOAD_CHUNK) {
+              ws.send(audioData.subarray(off, Math.min(off + UPLOAD_CHUNK, audioData.length)));
+            }
+            ws.send(JSON.stringify({ action: 'transcribe_upload_end' }));
+          }
+        };
+
+        // ── Model sync (fixes: batch mode ignored the engine picker) ──
+        // Batch transcription reuses the WARM engine server but never opens the renderer's
+        // streaming ws, which is the only path that told the server to hot-reload the
+        // selected model. So the server kept its launch model ('base') and every batch
+        // transcribed with base no matter what engine the user pinned (or WindyTune chose).
+        // store.engine.model is the source of truth (both setEngine and _windyTuneSwitch
+        // write it), so pin it here first: the server no-ops if it's already loaded, else
+        // it reloads and acks — only then do we transcribe. On a failed load the server
+        // keeps its working model and still acks, so we proceed rather than fail.
+        const desiredModel = store.get('engine.model');
+        if (desiredModel) {
+          pendingTranscribe = sendTranscribe;
+          ws.send(JSON.stringify({ action: 'config', config: { model: desiredModel } }));
+        } else {
+          sendTranscribe();
+        }
       } catch (err) {
-        responded = true;
-        clearTimeout(timeout);
-        ws.close();
-        reject(err);
+        fail(err);
       }
     });
 
     ws.on('message', (data) => {
       if (responded) return;
+      arm(); // server is alive and working — extend the deadline
       try {
         const msg = JSON.parse(data.toString());
+        // Model config was ack'd (server reloaded the selected model, or no-op'd because it
+        // was already loaded, or kept its old model on a failed load) — now transcribe.
+        if (msg.type === 'ack' && msg.action === 'config' && pendingTranscribe) {
+          if (msg.applied && msg.applied.model_error) {
+            console.warn(`[Batch] engine model load failed (${msg.applied.model_error}); transcribing with the currently loaded model`);
+          }
+          const run = pendingTranscribe;
+          pendingTranscribe = null;
+          run();
+          return;
+        }
         if (msg.type === 'transcribe_result') {
           responded = true;
-          clearTimeout(timeout);
+          if (timer) clearTimeout(timer);
           ws.close();
           if (msg.error) {
             reject(new Error(msg.error));
@@ -6711,13 +7298,7 @@ async function _transcribeViaWS(wavPath) {
       } catch (_) { /* non-JSON message */ }
     });
 
-    ws.on('error', (err) => {
-      if (!responded) {
-        responded = true;
-        clearTimeout(timeout);
-        reject(err);
-      }
-    });
+    ws.on('error', (err) => fail(err));
   });
 }
 
@@ -6731,23 +7312,56 @@ async function _transcribeViaWS(wavPath) {
 //
 // Returns the same shape the IPC handler returns (text or full WS
 // result depending on caller).
+/**
+ * Resolve an ABSOLUTE path to the ffmpeg binary for the transcription pipeline.
+ *
+ * GUI-launched macOS apps do NOT inherit the shell PATH (no /usr/local/bin or
+ * /opt/homebrew/bin), so a bare `spawn('ffmpeg')` throws ENOENT even when
+ * ffmpeg is installed for terminal use — the exact "Transcription failed:
+ * spawn ffmpeg ENOENT" symptom. We must hand spawn an absolute path. Priority:
+ *   1. wizard-installed copy (~/.windy-pro/bin, <userData>/bin) — writable
+ *   2. in-app bundled ffmpeg (Resources/bundled/ffmpeg[-<arch>]) — always
+ *      shipped + correct arch; the reliable hit in a packaged build. Arch
+ *      suffix supports universal (multi-arch) builds.
+ *   3. legacy mis-located paths, kept as harmless fallbacks
+ *   4. common Homebrew/system locations (defensive, for the GUI-PATH case)
+ *   5. bare 'ffmpeg' (PATH) — last resort
+ */
+function resolveFfmpegBin() {
+  const exe = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+  const home = path.join(os.homedir(), '.windy-pro');
+  let userData = null;
+  try { userData = app.getPath('userData'); } catch (_) {}
+  const res = process.resourcesPath;
+  const candidates = [
+    path.join(home, 'bin', exe),
+    userData && path.join(userData, 'bin', exe),
+    res && path.join(res, 'bundled', `ffmpeg-${process.arch}`, exe),
+    res && path.join(res, 'bundled', 'ffmpeg', exe),
+    path.join(home, 'ffmpeg', exe),
+    userData && path.join(userData, 'ffmpeg', exe),
+    process.execPath && path.join(path.dirname(process.execPath), exe),
+    '/opt/homebrew/bin/' + exe,
+    '/usr/local/bin/' + exe,
+    '/usr/bin/' + exe,
+  ].filter(Boolean);
+  for (const fp of candidates) {
+    try { if (fs.existsSync(fp)) return fp; } catch (_) { /* ignore */ }
+  }
+  // No bundled or system ffmpeg found. Windows has no system ffmpeg, so the bare
+  // fallback below ENOENTs at transcribe time — log loudly so a packaging regression
+  // (missing bundled ffmpeg) is diagnosable instead of a silent per-recording failure.
+  console.error('[ffmpeg] no bundled/system ffmpeg found; falling back to bare "ffmpeg" (will fail on Windows). checked: ' + candidates.join(', '));
+  return 'ffmpeg';
+}
+
 async function _transcribeAudioFile(audioPath, opts = {}) {
   const tmpDir = os.tmpdir();
   const tmpId = crypto.randomBytes(16).toString('hex');
   const wavPath = path.join(tmpDir, `windy-agent-batch-${tmpId}.wav`);
 
-  // Locate ffmpeg using the same search list the legacy IPC uses
-  const appDataDir = app.getPath('userData');
-  const homeDataDir = path.join(os.homedir(), '.windy-pro');
-  const ffmpegExeName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
-  let ffmpegBin = 'ffmpeg';
-  for (const fp of [
-    path.join(homeDataDir, 'ffmpeg', ffmpegExeName),
-    path.join(appDataDir, 'ffmpeg', ffmpegExeName),
-    path.join(path.dirname(process.execPath), ffmpegExeName),
-  ]) {
-    if (fs.existsSync(fp)) { ffmpegBin = fp; break; }
-  }
+  // Locate ffmpeg — GUI apps don't inherit shell PATH, so resolve an absolute path.
+  const ffmpegBin = resolveFfmpegBin();
 
   try {
     await execFileAsync(ffmpegBin, [
@@ -6781,6 +7395,15 @@ async function _transcribeAudioFile(audioPath, opts = {}) {
 }
 
 ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
+  // Top-level timeout: a wedged engine (model inference hang) can't freeze the UI
+  // forever. Scale it with recording length so long dictations aren't killed mid-
+  // transcribe — the old fixed 180s silently lost book-length recordings (the
+  // "unlimited recording" promise). ~90s of budget per minute of opus audio covers
+  // even the slowest engine on CPU; floored at 3 min for short clips, capped at 4 h.
+  const approxBytes = (base64Audio?.length || 0) * 0.75;   // base64 ≈ 1.33× binary
+  const approxMinutes = approxBytes / (1024 * 1024);        // opus ≈ 1 MB/min
+  const dynTimeoutMs = Math.min(4 * 60 * 60 * 1000, Math.max(180000, Math.round(approxMinutes * 90000)));
+  return withTimeout((async () => {
   console.info('[Batch Local] Starting transcription, audio size:', base64Audio?.length || 0, 'chars');
   const batchStartTime = Date.now();
   const tmpDir = os.tmpdir();
@@ -6795,22 +7418,10 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     await fsp.writeFile(webmPath, buffer);
     console.info('[Batch Local] Saved webm:', webmPath, '— size:', buffer.length, 'bytes');
 
-    // Find ffmpeg — check bundled location (.windy-pro), userData, then PATH
+    // appDataDir is reused later in this handler (venv resolution); keep it.
     const appDataDir = app.getPath('userData');
-    const homeDataDir = path.join(os.homedir(), '.windy-pro');
-    let ffmpegBin = 'ffmpeg';
-    const ffmpegExeName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
-    const ffmpegSearchPaths = [
-      path.join(homeDataDir, 'ffmpeg', ffmpegExeName),
-      path.join(appDataDir, 'ffmpeg', ffmpegExeName),
-      path.join(path.dirname(process.execPath), ffmpegExeName),
-    ];
-    for (const fp of ffmpegSearchPaths) {
-      if (fs.existsSync(fp)) {
-        ffmpegBin = fp;
-        break;
-      }
-    }
+    // Find ffmpeg — GUI apps don't inherit shell PATH, so resolve an absolute path.
+    const ffmpegBin = resolveFfmpegBin();
     console.info('[Batch Local] Using ffmpeg:', ffmpegBin);
 
     // P0-1: Convert to WAV using async execFile (non-blocking)
@@ -6883,36 +7494,45 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     const pythonPathLocal = venvPaths.find(p => fs.existsSync(p)) || (process.platform === 'win32' ? 'python' : 'python3');
     console.info('[Batch Local] Using python (fallback):', pythonPathLocal);
 
-    const _batchBundledRoot = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : '';
+    const _bbr = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : '';
     let modelName = store.get('engine.model') || store.get('defaultModel') || 'base';
     // Same guard as the warm server: if the configured model (often the schema
     // default 'base') isn't bundled but a windy-*-ct2 is, use the bundled engine.
-    if (_batchBundledRoot && !isBundledModel(modelName, _batchBundledRoot)) {
-      const bundled = firstBundledEngine(_batchBundledRoot);
-      if (bundled) modelName = bundled;
+    if (_bbr && !isBundledModel(modelName, _bbr)) { const bE2 = firstBundledEngine(_bbr); if (bE2) modelName = bE2; }
+    // Resolve a model name to its on-disk dir. Lean Windy engines use canonical
+    // ids (windy-*-ct2 → bundled/model/<id>/); legacy whisper names use the
+    // faster-whisper-<name>/ scheme. Both the bundled (offline) and any
+    // user-downloaded (~/.windy-pro/model) locations are checked.
+    const dirFor = (m) => (/-ct2$/.test(m) ? m : `faster-whisper-${m}`);
+    const userModelRoot = path.join(os.homedir(), '.windy-pro', 'model');
+    const bundledModelRoot = process.resourcesPath ? path.join(process.resourcesPath, 'bundled', 'model') : '';
+    const findModelDir = (m) => {
+      const u = path.join(userModelRoot, dirFor(m));
+      if (fs.existsSync(path.join(u, 'model.bin'))) return u;
+      if (bundledModelRoot) {
+        const b = path.join(bundledModelRoot, dirFor(m));
+        if (fs.existsSync(path.join(b, 'model.bin'))) return b;
+      }
+      return null;
+    };
+    let resolvedDir = findModelDir(modelName);
+    if (!resolvedDir && modelName !== 'base') {
+      // Tank-proof: never hand a bare model name to faster-whisper for an unbundled
+      // model — it would trigger a multi-GB HuggingFace download mid-transcribe and
+      // hang. Fall back to the always-bundled `base` engine instead.
+      console.warn(`[Batch Local] model "${modelName}" not present locally/bundled — falling back to bundled base`);
+      resolvedDir = findModelDir('base');
+      modelName = 'base';
     }
-    // windy-*-ct2 engines live under their bare id; stock names get the
-    // faster-whisper- prefix. Mirrors engine/transcriber.py _resolve_model_ref.
-    const modelSub = String(modelName).endsWith('-ct2') ? modelName : `faster-whisper-${modelName}`;
-    const localModelDir = path.join(os.homedir(), '.windy-pro', 'model', modelSub);
-    let bundledModelDir = '';
-    if (process.resourcesPath) {
-      bundledModelDir = path.join(process.resourcesPath, 'bundled', 'model', modelSub);
-    }
-    let modelRef = `"${modelName}"`;
-    if (fs.existsSync(path.join(localModelDir, 'model.bin'))) {
-      modelRef = `"${localModelDir.replace(/\\/g, '/')}"`;
-    } else if (bundledModelDir && fs.existsSync(path.join(bundledModelDir, 'model.bin'))) {
-      modelRef = `"${bundledModelDir.replace(/\\/g, '/')}"`;
-    }
+    const modelRef = resolvedDir ? resolvedDir.replace(/\\/g, '/') : modelName;
     console.info('[Batch Local] Model ref:', modelRef, '(configured model:', modelName, ')');
     const scriptPath = path.join(tmpDir, `windy-batch-transcribe-${tmpId}.py`);
     const scriptContent = [
       'import time',
       'from faster_whisper import WhisperModel',
       't0 = time.monotonic()',
-      `model = WhisperModel(${modelRef}, device="cpu", compute_type="int8")`,
-      `segments, info = model.transcribe("${wavPath.replace(/\\/g, '/')}", language="en", beam_size=5, condition_on_previous_text=True, vad_filter=False, no_speech_threshold=0.3)`,
+      `model = WhisperModel(${JSON.stringify(modelRef)}, device="cpu", compute_type="int8")`,
+      `segments, info = model.transcribe(${JSON.stringify(wavPath.replace(/\\/g, '/'))}, language=None, beam_size=5, condition_on_previous_text=True, vad_filter=False, no_speech_threshold=0.3)`,
       'text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())',
       'elapsed = round(time.monotonic() - t0, 2)',
       'print(text)',
@@ -6922,9 +7542,12 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     console.info('[Batch Local] Running Python transcription script (fallback)...');
 
     const { stdout, stderr } = await execFileAsync(pythonPathLocal, [scriptPath], {
-      timeout: 120000,
+      timeout: dynTimeoutMs,
       maxBuffer: 10 * 1024 * 1024,
-      env: { ...process.env, KMP_DUPLICATE_LIB_OK: 'TRUE' }
+      // Force faster-whisper fully offline (matches the primary server spawn + translate_local.py).
+      // Without these, an unresolved model dir here could trigger a HuggingFace fetch — a hang
+      // and a phone-home that breaks the "fully offline / your voice stays local" guarantee.
+      env: { ...process.env, KMP_DUPLICATE_LIB_OK: 'TRUE', HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1' }
     });
 
     // Extract timing from stderr
@@ -6949,6 +7572,7 @@ ipcMain.handle('batch-transcribe-local', async (event, base64Audio) => {
     try { await fsp.unlink(webmPath); } catch (_) { }
     try { await fsp.unlink(wavPath); } catch (_) { }
   }
+  })(), dynTimeoutMs, 'batch-transcribe-local');
 });
 
 ipcMain.handle('auto-paste-text', async (event, text) => {
@@ -6958,6 +7582,12 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
     const trimmed = text.trim();
     const pasteConfig = store.get('paste') || { strategy: 'auto', fallbackChain: [] };
     console.info(`[AutoPaste] Text length: ${trimmed.length} chars, config.strategy=${pasteConfig.strategy}`);
+
+    // Tank rule: the transcript must NEVER be lost. Put it on the clipboard
+    // FIRST — before any focus/permission step that might bail (e.g. missing
+    // Accessibility) — so the user can always recover it with a manual Cmd+V
+    // even when auto-injection can't run.
+    try { clipboard.writeText(trimmed); } catch (_) { /* clipboard best-effort */ }
 
     // ── macOS PID activation (load-bearing focus prep) ──
     // Move focus to the tracked target app BEFORE paste fires. Without this,
@@ -7232,7 +7862,7 @@ ipcMain.handle('get-archive-history', async () => {
 
         // Gather all files in this day directory for media matching
         const allFiles = fs.readdirSync(dirPath);
-        const mdFiles = allFiles.filter(f => f.endsWith('.md') && f !== `${dateDir}.md`).sort().reverse();
+        const mdFiles = allFiles.filter(f => /^\d{6}\.md$/.test(f)).sort().reverse();
         const audioFiles = allFiles.filter(f => f.endsWith('.webm') && !f.includes('-video'));
         const videoFiles = allFiles.filter(f => f.endsWith('.webm') && f.includes('-video'));
         const consumedAudio = new Set(); // Track matched audio files
@@ -7267,14 +7897,19 @@ ipcMain.handle('get-archive-history', async () => {
               if (line.startsWith('# ')) continue;
               // Handle both **Bold:** and bare Key: metadata formats
               const isMetaLine = (line.startsWith('**') && line.includes(':')) ||
-                /^(Start|End|Words|Engine|Time|Date|Duration):\s/.test(line);
+                /^(Start|End|Words|Engine|Time|Date|Duration|App):\s/.test(line);
               if (isMetaLine) {
                 if (line.includes('Words:')) {
                   const m = line.match(/Words:\s*(\d+)/);
                   if (m) wordCount = parseInt(m[1]);
                 }
                 if (line.includes('Start:') || line.includes('Time:')) {
-                  const m = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/);
+                  // Keep fractional seconds + timezone designator: the archive
+                  // writes "Start: …T09:57:12.582Z" and truncating the Z made
+                  // new Date() re-read the UTC clock as LOCAL time — every
+                  // archive entry showed 4h in the future AND escaped the 30s
+                  // dedupe against its localStorage twin (double-listed rows).
+                  const m = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)/);
                   if (m) dateStr = m[1];
                 }
                 if (line.includes('Engine:')) {
@@ -7639,10 +8274,10 @@ ipcMain.handle('get-archive-stats', async () => {
   }
   try {
     const archiveRoot = getArchiveFolder();
-    try { await fsp.access(archiveRoot); } catch { return { totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0 }; }
+    try { await fsp.access(archiveRoot); } catch { return { totalFiles: 0, totalSizeMB: 0, days: 0, audioHours: 0, videoHours: 0, totalWords: 0, totalSessions: 0, totalChars: 0, wpm: 0, streak: 0 }; }
 
     let totalFiles = 0, totalSize = 0, days = new Set();
-    let audioBytes = 0, videoBytes = 0, totalWords = 0, totalSessions = 0, totalChars = 0;
+    let audioBytes = 0, videoBytes = 0, totalWords = 0, totalSessions = 0, totalChars = 0, speakingMs = 0;
 
     const items = await fsp.readdir(archiveRoot);
     for (const item of items) {
@@ -7665,10 +8300,16 @@ ipcMain.handle('get-archive-stats', async () => {
             totalSessions++;
             try {
               const content = await fsp.readFile(path.join(itemPath, file), 'utf-8');
-              const textLines = content.split('\n').filter(l => !l.startsWith('#') && !l.startsWith('**') && l.trim() !== '---' && l.trim() !== '');
-              const text = textLines.join(' ').trim();
-              totalWords += text.split(/\s+/).filter(Boolean).length;
-              totalChars += text.length;
+              // Word count: prefer the authoritative "Words:" metadata (the real text count
+              // written at archive time); fall back to counting the body for legacy entries.
+              // (The old approach counted the Start/End/Words meta lines as text — inflated.)
+              const wm = content.match(/^Words:\s*(\d+)/m);
+              const body = content.includes('---') ? content.split('---').slice(1).join('---').trim() : content;
+              totalWords += wm ? parseInt(wm[1], 10) : body.split(/\s+/).filter(Boolean).length;
+              totalChars += body.length;
+              // Speaking duration (for wpm) from Start/End metadata.
+              const sm = content.match(/^Start:\s*(.+)$/m), em = content.match(/^End:\s*(.+)$/m);
+              if (sm && em) { const dur = new Date(em[1]) - new Date(sm[1]); if (dur > 0 && dur < 3600000) speakingMs += dur; }
             } catch (_) { }
           }
         } catch (_) { }
@@ -7676,12 +8317,21 @@ ipcMain.handle('get-archive-stats', async () => {
     }
     const audioHours = (audioBytes / 1024 / 16) / 3600;
     const videoHours = (videoBytes / 1024 / 100) / 3600;
+    // wpm = total words / total speaking minutes (Wispr-style average dictation rate).
+    const wpm = speakingMs > 0 ? Math.round(totalWords / (speakingMs / 60000)) : 0;
+    // Current day-streak: consecutive days with >=1 dictation, counting back from today.
+    // Today is optional (grace) — the streak only breaks once a full day is missed.
+    const pad = (n) => String(n).padStart(2, '0');
+    const keyOf = (dt) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+    let streak = 0; const cursor = new Date();
+    if (!days.has(keyOf(cursor))) cursor.setDate(cursor.getDate() - 1);
+    while (days.has(keyOf(cursor))) { streak++; cursor.setDate(cursor.getDate() - 1); }
     const result = {
       totalFiles, totalSizeMB: Math.round(totalSize / (1024 * 1024) * 10) / 10,
       days: days.size,
       audioHours: Math.round(audioHours * 100) / 100,
       videoHours: Math.round(videoHours * 100) / 100,
-      totalWords, totalSessions, totalChars
+      totalWords, totalSessions, totalChars, wpm, streak
     };
     _archiveStatsCache = result;
     _archiveStatsCacheTime = Date.now();
@@ -7920,6 +8570,14 @@ ipcMain.handle('export-voice-clone', async () => {
 
         csvRows.push(`"${destName}","${transcript}","${day}",${estDurationSec}`);
       }
+    }
+
+    // No audio means a useless empty zip — audio older than 7 days is auto-deleted.
+    // Tear down the already-opened write stream so we don't leave a partial file behind.
+    if (audioCount === 0) {
+      try { output.destroy(); } catch (_) { }
+      try { fs.unlinkSync(result.filePath); } catch (_) { }
+      return { ok: false, error: 'No audio recordings found (audio older than 7 days is auto-deleted; re-record to export voice data).' };
     }
 
     // Add metadata CSV
@@ -8224,7 +8882,6 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
   const DATA = JSON.stringify({ allPlans, featureDefs, tiers, monthlyPlanUrls, annualPlanUrls: Object.keys(annualPlanUrls).length ? annualPlanUrls : planUrls, lifetimePlanUrls, currentTier, initialTier });
 
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Choose Your Plan</title>' +
-    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
     '<style>' +
     '*{margin:0;padding:0;box-sizing:border-box;}' +
     'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B,#0F172A);color:#F1F5F9;min-height:100vh;overflow-x:hidden;}' +
@@ -8421,7 +9078,6 @@ ipcMain.handle('open-checkout-url', async (event, opts) => {
       if (navUrl.includes('/payment-success')) {
         navEvent.preventDefault();
         const successHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment Successful!</title>' +
-          '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">' +
           '<style>*{margin:0;padding:0;box-sizing:border-box;}' +
           'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B);color:#F1F5F9;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;}' +
           '.card{max-width:500px;padding:40px;animation:fadeIn 0.6s ease;}' +
@@ -8736,9 +9392,9 @@ print(f"DOWNLOADING {sys.argv[0]}", flush=True)
 try:
     from huggingface_hub import snapshot_download
     print("LOADING", flush=True)
-    local_dir = "${localDir}"
+    local_dir = ${JSON.stringify(localDir)}
     os.makedirs(local_dir, exist_ok=True)
-    snapshot_download("WindyLabs/${repoName}", local_dir=local_dir)
+    snapshot_download(${JSON.stringify('WindyLabs/' + repoName)}, local_dir=local_dir)
     print("DONE", flush=True)
 except Exception as e:
     print(f"ERROR {e}", flush=True)
@@ -8824,7 +9480,6 @@ function showDownloadWizard(newTier) {
   const DATA = JSON.stringify({ modelRows, toDownload, tierName, totalSizeMB });
 
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Downloading Engines</title>' +
-    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
     '<style>' +
     '*{margin:0;padding:0;box-sizing:border-box;}' +
     'body{font-family:"Inter",system-ui,sans-serif;background:linear-gradient(135deg,#0F172A,#1E1B4B,#0F172A);color:#F1F5F9;min-height:100vh;padding:30px;}' +
@@ -9074,6 +9729,56 @@ ipcMain.handle('translate-offline', async (event, text, sourceLang, targetLang) 
   }
 });
 
+// On-device translation — NLLB-200 (CTranslate2 + SentencePiece), fully offline.
+// Spawns the venv python on the bundled translate_local.py with the bundled model
+// (same offline-correct pattern as 'batch-transcribe-local'). No cloud, no API key.
+// Shared by the 'translate-local' IPC and the mini-translate-speech text step.
+async function nllbTranslate(text, sourceLang, targetLang) {
+  if (!text || !targetLang) return { ok: false, error: 'Missing text or target language' };
+  const tmpReq = path.join(os.tmpdir(), `windy-tr-${crypto.randomBytes(8).toString('hex')}.json`);
+  try {
+    const appDataDir = path.join(os.homedir(), '.windy-pro');
+    const venvPy = process.platform === 'win32'
+      ? path.join(appDataDir, 'venv', 'Scripts', 'python.exe')
+      : path.join(appDataDir, 'venv', 'bin', 'python');
+    const bundledRoot = process.resourcesPath ? path.join(process.resourcesPath, 'bundled') : null;
+    const bundledPy = bundledRoot
+      ? (process.platform === 'win32' ? path.join(bundledRoot, 'python', 'python.exe') : path.join(bundledRoot, 'python', 'bin', 'python3'))
+      : null;
+    const pythonPath = fs.existsSync(venvPy) ? venvPy : (bundledPy && fs.existsSync(bundledPy) ? bundledPy : 'python3');
+
+    const modelDir = app.isPackaged
+      ? path.join(process.resourcesPath, 'bundled', 'model', 'nllb-200-600M')
+      : path.join(__dirname, '..', '..', '..', 'extraResources', 'model', 'nllb-200-600M');
+    const scriptPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'engine', 'translate_local.py')
+      : path.join(__dirname, '..', '..', 'engine', 'translate_local.py');
+
+    if (!fs.existsSync(path.join(modelDir, 'model.bin'))) {
+      return { ok: false, error: 'On-device translation model is not installed.' };
+    }
+    fs.writeFileSync(tmpReq, JSON.stringify({
+      model_dir: modelDir,
+      items: [{ text, source: sourceLang || 'en', target: targetLang }],
+    }));
+
+    const { stdout } = await execFileAsync(pythonPath, [scriptPath, tmpReq], {
+      timeout: 60000,
+      maxBuffer: 16 * 1024 * 1024,
+      env: { ...process.env, HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1', KMP_DUPLICATE_LIB_OK: 'TRUE' },
+    });
+    const parsed = JSON.parse(stdout.trim().split('\n').pop());
+    if (!parsed.ok) return { ok: false, error: parsed.error || 'translation failed' };
+    return { ok: true, translatedText: parsed.results?.[0]?.translatedText || '', engine: parsed.engine || 'nllb-local' };
+  } catch (err) {
+    console.error('[translate-local] error:', err.message);
+    return { ok: false, error: err.message };
+  } finally {
+    try { fs.unlinkSync(tmpReq); } catch (_) {}
+  }
+}
+ipcMain.handle('translate-local', (event, text, sourceLang, targetLang) => nllbTranslate(text, sourceLang, targetLang));
+
 ipcMain.handle('apply-coupon', async (event, code) => {
   try {
     const stripe = getStripe();
@@ -9305,6 +10010,15 @@ ipcMain.handle('identify-song', async (event, { dataUrl, auddApiKey }) => {
 // Also fires a second restore 200ms later to catch AudioContext focus-steal.
 ipcMain.on('mic-access-granted', () => {
   if (process.platform !== 'darwin' || !global._lastFocusedPid) return;
+  // Don't steal focus to the target app when the user is ACTIVELY in the Windy window
+  // (e.g. Settings open) — that's what shoved the window behind everything. Discriminator:
+  // normal hotkey dictation keeps mainWindow focusable:false (getUserMedia momentarily
+  // steals focus but isFocusable stays false → restore still runs, paste works); only the
+  // Settings/UI path sets focusable:true, so isFocusable()&&isFocused() means "user is in Windy".
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocusable() && mainWindow.isFocused()) {
+    console.info('[Focus] Windy window is active (Settings/UI) — skipping restore-to-target');
+    return;
+  }
   const targetPid = global._lastFocusedPid;
   const targetApp = global._lastFocusedApp;
   console.info(`[Focus] Mic access granted — restoring cursor to "${targetApp}" (pid ${targetPid})`);
@@ -9335,11 +10049,21 @@ ipcMain.on('mic-access-granted', () => {
   // Every 5s, re-assert focus to keep the cursor blinking.
   // Some macOS apps lose caret blink if another process touches focus.
   if (global._focusKeepAlive) clearInterval(global._focusKeepAlive);
+  const keepAliveStart = Date.now();
   global._focusKeepAlive = setInterval(() => {
+    // Stop when recording + processing are done…
     if (!isRecording && !global._batchProcessing) {
-      clearInterval(global._focusKeepAlive);
-      global._focusKeepAlive = null;
-      return;
+      clearInterval(global._focusKeepAlive); global._focusKeepAlive = null; return;
+    }
+    // …or the instant the user is back in the Windy window (Settings/UI), so it can never
+    // keep yanking focus away from a window the user is trying to use…
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocusable() && mainWindow.isFocused()) {
+      clearInterval(global._focusKeepAlive); global._focusKeepAlive = null; return;
+    }
+    // …or after a 10-minute hard cap, so a stuck state can NEVER trap focus forever.
+    if (Date.now() - keepAliveStart > 600000) {
+      console.warn('[Focus] keepalive hit 10-min cap — stopping (safety)');
+      clearInterval(global._focusKeepAlive); global._focusKeepAlive = null; return;
     }
     restore('keepalive');
   }, 5000);
@@ -9361,11 +10085,14 @@ ipcMain.on('batch-complete', (event, { wordCount }) => {
   updateTrayMenu();
   if (tray) tray.setToolTip('Windy Word');
 
-  // Show OS notification
-  if (Notification.isSupported()) {
+  // Show OS notification — ONLY for a real result. The batch teardown finally-block
+  // also fires batch-complete with 0 (to clear the focus-keepalive state on every path);
+  // without this gate that produced a spurious second "0 words captured" toast after
+  // every successful transcription.
+  if (wordCount > 0 && Notification.isSupported()) {
     const notification = new Notification({
       title: '✨ Transcription Ready!',
-      body: `${wordCount || 0} words captured and polished.`,
+      body: `${wordCount} words captured and polished.`,
       silent: false
     });
     notification.on('click', () => {
@@ -9406,6 +10133,18 @@ ipcMain.on('recording-stopped', () => {
   updateMiniState('idle');
   if (tray) tray.setToolTip('Windy Word');
   console.info(`[Recording] Stopped via UI. PID preserved: "${global._lastFocusedApp || 'NONE'}" (pid ${global._lastFocusedPid || 'NONE'})`);
+});
+
+// Mirror of recording-stopped: the renderer notifies us when recording STARTS via the
+// Record button (or mini button). Without this, main's isRecording stayed false after a
+// button-start, so the ⌘⇧Space global hotkey's toggle flipped false→true and sent `true`
+// — which the renderer (already recording) ignored, leaving recording stuck ON. Only sets
+// isRecording=true; cannot regress the stop path.
+ipcMain.on('recording-started', () => {
+  isRecording = true;
+  updateTrayMenu();
+  updateTrayIcon('listening');
+  updateMiniState('recording');
 });
 
 // Save file dialog
@@ -9525,6 +10264,37 @@ app.whenReady().then(async () => {
       setTimeout(() => intel.noteClientError('error_dialog_shown', 'selftest', { recoverable: true }), 4000);
     }
   } catch (_) { /* never block startup */ }
+
+  // ── macOS microphone access (CRITICAL for dictation) ──────────────────────
+  // The Chromium permission handler approves getUserMedia at the APP layer, but
+  // that does NOT obtain the macOS OS-level (TCC) microphone grant. Without the
+  // OS grant, CoreAudio hands the process SILENT audio — getUserMedia succeeds,
+  // MediaRecorder records, but the result is empty ("No speech detected in
+  // recording"). A signed app usually gets an automatic system prompt on first
+  // device access; we must not rely on that. Explicitly ask the OS so the
+  // permission dialog reliably appears on first run (and after updates).
+  if (process.platform === 'darwin') {
+    try {
+      const { systemPreferences } = require('electron');
+      const status = systemPreferences.getMediaAccessStatus('microphone');
+      console.info('[Media] microphone access status at launch:', status);
+      if (status !== 'granted') {
+        systemPreferences.askForMediaAccess('microphone')
+          .then((granted) => console.info('[Media] microphone access granted:', granted))
+          .catch((e) => console.warn('[Media] askForMediaAccess(microphone) failed:', e?.message));
+      }
+      // Camera: do NOT pre-request at launch. Windy Word is a voice-to-text app, and an
+      // unsolicited camera-permission dialog on first run reads as invasive to a
+      // non-technical reader. Camera is only used by the opt-in "Save video recordings"
+      // feature, so the OS prompt is deferred to first actual video use — getUserMedia
+      // ({ video: true }) triggers the macOS TCC prompt naturally at that point. (Mic is
+      // pre-requested above because an ungranted mic yields SILENT audio, a silent
+      // failure; camera has no equivalent silent-failure mode.)
+    } catch (e) {
+      console.warn('[Media] media access check failed:', e?.message);
+    }
+  }
+
   // Clear file cache in dev mode to ensure fresh JS files
   if (process.argv.includes('--dev')) {
     try { await session.defaultSession.clearCache(); } catch (_) {}
@@ -9541,6 +10311,50 @@ app.whenReady().then(async () => {
   const { InstallWizard } = require(wizardPath);
   const APP_DATA_DIR = path.join(os.homedir(), '.windy-pro');
 
+  // When the book-launch fast path builds the engine venv on first run (async), defer
+  // the initial Python-server start until the venv is ready (ensureEngineVenv restarts
+  // it) — avoids a burst of failing bundled-Python attempts while pip runs.
+  let deferPythonForVenv = false;
+  if (InstallWizard.needsSetup(APP_DATA_DIR)) {
+    // ── Book-launch fast path ─────────────────────────────────────────────────
+    // The free Windy Word builds bundle every speech engine offline and have no
+    // account/license/model-download, so the installer-v2 wizard's real job (pick +
+    // download engines) is already done. Running its 10-screen flow on a launch-day
+    // machine only adds failure surface (hardware scan, a paywall screen, a network
+    // "install" step). When every engine this edition needs is already on disk, write
+    // the same config.json the wizard's final step writes and boot straight in. The
+    // in-app welcome panel (first-run.js) covers the only first-run touchpoint that
+    // matters: the dictation hotkey + mic permission. installer-v2 is left fully
+    // intact and simply never runs here. Reversible: nothing removed.
+    try {
+      const edition = require('./edition');
+      const engines = Array.isArray(edition.ENGINES) ? edition.ENGINES : [];
+      const userModelRoot = path.join(APP_DATA_DIR, 'model');
+      const bundledModelRoot = process.resourcesPath
+        ? path.join(process.resourcesPath, 'bundled', 'model') : '';
+      const isBundled = (id) => {
+        const dir = /-ct2$/.test(id) ? id : `faster-whisper-${id}`;
+        if (fs.existsSync(path.join(userModelRoot, dir, 'model.bin'))) return true;
+        return !!bundledModelRoot && fs.existsSync(path.join(bundledModelRoot, dir, 'model.bin'));
+      };
+      if (engines.length > 0 && engines.every(isBundled)) {
+        fs.mkdirSync(APP_DATA_DIR, { recursive: true });
+        fs.writeFileSync(path.join(APP_DATA_DIR, 'config.json'), JSON.stringify({
+          version: app.getVersion(),
+          installedAt: new Date().toISOString(),
+          models: engines,
+          pairs: [],
+          defaultModel: engines[0]
+        }, null, 2));
+        console.info(`[Main] Book-launch fast path: all ${engines.length} engines bundled — wizard skipped`);
+      }
+    } catch (e) {
+      console.warn('[Main] Book-launch fast path skipped:', e.message);
+    }
+  }
+
+  // Run the real installer-v2 wizard only if setup is STILL needed (i.e. engines must
+  // be downloaded). The fast path above satisfies it for the bundled free builds.
   if (InstallWizard.needsSetup(APP_DATA_DIR)) {
     console.info('[Main] Wizard needed — launching setup wizard');
     // Intel: onboarding funnel start (install.first_run.step, contract §1.7)
@@ -9573,7 +10387,14 @@ app.whenReady().then(async () => {
     }
   }
 
-  startPythonServer();
+  // Ensure the offline engine venv is healthy on EVERY launch — this is what self-heals a
+  // venv left half-built by an interrupted/slow first run. It MUST run regardless of
+  // config.json: needsSetup() only checks config.json (which is written before the async
+  // build finishes), so gating this behind it would let an interrupted first build stay
+  // bricked forever. Cheap no-op when the venv is already marked ready; returns true if a
+  // (re)build started, in which case ensureEngineVenv() starts the server itself when ready.
+  deferPythonForVenv = ensureEngineVenv(APP_DATA_DIR);
+  if (!deferPythonForVenv) startPythonServer();
   createWindow();
   createTray();
   createMacOSMenu();  // macOS application menu bar (Cmd+Q, Cmd+H, Cmd+M, Edit menu)
@@ -9715,7 +10536,14 @@ app.whenReady().then(async () => {
           console.warn('[Heartbeat] License revoked — all models deleted');
         }
       });
-      heartbeat.start();
+      // Book-launch free build: license enforcement is OFF (edition.js), so the heartbeat
+      // is never started — no phone-home, no offline-grace lockout, no revoke-delete.
+      // The app must work forever, offline. Paid enforcement lives in a separate build only.
+      if (require('./edition').LICENSE_ENFORCEMENT) {
+        heartbeat.start();
+      } else {
+        console.info('[Main] License enforcement OFF (free book-launch build) — heartbeat not started');
+      }
     } catch (e) {
       console.error('[Main] Heartbeat service skipped:', e.message);
     }
@@ -9723,15 +10551,22 @@ app.whenReady().then(async () => {
     // Auto-cleanup old archive media files (keeps transcripts forever)
     autoCleanupArchive();
 
-    // Auto-update check (T16 — fail silently if no releases)
+    // Auto-update check (T16 — fail silently if no releases).
+    // Skipped in the book-launch build: it's distributed via R2, not GitHub releases,
+    // so checkForUpdates only 404s on latest-mac.yml and leaks an unhandled rejection
+    // on every launch. Gated on the edition AUTO_UPDATE flag (reversible).
     try {
-      const { WindyUpdater } = require('./updater');
-      updaterInstance = new WindyUpdater();
-      updaterInstance.checkForUpdates();
-      // Periodic update check every 6 hours
-      setInterval(() => {
-        try { updaterInstance.checkForUpdates(); } catch (e) { /* silent */ }
-      }, 6 * 60 * 60 * 1000);
+      if (require('./edition').AUTO_UPDATE === false) {
+        console.info('[Main] Auto-updater disabled (book-launch build — distributed via R2, not GitHub releases)');
+      } else {
+        const { WindyUpdater } = require('./updater');
+        updaterInstance = new WindyUpdater();
+        Promise.resolve(updaterInstance.checkForUpdates()).catch((e) => console.warn('[Updater] check failed:', e?.message));
+        // Periodic update check every 6 hours
+        setInterval(() => {
+          try { Promise.resolve(updaterInstance.checkForUpdates()).catch(() => {}); } catch (e) { /* silent */ }
+        }, 6 * 60 * 60 * 1000);
+      }
     } catch (e) {
       console.error('[Main] Auto-updater skipped:', e.message);
     }
@@ -9823,7 +10658,10 @@ app.whenReady().then(async () => {
     // macOS: re-create window if dock icon clicked
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
-    } else {
+    } else if (mainWindow && !mainWindow.isDestroyed()) {
+      // show() alone does NOT un-minimize: after the title-bar ─ button the
+      // window stayed in the Dock no matter how often the icon was clicked.
+      if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
     }
   });

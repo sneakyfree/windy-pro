@@ -67,6 +67,11 @@ class UpgradePanel {
     }
 
     toggle() {
+        // Book-launch: this is a free, no-account build — there's no paid/cloud tier
+        // to sell, so the entire upgrade/pricing modal is disabled. Reversible: it
+        // returns in the full build (ecosystemUI true). Belt-and-suspenders with the
+        // hidden #settingsPlanSection entry point.
+        if (window.windyAPI && window.windyAPI.ecosystemUI === false) return;
         this.isOpen ? this.close() : this.open();
     }
 

@@ -27,6 +27,7 @@ except ImportError:
 
 WebSocketServerProtocol = Any
 
+from dataclasses import replace as _replace_config
 from .transcriber import StreamingTranscriber, TranscriberConfig, TranscriptionState
 from .vault import PromptVault
 from .vibe import VibeProcessor
@@ -66,6 +67,7 @@ class WindyServer:
         self._current_session_id: int = None
         self.vibe = VibeProcessor()
         self._pending_model = None
+        self._pending_device = None
         self._loop = None
         
     async def _broadcast(self, message: dict):
@@ -239,19 +241,24 @@ class WindyServer:
                         "message": f"Loading {self._pending_model} model..."
                     }))
                     
-                    # Create a fresh transcriber with the new model
-                    old_config = self.transcriber.config
-                    old_config.model_size = self._pending_model
-                    new_transcriber = StreamingTranscriber(old_config)
+                    # Create a fresh transcriber with the new model.
+                    # Build a SEPARATE config (dataclasses.replace) so the live
+                    # transcriber's config is untouched until the load succeeds —
+                    # otherwise a failed load leaves us reporting a model we never loaded.
+                    if self._pending_device is not None:
+                        new_config = _replace_config(self.transcriber.config, model_size=self._pending_model, device=self._pending_device)
+                    else:
+                        new_config = _replace_config(self.transcriber.config, model_size=self._pending_model)
+                    new_transcriber = StreamingTranscriber(new_config)
                     new_transcriber.on_state_change(self._on_state_change)
                     new_transcriber.on_transcript(self._on_transcript)
-                    
+
                     # Load model in thread pool to avoid blocking event loop
                     loop = asyncio.get_event_loop()
                     success = await loop.run_in_executor(
                         None, new_transcriber.load_model
                     )
-                    
+
                     if success:
                         self.transcriber = new_transcriber
                     else:
@@ -260,9 +267,11 @@ class WindyServer:
                             "message": f"Failed to load {self._pending_model} model"
                         }))
                         self._pending_model = None
+                        self._pending_device = None
                         return
-                    
+
                     self._pending_model = None
+                    self._pending_device = None
                 
                 self.transcriber.start_session()
                 self._current_session_id = self.vault.create_session()
@@ -327,21 +336,23 @@ class WindyServer:
                 self.vibe.enabled = config_data["vibe_enabled"]
                 applied["vibe_enabled"] = config_data["vibe_enabled"]
 
-            # Device change — requires model reload (same as model change)
+            # Device change — requires model reload. Queue it WITHOUT mutating the
+            # live config (the same shared-mutable-state trap the model path avoids):
+            # a failed device load (e.g. picking CUDA on a Mac) must not corrupt the
+            # working transcriber. Applied via _replace_config on the next reload.
             if "device" in config_data and self.transcriber:
                 new_device = config_data["device"]
-                self.transcriber.config.device = new_device
-                applied["device"] = new_device
-                # Queue model reload with new device
+                self._pending_device = new_device
                 self._pending_model = self.transcriber.config.model_size
+                applied["device"] = new_device
                 applied["device_note"] = "Device change will reload model"
 
             # Model change — hot-reload immediately if no active session
             if "model" in config_data:
                 new_model = config_data["model"]
                 applied["model"] = new_model
-                
-                if self.transcriber and not self.transcriber._running:
+
+                if self.transcriber and new_model != self.transcriber.config.model_size and not self.transcriber._running:
                     # No active session — reload immediately
                     await websocket.send(json.dumps({
                         "type": "state",
@@ -354,9 +365,10 @@ class WindyServer:
                         "message": f"Loading {new_model} model..."
                     })
                     
-                    old_config = self.transcriber.config
-                    old_config.model_size = new_model
-                    new_transcriber = StreamingTranscriber(old_config)
+                    # Separate config so a failed load can't corrupt the live
+                    # transcriber's reported model_size (it keeps the old, working model).
+                    new_config = _replace_config(self.transcriber.config, model_size=new_model)
+                    new_transcriber = StreamingTranscriber(new_config)
                     new_transcriber.on_state_change(self._on_state_change)
                     new_transcriber.on_transcript(self._on_transcript)
                     new_transcriber.on_performance_warning(self._on_performance_warning)
@@ -368,6 +380,9 @@ class WindyServer:
                     
                     if success:
                         self.transcriber = new_transcriber
+                        # Keep _model_config in sync so /health reports the LIVE model, not the
+                        # startup one — it read the stale value through every hot-reload before.
+                        self._model_config = new_config
                         applied["model_reloaded"] = True
                         print(f"Model hot-reloaded to: {new_model}")
                     else:
@@ -490,19 +505,23 @@ class WindyServer:
                         
                         try:
                             lang = source_lang if source_lang not in ('auto', '') else None
-                            segments, info = self.transcriber.model.transcribe(
-                                tmp.name,  # File path — faster-whisper handles decoding via ffmpeg
-                                language=lang,
-                                task="translate",
-                                beam_size=self.transcriber.config.beam_size,
-                                vad_filter=True,
-                                condition_on_previous_text=False,
-                                no_speech_threshold=0.6,
-                                log_prob_threshold=-1.0
-                            )
-                            
-                            translated_text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())
-                            detected_lang = getattr(info, 'language', '') or ''
+                            # Run blocking inference off the event loop (see _transcribe_file_and_reply).
+                            def _do_translate():
+                                segments, info = self.transcriber.model.transcribe(
+                                    tmp.name,  # File path — faster-whisper handles decoding via ffmpeg
+                                    language=lang,
+                                    task="translate",
+                                    beam_size=self.transcriber.config.beam_size,
+                                    vad_filter=True,
+                                    condition_on_previous_text=False,
+                                    no_speech_threshold=0.6,
+                                    log_prob_threshold=-1.0
+                                )
+                                txt = " ".join(seg.text.strip() for seg in segments if seg.text.strip())
+                                return txt, (getattr(info, 'language', '') or '')
+
+                            loop = asyncio.get_event_loop()
+                            translated_text, detected_lang = await loop.run_in_executor(None, _do_translate)
                             
                             await websocket.send(json.dumps({
                                 "type": "translate_result",
@@ -553,41 +572,7 @@ class WindyServer:
                         tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
                         tmp.write(audio_data)
                         tmp.close()
-                        
-                        try:
-                            t0 = time.monotonic()
-                            lang = language if language not in ('auto', '') else None
-                            segments, info = self.transcriber.model.transcribe(
-                                tmp.name,
-                                language=lang,
-                                task="transcribe",
-                                beam_size=self.transcriber.config.beam_size,
-                                vad_filter=True,
-                                condition_on_previous_text=True,
-                                no_speech_threshold=0.3,
-                                log_prob_threshold=-1.0
-                            )
-                            
-                            text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())
-                            elapsed = round(time.monotonic() - t0, 2)
-                            audio_duration = getattr(info, 'duration', 0) or 0
-                            ratio = round(elapsed / max(audio_duration, 0.01), 2)
-                            
-                            await websocket.send(json.dumps({
-                                "type": "transcribe_result",
-                                "text": text,
-                                "elapsed_s": elapsed,
-                                "audio_duration_s": round(audio_duration, 1),
-                                "ratio": ratio,
-                                "model": self.transcriber.config.model_size,
-                                "engine": "local-whisper-ws"
-                            }))
-                            print(f"🎤 Batch transcribe: {len(text)} chars in {elapsed}s (ratio {ratio}, model {self.transcriber.config.model_size})")
-                        finally:
-                            try:
-                                os.unlink(tmp.name)
-                            except Exception:
-                                pass
+                        await self._transcribe_file_and_reply(websocket, tmp.name, language)
                     else:
                         await websocket.send(json.dumps({
                             "type": "transcribe_result",
@@ -607,13 +592,125 @@ class WindyServer:
                     "text": "",
                     "error": "No model loaded"
                 }))
-        
+
+        elif action == "transcribe_upload":
+            # Chunked upload for long recordings that exceed the single-frame WS
+            # limit (max_size=50MB). Client sends this command, then N binary frames
+            # (each < 50MB), then {"action": "transcribe_upload_end"}. Frames are
+            # streamed straight to disk so RAM stays bounded for multi-hour audio,
+            # then faster-whisper transcribes the reassembled file (it decodes
+            # incrementally, so a long file does not load fully into RAM).
+            language = cmd.get("language", "en")
+            if self.transcriber and self.transcriber.model:
+                import tempfile
+                fmt = cmd.get("format", "wav")
+                suffix = f".{fmt}" if fmt else ".wav"
+                tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+                total = 0
+                MAX_UPLOAD = 2 * 1024 * 1024 * 1024  # 2GB hard safety cap (~17h opus)
+                aborted = False
+                try:
+                    while True:
+                        part = await websocket.recv()
+                        if isinstance(part, (bytes, bytearray)):
+                            total += len(part)
+                            if total > MAX_UPLOAD:
+                                aborted = True
+                                break
+                            tmp.write(part)
+                        else:
+                            try:
+                                ctrl = json.loads(part)
+                            except Exception:
+                                ctrl = {}
+                            if ctrl.get("action") == "transcribe_upload_end":
+                                break
+                            # ignore any other interleaved text frame
+                    tmp.close()
+                    if aborted:
+                        try: os.unlink(tmp.name)
+                        except Exception: pass
+                        await websocket.send(json.dumps({
+                            "type": "transcribe_result", "text": "",
+                            "error": "Recording too large (over 2GB)"
+                        }))
+                    elif total > 100:
+                        print(f"[upload] received {round(total/1048576,1)}MB, transcribing...", flush=True)
+                        await self._transcribe_file_and_reply(websocket, tmp.name, language)
+                    else:
+                        try: os.unlink(tmp.name)
+                        except Exception: pass
+                        await websocket.send(json.dumps({
+                            "type": "transcribe_result", "text": "",
+                            "error": "No audio data received"
+                        }))
+                except Exception as e:
+                    print(f"Transcribe upload error: {e}", file=sys.stderr)
+                    try:
+                        tmp.close(); os.unlink(tmp.name)
+                    except Exception:
+                        pass
+                    await websocket.send(json.dumps({
+                        "type": "transcribe_result", "text": "", "error": str(e)
+                    }))
+            else:
+                await websocket.send(json.dumps({
+                    "type": "transcribe_result", "text": "", "error": "No model loaded"
+                }))
+
         else:
             await websocket.send(json.dumps({
                 "type": "error",
                 "message": f"Unknown action: {action}"
             }))
     
+    async def _transcribe_file_and_reply(self, websocket, tmp_name, language):
+        """Transcribe an on-disk audio file with the loaded model and send the
+        transcribe_result. Shared by transcribe_blob (single frame) and
+        transcribe_upload (chunked, for recordings over the WS frame limit).
+        Always deletes the temp file when done."""
+        try:
+            lang = language if language not in ('auto', '') else None
+            # Run blocking CTranslate2 inference (AND generator consumption) OFF the
+            # event loop so the engine stays responsive — health, heartbeat, and a
+            # second request aren't frozen for the full duration of a long recording.
+            def _do_transcribe():
+                t0 = time.monotonic()
+                segments, info = self.transcriber.model.transcribe(
+                    tmp_name,
+                    language=lang,
+                    task="transcribe",
+                    beam_size=self.transcriber.config.beam_size,
+                    vad_filter=True,
+                    condition_on_previous_text=True,
+                    no_speech_threshold=0.3,
+                    log_prob_threshold=-1.0
+                )
+                txt = " ".join(seg.text.strip() for seg in segments if seg.text.strip())
+                el = round(time.monotonic() - t0, 2)
+                dur = getattr(info, 'duration', 0) or 0
+                return txt, el, dur
+
+            loop = asyncio.get_event_loop()
+            text, elapsed, audio_duration = await loop.run_in_executor(None, _do_transcribe)
+            ratio = round(elapsed / max(audio_duration, 0.01), 2)
+
+            await websocket.send(json.dumps({
+                "type": "transcribe_result",
+                "text": text,
+                "elapsed_s": elapsed,
+                "audio_duration_s": round(audio_duration, 1),
+                "ratio": ratio,
+                "model": self.transcriber.config.model_size,
+                "engine": "local-whisper-ws"
+            }))
+            print(f"🎤 Batch transcribe: {len(text)} chars in {elapsed}s (ratio {ratio}, model {self.transcriber.config.model_size})")
+        finally:
+            try:
+                os.unlink(tmp_name)
+            except Exception:
+                pass
+
     async def start(self, config: TranscriberConfig = None):
         """Start the WebSocket server."""
         self._loop = asyncio.get_running_loop()
@@ -917,6 +1014,13 @@ async def main():
             print("\nShutting down...")
         finally:
             await server.stop()
+    else:
+        # Model load / port bind failed. Exit NON-ZERO so the desktop app detects the
+        # failure (its pythonProcess 'close' handler restarts, then surfaces an error)
+        # instead of the process lingering at exit 0 while the UI waits forever for the
+        # 'Waiting for connections' ready signal that will never come.
+        print("Server failed to start (model load or port bind failed)", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

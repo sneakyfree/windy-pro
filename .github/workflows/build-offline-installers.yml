@@ -1,0 +1,100 @@
+name: Build Offline Installers (Win + Linux)
+
+# Full-OFFLINE Reader builds: same as build-installer.yml's win/linux jobs, but with all
+# 7 lean CT2 engines fetched into extraResources/model/ before packaging (~4.3 GB each),
+# then uploaded straight to R2 (downloads.windyword.ai) — no routing multi-GB through a
+# dev machine. Manual trigger only.
+on:
+  workflow_dispatch: {}
+  # workflow_dispatch only works once a workflow is on the default branch. Until then,
+  # pushing this branch's content to `ci/offline-build` fires the run.
+  push:
+    branches: [ 'ci/offline-build' ]
+
+env:
+  WINDY_EDITION: reader
+  R2_ENDPOINT: https://193b347aedeaafe35de0b5a534b2d9aa.r2.cloudflarestorage.com
+  R2_BUCKET: s3://windyword-releases
+  AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: auto
+
+jobs:
+  win-offline:
+    name: Windows x64 (offline)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install npm deps
+        run: npm ci
+      - name: Build portable Python+wheels bundle (win-x64)
+        run: node scripts/build-portable-bundle.js --target win-x64
+      - name: Stage bundle into extraResources/
+        run: node scripts/stage-portable-bundle.js --target win-x64
+      - name: Assert ffmpeg is bundled (guards the ENOENT-every-transcription regression)
+        shell: bash
+        run: |
+          test -f extraResources/ffmpeg/ffmpeg.exe \
+            || { echo "::error::extraResources/ffmpeg/ffmpeg.exe missing — Windows build would ship with no ffmpeg and every transcription would fail"; exit 1; }
+          echo "ffmpeg present: $(ls -la extraResources/ffmpeg/ffmpeg.exe)"
+      - name: Fetch 7 lean engines into extraResources/model (OFFLINE bundle)
+        shell: bash
+        run: bash scripts/ci/fetch-engines-ci.sh
+      - name: Show staged model size
+        shell: bash
+        run: du -sh extraResources/model || true
+      # NSIS's 32-bit makensis.exe can't mmap a >4GB payload ("failed creating mmap"),
+      # so an offline (~4.3GB) build must ship as a portable ZIP, not an installer.
+      - name: Build portable ZIP (with models)
+        run: npx electron-builder --win zip --x64 --publish never
+      - name: Upload offline ZIP to R2
+        shell: bash
+        run: |
+          ZIP=$(find dist -maxdepth 1 -name "*.zip" | head -1)
+          echo "uploading: $ZIP ($(du -h "$ZIP" | cut -f1))"
+          aws s3 cp "$ZIP" "$R2_BUCKET/Windy-Word-Reader-Offline-win-x64.zip" \
+            --endpoint-url "$R2_ENDPOINT" --content-type application/zip --only-show-errors
+          echo "verify:"; curl -sI "https://downloads.windyword.ai/Windy-Word-Reader-Offline-win-x64.zip" | grep -iE "^HTTP|content-length"
+
+  linux-offline:
+    name: Linux x64 (offline)
+    if: false   # already built + published to R2 (AppImage live); flip to true to rebuild
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install OS deps for AppImage
+        run: sudo apt-get update && sudo apt-get install -y libfuse2 portaudio19-dev libasound2-dev
+      - name: Install npm deps
+        run: npm ci
+      - name: Build portable Python+wheels bundle (linux-x64)
+        run: node scripts/build-portable-bundle.js --target linux-x64
+      - name: Stage bundle into extraResources/
+        run: node scripts/stage-portable-bundle.js --target linux-x64
+      - name: Assert ffmpeg is bundled (guards the ENOENT-every-transcription regression)
+        run: |
+          test -f extraResources/ffmpeg/ffmpeg \
+            || { echo "::error::extraResources/ffmpeg/ffmpeg missing — Linux build would ship with no ffmpeg and every transcription would fail"; exit 1; }
+          echo "ffmpeg present: $(ls -la extraResources/ffmpeg/ffmpeg)"
+      - name: Fetch 7 lean engines into extraResources/model (OFFLINE bundle)
+        run: bash scripts/ci/fetch-engines-ci.sh
+      - name: Show staged model size
+        run: du -sh extraResources/model || true
+      - name: Build AppImage (with models)
+        run: npx electron-builder --linux AppImage --x64 --publish never
+      - name: Upload offline AppImage to R2
+        run: |
+          IMG=$(find dist -maxdepth 1 -name "*.AppImage" | head -1)
+          echo "uploading: $IMG ($(du -h "$IMG" | cut -f1))"
+          aws s3 cp "$IMG" "$R2_BUCKET/Windy-Word-Reader-Offline-linux-x86_64.AppImage" \
+            --endpoint-url "$R2_ENDPOINT" --content-type application/octet-stream --only-show-errors
+          echo "verify:"; curl -sI "https://downloads.windyword.ai/Windy-Word-Reader-Offline-linux-x86_64.AppImage" | grep -iE "^HTTP|content-length"

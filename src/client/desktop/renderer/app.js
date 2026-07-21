@@ -10,6 +10,23 @@
 
 class WindyApp {
   constructor() {
+    // ═══ A1: One-time engine migration (self-heal "opens on 1.5GB flagship") ═══
+    // Early users could get windy_model pinned to the heavy pro-engine, forcing
+    // every launch to load the 1.5GB flagship. Reset that pin to Auto (WindyTune
+    // → lightweight bundled `base`) exactly once. Runs before any engine resolution.
+    // Early testers thrashed engines (pro-engine 1.5GB, edge, etc.) and the app
+    // would re-open on whatever heavy model was last pinned. The book-launch default
+    // must be Auto (WindyTune → lightweight multilingual `base`). Reset any stale pin
+    // to Auto exactly once; after that the user's own picks stick.
+    try {
+      if (localStorage.getItem('windy_engineDefaultV2') !== '1') {
+        localStorage.setItem('windy_model', '');
+        localStorage.setItem('windy_engine', 'windytune');
+        localStorage.setItem('windy_engineDefaultV2', '1');
+        console.info('[Migrate] reset engine pin to Auto (book-launch default)');
+      }
+    } catch (_) { /* localStorage unavailable — non-fatal */ }
+
     // State
     this.isRecording = false;
     this.currentState = 'idle';
@@ -27,15 +44,20 @@ class WindyApp {
     this.transcriptionEngine = 'local';  // 'local' | 'cloud' | 'stream' | 'smart'
 
     // Engine name → model mapping (UI names → actual models)
+    // Each Windy engine maps to its canonical lean CT2 model id (windy-*-ct2).
+    // main.js resolves these to the bundled offline model dir of the same name —
+    // NO legacy whisper-name translation (which mis-mapped Plus→large-v2 etc. and
+    // could trigger a 3GB HuggingFace download). WindyTune (Auto) stays on the
+    // always-bundled multilingual `base` for a rock-solid default. See BUNDLED_MODELS.
     this._engineModelMap = {
       'local': null, // auto-detect
-      'windytune': 'small', // auto-pilot: starts with small, auto-adjusts
-      'windy-nano': 'tiny', 'windy-lite': 'small', 'windy-core': 'base',
-      'windy-edge': 'medium', 'windy-plus': 'large-v2', 'windy-turbo': 'large-v3',
-      'windy-pro-engine': 'large-v3-turbo',
-      'windy-nano-cpu': 'tiny', 'windy-lite-cpu': 'small', 'windy-core-cpu': 'base',
-      'windy-edge-cpu': 'medium', 'windy-plus-cpu': 'large-v2', 'windy-turbo-cpu': 'large-v3',
-      'windy-pro-engine-cpu': 'large-v3-turbo',
+      'windytune': 'base', // auto-pilot: bundled multilingual base — see BUNDLED_MODELS
+      'windy-nano': 'windy-nano-ct2', 'windy-lite': 'windy-lite-ct2', 'windy-core': 'windy-core-ct2',
+      'windy-edge': 'windy-edge-ct2', 'windy-plus': 'windy-plus-ct2', 'windy-turbo': 'windy-turbo-ct2',
+      'windy-pro-engine': 'windy-pro-engine-ct2',
+      'windy-nano-cpu': 'windy-nano-ct2', 'windy-lite-cpu': 'windy-lite-ct2', 'windy-core-cpu': 'windy-core-ct2',
+      'windy-edge-cpu': 'windy-edge-ct2', 'windy-plus-cpu': 'windy-plus-ct2', 'windy-turbo-cpu': 'windy-turbo-ct2',
+      'windy-pro-engine-cpu': 'windy-pro-engine-ct2',
       'windy-translate-spark': null, 'windy-translate-standard': null
     };
 
@@ -84,6 +106,19 @@ class WindyApp {
     this.archiveOpenBtn = document.getElementById('archiveOpenBtn');
     this.archiveChangeBtn = document.getElementById('archiveChangeBtn');
     this.archivePathLabel = document.getElementById('archivePathLabel');
+
+    // Book-launch: WindyCloud isn't live — restrict the bottom-bar archive route to
+    // local destinations (Local / Off) by dropping the cloud options. The folder
+    // picker (⚙️) still lets users archive anywhere on disk. Reversible: the cloud
+    // routes return when CLOUD_STORAGE is true in edition.js.
+    if (this.archiveRouteSelect && window.windyAPI?.cloudStorage === false) {
+      Array.from(this.archiveRouteSelect.options).forEach(opt => {
+        if (opt.value === 'cloud' || opt.value === 'local_cloud') opt.remove();
+      });
+      if (['cloud', 'local_cloud'].includes(this.archiveRouteSelect.value)) {
+        this.archiveRouteSelect.value = 'local';
+      }
+    }
     this.connectionDot = document.getElementById('connectionDot');
     this.connectionText = document.getElementById('connectionText');
     this.archiveStatus = document.getElementById('archiveStatus');
@@ -135,6 +170,15 @@ class WindyApp {
     this.bindIPCEvents();
     this.initAgentBridge();
 
+    // One-time delegated listener for the always-present bottom export row.
+    // The per-show rebind in _showExportButtons() captures a stale snapshot of
+    // the text and leaves the buttons dead before the first transcription /
+    // after Clear; this delegated handler always reads the live transcript.
+    document.getElementById('exportButtons')?.addEventListener('click', (e) => {
+      const b = e.target.closest('.export-btn');
+      if (b) this._exportTranscript(this.getFullTranscript(), b.dataset.format);
+    });
+
     // ── Offline Detection (global) ──
     this.isOffline = !navigator.onLine;
     window.addEventListener('online', () => { this.isOffline = false; this._updateOfflineUI(); });
@@ -176,7 +220,12 @@ class WindyApp {
     if (window.windyAPI?.getSettings) {
       const settings = await window.windyAPI.getSettings();
       this.livePreview = settings?.livePreview !== false;
-      const route = settings?.archiveRouteToday || 'local';
+      let route = settings?.archiveRouteToday || 'local';
+      // Book-launch: a previously-saved cloud route is invalid (cloud options
+      // removed) — fall back to local so the selector never ends up blank.
+      if (window.windyAPI?.cloudStorage === false && (route === 'cloud' || route === 'local_cloud')) {
+        route = 'local';
+      }
       if (this.archiveRouteSelect) this.archiveRouteSelect.value = route;
       this._setArchiveRouteStatus(route);
 
@@ -196,8 +245,17 @@ class WindyApp {
       if (settings?.cloudPassword) this.cloudPassword = settings.cloudPassword;
       console.debug(`[Init] IPC: Engine=${this.transcriptionEngine}, CloudURL=${this.cloudUrl ? 'configured' : 'empty'}`);
 
-      // Load transcription mode (auto / local_only / cloud_only)
-      this.transcriptionMode = settings?.transcriptionMode || localStorage.getItem('windy_transcriptionMode') || 'auto';
+      // Load transcription mode (auto / local_only / cloud_only).
+      // Free/offline build (cloudStorage off): FORCE local-only and ignore any persisted
+      // mode. An upgrader from a prior tiered build can carry a stale 'cloud_only' (or
+      // 'auto') in settings/localStorage, which would otherwise win the `||` chain here and
+      // silently connect to wss://windyword.ai on launch (see the cloud_only branch below) —
+      // breaking the "your voice never leaves your device" promise. Only paid builds
+      // (cloudStorage on) honor the saved mode.
+      const _cloudDisabled = (window.windyAPI?.cloudStorage === false);
+      this.transcriptionMode = _cloudDisabled
+        ? 'local_only'
+        : (settings?.transcriptionMode || localStorage.getItem('windy_transcriptionMode') || 'auto');
       console.debug(`[Init] Transcription mode: ${this.transcriptionMode}`);
 
       // Cloud-only mode: connect to cloud WebSocket immediately, skip local backend
@@ -214,7 +272,15 @@ class WindyApp {
       }
 
       // Show current engine/model in status bar badge on startup
-      const savedModel = settings?.model || localStorage.getItem('windy_model') || 'small';
+      // A1: Default to a BUNDLED model, never the non-bundled 'small'. When the
+      // engine is WindyTune (Auto — the default), the loaded model must come from
+      // the Auto path (_engineModelMap['windytune'] = 'base': fast + multilingual),
+      // never a heavy saved pin — so a fresh/unpinned app never auto-loads pro-engine.
+      const startupBadgeEngine = localStorage.getItem('windy_engine') || this.transcriptionEngine || 'windytune';
+      const autoModel = (this._engineModelMap && this._engineModelMap['windytune']) || 'base';
+      const savedModel = (startupBadgeEngine === 'windytune')
+        ? autoModel
+        : (settings?.model || localStorage.getItem('windy_model') || autoModel);
       const engineName = this.transcriptionEngine || 'local';
       if (this.transcriptionMode === 'cloud_only') {
         this.updateModelBadge('cloud', false);
@@ -266,15 +332,18 @@ class WindyApp {
       });
     }
 
-    // Keyboard shortcuts: Ctrl+= (zoom in), Ctrl+- (zoom out), Ctrl+0 (reset)
+    // Keyboard shortcuts: zoom in/out/reset. Ctrl everywhere; on macOS ⌘ too —
+    // the shortcut cards advertise the platform modifier, so ⌘ must actually work.
+    const zoomIsMac = (window.windyAPI && window.windyAPI.platform === 'darwin');
     document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
+      const mod = e.ctrlKey || (zoomIsMac && e.metaKey);
+      if (mod && (e.key === '=' || e.key === '+')) {
         e.preventDefault();
         this._changeFontSize(10);
-      } else if (e.ctrlKey && e.key === '-') {
+      } else if (mod && e.key === '-') {
         e.preventDefault();
         this._changeFontSize(-10);
-      } else if (e.ctrlKey && e.key === '0') {
+      } else if (mod && e.key === '0') {
         e.preventDefault();
         this._setFontSize(100);
       }
@@ -305,7 +374,7 @@ class WindyApp {
     }
 
     // Ecosystem navigation toolbar
-    if (typeof EcosystemNav !== 'undefined') {
+    if (typeof EcosystemNav !== 'undefined' && window.windyAPI?.ecosystemUI !== false) {
       this.ecosystemNav = new EcosystemNav(this);
     }
 
@@ -630,6 +699,16 @@ class WindyApp {
     // Paste button
     this.pasteBtn.addEventListener('click', () => this.pasteTranscript());
 
+    // Engine badge → manual override menu (WindyTune Auto, or pin any engine).
+    this._setupEngineMenu();
+
+    // UI-6: the translate menu's Quick-Translate <kbd> is static HTML ("Ctrl+Shift+T");
+    // show the ⌘ modifier on macOS to match the real accelerator (⌘ = CommandOrControl).
+    if (window.windyAPI?.platform === 'darwin') {
+      const qt = document.getElementById('qtShortcut');
+      if (qt) qt.textContent = '⌘+Shift+T';
+    }
+
     // Today archive route
     this.archiveRouteSelect?.addEventListener('change', () => {
       const route = this.archiveRouteSelect.value;
@@ -940,12 +1019,10 @@ class WindyApp {
     // ═══ WindyTune Adaptive Model Notifications ═══
     window.windyAPI.onWindyTuneModelSwitched?.((data) => {
       console.info(`[WindyTune] Model switched: ${data.oldModel} → ${data.newModel}`);
-      // Update model badge in status bar
-      const modelBadge = document.getElementById('modelBadge');
-      if (modelBadge) {
-        modelBadge.textContent = `WindyTune (${data.newModel})`;
-      }
-      // Show actionable toast with Undo option
+      // Update the persistent badge via the branded formatter (⚡ WindyTune · <model>).
+      this.updateModelBadge(data.newModel);
+      // Show actionable toast with Undo option — this is the "switching engines"
+      // notification the user sees (and a support breadcrumb).
       this._showWindyTuneToast(`⚡ ${data.message}`, data.canUndo ? data.oldModel : null);
     });
 
@@ -978,7 +1055,7 @@ class WindyApp {
           <div class="welcome-panel" data-step="1" style="display:none">
             <div style="font-size:56px;margin-bottom:16px">🎤</div>
             <h2 style="font-size:22px;color:#f1f5f9;margin-bottom:8px">How to Record</h2>
-            <p style="color:#94a3b8;font-size:14px;line-height:1.6">Click the <strong style="color:#22c55e">Record</strong> button or press <strong style="color:#60a5fa">Ctrl+Shift+Space</strong> to start recording. Speak naturally — Windy Word transcribes as you go.</p>
+            <p style="color:#94a3b8;font-size:14px;line-height:1.6">Click the <strong style="color:#22c55e">Record</strong> button or press <strong style="color:#60a5fa">${window.windyAPI?.platform === 'darwin' ? '⌘+Shift+Space' : 'Ctrl+Shift+Space'}</strong> to start recording. Speak naturally — Windy Word transcribes as you go.</p>
           </div>
           <div class="welcome-panel" data-step="2" style="display:none">
             <div style="font-size:56px;margin-bottom:16px">🌐</div>
@@ -1081,6 +1158,12 @@ class WindyApp {
     this.setConnectionStatus('connecting');
 
     try {
+      // Detach + close any prior socket before reopening, so reconnect loops don't leak
+      // handlers/sockets (e.g. when the backend is briefly unavailable and we retry).
+      if (this.ws) {
+        try { this.ws.onopen = this.ws.onmessage = this.ws.onerror = this.ws.onclose = null; } catch (_) {}
+        try { this.ws.close(); } catch (_) {}
+      }
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
@@ -1588,10 +1671,11 @@ class WindyApp {
       quickTranslate: hotkeys?.quickTranslate || defaults.quickTranslate
     };
 
-    // Format accelerator string for display
-    const fmt = (accel) => accel
-      .replace(/CommandOrControl/gi, 'Ctrl')
-      .replace(/\+/g, '+');
+    // Format accelerator string for display — OS-aware. On macOS, CommandOrControl
+    // maps to ⌘ (Command), NOT Ctrl. Showing "Ctrl" on a Mac is a lie that leaves
+    // people mashing the wrong key and concluding the app is broken.
+    const isMac = (window.windyAPI && window.windyAPI.platform === 'darwin');
+    const fmt = (accel) => accel.replace(/CommandOrControl/gi, isMac ? '⌘' : 'Ctrl');
 
     const customBadge = ' <span style="color:#A78BFA;font-size:10px;font-weight:600;vertical-align:middle;margin-left:4px;background:rgba(167,139,250,0.15);padding:1px 5px;border-radius:4px;">✦ custom</span>';
 
@@ -1624,6 +1708,14 @@ class WindyApp {
       const isCustom = actual[row.key] !== defaults[row.key];
       el.innerHTML = `<kbd>${fmt(actual[row.key])}</kbd> — ${row.label}${isCustom ? customBadge : ''}`;
     }
+
+    // Zoom row: the listener accepts ⌘ on macOS (and Ctrl everywhere), so show
+    // the platform modifier instead of the hardcoded "Ctrl" the markup ships.
+    const zoomEl = document.getElementById('shortcutRow_zoom');
+    if (zoomEl) {
+      const zm = isMac ? '⌘' : 'Ctrl';
+      zoomEl.innerHTML = `<kbd>${zm} + / −</kbd> — <span style="color:#A78BFA;font-weight:600;">Zoom</span> in / out &nbsp; <kbd>${zm}+0</kbd> Reset`;
+    }
   }
 
   _updateArchivePathLabel() {
@@ -1637,6 +1729,202 @@ class WindyApp {
     } else {
       this.archivePathLabel.textContent = '~/Documents/WindyProArchive';
       this.archivePathLabel.title = 'Default: ~/Documents/WindyProArchive';
+    }
+  }
+
+  // ── Manual engine override (status-bar badge menu) ───────────────────────
+  // WindyTune auto-pilot is the default. Clicking the engine badge opens a menu
+  // to pin any installed engine — or return to Auto. Pinning sets engine.engine
+  // to a specific id, which makes WindyTune back off (it only auto-switches when
+  // engine === 'windytune'). The safety valve for "WindyTune is stuck on a slow
+  // model and won't come down." Reuses the proven switch path (updateSettings +
+  // WS model hot-reload). Fastest → most accurate.
+  // Engine catalog — id ↔ whisper model ↔ friendly name + size. Sizes/notes match
+  // the website (TheVault). `model` lets the badge translate the raw whisper model
+  // WindyTune is running (e.g. 'small') back into a real engine name (Windy Lite).
+  get _engineLadder() {
+    return [
+      { id: 'windy-nano',       model: 'windy-nano-ct2',       name: 'Windy Nano',  size: '38 MB',  note: 'Fastest · lightest' },
+      { id: 'windy-lite',       model: 'windy-lite-ct2',       name: 'Windy Lite',  size: '72 MB',  note: 'Fast · balanced' },
+      { id: 'windy-core',       model: 'windy-core-ct2',       name: 'Windy Core',  size: '234 MB', note: 'Balanced everyday driver' },
+      { id: 'windy-edge',       model: 'windy-edge-ct2',       name: 'Windy Edge',  size: '727 MB', note: 'High-accuracy workhorse · types in lowercase' },
+      { id: 'windy-plus',       model: 'windy-plus-ct2',       name: 'Windy Plus',  size: '734 MB', note: 'Premium accuracy' },
+      { id: 'windy-turbo',      model: 'windy-turbo-ct2',      name: 'Windy Turbo', size: '777 MB', note: 'State of the art · 99 languages · types in CAPS' },
+      { id: 'windy-pro-engine', model: 'windy-pro-engine-ct2', name: 'Windy Word',  size: '1.5 GB', note: 'Flagship · most accurate' },
+    ];
+  }
+
+  _setupEngineMenu() {
+    const badge = document.getElementById('modelBadge');
+    if (!badge) return;
+    // Make the badge read + feel like a real button — it opens the engine menu.
+    const REST = 'rgba(167,139,250,0.14)';
+    const HOVER = 'rgba(167,139,250,0.28)';
+    badge.style.cursor = 'pointer';
+    badge.style.userSelect = 'none';
+    badge.style.background = REST;
+    badge.style.borderColor = 'rgba(167,139,250,0.55)';
+    badge.style.padding = '3px 10px';
+    badge.style.fontWeight = '600';
+    badge.style.transition = 'background .15s, border-color .15s, transform .05s';
+    badge.setAttribute('role', 'button');
+    badge.setAttribute('tabindex', '0');
+    badge.setAttribute('aria-haspopup', 'menu');
+    badge.addEventListener('mouseenter', () => { badge.style.background = HOVER; badge.style.borderColor = 'rgba(167,139,250,0.85)'; });
+    badge.addEventListener('mouseleave', () => { badge.style.background = REST; badge.style.borderColor = 'rgba(167,139,250,0.55)'; });
+    badge.addEventListener('mousedown', () => { badge.style.transform = 'scale(0.96)'; });
+    badge.addEventListener('mouseup', () => { badge.style.transform = 'scale(1)'; });
+    badge.addEventListener('click', (e) => { e.stopPropagation(); this._toggleEngineMenu(); });
+    badge.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._toggleEngineMenu(); }
+    });
+  }
+
+  _toggleEngineMenu() {
+    const existing = document.getElementById('engineMenu');
+    if (existing) { existing.remove(); return; }
+    const badge = document.getElementById('modelBadge');
+    if (!badge) return;
+
+    const current = localStorage.getItem('windy_engine') || 'windytune';
+    const isAuto = current === 'windytune' || current === 'local';
+
+    const menu = document.createElement('div');
+    menu.id = 'engineMenu';
+    menu.style.cssText =
+      'position:fixed;z-index:100000;background:#11161f;border:1px solid #2a3340;' +
+      'border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.55);padding:6px;' +
+      'width:288px;max-height:72vh;overflow:auto;font-size:13px;';
+
+    // Clear close (✕) affordance — top-right of the menu.
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText =
+      'position:sticky;top:0;float:right;margin:-2px -2px 0 0;width:24px;height:24px;border:none;' +
+      'background:rgba(255,255,255,0.06);color:#9aa6b2;border-radius:6px;cursor:pointer;' +
+      'font-size:12px;line-height:1;z-index:1;';
+    closeBtn.onmouseenter = () => { closeBtn.style.background = 'rgba(255,255,255,0.16)'; closeBtn.style.color = '#fff'; };
+    closeBtn.onmouseleave = () => { closeBtn.style.background = 'rgba(255,255,255,0.06)'; closeBtn.style.color = '#9aa6b2'; };
+    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.remove(); });
+    menu.appendChild(closeBtn);
+
+    const mkRow = (id, name, note, size, selected) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.style.cssText =
+        'display:flex;align-items:center;gap:10px;width:100%;text-align:left;' +
+        'background:' + (selected ? 'rgba(245,158,11,0.12)' : 'transparent') + ';' +
+        'border:1px solid ' + (selected ? 'rgba(245,158,11,0.35)' : 'transparent') + ';' +
+        'border-radius:8px;padding:8px 10px;margin:2px 0;cursor:pointer;color:#e8edf2;';
+      row.onmouseenter = () => { if (!selected) row.style.background = 'rgba(255,255,255,0.05)'; };
+      row.onmouseleave = () => { if (!selected) row.style.background = 'transparent'; };
+      row.innerHTML =
+        '<span style="width:16px;flex:none;color:#F59E0B">' + (selected ? '✓' : '') + '</span>' +
+        '<span style="flex:1">' +
+          '<span style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">' +
+            '<span style="font-weight:600">' + name + '</span>' +
+            (size ? '<span style="color:#8b97a5;font-size:11px;white-space:nowrap">' + size + '</span>' : '') +
+          '</span>' +
+          '<span style="display:block;color:#8b97a5;font-size:11px;margin-top:1px">' + note + '</span>' +
+        '</span>';
+      row.addEventListener('click', (e) => { e.stopPropagation(); menu.remove(); this.setEngine(id); });
+      return row;
+    };
+
+    menu.appendChild(mkRow('windytune', '⚡ Auto — WindyTune', 'Picks the best engine for your machine', '', isAuto));
+
+    const divider = document.createElement('div');
+    divider.style.cssText = 'height:1px;background:#2a3340;margin:6px 4px;';
+    menu.appendChild(divider);
+    const hdr = document.createElement('div');
+    hdr.textContent = 'Pin a specific engine';
+    hdr.style.cssText = 'color:#6b7785;font-size:10px;text-transform:uppercase;letter-spacing:.08em;padding:4px 10px 6px;';
+    menu.appendChild(hdr);
+
+    for (const e of this._engineLadder) {
+      menu.appendChild(mkRow(e.id, e.name, e.note, e.size, !isAuto && current === e.id));
+    }
+
+    const foot = document.createElement('div');
+    foot.style.cssText = 'color:#6b7785;font-size:10px;padding:8px 10px 4px;border-top:1px solid #2a3340;margin-top:6px;';
+    foot.textContent = 'Auto adapts to your hardware. Pin one for full control — Back to Auto anytime.';
+    menu.appendChild(foot);
+
+    document.body.appendChild(menu);
+
+    // Position anchored to the badge (prefer above; flip below if no room).
+    const r = badge.getBoundingClientRect();
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    let left = Math.max(8, Math.min(r.left, window.innerWidth - mw - 8));
+    let top = r.top - mh - 8;
+    if (top < 8) top = Math.min(r.bottom + 8, window.innerHeight - mh - 8);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+
+    const close = (ev) => {
+      if (ev.type === 'keydown' && ev.key !== 'Escape') return;
+      if (ev.type === 'click' && menu.contains(ev.target)) return;
+      menu.remove();
+      document.removeEventListener('click', close, true);
+      document.removeEventListener('keydown', close, true);
+    };
+    setTimeout(() => {
+      document.addEventListener('click', close, true);
+      document.addEventListener('keydown', close, true);
+    }, 0);
+  }
+
+  /**
+   * Switch the transcription engine. engineId 'windytune' = Auto (re-enables
+   * WindyTune); any other id pins that engine (WindyTune backs off). Persists to
+   * the main store (engine.engine + engine.model) and hot-reloads the Python
+   * model over the existing WS — the same mechanism WindyTune uses internally.
+   */
+  setEngine(engineId) {
+    const isAuto = engineId === 'windytune';
+    const model = (this._engineModelMap && this._engineModelMap[engineId]) || 'base';
+    // ── Tank-proof guard ──────────────────────────────────────────────────
+    // Only switch to a model that's actually bundled on the machine. Picking an
+    // un-bundled engine would make faster-whisper start a silent multi-GB download
+    // and the engine would appear to "hang" — the exact wobble we're killing.
+    // The Reader edition ships all 7 lean engines offline, so the full ladder is
+    // live; `base` is the always-present WindyTune default.
+    const BUNDLED_MODELS = ['base',
+      'windy-nano-ct2', 'windy-lite-ct2', 'windy-core-ct2', 'windy-edge-ct2',
+      'windy-plus-ct2', 'windy-turbo-ct2', 'windy-pro-engine-ct2'];
+    if (!isAuto && !BUNDLED_MODELS.includes(model)) {
+      const eng = this._engineLadder.find(e => e.id === engineId);
+      if (typeof this.showReconnectToast === 'function') {
+        this.showReconnectToast(`⬇ ${eng ? eng.name : engineId}${eng?.size ? ' (' + eng.size + ')' : ''} ships in the full engine pack — coming soon. Keeping your current engine so nothing stalls.`);
+      }
+      return; // do NOT switch — prevents the silent download/hang
+    }
+    this.transcriptionEngine = engineId;
+    try {
+      if (window.windyAPI?.updateSettings) window.windyAPI.updateSettings({ engine: engineId, model });
+    } catch (_) { /* settings persist best-effort */ }
+    try {
+      localStorage.setItem('windy_engine', engineId);
+      if (model) localStorage.setItem('windy_model', model);
+    } catch (_) { /* localStorage best-effort */ }
+    // Hot-reload the model on the Python server (same message the settings panel
+    // and WindyTune use). If the socket isn't open, the persisted setting applies
+    // on the next connect.
+    try {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN && model) {
+        this.send('config', { config: { model } });
+      }
+    } catch (_) { /* ws best-effort */ }
+    this.updateModelBadge(engineId);
+    const label = isAuto
+      ? 'Auto — WindyTune'
+      : (this._engineLadder.find(e => e.id === engineId)?.name || engineId);
+    if (typeof this.showReconnectToast === 'function') {
+      this.showReconnectToast(isAuto
+        ? '⚡ Back to Auto — WindyTune will pick the best engine for your machine'
+        : `⚡ Engine pinned: ${label}`);
     }
   }
 
@@ -1680,6 +1968,37 @@ class WindyApp {
       return;
     }
 
+    // WindyTune (Auto) + the manual engine ladder. Translate the raw whisper model
+    // into a real engine NAME + size (e.g. model 'small' → "Windy Lite (72 MB)") so
+    // the badge never shows an internal model name the user can't find in the menu.
+    // Trailing ▾ signals the badge is a clickable engine switcher.
+    {
+      const ladder = this._engineLadder;
+      const byId = {}, byModel = {};
+      ladder.forEach(e => { byId[e.id] = e; byModel[e.model] = e; });
+      const auto = activeEngine === 'windytune' || activeEngine === 'local';
+      if (auto || (activeEngine in byId)) {
+        let eng;
+        if (auto) {
+          // Reflect whichever model WindyTune is actually running (default small/Lite).
+          const m = (modelName && byModel[modelName]) ? modelName
+            : ((this._engineModelMap && this._engineModelMap['windytune']) || 'base');
+          // WindyTune runs the bundled multilingual `base`, which has no ladder
+          // entry — present it as the Core engine so the badge stays human-readable.
+          eng = byModel[m] || byId['windy-core'];
+        } else {
+          eng = byId[activeEngine];
+        }
+        const label = eng ? `${eng.name} (${eng.size})` : 'engine';
+        badge.textContent = (auto ? `⚡ WindyTune · ${label}` : `⚡ ${label}`) + ' ▾';
+        badge.title = auto
+          ? `WindyTune (auto) — currently running ${eng ? eng.name : 'an engine'}. Click to pin a specific engine.`
+          : `Manual: ${eng ? eng.name : activeEngine}. Click to change or return to Auto.`;
+        badge.classList.remove('loading');
+        return;
+      }
+    }
+
     // Cloud API engines — always show engine name
     if (isCloudEngine && !isCustomEngine) {
       const icon = engineIcons[activeEngine] || '☁️';
@@ -1700,12 +2019,16 @@ class WindyApp {
       return;
     }
 
-    // 'local' auto-detect — show whatever the Python server reports
-    const icon = '🏠';
+    // 'local' auto-detect == WindyTune auto mode: the engine is WindyTune and it
+    // auto-picks the model. Brand the badge so the user ALWAYS sees that WindyTune
+    // is active AND which model it's currently running — the value-prop made
+    // visible, and a support signal ("what engine were you on?").
     const name = modelName || 'unknown';
     const size = modelSizes[name.toLowerCase()];
-    badge.textContent = size ? `${icon} ${name} (${size})` : `${icon} ${name}`;
-    badge.title = size ? `Model: ${name} (${size})` : `Model: ${name}`;
+    const label = `WindyTune · ${name}`;
+    badge.textContent = size ? `⚡ ${label} (${size})` : `⚡ ${label}`;
+    badge.title = `WindyTune (auto) — currently running ${name}${size ? ' (' + size + ')' : ''}. `
+      + `Switches models automatically for the best speed/accuracy on your hardware.`;
     badge.classList.remove('loading');
   }
 
@@ -1770,21 +2093,13 @@ class WindyApp {
       // Track slow streaks for WindyTune auto-pilot
       this._slowStreak = (this._slowStreak || 0) + 1;
 
-      // WindyTune auto-pilot: auto-downgrade after 3 consecutive slow chunks
+      // WindyTune auto-downgrade is handled AUTHORITATIVELY in the main process
+      // (_windyTuneRecord in main.js), which steps only through BUNDLED engines so it
+      // can never select a non-bundled model and trigger an offline HuggingFace fetch.
+      // The old renderer ladder here used raw whisper names (e.g. 'tiny') that aren't
+      // bundled — it poisoned windy_model and showed a misleading toast. Removed.
       if (activeEngine === 'windytune' && this._slowStreak >= 3) {
-        const modelOrder = ['large-v3', 'turbo', 'medium.en', 'medium', 'small', 'base', 'tiny'];
-        const currentModel = this._engineModelMap?.[activeEngine] || msg.model;
-        const idx = modelOrder.indexOf(currentModel);
-        if (idx >= 0 && idx < modelOrder.length - 1) {
-          const nextModel = modelOrder[idx + 1];
-          this._engineModelMap['windytune'] = nextModel;
-          localStorage.setItem('windy_model', nextModel);
-          if (this.ws?.readyState === WebSocket.OPEN) {
-            this.send('config', { model: nextModel });
-          }
-          this.showReconnectToast(`🌪️ WindyTune: Auto-switched to ${nextModel} for better speed`);
-          this._slowStreak = 0;
-        }
+        this._slowStreak = 0;
       }
 
       // Cloud failover logic — respects transcription mode setting
@@ -2293,14 +2608,8 @@ class WindyApp {
           if (tierLimits && !tierLimits.batchMode) {
             // Batch mode is now available on all tiers — no gate needed
           }
-          // Override max recording with tier limit
-          if (tierLimits?.maxMinutes) {
-            const currentMax = parseInt(localStorage.getItem('windy_maxRecordingMin') || '10');
-            if (currentMax > tierLimits.maxMinutes) {
-              localStorage.setItem('windy_maxRecordingMin', String(tierLimits.maxMinutes));
-              this.showReconnectToast(`⚡ Free plan: max ${tierLimits.maxMinutes} min. Upgrade for 30 min.`);
-            }
-          }
+          // Recording length: UNLIMITED in the free book-launch build — no tier clamp and
+          // no upgrade nag. (Removed the maxMinutes downgrade + upsell toast.)
         }
       } catch (e) { console.warn('[TierLimits] Failed to enforce plan limits:', e.message); }
 
@@ -2367,10 +2676,15 @@ class WindyApp {
       if (audioBadge) { audioBadge.classList.add('active'); audioBadge.textContent = '🎤 Audio ✓'; }
 
       try {
+        // A2: Video is OPT-IN. The webcam getUserMedia(video), the video
+        // MediaRecorder, AND the camera preview window are ALL gated behind
+        // saveVideo === true. When settings.saveVideo is undefined/false,
+        // videoEnabled stays false → no camera capture, no recording, and no
+        // preview panel is shown during normal voice dictation.
         let videoEnabled = false;
         if (window.windyAPI) {
           const settings = await window.windyAPI.getSettings();
-          videoEnabled = !!settings?.saveVideo;
+          videoEnabled = settings?.saveVideo === true;
         }
         if (videoEnabled) {
           if (videoBadge) { videoBadge.style.display = 'inline-flex'; videoBadge.textContent = '🎬 Video…'; }
@@ -2450,22 +2764,11 @@ class WindyApp {
         }
       }
 
-      // 4. Set up max duration auto-stop (skip for clone_capture — unlimited)
+      // 4. Max-duration auto-stop — DISABLED for the free book-launch build: recording is
+      //    UNLIMITED (the dictate-a-whole-book use case). The mic indicator signals recording
+      //    health; long-session memory behavior is verified in launch hardening.
+      //    (clone_capture was already unlimited via this same path.)
       const currentRecMode = localStorage.getItem('windy_recordingMode') || 'batch';
-      if (currentRecMode !== 'clone_capture') {
-        const maxMin = parseInt(localStorage.getItem('windy_maxRecordingMin') || '10');
-        this._batchMaxTimer = setTimeout(() => {
-          this.showReconnectToast('⏰ Max recording time reached. Processing...');
-          this.stopBatchRecording();
-        }, maxMin * 60 * 1000);
-
-        // 5. Warning at 30s before max
-        if (maxMin * 60 > 30) {
-          this._batchWarnTimer = setTimeout(() => {
-            this.showReconnectToast(`⏰ ${maxMin} min limit in 30 seconds...`);
-          }, (maxMin * 60 - 30) * 1000);
-        }
-      }
 
       // 5b. Voice level monitoring for mini widget strobe
       try {
@@ -2563,9 +2866,18 @@ class WindyApp {
         window.windyAPI.notifyRecordingFailed();
       }
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        this.showReconnectToast('🚫 Microphone access denied. Check system permissions.');
+        // macOS never re-prompts once mic access is denied, so a vague transient toast
+        // left the app silently non-functional with no way forward. Give an explicit,
+        // per-OS recovery path and keep it on screen (persistent) until the next action.
+        const p = (navigator.platform || '').toLowerCase();
+        const where = p.includes('mac')
+          ? 'System Settings ▸ Privacy & Security ▸ Microphone, then turn on Windy Word'
+          : p.includes('win')
+            ? 'Settings ▸ Privacy & security ▸ Microphone, then allow Windy Word'
+            : 'your system Settings ▸ Privacy ▸ Microphone, then allow Windy Word';
+        this.showReconnectToast(`🚫 Microphone access is blocked — Windy Word can't hear you. Enable it in ${where}, then press the shortcut again.`, true);
       } else {
-        this.showReconnectToast('⚠️ Could not access microphone.');
+        this.showReconnectToast('⚠️ Could not access the microphone. Make sure no other app is using it, then try again.');
       }
     }
   }
@@ -2672,23 +2984,32 @@ class WindyApp {
             <div style="font-size:12px;opacity:0.8;">${durationStr} of audio${videoBlob ? ' + video' : ''} archived</div>
             <div style="font-size:11px;opacity:0.6;margin-top:4px;">Data saved to your Soul File archive for future processing</div>
           </div>`;
-          // Archive the audio + video
-          if (window.windyAPI?.archiveRecording) {
-            try {
-              const audioArr = await audioBlob.arrayBuffer();
-              const payload = { audio: Array.from(new Uint8Array(audioArr)), mimeType: audioBlob.type };
-              if (videoBlob) {
-                const videoArr = await videoBlob.arrayBuffer();
-                payload.video = Array.from(new Uint8Array(videoArr));
-                payload.videoMimeType = videoBlob.type;
-              }
-              payload.mode = 'clone_capture';
-              await window.windyAPI.archiveRecording(payload);
-              console.info('[CloneCapture] Archived successfully:', durationStr);
-            } catch (archErr) {
-              console.warn('[CloneCapture] Archive error:', archErr.message);
-            }
+          // Archive the audio + video via the PROVEN archiveAudio/archiveVideo
+          // handlers. The old `archiveRecording` channel was never exposed in
+          // preload (and had no main handler), so Clone Capture silently discarded
+          // its recording. _saveAudioRecording/_saveVideoRecording reuse the same
+          // base64 chunking + archive-audio/archive-video IPC the batch path uses.
+          try {
+            const cloneTs = new Date(this._batchStartTime || Date.now()).toISOString();
+            if (audioBlob) await this._saveAudioRecording(audioBlob, cloneTs);
+            if (videoBlob) await this._saveVideoRecording(videoBlob, cloneTs);
+            console.info('[CloneCapture] Archived audio' + (videoBlob ? '+video' : '') + ':', durationStr);
+          } catch (archErr) {
+            console.warn('[CloneCapture] Archive error:', archErr.message);
           }
+          return;
+        }
+
+        // ═══ A3: Too-short guard ═══
+        // If the user only tapped the shortcut (recording < 600ms), there's no
+        // real speech to transcribe — a sub-second clip often yields a stray
+        // "v"/garbage. Skip transcribe/paste and tell the user to hold longer.
+        const elapsedMs = (typeof performance !== 'undefined' ? performance.now() + performance.timeOrigin : Date.now()) - (this._batchStartTime || Date.now());
+        if (elapsedMs < 600) {
+          console.info(`[Batch] Too short (${Math.round(elapsedMs)}ms) — skipping transcribe/paste`);
+          this.setState('idle');
+          this.transcriptContent.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">⚠️ Too quick — hold the shortcut a moment longer.</p>';
+          this.showReconnectToast('⚠️ Too quick — I did not catch that. Hold the shortcut a moment longer.');
           return;
         }
 
@@ -2749,20 +3070,11 @@ class WindyApp {
           const batchDuration = (Date.now() - batchStartMs) / 1000;
           console.debug(`[Batch] Transcription completed in ${batchDuration.toFixed(1)}s`);
 
-          if (engine === 'windytune' && batchDuration > 30) {
-            const modelOrder = ['large-v3', 'turbo', 'medium.en', 'medium', 'small', 'base', 'tiny'];
-            const currentModel = this._engineModelMap?.[engine] || localStorage.getItem('windy_model') || 'small';
-            const idx = modelOrder.indexOf(currentModel);
-            if (idx >= 0 && idx < modelOrder.length - 1) {
-              const nextModel = modelOrder[idx + 1];
-              this._engineModelMap['windytune'] = nextModel;
-              localStorage.setItem('windy_model', nextModel);
-              if (this.ws?.readyState === WebSocket.OPEN) {
-                this.send('config', { model: nextModel });
-              }
-              this.showReconnectToast(`🌪️ WindyTune: ${batchDuration.toFixed(1)}s latency → switching from ${currentModel} to ${nextModel} for speed`);
-            }
-          }
+          // WindyTune batch auto-downgrade is handled AUTHORITATIVELY in the main
+          // process (_windyTuneRecord in main.js, invoked per batch at the WS result),
+          // which steps only through BUNDLED engines. The old renderer ladder here used
+          // raw whisper names (e.g. 'tiny') that aren't bundled offline — removed to
+          // avoid poisoning windy_model, a misleading toast, and a failed model load.
 
           // Display polished result
           this._displayBatchResult(result);
@@ -2797,6 +3109,12 @@ class WindyApp {
         } finally {
           // Always clean up the processing effect interval
           clearInterval(this._processEffectInterval);
+          // Always tell main the batch phase is over — even on error or early-return paths.
+          // This clears global._batchProcessing so the macOS focus keepalive can stop;
+          // without it (the old error path) the keepalive leaked and trapped the window.
+          if (window.windyAPI?.notifyBatchComplete) {
+            try { window.windyAPI.notifyBatchComplete(0); } catch (_) { }
+          }
         }
 
         resolve();
@@ -2977,6 +3295,8 @@ class WindyApp {
   async _displayBatchResult(text) {
     if (!text || !text.trim()) {
       this.transcriptContent.innerHTML = '<p style="color:#888;text-align:center;">No speech detected in recording.</p>';
+      // A3: also surface as a toast so the user notices the empty result.
+      this.showReconnectToast('⚠️ No speech detected — try again, a little louder.');
       this.setState('idle');
       return;
     }
@@ -3012,25 +3332,37 @@ class WindyApp {
           if (!fxPasteMode || fxPasteMode === 'default' || fxPasteMode === 'silent') {
             this._playPasteBlip();
           }
-          const pasteResult = await window.windyAPI.autoPasteText(text.trim());
-          if (!pasteResult) {
-            // Paste failed (no target PID or target not reachable)
-            // Text is already archived and on clipboard — show toast and clear after brief delay
-            console.warn('[AutoPaste] Paste returned false — text on clipboard and archived. Use Cmd+V to paste.');
-            this.showReconnectToast('📋 Text copied to clipboard — use Cmd+V to paste');
-            // Still clear after 3s since text is archived and on clipboard
-            setTimeout(() => this.clearTranscript(), 3000);
-          }
-          // Strand I: trigger paste effect with word count for dynamic scaling
-          try { if (this.effectsEngine) this.effectsEngine.trigger('paste', { wordCount: text.trim().split(/\s+/).length }); } catch (_) { }
-          // Only clear if "Clear after paste" is checked (stored in electron-store, not localStorage)
-          let clearAfterPaste = true;
+          // Read the "Clear after paste" preference ONCE, up front. Default is
+          // false (main.js store default + the unchecked Simple Mode checkbox).
+          // The old code force-cleared after 3s whenever the paste FAILED,
+          // ignoring the setting — so in the common no-Accessibility case the
+          // transcript vanished and the .txt/.md/.srt export bar was left with
+          // nothing to export ("Nothing to export yet" on every click).
+          let clearAfterPaste = false;
           if (window.windyAPI?.getSettings) {
             try {
               const settings = await window.windyAPI.getSettings();
-              clearAfterPaste = settings.clearOnPaste !== false;
+              clearAfterPaste = settings.clearOnPaste === true;
             } catch (_) { }
           }
+          const pasteResult = await window.windyAPI.autoPasteText(text.trim());
+          if (!pasteResult) {
+            // Paste failed (no target PID or target not reachable)
+            // Text is already archived and on clipboard — show toast
+            console.warn('[AutoPaste] Paste returned false — text on clipboard and archived. Use Cmd+V to paste.');
+            this.showReconnectToast('📋 Text copied to clipboard — use Cmd+V to paste');
+            if (clearAfterPaste) setTimeout(() => this.clearTranscript(), 3000);
+          } else {
+            // A3: paste succeeded — reassure the user the transcript is also on
+            // the clipboard. The macOS paste keystroke can rarely drop Cmd and
+            // type a literal "v"; since the real text is always on the clipboard
+            // (tank rule), a stray "v" never means the app is broken.
+            const pastedWords = text.trim().split(/\s+/).filter(Boolean).length;
+            this.showReconnectToast(`✓ Pasted ${pastedWords} word${pastedWords === 1 ? '' : 's'} · also on clipboard (Cmd V if needed)`);
+          }
+          // Strand I: trigger paste effect with word count for dynamic scaling
+          try { if (this.effectsEngine) this.effectsEngine.trigger('paste', { wordCount: text.trim().split(/\s+/).length }); } catch (_) { }
+          // Only clear if "Clear after paste" is checked (read once above)
           if (clearAfterPaste) {
             this.clearTranscript();
           }
@@ -3205,6 +3537,11 @@ class WindyApp {
       URL.revokeObjectURL(this._lastPlaybackUrl);
       this._lastPlaybackUrl = null;
     }
+    // Revoke previous video playback URL in parallel with the audio one.
+    if (this._lastPlaybackVideoUrl) {
+      URL.revokeObjectURL(this._lastPlaybackVideoUrl);
+      this._lastPlaybackVideoUrl = null;
+    }
     const audioUrl = URL.createObjectURL(blob);
     this._lastPlaybackUrl = audioUrl;
     this._showPlaybackBar(audioUrl);
@@ -3273,6 +3610,21 @@ class WindyApp {
       <audio controls src="${audioUrl}" preload="metadata" style="flex:1;height:28px;"></audio>
     `;
 
+    // Additively inject a <video> when a screen/video recording was captured
+    // for this session. Gated strictly on _lastVideoBlob so the audio-only
+    // path is unchanged. Uses a separate object URL tracked + revoked in
+    // parallel with _lastPlaybackUrl (see _saveAudioRecording).
+    if (this._lastVideoBlob) {
+      const videoUrl = URL.createObjectURL(this._lastVideoBlob);
+      this._lastPlaybackVideoUrl = videoUrl;
+      const video = document.createElement('video');
+      video.controls = true;
+      video.src = videoUrl;
+      video.preload = 'metadata';
+      video.style.cssText = 'flex:1;max-height:160px;border-radius:6px;';
+      bar.appendChild(video);
+    }
+
     // Insert into the persistent playback slot
     const slot = document.getElementById('playbackSlot');
     if (slot) {
@@ -3300,6 +3652,10 @@ class WindyApp {
    * Export transcript in specified format.
    */
   async _exportTranscript(text, format) {
+    if (!text || !text.trim()) {
+      this.showReconnectToast('⚠️ Nothing to export yet');
+      return;
+    }
     if (format === 'copy') {
       // Use navigator clipboard
       try {
@@ -3895,6 +4251,9 @@ class WindyApp {
       } else {
         this.startRecording();
       }
+      // Tell main the recording STARTED so its isRecording flag tracks button-started
+      // sessions — otherwise a ⌘⇧Space hotkey-stop is swallowed and recording sticks ON.
+      try { window.windyAPI?.notifyRecordingStarted?.(); } catch (_) { }
     }
     // Clear hotkey flag
     this._hotkeyTriggered = false;
@@ -3963,7 +4322,7 @@ class WindyApp {
         // Send resolved whisper model config to Python server for custom engines
         const engineModel = this._engineModelMap?.[this.transcriptionEngine];
         if (engineModel) {
-          this.send('config', { model: engineModel });
+          this.send('config', { config: { model: engineModel } });
         }
         this.send('start');
       }
@@ -4290,7 +4649,7 @@ class WindyApp {
       <div id="shortcutRow_paste" style="margin:4px 0;"></div>
       <div id="shortcutRow_showHide" style="margin:4px 0;"></div>
       <div id="shortcutRow_quickTranslate" style="margin:4px 0;"></div>
-      <div style="margin:4px 0;"><kbd>Ctrl + / −</kbd> — <span style="color:#A78BFA;font-weight:600;">Zoom</span> in / out &nbsp; <kbd>Ctrl+0</kbd> Reset</div>
+      <div id="shortcutRow_zoom" style="margin:4px 0;"><kbd>Ctrl + / −</kbd> — <span style="color:#A78BFA;font-weight:600;">Zoom</span> in / out &nbsp; <kbd>Ctrl+0</kbd> Reset</div>
     </div>`;
     // Re-populate with user's actual hotkeys
     if (window.windyAPI?.getSettings) {

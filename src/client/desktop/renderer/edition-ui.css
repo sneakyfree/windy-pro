@@ -1,0 +1,48 @@
+/*
+ * Book-launch edition UI gating.
+ *
+ * These rules hide the full-ecosystem cross-sell surfaces so the free Windy Word
+ * build is pure voice-to-text. They ONLY take effect when edition-ui.js adds the
+ * gating class to <html> — which happens when edition.js sets ECOSYSTEM_UI:false
+ * (the book-launch reader/lite editions). The full build (main branch) leaves the
+ * flag true, no class is added, and every surface renders exactly as before.
+ *
+ * Nothing is removed — this is a reversible light switch. Flip ECOSYSTEM_UI back
+ * to true in edition.js (or build from main) and the ecosystem returns untouched.
+ */
+
+/* Ecosystem off → hide the product-switcher tab bar, the marketplace/Bundles
+   button, the "Hatch Your Agent" card mount, and the embedded ecosystem webviews. */
+html.edition-simple #ecosystemWrapper,
+html.edition-simple #marketplaceBtn,
+html.edition-simple #hatchCardMount,
+html.edition-simple #ecoWebviewContainer {
+  display: none !important;
+}
+
+/* Translation off (optional, independent flag) → hide the 🌐 Translate menu AND the
+   Quick-Translate row in Settings (its hotkey is also unregistered in main.js, so no
+   dangling shortcut to a hidden feature). */
+html.edition-no-translate #translateMenuWrap,
+html.edition-no-translate #shortcutRow_quickTranslate,
+html.edition-no-translate #qtHotkeyRow {
+  display: none !important;
+}
+
+/* Book-launch: the advanced Transcription settings (Engine dropdown, Model Size,
+   Device/GPU, Language, Identify-speakers, and the plan/upgrade banner) are
+   redundant — engine selection now lives on the status-bar WindyTune badge, and
+   everything else is auto. Hide both legacy sections. Reversible: they return in
+   the full build (no edition-simple class). */
+html.edition-simple #transcriptionEngineSection,
+html.edition-simple #localModelSection,
+html.edition-simple #settingsPlanSection {
+  display: none !important;
+}
+
+/* Book-launch: the History panel's cloud "View all history in Web Portal" button
+   points at the dashboard, which the free offline build has no account for. Hide it.
+   Reversible: returns in the full build (no edition-simple class). */
+html.edition-simple #historyOpenPortal {
+  display: none !important;
+}

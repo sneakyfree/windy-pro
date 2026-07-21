@@ -1,3 +1,6 @@
+# Build-stamped edition marker (written by scripts/stamp-edition.cjs)
+**/edition.generated.json
+
 # Python
 __pycache__/
 *.py[cod]

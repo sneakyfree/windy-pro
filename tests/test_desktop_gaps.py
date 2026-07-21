@@ -218,8 +218,9 @@ class TestEditableTranscriptIntegration:
         """getFullTranscript must check isContentEditable before reading DOM."""
         app_path = ROOT / "src" / "client" / "desktop" / "renderer" / "app.js"
         content = app_path.read_text()
-        # Find getFullTranscript function
-        fn_start = content.index("getFullTranscript()")
+        # Find the getFullTranscript DEFINITION (not a call site — the export
+        # button handler calls it earlier in the file than the definition).
+        fn_start = content.index("getFullTranscript() {")
         fn_text = content[fn_start:fn_start + 300]
         assert "isContentEditable" in fn_text, \
             "getFullTranscript does not check isContentEditable"
