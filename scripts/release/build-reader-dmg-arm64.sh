@@ -52,7 +52,7 @@ echo "═══ 2.6 Generate wheel integrity manifest (CHECKSUMS.sha256) ══�
 echo "═══ 3. Build signed Reader arm64 DMG ═══"
 rm -rf dist/*arm64*.dmg dist/mac-arm64 "dist/Windy Word"*arm64*.dmg 2>/dev/null || true
 npm run build:web
-npm run stamp:reader
+npm run stamp:standard
 CODESIGN_IDENTITY="$CODESIGN_IDENTITY" CSC_LINK="$CSC_LINK" CSC_KEY_PASSWORD="$CSC_KEY_PASSWORD" \
   npx electron-builder --mac dmg --arm64 --publish never
 

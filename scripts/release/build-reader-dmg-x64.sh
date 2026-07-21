@@ -47,7 +47,7 @@ echo "═══ 3. Build signed x64 DMG ═══"
 rm -f "dist/Windy Word-1.7.0.dmg" dist/*-x64.dmg 2>/dev/null || true
 rm -rf dist/mac 2>/dev/null || true
 npm run build:web
-npm run stamp:reader
+npm run stamp:standard
 CODESIGN_IDENTITY="$CODESIGN_IDENTITY" CSC_LINK="$CSC_LINK" CSC_KEY_PASSWORD="$CSC_KEY_PASSWORD" \
   npx electron-builder --mac dmg --x64 --publish never
 

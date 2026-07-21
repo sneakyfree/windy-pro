@@ -1,29 +1,31 @@
 /**
- * Book-launch edition config — single source of truth for the free Windy Word build.
+ * Edition config — single source of truth for the flagship Windy Word build.
  *
- * Launch virtues: UX > Stability > Simple > Reliability > Quality. These builds are FREE,
- * ungated, and fully local. License enforcement (heartbeat, offline-grace model locking,
- * revoke-delete) is HARD-OFF so the app can never lock or wipe itself — it must work
- * forever, offline, with no phone-home for the user's content.
+ * Consolidation decision 2026-07-21: ONE edition — 'standard' — for everybody.
+ * All 7 CPU/int8 engines ship; there is no lite tier and no model shopping.
+ * Legacy 'reader'/'lite' stamps (pre-consolidation artifacts) resolve to
+ * 'standard'. WindyTune bounces among whatever is installed; the user never
+ * has to pick a model (but may, from the dropdown).
  *
- * Two editions, differing ONLY in which CPU/int8 engines ship (no GPU/CUDA at launch):
- *   - 'lite'   : 2 engines (website default download)
- *   - 'reader' : all 7 engines (unlocked via the per-book code/link)
- * WindyTune bounces among whatever is installed; the user never picks a model.
+ * Launch virtues: UX > Stability > Simple > Reliability > Quality. This build is
+ * FREE and fully local. License enforcement (heartbeat, offline-grace model
+ * locking, revoke-delete) is HARD-OFF so the app can never lock or wipe itself —
+ * it must work forever, offline, with no phone-home for the user's content.
  */
 'use strict';
 
 function resolveEdition() {
-  // Baked at build time by scripts/stamp-edition.cjs. Falls back to env, then 'reader',
-  // so a plain build (no stamp file) is always a valid Reader edition.
+  // Baked at build time by scripts/stamp-edition.cjs. Falls back to env, then
+  // 'standard', so a plain build (no stamp file) is always a valid standard build.
   try { return require('./edition.generated.json').edition; } catch (_) { /* not stamped */ }
-  return process.env.WINDY_EDITION || 'reader';
+  return process.env.WINDY_EDITION || 'standard';
 }
-const EDITION = resolveEdition() === 'lite' ? 'lite' : 'reader';
+// Every legacy stamp value ('reader', 'lite') maps to the one flagship edition.
+const EDITION = 'standard';
+void resolveEdition; // retained for stamp-file diagnostics/back-compat
 
 const ENGINE_SETS = {
-  lite: ['windy-lite-ct2', 'windy-turbo-ct2'],
-  reader: [
+  standard: [
     'windy-nano-ct2',
     'windy-lite-ct2',
     'windy-core-ct2',
@@ -36,8 +38,8 @@ const ENGINE_SETS = {
 
 module.exports = {
   EDITION,
-  // Hard-off for ALL free book-launch builds. Do not flip to true here — paid enforcement
-  // belongs in a separate build, never in the free reader/lite editions.
+  // Hard-off for the free flagship build. Do not flip to true here — paid enforcement
+  // belongs server-side (cloud compute/storage entitlements), never in the free client.
   LICENSE_ENFORCEMENT: false,
   // ── Book-launch UI minimalism ────────────────────────────────────────────
   // The free Windy Word build is deliberately ONE thing: God's-gift local
@@ -65,12 +67,14 @@ module.exports = {
   // local-only. The local-folder picker (save anywhere on disk) stays. Flip to
   // true when WindyCloud ships to restore cloud/sync storage. Reversible.
   CLOUD_STORAGE: false,
-  // Auto-update via electron-updater (GitHub releases). OFF for book-launch: this
-  // build is distributed as a notarized DMG from R2 (downloads.windyword.ai), not via
-  // GitHub releases, so the updater only 404s on latest-mac.yml and throws an unhandled
-  // rejection on every launch. Users update by re-downloading. Flip true in the full
-  // build (which ships GitHub releases) to restore auto-update. Reversible.
-  AUTO_UPDATE: false,
+  // Auto-update via electron-updater against the R2 generic feed
+  // (downloads.windyword.ai/updates — see updater.js). ON for the flagship:
+  // the update check is simultaneously the install census (content-free — CF
+  // zone analytics count the requests) and the delivery channel for every
+  // future flag-flip and seasonal offer. Where the packaged target can't
+  // auto-apply (portable ZIP / DMG), the check still notifies and links the
+  // re-download; failures stay silent (wrapped upstream). Reversible.
+  AUTO_UPDATE: true,
   // Agent-control HTTP surface (localhost:18765 — /recording, /audio, /sound-effects,
   // /widget, /paste config, /install, /transcribe-file) that lets an external AI agent
   // drive the app. OFF for book-launch: it's an ecosystem/power-user feature, and being
@@ -90,6 +94,6 @@ module.exports = {
   // With this true the control server starts on every platform (macOS/Windows too).
   // Flip false to strip the app back to zero local control surface. Reversible.
   AGENT_CONTROL_KNOBS: true,
-  ENGINES: ENGINE_SETS[EDITION] || ENGINE_SETS.reader,
+  ENGINES: ENGINE_SETS[EDITION] || ENGINE_SETS.standard,
   ENGINE_SETS,
 };
