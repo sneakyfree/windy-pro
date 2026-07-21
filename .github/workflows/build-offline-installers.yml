@@ -12,7 +12,7 @@ on:
     branches: [ 'ci/offline-build' ]
 
 env:
-  WINDY_EDITION: reader
+  WINDY_EDITION: standard
   R2_ENDPOINT: https://193b347aedeaafe35de0b5a534b2d9aa.r2.cloudflarestorage.com
   R2_BUCKET: s3://windyword-releases
   AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -42,6 +42,8 @@ jobs:
           test -f extraResources/ffmpeg/ffmpeg.exe \
             || { echo "::error::extraResources/ffmpeg/ffmpeg.exe missing — Windows build would ship with no ffmpeg and every transcription would fail"; exit 1; }
           echo "ffmpeg present: $(ls -la extraResources/ffmpeg/ffmpeg.exe)"
+      - name: Stamp standard edition
+        run: node scripts/stamp-edition.cjs
       - name: Fetch 7 lean engines into extraResources/model (OFFLINE bundle)
         shell: bash
         run: bash scripts/ci/fetch-engines-ci.sh
@@ -60,10 +62,23 @@ jobs:
           aws s3 cp "$ZIP" "$R2_BUCKET/Windy-Word-Reader-Offline-win-x64.zip" \
             --endpoint-url "$R2_ENDPOINT" --content-type application/zip --only-show-errors
           echo "verify:"; curl -sI "https://downloads.windyword.ai/Windy-Word-Reader-Offline-win-x64.zip" | grep -iE "^HTTP|content-length"
+      - name: Publish update feed (latest.yml)
+        shell: bash
+        run: |
+          ZIP=$(find dist -maxdepth 1 -name "*.zip" | head -1)
+          V=$(node -p "require('./package.json').version")
+          SHA=$(openssl dgst -sha512 -binary "$ZIP" | base64 -w0)
+          SIZE=$(wc -c < "$ZIP" | tr -d ' ')
+          URL="https://downloads.windyword.ai/Windy-Word-Reader-Offline-win-x64.zip"
+          printf 'version: %s\nfiles:\n  - url: %s\n    sha512: %s\n    size: %s\npath: %s\nsha512: %s\nreleaseDate: %s\n' \
+            "$V" "$URL" "$SHA" "$SIZE" "$URL" "$SHA" "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'" > latest.yml
+          aws s3 cp latest.yml "$R2_BUCKET/updates/latest.yml" \
+            --endpoint-url "$R2_ENDPOINT" --content-type text/yaml --only-show-errors
+          echo "feed:"; curl -s "https://downloads.windyword.ai/updates/latest.yml" | head -3
 
   linux-offline:
     name: Linux x64 (offline)
-    if: false   # already built + published to R2 (AppImage live); flip to true to rebuild
+    if: true    # re-cut from consolidated main (flagship generation); flip false when idle
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -85,6 +100,8 @@ jobs:
           test -f extraResources/ffmpeg/ffmpeg \
             || { echo "::error::extraResources/ffmpeg/ffmpeg missing — Linux build would ship with no ffmpeg and every transcription would fail"; exit 1; }
           echo "ffmpeg present: $(ls -la extraResources/ffmpeg/ffmpeg)"
+      - name: Stamp standard edition
+        run: node scripts/stamp-edition.cjs
       - name: Fetch 7 lean engines into extraResources/model (OFFLINE bundle)
         run: bash scripts/ci/fetch-engines-ci.sh
       - name: Show staged model size
@@ -98,3 +115,15 @@ jobs:
           aws s3 cp "$IMG" "$R2_BUCKET/Windy-Word-Reader-Offline-linux-x86_64.AppImage" \
             --endpoint-url "$R2_ENDPOINT" --content-type application/octet-stream --only-show-errors
           echo "verify:"; curl -sI "https://downloads.windyword.ai/Windy-Word-Reader-Offline-linux-x86_64.AppImage" | grep -iE "^HTTP|content-length"
+      - name: Publish update feed (latest-linux.yml)
+        run: |
+          IMG=$(find dist -maxdepth 1 -name "*.AppImage" | head -1)
+          V=$(node -p "require('./package.json').version")
+          SHA=$(openssl dgst -sha512 -binary "$IMG" | base64 -w0)
+          SIZE=$(wc -c < "$IMG" | tr -d ' ')
+          URL="https://downloads.windyword.ai/Windy-Word-Reader-Offline-linux-x86_64.AppImage"
+          printf 'version: %s\nfiles:\n  - url: %s\n    sha512: %s\n    size: %s\npath: %s\nsha512: %s\nreleaseDate: %s\n' \
+            "$V" "$URL" "$SHA" "$SIZE" "$URL" "$SHA" "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'" > latest-linux.yml
+          aws s3 cp latest-linux.yml "$R2_BUCKET/updates/latest-linux.yml" \
+            --endpoint-url "$R2_ENDPOINT" --content-type text/yaml --only-show-errors
+          echo "feed:"; curl -s "https://downloads.windyword.ai/updates/latest-linux.yml" | head -3

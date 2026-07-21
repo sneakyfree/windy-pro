@@ -2,7 +2,7 @@
  * Windy Word - Auto Updater
  * Checks for updates on startup and prompts user to install.
  * 
- * Uses GitHub Releases as the update source.
+ * Uses the R2 generic feed (downloads.windyword.ai/updates) as the update source.
  * 
  * DNA Strand: FEAT-068
  */
@@ -24,11 +24,15 @@ class WindyUpdater {
         autoUpdater.autoDownload = true;
         autoUpdater.autoInstallOnAppQuit = true;
 
-        // GitHub releases feed
+        // Generic feed on R2 (downloads.windyword.ai/updates/latest*.yml).
+        // NOT GitHub releases: the repo is going private (no anonymous feed)
+        // and artifacts are distributed from R2. The re-cut CI publishes the
+        // latest.yml / latest-mac.yml / latest-linux.yml alongside artifacts.
+        // Every check request doubles as the content-free install census
+        // (counted by CF zone analytics — no identity, no payload).
         autoUpdater.setFeedURL({
-            provider: 'github',
-            owner: 'sneakyfree',
-            repo: 'windy-pro'
+            provider: 'generic',
+            url: 'https://downloads.windyword.ai/updates'
         });
 
         // Update events
