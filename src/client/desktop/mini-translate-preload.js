@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('miniTranslateAPI', {
     close: () => ipcRenderer.send('mini-translate-close'),
     translate: (text, sourceLang, targetLang) =>
         ipcRenderer.invoke('mini-translate-text', text, sourceLang, targetLang),
+    translateLocal: (text, sourceLang, targetLang) =>
+        ipcRenderer.invoke('translate-local', text, sourceLang, targetLang),
     translateSpeech: (audioArray, sourceLang, targetLang, apiKeys, options) =>
         ipcRenderer.invoke('mini-translate-speech', audioArray, sourceLang, targetLang, apiKeys, options),
 });

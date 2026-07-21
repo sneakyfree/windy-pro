@@ -23,6 +23,13 @@ class HistoryPanel {
             local: '🏠', cloud: '☁️', stream: '🎙️',
             smart: '🧠'
         };
+        // Attach the export-dropdown outside-click listener ONCE — re-binding it on
+        // every panel open leaked a document listener per open. Reads the current
+        // dropdown from the live panel so it stays correct across re-opens.
+        document.addEventListener('click', () => {
+            const dd = this.panel?.querySelector('#exportDropdown');
+            if (dd) dd.style.display = 'none';
+        });
     }
 
     toggle() {
@@ -295,6 +302,12 @@ class HistoryPanel {
       <div class="audio-loading">\ud83c\udfa4 Loading audio\u2026</div>
     </div>`;
         }
+        // B3 — Reveal-in-Finder button: only when a saved audio/video file exists.
+        // One-click way to get at / share the actual recording file.
+        const revealPath = item.audioPath || item.videoPath;
+        const revealButton = (revealPath && (item.hasAudio || item.hasVideo))
+            ? '\n    <button class="history-exp-btn" data-action="reveal" title="Show this recording in your file manager (to share, copy, or attach it)">📂 Reveal</button>'
+            : '';
         let videoSection = '';
         if (item.hasVideo && item.videoPath) {
             videoSection = `
@@ -320,7 +333,7 @@ class HistoryPanel {
   <div class="history-expanded-actions">
     <button class="history-exp-btn" data-action="copy" title="Copy transcript text to clipboard">\ud83d\udccb Copy</button>
     <button class="history-exp-btn" data-action="export-txt" title="Download transcript as a plain text file">\ud83d\udcbe .txt</button>
-    <button class="history-exp-btn" data-action="export-md" title="Download transcript as a Markdown file">\ud83d\udcdd .md</button>
+    <button class="history-exp-btn" data-action="export-md" title="Download transcript as a Markdown file">\ud83d\udcdd .md</button>${revealButton}
   </div>
   <div class="history-expanded-actions" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.06);padding-top:6px;">
     ${deleteButtons}
@@ -456,58 +469,6 @@ class HistoryPanel {
         }
     }
 
-    /**
-     * Link audio and video player playback — play/pause/seek one mirrors the other.
-     * Video plays muted; audio comes from the audio player.
-     * Uses a lock timeout to prevent infinite event loops from programmatic play/pause.
-     */
-    _syncAVPlayers() {
-        const audio = this.panel?.querySelector('.history-audio-el');
-        const video = this.panel?.querySelector('.history-video-el');
-        if (!audio || !video) return;
-
-        // Mute video — audio player provides the sound
-        video.muted = true;
-
-        let locked = false;
-        const withLock = (fn) => {
-            if (locked) return;
-            locked = true;
-            fn();
-            // Hold lock for 150ms to let async events settle
-            setTimeout(() => { locked = false; }, 150);
-        };
-
-        audio.addEventListener('play', () => withLock(() => {
-            video.currentTime = audio.currentTime;
-            video.play().catch(() => { });
-        }));
-        audio.addEventListener('pause', () => withLock(() => {
-            video.pause();
-        }));
-        audio.addEventListener('seeked', () => withLock(() => {
-            video.currentTime = audio.currentTime;
-        }));
-
-        video.addEventListener('play', () => withLock(() => {
-            audio.currentTime = video.currentTime;
-            audio.play().catch(() => { });
-        }));
-        video.addEventListener('pause', () => withLock(() => {
-            audio.pause();
-        }));
-        video.addEventListener('seeked', () => withLock(() => {
-            audio.currentTime = video.currentTime;
-        }));
-
-        // Add a small label indicating sync
-        const wrapper = video.closest('.video-player-wrapper');
-        if (wrapper) {
-            const label = wrapper.querySelector('.video-label');
-            if (label) label.textContent = '🎬 Recording (synced with audio)';
-        }
-    }
-
     _groupByDate(entries) {
         const groups = new Map();
         const today = new Date();
@@ -597,8 +558,7 @@ class HistoryPanel {
             e.stopPropagation();
             exportDropdown.style.display = exportDropdown.style.display === 'none' ? 'block' : 'none';
         });
-        // Close dropdown on outside click
-        document.addEventListener('click', () => { exportDropdown.style.display = 'none'; });
+        // Close dropdown on outside click — listener attached once in the constructor.
         exportDropdown.addEventListener('click', (e) => e.stopPropagation());
 
         // Export options
@@ -691,12 +651,47 @@ class HistoryPanel {
                     setTimeout(() => { btn.textContent = '📋 Copy'; }, 1500);
                     this._emitExportIntel('txt', 'clipboard');
                 } else if (action === 'export-txt') {
-                    this._downloadFile(item.text, 'transcript.txt', 'text/plain');
+                    try {
+                        const result = await window.windyAPI.saveFile({
+                            defaultPath: 'transcript.txt',
+                            filters: [{ name: 'Text', extensions: ['txt'] }],
+                            content: item.text
+                        });
+                        if (result?.saved) {
+                            this._showExportToast(`✅ Saved to ${result.path || 'chosen location'}`);
+                        }
+                    } catch (err) {
+                        this._downloadFile(item.text, 'transcript.txt', 'text/plain');
+                    }
                     this._emitExportIntel('txt', 'file');
                 } else if (action === 'export-md') {
                     const md = `# Transcript\n\n${item.text}\n`;
-                    this._downloadFile(md, 'transcript.md', 'text/markdown');
+                    try {
+                        const result = await window.windyAPI.saveFile({
+                            defaultPath: 'transcript.md',
+                            filters: [{ name: 'Markdown', extensions: ['md'] }],
+                            content: md
+                        });
+                        if (result?.saved) {
+                            this._showExportToast(`✅ Saved to ${result.path || 'chosen location'}`);
+                        }
+                    } catch (err) {
+                        this._downloadFile(md, 'transcript.md', 'text/markdown');
+                    }
                     this._emitExportIntel('md', 'file');
+                } else if (action === 'reveal') {
+                    // B3 — open the saved recording in the OS file manager so the
+                    // user can share/copy/attach it. Prefer audio, fall back to video.
+                    const revealPath = item.audioPath || item.videoPath;
+                    if (revealPath && window.windyAPI?.revealInFolder) {
+                        try {
+                            await window.windyAPI.revealInFolder(revealPath);
+                            this._showExportToast('📂 Revealed recording in file manager');
+                        } catch (err) {
+                            this._showExportToast('❌ Could not reveal file');
+                            console.warn('[History] Reveal failed:', err.message);
+                        }
+                    }
                 } else if (action === 'delete-text') {
                     if (confirm('Delete the transcript text for this session? This cannot be undone.')) {
                         await this._deleteAsset(item, 'text', btn);

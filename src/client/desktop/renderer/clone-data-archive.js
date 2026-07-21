@@ -184,12 +184,14 @@ class CloneDataArchive {
             });
         });
 
-        // Export ZIP
+        // Export JSON
         document.getElementById('cda-export-selected').addEventListener('click', async () => {
             const ids = Array.from(this.selectedBundles);
             if (ids.length === 0) { alert('Select bundles to export'); return; }
             try {
-                await window.windyAPI.exportCloneBundles(ids);
+                const r = await window.windyAPI.exportCloneBundles(ids);
+                if (r?.success) alert('Exported to ' + r.exportPath);
+                else if (r) alert('Export cancelled');
             } catch (err) { console.error('[CDA] Export error:', err); }
         });
 

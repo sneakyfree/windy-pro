@@ -33,6 +33,12 @@ const path = require('path');
 const crypto = require('crypto');
 
 const HF_BASE = 'https://huggingface.co';
+// Model bytes are mirrored to our own R2 (zero egress, Cloudflare-cached) and served here.
+// We try R2 first and fall back to HuggingFace per-file, so an HF outage or rate-limit
+// during a launch spike can never block a first-run model download. Same path layout as
+// HF (repo-without-"WindyWord/" + rfilename), so the fallback URL is identical to before.
+// Override for local testing via WINDY_MODEL_CDN.
+const MODEL_CDN_BASE = process.env.WINDY_MODEL_CDN || 'https://downloads.windyword.ai/models';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
@@ -281,11 +287,22 @@ class DownloadManager {
         }
       }
 
-      const url = `${HF_BASE}/${info.hfRepo}/resolve/main/${file.rfilename}`;
-      await this._downloadFile(url, destPath, (fileProgress, fileBytes) => {
+      const repoPath = info.hfRepo.replace(/^WindyWord\//, '');
+      const r2url = `${MODEL_CDN_BASE}/${repoPath}/${file.rfilename}`;
+      const hfurl = `${HF_BASE}/${info.hfRepo}/resolve/main/${file.rfilename}`;
+      const onFileProgress = (fileProgress, fileBytes) => {
         const currentTotal = downloaded + fileBytes;
         onProgress(Math.min(99, Math.round(currentTotal / totalSize * 100)));
-      });
+      };
+      try {
+        // Primary: our R2 mirror. Fail-fast (no internal retries) so we fall back quickly.
+        await this._downloadFile(r2url, destPath, onFileProgress, MAX_RETRIES);
+      } catch (e) {
+        // Fallback: HuggingFace with full retry budget — preserves the original behavior
+        // if R2 is ever missing a file, so this change can only add reliability, never remove it.
+        this.onLog(`[DownloadManager] R2 unavailable for ${file.localName} (${e.message}); falling back to HuggingFace`);
+        await this._downloadFile(hfurl, destPath, onFileProgress, 0);
+      }
 
       downloaded += file.size || 0;
       onProgress(Math.round(downloaded / totalSize * 100));

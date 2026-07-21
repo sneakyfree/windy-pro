@@ -46,21 +46,26 @@ class WidgetEngine {
   static STOCK_WIDGETS = {
     tornado: {
       name: '🌪️ Tornado',
-      description: 'Classic tornado animation',
+      description: 'Classic tornado funnel — Windy Word\'s signature',
       svg: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 16 Q32 8 52 16" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.9">
-          <animate attributeName="d" values="M12 16 Q32 8 52 16;M14 16 Q32 12 50 16;M12 16 Q32 8 52 16" dur="2s" repeatCount="indefinite"/>
-        </path>
-        <path d="M16 26 Q32 18 48 26" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity="0.75">
-          <animate attributeName="d" values="M16 26 Q32 18 48 26;M18 26 Q32 22 46 26;M16 26 Q32 18 48 26" dur="1.8s" repeatCount="indefinite"/>
-        </path>
-        <path d="M20 36 Q32 28 44 36" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.6">
-          <animate attributeName="d" values="M20 36 Q32 28 44 36;M22 36 Q32 32 42 36;M20 36 Q32 28 44 36" dur="1.5s" repeatCount="indefinite"/>
-        </path>
-        <path d="M26 46 Q32 40 38 46" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.45">
-          <animate attributeName="d" values="M26 46 Q32 40 38 46;M27 46 Q32 43 37 46;M26 46 Q32 40 38 46" dur="1.2s" repeatCount="indefinite"/>
-        </path>
-        <circle cx="32" cy="54" r="2" fill="currentColor" opacity="0.3"/>
+        <g stroke="currentColor" stroke-linecap="round" fill="none">
+          <path d="M10 12 H54" stroke-width="5" opacity="0.95">
+            <animate attributeName="d" values="M10 12 H54;M13 12 H51;M10 12 H54" dur="1.1s" repeatCount="indefinite"/>
+          </path>
+          <path d="M14 22 H50" stroke-width="4.3" opacity="0.85">
+            <animate attributeName="d" values="M14 22 H50;M11 22 H47;M14 22 H50" dur="1s" repeatCount="indefinite"/>
+          </path>
+          <path d="M19 31 H45" stroke-width="3.6" opacity="0.75">
+            <animate attributeName="d" values="M19 31 H45;M22 31 H48;M19 31 H45" dur="0.9s" repeatCount="indefinite"/>
+          </path>
+          <path d="M24 39 H40" stroke-width="3" opacity="0.65">
+            <animate attributeName="d" values="M24 39 H40;M21 39 H37;M24 39 H40" dur="0.8s" repeatCount="indefinite"/>
+          </path>
+          <path d="M28 46 H36" stroke-width="2.5" opacity="0.55">
+            <animate attributeName="d" values="M28 46 H36;M30 46 H38;M28 46 H36" dur="0.7s" repeatCount="indefinite"/>
+          </path>
+          <circle cx="32" cy="52" r="1.8" fill="currentColor" stroke="none" opacity="0.5"/>
+        </g>
       </svg>`
     },
 

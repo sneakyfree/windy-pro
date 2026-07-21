@@ -13,6 +13,9 @@
   <link rel="stylesheet" href="auto-sync.css">
   <link rel="stylesheet" href="marketplace.css">
   <link rel="stylesheet" href="hatch-ceremony.css">
+  <!-- Book-launch UI gating: hide ecosystem cross-sell in the free edition. -->
+  <link rel="stylesheet" href="edition-ui.css">
+  <script src="edition-ui.js"></script>
 </head>
 
 <body>
@@ -39,7 +42,7 @@
             <button class="translate-menu-option" id="openQuickTranslate" role="menuitem">
               <div class="tm-icon">🌐</div>
               <div class="tm-info">
-                <strong>Quick Translate</strong> <kbd>Ctrl+Shift+T</kbd>
+                <strong>Quick Translate</strong> <kbd id="qtShortcut">Ctrl+Shift+T</kbd>
                 <span>Floating overlay — live listen in meetings, type-to-translate, auto-detect</span>
               </div>
             </button>
@@ -135,6 +138,8 @@
         <div class="transcript-content" id="transcriptContent">
           <!-- Transcript segments will appear here -->
           <div class="placeholder" id="shortcutsPlaceholder">
+            <!-- Local, private dictation insights (stats card + recent timeline) — 100% on-device, by home-insights.js -->
+            <div id="homeInsightsMount"></div>
             <!-- Wave 8 Grandma Ribbon: Hatch Your Agent card is mounted here by hatch-ceremony.js -->
             <div id="hatchCardMount"></div>
             <div style="margin-bottom:8px;font-weight:600;">⌨️ Keyboard Shortcuts</div>
@@ -142,8 +147,9 @@
             <div id="shortcutRow_paste" style="margin:4px 0;"></div>
             <div id="shortcutRow_showHide" style="margin:4px 0;"></div>
             <div id="shortcutRow_quickTranslate" style="margin:4px 0;"></div>
-            <div style="margin:4px 0;"><kbd>Ctrl + / −</kbd> — <span style="color:#A78BFA;font-weight:600;">Zoom</span>
+            <div id="shortcutRow_zoom" style="margin:4px 0;"><kbd>Ctrl + / −</kbd> — <span style="color:#A78BFA;font-weight:600;">Zoom</span>
               in / out &nbsp; <kbd>Ctrl+0</kbd> Reset</div>
+            <div style="margin-top:12px;font-size:11px;color:#9CA3AF;">🔊 <b>Notification sounds</b> play at each stage (start · while it works · paste). Adjust the volume, change the pack, or mute any of them in <b>Settings ▸ Theme Packs &amp; Effects</b> (the <b>🔔 Default</b> button restores them all).</div>
           </div>
         </div>
       </div>
@@ -205,7 +211,7 @@
       <span class="status-dot" id="connectionDot" data-tooltip="Connection Status"></span>
       <span class="status-text" id="connectionText" data-tooltip="Engine Connection">Connecting...</span>
       <span class="word-count" id="wordCount" data-tooltip="Word Count"></span>
-      <span class="model-badge" id="modelBadge" title="Current transcription model" data-tooltip="Transcription Model">⚡ windytune (0.5GB)</span>
+      <span class="model-badge" id="modelBadge" title="WindyTune — auto-selects the best model for your hardware" data-tooltip="WindyTune engine">⚡ WindyTune</span>
       <span class="sfx-volume-wrap" id="sfxVolumeWrap" title="Sound effects volume" data-tooltip="Sound Effects Volume">
         <span class="sfx-volume-icon" id="sfxVolumeIcon">🔊</span>
       </span>
@@ -347,6 +353,7 @@
   <!-- P4 transcript-format helpers — pure functions, no DOM, used
        by app.js _exportTranscript via window.WindyTranscriptFormat. -->
   <script src="transcript-format.js"></script>
+  <script src="home-insights.js"></script>
   <script src="app.js"></script>
 </body>
 

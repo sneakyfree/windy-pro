@@ -35,17 +35,18 @@ async function _windyTranscribeBlob(blob) {
       const ws = new WebSocket('ws://127.0.0.1:9876');
       ws.onopen = () => {
         blob.arrayBuffer().then(buf => {
-          ws.send(JSON.stringify({ type: 'transcribe', format: 'webm' }));
+          ws.send(JSON.stringify({ action: 'transcribe_blob', language: 'en', format: 'webm' }));
           ws.send(buf);
         });
       };
       ws.onmessage = (e) => {
-        clearTimeout(timeout);
         try {
           const data = JSON.parse(e.data);
+          if (data.type !== 'transcribe_result') return;
+          clearTimeout(timeout);
           ws.close();
           resolve(data.text || (data.segments || []).map(s => s.text).join(' '));
-        } catch { resolve(e.data); }
+        } catch { clearTimeout(timeout); resolve(e.data); }
       };
       ws.onerror = () => { clearTimeout(timeout); reject(new Error('Engine unavailable')); };
     } catch (err) { clearTimeout(timeout); reject(err); }

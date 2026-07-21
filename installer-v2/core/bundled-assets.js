@@ -90,9 +90,14 @@ class BundledAssets {
     );
 
     const exists = (p) => fs.existsSync(p);
-    const isComplete = (dir) =>
-      exists(dir) && exists(path.join(dir, 'python')) && exists(path.join(dir, 'wheels'));
-    const hasPython = (dir) => exists(dir) && exists(path.join(dir, 'python'));
+    // Universal (multi-arch) bundles ship per-arch payloads as `<name>-<arch>`
+    // (e.g. python-arm64, wheels-x64); single-arch bundles ship the plain
+    // `<name>`. A sub-component is "present" if either layout exists for THIS
+    // process's CPU arch.
+    const hasSub = (dir, name) =>
+      exists(path.join(dir, name)) || exists(path.join(dir, `${name}-${process.arch}`));
+    const isComplete = (dir) => exists(dir) && hasSub(dir, 'python') && hasSub(dir, 'wheels');
+    const hasPython = (dir) => exists(dir) && hasSub(dir, 'python');
 
     for (const dir of candidates) {
       if (isComplete(dir)) return dir;
@@ -142,21 +147,36 @@ class BundledAssets {
    *
    * We check the modern layout first, then fall back to legacy.
    */
+  /**
+   * Resolve a bundle sub-directory that may be CPU-arch-specific.
+   *
+   * Universal (multi-arch) builds ship per-arch native payloads as
+   * `<name>-<arch>` (python-arm64, wheels-x64, ffmpeg-arm64, uv-x64) next to a
+   * shared, arch-independent model/. Single-arch builds ship the plain
+   * `<name>`. Prefer the arch-suffixed dir for THIS process's arch; fall back
+   * to the unsuffixed legacy dir so single-arch bundles keep working unchanged.
+   */
+  _archDir(name) {
+    const suffixed = path.join(this.bundleDir, `${name}-${this.arch}`);
+    return fs.existsSync(suffixed) ? suffixed : path.join(this.bundleDir, name);
+  }
+
   _getPythonExtractedDir() {
-    // Modern flat layout: bundled/python/bin/python3 (Unix) or python.exe (Win)
+    const pythonRoot = this._archDir('python');
+    // Modern flat layout: <pythonRoot>/bin/python3 (Unix) or python.exe (Win)
     const flatProbe = this.platform === 'win32'
-      ? path.join(this.bundleDir, 'python', 'python.exe')
-      : path.join(this.bundleDir, 'python', 'bin', 'python3');
+      ? path.join(pythonRoot, 'python.exe')
+      : path.join(pythonRoot, 'bin', 'python3');
     if (fs.existsSync(flatProbe)) {
-      return path.join(this.bundleDir, 'python');
+      return pythonRoot;
     }
     // Legacy platform-segmented layout
     if (this.platform === 'win32') {
-      return path.join(this.bundleDir, 'python', 'win64');
+      return path.join(pythonRoot, 'win64');
     } else if (this.platform === 'darwin') {
-      return path.join(this.bundleDir, 'python', 'macos', 'python');
+      return path.join(pythonRoot, 'macos', 'python');
     } else {
-      return path.join(this.bundleDir, 'python', 'linux', 'python');
+      return path.join(pythonRoot, 'linux', 'python');
     }
   }
 
@@ -167,18 +187,19 @@ class BundledAssets {
    * Legacy layout:      bundled/ffmpeg/extracted-{mac,linux,win}/...
    */
   _getFfmpegExtractedDir() {
+    const ffmpegRoot = this._archDir('ffmpeg');
     const flatProbe = this.platform === 'win32'
-      ? path.join(this.bundleDir, 'ffmpeg', 'ffmpeg.exe')
-      : path.join(this.bundleDir, 'ffmpeg', 'ffmpeg');
+      ? path.join(ffmpegRoot, 'ffmpeg.exe')
+      : path.join(ffmpegRoot, 'ffmpeg');
     if (fs.existsSync(flatProbe)) {
-      return path.join(this.bundleDir, 'ffmpeg');
+      return ffmpegRoot;
     }
     if (this.platform === 'win32') {
-      return path.join(this.bundleDir, 'ffmpeg', 'extracted-win');
+      return path.join(ffmpegRoot, 'extracted-win');
     } else if (this.platform === 'darwin') {
-      return path.join(this.bundleDir, 'ffmpeg', 'extracted-mac');
+      return path.join(ffmpegRoot, 'extracted-mac');
     } else {
-      return path.join(this.bundleDir, 'ffmpeg', 'extracted-linux');
+      return path.join(ffmpegRoot, 'extracted-linux');
     }
   }
 
@@ -187,7 +208,7 @@ class BundledAssets {
    * Returns null if no wheels are bundled (legacy bundle without wheels).
    */
   _getWheelsDir() {
-    const dir = path.join(this.bundleDir, 'wheels');
+    const dir = this._archDir('wheels');
     return fs.existsSync(dir) ? dir : null;
   }
 
@@ -202,9 +223,10 @@ class BundledAssets {
    * because it parallelises wheel resolution and uses hardlinks.
    */
   _findUv() {
+    const uvRoot = this._archDir('uv');
     const exe = this.platform === 'win32'
-      ? path.join(this.bundleDir, 'uv', 'uv.exe')
-      : path.join(this.bundleDir, 'uv', 'uv');
+      ? path.join(uvRoot, 'uv.exe')
+      : path.join(uvRoot, 'uv');
     return fs.existsSync(exe) ? exe : null;
   }
 
@@ -253,10 +275,10 @@ class BundledAssets {
     // (/tmp/.mount_XXXXXX — a new random dir every launch that dies with the process). A
     // venv created from it dangles on every later launch: pyvenv.cfg `home` and the
     // bin/python symlink both point into the dead mount, so the engine works for exactly
-    // one session and startPythonServer falls back to bundled python forever after
-    // (proven on OC2 / Ubuntu 24.04, Mission 10 2026-07-08). Install the runtime to the
-    // stable APP_DIR copy first (same mechanism the legacy path already uses) and build
-    // the venv from that. mac .app / Windows LOCALAPPDATA / .deb paths are stable — no copy.
+    // one session (proven on OC2 / Ubuntu 24.04, Mission 10 2026-07-08). Install the
+    // runtime to the stable APP_DIR copy first (the mechanism the legacy path already
+    // uses) and build the venv from that. mac .app / Windows LOCALAPPDATA / .deb paths
+    // are stable — no copy. Mirrors main.js#_stableEnginePythonRoot for the wizard path.
     if (this.platform === 'linux' && /^\/tmp\/\.mount_/.test(bundledPyExe)) {
       const stablePy = await this.installPython(appDir, log);
       if (stablePy) {
@@ -541,7 +563,7 @@ class BundledAssets {
       linux: 'python-3.11.9-linux.tar.gz'
     };
     const file = map[this.platform];
-    return file ? path.join(this.bundleDir, 'python', file) : null;
+    return file ? path.join(this._archDir('python'), file) : null;
   }
 
   _getFfmpegArchivePath() {
@@ -551,7 +573,7 @@ class BundledAssets {
       linux: 'ffmpeg-linux.tar.xz'
     };
     const file = map[this.platform];
-    return file ? path.join(this.bundleDir, 'ffmpeg', file) : null;
+    return file ? path.join(this._archDir('ffmpeg'), file) : null;
   }
 
   _findPythonExe(dir) {

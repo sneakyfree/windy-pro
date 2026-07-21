@@ -37,6 +37,16 @@ if [ -d "$APP/Contents/Resources/bundled" ]; then
     -type f \( -name "*.dylib" -o -name "*.so" -o -name "python3.11" -o -name "ffmpeg" -o -name "uv" -o -name "uvx" \) \
     ! -path "*/wheels/*" \
     -print0 | xargs -0 -n1 -I{} codesign --force --options runtime --timestamp --sign "$IDENT" "{}" 2>/dev/null
+  # 1b: The bundled Python interpreter runs ctranslate2/oneDNN, which JIT-compiles its
+  # compute kernels at inference. Under the hardened runtime that REQUIRES the
+  # allow-jit / allow-unsigned-executable-memory entitlements — without them the engine
+  # SEGFAULTS the instant it transcribes (the loose-sign above carries NO entitlements).
+  # Re-sign the interpreter(s) WITH the app entitlements so the runtime venv (which
+  # symlinks to this binary) can JIT. disable-library-validation (also in $ENT) lets the
+  # venv's signed wheels load cleanly. Without this, offline dictation is dead on arrival.
+  echo "[sign-bundled] 1b/6 re-sign Python interpreter WITH jit entitlements"
+  find "$APP/Contents/Resources/bundled" -type f -name "python3.11" ! -path "*/wheels/*" -print0 \
+    | xargs -0 -n1 -I{} codesign --force --options runtime --timestamp --entitlements "$ENT" --sign "$IDENT" "{}" 2>/dev/null
 fi
 
 # --- 2. Electron Framework Libraries + Helpers + Squirrel ShipIt (--deep misses these) ---

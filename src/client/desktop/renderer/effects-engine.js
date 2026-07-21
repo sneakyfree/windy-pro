@@ -215,23 +215,33 @@ class EffectsEngine {
         this.sound = new SoundManager();
         this.visual = new VisualOverlay();
 
-        // Current configuration
-        this._mode = 'silent';        // 'silent' | 'single' | 'surprise'
+        // Current configuration — ship with the friendly Classic sounds ON by default
+        // (a soft tick when recording starts, while transcribing, and on paste — genuinely
+        // useful when you've looked away during a local-model transcription). Fully
+        // user-adjustable: change volume, swap packs, or go Silent in Settings. This is only
+        // the FRESH-INSTALL default; any saved preference in localStorage('windy_effects')
+        // overrides it, so existing users keep their choice.
+        this._mode = 'default';       // 'silent' | 'default' | 'single' | 'surprise' | 'custom'
         this._activePack = null;      // ThemePack manifest object
+        this._activePackId = 'classic-beep'; // 🔔 Classic ★ — the nice default pack
         this._packs = {};             // id → manifest
         this._favorites = [];
         this._surpriseCategory = 'all';
         this._shuffleBag = [];
         this._dynamicScaling = true;
 
-        // Per-hook-point settings
+        // Per-hook-point settings — ALL 6 stages ON by default at clearly audible volumes,
+        // so a new user immediately hears every cue (start, the during/processing confirmation
+        // beeps, stop, the time-limit warning, and paste). The quiet 30% beeps were nearly
+        // inaudible after the master×pack×hook multiply; bumped so they actually register.
+        // Fully adjustable (or mutable) per hook in Settings → Theme Packs & Effects.
         this._hookPoints = {
-            start: { enabled: false, volume: 70 },
-            during: { enabled: false, volume: 30 },
-            stop: { enabled: false, volume: 70 },
-            process: { enabled: false, volume: 30 },
-            warning: { enabled: false, volume: 80 },
-            paste: { enabled: false, volume: 100 }
+            start: { enabled: true, volume: 90 },
+            during: { enabled: true, volume: 70 },
+            stop: { enabled: true, volume: 90 },
+            process: { enabled: true, volume: 75 },
+            warning: { enabled: true, volume: 85 },
+            paste: { enabled: true, volume: 100 }
         };
 
         this._loadSettings();
@@ -245,27 +255,39 @@ class EffectsEngine {
             const saved = localStorage.getItem('windy_effects');
             if (saved) {
                 const s = JSON.parse(saved);
-                this._mode = s.mode || 'silent';
+                // Keep the saved mode (incl. 'default', which now plays the Classic pack since
+                // the trigger() bug is fixed). Missing mode → 'default' (audible), not silent.
+                this._mode = s.mode || 'default';
                 this._dynamicScaling = s.dynamicScaling !== false;
                 this._surpriseCategory = s.surpriseCategory || 'all';
                 this._favorites = s.favorites || [];
-                if (s.hookPoints) {
+                // One-time heal (schemaVersion < 2): builds before the audible-defaults fix
+                // shipped every hook DISABLED (during/process volume 30) and persisted that,
+                // which silenced Default mode for everyone who ran them. For those legacy
+                // profiles, DROP the stale muted hookPoints and keep the audible constructor
+                // defaults (start 90 / during 70 / stop 90 / process 75 / warning 85 / paste 100,
+                // all enabled). v2+ profiles honor the user's saved per-hook mutes/volumes.
+                const isLegacy = !s.schemaVersion || s.schemaVersion < 2;
+                if (s.hookPoints && !isLegacy) {
                     for (const [k, v] of Object.entries(s.hookPoints)) {
                         if (this._hookPoints[k]) Object.assign(this._hookPoints[k], v);
                     }
                 }
                 if (s.activePack) this._activePackId = s.activePack;
+                // Persist the heal once so it sticks and never re-fires (stamps schemaVersion 2).
+                if (isLegacy) this._saveSettings();
             }
         } catch (_) { }
 
-        // Sync master volume with SFX slider
-        const sfxVol = parseInt(localStorage.getItem('windy_sfxVolume') || '70', 10);
+        // Sync master volume with SFX slider (default 85% so the cues are clearly audible).
+        const sfxVol = parseInt(localStorage.getItem('windy_sfxVolume') || '85', 10);
         this.sound.setMasterVolume(sfxVol / 100);
     }
 
     _saveSettings() {
         try {
             localStorage.setItem('windy_effects', JSON.stringify({
+                schemaVersion: 2,
                 mode: this._mode,
                 activePack: this._activePack?.id || this._activePackId || null,
                 surpriseCategory: this._surpriseCategory,
@@ -385,6 +407,27 @@ class EffectsEngine {
         this._saveSettings();
     }
 
+    // The "🔔 Default" button — a true RESET to the friendly all-on audible default.
+    // Re-enables all 6 hooks, restores the Classic pack, bumps the master, and clears any
+    // previously-muted/quieted state in one click (the legacy Default button only set a
+    // broken mode and never touched the hooks).
+    resetToDefaults() {
+        this._mode = 'default';
+        this._activePackId = 'classic-beep';
+        this._activePack = this._packs['classic-beep'] || null;
+        this._hookPoints = {
+            start: { enabled: true, volume: 90 },
+            during: { enabled: true, volume: 70 },
+            stop: { enabled: true, volume: 90 },
+            process: { enabled: true, volume: 75 },
+            warning: { enabled: true, volume: 85 },
+            paste: { enabled: true, volume: 100 },
+        };
+        this.sound.setMasterVolume(0.85);
+        try { localStorage.setItem('windy_sfxVolume', '85'); } catch (_) { /* best-effort */ }
+        this._saveSettings();
+    }
+
     setActivePack(packId) {
         if (this._packs[packId]) {
             this._activePack = this._packs[packId];
@@ -450,7 +493,7 @@ class EffectsEngine {
      */
     trigger(hook, metadata = {}) {
         console.debug(`[EffectsEngine] trigger(${hook}): mode=${this._mode}, hookEnabled=${this._hookPoints[hook]?.enabled}, hookVol=${this._hookPoints[hook]?.volume}`);
-        if (this._mode === 'silent' || this._mode === 'default') return;
+        if (this._mode === 'silent') return; // 'default' is normalized to 'single' on load — never silence it
 
         const hp = this._hookPoints[hook];
         if (!hp || !hp.enabled) { console.debug(`[EffectsEngine] Hook ${hook} skipped: hp=${!!hp}, enabled=${hp?.enabled}`); return; }

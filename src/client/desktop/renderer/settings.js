@@ -59,8 +59,9 @@ class SettingsPanel {
             <label for="recordingModeSelect">Transcription Mode</label>
             <select id="recordingModeSelect">
               <option value="batch" selected>✨ Batch — record first, transcribe on stop</option>
+              ${(window.windyAPI && window.windyAPI.ecosystemUI === false) ? '' : `
               <option value="live">⚡ Live — see words as you speak</option>
-              <option value="hybrid">🔄 Hybrid — live preview + final polish</option>
+              <option value="hybrid">🔄 Hybrid — live preview + final polish</option>`}
               <option value="clone_capture">🧬 Clone Capture — record only, no transcription</option>
             </select>
           </div>
@@ -69,16 +70,33 @@ class SettingsPanel {
           <div class="setting-row">
             <label for="transcriptionModeSelect">Transcription Route</label>
             <select id="transcriptionModeSelect">
-              <option value="auto" selected>🔄 Auto — local first, cloud failover</option>
+              ${(() => {
+                // Book-launch: no cloud transcription yet — lock to Local only.
+                // Reversible: the full Auto/Cloud options return when CLOUD_STORAGE
+                // is true (cloud ships).
+                if (window.windyAPI && window.windyAPI.cloudStorage === false) {
+                  return `<option value="local_only" selected>🏠 Local only — runs on your machine</option>`;
+                }
+                return `<option value="auto" selected>🔄 Auto — local first, cloud failover</option>
               <option value="local_only">🏠 Local only — never use cloud</option>
-              <option value="cloud_only">☁️ Cloud only — always use cloud</option>
+              <option value="cloud_only">☁️ Cloud only — always use cloud</option>`;
+              })()}
             </select>
           </div>
-          <p class="settings-hint" id="transcriptionModeHint">Auto switches to cloud when local performance drops. Cloud only is best for weak hardware.</p>
+          <p class="settings-hint" id="transcriptionModeHint">${(window.windyAPI && window.windyAPI.cloudStorage === false)
+            ? 'Everything is transcribed right on your machine — nothing is ever sent to the cloud.'
+            : 'Auto switches to cloud when local performance drops. Cloud only is best for weak hardware.'}</p>
           <div class="setting-row" id="maxDurationRow">
             <label for="maxRecordingSelect">Max Recording</label>
             <select id="maxRecordingSelect">
               ${(() => {
+                // Book-launch free build: recording is unlimited (the max-duration
+                // auto-stop is disabled in the renderer). Show an honest "Unlimited"
+                // option instead of the license-tier cap. Reversible — reverts to the
+                // tiered dropdown when UNLIMITED_RECORDING is false (paid/tiered builds).
+                if (window.windyAPI && window.windyAPI.unlimitedRecording) {
+                  return `<option value="0" selected>Unlimited</option>`;
+                }
                 const tier = localStorage.getItem('windy_license_tier') || 'free';
                 const tierMaxMap = { free: 5, pro: 30, translate: 30, translate_pro: 60 };
                 const tierMax = tierMaxMap[tier] || 5;
@@ -131,12 +149,23 @@ class SettingsPanel {
           <div class="setting-row">
             <label for="storageLocation">Storage</label>
             <select id="storageLocation">
-              <option value="local" selected>💾 Local only — stays on this device</option>
+              ${(() => {
+                // Book-launch: WindyCloud isn't live yet — show Local only and hide
+                // the cloud/sync options. The "Local folder" picker below still lets
+                // users save anywhere on disk. Reversible: the full set returns when
+                // CLOUD_STORAGE is true in edition.js (WindyCloud ships).
+                if (window.windyAPI && window.windyAPI.cloudStorage === false) {
+                  return `<option value="local" selected>💾 Local only — stays on this device</option>`;
+                }
+                return `<option value="local" selected>💾 Local only — stays on this device</option>
               <option value="windy-cloud">☁️ WindyCloud — encrypted, syncs when on Wi-Fi</option>
-              <option value="both">🔄 Both — local + WindyCloud backup</option>
+              <option value="both">🔄 Both — local + WindyCloud backup</option>`;
+              })()}
             </select>
           </div>
-          <p class="settings-hint" id="storageHint">Local storage selected — your data stays on this machine. Change to WindyCloud or Both to enable syncing.</p>
+          <p class="settings-hint" id="storageHint">${(window.windyAPI && window.windyAPI.cloudStorage === false)
+            ? 'Your recordings stay on this machine. Use the “Local folder” below to save them anywhere you like.'
+            : 'Local storage selected — your data stays on this machine. Change to WindyCloud or Both to enable syncing.'}</p>
           <div class="setting-row" title="Where to save files on this device.">
             <label for="archiveFolder">Local folder</label>
             <div class="setting-inline">
@@ -191,7 +220,7 @@ class SettingsPanel {
           <p class="settings-hint" style="margin-top:6px;">Record a voice sample and submit it to Windy Clone for training, or export audio + transcripts in formats compatible with ElevenLabs, Coqui, Tortoise TTS, and other major voice cloning platforms.</p>
         </div>
 
-        <div class="settings-section">
+        <div class="settings-section" id="transcriptionEngineSection">
           <h3>🔌 Transcription Engine</h3>
           <div class="setting-row">
             <label for="engineSelect">Engine</label>
@@ -258,11 +287,14 @@ class SettingsPanel {
           <div class="setting-row" id="modelSizeRow">
             <label for="modelSelect">Model Size</label>
             <select id="modelSelect">
-              <option value="tiny" selected>Windy Nano (73MB — fastest, GPU ✅)</option>
-              <option value="base">Windy Core (462MB — recommended, GPU ✅)</option>
-              <option value="small">Windy Lite (140MB — lightweight, GPU ✅)</option>
-              <option value="medium">Windy Edge (1444MB — high-accuracy, GPU ✅)</option>
-              <option value="large-v3">Windy Word Engine (2945MB — ultra-fast large model, GPU ✅)</option>
+              <option value="base" selected>Windy Core (462MB — recommended, GPU ✅)</option>
+              <option value="windy-nano-ct2">Windy Nano (fastest, GPU ✅)</option>
+              <option value="windy-lite-ct2">Windy Lite (lightweight, GPU ✅)</option>
+              <option value="windy-core-ct2">Windy Core CT2 (balanced, GPU ✅)</option>
+              <option value="windy-edge-ct2">Windy Edge (high-accuracy, GPU ✅)</option>
+              <option value="windy-plus-ct2">Windy Plus (high-accuracy, GPU ✅)</option>
+              <option value="windy-turbo-ct2">Windy Turbo (fast large, GPU ✅)</option>
+              <option value="windy-pro-engine-ct2">Windy Pro Engine (ultra-fast large, GPU ✅)</option>
             </select>
           </div>
           <div class="setting-row">
@@ -326,32 +358,32 @@ class SettingsPanel {
             <div class="hotkey-item-stacked">
               <span class="hotkey-label">🎙️ Start / Stop Recording</span>
               <span class="hotkey-desc">Begins or ends a voice recording session</span>
-              <div class="shortcut-capture shortcut-btn" id="shortcutToggle" tabindex="0" data-key="toggleRecording">Ctrl+Shift+Space</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutToggle" tabindex="0" data-key="toggleRecording">${this._mod}+Shift+Space</div>
             </div>
             <div class="hotkey-item-stacked">
               <span class="hotkey-label">📋 Auto-Type Transcription</span>
               <span class="hotkey-desc">Types your latest recording at the cursor</span>
-              <div class="shortcut-capture shortcut-btn" id="shortcutPaste" tabindex="0" data-key="pasteTranscript">Ctrl+Shift+V</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutPaste" tabindex="0" data-key="pasteTranscript">${this._mod}+Shift+V</div>
             </div>
             <div class="hotkey-item-stacked">
               <span class="hotkey-label">📸 Paste from Clipboard</span>
               <span class="hotkey-desc">Pastes clipboard contents (screenshots, copied text)</span>
-              <div class="shortcut-capture shortcut-btn" id="shortcutClipboard" tabindex="0" data-key="pasteClipboard">Ctrl+Shift+B</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutClipboard" tabindex="0" data-key="pasteClipboard">${this._mod}+Shift+B</div>
             </div>
             <div class="hotkey-item-stacked">
               <span class="hotkey-label">👁️ Show / Hide Window</span>
               <span class="hotkey-desc">Cycles: Full window → Tornado → Hidden</span>
-              <div class="shortcut-capture shortcut-btn" id="shortcutShowHide" tabindex="0" data-key="showHide">Ctrl+Shift+W</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutShowHide" tabindex="0" data-key="showHide">${this._mod}+Shift+W</div>
             </div>
-            <div class="hotkey-item-stacked">
+            <div class="hotkey-item-stacked" id="qtHotkeyRow">
               <span class="hotkey-label">🌐 Quick Translate</span>
               <span class="hotkey-desc">Opens floating translate pop-up for instant translations</span>
-              <div class="shortcut-capture shortcut-btn" id="shortcutQuickTranslate" tabindex="0" data-key="quickTranslate">Ctrl+Shift+T</div>
+              <div class="shortcut-capture shortcut-btn" id="shortcutQuickTranslate" tabindex="0" data-key="quickTranslate">${this._mod}+Shift+T</div>
             </div>
             <div class="hotkey-item-stacked hotkey-readonly">
               <span class="hotkey-label">🔍 Zoom (app window only)</span>
               <span class="hotkey-desc">Click inside the app first — only zooms the Windy Word window, not your desktop</span>
-              <span class="hotkey-fixed-btn">Ctrl + / −  ·  Ctrl+0 Reset</span>
+              <span class="hotkey-fixed-btn">${this._mod} + / −  ·  ${this._mod}+0 Reset</span>
             </div>
           </div>
           <button class="hotkey-reset-btn" id="hotkeyResetBtn">🔄 Reset All to Defaults</button>
@@ -366,7 +398,7 @@ class SettingsPanel {
               <span>Ctrl+W</span><span>Ctrl+T</span><span>Ctrl+Q</span>
               <span>Alt+F4</span>
             </div>
-            <p>✅ <b>Tip:</b> Use <b>Ctrl+Shift+key</b> or <b>Ctrl+Alt+key</b> combos — those are fair game!</p>
+            <p>✅ <b>Tip:</b> Use <b>${this._mod}+Shift+key</b> or <b>${this._mod}+Alt+key</b> combos — those are fair game!</p>
           </details>
         </div>
         
@@ -628,11 +660,19 @@ class SettingsPanel {
 
     // Font size buttons (zoom webContents)
     this.panel.querySelector('#settingsFontDown')?.addEventListener('click', () => {
-      if (window.windyAPI?.zoomOut) window.windyAPI.zoomOut();
+      // Mirror the main-window Ctrl-zoom path so font size persists/broadcasts.
+      const current = window.app?._currentFontSize || 100;
+      const next = Math.max(70, Math.min(150, current - 10));
+      if (window.app) window.app._currentFontSize = next;
+      if (window.windyAPI?.setFontSize) window.windyAPI.setFontSize(next);
       else document.body.style.zoom = (parseFloat(document.body.style.zoom || '1') - 0.1).toFixed(1);
     });
     this.panel.querySelector('#settingsFontUp')?.addEventListener('click', () => {
-      if (window.windyAPI?.zoomIn) window.windyAPI.zoomIn();
+      // Mirror the main-window Ctrl-zoom path so font size persists/broadcasts.
+      const current = window.app?._currentFontSize || 100;
+      const next = Math.max(70, Math.min(150, current + 10));
+      if (window.app) window.app._currentFontSize = next;
+      if (window.windyAPI?.setFontSize) window.windyAPI.setFontSize(next);
       else document.body.style.zoom = (parseFloat(document.body.style.zoom || '1') + 0.1).toFixed(1);
     });
 
@@ -742,7 +782,7 @@ class SettingsPanel {
         }
         // Also tell the Python server to switch models now
         if (this.app?.ws?.readyState === WebSocket.OPEN) {
-          this.app.ws.send(JSON.stringify({ type: 'config', model: whisperModel }));
+          this.app.ws.send(JSON.stringify({ action: 'config', config: { model: whisperModel } }));
         }
       }
     });
@@ -926,7 +966,7 @@ class SettingsPanel {
 
       const confirmed = confirm(
         `Switch model: ${currentModel} → ${newModel}\n\n` +
-        `📦 Download: ${info.size} (first time only)\n` +
+        `📦 Bundled offline — no download needed\n` +
         `💾 RAM needed: ${info.ram}\n` +
         `⏱️ Load time: ${info.time}\n` +
         `🎯 Quality: ${info.quality}` +
@@ -1140,8 +1180,13 @@ class SettingsPanel {
     // Transcription route (auto / local_only / cloud_only)
     const transcriptionModeSelect = this.panel.querySelector('#transcriptionModeSelect');
     if (transcriptionModeSelect) {
-      // Restore saved value
-      const saved = localStorage.getItem('windy_transcriptionMode') || 'auto';
+      // Restore saved value — clamped to the options this build actually renders.
+      // The free build lists only local_only; restoring the tiered default 'auto'
+      // left the select with selectedIndex=-1 (a blank dropdown) and the hint
+      // showing cloud-failover copy that doesn't apply.
+      let saved = localStorage.getItem('windy_transcriptionMode') || 'auto';
+      const available = [...transcriptionModeSelect.options].map(o => o.value);
+      if (!available.includes(saved)) saved = available[0] || 'local_only';
       transcriptionModeSelect.value = saved;
       const tmHint = this.panel.querySelector('#transcriptionModeHint');
       const tmHints = {
@@ -1207,16 +1252,39 @@ class SettingsPanel {
         if (e.ctrlKey || e.metaKey) parts.push('CommandOrControl');
         if (e.altKey) parts.push('Alt');
         if (e.shiftKey) parts.push('Shift');
-        // Get the actual key (not modifier-only)
-        const key = e.key;
+        // Get the actual key (not modifier-only). Derive letters/digits from the
+        // PHYSICAL key code, NOT e.key: on macOS, Option+<letter> composes a special
+        // character in e.key (e.g. Option+R → "®"), which becomes an accelerator like
+        // "Alt+®" that Electron's globalShortcut.register() cannot parse and CRASHES
+        // the app ("conversion failure from Alt+®"). e.code is layout/Option-immune.
+        const code = e.code || '';
+        let key = e.key;
+        if (/^Key[A-Z]$/.test(code)) key = code.slice(3);          // KeyR → R
+        else if (/^Digit[0-9]$/.test(code)) key = code.slice(5);   // Digit5 → 5
+        else if (code === 'Space') key = ' ';
+        // Escape cancels capture without saving.
+        if (key === 'Escape') {
+          el.textContent = el.dataset.previous || el.textContent;
+          el.classList.remove('capturing');
+          el.blur();
+          return;
+        }
         if (!['Control', 'Shift', 'Alt', 'Meta'].includes(key)) {
+          // REQUIRE at least one modifier. A bare key (e.g. just "Space") would register as
+          // a GLOBAL shortcut that fires on every keystroke — that's what froze the window
+          // and killed show-hide / toggle-recording. Keep capturing until a real chord.
+          if (parts.length === 0) {
+            this.showToast('⚠️ Shortcuts need a modifier — hold ⌘/Ctrl (and Shift), then press a key');
+            el.textContent = 'Press keys… (need ⌘/Ctrl)';
+            return;
+          }
           if (key === ' ') parts.push('Space');
           else if (key.length === 1) parts.push(key.toUpperCase());
           else parts.push(key);
 
           const accelerator = parts.join('+');
           const settingKey = el.dataset.key;
-          const displayStr = accelerator.replace('CommandOrControl', 'Ctrl');
+          const displayStr = accelerator.replace('CommandOrControl', (window.windyAPI && window.windyAPI.platform === 'darwin') ? '⌘' : 'Ctrl');
 
           // Block reserved system shortcuts that should never be hijacked
           const reserved = [
@@ -1264,7 +1332,7 @@ class SettingsPanel {
     // Reset all hotkeys to defaults
     const resetBtn = this.panel.querySelector('#hotkeyResetBtn');
     if (resetBtn) {
-      resetBtn.addEventListener('click', () => {
+      resetBtn.addEventListener('click', async () => {
         const defaults = {
           toggleRecording: 'CommandOrControl+Shift+Space',
           pasteTranscript: 'CommandOrControl+Shift+V',
@@ -1282,15 +1350,40 @@ class SettingsPanel {
         // Reset each badge display
         for (const [key, selector] of Object.entries(displayMap)) {
           const el = this.panel.querySelector(selector);
-          if (el) el.textContent = defaults[key].replace('CommandOrControl', 'Ctrl');
+          if (el) el.textContent = defaults[key].replace('CommandOrControl', (window.windyAPI && window.windyAPI.platform === 'darwin') ? '⌘' : 'Ctrl');
         }
-        // Tell main process to reset each
+        // Tell main process to reset each — await so we know which actually bound
+        const failures = [];
         if (window.windyAPI?.rebindHotkey) {
           for (const [key, accel] of Object.entries(defaults)) {
-            window.windyAPI.rebindHotkey(key, accel);
+            try {
+              const result = await window.windyAPI.rebindHotkey(key, accel);
+              if (result && result.ok === false) failures.push(key);
+            } catch (_) {
+              failures.push(key);
+            }
           }
         }
-        this.showToast('✅ All shortcuts reset to defaults');
+        if (failures.length === 0) {
+          this.showToast('✅ All shortcuts reset to defaults');
+          // Refresh the main-screen shortcuts card too — individual rebinds do
+          // this, but reset left the card showing the pre-reset custom combo.
+          if (window.windyAPI?.getSettings && window.app?._populateShortcutDisplay) {
+            try {
+              const s = await window.windyAPI.getSettings();
+              window.app._populateShortcutDisplay(s?.hotkeys);
+            } catch (_) { }
+          }
+        } else {
+          this.showToast(`⚠️ Reset failed for: ${failures.join(', ')}`);
+          // Re-sync badges from the real saved state on failure
+          if (window.windyAPI?.getSettings && window.app?._populateShortcutDisplay) {
+            try {
+              const s = await window.windyAPI.getSettings();
+              window.app._populateShortcutDisplay(s?.hotkeys);
+            } catch (_) { }
+          }
+        }
       });
     }
 
@@ -1364,12 +1457,36 @@ class SettingsPanel {
       if (surpriseRow) surpriseRow.style.display = mode === 'surprise' ? 'flex' : 'none';
       if (unifiedSection) unifiedSection.style.display = mode === 'silent' ? 'none' : '';
       if (previewRow) previewRow.style.display = mode === 'silent' ? 'none' : '';
+      // Per-hook sound dropdowns are only honored in custom mode — disable them
+      // elsewhere so they don't look interactive when they're ignored.
+      this.panel.querySelectorAll('[id^="uniSelect_"]').forEach(s => { s.disabled = (mode !== 'custom'); });
     };
 
     modePills.forEach(pill => {
       pill.addEventListener('click', () => {
         const mode = pill.dataset.mode;
-        if (fx) fx.setMode(mode);
+        if (fx && mode === 'default') {
+          // "Default" is a true RESET: re-enable all 6 hooks at audible volumes, restore the
+          // Classic pack + master — and reflect it in the UI (mute icons + sliders) at once,
+          // so a user who muted/quieted things gets working sound back in one click.
+          fx.resetToDefaults();
+          ['start', 'during', 'stop', 'process', 'warning', 'paste'].forEach(k => {
+            const hp = fx._hookPoints[k];
+            const mute = this.panel.querySelector(`#uniMute_${k}`);
+            const vol = this.panel.querySelector(`#uniVol_${k}`);
+            const pct = this.panel.querySelector(`#uniVolPct_${k}`);
+            if (hp && mute) mute.textContent = hp.enabled ? '🔊' : '🔇';
+            if (hp && vol) vol.value = hp.volume;
+            if (hp && pct) pct.textContent = hp.volume + '%';
+          });
+          const mv = this.panel.querySelector('#sfxMasterVol');
+          const mvPct = this.panel.querySelector('#sfxMasterVolPct');
+          if (mv) mv.value = 85;
+          if (mvPct) mvPct.textContent = '85%';
+          try { this.showToast('🔔 Sounds reset to default — all 6 stages on'); } catch (_) { }
+        } else if (fx) {
+          fx.setMode(mode);
+        }
         updateModeUI(mode);
       });
     });
@@ -2183,6 +2300,51 @@ class SettingsPanel {
       });
     }
 
+    // Master volume slider + mute button (windy_sfxVolume stored 0–100; engine wants 0–1)
+    const masterVol = this.panel.querySelector('#sfxMasterVol');
+    const masterVolPct = this.panel.querySelector('#sfxMasterVolPct');
+    const masterMute = this.panel.querySelector('#sfxMasterMute');
+
+    // Initialize slider + pct from saved value on render
+    const savedMasterVol = parseInt(localStorage.getItem('windy_sfxVolume') || '85', 10) || 0;
+    if (masterVol) masterVol.value = savedMasterVol;
+    if (masterVolPct) masterVolPct.textContent = savedMasterVol + '%';
+    if (masterMute) masterMute.textContent = savedMasterVol === 0 ? '🔇' : '🔊';
+
+    if (masterVol) {
+      masterVol.addEventListener('input', () => {
+        const v = parseInt(masterVol.value, 10) || 0;
+        fx?.setMasterVolume(v / 100);
+        localStorage.setItem('windy_sfxVolume', String(v));
+        if (masterVolPct) masterVolPct.textContent = v + '%';
+        if (masterMute) masterMute.textContent = v === 0 ? '🔇' : '🔊';
+      });
+    }
+
+    if (masterMute) {
+      masterMute.style.cursor = 'pointer';
+      masterMute.addEventListener('click', () => {
+        const current = parseInt(localStorage.getItem('windy_sfxVolume') || '85', 10) || 0;
+        if (current > 0) {
+          // Mute: remember current level so we can restore it on unmute
+          localStorage.setItem('windy_sfxVolumePrev', String(current));
+          fx?.setMasterVolume(0);
+          localStorage.setItem('windy_sfxVolume', '0');
+          if (masterVol) masterVol.value = 0;
+          if (masterVolPct) masterVolPct.textContent = '0%';
+          masterMute.textContent = '🔇';
+        } else {
+          // Unmute: restore the saved level (fall back to 85 if none)
+          const restore = parseInt(localStorage.getItem('windy_sfxVolumePrev') || '85', 10) || 85;
+          fx?.setMasterVolume(restore / 100);
+          localStorage.setItem('windy_sfxVolume', String(restore));
+          if (masterVol) masterVol.value = restore;
+          if (masterVolPct) masterVolPct.textContent = restore + '%';
+          masterMute.textContent = '🔊';
+        }
+      });
+    }
+
     // Surprise Me category
     const surpriseCat = this.panel.querySelector('#sfxSurpriseCategory');
     if (surpriseCat && fx) {
@@ -2297,8 +2459,32 @@ class SettingsPanel {
           <button class="custom-widget-delete" data-del="${i}" title="Remove">✕</button>
         </div>
       `).join('');
+    };
 
-      // Click to select
+    // Widget mode pills
+    const widgetModePills = this.panel.querySelector('#widgetModePills');
+    const specificSection = this.panel.querySelector('#widgetSpecificSection');
+    const randomStockInfo = this.panel.querySelector('#widgetRandomStockInfo');
+    const randomCustomInfo = this.panel.querySelector('#widgetRandomCustomInfo');
+    const savedWidgetMode = localStorage.getItem('windy_widgetMode') || 'specific';
+
+    const setWidgetMode = (mode) => {
+      localStorage.setItem('windy_widgetMode', mode);
+      if (widgetModePills) {
+        widgetModePills.querySelectorAll('.widget-mode-pill').forEach(p => {
+          p.classList.toggle('active', p.dataset.mode === mode);
+        });
+      }
+      if (specificSection) specificSection.style.display = mode === 'specific' ? '' : 'none';
+      if (randomStockInfo) randomStockInfo.style.display = mode === 'random-stock' ? '' : 'none';
+      if (randomCustomInfo) randomCustomInfo.style.display = mode === 'random-custom' ? '' : 'none';
+    };
+
+    setWidgetMode(savedWidgetMode);
+
+    // Custom-widget grid click handler — attached ONCE (renderCustomGrid only
+    // rewrites innerHTML, so re-binding here would stack duplicate listeners).
+    if (customGrid) {
       customGrid.addEventListener('click', (e) => {
         const del = e.target.closest('[data-del]');
         if (del) {
@@ -2325,28 +2511,7 @@ class SettingsPanel {
           this.showToast('✅ Custom widget selected!');
         }
       });
-    };
-
-    // Widget mode pills
-    const widgetModePills = this.panel.querySelector('#widgetModePills');
-    const specificSection = this.panel.querySelector('#widgetSpecificSection');
-    const randomStockInfo = this.panel.querySelector('#widgetRandomStockInfo');
-    const randomCustomInfo = this.panel.querySelector('#widgetRandomCustomInfo');
-    const savedWidgetMode = localStorage.getItem('windy_widgetMode') || 'specific';
-
-    const setWidgetMode = (mode) => {
-      localStorage.setItem('windy_widgetMode', mode);
-      if (widgetModePills) {
-        widgetModePills.querySelectorAll('.widget-mode-pill').forEach(p => {
-          p.classList.toggle('active', p.dataset.mode === mode);
-        });
-      }
-      if (specificSection) specificSection.style.display = mode === 'specific' ? '' : 'none';
-      if (randomStockInfo) randomStockInfo.style.display = mode === 'random-stock' ? '' : 'none';
-      if (randomCustomInfo) randomCustomInfo.style.display = mode === 'random-custom' ? '' : 'none';
-    };
-
-    setWidgetMode(savedWidgetMode);
+    }
 
     if (widgetModePills) {
       widgetModePills.addEventListener('click', (e) => {
@@ -2415,6 +2580,10 @@ class SettingsPanel {
         input.addEventListener('change', async () => {
           const file = input.files?.[0];
           if (!file) return;
+          if (file.type && !/^image\/(png|gif|svg\+xml|webp)$/.test(file.type)) {
+            this.showToast('❌ Use PNG, GIF, SVG, or WebP');
+            return;
+          }
           if (file.size > 2 * 1024 * 1024) {
             this.showToast('❌ File too large (max 2MB)');
             return;
@@ -2450,7 +2619,7 @@ class SettingsPanel {
     const checkUpdBtn = this.panel.querySelector('#checkUpdatesBtn');
     if (checkUpdBtn) {
       checkUpdBtn.addEventListener('click', async () => {
-        checkUpdBtn.textContent = '⏳ Checking...';
+        checkUpdBtn.textContent = 'ℹ️ Auto-update off — re-download to update';
         checkUpdBtn.disabled = true;
         try {
           if (window.windyAPI?.checkForUpdates) {
@@ -2558,8 +2727,18 @@ class SettingsPanel {
         if (settings.device) this.panel.querySelector('#deviceSelect').value = settings.device;
         if (settings.language) this.panel.querySelector('#languageSelect').value = settings.language;
         if (settings.opacity) {
-          this.panel.querySelector('#opacityRange').value = settings.opacity;
-          this.panel.querySelector('#opacityValue').textContent = `${settings.opacity}%`;
+          // Normalize: some writers store a 0-1 fraction (Electron setOpacity
+          // scale), the slider speaks 50-100 percent. An unnormalized "1"
+          // rendered as "1%" beside a fully opaque window.
+          let opPct = Number(settings.opacity);
+          if (isFinite(opPct)) {
+            if (opPct <= 1) opPct = Math.round(opPct * 100);
+            opPct = Math.max(50, Math.min(100, opPct));
+            this.panel.querySelector('#opacityRange').value = opPct;
+            this.panel.querySelector('#opacityValue').textContent = `${opPct}%`;
+            const winEl = document.querySelector('.window');
+            if (winEl) winEl.style.opacity = opPct / 100;
+          }
         }
         if (settings.alwaysOnTop !== undefined) {
           this.panel.querySelector('#alwaysOnTop').checked = settings.alwaysOnTop;
@@ -2574,6 +2753,9 @@ class SettingsPanel {
         if (settings.clearOnPaste !== undefined) {
           this.panel.querySelector('#clearOnPaste').checked = settings.clearOnPaste;
         }
+        // Restore analytics opt-in from localStorage (persists across relaunch)
+        const a = this.panel.querySelector('#analyticsEnabled');
+        if (a) a.checked = localStorage.getItem('windy_analytics') === 'true';
         /* livePreview restore handled via recordingMode */
         this.app.livePreview = settings.recordingMode === 'live' || settings.recordingMode === 'hybrid';
         // Recording mode restore
@@ -2603,7 +2785,7 @@ class SettingsPanel {
           for (const [key, selector] of Object.entries(map)) {
             const el = this.panel.querySelector(selector);
             if (el && settings.hotkeys[key]) {
-              el.textContent = settings.hotkeys[key].replace('CommandOrControl', 'Ctrl');
+              el.textContent = settings.hotkeys[key].replace('CommandOrControl', (window.windyAPI && window.windyAPI.platform === 'darwin') ? '⌘' : 'Ctrl');
             }
           }
         }
@@ -2967,6 +3149,11 @@ class SettingsPanel {
     }
   }
 
+  // OS-aware modifier label: CommandOrControl renders as ⌘ on macOS, Ctrl elsewhere.
+  // Showing "Ctrl" on a Mac (where the real key is Command) makes users think the
+  // shortcut is broken.
+  get _mod() { return (window.windyAPI && window.windyAPI.platform === 'darwin') ? '⌘' : 'Ctrl'; }
+
   toggle() {
     this.isOpen ? this.close() : this.open();
   }
@@ -2974,11 +3161,17 @@ class SettingsPanel {
   open() {
     this.panel.classList.add('open');
     this.isOpen = true;
+    // The macOS window is focusable:false (so it can't steal the cursor during
+    // paste-to-cursor). That also blocks ALL keyboard input — including rebinding
+    // shortcuts and typing in fields. Make it focusable while Settings is open,
+    // and release it on close.
+    try { window.windyAPI?.requestFocus?.(); } catch (_) { /* best-effort */ }
   }
 
   close() {
     this.panel.classList.remove('open');
     this.isOpen = false;
+    try { window.windyAPI?.releaseFocus?.(); } catch (_) { /* best-effort */ }
   }
 
   /**
