@@ -6383,3 +6383,13 @@ body.light-mode .slib-tab-active {
 /* NOTE: .status-bar intentionally NOT hidden here.
    Users always need to see model info, connection status, and the
    pin/unpin chevron, even when viewing Chat/Mail/Clone/etc. */
+/* Linux window-management (non-focusable window): disable native titlebar drag
+   so our programmatic move doesn't fight it, and show a bottom-right resize grip. */
+body.linux-wm .title-bar { -webkit-app-region: no-drag !important; cursor: default; }
+body.linux-wm #resizeGrip {
+  position: fixed; right: 0; bottom: 0; width: 26px; height: 26px;
+  cursor: nwse-resize; z-index: 99999; -webkit-app-region: no-drag;
+  background: linear-gradient(135deg, transparent 50%, var(--text-secondary, #9aa4b2) 50%, var(--text-secondary, #9aa4b2) 60%, transparent 60%, transparent 72%, var(--text-secondary, #9aa4b2) 72%, var(--text-secondary, #9aa4b2) 82%, transparent 82%);
+  opacity: 0.55;
+}
+body.linux-wm #resizeGrip:hover { opacity: 0.9; }

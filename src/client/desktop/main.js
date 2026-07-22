@@ -9845,6 +9845,42 @@ function _withFocusable(fn) {
 ipcMain.on('minimize-window', () => { _withFocusable(() => mainWindow.minimize()); });
 ipcMain.on('maximize-window', () => { _withFocusable(() => mainWindow.maximize()); });
 ipcMain.on('unmaximize-window', () => { _withFocusable(() => mainWindow.unmaximize()); });
+
+// Programmatic move/resize for the non-focusable window on Linux/Mutter (which
+// refuses native window-management on a window that declines input focus, and
+// where -webkit-app-region:drag is disabled via the body.linux-wm class). The
+// renderer starts a gesture on titlebar mousedown (move) or resize-grip
+// mousedown (resize); we poll the OS cursor and setPosition/setSize. The anchor
+// (offset for move, window origin for resize) is captured ONCE at gesture start,
+// so there is no feedback loop — this is what the earlier custom drag got wrong
+// (it fought the native app-region drag, causing runaway resize). macOS/Windows
+// keep their native app-region drag + native resize and never call these.
+let _wmTimer = null;
+function _wmStart(mode) {
+  if (!mainWindow || mainWindow.isDestroyed() || _wmTimer) return;
+  try {
+    const { screen } = require('electron');
+    const c0 = screen.getCursorScreenPoint();
+    const b0 = mainWindow.getBounds();
+    const anchor = { dx: c0.x - b0.x, dy: c0.y - b0.y, ox: b0.x, oy: b0.y };
+    _wmTimer = setInterval(() => {
+      try {
+        if (!mainWindow || mainWindow.isDestroyed()) { clearInterval(_wmTimer); _wmTimer = null; return; }
+        const c = screen.getCursorScreenPoint();
+        if (mode === 'move') {
+          mainWindow.setPosition(Math.round(c.x - anchor.dx), Math.round(c.y - anchor.dy));
+        } else {
+          const w = Math.max(250, Math.round(c.x - anchor.ox));
+          const h = Math.max(MIN_HEIGHT || 200, Math.round(c.y - anchor.oy));
+          mainWindow.setSize(w, h);
+        }
+      } catch (_) { }
+    }, 12);
+  } catch (_) { }
+}
+ipcMain.on('window-move-start', () => _wmStart('move'));
+ipcMain.on('window-resize-start', () => _wmStart('resize'));
+ipcMain.on('window-wm-end', () => { if (_wmTimer) { clearInterval(_wmTimer); _wmTimer = null; } });
 // Custom video-expand fullscreen — paired with the History panel's expand
 // button (history.js). On macOS uses setSimpleFullScreen so it works with the
 // non-focusable main window without disturbing the recording focus invariant.

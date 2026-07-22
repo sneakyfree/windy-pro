@@ -56,6 +56,9 @@ contextBridge.exposeInMainWorld('windyAPI', {
   minimize: () => ipcRenderer.send('minimize-window'),
   maximize: () => ipcRenderer.send('maximize-window'),
   unmaximize: () => ipcRenderer.send('unmaximize-window'),
+  windowMoveStart: () => ipcRenderer.send('window-move-start'),
+  windowResizeStart: () => ipcRenderer.send('window-resize-start'),
+  windowWmEnd: () => ipcRenderer.send('window-wm-end'),
   isMaximized: () => ipcRenderer.invoke('is-maximized'),
   setVideoFullscreen: (on) => ipcRenderer.send('set-video-fullscreen', !!on),
   onSettingsApplySideEffect: (callback) => {

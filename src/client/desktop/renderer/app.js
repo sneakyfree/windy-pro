@@ -825,6 +825,52 @@ class WindyApp {
       }
     });
 
+    // ── Linux window move/resize (non-focusable window) ────────────────────
+    // On macOS/Windows the native -webkit-app-region:drag + native resize work
+    // fine on the non-focusable window, so we do nothing extra there. On Linux
+    // (Mutter refuses native window-management on a non-focusable window) we
+    // disable native drag (body.linux-wm class + CSS) and drive move/resize
+    // programmatically from a titlebar drag and a bottom-right resize grip.
+    const _plat = window.windyAPI?.platform;
+    if (_plat === 'linux' && window.windyAPI?.windowMoveStart) {
+      document.body.classList.add('linux-wm');
+      const endGesture = () => {
+        try { window.windyAPI.windowWmEnd(); } catch (_) { }
+        window.removeEventListener('mouseup', endGesture, true);
+        window.removeEventListener('blur', endGesture, true);
+      };
+      const beginGesture = (kind) => {
+        try { kind === 'resize' ? window.windyAPI.windowResizeStart() : window.windyAPI.windowMoveStart(); } catch (_) { }
+        window.addEventListener('mouseup', endGesture, true);
+        window.addEventListener('blur', endGesture, true);
+      };
+      // Move: press-drag anywhere on the titlebar except its buttons/menus.
+      const titleBar = document.getElementById('titleBar');
+      if (titleBar) {
+        titleBar.addEventListener('mousedown', (e) => {
+          if (e.button !== 0) return;
+          if (e.target.closest('button, a, input, select, [role="menu"], .title-btn, .translate-menu-wrap')) return;
+          beginGesture('move');
+        });
+      }
+      // Resize: a visible grip pinned to the bottom-right corner (visual cue),
+      // but the actual trigger is a DOCUMENT-level corner detector so it can't be
+      // swallowed by footer controls that sit at that corner (which is exactly
+      // what happened when the grip owned the mousedown). Any left-press within
+      // ~26px of the viewport's bottom-right starts a resize.
+      const grip = document.createElement('div');
+      grip.id = 'resizeGrip';
+      grip.title = 'Drag to resize';
+      document.body.appendChild(grip);
+      document.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        if (e.clientX >= window.innerWidth - 26 && e.clientY >= window.innerHeight - 26) {
+          e.preventDefault();
+          beginGesture('resize');
+        }
+      }, true);
+    }
+
     // Maximize / Restore toggle
     const maxBtn = document.getElementById('maximizeBtn');
     if (maxBtn) {
