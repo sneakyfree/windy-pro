@@ -3004,7 +3004,11 @@ class WindyApp {
         // If the user only tapped the shortcut (recording < 600ms), there's no
         // real speech to transcribe — a sub-second clip often yields a stray
         // "v"/garbage. Skip transcribe/paste and tell the user to hold longer.
-        const elapsedMs = (typeof performance !== 'undefined' ? performance.now() + performance.timeOrigin : Date.now()) - (this._batchStartTime || Date.now());
+        // MUST use Date.now() on BOTH ends: _batchStartTime is wall-clock, and
+        // performance.timeOrigin+now() FREEZES during macOS sleep, so on a
+        // napping Mac the mixed-clock delta went negative and flashed "Too
+        // quick" on every recording no matter how long (Mac mini, 2026-07-21).
+        const elapsedMs = Date.now() - (this._batchStartTime || Date.now());
         if (elapsedMs < 600) {
           console.info(`[Batch] Too short (${Math.round(elapsedMs)}ms) — skipping transcribe/paste`);
           this.setState('idle');
