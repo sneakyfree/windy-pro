@@ -825,27 +825,6 @@ class WindyApp {
       }
     });
 
-    // Custom titlebar drag: the window is non-focusable so the CSS
-    // -webkit-app-region:drag can't move it on Mutter. Drive a programmatic
-    // drag from the titlebar instead (main polls the OS cursor → setPosition).
-    // no-drag children (the min/max/close buttons) are excluded via .closest.
-    const titleBar = document.getElementById('titleBar');
-    if (titleBar && window.windyAPI?.windowDragStart) {
-      titleBar.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
-        // don't start a drag when pressing a control inside the titlebar
-        if (e.target.closest('button, a, input, select, .title-btn, [data-no-drag]')) return;
-        window.windyAPI.windowDragStart();
-        const end = () => {
-          try { window.windyAPI.windowDragEnd(); } catch (_) { }
-          window.removeEventListener('mouseup', end, true);
-          window.removeEventListener('blur', end, true);
-        };
-        window.addEventListener('mouseup', end, true);
-        window.addEventListener('blur', end, true);
-      });
-    }
-
     // Maximize / Restore toggle
     const maxBtn = document.getElementById('maximizeBtn');
     if (maxBtn) {

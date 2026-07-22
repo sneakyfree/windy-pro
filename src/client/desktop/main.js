@@ -9845,30 +9845,6 @@ function _withFocusable(fn) {
 ipcMain.on('minimize-window', () => { _withFocusable(() => mainWindow.minimize()); });
 ipcMain.on('maximize-window', () => { _withFocusable(() => mainWindow.maximize()); });
 ipcMain.on('unmaximize-window', () => { _withFocusable(() => mainWindow.unmaximize()); });
-
-// Custom titlebar drag: -webkit-app-region:drag doesn't move a non-focusable
-// window on Mutter, so drag it programmatically by polling the OS cursor and
-// calling setPosition — works regardless of focusable state, on every platform.
-let _dragTimer = null;
-ipcMain.on('window-drag-start', () => {
-  if (!mainWindow || mainWindow.isDestroyed() || _dragTimer) return;
-  try {
-    const { screen } = require('electron');
-    const c0 = screen.getCursorScreenPoint();
-    const [wx, wy] = mainWindow.getPosition();
-    const offX = c0.x - wx, offY = c0.y - wy;
-    _dragTimer = setInterval(() => {
-      try {
-        if (!mainWindow || mainWindow.isDestroyed()) { clearInterval(_dragTimer); _dragTimer = null; return; }
-        const c = screen.getCursorScreenPoint();
-        mainWindow.setPosition(c.x - offX, c.y - offY);
-      } catch (_) { }
-    }, 8);
-  } catch (_) { }
-});
-ipcMain.on('window-drag-end', () => {
-  if (_dragTimer) { clearInterval(_dragTimer); _dragTimer = null; }
-});
 // Custom video-expand fullscreen — paired with the History panel's expand
 // button (history.js). On macOS uses setSimpleFullScreen so it works with the
 // non-focusable main window without disturbing the recording focus invariant.
