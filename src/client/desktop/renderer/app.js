@@ -349,6 +349,43 @@ class WindyApp {
       }
     });
 
+    // ── Universal focus escalation (Grant 2026-07-22) ──────────────────────
+    // The window is non-focusable at rest so clicking controls never pulls the
+    // user's cursor out of their external dictation target. But the app has its
+    // OWN text-entry fields (settings search, hotkey rebind, editable transcript)
+    // that must accept typing. So: when the user presses down on a TEXT-ENTRY
+    // element, escalate focus BEFORE the click lands (request-focus makes the
+    // window key). When focus later leaves all text entry, release it. Crucially
+    // this ONLY fires for text entry — buttons, the model <select>, checkboxes,
+    // theme toggle etc. never escalate, so those clicks keep the cursor put.
+    const _isTextEntry = (el) => {
+      if (!el || el.nodeType !== 1) return false;
+      if (el.isContentEditable) return true;
+      const tag = el.tagName;
+      if (tag === 'TEXTAREA') return true;
+      if (tag === 'INPUT') {
+        const t = (el.getAttribute('type') || 'text').toLowerCase();
+        return ['text', 'search', 'url', 'email', 'password', 'number', 'tel'].includes(t);
+      }
+      return false;
+    };
+    // mousedown (capture) fires before focus moves — escalate first so the field
+    // can actually become key and receive keystrokes on a non-focusable window.
+    document.addEventListener('mousedown', (e) => {
+      if (_isTextEntry(e.target && e.target.closest && (e.target.closest('input,textarea,[contenteditable]') || e.target))) {
+        try { window.windyAPI?.requestFocus?.(); } catch (_) { }
+      }
+    }, true);
+    // When focus leaves a text field and doesn't land on another, drop back to
+    // non-focusable so the next control click can't steal the cursor.
+    document.addEventListener('focusout', () => {
+      setTimeout(() => {
+        if (!_isTextEntry(document.activeElement)) {
+          try { window.windyAPI?.releaseFocus?.(); } catch (_) { }
+        }
+      }, 50);
+    }, true);
+
     // Fallback: also check localStorage for cloud settings (always available)
     // localStorage ALWAYS overrides defaults since it reflects user's most recent Settings choice
     try {

@@ -1240,18 +1240,20 @@ function createWindow() {
     x: windowConfig.x,
     y: windowConfig.y,
 
-    // Floating window properties
-    // macOS: 'floating' level = non-activating panel (like a utility palette).
-    //   focusable:false = window never becomes key window, so the cursor
-    //   stays blinking in the external app at all times during recording.
-    //   Mouse clicks still work — only keyboard focus is prevented.
-    // Linux Wayland: setFocusable(false) (applied during toggleRecording) is
-    //   the real defense against XWayland focus theft; honoring the user's
-    //   alwaysOnTop preference at creation time does not generate the X11
-    //   property-change events that runtime toggling does, so it's safe.
-    // Linux X11/Windows: plain alwaysOnTop works fine.
+    // Floating window properties.
+    // UNIVERSAL NON-FOCUSABLE DOCTRINE (Grant 2026-07-22): the whole app is a
+    // control panel, not a text destination. Clicking ANYWHERE in it — buttons,
+    // settings, the model dropdown, theme toggle, record — must NEVER pull the
+    // user's blinking cursor out of wherever they're dictating to. So the window
+    // is created focusable:false on EVERY platform (was macOS-only, which is why
+    // Linux/Windows clicks stole the cursor). Mouse clicks still work — only
+    // keyboard focus is withheld. The renderer escalates focus (request-focus)
+    // ONLY when the user clicks into an actual text-entry field inside the app
+    // (settings search, hotkey rebind, editable transcript), and releases it on
+    // blur — so in-app typing still works while the 98%-case control clicks never
+    // move the cursor. On Wayland this doubles as the XWayland focus-theft defense.
     alwaysOnTop: appearance.alwaysOnTop,
-    focusable: process.platform !== 'darwin',  // Non-focusable on macOS only
+    focusable: false,
     frame: true,            // Framed so user can see/cycle the window (temp Linux tweak)
     transparent: false,     // Opaque so empty page isn't invisible (temp Linux tweak)
     resizable: true,
@@ -1291,39 +1293,46 @@ function createWindow() {
     mainWindow.setAlwaysOnTop(true, 'floating');
   }
 
-  // IPC: Temporarily make window focusable when user needs keyboard input
-  // (e.g. settings, typing in transcript). Call 'release-focus' when done.
+  // IPC: Temporarily make window focusable when the user clicks into an in-app
+  // TEXT-ENTRY field (settings search, hotkey rebind, editable transcript). The
+  // renderer fires request-focus on mousedown of a text field and release-focus
+  // on blur. Works on ALL platforms now (was darwin-only) so the universal
+  // non-focusable window can still accept typing where the user actually intends
+  // to type. Guarded during recording so a stray escalation can't steal the
+  // cursor mid-dictation.
   ipcMain.on('request-focus', () => {
-    if (mainWindow && !mainWindow.isDestroyed() && process.platform === 'darwin') {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (isRecording) return; // never grab focus mid-recording
+    try {
       mainWindow.setFocusable(true);
-      // A window created focusable:false at a 'floating' panel level often won't
-      // become the KEY window from setFocusable+focus alone — so keyboard events
-      // (e.g. rebinding a shortcut, typing in a field) never arrive. Steal app
-      // focus + move to top so the window actually becomes key and receives keys.
+      // A focusable:false window often won't become the KEY window from
+      // setFocusable+focus alone, so keyboard events never arrive. Steal app
+      // focus + raise so it actually becomes key and receives keystrokes.
       try { app.focus({ steal: true }); } catch (_) { /* best-effort */ }
       mainWindow.moveTop();
       mainWindow.focus();
-    }
+    } catch (_) { /* best-effort */ }
   });
   ipcMain.on('release-focus', () => {
-    if (mainWindow && !mainWindow.isDestroyed() && process.platform === 'darwin') {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    try {
       mainWindow.blur();
       mainWindow.setFocusable(false);
-    }
+    } catch (_) { /* best-effort */ }
   });
 
-  // macOS: Non-focusable window means getUserMedia/AudioContext can't steal focus.
-  // The cursor stays blinking in the external app at all times.
-  // Fallback focus guard for edge cases (e.g. window temporarily set focusable for settings).
-  if (process.platform === 'darwin') {
-    mainWindow.on('focus', () => {
-      if (isRecording) {
-        console.info('[Focus-Guard] Window gained focus during recording — releasing immediately');
-        mainWindow.blur();
-      }
-    });
-  }
-  console.info(`[Startup] ★ macOS non-activating panel mode (cursor stays in external app)`);
+  // Non-focusable window means getUserMedia/AudioContext/button clicks can't
+  // steal focus — the cursor stays blinking in the external app at all times.
+  // Fallback focus guard: if the window somehow gains focus DURING recording
+  // (e.g. a text field was escalated just before record), release it immediately
+  // so the imminent paste still lands in the external target. All platforms.
+  mainWindow.on('focus', () => {
+    if (isRecording) {
+      console.info('[Focus-Guard] Window gained focus during recording — releasing immediately');
+      try { mainWindow.blur(); mainWindow.setFocusable(false); } catch (_) { }
+    }
+  });
+  console.info(`[Startup] ★ Universal non-activating panel mode (cursor stays in external app)`);
 
   // ── macOS Accessibility permission: required for auto-paste (Cmd+V keystrokes) ──
   if (process.platform === 'darwin') {
@@ -6573,11 +6582,10 @@ function toggleRecording() {
   if (PLATFORM.isWayland) {
     const winsNow = [mainWindow, miniWindow, videoWindow].filter(w => w && !w.isDestroyed());
     winsNow.forEach(w => { try { w.setFocusable(false); } catch (_) { } });
-    const delayMs = isRecording ? 3000 : 10000;
-    setTimeout(() => {
-      const winsLater = [mainWindow, miniWindow, videoWindow].filter(w => w && !w.isDestroyed());
-      winsLater.forEach(w => { try { w.setFocusable(true); } catch (_) { } });
-    }, delayMs);
+    // Universal non-focusable doctrine: windows are focusable:false at rest, so
+    // there is NO restore-to-true after recording (the old code flipped them back
+    // to focusable, which reintroduced click-to-steal-focus between recordings).
+    // They simply stay non-focusable; request-focus escalates only for text entry.
   }
 
   safeSend('toggle-recording', isRecording);
