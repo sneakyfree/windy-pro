@@ -9825,16 +9825,49 @@ ipcMain.handle('get-server-config', () => {
 });
 
 // Minimize window
-ipcMain.on('minimize-window', () => {
-  if (mainWindow) mainWindow.minimize();
-});
+// A non-focusable window (universal non-steal-focus doctrine) can't be
+// minimized/maximized/dragged by the compositor on Linux/Mutter — it ignores
+// window-management requests from a window that declines input focus. So each
+// explicit window-management action briefly re-enables focusable, performs the
+// action, and drops back to non-focusable. These are deliberate user gestures
+// (clicking minimize, dragging the titlebar), so a momentary focus is fine —
+// and minimize hides the window anyway, while drag restores non-focusable the
+// instant the user lets go. Fixes "can't move or minimize the window" (Grant
+// hand-test on Fedora/GNOME 2026-07-22).
+function _withFocusable(fn) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  let was = true;
+  try { was = mainWindow.isFocusable(); } catch (_) { }
+  try { if (!was) mainWindow.setFocusable(true); } catch (_) { }
+  try { fn(); } catch (_) { }
+  if (!was) setTimeout(() => { try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setFocusable(false); } catch (_) { } }, 120);
+}
+ipcMain.on('minimize-window', () => { _withFocusable(() => mainWindow.minimize()); });
+ipcMain.on('maximize-window', () => { _withFocusable(() => mainWindow.maximize()); });
+ipcMain.on('unmaximize-window', () => { _withFocusable(() => mainWindow.unmaximize()); });
 
-// Maximize / Restore window
-ipcMain.on('maximize-window', () => {
-  if (mainWindow) mainWindow.maximize();
+// Custom titlebar drag: -webkit-app-region:drag doesn't move a non-focusable
+// window on Mutter, so drag it programmatically by polling the OS cursor and
+// calling setPosition — works regardless of focusable state, on every platform.
+let _dragTimer = null;
+ipcMain.on('window-drag-start', () => {
+  if (!mainWindow || mainWindow.isDestroyed() || _dragTimer) return;
+  try {
+    const { screen } = require('electron');
+    const c0 = screen.getCursorScreenPoint();
+    const [wx, wy] = mainWindow.getPosition();
+    const offX = c0.x - wx, offY = c0.y - wy;
+    _dragTimer = setInterval(() => {
+      try {
+        if (!mainWindow || mainWindow.isDestroyed()) { clearInterval(_dragTimer); _dragTimer = null; return; }
+        const c = screen.getCursorScreenPoint();
+        mainWindow.setPosition(c.x - offX, c.y - offY);
+      } catch (_) { }
+    }, 8);
+  } catch (_) { }
 });
-ipcMain.on('unmaximize-window', () => {
-  if (mainWindow) mainWindow.unmaximize();
+ipcMain.on('window-drag-end', () => {
+  if (_dragTimer) { clearInterval(_dragTimer); _dragTimer = null; }
 });
 // Custom video-expand fullscreen — paired with the History panel's expand
 // button (history.js). On macOS uses setSimpleFullScreen so it works with the

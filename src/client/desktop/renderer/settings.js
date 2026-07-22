@@ -3161,17 +3161,24 @@ class SettingsPanel {
   open() {
     this.panel.classList.add('open');
     this.isOpen = true;
-    // The macOS window is focusable:false (so it can't steal the cursor during
-    // paste-to-cursor). That also blocks ALL keyboard input — including rebinding
-    // shortcuts and typing in fields. Make it focusable while Settings is open,
-    // and release it on close.
-    try { window.windyAPI?.requestFocus?.(); } catch (_) { /* best-effort */ }
+    // NOTE (2026-07-22): deliberately does NOT grab focus. The window is
+    // focusable:false so it can't pull the user's cursor out of their external
+    // dictation target. Merely OPENING settings — toggling switches, changing
+    // dropdowns, reading options — needs no keyboard focus, so grabbing it here
+    // (the old behavior) stole the blinking cursor for the whole time the panel
+    // was open (very visible on Windows, where focus() truly yanks the cursor;
+    // Grant's hand-test 2026-07-22). Text fields INSIDE settings (hotkey rebind,
+    // search) still work: the global delegated mousedown handler in app.js
+    // escalates focus only when the user actually clicks INTO a text-entry field,
+    // and releases it on blur. So the user can leave settings open and keep
+    // dictating — the cursor never moves until they click a real text field.
   }
 
   close() {
     this.panel.classList.remove('open');
     this.isOpen = false;
-    try { window.windyAPI?.releaseFocus?.(); } catch (_) { /* best-effort */ }
+    // Matching the above: nothing to release here. Per-field escalation is
+    // self-balancing (mousedown escalates, blur releases).
   }
 
   /**
