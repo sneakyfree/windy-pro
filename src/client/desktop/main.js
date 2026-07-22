@@ -9856,31 +9856,54 @@ ipcMain.on('unmaximize-window', () => { _withFocusable(() => mainWindow.unmaximi
 // (it fought the native app-region drag, causing runaway resize). macOS/Windows
 // keep their native app-region drag + native resize and never call these.
 let _wmTimer = null;
+let _wmCleanup = null;
+function _wmStop() {
+  if (_wmTimer) { clearInterval(_wmTimer); _wmTimer = null; }
+  if (_wmCleanup) { try { _wmCleanup(); } catch (_) { } _wmCleanup = null; }
+}
 function _wmStart(mode) {
   if (!mainWindow || mainWindow.isDestroyed() || _wmTimer) return;
   try {
     const { screen } = require('electron');
     const c0 = screen.getCursorScreenPoint();
     const b0 = mainWindow.getBounds();
-    const anchor = { dx: c0.x - b0.x, dy: c0.y - b0.y, ox: b0.x, oy: b0.y };
+    const anchor = { dx: c0.x - b0.x, dy: c0.y - b0.y, ox: b0.x, oy: b0.y, w: b0.width, h: b0.height };
+    // On HiDPI X11/XWayland (scaleFactor > 1) Electron's setPosition re-applies
+    // the current size through a lossy DIP↔pixel conversion, so each call grows
+    // the window and the 12ms loop compounds it into runaway expansion. Never
+    // read the size back mid-gesture: pin move to the anchored w/h via setBounds,
+    // pin resize to the anchored x/y, and lock resizable during a move.
+    const wasResizable = mainWindow.isResizable();
+    if (mode === 'move' && wasResizable) {
+      try { mainWindow.setResizable(false); } catch (_) { }
+      _wmCleanup = () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setResizable(true); };
+    }
+    let last = null;
     _wmTimer = setInterval(() => {
       try {
-        if (!mainWindow || mainWindow.isDestroyed()) { clearInterval(_wmTimer); _wmTimer = null; return; }
+        if (!mainWindow || mainWindow.isDestroyed()) { _wmStop(); return; }
         const c = screen.getCursorScreenPoint();
+        let next;
         if (mode === 'move') {
-          mainWindow.setPosition(Math.round(c.x - anchor.dx), Math.round(c.y - anchor.dy));
+          next = { x: Math.round(c.x - anchor.dx), y: Math.round(c.y - anchor.dy), width: anchor.w, height: anchor.h };
         } else {
           const w = Math.max(250, Math.round(c.x - anchor.ox));
-          const h = Math.max(MIN_HEIGHT || 200, Math.round(c.y - anchor.oy));
-          mainWindow.setSize(w, h);
+          // 320 = the same height floor createWindow enforces (its MIN_HEIGHT
+          // const is function-scoped and not visible here — referencing it threw
+          // on every tick and silently killed resize).
+          const h = Math.max(320, Math.round(c.y - anchor.oy));
+          next = { x: anchor.ox, y: anchor.oy, width: w, height: h };
         }
+        if (last && last.x === next.x && last.y === next.y && last.width === next.width && last.height === next.height) return;
+        last = next;
+        mainWindow.setBounds(next);
       } catch (_) { }
     }, 12);
   } catch (_) { }
 }
 ipcMain.on('window-move-start', () => _wmStart('move'));
 ipcMain.on('window-resize-start', () => _wmStart('resize'));
-ipcMain.on('window-wm-end', () => { if (_wmTimer) { clearInterval(_wmTimer); _wmTimer = null; } });
+ipcMain.on('window-wm-end', () => _wmStop());
 // Custom video-expand fullscreen — paired with the History panel's expand
 // button (history.js). On macOS uses setSimpleFullScreen so it works with the
 // non-focusable main window without disturbing the recording focus invariant.

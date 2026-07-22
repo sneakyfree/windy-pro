@@ -834,15 +834,20 @@ class WindyApp {
     const _plat = window.windyAPI?.platform;
     if (_plat === 'linux' && window.windyAPI?.windowMoveStart) {
       document.body.classList.add('linux-wm');
+      const onDragMove = (e) => { if (e.buttons === 0) endGesture(); };
       const endGesture = () => {
         try { window.windyAPI.windowWmEnd(); } catch (_) { }
         window.removeEventListener('mouseup', endGesture, true);
         window.removeEventListener('blur', endGesture, true);
+        window.removeEventListener('mousemove', onDragMove, true);
       };
       const beginGesture = (kind) => {
         try { kind === 'resize' ? window.windyAPI.windowResizeStart() : window.windyAPI.windowMoveStart(); } catch (_) { }
         window.addEventListener('mouseup', endGesture, true);
         window.addEventListener('blur', endGesture, true);
+        // Mouseup can land outside the window mid-drag; a mousemove with no
+        // buttons held means the press ended without us seeing it — stop.
+        window.addEventListener('mousemove', onDragMove, true);
       };
       // Move: press-drag anywhere on the titlebar except its buttons/menus.
       const titleBar = document.getElementById('titleBar');
