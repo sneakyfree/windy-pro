@@ -40,6 +40,10 @@ const ALLOWED_RECEIVE_CHANNELS = new Set([
   // renderer/intel-banner.js, never during active dictation/recording.
   'intel:update-nudge',
   'intel:message',
+  // WiFi phone companion — main relays phone signaling + connection lifecycle
+  // events to the renderer ({kind: 'from-phone'|'connected'|'disconnected'|
+  // 'resumed'|'socket-closed', ...}). Renderer side: phone-companion-client.js.
+  'phone-companion:event',
 ]);
 
 function safeOn(channel, callback) {
@@ -97,6 +101,19 @@ contextBridge.exposeInMainWorld('windyAPI', {
   translationUI: _edition.translationUI !== false,
   unlimitedRecording: _edition.unlimitedRecording === true,
   cloudStorage: _edition.cloudStorage !== false,
+
+  // ═══ WiFi Phone Companion ══════════════════════════════════════
+  // Any phone becomes a wireless mic/camera: QR pairing + WebRTC over LAN.
+  // Main process hosts the LAN server and relays signaling; the renderer
+  // owns the RTCPeerConnection (phone-companion-client.js).
+  phoneCompanion: {
+    createSession: () => ipcRenderer.invoke('phone-companion:create-session'),
+    toPhone: (msg) => ipcRenderer.send('phone-companion:to-phone', msg),
+    endSession: () => ipcRenderer.invoke('phone-companion:end'),
+    onEvent: (callback) => {
+      safeOn('phone-companion:event', (_e, payload) => callback(payload));
+    },
+  },
 
   // ═══ Settings ══════════════════════════════════════════════════
   getSettings: () => ipcRenderer.invoke('get-settings'),

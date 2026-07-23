@@ -38,7 +38,9 @@
     "matrix-js-sdk": "^41.1.0",
     "music-metadata": "^11.12.3",
     "node-fetch": "^2.7.0",
+    "qrcode-generator": "^2.0.4",
     "say": "^0.16.0",
+    "selfsigned": "^5.5.0",
     "stripe": "^20.4.0",
     "ws": "^8.19.0",
     "zod": "^3.25.76"

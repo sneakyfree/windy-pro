@@ -112,13 +112,13 @@ const CATALOG = {
   },
   'engine.micDeviceId': {
     type: 'string',
-    description: 'Microphone device id ("default" or a specific id from the audio device enumeration).',
+    description: 'Microphone device id ("default", a specific id from the audio device enumeration, or "phone:wifi" for a phone paired via the WiFi phone companion). If the selected device is unavailable at record time, capture falls back to the OS default microphone without failing the recording; a WiFi phone dropping mid-recording hot-swaps to the default mic with the recording uninterrupted.',
     default: 'default',
     restartRequired: false,
   },
   'engine.cameraDeviceId': {
     type: 'string',
-    description: 'Camera device id for video recordings ("default" or a specific id from the video device enumeration). Covers any OS-visible camera: built-in, USB, capture cards, and phone cameras exposed by the OS (e.g. iPhone Continuity Camera on macOS). If the selected device is unavailable at record time, capture falls back to the OS default camera without failing the recording.',
+    description: 'Camera device id for video recordings ("default", a specific id from the video device enumeration, or "phone:wifi" for a phone paired via the WiFi phone companion). Covers any OS-visible camera: built-in, USB, capture cards, and phone cameras exposed by the OS (e.g. iPhone Continuity Camera on macOS). If the selected device is unavailable at record time, capture falls back to the OS default camera without failing the recording; a camera dying mid-recording finalizes the partial video while audio continues.',
     default: 'default',
     restartRequired: false,
     tags: ['archive'],

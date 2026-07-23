@@ -169,6 +169,7 @@ class WindyApp {
     this.bindEvents();
     this.bindIPCEvents();
     this.initAgentBridge();
+    this._initPhoneCompanionRecordingGuard();
 
     // One-time delegated listener for the always-present bottom export row.
     // The per-show rebind in _showExportButtons() captures a stale snapshot of
@@ -1383,6 +1384,27 @@ class WindyApp {
       toast.classList.remove('visible');
       setTimeout(() => { toast.style.display = 'none'; }, 300);
     }
+  }
+
+  /**
+   * Generic toast used by the device-fallback and phone-companion paths.
+   * `type` is advisory; `durationMs` overrides the 5s default. Reuses the
+   * #reconnectToast element. Must never throw — callers sit inside recording
+   * catch blocks where an exception would kill the recording being rescued.
+   */
+  _showToast(message, type = 'info', durationMs = 5000) {
+    try {
+      const toast = document.getElementById('reconnectToast');
+      if (!toast) return;
+      toast.textContent = message;
+      toast.style.display = 'block';
+      toast.classList.add('visible');
+      clearTimeout(this._reconnectToastTimer);
+      this._reconnectToastTimer = setTimeout(() => {
+        toast.classList.remove('visible');
+        setTimeout(() => { toast.style.display = 'none'; }, 300);
+      }, durationMs);
+    } catch { /* toasts must never break recording */ }
   }
 
   /**
@@ -2709,19 +2731,37 @@ class WindyApp {
         noiseSuppression: true,
         autoGainControl: true
       };
+      let micDeviceId = null;
       if (window.windyAPI) {
         const settings = await window.windyAPI.getSettings();
-        if (settings && settings.micDeviceId && settings.micDeviceId !== 'default') {
-          audioConstraints.deviceId = { exact: settings.micDeviceId };
+        micDeviceId = settings?.micDeviceId || null;
+        if (micDeviceId && micDeviceId !== 'default' && !micDeviceId.startsWith('phone:')) {
+          audioConstraints.deviceId = { exact: micDeviceId };
+        }
+      }
+      let stream;
+      let usingPrewarmed = false;
+      // WiFi phone companion mic: route through a swappable mixer so a phone
+      // dropout mid-recording hot-swaps to the default mic WITHOUT stopping
+      // the MediaRecorder — the recorder only ever sees the mixer output.
+      if (micDeviceId === 'phone:wifi') {
+        const phoneTrack = window.phoneCompanion?.connected
+          ? window.phoneCompanion.stream?.getAudioTracks()[0] : null;
+        if (phoneTrack && phoneTrack.readyState === 'live') {
+          stream = this._buildPhoneMix(phoneTrack);
+          console.debug('[Batch] Recording mic from WiFi phone companion');
+        } else {
+          console.warn('[Batch] Phone mic selected but no phone streaming — falling back to default mic');
+          this._showToast('📱 Phone not connected — using default microphone', 'warning', 6000);
         }
       }
       // Reuse the pre-warmed stream when possible (Linux/Wayland focus
       // protection). Fall back to fresh getUserMedia if no cache exists or
       // the user picked a non-default mic device.
-      let stream;
-      let usingPrewarmed = false;
       const wantsCustomDevice = !!audioConstraints.deviceId;
-      if (this._prewarmedStream && this._prewarmedStream.active && !wantsCustomDevice) {
+      if (stream) {
+        // phone mixer path — nothing to acquire
+      } else if (this._prewarmedStream && this._prewarmedStream.active && !wantsCustomDevice) {
         stream = this._prewarmedStream;
         usingPrewarmed = true;
       } else {
@@ -2810,7 +2850,22 @@ class WindyApp {
           }
           const vq = qualityMap[videoQuality] || qualityMap['720p'];
           const videoConstraints = { width: { ideal: vq.width }, height: { ideal: vq.height }, frameRate: { ideal: 30 } };
-          try {
+          // WiFi phone companion camera: use the streamed track directly.
+          // Clone it so recorder teardown can't kill the live companion session.
+          if (cameraDeviceId === 'phone:wifi') {
+            const phoneVTrack = window.phoneCompanion?.connected
+              ? window.phoneCompanion.stream?.getVideoTracks()[0] : null;
+            if (phoneVTrack && phoneVTrack.readyState === 'live') {
+              this._videoStream = new MediaStream([phoneVTrack.clone()]);
+              this._videoFromPhone = true;
+              console.debug('[Batch] Recording video from WiFi phone camera');
+            } else {
+              console.warn('[Batch] Phone camera selected but not streaming video — falling back to default camera');
+              this._showToast('📱 Phone camera not available — using default camera', 'warning', 6000);
+            }
+            cameraDeviceId = null; // local-camera fallback below uses default
+          }
+          if (!this._videoStream) try {
             this._videoStream = await navigator.mediaDevices.getUserMedia({
               video: cameraDeviceId
                 ? { ...videoConstraints, deviceId: { exact: cameraDeviceId } }
@@ -2860,6 +2915,12 @@ class WindyApp {
           };
           this._videoRecorder.start(1000);
           console.debug('[Batch] Video recording started (' + videoQuality + ', ' + videoMime + ')');
+
+          // Mid-recording vanish (USB yanked, iPhone left Continuity range,
+          // WiFi phone dropped): finalize the partial video cleanly instead of
+          // dying — audio keeps recording. Normal teardown also fires 'ended'
+          // but _onVideoTrackEnded no-ops once the batch recorder is stopped.
+          vTrack?.addEventListener('ended', () => this._onVideoTrackEnded());
 
           // Show independent video preview window and start frame forwarding
           if (window.windyAPI?.showVideoPreview) {
@@ -2986,6 +3047,7 @@ class WindyApp {
         this._batchStream.getTracks().forEach(t => t.stop());
         this._batchStream = null;
       }
+      this._teardownPhoneMix();
       this._batchRecorder = null;
       this._batchChunks = [];
       this.isRecording = false;
@@ -3050,6 +3112,7 @@ class WindyApp {
           this._batchStream.getTracks().forEach(t => t.stop());
           this._batchStream = null;
         }
+        this._teardownPhoneMix();
 
         // Build audio blob
         const chunkCount = this._batchChunks.length;
@@ -4512,15 +4575,34 @@ class WindyApp {
       noiseSuppression: true,
       autoGainControl: true
     };
+    let micDeviceId = null;
     if (window.windyAPI) {
       const settings = await window.windyAPI.getSettings();
-      if (settings && settings.micDeviceId && settings.micDeviceId !== 'default') {
-        audioConstraints.deviceId = { exact: settings.micDeviceId };
+      micDeviceId = settings?.micDeviceId || null;
+      if (micDeviceId && micDeviceId !== 'default' && !micDeviceId.startsWith('phone:')) {
+        audioConstraints.deviceId = { exact: micDeviceId };
+      }
+    }
+
+    // WiFi phone companion mic: use the streamed track (cloned — teardown in
+    // stopAudioCapture() stops mediaStream tracks, and stopping the original
+    // remote track would kill the companion session for later recordings).
+    this._liveUsingPhone = false;
+    if (micDeviceId === 'phone:wifi') {
+      const phoneTrack = window.phoneCompanion?.connected
+        ? window.phoneCompanion.stream?.getAudioTracks()[0] : null;
+      if (phoneTrack && phoneTrack.readyState === 'live') {
+        this.mediaStream = new MediaStream([phoneTrack.clone()]);
+        this._liveUsingPhone = true;
+        console.debug('[Capture] Live-streaming mic from WiFi phone companion');
+      } else {
+        console.warn('[Capture] Phone mic selected but no phone streaming — falling back to default mic');
+        this._showToast('📱 Phone not connected — using default microphone', 'warning', 6000);
       }
     }
 
     // B2.6.1: Request microphone access
-    try {
+    if (!this.mediaStream) try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: audioConstraints
       });
@@ -4626,6 +4708,125 @@ class WindyApp {
     // Hide audio meter
     this.audioMeterContainer.style.display = 'none';
     this.audioMeterBar.style.width = '0%';
+    this._liveUsingPhone = false;
+  }
+
+  // ═══ WiFi Phone Companion — recording integration ══════════════════════
+  // The picker exposes the phone as 'phone:wifi' (settings.js). These helpers
+  // extend the #275 device-fallback pattern: if the phone drops mid-recording,
+  // the recording SURVIVES on the default local mic with a visible notice.
+
+  /**
+   * Batch mode records phone audio through a mixer (source → destination) so
+   * the MediaRecorder only ever sees the mixer output. Swapping the source
+   * (phone → default mic) is invisible to the recorder — zero interruption.
+   */
+  _buildPhoneMix(phoneTrack) {
+    const ctx = new AudioContext();
+    const dest = ctx.createMediaStreamDestination();
+    const src = ctx.createMediaStreamSource(new MediaStream([phoneTrack]));
+    src.connect(dest);
+    this._phoneMix = { ctx, dest, src, fallbackStream: null };
+    return dest.stream;
+  }
+
+  async _swapPhoneMixToDefault() {
+    const mix = this._phoneMix;
+    if (!mix) return;
+    try { mix.src.disconnect(); } catch { /* already dead */ }
+    this._showToast('📱 Phone disconnected — switched to the default microphone', 'warning', 8000);
+    try {
+      // Prefer a CLONE of the pre-warmed stream (Linux/Wayland: no fresh
+      // getUserMedia mid-recording; clone keeps the cache alive for later).
+      let fallback = null;
+      if (this._prewarmedStream?.active) {
+        fallback = new MediaStream([this._prewarmedStream.getAudioTracks()[0].clone()]);
+      } else {
+        fallback = await navigator.mediaDevices.getUserMedia({
+          audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        });
+      }
+      mix.fallbackStream = fallback;
+      mix.src = mix.ctx.createMediaStreamSource(fallback);
+      mix.src.connect(mix.dest);
+      console.warn('[Batch] Phone dropped — mixer hot-swapped to default mic, recording uninterrupted');
+    } catch (e) {
+      console.warn('[Batch] Default-mic fallback failed:', e.message);
+      this._showToast('🎤 No microphone available — recording continues but is silent', 'error', 8000);
+    }
+  }
+
+  _teardownPhoneMix() {
+    const mix = this._phoneMix;
+    if (!mix) return;
+    this._phoneMix = null;
+    try { mix.src.disconnect(); } catch { /* noop */ }
+    try { mix.fallbackStream?.getTracks().forEach(t => t.stop()); } catch { /* noop */ }
+    try { mix.ctx.close(); } catch { /* noop */ }
+  }
+
+  /**
+   * Live-stream mode: the worklet chain reads from this.audioSource — swap
+   * the source node to a default-mic stream and the engine never notices.
+   */
+  async _swapLiveSourceToDefault() {
+    if (!this._liveUsingPhone || !this.audioContext) return;
+    this._liveUsingPhone = false;
+    this._showToast('📱 Phone disconnected — switched to the default microphone', 'warning', 8000);
+    try {
+      let fallback = null;
+      if (this._prewarmedStream?.active) {
+        fallback = new MediaStream([this._prewarmedStream.getAudioTracks()[0].clone()]);
+      } else {
+        fallback = await navigator.mediaDevices.getUserMedia({
+          audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        });
+      }
+      const oldStream = this.mediaStream;
+      const newSource = this.audioContext.createMediaStreamSource(fallback);
+      try { this.audioSource?.disconnect(); } catch { /* noop */ }
+      this.audioSource = newSource;
+      if (this.audioProcessor) this.audioSource.connect(this.audioProcessor);
+      if (this._analyser) this.audioSource.connect(this._analyser);
+      this.mediaStream = fallback;
+      try { oldStream?.getTracks().forEach(t => t.stop()); } catch { /* noop */ }
+      console.warn('[Capture] Phone dropped — live source hot-swapped to default mic');
+    } catch (e) {
+      console.warn('[Capture] Default-mic fallback failed:', e.message);
+      this._showToast('🎤 No microphone available — live capture lost its input', 'error', 8000);
+    }
+  }
+
+  /** Camera/video source died mid-recording — save the partial video, keep audio. */
+  _onVideoTrackEnded() {
+    if (!this._videoRecorder || this._videoRecorder.state === 'inactive') return;
+    if (!this._batchRecorder || this._batchRecorder.state !== 'recording') return; // normal teardown
+    console.warn('[Batch] Video source ended mid-recording — finalizing partial video, audio continues');
+    this._showToast('📹 Camera disconnected — video saved up to here; audio keeps recording', 'warning', 8000);
+    try { this._videoRecorder.stop(); } catch { /* already stopping */ }
+    this._stopVideoFrameForwarding();
+    const videoBadge = document.getElementById('videoBadge');
+    if (videoBadge) { videoBadge.classList.remove('active'); videoBadge.classList.add('failed'); videoBadge.textContent = '🎬 Video ⏸'; }
+  }
+
+  /** Wired at init: reacts to phone-companion connection changes mid-recording. */
+  _initPhoneCompanionRecordingGuard() {
+    if (!window.phoneCompanion) return;
+    window.phoneCompanion.onChange((evt) => {
+      if (evt.kind !== 'disconnected') return;
+      if (this._phoneMix && this._batchRecorder && this._batchRecorder.state === 'recording') {
+        this._swapPhoneMixToDefault();
+      }
+      if (this._liveUsingPhone && this.audioContext) {
+        this._swapLiveSourceToDefault();
+      }
+      // Video: the cloned track's 'ended' usually fires on its own; this is
+      // the belt-and-suspenders path in case the clone lingers.
+      if (this._videoFromPhone) {
+        this._videoFromPhone = false;
+        this._onVideoTrackEnded();
+      }
+    });
   }
 
   /**

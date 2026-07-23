@@ -6721,6 +6721,45 @@ registerSettingsIpc({
   reservedShortcuts: RESERVED_SHORTCUTS,
 });
 
+// ═══ WiFi Phone Companion (QR + WebRTC over LAN) ═══════════════════════════
+// Any phone becomes a wireless mic/camera with no app install: main hosts a
+// LAN-only HTTPS page + WS signaling on :9878 (phone-companion.js) and relays
+// phone<->renderer signaling over IPC. Lazy: the server only starts the first
+// time the user opens "Connect a phone…" in the device picker.
+let _phoneCompanion = null;
+async function ensurePhoneCompanion() {
+  if (_phoneCompanion) return _phoneCompanion;
+  const { PhoneCompanion } = require('./phone-companion');
+  const pc = new PhoneCompanion({ userDataDir: app.getPath('userData') });
+  const forward = (kind) => (payload) =>
+    safeSend('phone-companion:event', { kind, ...(payload || {}) });
+  pc.on('from-phone', (msg) => safeSend('phone-companion:event', { kind: 'from-phone', msg }));
+  pc.on('phone-connected', forward('connected'));
+  pc.on('phone-disconnected', forward('disconnected'));
+  pc.on('phone-resumed', forward('resumed'));
+  pc.on('phone-socket-closed', forward('socket-closed'));
+  await pc.start();
+  _phoneCompanion = pc;
+  return pc;
+}
+ipcMain.handle('phone-companion:create-session', async () => {
+  try {
+    const pc = await ensurePhoneCompanion();
+    return pc.createPairingSession();
+  } catch (err) {
+    console.error('[PhoneCompanion] start failed:', err.message);
+    return { error: 'start-failed', message: err.message };
+  }
+});
+ipcMain.on('phone-companion:to-phone', (_event, msg) => {
+  if (_phoneCompanion && msg && typeof msg === 'object') _phoneCompanion.sendToPhone(msg);
+});
+ipcMain.handle('phone-companion:end', () => {
+  _phoneCompanion?.endSession();
+  return true;
+});
+app.on('will-quit', () => { try { _phoneCompanion?.stop(); } catch { /* shutting down */ } });
+
 // Edition flags for the renderer. With `sandbox: true`, the preload CANNOT
 // require() local modules — so it can't read edition.js directly. The main
 // process can, and exposes the book-launch flags synchronously via sendSync so

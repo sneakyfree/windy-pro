@@ -1080,6 +1080,10 @@ class SettingsPanel {
     const cameraSelectEl = this.panel.querySelector('#cameraSelect');
     if (cameraSelectEl) {
       cameraSelectEl.addEventListener('change', (e) => {
+        if (e.target.value === '__connect_phone__') {
+          this._handleConnectPhone(e.target, 'cameraDeviceId');
+          return;
+        }
         this.saveSetting('cameraDeviceId', e.target.value);
         // Re-probe so the resolution hint reflects the newly selected camera
         this._probeCameraResolution();
@@ -1423,6 +1427,10 @@ class SettingsPanel {
 
     // Mic device selector (T20)
     this.panel.querySelector('#micSelect').addEventListener('change', (e) => {
+      if (e.target.value === '__connect_phone__') {
+        this._handleConnectPhone(e.target, 'micDeviceId');
+        return;
+      }
       this.saveSetting('micDeviceId', e.target.value);
     });
 
@@ -2860,6 +2868,53 @@ class SettingsPanel {
         this.populateCameraDevices();
       });
     }
+
+    // WiFi phone companion: refresh pickers on connect/disconnect, and after
+    // a connect initiated from a picker, auto-select the phone there.
+    if (!this._phoneHooked && window.phoneCompanion) {
+      this._phoneHooked = true;
+      window.phoneCompanion.onChange((evt) => {
+        if (evt.kind === 'connected' && this._phoneConnectTarget) {
+          const target = this._phoneConnectTarget;
+          this._phoneConnectTarget = null;
+          this.saveSetting(target, 'phone:wifi');
+          if (target === 'cameraDeviceId') this._probeCameraResolution();
+        }
+        this.populateMicDevices();
+        this.populateCameraDevices();
+      });
+    }
+  }
+
+  /** '📱 Connect a phone…' picked in a device dropdown — it's an action, not a
+   *  device: revert the visible selection, remember which picker asked, and
+   *  open the QR overlay. On connect, the phone is saved for that picker. */
+  async _handleConnectPhone(select, settingKey) {
+    try {
+      const settings = window.windyAPI ? await window.windyAPI.getSettings() : null;
+      const saved = settings?.[settingKey];
+      select.value = Array.from(select.options).some(o => o.value === saved) ? saved : 'default';
+    } catch { select.value = 'default'; }
+    if (!window.phoneCompanion) return;
+    this._phoneConnectTarget = settingKey;
+    window.phoneCompanion.openConnectOverlay();
+  }
+
+  /** Phone entries shared by both pickers. The live phone (if any) appears as
+   *  a selectable device; the connect action is always last. */
+  _appendPhoneOptions(select, kind) {
+    const phone = window.phoneCompanion;
+    if (!phone) return;
+    if (phone.connected && (kind === 'mic' || phone.hasVideo)) {
+      const opt = document.createElement('option');
+      opt.value = 'phone:wifi';
+      opt.textContent = `📱 ${phone.label || 'Phone'} (WiFi)`;
+      select.appendChild(opt);
+    }
+    const connectOpt = document.createElement('option');
+    connectOpt.value = '__connect_phone__';
+    connectOpt.textContent = phone.connected ? '📱 Connect a different phone…' : '📱 Connect a phone…';
+    select.appendChild(connectOpt);
   }
 
   async populateMicDevices() {
@@ -2874,11 +2929,15 @@ class SettingsPanel {
         opt.textContent = mic.label || `Microphone ${mic.deviceId.slice(0, 8)}`;
         select.appendChild(opt);
       });
-      // Restore saved selection
+      this._appendPhoneOptions(select, 'mic');
+      // Restore saved selection; if the saved mic is gone (unplugged, phone
+      // dropped), show System Default WITHOUT overwriting the saved setting —
+      // the device is used again when it returns (same pattern as camera).
       if (window.windyAPI) {
         const settings = await window.windyAPI.getSettings();
         if (settings && settings.micDeviceId) {
-          select.value = settings.micDeviceId;
+          const has = Array.from(select.options).some(o => o.value === settings.micDeviceId);
+          select.value = has ? settings.micDeviceId : 'default';
         }
       }
     } catch (e) {
@@ -2900,13 +2959,14 @@ class SettingsPanel {
         opt.textContent = cam.label || `Camera ${cam.deviceId.slice(0, 8)}`;
         select.appendChild(opt);
       });
+      this._appendPhoneOptions(select, 'camera');
       // Restore saved selection; if the saved camera is gone (unplugged,
       // phone out of range), fall back to showing System Default WITHOUT
       // overwriting the saved setting — the device may come back.
       if (window.windyAPI) {
         const settings = await window.windyAPI.getSettings();
         if (settings && settings.cameraDeviceId) {
-          const exists = cams.some(c => c.deviceId === settings.cameraDeviceId);
+          const exists = Array.from(select.options).some(o => o.value === settings.cameraDeviceId);
           select.value = exists ? settings.cameraDeviceId : 'default';
         }
       }
@@ -3252,13 +3312,23 @@ class SettingsPanel {
   async _probeCameraResolution() {
     const hint = this.panel?.querySelector('#cameraCapHint');
     if (!hint) return;
+    const selectedCamEarly = this.panel?.querySelector('#cameraSelect')?.value;
+    if (selectedCamEarly && (selectedCamEarly.startsWith('phone:') || selectedCamEarly === '__connect_phone__')) {
+      // WiFi phone camera isn't a local device — no getUserMedia probe.
+      const label = window.phoneCompanion?.label || 'Phone';
+      hint.textContent = window.phoneCompanion?.connected
+        ? `📱 ${label} camera — resolution follows the phone`
+        : '📱 Phone not connected';
+      hint.style.display = 'block';
+      return;
+    }
     hint.textContent = '📷 Checking camera…';
     hint.style.display = 'block';
     try {
       // Request max resolution to see what the camera actually delivers.
       // Probe the camera the user selected, not just the OS default.
       const probeConstraints = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
-      const selectedCam = this.panel?.querySelector('#cameraSelect')?.value;
+      const selectedCam = selectedCamEarly;
       if (selectedCam && selectedCam !== 'default') {
         probeConstraints.deviceId = { exact: selectedCam };
       }

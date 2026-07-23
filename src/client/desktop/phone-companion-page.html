@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Windy Word — Phone Mic &amp; Camera</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1218; color: #e8eaf0;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+    text-align: center;
+  }
+  .banner { font-size: 14px; color: #8b93a7; margin-bottom: 6px; }
+  .banner b { color: #e8eaf0; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .logo { font-size: 40px; margin: 18px 0 6px; }
+  #status {
+    margin: 14px 0; font-size: 15px; min-height: 22px; color: #8b93a7;
+  }
+  #status.ok { color: #4ade80; }
+  #status.err { color: #f87171; }
+  .card {
+    width: 100%; max-width: 420px; background: #171c26; border-radius: 16px;
+    padding: 20px; margin-top: 10px;
+  }
+  label.row {
+    display: flex; align-items: center; gap: 10px; font-size: 16px;
+    padding: 10px 4px; justify-content: center;
+  }
+  input[type=checkbox] { width: 22px; height: 22px; accent-color: #4f8cff; }
+  input[type=text] {
+    width: 100%; padding: 12px; font-size: 16px; border-radius: 10px;
+    border: 1px solid #2a3140; background: #0f1218; color: #e8eaf0;
+    text-align: center; margin-top: 8px;
+  }
+  #startBtn {
+    width: 100%; padding: 18px; font-size: 20px; font-weight: 700;
+    border: none; border-radius: 14px; background: #4f8cff; color: #fff;
+    margin-top: 16px; cursor: pointer;
+  }
+  #startBtn:active { transform: scale(0.98); }
+  #startBtn.stop { background: #e5484d; }
+  #startBtn:disabled { background: #2a3140; color: #6b7280; }
+  #meterWrap {
+    width: 100%; height: 14px; background: #0f1218; border-radius: 7px;
+    overflow: hidden; margin-top: 18px; display: none;
+  }
+  #meter { height: 100%; width: 0%; background: linear-gradient(90deg, #4ade80, #facc15, #f87171); transition: width 60ms linear; }
+  video {
+    width: 100%; max-width: 420px; border-radius: 12px; margin-top: 14px;
+    display: none; transform: scaleX(-1); background: #000;
+  }
+  .hint { font-size: 13px; color: #6b7280; margin-top: 16px; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <div class="logo">🌀</div>
+  <h1>Windy Word</h1>
+  <p class="banner">Connected to Windy Word on <b>__WINDY_HOSTNAME__</b></p>
+  <div id="status">Ready — tap Start to share this phone's microphone</div>
+
+  <div class="card">
+    <label class="row"><input type="checkbox" id="shareCam"> Also share camera</label>
+    <input type="text" id="nameField" maxlength="40" placeholder="Name shown on the computer">
+    <button id="startBtn">🎙️ Start streaming</button>
+    <div id="meterWrap"><div id="meter"></div></div>
+    <video id="preview" autoplay playsinline muted></video>
+  </div>
+
+  <p class="hint">Keep this page open while streaming.<br>
+  Your voice/video goes directly to your computer over your own WiFi — nothing touches the internet.</p>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const status = (msg, cls) => { $('status').textContent = msg; $('status').className = cls || ''; };
+
+  const token = new URLSearchParams(location.search).get('t') || '';
+  const AC = window.AudioContext || window.webkitAudioContext;
+
+  // Default device name from the user agent — user can edit it.
+  const ua = navigator.userAgent;
+  let defaultName = 'Phone';
+  if (/iPhone/.test(ua)) defaultName = 'iPhone';
+  else if (/iPad/.test(ua)) defaultName = 'iPad';
+  else if (/Android/.test(ua)) {
+    const m = ua.match(/Android[^;]*;\s*([^;)]+)\)/);
+    defaultName = (m && m[1].trim().replace(/ Build.*/, '')) || 'Android phone';
+  }
+  $('nameField').value = defaultName;
+
+  let ws = null, pc = null, stream = null, audioCtx = null, rafId = null;
+  let sessionId = null, resumeKey = null, streaming = false, wakeLock = null;
+
+  function wsUrl() {
+    const base = 'wss://' + location.host + '/ws';
+    if (sessionId && resumeKey) return base + '?resume=' + sessionId + ':' + resumeKey;
+    return base + '?t=' + encodeURIComponent(token);
+  }
+
+  function send(obj) {
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+  }
+
+  function connectWs() {
+    return new Promise((resolve, reject) => {
+      ws = new WebSocket(wsUrl());
+      ws.onopen = () => resolve();
+      ws.onerror = () => reject(new Error('ws'));
+      ws.onmessage = async (ev) => {
+        let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+        if (msg.type === 'joined') { sessionId = msg.sessionId; resumeKey = msg.resumeKey; }
+        else if (msg.type === 'answer') {
+          try { await pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp }); } catch (e) { status('Connection error: ' + e.message, 'err'); }
+        }
+        else if (msg.type === 'ice' && msg.candidate) {
+          try { await pc.addIceCandidate(msg.candidate); } catch { /* late candidate */ }
+        }
+        else if (msg.type === 'bye') { stopStreaming('The computer ended the session.'); }
+      };
+      ws.onclose = () => {
+        if (streaming) {
+          status('Connection lost — reconnecting…', 'err');
+          setTimeout(tryResume, 1200);
+        }
+      };
+    });
+  }
+
+  async function tryResume() {
+    if (!streaming) return;
+    try {
+      await connectWs();
+      status('Reconnected — restoring stream…', 'ok');
+      await makeOffer(); // fresh offer over the resumed channel
+    } catch {
+      if (streaming) setTimeout(tryResume, 2000);
+    }
+  }
+
+  async function makeOffer() {
+    if (pc) { try { pc.close(); } catch {} }
+    pc = new RTCPeerConnection({ iceServers: [] }); // same LAN — host candidates only
+    stream.getTracks().forEach(t => pc.addTrack(t, stream));
+    pc.onicecandidate = (e) => { if (e.candidate) send({ type: 'ice', candidate: e.candidate.toJSON() }); };
+    pc.onconnectionstatechange = () => {
+      const s = pc.connectionState;
+      if (s === 'connected') status('🟢 Streaming to __WINDY_HOSTNAME__', 'ok');
+      else if (s === 'failed') { status('Stream failed — retrying…', 'err'); setTimeout(tryResume, 1000); }
+    };
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    send({ type: 'offer', sdp: offer.sdp });
+  }
+
+  function startMeter() {
+    audioCtx = new AC();
+    const src = audioCtx.createMediaStreamSource(stream);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    src.connect(analyser);
+    const buf = new Uint8Array(analyser.frequencyBinCount);
+    $('meterWrap').style.display = 'block';
+    const tick = () => {
+      analyser.getByteFrequencyData(buf);
+      let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i];
+      $('meter').style.width = Math.min(100, (sum / buf.length) * 1.4) + '%';
+      rafId = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  async function startStreaming() {
+    $('startBtn').disabled = true;
+    status('Requesting microphone…');
+    const wantCam = $('shareCam').checked;
+    try {
+      // getUserMedia MUST be inside this user-gesture handler (Safari iOS).
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+        video: wantCam ? { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+      });
+    } catch (e) {
+      status(e.name === 'NotAllowedError'
+        ? 'Permission denied — allow microphone access and try again.'
+        : 'Could not access microphone: ' + e.message, 'err');
+      $('startBtn').disabled = false;
+      return;
+    }
+    if (wantCam && stream.getVideoTracks().length) {
+      $('preview').srcObject = stream;
+      $('preview').style.display = 'block';
+    }
+    try {
+      status('Connecting to __WINDY_HOSTNAME__…');
+      await connectWs();
+      send({ type: 'hello', label: $('nameField').value.trim() || defaultName, hasVideo: wantCam });
+      await makeOffer();
+    } catch {
+      status('Could not reach the computer. Same WiFi? Try a fresh QR code.', 'err');
+      stream.getTracks().forEach(t => t.stop());
+      $('startBtn').disabled = false;
+      return;
+    }
+    streaming = true;
+    startMeter();
+    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* optional */ }
+    $('startBtn').textContent = '⏹ Stop streaming';
+    $('startBtn').classList.add('stop');
+    $('startBtn').disabled = false;
+    $('nameField').disabled = true;
+    $('shareCam').disabled = true;
+  }
+
+  function stopStreaming(reason) {
+    streaming = false;
+    send({ type: 'bye' });
+    cancelAnimationFrame(rafId);
+    try { pc?.close(); } catch {}
+    try { ws?.close(); } catch {}
+    try { audioCtx?.close(); } catch {}
+    stream?.getTracks().forEach(t => t.stop());
+    try { wakeLock?.release(); } catch {}
+    $('meterWrap').style.display = 'none';
+    $('preview').style.display = 'none';
+    $('startBtn').textContent = '🎙️ Start streaming';
+    $('startBtn').classList.remove('stop');
+    $('nameField').disabled = false;
+    $('shareCam').disabled = false;
+    status(reason || 'Stopped.');
+  }
+
+  $('startBtn').addEventListener('click', () => {
+    if (streaming) stopStreaming(); else startStreaming();
+  });
+
+  // Screen lock / app switch: Safari iOS suspends the page. On return,
+  // resume audio and re-establish the stream if the socket died.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !streaming) return;
+    try { audioCtx?.resume(); } catch { /* noop */ }
+    try { navigator.wakeLock?.request('screen').then(w => { wakeLock = w; }).catch(() => {}); } catch {}
+    if (!ws || ws.readyState >= 2) tryResume();
+  });
+  window.addEventListener('pageshow', () => {
+    if (streaming && (!ws || ws.readyState >= 2)) tryResume();
+  });
+})();
+</script>
+</body>
+</html>
