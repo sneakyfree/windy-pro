@@ -22,7 +22,7 @@ env:
 jobs:
   win-offline:
     name: Windows x64 (offline)
-    runs-on: windows-latest
+    runs-on: windows-latest  # runner-lint-allow — CD/hosted-only; disabled, manual until CD mission
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
   linux-offline:
     name: Linux x64 (offline)
     if: true    # re-cut from consolidated main (flagship generation); flip false when idle
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # runner-lint-allow — CD/hosted-only; disabled, manual until CD mission
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
