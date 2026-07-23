@@ -132,6 +132,12 @@ class SettingsPanel {
               <option value="1080p">1080p — high quality (~1.5 GB/hr)</option>
             </select>
           </div>
+          <div id="cameraSelectRow" class="setting-row" style="display:none;" title="Which camera to record from. Includes built-in, USB, and phone cameras exposed by the OS (e.g. iPhone via Continuity Camera).">
+            <label for="cameraSelect">Camera</label>
+            <select id="cameraSelect">
+              <option value="default">System Default</option>
+            </select>
+          </div>
           <p id="cameraCapHint" class="settings-hint" style="display:none; font-size:11px;"></p>
           <div id="audioQualityRow" class="setting-row" title="Audio recording quality.">
             <label for="audioQuality">Audio quality</label>
@@ -1046,13 +1052,18 @@ class SettingsPanel {
     // Video recording toggle
     const saveVideoEl = this.panel.querySelector('#saveVideo');
     const videoQualityRow = this.panel.querySelector('#videoQualityRow');
+    const cameraSelectRow = this.panel.querySelector('#cameraSelectRow');
     const cameraCapHint = this.panel.querySelector('#cameraCapHint');
     if (saveVideoEl) {
       saveVideoEl.addEventListener('change', (e) => {
         this.saveSetting('saveVideo', e.target.checked);
         if (videoQualityRow) videoQualityRow.style.display = e.target.checked ? 'flex' : 'none';
+        if (cameraSelectRow) cameraSelectRow.style.display = e.target.checked ? 'flex' : 'none';
         if (cameraCapHint) cameraCapHint.style.display = e.target.checked ? 'block' : 'none';
-        if (e.target.checked) this._probeCameraResolution();
+        if (e.target.checked) {
+          this.populateCameraDevices();
+          this._probeCameraResolution();
+        }
       });
     }
 
@@ -1061,6 +1072,16 @@ class SettingsPanel {
     if (videoQualityEl) {
       videoQualityEl.addEventListener('change', (e) => {
         this.saveSetting('videoQuality', e.target.value);
+        this._probeCameraResolution();
+      });
+    }
+
+    // Camera device selector (mirrors mic picker / T20 pattern)
+    const cameraSelectEl = this.panel.querySelector('#cameraSelect');
+    if (cameraSelectEl) {
+      cameraSelectEl.addEventListener('change', (e) => {
+        this.saveSetting('cameraDeviceId', e.target.value);
+        // Re-probe so the resolution hint reflects the newly selected camera
         this._probeCameraResolution();
       });
     }
@@ -2795,6 +2816,7 @@ class SettingsPanel {
         if (saveVideoEl2) saveVideoEl2.checked = !!settings.saveVideo;
         if (saveVideoEl2?.checked) {
           const vqr = this.panel.querySelector('#videoQualityRow'); if (vqr) vqr.style.display = 'flex';
+          const csr = this.panel.querySelector('#cameraSelectRow'); if (csr) csr.style.display = 'flex';
           const camHint = this.panel.querySelector('#cameraCapHint'); if (camHint) camHint.style.display = 'block';
           this._probeCameraResolution();
         }
@@ -2825,6 +2847,19 @@ class SettingsPanel {
 
     // Enumerate audio input devices (T20)
     this.populateMicDevices();
+    // Enumerate cameras (camera picker)
+    this.populateCameraDevices();
+
+    // Refresh both device lists when hardware appears/disappears — e.g. a
+    // USB webcam plugged in, or an iPhone entering/leaving Continuity Camera
+    // range. Hooked once per panel instance.
+    if (!this._deviceChangeHooked && navigator.mediaDevices?.addEventListener) {
+      this._deviceChangeHooked = true;
+      navigator.mediaDevices.addEventListener('devicechange', () => {
+        this.populateMicDevices();
+        this.populateCameraDevices();
+      });
+    }
   }
 
   async populateMicDevices() {
@@ -2848,6 +2883,35 @@ class SettingsPanel {
       }
     } catch (e) {
       // Devices not available until mic permission granted
+    }
+  }
+
+  async populateCameraDevices() {
+    try {
+      const select = this.panel.querySelector('#cameraSelect');
+      if (!select) return;
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === 'videoinput');
+      select.innerHTML = '<option value="default">System Default</option>';
+      cams.forEach(cam => {
+        const opt = document.createElement('option');
+        opt.value = cam.deviceId;
+        // Labels are empty until camera permission has been granted once
+        opt.textContent = cam.label || `Camera ${cam.deviceId.slice(0, 8)}`;
+        select.appendChild(opt);
+      });
+      // Restore saved selection; if the saved camera is gone (unplugged,
+      // phone out of range), fall back to showing System Default WITHOUT
+      // overwriting the saved setting — the device may come back.
+      if (window.windyAPI) {
+        const settings = await window.windyAPI.getSettings();
+        if (settings && settings.cameraDeviceId) {
+          const exists = cams.some(c => c.deviceId === settings.cameraDeviceId);
+          select.value = exists ? settings.cameraDeviceId : 'default';
+        }
+      }
+    } catch (e) {
+      // Devices not available until camera permission granted
     }
   }
 
@@ -3191,10 +3255,14 @@ class SettingsPanel {
     hint.textContent = '📷 Checking camera…';
     hint.style.display = 'block';
     try {
-      // Request max resolution to see what the camera actually delivers
-      const probe = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }
-      });
+      // Request max resolution to see what the camera actually delivers.
+      // Probe the camera the user selected, not just the OS default.
+      const probeConstraints = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
+      const selectedCam = this.panel?.querySelector('#cameraSelect')?.value;
+      if (selectedCam && selectedCam !== 'default') {
+        probeConstraints.deviceId = { exact: selectedCam };
+      }
+      const probe = await navigator.mediaDevices.getUserMedia({ video: probeConstraints });
       const track = probe.getVideoTracks()[0];
       const s = track?.getSettings();
       const camW = s?.width || 0;
