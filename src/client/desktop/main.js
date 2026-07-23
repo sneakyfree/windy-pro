@@ -9910,8 +9910,13 @@ ipcMain.on('window-wm-end', () => _wmStop());
 ipcMain.on('set-video-fullscreen', (event, on) => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   try {
+    // macOS only: setSimpleFullScreen coexists with the non-focusable window.
+    // Linux/Windows get NO OS-level fullscreen — setFullScreen on the universal
+    // focusable:false window is WM roulette (Mutter half-applies it and the user
+    // is trapped: Esc can never reach a window that refuses keyboard focus).
+    // The CSS class already makes the video fill the window; the window itself
+    // stays where the user put it, with the titlebar/grip still reachable.
     if (process.platform === 'darwin') mainWindow.setSimpleFullScreen(!!on);
-    else mainWindow.setFullScreen(!!on);
   } catch (e) { console.warn('[set-video-fullscreen]', e.message); }
 });
 

@@ -57,6 +57,10 @@ class HistoryPanel {
     }
 
     close() {
+        // If a video is expanded, unwind it fully (body class + OS fullscreen)
+        // BEFORE the panel DOM goes away, or the expansion state is orphaned
+        // with no UI left to clear it.
+        if (this._exitVideoExpand) { try { this._exitVideoExpand(); } catch (_) { } }
         // Cleanup audio blob URL
         if (this._activeAudioUrl) {
             URL.revokeObjectURL(this._activeAudioUrl);
@@ -391,6 +395,9 @@ class HistoryPanel {
         if (!container) return;
 
         try {
+            // Replacing the player while a previous video is expanded would
+            // orphan the expansion state — unwind it first.
+            if (this._exitVideoExpand) { try { this._exitVideoExpand(); } catch (_) { } }
             if (this._activeVideoUrl) {
                 URL.revokeObjectURL(this._activeVideoUrl);
                 this._activeVideoUrl = null;
@@ -420,6 +427,7 @@ class HistoryPanel {
       <div class="video-label-row">
         <span class="video-label">🎬 Recording</span>
         <button type="button" class="video-expand-btn" id="historyVideoExpand" title="Expand video to fill window" aria-label="Expand video">⛶</button>
+        <button type="button" class="video-exit-btn" id="historyVideoExit" title="Exit expanded view" aria-label="Exit expanded view">✕ Exit</button>
       </div>
       <video controls preload="metadata" class="history-video-el">
         <source src="${this._activeVideoUrl}" type="${result.mimeType || 'video/webm'}">
@@ -433,30 +441,45 @@ class HistoryPanel {
             // CSS-class-based expansion sidesteps the API entirely.
             const wrapper = container.querySelector('.video-player-wrapper');
             const expandBtn = container.querySelector('#historyVideoExpand');
+            const exitBtn = container.querySelector('#historyVideoExit');
             const setExpanded = (on) => {
-                if (!wrapper) return;
-                wrapper.classList.toggle('expanded', on);
-                document.body.classList.toggle('video-expanded-active', on);
+                // Even with the wrapper gone (panel torn down mid-expand), the
+                // body class and OS fullscreen MUST still be cleared — leaving
+                // either orphaned is the lock-up Grant hit on 2026-07-22.
+                if (wrapper) wrapper.classList.toggle('expanded', !!on);
+                document.body.classList.toggle('video-expanded-active', !!on);
                 if (expandBtn) {
                     expandBtn.textContent = on ? '⤢' : '⛶';
-                    expandBtn.title = on ? 'Exit expanded view (Esc)' : 'Expand video to fill window';
+                    expandBtn.title = on ? 'Exit expanded view' : 'Expand video to fill window';
                 }
-                // Pair the in-window expansion with OS-level fullscreen so the
-                // video fills the actual screen, not just the BrowserWindow.
-                // No-op if the API isn't exposed (older preload, web fallback).
-                try { window.windyAPI?.setVideoFullscreen?.(on); } catch (_) { /* best-effort */ }
+                try { window.windyAPI?.setVideoFullscreen?.(!!on); } catch (_) { /* best-effort */ }
             };
+            this._exitVideoExpand = () => setExpanded(false);
             if (expandBtn) {
                 expandBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     setExpanded(!wrapper.classList.contains('expanded'));
                 });
             }
-            // Esc key exits expanded view. Scoped to document so it works even if
-            // focus is on the video element. Removed when the video container is
-            // replaced or the History panel closes.
+            // A big labeled exit button (CSS shows it only while expanded).
+            // The keyboard is NOT a reliable exit on the non-focusable window,
+            // so every exit affordance must be clickable.
+            if (exitBtn) {
+                exitBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    setExpanded(false);
+                });
+            }
+            // Clicking the black backdrop (outside the video itself) also exits.
+            if (wrapper) {
+                wrapper.addEventListener('click', (e) => {
+                    if (wrapper.classList.contains('expanded') && e.target === wrapper) setExpanded(false);
+                });
+            }
+            // Esc still exits when the window happens to hold keyboard focus
+            // (e.g. after a text-field focus escalation) — bonus, not the plan.
             const escHandler = (e) => {
-                if (e.key === 'Escape' && wrapper.classList.contains('expanded')) {
+                if (e.key === 'Escape' && wrapper && wrapper.classList.contains('expanded')) {
                     e.stopPropagation();
                     setExpanded(false);
                 }

@@ -2450,6 +2450,28 @@ body.light-mode .sfx-master-controls {
   border-radius: 0;
   object-fit: contain;
 }
+/* Labeled exit button: hidden in normal mode (the ⛶ toggle is enough there),
+   large and unmissable while expanded — the keyboard can't be relied on to
+   exit on the non-focusable window, so the way out must be clickable. */
+.video-exit-btn {
+  display: none;
+}
+.video-player-wrapper.expanded .video-exit-btn {
+  display: inline-block;
+  background: rgba(220, 53, 69, 0.9);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  padding: 4px 12px;
+  height: 28px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 6px;
+}
+.video-player-wrapper.expanded .video-exit-btn:hover {
+  background: rgba(220, 53, 69, 1);
+}
 
 /* ═══ Word Count (RP-04) ═══ */
 
