@@ -258,15 +258,21 @@ describe('POST /api/v1/auth/change-password', () => {
 describe('POST /api/v1/translate/text', () => {
   // Route is intentionally optionalAuth: anonymous callers (the i18n Tier 2
   // dynamic-string translator) need to use it without a token.
-  it('returns 200 + translation payload without auth (no history persisted)', async () => {
+  //
+  // The test env configures no translation engine (no Mind, no Groq/OpenAI
+  // keys). Since the 2026-05-08 + 2026-07-10 integrity incidents the route
+  // must NEVER fabricate a bracketed-echo "translation" at HTTP 200 in that
+  // state — it fails honestly with 503 translation_unavailable. This test
+  // pins both halves: anonymous access is allowed (not a 401), and the
+  // no-engine failure is honest (503, not a fake 200).
+  it('accepts anonymous callers and fails honestly (503) when no engine is configured', async () => {
     const res = await request(app)
       .post('/api/v1/translate/text')
       .send({ text: 'hello', sourceLang: 'en', targetLang: 'es' });
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('translatedText');
-    expect(res.body).toHaveProperty('engine');
-    expect(res.body.sourceLang).toBe('en');
-    expect(res.body.targetLang).toBe('es');
+    expect(res.status).not.toBe(401);
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('translation_unavailable');
+    expect(res.body).not.toHaveProperty('translatedText');
   });
 });
 
