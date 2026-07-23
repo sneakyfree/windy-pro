@@ -175,7 +175,7 @@ export function renderOAuthLoginPage(data: OAuthLoginPageData): string {
 
     <div class="footer">
       You'll go straight back to ${escapeHtml(data.clientName)} after you sign in.<br>
-      New to Windy? <a href="https://app.windyword.ai">Create your free account</a>
+      New to Windy? <a href="https://windyword.ai">Create your free account</a>
     </div>
   </div>
 </body>
