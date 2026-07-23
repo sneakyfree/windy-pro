@@ -233,6 +233,7 @@ const VIDEO_IPC_CHANNELS = Object.freeze([
   'video-frame-to-preview', 'recording-state-to-preview',
   'resize-video-preview', 'resize-move-video-preview',
   'start-resize-video', 'stop-resize-video',
+  'start-move-video', 'stop-move-video',
 ]);
 
 module.exports = { registerVideoIpc, VIDEO_IPC_CHANNELS };
