@@ -67,6 +67,8 @@ class WindyApp {
     // inline _engineLadder copy and the 'base' map fallback above apply.
     this._windyTuneModel = null;   // disk-verified start model for Auto mode
     this._catalogLadder = null;    // canonical ladder from lib/engine-catalog.js
+    this._presentModels = null;    // ladder models actually on disk (main's view)
+    this._gpuPackEnabled = false;  // GPU engine pack accepted on this machine
 
     // Web Speech API state (kept for future Chrome-tab relay)
     this.speechRecognition = null;
@@ -285,6 +287,8 @@ class WindyApp {
         this._windyTuneModel = (await window.windyAPI?.windytuneStartModel?.()) || null;
         const cat = await window.windyAPI?.getEngineCatalog?.();
         if (cat?.ladder?.length) this._catalogLadder = cat.ladder;
+        if (cat?.presentModels) this._presentModels = cat.presentModels; // disk truth for the setEngine guard
+        this._gpuPackEnabled = !!cat?.gpuPackEnabled;
       } catch (_) { /* inline fallbacks apply */ }
 
       // Show current engine/model in status bar badge on startup
@@ -1134,6 +1138,57 @@ class WindyApp {
       console.info(`[WindyTune] Upgrade suggested: ${data.currentModel} → ${data.suggestedModel}`);
       this._showWindyTuneUpgradeToast(data);
     });
+
+    // ═══ GPU Engine Pack ═══
+    window.windyAPI.onGpuPackOffer?.((data) => {
+      console.info(`[GpuPack] Offer received: ${data.reason}`);
+      this._showGpuPackOffer(data);
+    });
+    window.windyAPI.onGpuPackDownloadFailed?.((data) => {
+      this.showReconnectToast(`⚠️ GPU engine download failed: ${data.model}. Will retry from the engine menu.`);
+    });
+    window.windyAPI.onEngineCatalogUpdated?.((data) => {
+      if (data?.presentModels) this._presentModels = data.presentModels;
+    });
+  }
+
+  /**
+   * One-time GPU engine pack offer — shown only on hardware main has verified
+   * can actually run it (NVIDIA + CUDA, enough VRAM). Framed honestly: extra
+   * disk, real speedup, user's call. Decline is permanent (no nagging).
+   */
+  _showGpuPackOffer(data) {
+    if (document.getElementById('gpuPackOffer')) return;
+    const totalGB = data.downloadMB > 0 ? (data.downloadMB / 1024).toFixed(1) : 0;
+    const modelList = data.models.map(m => `${m.name} (${m.size})`).join(' · ');
+    const card = document.createElement('div');
+    card.id = 'gpuPackOffer';
+    card.style.cssText =
+      'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:100001;' +
+      'background:#11161f;border:1px solid rgba(139,92,246,0.5);border-radius:14px;' +
+      'box-shadow:0 16px 48px rgba(0,0,0,.6);padding:16px 18px;width:360px;font-size:13px;color:#e8edf2;';
+    card.innerHTML =
+      '<div style="font-weight:700;font-size:14px;margin-bottom:6px;">🚀 Your machine is in the top ~3%</div>' +
+      `<div style="color:#9aa6b2;margin-bottom:8px;">${data.gpuName}${data.vramGB ? ' · ' + data.vramGB + 'GB VRAM' : ''} can run the GPU engine pack — the three most accurate engines, GPU-accelerated:</div>` +
+      `<div style="margin-bottom:8px;">${modelList}</div>` +
+      `<div style="color:#9aa6b2;margin-bottom:12px;">${data.missing.length > 0
+        ? `Adds ~${totalGB} GB of downloads. You can prune any engine later from the engine menu.`
+        : 'Already on disk — this just switches them to GPU acceleration.'}</div>` +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+      '<button id="gpuPackDecline" style="padding:6px 14px;border-radius:8px;background:rgba(255,255,255,0.08);color:#9aa6b2;border:1px solid rgba(255,255,255,0.15);cursor:pointer;">No thanks</button>' +
+      '<button id="gpuPackAccept" style="padding:6px 14px;border-radius:8px;background:#7c3aed;color:#fff;border:none;cursor:pointer;font-weight:600;">Add GPU engines</button>' +
+      '</div>';
+    document.body.appendChild(card);
+    document.getElementById('gpuPackDecline').addEventListener('click', async () => {
+      card.remove();
+      await window.windyAPI.gpuPackResponse?.(false);
+    });
+    document.getElementById('gpuPackAccept').addEventListener('click', async () => {
+      card.remove();
+      this.showReconnectToast('🚀 GPU engine pack enabled — CUDA on' + (data.missing.length ? ', downloading engines…' : ''));
+      const res = await window.windyAPI.gpuPackResponse?.(true);
+      if (res?.enabled) this.showReconnectToast('✅ GPU engine pack ready');
+    });
   }
 
   /**
@@ -1899,9 +1954,12 @@ class WindyApp {
     });
   }
 
-  _toggleEngineMenu() {
+  async _toggleEngineMenu() {
     const existing = document.getElementById('engineMenu');
     if (existing) { existing.remove(); return; }
+    // Per-engine usage stats (best-effort — menu renders without them)
+    let usage = null;
+    try { usage = await window.windyAPI?.engineUsageStats?.(); } catch (_) { }
     const badge = document.getElementById('modelBadge');
     if (!badge) return;
 
@@ -1963,7 +2021,28 @@ class WindyApp {
     menu.appendChild(hdr);
 
     for (const e of this._engineLadder) {
-      menu.appendChild(mkRow(e.id, e.name, e.note, e.size, !isAuto && current === e.id));
+      const u = usage?.models?.[e.model];
+      const noteBits = [e.note];
+      if (u && usage.total > 0 && u.count > 0) noteBits.push(`used ${u.percent}%`);
+      const row = mkRow(e.id, e.name, noteBits.join(' · '), e.size, !isAuto && current === e.id);
+      // Prune control — user-DOWNLOADED engines only (main enforces this too;
+      // bundled engines never show it). Reclaims disk; re-downloadable anytime.
+      if (u?.prunable) {
+        const prune = document.createElement('span');
+        prune.textContent = '🗑';
+        prune.title = `Remove the downloaded ${e.name} files (${e.size}) from disk`;
+        prune.style.cssText = 'flex:none;cursor:pointer;opacity:.55;padding:2px 4px;';
+        prune.addEventListener('click', async (ev) => {
+          ev.stopPropagation();
+          if (!confirm(`Remove ${e.name} (${e.size}) from disk?\n\nYou can re-download it anytime.`)) return;
+          const res = await window.windyAPI.pruneModel?.(e.model);
+          this.showReconnectToast(res?.ok ? `🗑 ${e.name} removed from disk` : `⚠️ ${res?.error || 'Prune failed'}`);
+          if (res?.ok && this._presentModels) this._presentModels = this._presentModels.filter(m => m !== e.model);
+          menu.remove();
+        });
+        row.appendChild(prune);
+      }
+      menu.appendChild(row);
     }
 
     const foot = document.createElement('div');
@@ -2007,12 +2086,12 @@ class WindyApp {
       ? this._windyTuneModelId()
       : ((this._engineModelMap && this._engineModelMap[engineId]) || 'base');
     // ── Tank-proof guard ──────────────────────────────────────────────────
-    // Only switch to a model that's actually bundled on the machine. Picking an
-    // un-bundled engine would make faster-whisper start a silent multi-GB download
-    // and the engine would appear to "hang" — the exact wobble we're killing.
-    // The Reader edition ships all 7 lean engines offline, so the full ladder is
-    // live; `base` is the always-present WindyTune default.
-    const BUNDLED_MODELS = ['base',
+    // Only switch to a model that's actually on disk. Picking an absent engine
+    // would make faster-whisper start a silent multi-GB download and the engine
+    // would appear to "hang" — the exact wobble we're killing. Main reports the
+    // real on-disk set via engine-catalog:get (updated after pack downloads);
+    // the hardcoded list is only the pre-fetch fallback.
+    const BUNDLED_MODELS = this._presentModels || ['base',
       'windy-nano-ct2', 'windy-lite-ct2', 'windy-core-ct2', 'windy-edge-ct2',
       'windy-plus-ct2', 'windy-turbo-ct2', 'windy-pro-engine-ct2'];
     if (!isAuto && !BUNDLED_MODELS.includes(model)) {
