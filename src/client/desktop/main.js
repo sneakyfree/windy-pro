@@ -7125,6 +7125,16 @@ function _windyTuneModelDir(m) {
     const b = path.join(bundledRoot, dirFor(m));
     if (fs.existsSync(path.join(b, 'model.bin'))) return b;
   }
+  // Dev mode (electron . from source): resourcesPath points inside
+  // node_modules, but the full engine set lives in <repo>/extraResources/model
+  // (what electron-builder packs as resources/bundled/model). Without this
+  // root, presentModels collapses to whatever's in ~/.windy-pro and the picker
+  // wrongly gates every bundled engine as "pack coming soon" (Grant hand-test
+  // 2026-07-23 — engines were running fine while the picker refused them).
+  if (!app.isPackaged) {
+    const d = path.join(app.getAppPath(), 'extraResources', 'model', dirFor(m));
+    if (fs.existsSync(path.join(d, 'model.bin'))) return d;
+  }
   return null;
 }
 
@@ -10052,16 +10062,27 @@ function _withFocusable(fn) {
 // no-op on Mutter, but dictation focus is never at risk.
 ipcMain.on('minimize-window', () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  let was = true;
-  try { was = mainWindow.isFocusable(); } catch (_) { }
-  const restore = () => { try { if (!was && mainWindow && !mainWindow.isDestroyed()) mainWindow.setFocusable(false); } catch (_) { } };
-  try {
-    if (!was) mainWindow.setFocusable(true);
-    if (!isRecording) { try { mainWindow.focus(); } catch (_) { } }
-    mainWindow.once('minimize', () => setTimeout(restore, 50));
-    mainWindow.minimize();
-  } catch (_) { }
-  setTimeout(restore, 1000); // belt: restore even if Mutter refused the iconify
+  if (process.platform === 'linux') {
+    // TRUE minimize is impossible here: Chromium hard-couples focusable:false
+    // to skip-taskbar on X11 (re-asserts it if cleared — verified live with
+    // wmctrl 2026-07-23), and Mutter refuses to iconify a skip-taskbar window
+    // because it would become unreachable. So minimize = hide-to-tray, wired
+    // into the SAME userHiddenWindow state as Ctrl+Shift+W, so the hotkey and
+    // the tray icon both bring it back. One-time notification teaches the
+    // recovery path.
+    try {
+      if (!store.get('ui.minimizeToTrayNoticeShown')) {
+        store.set('ui.minimizeToTrayNoticeShown', true);
+        new Notification({
+          title: 'Windy Word minimized to tray',
+          body: 'Press Ctrl+Shift+W or click the tray icon to bring it back.',
+        }).show();
+      }
+    } catch (_) { }
+    try { mainWindow.hide(); userHiddenWindow = true; } catch (_) { }
+    return;
+  }
+  _withFocusable(() => mainWindow.minimize());
 });
 
 // Maximize/unmaximize: implemented as PURE GEOMETRY (setBounds to the display
