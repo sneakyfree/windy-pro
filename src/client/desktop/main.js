@@ -10042,9 +10042,54 @@ function _withFocusable(fn) {
   try { fn(); } catch (_) { }
   if (!was) setTimeout(() => { try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setFocusable(false); } catch (_) { } }, 120);
 }
-ipcMain.on('minimize-window', () => { _withFocusable(() => mainWindow.minimize()); });
-ipcMain.on('maximize-window', () => { _withFocusable(() => mainWindow.maximize()); });
-ipcMain.on('unmaximize-window', () => { _withFocusable(() => mainWindow.unmaximize()); });
+
+// Minimize: Mutter refuses to iconify a focusable:false window even with the
+// momentary-focusable trick — the request needs the window to actually take
+// focus first (Grant hand-test 2026-07-23: buttons dead). So when NOT
+// recording, briefly focus before minimizing (deliberate user gesture; focus
+// falls back to the previous app once we iconify). Mid-recording we must never
+// grab focus (cursor-steal doctrine), so we try the plain request — it may
+// no-op on Mutter, but dictation focus is never at risk.
+ipcMain.on('minimize-window', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  let was = true;
+  try { was = mainWindow.isFocusable(); } catch (_) { }
+  const restore = () => { try { if (!was && mainWindow && !mainWindow.isDestroyed()) mainWindow.setFocusable(false); } catch (_) { } };
+  try {
+    if (!was) mainWindow.setFocusable(true);
+    if (!isRecording) { try { mainWindow.focus(); } catch (_) { } }
+    mainWindow.once('minimize', () => setTimeout(restore, 50));
+    mainWindow.minimize();
+  } catch (_) { }
+  setTimeout(restore, 1000); // belt: restore even if Mutter refused the iconify
+});
+
+// Maximize/unmaximize: implemented as PURE GEOMETRY (setBounds to the display
+// work area / restore saved bounds) — no WM request at all, so Mutter can't
+// refuse it for the non-focusable window. _manualMax tracks our state; the WM
+// flag stays as a fallback for platforms using true maximize.
+let _manualMax = null; // saved pre-maximize bounds while manually maximized
+ipcMain.on('maximize-window', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    const { screen } = require('electron');
+    const prev = mainWindow.getBounds();
+    const wa = screen.getDisplayMatching(prev).workArea;
+    _manualMax = prev;
+    mainWindow.setBounds(wa);
+  } catch (_) { }
+});
+ipcMain.on('unmaximize-window', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    if (_manualMax) {
+      mainWindow.setBounds(_manualMax);
+      _manualMax = null;
+    } else {
+      _withFocusable(() => mainWindow.unmaximize());
+    }
+  } catch (_) { }
+});
 
 // Programmatic move/resize for the non-focusable window on Linux/Mutter (which
 // refuses native window-management on a window that declines input focus, and
@@ -10121,7 +10166,9 @@ ipcMain.on('set-video-fullscreen', (event, on) => {
 });
 
 ipcMain.handle('is-maximized', () => {
-  return mainWindow ? mainWindow.isMaximized() : false;
+  if (!mainWindow) return false;
+  if (_manualMax) return true; // manual geometry-maximize (Linux non-focusable path)
+  return mainWindow.isMaximized();
 });
 
 // ── Song Identification (Chromaprint/AcoustID + AudD fallback) ──
