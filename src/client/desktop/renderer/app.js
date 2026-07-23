@@ -2725,7 +2725,26 @@ class WindyApp {
         stream = this._prewarmedStream;
         usingPrewarmed = true;
       } else {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        } catch (micErr) {
+          // Selected mic unavailable (unplugged, in use elsewhere) — fall
+          // back to the default mic rather than failing the entire recording.
+          // Mirrors the camera fallback. Saved setting left intact so the
+          // device is used again when it returns.
+          if (!wantsCustomDevice) throw micErr;
+          console.warn('[Batch] Selected mic unavailable (' + micErr.name + ') — falling back to default mic');
+          this._showToast('🎤 Selected microphone unavailable — using default microphone', 'warning', 6000);
+          delete audioConstraints.deviceId;
+          if (this._prewarmedStream && this._prewarmedStream.active) {
+            // Reuse the pre-warmed default-mic stream (preserves Wayland
+            // focus protection in the fallback path too).
+            stream = this._prewarmedStream;
+            usingPrewarmed = true;
+          } else {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+          }
+        }
       }
 
       // ═══ FOCUS RESTORE ═══
@@ -2778,14 +2797,36 @@ class WindyApp {
           if (videoBadge) { videoBadge.style.display = 'inline-flex'; videoBadge.textContent = '🎬 Video…'; }
           const qualityMap = { '480p': { width: 640, height: 480 }, '720p': { width: 1280, height: 720 }, '1080p': { width: 1920, height: 1080 } };
           let videoQuality = '720p';
+          let cameraDeviceId = null;
           if (window.windyAPI) {
             const settings = await window.windyAPI.getSettings();
             videoQuality = settings?.videoQuality || '720p';
+            // Camera picker: honor the camera chosen in Settings. 'default'
+            // or unset → no deviceId constraint (OS default), which is the
+            // exact pre-picker behavior on every platform.
+            if (settings?.cameraDeviceId && settings.cameraDeviceId !== 'default') {
+              cameraDeviceId = settings.cameraDeviceId;
+            }
           }
           const vq = qualityMap[videoQuality] || qualityMap['720p'];
-          this._videoStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: vq.width }, height: { ideal: vq.height }, frameRate: { ideal: 30 } }
-          });
+          const videoConstraints = { width: { ideal: vq.width }, height: { ideal: vq.height }, frameRate: { ideal: 30 } };
+          try {
+            this._videoStream = await navigator.mediaDevices.getUserMedia({
+              video: cameraDeviceId
+                ? { ...videoConstraints, deviceId: { exact: cameraDeviceId } }
+                : videoConstraints
+            });
+          } catch (camErr) {
+            // Selected camera unavailable (unplugged, iPhone left Continuity
+            // range, in use by another app) — fall back to the OS default
+            // camera rather than losing the whole video recording. The saved
+            // setting is left intact so the device is used again when it
+            // returns.
+            if (!cameraDeviceId) throw camErr;
+            console.warn('[Batch] Selected camera unavailable (' + camErr.name + ') — falling back to default camera');
+            this._showToast('📹 Selected camera unavailable — using default camera', 'warning', 6000);
+            this._videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+          }
 
           // ═══ Camera resolution check: warn if hardware < requested ═══
           const vTrack = this._videoStream.getVideoTracks()[0];
@@ -4479,9 +4520,22 @@ class WindyApp {
     }
 
     // B2.6.1: Request microphone access
-    this.mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: audioConstraints
-    });
+    try {
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: audioConstraints
+      });
+    } catch (micErr) {
+      // Selected mic unavailable (unplugged, in use elsewhere) — fall back
+      // to the default mic rather than failing capture entirely. Mirrors the
+      // batch-mode and camera fallbacks. Saved setting left intact.
+      if (!audioConstraints.deviceId) throw micErr;
+      console.warn('[Capture] Selected mic unavailable (' + micErr.name + ') — falling back to default mic');
+      this._showToast('🎤 Selected microphone unavailable — using default microphone', 'warning', 6000);
+      delete audioConstraints.deviceId;
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: audioConstraints
+      });
+    }
 
     // B2.6.2: Create AudioContext at 16kHz
     this.audioContext = new AudioContext({ sampleRate: 16000 });

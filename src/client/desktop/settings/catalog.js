@@ -116,6 +116,13 @@ const CATALOG = {
     default: 'default',
     restartRequired: false,
   },
+  'engine.cameraDeviceId': {
+    type: 'string',
+    description: 'Camera device id for video recordings ("default" or a specific id from the video device enumeration). Covers any OS-visible camera: built-in, USB, capture cards, and phone cameras exposed by the OS (e.g. iPhone Continuity Camera on macOS). If the selected device is unavailable at record time, capture falls back to the OS default camera without failing the recording.',
+    default: 'default',
+    restartRequired: false,
+    tags: ['archive'],
+  },
   'engine.language': {
     type: 'string',
     description: 'Whisper transcription language. ISO 639-1 code (e.g. "en", "es", "fr", "ja", "zh", "ar", "hi", "de", "pt", "ko", "ru", "it", "nl", "pl", "tr", "sv", "vi", "th") — or "auto" to let Whisper detect per-utterance. Hot-swappable; the live Python engine reconfigures over WebSocket without app restart.',
