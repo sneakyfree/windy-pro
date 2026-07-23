@@ -2041,7 +2041,13 @@ function createVideoWindow() {
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    resizable: false, // We handle resize manually via IPC
+    // Resize is driven by our own corner handles via IPC, but the window MUST
+    // stay resizable:true — on Linux, resizable:false pins X11 size hints and
+    // Chromium clamps programmatic setBounds against them asymmetrically:
+    // grows apply, shrinks silently no-op (the "can only expand" bug,
+    // rig-reproduced 2026-07-23). Frameless windows expose no native resize
+    // affordance anyway, so our handles remain the only resize path.
+    resizable: true,
     skipTaskbar: true,
     hasShadow: false,
     // focusable:false is LOAD-BEARING, not cosmetic. This is a passive webcam
@@ -2119,6 +2125,15 @@ registerVideoIpc({
   videoDismissedRef: _videoDismissedRef,
   screen: require('electron').screen,
 });
+
+// Test hook: WINDY_TEST_SHOW_PREVIEW=1 opens the video-preview window at
+// startup so the headless screenshot rig can exercise its move/resize
+// gestures without driving a full recording. Inert in normal runs.
+if (process.env.WINDY_TEST_SHOW_PREVIEW === '1') {
+  app.whenReady().then(() => setTimeout(() => {
+    try { const w = createVideoWindow(); if (w) w.show(); } catch (e) { console.warn('[test-preview]', e.message); }
+  }, 4000));
+}
 
 // ═══════════════════════════════════════════
 //  FONT SIZE CONTROL

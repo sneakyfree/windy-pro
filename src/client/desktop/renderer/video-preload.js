@@ -41,10 +41,14 @@ contextBridge.exposeInMainWorld('videoPreviewAPI', {
     ipcRenderer.send('stop-resize-video');
   },
 
-  // Start/stop main-process-driven window move (Linux: Mutter refuses
-  // native app-region drag on the focusable:false preview window)
+  // Renderer-tick window move (Linux: Mutter refuses native app-region
+  // drag on the focusable:false preview window). Each pointermove sends
+  // a tick; main repositions using its own cursor coords. No timers.
   startMove: () => {
     ipcRenderer.send('start-move-video');
+  },
+  moveTick: () => {
+    ipcRenderer.send('move-video-tick');
   },
   stopMove: () => {
     ipcRenderer.send('stop-move-video');

@@ -188,31 +188,38 @@ function registerVideoIpc(deps) {
     }
   });
 
-  // ── Move drag (main-process mouse polling) ───────────────────
+  // ── Move drag (renderer-tick driven) ─────────────────────────
   // Linux/Mutter refuses native -webkit-app-region drag on the
-  // focusable:false preview window, so the renderer starts a
-  // cursor-poll move here instead. Width/height are pinned to the
-  // gesture-start bounds — on HiDPI, re-applying a size read back
-  // mid-drag compounds through lossy DIP conversion (the main
-  // window's runaway-growth bug; same defense here).
-  let _moveInterval = null;
+  // focusable:false preview window. v1 used a main-process interval,
+  // but a window warping under the cursor can drop the renderer's
+  // pointerup — the timer then runs forever and the thumbnail stays
+  // GLUED to the mouse (Grant, 2026-07-23). Now each reposition is
+  // driven by a renderer pointermove tick: if events stop flowing
+  // for ANY reason, the window simply stops following. There is no
+  // timer to get stuck. Coordinates are read main-process-side only
+  // (renderer screen coords disagree on HiDPI); width/height pinned
+  // to gesture-start bounds (anti-runaway).
+  let _moveAnchor = null;
   ipcMain.on('start-move-video', () => {
     const win0 = getLiveWindow();
     if (!win0) return;
     const c0 = screen.getCursorScreenPoint();
     const b0 = win0.getBounds();
-    const anchor = { dx: c0.x - b0.x, dy: c0.y - b0.y, w: b0.width, h: b0.height };
-    if (_moveInterval) clearInterval(_moveInterval);
-    _moveInterval = setInterval(() => {
-      const win = getLiveWindow();
-      if (!win) { clearInterval(_moveInterval); _moveInterval = null; return; }
-      const c = screen.getCursorScreenPoint();
-      win.setBounds({ x: Math.round(c.x - anchor.dx), y: Math.round(c.y - anchor.dy), width: anchor.w, height: anchor.h });
-    }, 16);
+    _moveAnchor = { dx: c0.x - b0.x, dy: c0.y - b0.y, w: b0.width, h: b0.height };
   });
-  ipcMain.on('stop-move-video', () => {
-    if (_moveInterval) { clearInterval(_moveInterval); _moveInterval = null; }
+  ipcMain.on('move-video-tick', () => {
+    if (!_moveAnchor) return;
+    const win = getLiveWindow();
+    if (!win) { _moveAnchor = null; return; }
+    const c = screen.getCursorScreenPoint();
+    win.setBounds({
+      x: Math.round(c.x - _moveAnchor.dx),
+      y: Math.round(c.y - _moveAnchor.dy),
+      width: _moveAnchor.w,
+      height: _moveAnchor.h,
+    });
   });
+  ipcMain.on('stop-move-video', () => { _moveAnchor = null; });
 
   return {
     // Exposed so main.js (or future shutdown hooks) can force-clear
