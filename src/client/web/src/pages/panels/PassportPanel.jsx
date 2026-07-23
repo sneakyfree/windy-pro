@@ -10,7 +10,7 @@ export default function PassportPanel({ apiFetch }) {
             let p = d?.passport || null
             // Enrich with the LIVE Eternitas trust view so "Verified" and
             // "Trust Score" reflect reality, not the local default (1.0). The
-            // registry is public and allows the app.windyword.ai origin.
+            // registry is public and allows the canonical windyword.ai origins.
             if (p?.passport_number) {
                 try {
                     const base = import.meta.env.VITE_ETERNITAS_URL || 'https://api.eternitas.ai'

@@ -131,6 +131,7 @@ EXCLUDE_PATHS=(
 # File patterns to skip. Dated audit reports look like FOO_2026-04-21.md or
 # similar (4-digit year, dashes). We catch them via a regex below.
 EXCLUDE_FILES=(
+  "BOOK-LAUNCH-HANDOFF.md"  # historical handoff doc — dead-DNS domain list is intentional
   "*.bak"
   "*.lock"
   "package-lock.json"

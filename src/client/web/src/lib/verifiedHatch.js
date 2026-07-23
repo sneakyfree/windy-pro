@@ -3,7 +3,7 @@
  *
  * The PaymentIntent is created against Eternitas DIRECTLY (the endpoint
  * is unauthenticated by design — the payer has no operator yet — and
- * Eternitas CORS allows app.windyword.ai). The card is confirmed with
+ * Eternitas CORS allows the canonical windyword.ai origins). The card is confirmed with
  * Stripe.js, so the PAN never touches Windy servers (PCI SAQ-A), and
  * the resulting payment_intent_id is passed into the hatch SSE where
  * the account-server → Eternitas chain proves it server-side. The
