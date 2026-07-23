@@ -3148,15 +3148,17 @@ class WindyApp {
 
         // Show processing state (batch modes only)
         this.setState('buffering');
-        // Strand I: trigger process effect (first beep + repeating loop)
+        // Strand I: trigger process effect (first beep + repeating loop).
+        // durationSec lets effects scale linearly with recording length (I4).
         try {
-          if (this.effectsEngine) this.effectsEngine.trigger('process');
+          const fxProcMeta = { durationSec: elapsedMs / 1000 };
+          if (this.effectsEngine) this.effectsEngine.trigger('process', fxProcMeta);
           // Start repeating processing beep loop
           clearInterval(this._processEffectInterval);
           const processIntervalSec = parseInt(localStorage.getItem('windy_processInterval') || '10', 10);
           const processIntervalMs = Math.max(1000, processIntervalSec * 1000);
           this._processEffectInterval = setInterval(() => {
-            try { if (this.effectsEngine) this.effectsEngine.trigger('process'); } catch (_) { }
+            try { if (this.effectsEngine) this.effectsEngine.trigger('process', fxProcMeta); } catch (_) { }
           }, processIntervalMs);
         } catch (_) { }
         this.transcriptContent.innerHTML = '<p class="batch-processing-indicator"><span class="processing-spinner"></span> Processing your recording...<br><span style="font-size:12px;color:#888;">This may take a moment for longer recordings</span></p>';
@@ -3948,13 +3950,16 @@ class WindyApp {
           if (this._apiAudioChunks.length > 0) {
             const audioBlob = new Blob(this._apiAudioChunks, { type: mimeType });
             this.setState('buffering');
-            // Strand I: trigger process effect (first beep + repeating loop)
+            // Strand I: trigger process effect (first beep + repeating loop).
+            // durationSec lets effects scale linearly with recording length (I4).
             try {
-              if (this.effectsEngine) this.effectsEngine.trigger('process');
+              const fxStart = this._batchStartTime || this._sessionStartTime;
+              const fxProcMeta = { durationSec: fxStart ? Math.max(0, (Date.now() - fxStart) / 1000) : undefined };
+              if (this.effectsEngine) this.effectsEngine.trigger('process', fxProcMeta);
               clearInterval(this._processEffectInterval);
               const pSec = parseInt(localStorage.getItem('windy_processInterval') || '10', 10);
               this._processEffectInterval = setInterval(() => {
-                try { if (this.effectsEngine) this.effectsEngine.trigger('process'); } catch (_) { }
+                try { if (this.effectsEngine) this.effectsEngine.trigger('process', fxProcMeta); } catch (_) { }
               }, Math.max(1000, pSec * 1000));
             } catch (_) { }
             try {
@@ -4355,8 +4360,16 @@ class WindyApp {
       if (!fxMode || fxMode === 'default' || fxMode === 'silent') {
         this._playBlip(440, 0.1);
       }
-      // Strand I: trigger stop effect (pure observer, safe to fail)
-      try { if (this.effectsEngine) this.effectsEngine.trigger('stop'); } catch (_) { }
+      // Strand I: trigger stop effect (pure observer, safe to fail).
+      // Pass elapsed recording duration so effects scale linearly with length (I4) —
+      // the transcript isn't known yet at stop time, so duration is the proxy.
+      try {
+        if (this.effectsEngine) {
+          const fxStart = this._batchStartTime || this._sessionStartTime;
+          const durationSec = fxStart ? Math.max(0, (Date.now() - fxStart) / 1000) : undefined;
+          this.effectsEngine.trigger('stop', { durationSec });
+        }
+      } catch (_) { }
       // Strand I: stop "during" effect interval
       clearInterval(this._duringEffectInterval);
       if (this._batchRecorder) {
