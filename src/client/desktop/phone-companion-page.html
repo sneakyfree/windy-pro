@@ -46,6 +46,12 @@
   #startBtn:active { transform: scale(0.98); }
   #startBtn.stop { background: #e5484d; }
   #startBtn:disabled { background: #2a3140; color: #6b7280; }
+  #flipBtn {
+    width: 100%; padding: 12px; font-size: 16px; border: 1px solid #2a3140;
+    border-radius: 12px; background: #0f1218; color: #e8eaf0; margin-top: 10px;
+    display: none; cursor: pointer;
+  }
+  video.rear { transform: none; }
   #meterWrap {
     width: 100%; height: 14px; background: #0f1218; border-radius: 7px;
     overflow: hidden; margin-top: 18px; display: none;
@@ -68,6 +74,7 @@
     <label class="row"><input type="checkbox" id="shareCam"> Also share camera</label>
     <input type="text" id="nameField" maxlength="40" placeholder="Name shown on the computer">
     <button id="startBtn">🎙️ Start streaming</button>
+    <button id="flipBtn">🔄 Flip to rear camera</button>
     <div id="meterWrap"><div id="meter"></div></div>
     <video id="preview" autoplay playsinline muted></video>
   </div>
@@ -105,6 +112,8 @@
 
   let ws = null, pc = null, stream = null, audioCtx = null, rafId = null;
   let sessionId = null, resumeKey = null, streaming = false, wakeLock = null;
+  let facing = 'user';        // front camera first (you can see yourself to aim)
+  let resumeDeadline = null;  // zombie guard: stop retrying dead sessions
 
   function wsUrl() {
     const base = 'wss://' + location.host + '/ws';
@@ -119,7 +128,7 @@
   function connectWs() {
     return new Promise((resolve, reject) => {
       ws = new WebSocket(wsUrl());
-      ws.onopen = () => resolve();
+      ws.onopen = () => { resumeDeadline = null; resolve(); };
       ws.onerror = () => reject(new Error('ws'));
       ws.onmessage = async (ev) => {
         let msg; try { msg = JSON.parse(ev.data); } catch { return; }
@@ -143,6 +152,14 @@
 
   async function tryResume() {
     if (!streaming) return;
+    // Zombie guard: a page whose session is truly gone (computer restarted the
+    // app, token consumed) must NOT sit forever looking alive with the camera
+    // on — it blocks Continuity Camera and fools the user. Give up after 90s.
+    if (!resumeDeadline) resumeDeadline = Date.now() + 90000;
+    if (Date.now() > resumeDeadline) {
+      stopStreaming('❌ Session ended — scan a FRESH QR code from the computer to reconnect.');
+      return;
+    }
     try {
       await connectWs();
       status('Reconnected — restoring stream…', 'ok');
@@ -151,6 +168,33 @@
       if (streaming) setTimeout(tryResume, 2000);
     }
   }
+
+  async function flipCamera() {
+    if (!stream || !stream.getVideoTracks().length) return;
+    $('flipBtn').disabled = true;
+    try {
+      facing = facing === 'user' ? 'environment' : 'user';
+      const fresh = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      const newTrack = fresh.getVideoTracks()[0];
+      const oldTrack = stream.getVideoTracks()[0];
+      // replaceTrack: no renegotiation needed — the desktop keeps recording
+      // seamlessly through the swap.
+      const sender = pc?.getSenders().find((s) => s.track && s.track.kind === 'video');
+      if (sender) await sender.replaceTrack(newTrack);
+      stream.removeTrack(oldTrack); oldTrack.stop();
+      stream.addTrack(newTrack);
+      $('preview').srcObject = stream;
+      $('preview').classList.toggle('rear', facing === 'environment'); // no mirror on rear
+      $('flipBtn').textContent = facing === 'user' ? '🔄 Flip to rear camera' : '🔄 Flip to front camera';
+    } catch (e) {
+      facing = facing === 'user' ? 'environment' : 'user'; // revert
+      status('Could not switch cameras: ' + e.message, 'err');
+    }
+    $('flipBtn').disabled = false;
+  }
+  $('flipBtn').addEventListener('click', flipCamera);
 
   async function makeOffer() {
     if (pc) { try { pc.close(); } catch {} }
@@ -204,6 +248,7 @@
     if (wantCam && stream.getVideoTracks().length) {
       $('preview').srcObject = stream;
       $('preview').style.display = 'block';
+      $('flipBtn').style.display = 'block';
     }
     try {
       status('Connecting to __WINDY_HOSTNAME__…');
@@ -237,6 +282,8 @@
     try { wakeLock?.release(); } catch {}
     $('meterWrap').style.display = 'none';
     $('preview').style.display = 'none';
+    $('flipBtn').style.display = 'none';
+    resumeDeadline = null;
     $('startBtn').textContent = '🎙️ Start streaming';
     $('startBtn').classList.remove('stop');
     $('nameField').disabled = false;

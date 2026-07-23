@@ -64,6 +64,13 @@ class PhoneCompanionClient {
     this._overlay = overlay;
     overlay.querySelector('#pcwCancel')?.addEventListener('click', () => this.closeOverlay());
     overlay.addEventListener('click', (e) => { if (e.target === overlay) this.closeOverlay(); });
+    // Nothing arriving usually means an OLD tab on the phone (looks alive,
+    // connected to nothing — the 7-23 zombie). Nudge after 45s.
+    setTimeout(() => {
+      if (this._overlay === overlay && !this.connected) {
+        this._setOverlayStatus('Still waiting… On the phone: scan THIS QR (an old tab won\'t work) and tap "Start streaming".');
+      }
+    }, 45000);
   }
 
   closeOverlay() {
