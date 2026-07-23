@@ -620,12 +620,15 @@ function getArchiveFolder() {
 }
 
 /**
- * Auto-cleanup: delete local audio/video files older than 7 days.
- * Keeps all .md transcript files forever (text is tiny).
- * Runs once on app startup.
+ * Archive retention. DATA-FOREVER DOCTRINE (Grant 2026-07-22): the default is
+ * that NOTHING is ever auto-deleted — audio, video, and transcripts all stay
+ * until the user deletes them. Retention days of 0 (the default) means
+ * forever. Auto-cleanup only runs if the user explicitly sets a positive
+ * engine.archiveRetentionDays — deletion must always be a user decision.
  */
 function autoCleanupArchive() {
-  const RETENTION_DAYS = store.get('engine.archiveRetentionDays', 7);
+  const RETENTION_DAYS = store.get('engine.archiveRetentionDays', 0);
+  if (!Number.isFinite(RETENTION_DAYS) || RETENTION_DAYS <= 0) return; // forever
   const archiveDir = getArchiveFolder();
   if (!fs.existsSync(archiveDir)) return;
 
@@ -8588,12 +8591,12 @@ ipcMain.handle('export-voice-clone', async () => {
       }
     }
 
-    // No audio means a useless empty zip — audio older than 7 days is auto-deleted.
+    // No audio means a useless empty zip.
     // Tear down the already-opened write stream so we don't leave a partial file behind.
     if (audioCount === 0) {
       try { output.destroy(); } catch (_) { }
       try { fs.unlinkSync(result.filePath); } catch (_) { }
-      return { ok: false, error: 'No audio recordings found (audio older than 7 days is auto-deleted; re-record to export voice data).' };
+      return { ok: false, error: 'No audio recordings found in the archive (record with audio saving on, then export).' };
     }
 
     // Add metadata CSV
