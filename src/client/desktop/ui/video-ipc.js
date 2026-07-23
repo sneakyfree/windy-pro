@@ -98,7 +98,10 @@ function registerVideoIpc(deps) {
   // ── Sizing ───────────────────────────────────────────────────
   ipcMain.on('resize-video-preview', (event, w, h) => {
     const win = getLiveWindow();
-    if (win) win.setSize(Math.round(w), Math.round(h));
+    if (win) {
+      _lastSetSize = { w: Math.round(w), h: Math.round(h) };
+      win.setSize(_lastSetSize.w, _lastSetSize.h);
+    }
   });
 
   ipcMain.on('resize-move-video-preview', (event, w, h, x, y) => {
@@ -106,6 +109,7 @@ function registerVideoIpc(deps) {
     if (!win) return;
     const rw = Math.round(w);
     const rh = Math.round(h);
+    _lastSetSize = { w: rw, h: rh };
     if (x !== null && y !== null) {
       win.setBounds({ x: Math.round(x), y: Math.round(y), width: rw, height: rh });
     } else if (x !== null) {
@@ -166,6 +170,7 @@ function registerVideoIpc(deps) {
       }
       const rw = Math.round(newW);
       const rh = Math.round(newH);
+      _lastSetSize = { w: rw, h: rh };
       if (newX !== undefined && newY !== undefined) {
         win.setBounds({ x: Math.round(newX), y: Math.round(newY), width: rw, height: rh });
       } else if (newX !== undefined) {
@@ -199,13 +204,21 @@ function registerVideoIpc(deps) {
   // timer to get stuck. Coordinates are read main-process-side only
   // (renderer screen coords disagree on HiDPI); width/height pinned
   // to gesture-start bounds (anti-runaway).
+  // Last size WE set (via resize handlers). Used as the move anchor's size
+  // so a move never round-trips width/height through getBounds — on 2x
+  // HiDPI that readback is lossy and inflated the window +2x1 px per
+  // gesture (trace: 162x91 -> 164x92 -> 166x93..., 2026-07-23).
+  let _lastSetSize = null;
+
   let _moveAnchor = null;
   ipcMain.on('start-move-video', () => {
     const win0 = getLiveWindow();
     if (!win0) return;
     const c0 = screen.getCursorScreenPoint();
     const b0 = win0.getBounds();
-    _moveAnchor = { dx: c0.x - b0.x, dy: c0.y - b0.y, w: b0.width, h: b0.height, t0: Date.now() };
+    const w = _lastSetSize ? _lastSetSize.w : b0.width;
+    const h = _lastSetSize ? _lastSetSize.h : b0.height;
+    _moveAnchor = { dx: c0.x - b0.x, dy: c0.y - b0.y, w, h, t0: Date.now() };
     console.log('[VP-WM] move-start', JSON.stringify({ c: c0, b: b0 }));
   });
   ipcMain.on('move-video-tick', () => {

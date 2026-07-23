@@ -43,6 +43,17 @@
             transform: scaleX(-1);
             display: block;
             background: #000;
+            /* This img is a passive mirror — it must NEVER receive pointer
+               input. With real frames loaded, a press-drag on a default img
+               starts Chromium's NATIVE IMAGE DRAG, which fires pointercancel
+               and kills the window-move gesture ~200ms in (root cause of the
+               Wayland "thumbnail won't move / glued to mouse" bug — trace:
+               [VP-WM] stop:cancel on every gesture, 2026-07-23). The rig never
+               caught it because with no camera the img is empty and nothing
+               native-drags. */
+            pointer-events: none;
+            -webkit-user-drag: none;
+            user-select: none;
         }
 
         /* Green LIVE strobe */
@@ -297,7 +308,7 @@
 
 <body>
     <div class="video-container" id="container">
-        <img id="videoEl" />
+        <img id="videoEl" draggable="false" />
         <span class="live-strobe" id="liveStrobe"><span class="dot"></span> LIVE</span>
         <span class="res-badge" id="resBadge">—</span>
         <span class="standby-label" id="standbyLabel">⏸ Standby</span>
@@ -425,6 +436,9 @@
         // window, so on Linux we disable the (dead) native drag and drive the
         // move ourselves — press anywhere on the video that isn't a resize
         // handle or a button. Mac/Windows keep the native app-region drag.
+        // Native drag/selection must never start anywhere in this window —
+        // it fires pointercancel and kills move/resize gestures mid-flight.
+        document.addEventListener('dragstart', (e) => e.preventDefault());
         if (window.videoPreviewAPI?.platform === 'linux' && window.videoPreviewAPI?.startMove) {
             container.style.setProperty('-webkit-app-region', 'no-drag');
             // Renderer-tick move: pointer capture pins the event stream to the
