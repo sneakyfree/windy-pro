@@ -24,6 +24,10 @@ const crashLogPath = _path.join(crashLogDir, 'crash.log');
 // src/client/desktop/lib/crash-summary.js (unit tested).
 const { safeErrorSummary: _safeErrorSummary } = require('./lib/crash-summary');
 
+// Canonical STT engine ladder + legacy whisper-name mapping (single source of
+// truth shared with the renderer via preload) — see lib/engine-catalog.js.
+const engineCatalog = require('./lib/engine-catalog');
+
 // Intel V2 (INTEL-CONTRACT-V2 §1.4): persist a pending-crash record so the
 // NEXT launch can emit client.crash. Only the 16-hex stack SIGNATURE is
 // stored (frames stripped to basenames before hashing) — never frames,
@@ -444,6 +448,27 @@ function migrateCollidingPasteHotkey() {
   console.info('[Migration] pasteTranscript Ctrl+Shift+V → Ctrl+Alt+V (Wayland paste-strategy collision — see paste-strategies.js CTRL_SHIFT_V_STRATEGIES)');
 }
 migrateCollidingPasteHotkey();
+
+// One-time migration (2026-07-23): stored engine.model / engine.selected can
+// still hold legacy whisper names ('base', 'small', 'faster-whisper-*') from
+// pre-ladder versions. WindyTune resolved those raw values, so it loaded
+// whisper `base` (not even bundled — faster-whisper falls through to the HF
+// cache/download path) while the badge claimed "Windy Core" via the shifted
+// legacy alias map. Migrate each value to its ct2 equivalent — but only when
+// that model is actually present on disk, so we never trade a working legacy
+// model for a missing one (tank-proof rule: no silent multi-GB downloads).
+function migrateLegacyEngineModelNames() {
+  for (const key of ['engine.model', 'engine.selected']) {
+    const current = store.get(key);
+    if (!current || typeof current !== 'string') continue;
+    const canonical = engineCatalog.canonicalModelId(current);
+    if (!canonical || canonical === current) continue;
+    if (_windyTuneModelDir(canonical) === null) continue;
+    store.set(key, canonical);
+    console.info(`[Migration] ${key}: legacy "${current}" → "${canonical}" (engine-catalog.js)`);
+  }
+}
+migrateLegacyEngineModelNames();
 
 let mainWindow = null;
 let miniWindow = null;
@@ -2802,10 +2827,13 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     'windy-translate-spark': { name: 'Windy Translate Spark', size: '929 MB', specialty: 'Fast multilingual translation. 100+ languages. LoRA-enhanced for priority pairs.' },
     'windy-translate-standard': { name: 'Windy Translate Standard', size: '2371 MB', specialty: 'Standard multilingual translation. 100+ languages. Higher quality than Spark.' },
 
-    // Legacy model names → Real Windy model equivalents (based on base_architecture)
+    // Legacy model names → Real Windy model equivalents. Keep aligned with
+    // LEGACY_MODEL_MAP in lib/engine-catalog.js (nano≈tiny, lite≈base,
+    // core≈small, edge≈medium) — the old version of this block was shifted one
+    // rung up (base claimed "Windy Core"), which produced a false engine badge.
     'tiny': { name: 'Windy Nano', size: '73 MB', specialty: 'Fastest engine. Best for quick dictation on powerful hardware.' },
-    'base': { name: 'Windy Core', size: '462 MB', specialty: 'Core engine. Recommended for most use cases.' },
-    'small': { name: 'Windy Lite', size: '140 MB', specialty: 'Lightweight engine with improved accuracy. Balanced speed/quality.' },
+    'base': { name: 'Windy Lite', size: '140 MB', specialty: 'Lightweight engine with improved accuracy. Balanced speed/quality.' },
+    'small': { name: 'Windy Core', size: '462 MB', specialty: 'Core engine. Recommended for most use cases.' },
     'medium': { name: 'Windy Edge', size: '1444 MB', specialty: 'High-accuracy engine. Best for professional transcription.' },
     'large-v3': { name: 'Windy Word Engine', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
     'turbo': { name: 'Windy Turbo', size: '1544 MB', specialty: 'Latest-gen engine. State-of-the-art accuracy and robustness.' },
@@ -7075,17 +7103,10 @@ ipcMain.handle('reveal-in-folder', (e, filePath) => {
 // WindyTune Adaptive Model Tracker
 // ═══════════════════════════════════════════════════════════════════
 const _windyTuneHistory = [];          // Rolling window of last 10 transcription timings
-// The exact ct2 engine ids, ascending accuracy/cost. These are the model ids the
-// engine actually reports + accepts, so indexOf() against the running model id works.
-const WINDYTUNE_ALL_LADDER = [
-  'windy-nano-ct2',
-  'windy-lite-ct2',
-  'windy-core-ct2',
-  'windy-edge-ct2',
-  'windy-plus-ct2',
-  'windy-turbo-ct2',
-  'windy-pro-engine-ct2',
-]; // fastest/lightest → most accurate
+// The exact ct2 engine ids, ascending accuracy/cost, from the canonical
+// catalog. These are the model ids the engine actually reports + accepts, so
+// indexOf() against the running model id works.
+const WINDYTUNE_ALL_LADDER = engineCatalog.LADDER.map(e => e.model); // fastest/lightest → most accurate
 
 // Resolve a model id to its on-disk dir (user-downloaded OR bundled). Mirrors the
 // per-batch findModelDir helper but at module scope so the ladder can be derived
@@ -7129,9 +7150,10 @@ function _windyTuneRecord(elapsed, audioDuration, model) {
   if (!isWindyTune) return; // Only adapt in WindyTune auto mode
 
   // Map the running model id onto the ct2 ladder so indexOf is never -1.
-  // Legacy whisper names ('base' / 'faster-whisper-base') and any model not on the
-  // ladder anchor at 'windy-lite-ct2' so downgrade (toward nano) + upgrade can fire.
-  let ladderModel = model;
+  // Legacy whisper names resolve through the catalog (e.g. 'base' →
+  // 'windy-lite-ct2'); anything still unresolved anchors at windy-lite so
+  // downgrade (toward nano) + upgrade can fire.
+  let ladderModel = engineCatalog.canonicalModelId(model) || model;
   if (WINDYTUNE_MODEL_LADDER.indexOf(ladderModel) < 0) {
     ladderModel = WINDYTUNE_MODEL_LADDER.indexOf('windy-lite-ct2') >= 0
       ? 'windy-lite-ct2'
@@ -7187,6 +7209,10 @@ function _windyTuneRecord(elapsed, audioDuration, model) {
 function _windyTuneSwitch(newModel, userMessage) {
   const oldModel = store.get('engine.model');
   store.set('engine.model', newModel);
+  // Timings from the outgoing model must not count toward the next
+  // downgrade/upgrade decision — slice(-2) spanning a switch mixed two models'
+  // ratios and could cascade a double-downgrade.
+  _windyTuneHistory.length = 0;
   console.info(`[WindyTune] Model switched: ${oldModel} → ${newModel}`);
 
   // Notify renderer
@@ -7209,6 +7235,29 @@ function _windyTuneSwitch(newModel, userMessage) {
     } catch (_) { /* ws module may not be available */ }
   }
 }
+
+// IPC: canonical engine catalog for the renderer (sandboxed preload can't
+// require lib/engine-catalog.js). Static data — safe to hand over wholesale.
+ipcMain.handle('engine-catalog:get', async () => ({
+  ladder: engineCatalog.LADDER,
+  legacyModelMap: engineCatalog.LEGACY_MODEL_MAP,
+}));
+
+// IPC: which model should WindyTune (Auto) start on? Resolves against models
+// actually present on disk — never the renderer's old hardcoded 'base', which
+// isn't bundled in this edition and silently fell through to faster-whisper's
+// HF-cache/download path. Preference order: the stored selection if it's a
+// present ladder model, else Windy Core (the "recommended" rung), else the
+// middle of whatever rungs exist, else 'base' as the last-resort legacy value.
+ipcMain.handle('windytune-start-model', async () => {
+  const stored = engineCatalog.canonicalModelId(store.get('engine.model'));
+  if (stored && WINDYTUNE_MODEL_LADDER.includes(stored)) return stored;
+  if (WINDYTUNE_MODEL_LADDER.includes('windy-core-ct2')) return 'windy-core-ct2';
+  if (WINDYTUNE_MODEL_LADDER.length > 0) {
+    return WINDYTUNE_MODEL_LADDER[Math.floor((WINDYTUNE_MODEL_LADDER.length - 1) / 2)];
+  }
+  return 'base';
+});
 
 // IPC: User accepts/rejects upgrade suggestion from renderer
 ipcMain.handle('windytune-accept-upgrade', async (event, newModel) => {

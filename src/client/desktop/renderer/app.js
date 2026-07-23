@@ -47,11 +47,13 @@ class WindyApp {
     // Each Windy engine maps to its canonical lean CT2 model id (windy-*-ct2).
     // main.js resolves these to the bundled offline model dir of the same name —
     // NO legacy whisper-name translation (which mis-mapped Plus→large-v2 etc. and
-    // could trigger a 3GB HuggingFace download). WindyTune (Auto) stays on the
-    // always-bundled multilingual `base` for a rock-solid default. See BUNDLED_MODELS.
+    // could trigger a 3GB HuggingFace download). WindyTune (Auto) asks main for
+    // its start model at init (windytuneStartModel — a ladder model actually
+    // present on disk); the 'base' here is only the last-resort fallback when
+    // that IPC is unavailable (web build). See _windyTuneModelId().
     this._engineModelMap = {
       'local': null, // auto-detect
-      'windytune': 'base', // auto-pilot: bundled multilingual base — see BUNDLED_MODELS
+      'windytune': 'base', // fallback only — real value comes from _windyTuneModelId()
       'windy-nano': 'windy-nano-ct2', 'windy-lite': 'windy-lite-ct2', 'windy-core': 'windy-core-ct2',
       'windy-edge': 'windy-edge-ct2', 'windy-plus': 'windy-plus-ct2', 'windy-turbo': 'windy-turbo-ct2',
       'windy-pro-engine': 'windy-pro-engine-ct2',
@@ -60,6 +62,11 @@ class WindyApp {
       'windy-pro-engine-cpu': 'windy-pro-engine-ct2',
       'windy-translate-spark': null, 'windy-translate-standard': null
     };
+
+    // Filled during init from main (engine-catalog.js via IPC). Until then the
+    // inline _engineLadder copy and the 'base' map fallback above apply.
+    this._windyTuneModel = null;   // disk-verified start model for Auto mode
+    this._catalogLadder = null;    // canonical ladder from lib/engine-catalog.js
 
     // Web Speech API state (kept for future Chrome-tab relay)
     this.speechRecognition = null;
@@ -271,13 +278,22 @@ class WindyApp {
         });
       }
 
+      // Resolve WindyTune's start model + canonical ladder from main (both
+      // disk-verified — see 'windytune-start-model' / 'engine-catalog:get' in
+      // main.js). Off-Electron the inline fallbacks apply.
+      try {
+        this._windyTuneModel = (await window.windyAPI?.windytuneStartModel?.()) || null;
+        const cat = await window.windyAPI?.getEngineCatalog?.();
+        if (cat?.ladder?.length) this._catalogLadder = cat.ladder;
+      } catch (_) { /* inline fallbacks apply */ }
+
       // Show current engine/model in status bar badge on startup
       // A1: Default to a BUNDLED model, never the non-bundled 'small'. When the
       // engine is WindyTune (Auto — the default), the loaded model must come from
-      // the Auto path (_engineModelMap['windytune'] = 'base': fast + multilingual),
-      // never a heavy saved pin — so a fresh/unpinned app never auto-loads pro-engine.
+      // the Auto path (_windyTuneModelId(): a present ladder model), never a
+      // heavy saved pin — so a fresh/unpinned app never auto-loads pro-engine.
       const startupBadgeEngine = localStorage.getItem('windy_engine') || this.transcriptionEngine || 'windytune';
-      const autoModel = (this._engineModelMap && this._engineModelMap['windytune']) || 'base';
+      const autoModel = this._windyTuneModelId();
       const savedModel = (startupBadgeEngine === 'windytune')
         ? autoModel
         : (settings?.model || localStorage.getItem('windy_model') || autoModel);
@@ -1470,10 +1486,14 @@ class WindyApp {
 
       case 'ack':
         console.debug('Ack:', msg.action, msg.success);
-        // Update model badge from start ack — but preserve engine name if custom engine selected
+        // Update model badge from start ack — but preserve engine name if custom
+        // engine selected. WindyTune is excluded on purpose: in Auto mode the
+        // badge must reflect the model the ENGINE just confirmed (msg.model),
+        // not the renderer's idea of it — engine truth wins.
         if (msg.action === 'start' && msg.model) {
           const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine;
-          const isCustomEngine = this._engineModelMap && engine in this._engineModelMap && engine !== 'local';
+          const isCustomEngine = this._engineModelMap && engine in this._engineModelMap
+            && engine !== 'local' && engine !== 'windytune';
           this.updateModelBadge(isCustomEngine ? engine : msg.model);
         }
         // Update model badge from config ack
@@ -1830,7 +1850,18 @@ class WindyApp {
   // Engine catalog — id ↔ whisper model ↔ friendly name + size. Sizes/notes match
   // the website (TheVault). `model` lets the badge translate the raw whisper model
   // WindyTune is running (e.g. 'small') back into a real engine name (Windy Lite).
+  // The model WindyTune (Auto) should load: main's disk-verified pick when
+  // available, else the map's legacy 'base' fallback.
+  _windyTuneModelId() {
+    return this._windyTuneModel || (this._engineModelMap && this._engineModelMap['windytune']) || 'base';
+  }
+
   get _engineLadder() {
+    if (this._catalogLadder) {
+      // Canonical catalog from main (lib/engine-catalog.js) — same shape as the
+      // inline fallback below but guaranteed in sync with the main process.
+      return this._catalogLadder.map(e => ({ id: e.engineId, model: e.model, name: e.name, size: e.size, note: e.note }));
+    }
     return [
       { id: 'windy-nano',       model: 'windy-nano-ct2',       name: 'Windy Nano',  size: '38 MB',  note: 'Fastest · lightest' },
       { id: 'windy-lite',       model: 'windy-lite-ct2',       name: 'Windy Lite',  size: '72 MB',  note: 'Fast · balanced' },
@@ -1972,7 +2003,9 @@ class WindyApp {
    */
   setEngine(engineId) {
     const isAuto = engineId === 'windytune';
-    const model = (this._engineModelMap && this._engineModelMap[engineId]) || 'base';
+    const model = isAuto
+      ? this._windyTuneModelId()
+      : ((this._engineModelMap && this._engineModelMap[engineId]) || 'base');
     // ── Tank-proof guard ──────────────────────────────────────────────────
     // Only switch to a model that's actually bundled on the machine. Picking an
     // un-bundled engine would make faster-whisper start a silent multi-GB download
@@ -2068,12 +2101,15 @@ class WindyApp {
       if (auto || (activeEngine in byId)) {
         let eng;
         if (auto) {
-          // Reflect whichever model WindyTune is actually running (default small/Lite).
+          // Reflect whichever model WindyTune is actually running.
           const m = (modelName && byModel[modelName]) ? modelName
-            : ((this._engineModelMap && this._engineModelMap['windytune']) || 'base');
-          // WindyTune runs the bundled multilingual `base`, which has no ladder
-          // entry — present it as the Core engine so the badge stays human-readable.
-          eng = byModel[m] || byId['windy-core'];
+            : this._windyTuneModelId();
+          // Honesty rule: if the running model has no ladder entry (legacy
+          // 'base' etc.), the badge names the model it actually is — it must
+          // NEVER claim a Windy engine that isn't running. (The old fallback
+          // to byId['windy-core'] is exactly the false "Windy Core" badge the
+          // 2026-07-23 hand test caught.)
+          eng = byModel[m] || { name: `${m} (legacy)`, size: '' };
         } else {
           eng = byId[activeEngine];
         }
