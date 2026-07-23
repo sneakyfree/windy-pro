@@ -1085,6 +1085,10 @@ class SettingsPanel {
           return;
         }
         this.saveSetting('cameraDeviceId', e.target.value);
+        // Label too — see micDeviceLabel comment (Continuity id drift).
+        const camLabel = (e.target.value === 'default' || e.target.value.startsWith('phone:'))
+          ? '' : (e.target.selectedOptions?.[0]?.textContent || '');
+        this.saveSetting('cameraDeviceLabel', camLabel);
         // Re-probe so the resolution hint reflects the newly selected camera
         this._probeCameraResolution();
       });
@@ -1432,6 +1436,11 @@ class SettingsPanel {
         return;
       }
       this.saveSetting('micDeviceId', e.target.value);
+      // Label too: Continuity/USB device ids can drift between sessions; the
+      // label lets record-time resolution find the same device by name.
+      const micLabel = (e.target.value === 'default' || e.target.value.startsWith('phone:'))
+        ? '' : (e.target.selectedOptions?.[0]?.textContent || '');
+      this.saveSetting('micDeviceLabel', micLabel);
     });
 
     // Language change
@@ -2869,6 +2878,18 @@ class SettingsPanel {
       });
     }
 
+    // Re-enumerate the MOMENT a picker is clicked: macOS/Chromium does not
+    // reliably fire 'devicechange' when a Continuity Camera iPhone powers on
+    // nearby (proven in Grant's 7-23 hand-test — three phones on, none
+    // appearing until restart). mousedown fires before the native popup
+    // snapshots its options, so a fresh list is usually visible same-click —
+    // worst case it's there on the next click, never "restart the app".
+    if (!this._pickerClickRefreshHooked) {
+      this._pickerClickRefreshHooked = true;
+      this.panel.querySelector('#micSelect')?.addEventListener('mousedown', () => this.populateMicDevices());
+      this.panel.querySelector('#cameraSelect')?.addEventListener('mousedown', () => this.populateCameraDevices());
+    }
+
     // WiFi phone companion: refresh pickers on connect/disconnect, and after
     // a connect initiated from a picker, auto-select the phone there.
     if (!this._phoneHooked && window.phoneCompanion) {
@@ -2936,8 +2957,12 @@ class SettingsPanel {
       if (window.windyAPI) {
         const settings = await window.windyAPI.getSettings();
         if (settings && settings.micDeviceId) {
-          const has = Array.from(select.options).some(o => o.value === settings.micDeviceId);
-          select.value = has ? settings.micDeviceId : 'default';
+          const opts = Array.from(select.options);
+          const byLabel = settings.micDeviceLabel
+            && opts.find(o => o.textContent === settings.micDeviceLabel);
+          if (opts.some(o => o.value === settings.micDeviceId)) select.value = settings.micDeviceId;
+          else if (byLabel) select.value = byLabel.value; // id drifted — same device, new id
+          else select.value = 'default';
         }
       }
     } catch (e) {
@@ -2966,8 +2991,12 @@ class SettingsPanel {
       if (window.windyAPI) {
         const settings = await window.windyAPI.getSettings();
         if (settings && settings.cameraDeviceId) {
-          const exists = Array.from(select.options).some(o => o.value === settings.cameraDeviceId);
-          select.value = exists ? settings.cameraDeviceId : 'default';
+          const opts = Array.from(select.options);
+          const byLabel = settings.cameraDeviceLabel
+            && opts.find(o => o.textContent === settings.cameraDeviceLabel);
+          if (opts.some(o => o.value === settings.cameraDeviceId)) select.value = settings.cameraDeviceId;
+          else if (byLabel) select.value = byLabel.value; // id drifted — same device, new id
+          else select.value = 'default';
         }
       }
     } catch (e) {
@@ -3285,6 +3314,10 @@ class SettingsPanel {
   open() {
     this.panel.classList.add('open');
     this.isOpen = true;
+    // Devices come and go while the panel sits open for days (Continuity
+    // iPhones powering on, USB cams plugged in) — re-scan on every open.
+    this.populateMicDevices();
+    this.populateCameraDevices();
     // NOTE (2026-07-22): deliberately does NOT grab focus. The window is
     // focusable:false so it can't pull the user's cursor out of their external
     // dictation target. Merely OPENING settings — toggling switches, changing

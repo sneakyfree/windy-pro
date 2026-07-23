@@ -2736,7 +2736,13 @@ class WindyApp {
         const settings = await window.windyAPI.getSettings();
         micDeviceId = settings?.micDeviceId || null;
         if (micDeviceId && micDeviceId !== 'default' && !micDeviceId.startsWith('phone:')) {
-          audioConstraints.deviceId = { exact: micDeviceId };
+          const resolved = await this._resolveDeviceId('audioinput', micDeviceId, settings?.micDeviceLabel);
+          if (resolved) {
+            audioConstraints.deviceId = { exact: resolved };
+          } else {
+            console.warn('[Batch] Saved mic absent from current devices — using default mic');
+            this._showToast('🎤 Selected microphone not found — using default microphone', 'warning', 6000);
+          }
         }
       }
       let stream;
@@ -2846,6 +2852,13 @@ class WindyApp {
             // exact pre-picker behavior on every platform.
             if (settings?.cameraDeviceId && settings.cameraDeviceId !== 'default') {
               cameraDeviceId = settings.cameraDeviceId;
+              if (!cameraDeviceId.startsWith('phone:')) {
+                cameraDeviceId = await this._resolveDeviceId('videoinput', cameraDeviceId, settings?.cameraDeviceLabel);
+                if (!cameraDeviceId) {
+                  console.warn('[Batch] Saved camera absent from current devices — using default camera');
+                  this._showToast('📹 Selected camera not found — using default camera', 'warning', 6000);
+                }
+              }
             }
           }
           const vq = qualityMap[videoQuality] || qualityMap['720p'];
@@ -4580,7 +4593,13 @@ class WindyApp {
       const settings = await window.windyAPI.getSettings();
       micDeviceId = settings?.micDeviceId || null;
       if (micDeviceId && micDeviceId !== 'default' && !micDeviceId.startsWith('phone:')) {
-        audioConstraints.deviceId = { exact: micDeviceId };
+        const resolved = await this._resolveDeviceId('audioinput', micDeviceId, settings?.micDeviceLabel);
+        if (resolved) {
+          audioConstraints.deviceId = { exact: resolved };
+        } else {
+          console.warn('[Capture] Saved mic absent from current devices — using default mic');
+          this._showToast('🎤 Selected microphone not found — using default microphone', 'warning', 6000);
+        }
       }
     }
 
@@ -4807,6 +4826,32 @@ class WindyApp {
     this._stopVideoFrameForwarding();
     const videoBadge = document.getElementById('videoBadge');
     if (videoBadge) { videoBadge.classList.remove('active'); videoBadge.classList.add('failed'); videoBadge.textContent = '🎬 Video ⏸'; }
+  }
+
+  /**
+   * Resolve a saved device id against the CURRENT enumeration. Continuity
+   * Camera (and some USB hubs) hand out a different deviceId after the phone
+   * sleeps or the app restarts — the label survives, so fall back to matching
+   * by name ("Grant's iPhone Camera"). Returns a usable deviceId, or null if
+   * the device is truly absent right now (caller falls back to default).
+   */
+  async _resolveDeviceId(kind, savedId, savedLabel) {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const pool = devices.filter(d => d.kind === kind);
+      if (pool.some(d => d.deviceId === savedId)) return savedId;
+      if (savedLabel) {
+        const byLabel = pool.find(d => d.label === savedLabel);
+        if (byLabel) {
+          console.warn(`[Devices] id drifted for "${savedLabel}" — using its current id`);
+          return byLabel.deviceId;
+        }
+      }
+      return null;
+    } catch {
+      // Enumeration unavailable — keep old behavior, let getUserMedia decide.
+      return savedId;
+    }
   }
 
   /** Wired at init: reacts to phone-companion connection changes mid-recording. */
