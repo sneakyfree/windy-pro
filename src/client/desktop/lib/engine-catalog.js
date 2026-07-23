@@ -39,6 +39,37 @@ const LEGACY_MODEL_MAP = {
   'turbo': 'windy-turbo-ct2',
 };
 
+// ── GPU engine pack ──────────────────────────────────────────────────────
+// The three clinic-approved heavy engines offered to GPU-capable machines
+// (NVIDIA + CUDA — see lib/gpu-detect.js). These are the SAME ct2 models as
+// the ladder's top rungs, run with device=cuda: CT2 accelerates ct2 weights
+// on CUDA natively, so nothing new has to be runnable. Picks follow
+// docs/MODEL_GLOSSARY.json eval loss: turbo 0.456 (champion), pro-engine
+// 0.577, plus 0.757. windy-edge (4.81) and windy-lite (4.18) are excluded —
+// known-regressed patients per the clinic.
+// downloadMB is the ct2 int8 payload when a lean build must fetch them.
+const GPU_PACK = {
+  minNvidiaVramGB: 6,
+  models: ['windy-plus-ct2', 'windy-turbo-ct2', 'windy-pro-engine-ct2'],
+  downloadMB: { 'windy-plus-ct2': 729, 'windy-turbo-ct2': 772, 'windy-pro-engine-ct2': 1473 },
+};
+
+// HuggingFace repos for download-on-demand. Models were renamed from
+// WindyLabs/windy-* to WindyProLabs/windy-stt-* (glossary predates the
+// rename). NOTE per 2026-07-23 HF audit: -turbo-ct2 and the pro-engine ct2
+// repos are NOT yet uploaded to WindyProLabs — flagship builds bundle them so
+// downloads never trigger there, but lean builds can't fetch those two until
+// the uploads land.
+const HF_REPO_FOR_MODEL = {
+  'windy-nano-ct2': 'WindyProLabs/windy-stt-nano-ct2',
+  'windy-lite-ct2': 'WindyProLabs/windy-stt-lite-ct2',
+  'windy-core-ct2': 'WindyProLabs/windy-stt-core-ct2',
+  'windy-plus-ct2': 'WindyProLabs/windy-stt-plus-ct2',
+  'windy-turbo-ct2': 'WindyProLabs/windy-stt-turbo-ct2',
+  'windy-edge-ct2': 'WindyProLabs/windy-stt-edge-ct2',
+  'windy-pro-engine-ct2': 'WindyProLabs/windy-stt-pro-ct2',
+};
+
 const _byModel = Object.fromEntries(LADDER.map(e => [e.model, e]));
 const _byEngineId = Object.fromEntries(LADDER.map(e => [e.engineId, e]));
 
@@ -72,6 +103,8 @@ function displayForModel(modelId) {
 module.exports = {
   LADDER,
   LEGACY_MODEL_MAP,
+  GPU_PACK,
+  HF_REPO_FOR_MODEL,
   canonicalModelId,
   entryForModel,
   entryForEngineId,

@@ -52,4 +52,22 @@ describe('engine-catalog', () => {
       expect(models.has(target)).toBe(true);
     }
   });
+
+  test('GPU pack is a subset of the ladder and excludes clinic-flagged engines', () => {
+    const models = new Set(catalog.LADDER.map(e => e.model));
+    for (const m of catalog.GPU_PACK.models) {
+      expect(models.has(m)).toBe(true);
+      expect(catalog.GPU_PACK.downloadMB[m]).toBeGreaterThan(0);
+    }
+    // windy-edge (eval 4.81) and windy-lite (4.18) are known-regressed per
+    // docs/MODEL_GLOSSARY.json — they must never ship in the pack.
+    expect(catalog.GPU_PACK.models).not.toContain('windy-edge-ct2');
+    expect(catalog.GPU_PACK.models).not.toContain('windy-lite-ct2');
+  });
+
+  test('every ladder model has an HF repo pointer for download-on-demand', () => {
+    for (const e of catalog.LADDER) {
+      expect(catalog.HF_REPO_FOR_MODEL[e.model]).toMatch(/^WindyProLabs\//);
+    }
+  });
 });
