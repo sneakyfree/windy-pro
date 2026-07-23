@@ -3746,39 +3746,9 @@ class WindyApp {
     bar.id = 'batchPlaybackBar';
     bar.className = 'playback-bar';
     bar.innerHTML = `
-      <div class="playback-audio-row" style="display:flex;align-items:center;gap:8px;width:100%;">
-        <span class="playback-label">🔊 Recording</span>
-        <audio controls src="${audioUrl}" preload="metadata" style="flex:1;height:28px;"></audio>
-      </div>
+      <span class="playback-label">🔊 Recording</span>
+      <audio controls src="${audioUrl}" preload="metadata" style="flex:1;height:28px;"></audio>
     `;
-
-    // Additively inject a <video> when a screen/video recording was captured
-    // for this session. Gated strictly on _lastVideoBlob so the audio-only
-    // path is unchanged. Uses a separate object URL tracked + revoked in
-    // parallel with _lastPlaybackUrl (see _saveAudioRecording).
-    // The video goes on its OWN labeled row under the audio (the bar becomes
-    // a column) — jammed side-by-side in the 28px audio row it rendered as a
-    // clipped half-visible strip that read as UI breakage (Grant, 2026-07-22).
-    if (this._lastVideoBlob) {
-      bar.style.flexDirection = 'column';
-      bar.style.alignItems = 'stretch';
-      const videoUrl = URL.createObjectURL(this._lastVideoBlob);
-      this._lastPlaybackVideoUrl = videoUrl;
-      const row = document.createElement('div');
-      row.className = 'playback-video-row';
-      row.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;margin-top:6px;';
-      const label = document.createElement('span');
-      label.className = 'playback-label';
-      label.textContent = '🎬 Video';
-      const video = document.createElement('video');
-      video.controls = true;
-      video.src = videoUrl;
-      video.preload = 'metadata';
-      video.style.cssText = 'flex:1;min-width:0;max-height:160px;border-radius:6px;object-fit:contain;background:#000;';
-      row.appendChild(label);
-      row.appendChild(video);
-      bar.appendChild(row);
-    }
 
     // Insert into the persistent playback slot
     const slot = document.getElementById('playbackSlot');
@@ -3786,6 +3756,45 @@ class WindyApp {
       slot.innerHTML = '';
       slot.appendChild(bar);
     }
+
+    // Video playback does NOT go in the footer stack — squeezed between the
+    // export/control bars it rendered as a clipped sliver (Grant, 2026-07-22).
+    // It gets a proper media card in the main content area, which sits mostly
+    // empty. Footer keeps only the slim audio bar.
+    if (this._lastVideoBlob) {
+      const videoUrl = URL.createObjectURL(this._lastVideoBlob);
+      this._lastPlaybackVideoUrl = videoUrl;
+      this._showVideoCard(videoUrl);
+    } else {
+      const oldCard = document.getElementById('lastRecordingCard');
+      if (oldCard) oldCard.remove();
+    }
+  }
+
+  /**
+   * Media card for the last video recording, shown at the top of the
+   * transcript area (the window's main real estate) instead of the footer.
+   */
+  _showVideoCard(videoUrl) {
+    const content = document.getElementById('transcriptContent');
+    if (!content) return;
+    const existing = document.getElementById('lastRecordingCard');
+    if (existing) existing.remove();
+
+    const card = document.createElement('div');
+    card.id = 'lastRecordingCard';
+    card.className = 'last-recording-card';
+    const when = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    card.innerHTML = `
+      <div class="last-recording-header">
+        <span class="last-recording-title">🎬 Last recording · ${when}</span>
+        <button type="button" class="last-recording-dismiss" title="Dismiss (recording stays in your archive)" aria-label="Dismiss video preview">✕</button>
+      </div>
+      <video controls preload="metadata" class="last-recording-video"></video>
+    `;
+    card.querySelector('.last-recording-video').src = videoUrl;
+    card.querySelector('.last-recording-dismiss').addEventListener('click', () => card.remove());
+    content.insertBefore(card, content.firstChild);
   }
 
   /**
