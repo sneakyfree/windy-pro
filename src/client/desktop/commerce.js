@@ -23,7 +23,7 @@ function accountServerUrl() {
 }
 
 function webAppUrl() {
-    return process.env.WINDY_WEBAPP_URL || 'https://app.windyword.ai';
+    return process.env.WINDY_WEBAPP_URL || 'https://windyword.ai';
 }
 
 function getAuthToken() {

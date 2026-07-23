@@ -35,9 +35,11 @@ concurrency:
 jobs:
   # ── Account Server: Type Check + Tests ──
   test-account-server:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
+      - name: runner-lint (hosted runners are billing-locked)
+        run: bash "$GITHUB_WORKSPACE/.github/lint/lint-runner-labels.sh" "$GITHUB_WORKSPACE/.github/workflows"
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -58,7 +60,7 @@ jobs:
   # fail-fast disabled so a single version's failure doesn't cancel
   # the others (we want signal from all supported lanes).
   test-backend:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     strategy:
       fail-fast: false
       matrix:
@@ -91,7 +93,7 @@ jobs:
 
   # ── Web Portal Build ──
   build-web-portal:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -99,14 +101,19 @@ jobs:
           node-version: '20'
       - run: cd src/client/web && npm ci && npm run build
       - name: Upload web artifacts
+        # Artifact uploads fail account-wide while GitHub billing is locked.
+        # Keep attempting the upload (it starts working again the moment
+        # billing unlocks) but never fail the job on it.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 3
           name: web-dist
           path: src/client/web/dist/
 
   # ── Desktop Build ──
   build-desktop:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -122,7 +129,7 @@ jobs:
   # withTimeout helper (must surface labeled timeouts so a hung wizard
   # never appears as a silent 0% spinner).
   test-installer:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -177,6 +184,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 3
           name: windy-pro-${{ matrix.os }}
           path: dist/
       - name: Upload to GitHub Release
@@ -196,8 +204,10 @@ jobs:
   # ── Docker Build & Deploy ──
   deploy:
     needs: [test-account-server, build-web-portal]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest  # runner-lint-allow — CD job, disabled below
+    # CD boundary (2026-07 runner migration): deploys stay manual until the
+    # supervised CD mission. Was: if: github.ref == 'refs/heads/main'
+    if: false
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker image

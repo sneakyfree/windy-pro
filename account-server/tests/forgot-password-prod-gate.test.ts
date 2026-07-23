@@ -26,10 +26,26 @@ process.env.DB_PATH = path.join(tmpDir, 'accounts.db');
 process.env.DATA_ROOT = tmpDir;
 process.env.TRUST_PROXY = '1';
 process.env.CORS_ALLOWED_ORIGINS = 'https://account.windyword.ai';
-process.env.RESEND_API_KEY = 'resend-stub-for-test-xxxxxxxxxxxxxxxxxxx'; // satisfies fail-closed; mailer will still stub because the key is not real
+process.env.RESEND_API_KEY = 'resend-stub-for-test-xxxxxxxxxxxxxxxxxxx'; // satisfies the fail-closed boot assertion only — sendMail below is mocked
+// NODE_ENV=production means server.ts really calls server.listen(). Use an
+// ephemeral port so parallel suites / long-lived services on the runner
+// can't collide (EADDRINUSE on the default 8098).
+process.env.PORT = '0';
+
+// Stub the mailer at the module boundary. With RESEND_API_KEY set the real
+// sendMail() would hit the Resend API over the network — CI must never
+// depend on that. Returning { stub: true } is exactly the scenario this
+// test pins: "mailer stubs" + NODE_ENV=production ⇒ no _devToken.
+jest.mock('../src/services/mailer', () => {
+    const actual = jest.requireActual('../src/services/mailer');
+    return {
+        ...actual,
+        sendMail: jest.fn(async () => ({ success: true, stub: true })),
+    };
+});
 
 import request from 'supertest';
-import { app } from '../src/server';
+import { app, server } from '../src/server';
 import bcrypt from 'bcryptjs';
 import { getDb } from '../src/db/schema';
 import { v4 as uuidv4 } from 'uuid';
@@ -41,6 +57,12 @@ async function registerProdUser(email: string) {
         `INSERT INTO users (id, email, name, password_hash, tier) VALUES (?, ?, ?, ?, ?)`,
     ).run(uuidv4(), email, 'Prod Tester', hash, 'free');
 }
+
+afterAll((done) => {
+    // NODE_ENV=production ⇒ server.ts started a real listener (ephemeral
+    // port, see PORT=0 above). Close it so jest can exit cleanly.
+    server.close(() => done());
+});
 
 describe('Wave 14 P0-1 — /auth/forgot-password in production', () => {
     it('never returns _devToken even when the mailer stubs', async () => {

@@ -66,7 +66,13 @@ function makeDeps(overrides = {}) {
       isEncryptionAvailable: () => true,
       encryptString: (s) => Buffer.from('enc:' + s),
     },
-    globalShortcut: { unregisterAll: jest.fn() },
+    globalShortcut: {
+      unregisterAll: jest.fn(),
+      // The rebind handler probes isRegistered() before and after
+      // re-registering to detect failed/clobbered accelerators;
+      // default to "everything registered fine".
+      isRegistered: jest.fn(() => true),
+    },
     registerHotkeys: jest.fn(),
     mainWindowRef: { current: win },
     reservedShortcuts: ['CommandOrControl+Space', 'CommandOrControl+Q'],

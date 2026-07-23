@@ -1,3 +1,4 @@
+# adr-046-exempt: override layer (extra_hosts only) — inherits the project name of the base compose it is layered onto
 services:
   account-server:
     extra_hosts:

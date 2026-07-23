@@ -11,6 +11,8 @@
  *   Messaging:   video-frame-to-preview, recording-state-to-preview
  *   Sizing:      resize-video-preview, resize-move-video-preview,
  *                start-resize-video, stop-resize-video
+ *   Move drag:   start-move-video, move-video-tick, stop-move-video
+ *   Debug:       video-wm-debug
  *
  * Same registrar + deps-object pattern as chat/ipc.js and
  * chat/pair-ipc.js. Module-private `_resizeInterval` holds the
@@ -268,6 +270,8 @@ const VIDEO_IPC_CHANNELS = Object.freeze([
   'video-frame-to-preview', 'recording-state-to-preview',
   'resize-video-preview', 'resize-move-video-preview',
   'start-resize-video', 'stop-resize-video',
+  'start-move-video', 'move-video-tick', 'stop-move-video',
+  'video-wm-debug',
 ]);
 
 module.exports = { registerVideoIpc, VIDEO_IPC_CHANNELS };

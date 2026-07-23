@@ -52,7 +52,7 @@ jobs:
   # Code signing / notarization will be added once Apple Developer ID is set up.
   build-mac-arm64:
     name: macOS arm64
-    runs-on: macos-latest
+    runs-on: macos-latest  # runner-lint-allow — CD/hosted-only; disabled, manual until CD mission
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -140,7 +140,7 @@ jobs:
   e2e:
     name: E2E (wizard + signup banner)
     needs: build-mac-arm64
-    runs-on: macos-latest
+    runs-on: macos-latest  # runner-lint-allow — CD/hosted-only; disabled, manual until CD mission
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -170,7 +170,7 @@ jobs:
   # python-build-standalone is target-specific).
   build-mac-x64:
     name: macOS x64
-    runs-on: macos-13
+    runs-on: macos-13  # runner-lint-allow — CD/hosted-only; disabled, manual until CD mission
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -209,7 +209,7 @@ jobs:
   # AppImage (universal) and a .deb (Debian/Ubuntu friendly).
   build-linux-x64:
     name: Linux x64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # runner-lint-allow — CD/hosted-only; disabled, manual until CD mission
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -253,7 +253,7 @@ jobs:
   # to v2.1 per the install-wizard plan).
   build-win-x64:
     name: Windows x64
-    runs-on: windows-latest
+    runs-on: windows-latest  # runner-lint-allow — CD/hosted-only; disabled, manual until CD mission
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
