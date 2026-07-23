@@ -205,10 +205,19 @@ function registerVideoIpc(deps) {
     if (!win0) return;
     const c0 = screen.getCursorScreenPoint();
     const b0 = win0.getBounds();
-    _moveAnchor = { dx: c0.x - b0.x, dy: c0.y - b0.y, w: b0.width, h: b0.height };
+    _moveAnchor = { dx: c0.x - b0.x, dy: c0.y - b0.y, w: b0.width, h: b0.height, t0: Date.now() };
+    console.log('[VP-WM] move-start', JSON.stringify({ c: c0, b: b0 }));
   });
   ipcMain.on('move-video-tick', () => {
     if (!_moveAnchor) return;
+    // Circuit breaker: no legit thumbnail drag lasts 15s. If the renderer's
+    // release events were all lost (Wayland/XWayland stale-state glue), this
+    // guarantees the window detaches anyway.
+    if (Date.now() - _moveAnchor.t0 > 15000) {
+      console.warn('[VP-WM] move gesture exceeded 15s — force-detached (glue breaker)');
+      _moveAnchor = null;
+      return;
+    }
     const win = getLiveWindow();
     if (!win) { _moveAnchor = null; return; }
     const c = screen.getCursorScreenPoint();
@@ -219,7 +228,13 @@ function registerVideoIpc(deps) {
       height: _moveAnchor.h,
     });
   });
-  ipcMain.on('stop-move-video', () => { _moveAnchor = null; });
+  ipcMain.on('stop-move-video', () => {
+    if (_moveAnchor) console.log('[VP-WM] move-stop after', Date.now() - _moveAnchor.t0, 'ms');
+    _moveAnchor = null;
+  });
+  ipcMain.on('video-wm-debug', (event, msg) => {
+    console.log('[VP-WM]', msg);
+  });
 
   return {
     // Exposed so main.js (or future shutdown hooks) can force-clear

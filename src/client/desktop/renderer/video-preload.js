@@ -53,6 +53,11 @@ contextBridge.exposeInMainWorld('videoPreviewAPI', {
   stopMove: () => {
     ipcRenderer.send('stop-move-video');
   },
+  // Gesture debug trace — lands in the main-process log so drag issues on
+  // real user sessions can be diagnosed from /tmp/windy-desktop.log.
+  wmDebug: (msg) => {
+    ipcRenderer.send('video-wm-debug', String(msg).slice(0, 200));
+  },
 
   // Platform for renderer-side gesture gating
   platform: process.platform,

@@ -434,21 +434,29 @@
             // following instead of staying glued to the mouse forever.
             let _moving = false;
             let _tickQueued = false;
-            const stopMove = () => {
+            let _capturedId = null;
+            const _wmLog = (msg) => { try { window.videoPreviewAPI.wmDebug(msg); } catch (_) { } };
+            const stopMove = (why) => {
                 if (!_moving) return;
                 _moving = false;
+                _wmLog('stop:' + why);
+                if (_capturedId != null) {
+                    try { container.releasePointerCapture(_capturedId); } catch (_) { }
+                    _capturedId = null;
+                }
                 try { window.videoPreviewAPI.stopMove(); } catch (_) { }
             };
             container.addEventListener('pointerdown', (e) => {
                 if (e.button !== 0) return;
                 if (e.target.closest('.resize-handle, button, .preview-btn')) return;
                 _moving = true;
-                try { container.setPointerCapture(e.pointerId); } catch (_) { }
+                _wmLog('down b=' + e.buttons);
+                try { container.setPointerCapture(e.pointerId); _capturedId = e.pointerId; } catch (_) { }
                 try { window.videoPreviewAPI.startMove(); } catch (_) { }
             });
             container.addEventListener('pointermove', (e) => {
                 if (!_moving) return;
-                if (e.buttons === 0) { stopMove(); return; }
+                if (e.buttons === 0) { stopMove('buttons0'); return; }
                 // One tick per frame max — unthrottled 500Hz+ pointermove IPC
                 // floods setBounds and leaves ghost-frame trails on X11.
                 if (_tickQueued) return;
@@ -458,10 +466,10 @@
                     if (_moving) { try { window.videoPreviewAPI.moveTick(); } catch (_) { } }
                 });
             });
-            container.addEventListener('pointerup', stopMove);
-            container.addEventListener('pointercancel', stopMove);
-            container.addEventListener('lostpointercapture', stopMove);
-            window.addEventListener('blur', stopMove);
+            container.addEventListener('pointerup', () => stopMove('up'));
+            container.addEventListener('pointercancel', () => stopMove('cancel'));
+            container.addEventListener('lostpointercapture', () => stopMove('lostcapture'));
+            window.addEventListener('blur', () => stopMove('blur'));
         }
 
         // ═══ Four-corner resize via main-process mouse polling ═══
