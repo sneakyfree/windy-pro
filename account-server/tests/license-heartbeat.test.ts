@@ -104,7 +104,7 @@ describe('POST /v1/license/heartbeat', () => {
         const admReg = await request(app)
             .post('/api/v1/auth/register')
             .send({ name: 'ADM', email: 'hb-admin@test.windy', password: 'Heartbeat-Test-1!' });
-        getDb().prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(admReg.body.userId);
+        getDb().prepare("UPDATE users SET role = 'admin', admin_role = 'super_admin' WHERE id = ?").run(admReg.body.userId);
         const admLogin = await request(app)
             .post('/api/v1/auth/login')
             .send({ email: 'hb-admin@test.windy', password: 'Heartbeat-Test-1!' });

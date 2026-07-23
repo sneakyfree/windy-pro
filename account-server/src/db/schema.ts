@@ -292,6 +292,13 @@ function initSchema(db: DbAdapter): void {
     "ALTER TABLE users ADD COLUMN connect_bundle_version TEXT",              // Bundle spec version, e.g. \"1.0\"
     "ALTER TABLE users ADD COLUMN admin_role TEXT",                          // Windy Admin RBAC (ADR-WA-001 §6): super_admin|admin|support|analyst; NULL = no admin access
 
+    // ─── RBAC unification (2026-07-19) ───
+    // admin_role is the ONE source of truth for admin access. Backfill legacy
+    // role='admin' rows (the bootstrap path) so they keep access. Idempotent
+    // (WHERE admin_role IS NULL) and safe to run every boot. Postgres prod:
+    // migrations/008-rbac-unify-admin-role-2026-07-19.sql (applied manually).
+    "UPDATE users SET admin_role = 'super_admin' WHERE role = 'admin' AND admin_role IS NULL",
+
     // ─── Commerce (migration 007) ───
     // Last cloud tier pushed to windy-cloud's /billing/allocate. The
     // entitlement sweep converges desired vs pushed, so a cloud outage

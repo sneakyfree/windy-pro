@@ -333,7 +333,7 @@ router.get('/users/:id', (req: Request, res: Response) => {
       ['Display Name', user.display_name || '-'],
       ['Type', null, typeBadge],
       ['Tier', user.tier || 'free'],
-      ['Role', user.role || 'user'],
+      ['Role', user.admin_role || 'user'],
       ['Status', null, frozenBadge],
       ['Phone', user.phone || '-'],
       ['Email Verified', user.email_verified ? 'Yes' : 'No'],

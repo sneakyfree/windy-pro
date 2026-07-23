@@ -29,11 +29,11 @@ router.get('/users', authenticateToken, adminOnly, (req: Request, res: Response)
 
         if (search) {
             const like = `%${search}%`;
-            users = db.prepare('SELECT id, name, email, tier, role, created_at FROM users WHERE name LIKE ? OR email LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?')
+            users = db.prepare('SELECT id, name, email, tier, role, admin_role, created_at FROM users WHERE name LIKE ? OR email LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?')
                 .all(like, like, limit, offset) as any[];
             total = (db.prepare('SELECT COUNT(*) as count FROM users WHERE name LIKE ? OR email LIKE ?').get(like, like) as any).count;
         } else {
-            users = db.prepare('SELECT id, name, email, tier, role, created_at FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?')
+            users = db.prepare('SELECT id, name, email, tier, role, admin_role, created_at FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?')
                 .all(limit, offset) as any[];
             total = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;
         }
@@ -297,7 +297,7 @@ router.post('/users/:userId/devices/:deviceId/remove', authenticateToken, adminO
 router.get('/overview', authenticateToken, adminOnly, (_req: Request, res: Response) => {
     try {
         const db = getDb();
-        const totalUsers = (db.prepare("SELECT COUNT(*) as count FROM users WHERE role != 'admin' OR role IS NULL").get() as any).count;
+        const totalUsers = (db.prepare("SELECT COUNT(*) as count FROM users WHERE admin_role IS NULL OR admin_role NOT IN ('super_admin', 'admin')").get() as any).count;
         const totalFiles = (db.prepare('SELECT COUNT(*) as count FROM files').get() as any).count;
         const totalRecordings = (db.prepare('SELECT COUNT(*) as count FROM recordings').get() as any).count;
         const totalStorage = (db.prepare('SELECT COALESCE(SUM(size), 0) as total FROM files').get() as any).total;

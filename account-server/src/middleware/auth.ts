@@ -17,7 +17,10 @@ export interface AuthUser {
     email: string;
     tier: string;
     accountId: string;
+    /** LEGACY users.role — never minted into login JWTs; do not gate on it. */
     role?: string;
+    /** ADR-WA-001 §6 admin tier (super_admin|admin|support|analyst), minted from users.admin_role. */
+    admin_role?: string;
     // Phase 10.1: Unified Identity fields
     type?: 'human' | 'bot';
     scopes?: string[];
@@ -247,12 +250,20 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
 
 /**
  * Admin-only guard — must be used after authenticateToken.
+ *
+ * RBAC unification (2026-07-19): users.admin_role is the ONE source of truth
+ * (ADR-WA-001 §6: super_admin | admin | support | analyst; NULL = no admin).
+ * This guard previously read the legacy users.role column while windy-admin
+ * gated on the admin_role JWT claim (minted from users.admin_role) — two
+ * brains that could disagree. Action-grade surfaces here require the
+ * super_admin/admin tiers, matching windy-admin's ACTION_ROLES. Reads the DB
+ * (not the claim) so revocation takes effect without waiting for re-login.
  */
 export function adminOnly(req: Request, res: Response, next: NextFunction): void {
     const { getDb } = require('../db/schema');
     const db = getDb();
-    const user = db.prepare('SELECT role FROM users WHERE id = ?').get((req as AuthRequest).user.userId) as { role: string } | undefined;
-    if (!user || user.role !== 'admin') {
+    const user = db.prepare('SELECT admin_role FROM users WHERE id = ?').get((req as AuthRequest).user.userId) as { admin_role: string | null } | undefined;
+    if (!user || !user.admin_role || !['super_admin', 'admin'].includes(user.admin_role)) {
         res.status(403).json({ error: 'Admin access required' });
         return;
     }

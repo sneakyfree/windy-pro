@@ -8,7 +8,7 @@
  *
  * This helper reads ADMIN_BOOTSTRAP_EMAIL + ADMIN_BOOTSTRAP_PASSWORD
  * at startup and creates an admin user IF no admin exists yet.
- * Idempotent: if an admin is already present (any role='admin' row),
+ * Idempotent: if an admin is already present (any admin_role row, or a legacy role='admin' row),
  * this is a no-op. If the env vars are unset, this is a no-op. If
  * only the email is set without a password, log a warning and
  * skip — we deliberately don't auto-generate a password and log it,
@@ -57,8 +57,11 @@ export async function maybeBootstrapAdmin(): Promise<BootstrapResult> {
     // don't care if it matches our email. The intent is "give the
     // platform exactly one minted admin identity"; if one already
     // exists, this bootstrap has done its job.
+    // RBAC unification: admin_role is the source of truth for ACCESS; the
+    // legacy role='admin' check stays here only so a not-yet-backfilled row
+    // still counts as "an admin exists" (idempotency, not authorization).
     const existing = db.prepare(
-        "SELECT id, email FROM users WHERE role = 'admin' LIMIT 1",
+        "SELECT id, email FROM users WHERE admin_role IN ('super_admin', 'admin') OR role = 'admin' LIMIT 1",
     ).get() as { id: string; email: string } | undefined;
 
     if (existing) {
@@ -83,7 +86,7 @@ export async function maybeBootstrapAdmin(): Promise<BootstrapResult> {
     const sameEmail = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as { id: string } | undefined;
     if (sameEmail) {
         db.prepare(
-            `UPDATE users SET role = 'admin', password_hash = ?, updated_at = datetime('now') WHERE id = ?`,
+            `UPDATE users SET role = 'admin', admin_role = 'super_admin', password_hash = ?, updated_at = datetime('now') WHERE id = ?`,
         ).run(hash, sameEmail.id);
         console.info(
             `[admin-bootstrap] promoted existing user ${email} to admin. ` +
@@ -93,8 +96,8 @@ export async function maybeBootstrapAdmin(): Promise<BootstrapResult> {
     }
 
     db.prepare(
-        `INSERT INTO users (id, email, name, password_hash, tier, role, windy_identity_id, identity_type)
-         VALUES (?, ?, ?, ?, 'free', 'admin', ?, 'human')`,
+        `INSERT INTO users (id, email, name, password_hash, tier, role, admin_role, windy_identity_id, identity_type)
+         VALUES (?, ?, ?, ?, 'free', 'admin', 'super_admin', ?, 'human')`,
     ).run(id, email, 'Admin', hash, windyIdentityId);
 
     console.info(
