@@ -771,9 +771,15 @@ class SettingsPanel {
           badge.textContent = `${icons[engine] || '🌪️'} ${engine}`;
         }
       }
-      // Auto-sync Model Size dropdown to match engine selection
+      // Auto-sync Model Size dropdown to match engine selection.
+      // 'windytune' is excluded: WindyTune's model is owned by the MAIN process
+      // (windytune-start-model IPC + adaptive switches persisted to the store).
+      // This listener also fires from loadSettings()' synthetic change event on
+      // EVERY startup, and the old map value ('base') overwrote whatever rung
+      // WindyTune had persisted — Auto mode could never remember its model
+      // across restarts (found in the 2026-07-23 hand test).
       const modelMap = this.app?._engineModelMap;
-      if (modelMap && engine in modelMap && modelMap[engine]) {
+      if (engine !== 'windytune' && modelMap && engine in modelMap && modelMap[engine]) {
         const whisperModel = modelMap[engine];
         this.saveSetting('model', whisperModel);
         const modelSelect = this.panel.querySelector('#modelSelect');

@@ -139,6 +139,12 @@ contextBridge.exposeInMainWorld('windyAPI', {
   notifyRecordingStopped: () => ipcRenderer.send('recording-stopped'),
 
   // ═══ WindyTune Adaptive ═══
+  // Start model resolved by main against models actually present on disk —
+  // replaces the renderer's old hardcoded 'base' (not bundled in this edition).
+  windytuneStartModel: () => ipcRenderer.invoke('windytune-start-model'),
+  // Canonical engine ladder from lib/engine-catalog.js (sandboxed preload can't
+  // require() it directly). Renderer keeps an inline copy only as fallback.
+  getEngineCatalog: () => ipcRenderer.invoke('engine-catalog:get'),
   windytuneAcceptUpgrade: (model) => ipcRenderer.invoke('windytune-accept-upgrade', model),
   windytuneUndoSwitch: (oldModel) => ipcRenderer.invoke('windytune-undo-switch', oldModel),
   onWindyTuneModelSwitched: (callback) => {
