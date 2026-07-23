@@ -30,9 +30,11 @@ class PhoneCompanionClient {
   _emit(evt) { for (const cb of this._listeners) { try { cb(evt); } catch { /* listener error */ } } }
 
   // ─── Connect overlay (QR) ────────────────────────────────────────────────
-  async openConnectOverlay() {
+  /** intent: 'camera' pre-enables camera sharing on the phone page. */
+  async openConnectOverlay(intent) {
     this.closeOverlay();
-    const session = await window.windyAPI.phoneCompanion.createSession();
+    this._intent = intent || 'mic';
+    const session = await window.windyAPI.phoneCompanion.createSession(this._intent);
     const overlay = document.createElement('div');
     overlay.id = 'pcwOverlay';
     overlay.className = 'pcw-overlay';
@@ -103,6 +105,11 @@ class PhoneCompanionClient {
         this.label = String(msg.label || 'Phone').slice(0, 40);
         this.hasVideo = !!msg.hasVideo;
         this._emit({ kind: 'label', label: this.label });
+        if (this._intent === 'camera' && !this.hasVideo) {
+          // They wanted a camera but the phone is sending audio only — say so
+          // NOW, in the overlay, instead of recording black video later.
+          this._setOverlayStatus('⚠️ ' + this.label + ' is sharing audio only — turn ON "Also share camera" on the phone, then tap Start again.', 'pcw-err');
+        }
       } else if (msg.type === 'offer') {
         // Phone (re)offers — fresh or after a resume. Replace any old pc.
         try { this.pc?.close(); } catch { /* noop */ }
@@ -119,10 +126,17 @@ class PhoneCompanionClient {
           if (this.pc?.connectionState === 'connected' && this.stream && !this.connected) {
             this.connected = true;
             this._attachKeepaliveSink();
-            this._setOverlayStatus('✅ ' + (this.label || 'Phone') + ' is live — you can close this window', 'pcw-ok');
             this._emit({ kind: 'connected', label: this.label, hasVideo: this.hasVideo });
-            // Give the user a beat to read the success state, then tidy up.
-            setTimeout(() => this.closeOverlay(), 1800);
+            if (this._intent === 'camera' && !this.hasVideo) {
+              // They wanted a camera but the phone sent audio only — keep the
+              // overlay open with instructions instead of recording black later.
+              this._setOverlayStatus('⚠️ ' + (this.label || 'Phone') + ' connected with mic ONLY — turn ON "Also share camera" on the phone and tap Start again to add video.', 'pcw-err');
+            } else {
+              const media = this.hasVideo ? 'mic + camera' : 'mic';
+              this._setOverlayStatus('✅ ' + (this.label || 'Phone') + ' is live (' + media + ') — you can close this window', 'pcw-ok');
+              // Give the user a beat to read the success state, then tidy up.
+              setTimeout(() => this.closeOverlay(), 1800);
+            }
           }
         };
         this.pc.onicecandidate = (e) => {

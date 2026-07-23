@@ -6742,10 +6742,10 @@ async function ensurePhoneCompanion() {
   _phoneCompanion = pc;
   return pc;
 }
-ipcMain.handle('phone-companion:create-session', async () => {
+ipcMain.handle('phone-companion:create-session', async (_event, intent) => {
   try {
     const pc = await ensurePhoneCompanion();
-    return pc.createPairingSession();
+    return pc.createPairingSession({ wantVideo: intent === 'camera' });
   } catch (err) {
     console.error('[PhoneCompanion] start failed:', err.message);
     return { error: 'start-failed', message: err.message };

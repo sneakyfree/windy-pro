@@ -2918,24 +2918,39 @@ class SettingsPanel {
     } catch { select.value = 'default'; }
     if (!window.phoneCompanion) return;
     this._phoneConnectTarget = settingKey;
-    window.phoneCompanion.openConnectOverlay();
+    // Camera-picker origin → the phone page pre-enables "Also share camera"
+    // (audio-only-by-default was the 7-23 "connected but black" confusion).
+    window.phoneCompanion.openConnectOverlay(settingKey === 'cameraDeviceId' ? 'camera' : 'mic');
   }
 
-  /** Phone entries shared by both pickers. The live phone (if any) appears as
-   *  a selectable device; the connect action is always last. */
-  _appendPhoneOptions(select, kind) {
-    const phone = window.phoneCompanion;
-    if (!phone) return;
-    if (phone.connected && (kind === 'mic' || phone.hasVideo)) {
+
+  /**
+   * Replace a <select>'s options ONLY if they actually changed. The pickers
+   * re-enumerate on every click/open; unconditionally rebuilding the DOM made
+   * the open popup flutter (Grant, 7-23). No change -> zero DOM churn.
+   */
+  _applySelectOptions(select, entries) {
+    const cur = Array.from(select.options).map(o => o.value + ' ' + o.textContent).join('');
+    const next = entries.map(e => e.value + ' ' + e.label).join('');
+    if (cur === next) return;
+    select.innerHTML = '';
+    for (const e of entries) {
       const opt = document.createElement('option');
-      opt.value = 'phone:wifi';
-      opt.textContent = `📱 ${phone.label || 'Phone'} (WiFi)`;
+      opt.value = e.value;
+      opt.textContent = e.label;
       select.appendChild(opt);
     }
-    const connectOpt = document.createElement('option');
-    connectOpt.value = '__connect_phone__';
-    connectOpt.textContent = phone.connected ? '📱 Connect a different phone…' : '📱 Connect a phone…';
-    select.appendChild(connectOpt);
+  }
+
+  _phoneOptionEntries(kind) {
+    const phone = window.phoneCompanion;
+    if (!phone) return [];
+    const entries = [];
+    if (phone.connected && (kind === 'mic' || phone.hasVideo)) {
+      entries.push({ value: 'phone:wifi', label: `📱 ${phone.label || 'Phone'} (WiFi)` });
+    }
+    entries.push({ value: '__connect_phone__', label: phone.connected ? '📱 Connect a different phone…' : '📱 Connect a phone…' });
+    return entries;
   }
 
   async populateMicDevices() {
@@ -2943,14 +2958,11 @@ class SettingsPanel {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const mics = devices.filter(d => d.kind === 'audioinput');
       const select = this.panel.querySelector('#micSelect');
-      select.innerHTML = '<option value="default">System Default</option>';
-      mics.forEach(mic => {
-        const opt = document.createElement('option');
-        opt.value = mic.deviceId;
-        opt.textContent = mic.label || `Microphone ${mic.deviceId.slice(0, 8)}`;
-        select.appendChild(opt);
-      });
-      this._appendPhoneOptions(select, 'mic');
+      this._applySelectOptions(select, [
+        { value: 'default', label: 'System Default' },
+        ...mics.map(mic => ({ value: mic.deviceId, label: mic.label || `Microphone ${mic.deviceId.slice(0, 8)}` })),
+        ...this._phoneOptionEntries('mic'),
+      ]);
       // Restore saved selection; if the saved mic is gone (unplugged, phone
       // dropped), show System Default WITHOUT overwriting the saved setting —
       // the device is used again when it returns (same pattern as camera).
@@ -2960,9 +2972,10 @@ class SettingsPanel {
           const opts = Array.from(select.options);
           const byLabel = settings.micDeviceLabel
             && opts.find(o => o.textContent === settings.micDeviceLabel);
-          if (opts.some(o => o.value === settings.micDeviceId)) select.value = settings.micDeviceId;
-          else if (byLabel) select.value = byLabel.value; // id drifted — same device, new id
-          else select.value = 'default';
+          const want = opts.some(o => o.value === settings.micDeviceId) ? settings.micDeviceId
+            : byLabel ? byLabel.value // id drifted — same device, new id
+              : 'default';
+          if (select.value !== want) select.value = want;
         }
       }
     } catch (e) {
@@ -2976,15 +2989,12 @@ class SettingsPanel {
       if (!select) return;
       const devices = await navigator.mediaDevices.enumerateDevices();
       const cams = devices.filter(d => d.kind === 'videoinput');
-      select.innerHTML = '<option value="default">System Default</option>';
-      cams.forEach(cam => {
-        const opt = document.createElement('option');
-        opt.value = cam.deviceId;
-        // Labels are empty until camera permission has been granted once
-        opt.textContent = cam.label || `Camera ${cam.deviceId.slice(0, 8)}`;
-        select.appendChild(opt);
-      });
-      this._appendPhoneOptions(select, 'camera');
+      // Labels are empty until camera permission has been granted once
+      this._applySelectOptions(select, [
+        { value: 'default', label: 'System Default' },
+        ...cams.map(cam => ({ value: cam.deviceId, label: cam.label || `Camera ${cam.deviceId.slice(0, 8)}` })),
+        ...this._phoneOptionEntries('camera'),
+      ]);
       // Restore saved selection; if the saved camera is gone (unplugged,
       // phone out of range), fall back to showing System Default WITHOUT
       // overwriting the saved setting — the device may come back.
@@ -2994,9 +3004,10 @@ class SettingsPanel {
           const opts = Array.from(select.options);
           const byLabel = settings.cameraDeviceLabel
             && opts.find(o => o.textContent === settings.cameraDeviceLabel);
-          if (opts.some(o => o.value === settings.cameraDeviceId)) select.value = settings.cameraDeviceId;
-          else if (byLabel) select.value = byLabel.value; // id drifted — same device, new id
-          else select.value = 'default';
+          const want = opts.some(o => o.value === settings.cameraDeviceId) ? settings.cameraDeviceId
+            : byLabel ? byLabel.value // id drifted — same device, new id
+              : 'default';
+          if (select.value !== want) select.value = want;
         }
       }
     } catch (e) {

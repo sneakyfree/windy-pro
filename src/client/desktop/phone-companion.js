@@ -73,6 +73,18 @@ class PhoneCompanion extends EventEmitter {
     this.pageHtml = null;
   }
 
+  /** One-line event log (userData/phone-companion.log) — packaged apps have no
+   *  visible console, and field-debugging "connected but black" without this
+   *  meant pure archaeology (7-23). Content-free: event names + labels only. */
+  _log(line) {
+    try {
+      fs.appendFileSync(
+        path.join(this.userDataDir, 'phone-companion.log'),
+        `${new Date().toISOString()} ${line}\n`
+      );
+    } catch { /* logging must never break pairing */ }
+  }
+
   async _loadCert() {
     const certPath = path.join(this.userDataDir, CERT_FILE);
     try {
@@ -131,8 +143,9 @@ class PhoneCompanion extends EventEmitter {
     this.wss = null;
   }
 
-  /** New pairing token + the URL/QR the renderer shows. */
-  createPairingSession() {
+  /** New pairing token + the URL/QR the renderer shows.
+   *  opts.wantVideo pre-enables "Also share camera" on the phone page. */
+  createPairingSession(opts = {}) {
     // prune expired
     const now = Date.now();
     for (const [t, exp] of this.tokens) if (exp < now) this.tokens.delete(t);
@@ -142,7 +155,8 @@ class PhoneCompanion extends EventEmitter {
 
     const ip = lanAddress();
     if (!ip) return { error: 'no-lan', message: 'No WiFi/LAN network detected on this computer.' };
-    const url = `https://${ip}:${this._port}/?t=${token}`;
+    const url = `https://${ip}:${this._port}/?t=${token}${opts.wantVideo ? '&video=1' : ''}`;
+    this._log(`pairing session created (video=${opts.wantVideo ? 1 : 0})`);
 
     const qrgen = require('qrcode-generator');
     const qr = qrgen(0, 'M');
@@ -212,6 +226,7 @@ class PhoneCompanion extends EventEmitter {
     if (!mode) { socket.destroy(); return; }
 
     this.wss.handleUpgrade(req, socket, head, (ws) => {
+      this._log(`ws ${mode} from ${req.socket.remoteAddress}`);
       if (mode === 'join') {
         // A new join replaces any prior session (one phone at a time).
         try { this.session?.phoneWs?.close(); } catch { /* noop */ }
@@ -242,7 +257,10 @@ class PhoneCompanion extends EventEmitter {
       try { msg = JSON.parse(buf.toString()); } catch { return; }
       if (msg.type === 'hello') {
         this.session.label = String(msg.label || 'Phone').slice(0, 40);
+        this._log(`hello label="${this.session.label}" hasVideo=${!!msg.hasVideo}`);
         this.emit('phone-connected', { label: this.session.label });
+      } else if (msg.type !== 'ice' && msg.type !== 'level') {
+        this._log(`phone -> desktop: ${msg.type}`);
       }
       // Signaling (offer/ice/bye/level) is relayed verbatim to the renderer.
       this.emit('from-phone', msg);
@@ -251,12 +269,14 @@ class PhoneCompanion extends EventEmitter {
       if (!this.session || this.session.phoneWs !== ws) return;
       this.session.phoneWs = null;
       this.session.lastSeen = Date.now();
+      this._log('phone socket closed (grace window open)');
       this.emit('phone-socket-closed', { label: this.session.label });
       // If it doesn't resume within the grace window, it's a real disconnect.
       setTimeout(() => {
         if (this.session && this.session.phoneWs === null &&
             Date.now() - this.session.lastSeen >= RESUME_GRACE_MS - 1000) {
           this.session.closedForever = true;
+          this._log('phone disconnected (grace expired)');
           this.emit('phone-disconnected', { label: this.session.label });
         }
       }, RESUME_GRACE_MS);
@@ -268,6 +288,7 @@ class PhoneCompanion extends EventEmitter {
   sendToPhone(msg) {
     const ws = this.session?.phoneWs;
     if (!ws || ws.readyState !== 1) return false;
+    if (msg.type !== 'ice') this._log(`desktop -> phone: ${msg.type}`);
     try { ws.send(JSON.stringify(msg)); return true; } catch { return false; }
   }
 

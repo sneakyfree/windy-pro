@@ -107,7 +107,7 @@ contextBridge.exposeInMainWorld('windyAPI', {
   // Main process hosts the LAN server and relays signaling; the renderer
   // owns the RTCPeerConnection (phone-companion-client.js).
   phoneCompanion: {
-    createSession: () => ipcRenderer.invoke('phone-companion:create-session'),
+    createSession: (intent) => ipcRenderer.invoke('phone-companion:create-session', intent),
     toPhone: (msg) => ipcRenderer.send('phone-companion:to-phone', msg),
     endSession: () => ipcRenderer.invoke('phone-companion:end'),
     onEvent: (callback) => {

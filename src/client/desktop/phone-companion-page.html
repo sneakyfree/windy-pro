@@ -81,8 +81,16 @@
   const $ = (id) => document.getElementById(id);
   const status = (msg, cls) => { $('status').textContent = msg; $('status').className = cls || ''; };
 
-  const token = new URLSearchParams(location.search).get('t') || '';
+  const params = new URLSearchParams(location.search);
+  const token = params.get('t') || '';
   const AC = window.AudioContext || window.webkitAudioContext;
+
+  // The desktop's camera picker initiated this pairing — camera ON by default
+  // ("audio-only default + no warning" = the connected-but-black confusion).
+  if (params.get('video') === '1') {
+    $('shareCam').checked = true;
+    status('Ready — tap Start to share this phone\'s camera and microphone');
+  }
 
   // Default device name from the user agent — user can edit it.
   const ua = navigator.userAgent;
