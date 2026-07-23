@@ -107,6 +107,22 @@ class SoundManager {
     }
 }
 
+// ═══ Visual Effects Library ═══
+// The catalog of hand-selectable visual effects. Mirrors the sound library:
+// packs reference these by `type`, and users can override any hook's visual
+// in Settings → Theme Packs & Effects via the per-stage visual dropdowns.
+// `defaults._all` are the opts used when a user hand-selects the effect.
+
+const VISUAL_LIBRARY = [
+    { id: 'flash', name: '💡 Screen Flash', desc: 'Quick full-window color flash', defaults: { _all: { color: '#4ECDC4', duration: 350, intensity: 0.6 } } },
+    { id: 'border-glow', name: '🌟 Border Glow', desc: 'Soft glow around the window edge', defaults: { _all: { color: '#22C55E', duration: 600, intensity: 0.6 } } },
+    { id: 'particles', name: '🎈 Rising Particles', desc: 'Dots float up from the bottom', defaults: { _all: { color: '#22C55E', count: 18, duration: 1600, intensity: 0.8 } } },
+    { id: 'sparkles', name: '✨ Sparkles', desc: 'Twinkling stars across the window', defaults: { _all: { color: '#FCD34D', count: 16, duration: 1200, intensity: 0.8 } } },
+    { id: 'fireworks', name: '🎆 Fireworks', desc: 'Radial celebration bursts', defaults: { _all: { color: '#F59E0B', count: 3, duration: 1400, intensity: 0.8 } } },
+    { id: 'lightning', name: '⚡ Lightning', desc: 'Jagged bolts with a sky flash', defaults: { _all: { color: '#A78BFA', count: 2, duration: 900, intensity: 0.8 } } },
+    { id: 'shake', name: '💥 Window Shake', desc: 'Impact shake on the window', defaults: { _all: { duration: 350, intensity: 0.6 } } }
+];
+
 // ═══ Visual Overlay ═══
 // CSS overlay layer on TOP of recording UI.
 // pointer-events: none — effects don't block UI interaction.
@@ -124,8 +140,8 @@ class VisualOverlay {
 
     /**
      * Render a visual effect
-     * @param {string} type - 'flash', 'particles', 'shake', 'border-glow'
-     * @param {Object} opts - { color, intensity, duration }
+     * @param {string} type - 'flash', 'particles', 'sparkles', 'fireworks', 'lightning', 'shake', 'border-glow'
+     * @param {Object} opts - { color, intensity, duration, count }
      */
     renderEffect(type, opts = {}) {
         const dur = opts.duration || 500;
@@ -137,6 +153,15 @@ class VisualOverlay {
                 break;
             case 'particles':
                 this._particles(opts.color || '#22C55E', opts.count || 15, dur);
+                break;
+            case 'sparkles':
+                this._sparkles(opts.color || '#FCD34D', opts.count || 14, dur);
+                break;
+            case 'fireworks':
+                this._fireworks(opts.color || '#F59E0B', opts.count || 3, dur);
+                break;
+            case 'lightning':
+                this._lightning(opts.color || '#A78BFA', opts.count || 2, dur, intensity);
                 break;
             case 'shake':
                 this._shake(intensity, dur);
@@ -161,7 +186,7 @@ class VisualOverlay {
     }
 
     _particles(color, count, duration) {
-        const clamped = Math.min(count, 30);
+        const clamped = Math.min(count, 60);
         for (let i = 0; i < clamped; i++) {
             const p = document.createElement('div');
             p.className = 'effect-particle';
@@ -177,6 +202,108 @@ class VisualOverlay {
       `;
             this._overlay.appendChild(p);
             setTimeout(() => p.remove(), duration + delay + 50);
+        }
+    }
+
+    _sparkles(color, count, duration) {
+        // Twinkling stars scattered across the window (distinct from rising particles)
+        const clamped = Math.min(count, 40);
+        for (let i = 0; i < clamped; i++) {
+            const s = document.createElement('div');
+            s.className = 'effect-sparkle';
+            const x = Math.random() * 100;
+            const y = Math.random() * 100;
+            const size = 8 + Math.random() * 10;
+            const delay = Math.random() * (duration * 0.4);
+            s.textContent = '✦';
+            s.style.cssText = `
+        position: fixed; left: ${x}%; top: ${y}%;
+        font-size: ${size}px; color: ${color};
+        text-shadow: 0 0 ${Math.round(size / 2)}px ${color};
+        pointer-events: none; z-index: 9990; opacity: 0;
+        animation: effectSparkleTwinkle ${Math.max(400, Math.round(duration * 0.6))}ms ease-in-out ${delay}ms forwards;
+      `;
+            this._overlay.appendChild(s);
+            setTimeout(() => s.remove(), duration + delay + 100);
+        }
+    }
+
+    _fireworks(color, bursts, duration) {
+        // Radial bursts at random positions; burst count scales with intensity
+        const nBursts = Math.max(1, Math.min(bursts, 6));
+        const palette = [color, '#FCD34D', '#F87171', '#60A5FA', '#34D399'];
+        for (let b = 0; b < nBursts; b++) {
+            const cx = 15 + Math.random() * 70; // % of width
+            const cy = 15 + Math.random() * 50; // upper 2/3 of window
+            const bDelay = b * 180 + Math.random() * 120;
+            const sparks = 14;
+            for (let i = 0; i < sparks; i++) {
+                const p = document.createElement('div');
+                p.className = 'effect-firework-spark';
+                const angle = (i / sparks) * Math.PI * 2 + Math.random() * 0.4;
+                const dist = 40 + Math.random() * 70;
+                const c = palette[Math.floor(Math.random() * palette.length)];
+                p.style.cssText = `
+          position: fixed; left: ${cx}%; top: ${cy}%;
+          width: 4px; height: 4px; border-radius: 50%;
+          background: ${c}; box-shadow: 0 0 6px ${c};
+          pointer-events: none; z-index: 9990; opacity: 0;
+          --fx-dx: ${Math.round(Math.cos(angle) * dist)}px;
+          --fx-dy: ${Math.round(Math.sin(angle) * dist + 30)}px;
+          animation: effectFireworkBurst ${Math.max(500, Math.round(duration * 0.7))}ms cubic-bezier(0.1, 0.8, 0.3, 1) ${bDelay}ms forwards;
+        `;
+                this._overlay.appendChild(p);
+                setTimeout(() => p.remove(), duration + bDelay + 150);
+            }
+        }
+    }
+
+    _lightning(color, bolts, duration, intensity = 0.8) {
+        // Jagged SVG bolts from the top of the window + a brief sky flash.
+        // Bolt count scales with intensity (via the caller's count scaling).
+        const nBolts = Math.max(1, Math.min(bolts, 5));
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const svgNS = 'http://www.w3.org/2000/svg';
+        for (let b = 0; b < nBolts; b++) {
+            const delay = b * 130 + Math.random() * 80;
+            // Build a jagged polyline top → mid/lower window
+            const x0 = w * (0.15 + Math.random() * 0.7);
+            const segs = 7 + Math.floor(Math.random() * 4);
+            const endY = h * (0.5 + Math.random() * 0.35);
+            let pts = `${Math.round(x0)},0`;
+            let x = x0;
+            for (let i = 1; i <= segs; i++) {
+                x += (Math.random() - 0.5) * (w * 0.12);
+                pts += ` ${Math.round(x)},${Math.round((endY / segs) * i)}`;
+            }
+            const svg = document.createElementNS(svgNS, 'svg');
+            svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+            svg.setAttribute('class', 'effect-lightning');
+            svg.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none; z-index: 9991; opacity: 0;
+        animation: effectLightningFlicker ${Math.max(350, Math.round(duration * 0.5))}ms ease-out ${delay}ms forwards;
+      `;
+            const glow = document.createElementNS(svgNS, 'polyline');
+            glow.setAttribute('points', pts);
+            glow.setAttribute('fill', 'none');
+            glow.setAttribute('stroke', color);
+            glow.setAttribute('stroke-width', '6');
+            glow.setAttribute('stroke-linejoin', 'round');
+            glow.style.filter = `drop-shadow(0 0 8px ${color})`;
+            const core = document.createElementNS(svgNS, 'polyline');
+            core.setAttribute('points', pts);
+            core.setAttribute('fill', 'none');
+            core.setAttribute('stroke', '#FFFFFF');
+            core.setAttribute('stroke-width', '2');
+            core.setAttribute('stroke-linejoin', 'round');
+            svg.appendChild(glow);
+            svg.appendChild(core);
+            this._overlay.appendChild(svg);
+            // Sky flash behind the first bolt
+            if (b === 0) this._flash(color, Math.min(0.5, 0.25 + intensity * 0.3), Math.max(250, Math.round(duration * 0.4)));
+            setTimeout(() => svg.remove(), duration + delay + 120);
         }
     }
 
@@ -244,6 +371,15 @@ class EffectsEngine {
             paste: { enabled: true, volume: 100 }
         };
 
+        // Per-hook VISUAL overrides — parallel to the sound dropdowns.
+        // 'auto' = follow the active pack's visual, 'none' = no visual,
+        // or a VISUAL_LIBRARY id ('lightning', 'sparkles', …) hand-picked by the user.
+        // Honored in EVERY non-silent mode (unlike custom sounds, which are custom-mode only).
+        this._visualHooks = {
+            start: 'auto', during: 'auto', stop: 'auto',
+            process: 'auto', warning: 'auto', paste: 'auto'
+        };
+
         this._loadSettings();
         this._loadPacks();
     }
@@ -274,6 +410,12 @@ class EffectsEngine {
                     }
                 }
                 if (s.activePack) this._activePackId = s.activePack;
+                // Visual overrides (added later; absent key = all 'auto', fully backward compatible)
+                if (s.visualHooks) {
+                    for (const [k, v] of Object.entries(s.visualHooks)) {
+                        if (this._visualHooks[k] !== undefined && typeof v === 'string') this._visualHooks[k] = v;
+                    }
+                }
                 // Persist the heal once so it sticks and never re-fires (stamps schemaVersion 2).
                 if (isLegacy) this._saveSettings();
             }
@@ -293,7 +435,8 @@ class EffectsEngine {
                 surpriseCategory: this._surpriseCategory,
                 dynamicScaling: this._dynamicScaling,
                 favorites: this._favorites,
-                hookPoints: this._hookPoints
+                hookPoints: this._hookPoints,
+                visualHooks: this._visualHooks
             }));
         } catch (_) { }
     }
@@ -313,17 +456,20 @@ class EffectsEngine {
             }
         });
 
-        // Classic Beep (restore original behavior)
+        // Classic Beep (restore original behavior) — now with MINIMAL visuals:
+        // subtle glows and a small particle rise on paste. Understated on purpose;
+        // Wizard is the maximal end of the spectrum. Per-hook visual dropdowns
+        // let users mix, match, or turn any of these off.
         this._registerPack({
             id: 'classic-beep', name: '🔔 Classic ★', category: 'system',
-            description: 'Same as Default beeps, with volume control',
+            description: 'Same as Default beeps, with volume control + subtle visuals',
             hooks: {
-                start: { sound: { frequency: 880, duration: 0.08, type: 'sine', volume: 0.6 } },
+                start: { sound: { frequency: 880, duration: 0.08, type: 'sine', volume: 0.6 }, visual: { type: 'border-glow', color: '#22C55E', duration: 400, intensity: 0.3 } },
                 during: { sound: { frequency: 660, duration: 0.04, type: 'sine', volume: 0.35 } },
-                stop: { sound: { frequency: 440, duration: 0.1, type: 'sine', volume: 0.6 } },
+                stop: { sound: { frequency: 440, duration: 0.1, type: 'sine', volume: 0.6 }, visual: { type: 'border-glow', color: '#F59E0B', duration: 400, intensity: 0.3 } },
                 process: { sound: { frequency: 550, duration: 0.2, type: 'sine', volume: 0.6 } },
-                warning: { sound: [{ frequency: 800, duration: 0.12, type: 'sine', volume: 0.7 }, { frequency: 600, duration: 0.15, type: 'sine', volume: 0.7, delay: 0.15 }] },
-                paste: { sound: { sweep: { from: 600, to: 900 }, duration: 0.15, type: 'sine', volume: 0.6 } }
+                warning: { sound: [{ frequency: 800, duration: 0.12, type: 'sine', volume: 0.7 }, { frequency: 600, duration: 0.15, type: 'sine', volume: 0.7, delay: 0.15 }], visual: { type: 'flash', color: '#F59E0B', duration: 250, intensity: 0.3 } },
+                paste: { sound: { sweep: { from: 600, to: 900 }, duration: 0.15, type: 'sine', volume: 0.6 }, visual: { type: 'particles', color: '#22C55E', count: 12, duration: 1200, intensity: 0.5 } }
             }
         });
 
@@ -340,16 +486,19 @@ class EffectsEngine {
             }
         });
 
-        // Wizard
+        // Wizard — MAXIMUM SORCERY. Lightning at every dramatic beat, sparkles
+        // for ambient magic, and a full storm (bolts + sparkles + fireworks) on
+        // paste. All of it scales linearly with recording length (I4).
         this._registerPack({
             id: 'wizard', name: '⚡ Wizard', category: 'epic',
             description: 'Arcane energy and lightning for creative sessions',
             hooks: {
-                start: { sound: { sweep: { from: 200, to: 800 }, duration: 0.3, type: 'sawtooth', volume: 0.5 }, visual: { type: 'border-glow', color: '#8B5CF6', duration: 600 } },
-                during: { sound: { frequency: 350, duration: 0.08, type: 'sawtooth', volume: 0.3 }, visual: { type: 'border-glow', color: '#A78BFA', duration: 400, intensity: 0.15 } },
-                stop: { sound: { sweep: { from: 800, to: 200 }, duration: 0.4, type: 'sawtooth', volume: 0.5 }, visual: { type: 'flash', color: '#8B5CF6', duration: 300 } },
-                process: { sound: { sweep: { from: 300, to: 500 }, duration: 0.2, type: 'sawtooth', volume: 0.45 }, visual: { type: 'particles', color: '#C084FC', count: 8, duration: 1500 } },
-                paste: { sound: [{ sweep: { from: 100, to: 1200 }, duration: 0.3, type: 'sawtooth', volume: 0.6 }, { frequency: 1200, duration: 0.15, type: 'square', volume: 0.4, delay: 0.25 }], visual: { type: 'particles', color: '#A78BFA', count: 20, duration: 2000 } }
+                start: { sound: { sweep: { from: 200, to: 800 }, duration: 0.3, type: 'sawtooth', volume: 0.5 }, visual: [{ type: 'border-glow', color: '#8B5CF6', duration: 600 }, { type: 'lightning', color: '#A78BFA', count: 1, duration: 500, intensity: 0.4 }] },
+                during: { sound: { frequency: 350, duration: 0.08, type: 'sawtooth', volume: 0.3 }, visual: { type: 'sparkles', color: '#C084FC', count: 5, duration: 900, intensity: 0.4 } },
+                stop: { sound: { sweep: { from: 800, to: 200 }, duration: 0.4, type: 'sawtooth', volume: 0.5 }, visual: [{ type: 'lightning', color: '#8B5CF6', count: 2, duration: 700, intensity: 0.7 }, { type: 'shake', intensity: 0.3, duration: 300 }] },
+                process: { sound: { sweep: { from: 300, to: 500 }, duration: 0.2, type: 'sawtooth', volume: 0.45 }, visual: { type: 'sparkles', color: '#C084FC', count: 10, duration: 1500, intensity: 0.6 } },
+                warning: { sound: [{ frequency: 800, duration: 0.12, type: 'sawtooth', volume: 0.7 }, { frequency: 600, duration: 0.15, type: 'sawtooth', volume: 0.7, delay: 0.15 }], visual: { type: 'lightning', color: '#F87171', count: 1, duration: 500, intensity: 0.6 } },
+                paste: { sound: [{ sweep: { from: 100, to: 1200 }, duration: 0.3, type: 'sawtooth', volume: 0.6 }, { frequency: 1200, duration: 0.15, type: 'square', volume: 0.4, delay: 0.25 }], visual: [{ type: 'lightning', color: '#A78BFA', count: 3, duration: 1100, intensity: 0.9 }, { type: 'sparkles', color: '#C084FC', count: 22, duration: 1800, intensity: 0.8 }, { type: 'fireworks', color: '#8B5CF6', count: 3, duration: 1500, intensity: 0.8 }] }
             }
         });
 
@@ -362,7 +511,7 @@ class EffectsEngine {
                 during: { sound: { frequency: 180, duration: 0.04, type: 'square', volume: 0.35 }, visual: { type: 'border-glow', color: '#EF4444', duration: 300, intensity: 0.15 } },
                 stop: { sound: { sweep: { from: 600, to: 100 }, duration: 0.3, type: 'sawtooth', volume: 0.6 }, visual: { type: 'shake', intensity: 0.4, duration: 300 } },
                 process: { sound: { frequency: 280, duration: 0.25, type: 'square', volume: 0.55 }, visual: { type: 'border-glow', color: '#F59E0B', duration: 1000, intensity: 0.4 } },
-                paste: { sound: [{ frequency: 440, duration: 0.15, type: 'square', volume: 0.6 }, { frequency: 554, duration: 0.15, type: 'square', volume: 0.6, delay: 0.15 }, { frequency: 659, duration: 0.25, type: 'square', volume: 0.7, delay: 0.3 }], visual: { type: 'particles', color: '#F59E0B', count: 25, duration: 1500 } }
+                paste: { sound: [{ frequency: 440, duration: 0.15, type: 'square', volume: 0.6 }, { frequency: 554, duration: 0.15, type: 'square', volume: 0.6, delay: 0.15 }, { frequency: 659, duration: 0.25, type: 'square', volume: 0.7, delay: 0.3 }], visual: { type: 'fireworks', color: '#F59E0B', count: 4, duration: 1500, intensity: 0.8 } }
             }
         });
 
@@ -375,7 +524,7 @@ class EffectsEngine {
                 during: { sound: { frequency: 523, duration: 0.12, type: 'sine', volume: 0.3 }, visual: { type: 'border-glow', color: '#EC4899', duration: 400, intensity: 0.15 } },
                 stop: { sound: [{ frequency: 523, duration: 0.15, type: 'sine', volume: 0.5 }, { frequency: 392, duration: 0.2, type: 'sine', volume: 0.45, delay: 0.15 }], visual: { type: 'border-glow', color: '#6366F1', duration: 600 } },
                 process: { sound: { frequency: 587, duration: 0.25, type: 'sine', volume: 0.5 }, visual: { type: 'border-glow', color: '#F472B6', duration: 1000, intensity: 0.3 } },
-                paste: { sound: [{ frequency: 784, duration: 0.1, type: 'sine', volume: 0.5 }, { frequency: 988, duration: 0.08, type: 'sine', volume: 0.45, delay: 0.1 }, { frequency: 1175, duration: 0.12, type: 'sine', volume: 0.4, delay: 0.18 }, { frequency: 784, duration: 0.2, type: 'sine', volume: 0.35, delay: 0.3 }], visual: { type: 'particles', color: '#F9A8D4', count: 12, duration: 1800 } }
+                paste: { sound: [{ frequency: 784, duration: 0.1, type: 'sine', volume: 0.5 }, { frequency: 988, duration: 0.08, type: 'sine', volume: 0.45, delay: 0.1 }, { frequency: 1175, duration: 0.12, type: 'sine', volume: 0.4, delay: 0.18 }, { frequency: 784, duration: 0.2, type: 'sine', volume: 0.35, delay: 0.3 }], visual: { type: 'sparkles', color: '#F9A8D4', count: 14, duration: 1800, intensity: 0.7 } }
             }
         });
 
@@ -423,6 +572,10 @@ class EffectsEngine {
             warning: { enabled: true, volume: 85 },
             paste: { enabled: true, volume: 100 },
         };
+        this._visualHooks = {
+            start: 'auto', during: 'auto', stop: 'auto',
+            process: 'auto', warning: 'auto', paste: 'auto'
+        };
         this.sound.setMasterVolume(0.85);
         try { localStorage.setItem('windy_sfxVolume', '85'); } catch (_) { /* best-effort */ }
         this._saveSettings();
@@ -453,6 +606,42 @@ class EffectsEngine {
     setDynamicScaling(enabled) {
         this._dynamicScaling = enabled;
         this._saveSettings();
+    }
+
+    // ── Visual Hook Overrides ──
+
+    getVisualLibrary() {
+        return VISUAL_LIBRARY;
+    }
+
+    /**
+     * Set the visual for a hook: 'auto' (pack default), 'none', or a VISUAL_LIBRARY id.
+     */
+    setVisualHook(hook, value) {
+        if (this._visualHooks[hook] === undefined) return;
+        const valid = value === 'auto' || value === 'none' || VISUAL_LIBRARY.some(v => v.id === value);
+        if (!valid) return;
+        this._visualHooks[hook] = value;
+        this._saveSettings();
+    }
+
+    /**
+     * Preview a visual effect at full intensity (for Settings UI).
+     * @param {string|null} effectId - VISUAL_LIBRARY id, or null to preview the
+     *                                 active pack's visual for the given hook.
+     * @param {string} hook - hook key (used when effectId is null)
+     */
+    previewVisual(effectId, hook) {
+        try {
+            if (!effectId) {
+                const hookDef = this._activePack?.hooks?.[hook];
+                const list = hookDef?.visual ? (Array.isArray(hookDef.visual) ? hookDef.visual : [hookDef.visual]) : [];
+                for (const vis of list) this.visual.renderEffect(vis.type, vis);
+                return;
+            }
+            const entry = VISUAL_LIBRARY.find(v => v.id === effectId);
+            if (entry) this.visual.renderEffect(entry.id, entry.defaults?._all || {});
+        } catch (_) { /* effects must never break the app */ }
     }
 
     toggleFavorite(packId) {
@@ -501,6 +690,19 @@ class EffectsEngine {
         // Hook-point volume (0-100 → 0-1)
         const hookVolMul = hp.volume / 100;
 
+        // ── Linear dynamic scaling (I4) ──
+        // Bigger recordings = bigger effects, as a smooth linear ramp instead of
+        // the old 3-step function. wordCount is exact (paste); durationSec is the
+        // proxy for stop/process where the transcript isn't known yet (~2.2 words/s).
+        // 300+ words ≈ full storm; floor of 0.15 keeps short tests visible.
+        let intensity = 1.0;
+        if (this._dynamicScaling && (hook === 'paste' || hook === 'stop' || hook === 'process')) {
+            const words = (typeof metadata.wordCount === 'number' && metadata.wordCount > 0)
+                ? metadata.wordCount
+                : ((typeof metadata.durationSec === 'number' && metadata.durationSec > 0) ? metadata.durationSec * 2.2 : null);
+            if (words !== null) intensity = Math.max(0.15, Math.min(1, 0.15 + words / 300));
+        }
+
         // ── Custom Mode: each hook has its own chosen sound ──
         if (this._mode === 'custom') {
             try {
@@ -542,6 +744,8 @@ class EffectsEngine {
                     }
                 }
             } catch (e) { console.error('[EffectsEngine] Custom trigger error:', e); }
+            // Custom mode sounds handled — fall through so VISUALS still render.
+            this._renderHookVisual(hook, intensity);
             return;
         }
 
@@ -554,23 +758,11 @@ class EffectsEngine {
                 this._activePack = pack;
             }
         }
-        if (!pack) return;
 
-        const hookDef = pack.hooks?.[hook];
-        if (!hookDef) return;
+        const hookDef = pack?.hooks?.[hook];
 
-        // Calculate intensity (dynamic scaling for paste)
-        let intensity = 1.0;
-        if (hook === 'paste' && this._dynamicScaling && metadata.wordCount) {
-            if (metadata.wordCount < 50) intensity = 0.3;
-            else if (metadata.wordCount < 200) intensity = 0.7;
-            else intensity = 1.0;
-        }
-
-        // (hookVolMul already declared above)
-
-        // Play sound
-        if (hookDef.sound) {
+        // Play sound (intensity computed above — linear scaling)
+        if (hookDef?.sound) {
             if (Array.isArray(hookDef.sound)) {
                 const tones = hookDef.sound.map(t => ({
                     ...t,
@@ -585,16 +777,39 @@ class EffectsEngine {
             }
         }
 
-        // Show visual
-        if (hookDef.visual) {
-            const vis = hookDef.visual;
-            this.visual.renderEffect(vis.type, {
-                color: vis.color,
-                intensity: (vis.intensity || 0.5) * intensity,
-                duration: vis.duration || 500,
-                count: vis.count ? Math.round(vis.count * intensity) : undefined
-            });
-        }
+        // Show visual (honors per-hook user override; works even with no pack)
+        this._renderHookVisual(hook, intensity);
+    }
+
+    /**
+     * Resolve and render the visual(s) for a hook, honoring the user's per-hook
+     * override ('auto' | 'none' | VISUAL_LIBRARY id) and scaling with intensity.
+     * Pack visuals may be a single {type,...} object or an ARRAY of them (combos).
+     */
+    _renderHookVisual(hook, intensity = 1.0) {
+        try {
+            const override = this._visualHooks?.[hook] || 'auto';
+            if (override === 'none') return;
+
+            let visuals = null;
+            if (override === 'auto') {
+                visuals = this._activePack?.hooks?.[hook]?.visual || null;
+            } else {
+                const entry = VISUAL_LIBRARY.find(v => v.id === override);
+                if (entry) visuals = { type: entry.id, ...(entry.defaults?._all || {}) };
+            }
+            if (!visuals) return;
+
+            const list = Array.isArray(visuals) ? visuals : [visuals];
+            for (const vis of list) {
+                this.visual.renderEffect(vis.type, {
+                    color: vis.color,
+                    intensity: (vis.intensity || 0.5) * intensity,
+                    duration: vis.duration || 500,
+                    count: vis.count ? Math.max(1, Math.round(vis.count * intensity)) : undefined
+                });
+            }
+        } catch (_) { /* effects must never break the app */ }
     }
 
     /**
@@ -625,7 +840,8 @@ class EffectsEngine {
             }
         }
         if (hookDef.visual) {
-            this.visual.renderEffect(hookDef.visual.type, hookDef.visual);
+            const list = Array.isArray(hookDef.visual) ? hookDef.visual : [hookDef.visual];
+            for (const vis of list) this.visual.renderEffect(vis.type, vis);
         }
     }
 

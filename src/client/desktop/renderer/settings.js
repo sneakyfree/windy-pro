@@ -577,10 +577,10 @@ class SettingsPanel {
             <div id="sfxUnifiedHooks"></div>
 
             <div class="setting-row" style="margin-top:8px;">
-              <label for="sfxDynamicScaling">Scale paste effects with length</label>
+              <label for="sfxDynamicScaling">Scale effects with recording length</label>
               <input type="checkbox" id="sfxDynamicScaling" checked>
             </div>
-            <p class="settings-hint">Bigger recordings = bigger paste celebration.</p>
+            <p class="settings-hint">Linear ramp: the longer you speak, the bigger the stop, processing & paste effects. 300+ words = full storm.</p>
           </div>
         </div>
 
@@ -771,9 +771,15 @@ class SettingsPanel {
           badge.textContent = `${icons[engine] || '🌪️'} ${engine}`;
         }
       }
-      // Auto-sync Model Size dropdown to match engine selection
+      // Auto-sync Model Size dropdown to match engine selection.
+      // 'windytune' is excluded: WindyTune's model is owned by the MAIN process
+      // (windytune-start-model IPC + adaptive switches persisted to the store).
+      // This listener also fires from loadSettings()' synthetic change event on
+      // EVERY startup, and the old map value ('base') overwrote whatever rung
+      // WindyTune had persisted — Auto mode could never remember its model
+      // across restarts (found in the 2026-07-23 hand test).
       const modelMap = this.app?._engineModelMap;
-      if (modelMap && engine in modelMap && modelMap[engine]) {
+      if (engine !== 'windytune' && modelMap && engine in modelMap && modelMap[engine]) {
         const whisperModel = modelMap[engine];
         this.saveSetting('model', whisperModel);
         const modelSelect = this.panel.querySelector('#modelSelect');
@@ -2134,10 +2140,23 @@ class SettingsPanel {
       // Build per-hook UI rows (unified: dropdown + volume + mute + preview in each row)
       const formatInterval = (s) => s >= 60 ? `${Math.floor(s / 60)}m${s % 60 ? s % 60 + 's' : ''}` : `${s}s`;
 
+      // ── Visual effect options (parallel to the sound library) ──
+      // Unlike custom sounds (custom-mode only), visual overrides are honored in
+      // EVERY non-silent mode, so these dropdowns are always live.
+      const visualLib = (typeof fx.getVisualLibrary === 'function') ? fx.getVisualLibrary() : [];
+      const buildVisualOptions = (hookKey) => {
+        const cur = (fx._visualHooks && fx._visualHooks[hookKey]) || 'auto';
+        return [
+          `<option value="auto"${cur === 'auto' ? ' selected' : ''}>✨ Visual: Pack default</option>`,
+          `<option value="none"${cur === 'none' ? ' selected' : ''}>🚫 Visual: None</option>`,
+          ...visualLib.map(v => `<option value="${v.id}"${cur === v.id ? ' selected' : ''}>${v.name} — ${v.desc}</option>`)
+        ].join('');
+      };
+
       // Intro tip
       const introTip = document.createElement('div');
       introTip.className = 'sfx-hooks-intro';
-      introTip.innerHTML = `<strong>Every recording has 6 sound stages.</strong> Customize the sound effect, volume, or mute each one independently. Use a stock sound, pick from your library, or keep the pack default.`;
+      introTip.innerHTML = `<strong>Every recording has 6 stages.</strong> Customize the sound AND the visual effect for each one independently — sparkles, lightning, fireworks, or keep it subtle. Sounds come from stock packs or your library; visuals from the visual library.`;
       unifiedHooksContainer.appendChild(introTip);
 
       let stepNum = 0;
@@ -2158,6 +2177,9 @@ class SettingsPanel {
           </div>
           <select class="sfx-unified-select" id="uniSelect_${hd.key}" style="margin-bottom:6px;">
             ${buildHookOptions()}
+          </select>
+          <select class="sfx-unified-select sfx-visual-select" id="uniVisual_${hd.key}" title="Visual effect for this stage" style="margin-bottom:6px;">
+            ${buildVisualOptions(hd.key)}
           </select>
           <div class="sfx-unified-hook-bottom">
             <input type="range" class="sfx-hook-vol" id="uniVol_${hd.key}" min="0" max="100" value="${hookVol}" title="Volume">
@@ -2213,6 +2235,18 @@ class SettingsPanel {
           muteBtn.textContent = '🔊';
         });
 
+        // --- Visual dropdown (live in all non-silent modes) ---
+        const visSel = row.querySelector(`#uniVisual_${hd.key}`);
+        if (visSel) {
+          visSel.addEventListener('change', () => {
+            if (typeof fx.setVisualHook === 'function') fx.setVisualHook(hd.key, visSel.value);
+            // Instant feedback: show the chosen visual right away
+            if (visSel.value !== 'none' && typeof fx.previewVisual === 'function') {
+              fx.previewVisual(visSel.value === 'auto' ? null : visSel.value, hd.key);
+            }
+          });
+        }
+
         // --- Preview ---
         row.querySelector(`#uniPreview_${hd.key}`).addEventListener('click', () => {
           const cfg = customCfg[hd.key];
@@ -2227,6 +2261,7 @@ class SettingsPanel {
                 audio.play().catch(e => console.warn('Shuffle preview failed:', e));
               }
             }
+            try { if (typeof fx._renderHookVisual === 'function') fx._renderHookVisual(hd.key, 1); } catch (_) { }
           } else if (cfg?.type === 'library') {
             const lib = soundLibrary.find(s => s.id === cfg.libId);
             if (lib?.dataUrl) {
@@ -2234,10 +2269,13 @@ class SettingsPanel {
               audio.volume = Math.max(0.05, (volSlider.value / 100));
               audio.play().catch(e => console.warn('Hook preview failed:', e));
             }
+            try { if (typeof fx._renderHookVisual === 'function') fx._renderHookVisual(hd.key, 1); } catch (_) { }
           } else if (cfg?.type === 'stock' && cfg.packId) {
             fx.previewEffect(cfg.packId, cfg.hook);
+            // Also show the effective visual for this stage
+            try { if (typeof fx._renderHookVisual === 'function') fx._renderHookVisual(hd.key, 1); } catch (_) { }
           } else {
-            // Pack default — trigger hook
+            // Pack default — trigger hook (plays sound + effective visual)
             fx.trigger(hd.key);
           }
         });

@@ -47,11 +47,13 @@ class WindyApp {
     // Each Windy engine maps to its canonical lean CT2 model id (windy-*-ct2).
     // main.js resolves these to the bundled offline model dir of the same name —
     // NO legacy whisper-name translation (which mis-mapped Plus→large-v2 etc. and
-    // could trigger a 3GB HuggingFace download). WindyTune (Auto) stays on the
-    // always-bundled multilingual `base` for a rock-solid default. See BUNDLED_MODELS.
+    // could trigger a 3GB HuggingFace download). WindyTune (Auto) asks main for
+    // its start model at init (windytuneStartModel — a ladder model actually
+    // present on disk); the 'base' here is only the last-resort fallback when
+    // that IPC is unavailable (web build). See _windyTuneModelId().
     this._engineModelMap = {
       'local': null, // auto-detect
-      'windytune': 'base', // auto-pilot: bundled multilingual base — see BUNDLED_MODELS
+      'windytune': 'base', // fallback only — real value comes from _windyTuneModelId()
       'windy-nano': 'windy-nano-ct2', 'windy-lite': 'windy-lite-ct2', 'windy-core': 'windy-core-ct2',
       'windy-edge': 'windy-edge-ct2', 'windy-plus': 'windy-plus-ct2', 'windy-turbo': 'windy-turbo-ct2',
       'windy-pro-engine': 'windy-pro-engine-ct2',
@@ -60,6 +62,13 @@ class WindyApp {
       'windy-pro-engine-cpu': 'windy-pro-engine-ct2',
       'windy-translate-spark': null, 'windy-translate-standard': null
     };
+
+    // Filled during init from main (engine-catalog.js via IPC). Until then the
+    // inline _engineLadder copy and the 'base' map fallback above apply.
+    this._windyTuneModel = null;   // disk-verified start model for Auto mode
+    this._catalogLadder = null;    // canonical ladder from lib/engine-catalog.js
+    this._presentModels = null;    // ladder models actually on disk (main's view)
+    this._gpuPackEnabled = false;  // GPU engine pack accepted on this machine
 
     // Web Speech API state (kept for future Chrome-tab relay)
     this.speechRecognition = null;
@@ -271,13 +280,24 @@ class WindyApp {
         });
       }
 
+      // Resolve WindyTune's start model + canonical ladder from main (both
+      // disk-verified — see 'windytune-start-model' / 'engine-catalog:get' in
+      // main.js). Off-Electron the inline fallbacks apply.
+      try {
+        this._windyTuneModel = (await window.windyAPI?.windytuneStartModel?.()) || null;
+        const cat = await window.windyAPI?.getEngineCatalog?.();
+        if (cat?.ladder?.length) this._catalogLadder = cat.ladder;
+        if (cat?.presentModels) this._presentModels = cat.presentModels; // disk truth for the setEngine guard
+        this._gpuPackEnabled = !!cat?.gpuPackEnabled;
+      } catch (_) { /* inline fallbacks apply */ }
+
       // Show current engine/model in status bar badge on startup
       // A1: Default to a BUNDLED model, never the non-bundled 'small'. When the
       // engine is WindyTune (Auto — the default), the loaded model must come from
-      // the Auto path (_engineModelMap['windytune'] = 'base': fast + multilingual),
-      // never a heavy saved pin — so a fresh/unpinned app never auto-loads pro-engine.
+      // the Auto path (_windyTuneModelId(): a present ladder model), never a
+      // heavy saved pin — so a fresh/unpinned app never auto-loads pro-engine.
       const startupBadgeEngine = localStorage.getItem('windy_engine') || this.transcriptionEngine || 'windytune';
-      const autoModel = (this._engineModelMap && this._engineModelMap['windytune']) || 'base';
+      const autoModel = this._windyTuneModelId();
       const savedModel = (startupBadgeEngine === 'windytune')
         ? autoModel
         : (settings?.model || localStorage.getItem('windy_model') || autoModel);
@@ -1118,6 +1138,57 @@ class WindyApp {
       console.info(`[WindyTune] Upgrade suggested: ${data.currentModel} → ${data.suggestedModel}`);
       this._showWindyTuneUpgradeToast(data);
     });
+
+    // ═══ GPU Engine Pack ═══
+    window.windyAPI.onGpuPackOffer?.((data) => {
+      console.info(`[GpuPack] Offer received: ${data.reason}`);
+      this._showGpuPackOffer(data);
+    });
+    window.windyAPI.onGpuPackDownloadFailed?.((data) => {
+      this.showReconnectToast(`⚠️ GPU engine download failed: ${data.model}. Will retry from the engine menu.`);
+    });
+    window.windyAPI.onEngineCatalogUpdated?.((data) => {
+      if (data?.presentModels) this._presentModels = data.presentModels;
+    });
+  }
+
+  /**
+   * One-time GPU engine pack offer — shown only on hardware main has verified
+   * can actually run it (NVIDIA + CUDA, enough VRAM). Framed honestly: extra
+   * disk, real speedup, user's call. Decline is permanent (no nagging).
+   */
+  _showGpuPackOffer(data) {
+    if (document.getElementById('gpuPackOffer')) return;
+    const totalGB = data.downloadMB > 0 ? (data.downloadMB / 1024).toFixed(1) : 0;
+    const modelList = data.models.map(m => `${m.name} (${m.size})`).join(' · ');
+    const card = document.createElement('div');
+    card.id = 'gpuPackOffer';
+    card.style.cssText =
+      'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:100001;' +
+      'background:#11161f;border:1px solid rgba(139,92,246,0.5);border-radius:14px;' +
+      'box-shadow:0 16px 48px rgba(0,0,0,.6);padding:16px 18px;width:360px;font-size:13px;color:#e8edf2;';
+    card.innerHTML =
+      '<div style="font-weight:700;font-size:14px;margin-bottom:6px;">🚀 Your machine is in the top ~3%</div>' +
+      `<div style="color:#9aa6b2;margin-bottom:8px;">${data.gpuName}${data.vramGB ? ' · ' + data.vramGB + 'GB VRAM' : ''} can run the GPU engine pack — the three most accurate engines, GPU-accelerated:</div>` +
+      `<div style="margin-bottom:8px;">${modelList}</div>` +
+      `<div style="color:#9aa6b2;margin-bottom:12px;">${data.missing.length > 0
+        ? `Adds ~${totalGB} GB of downloads. You can prune any engine later from the engine menu.`
+        : 'Already on disk — this just switches them to GPU acceleration.'}</div>` +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+      '<button id="gpuPackDecline" style="padding:6px 14px;border-radius:8px;background:rgba(255,255,255,0.08);color:#9aa6b2;border:1px solid rgba(255,255,255,0.15);cursor:pointer;">No thanks</button>' +
+      '<button id="gpuPackAccept" style="padding:6px 14px;border-radius:8px;background:#7c3aed;color:#fff;border:none;cursor:pointer;font-weight:600;">Add GPU engines</button>' +
+      '</div>';
+    document.body.appendChild(card);
+    document.getElementById('gpuPackDecline').addEventListener('click', async () => {
+      card.remove();
+      await window.windyAPI.gpuPackResponse?.(false);
+    });
+    document.getElementById('gpuPackAccept').addEventListener('click', async () => {
+      card.remove();
+      this.showReconnectToast('🚀 GPU engine pack enabled — CUDA on' + (data.missing.length ? ', downloading engines…' : ''));
+      const res = await window.windyAPI.gpuPackResponse?.(true);
+      if (res?.enabled) this.showReconnectToast('✅ GPU engine pack ready');
+    });
   }
 
   /**
@@ -1470,10 +1541,14 @@ class WindyApp {
 
       case 'ack':
         console.debug('Ack:', msg.action, msg.success);
-        // Update model badge from start ack — but preserve engine name if custom engine selected
+        // Update model badge from start ack — but preserve engine name if custom
+        // engine selected. WindyTune is excluded on purpose: in Auto mode the
+        // badge must reflect the model the ENGINE just confirmed (msg.model),
+        // not the renderer's idea of it — engine truth wins.
         if (msg.action === 'start' && msg.model) {
           const engine = localStorage.getItem('windy_engine') || this.transcriptionEngine;
-          const isCustomEngine = this._engineModelMap && engine in this._engineModelMap && engine !== 'local';
+          const isCustomEngine = this._engineModelMap && engine in this._engineModelMap
+            && engine !== 'local' && engine !== 'windytune';
           this.updateModelBadge(isCustomEngine ? engine : msg.model);
         }
         // Update model badge from config ack
@@ -1830,7 +1905,18 @@ class WindyApp {
   // Engine catalog — id ↔ whisper model ↔ friendly name + size. Sizes/notes match
   // the website (TheVault). `model` lets the badge translate the raw whisper model
   // WindyTune is running (e.g. 'small') back into a real engine name (Windy Lite).
+  // The model WindyTune (Auto) should load: main's disk-verified pick when
+  // available, else the map's legacy 'base' fallback.
+  _windyTuneModelId() {
+    return this._windyTuneModel || (this._engineModelMap && this._engineModelMap['windytune']) || 'base';
+  }
+
   get _engineLadder() {
+    if (this._catalogLadder) {
+      // Canonical catalog from main (lib/engine-catalog.js) — same shape as the
+      // inline fallback below but guaranteed in sync with the main process.
+      return this._catalogLadder.map(e => ({ id: e.engineId, model: e.model, name: e.name, size: e.size, note: e.note }));
+    }
     return [
       { id: 'windy-nano',       model: 'windy-nano-ct2',       name: 'Windy Nano',  size: '38 MB',  note: 'Fastest · lightest' },
       { id: 'windy-lite',       model: 'windy-lite-ct2',       name: 'Windy Lite',  size: '72 MB',  note: 'Fast · balanced' },
@@ -1868,9 +1954,12 @@ class WindyApp {
     });
   }
 
-  _toggleEngineMenu() {
+  async _toggleEngineMenu() {
     const existing = document.getElementById('engineMenu');
     if (existing) { existing.remove(); return; }
+    // Per-engine usage stats (best-effort — menu renders without them)
+    let usage = null;
+    try { usage = await window.windyAPI?.engineUsageStats?.(); } catch (_) { }
     const badge = document.getElementById('modelBadge');
     if (!badge) return;
 
@@ -1932,7 +2021,28 @@ class WindyApp {
     menu.appendChild(hdr);
 
     for (const e of this._engineLadder) {
-      menu.appendChild(mkRow(e.id, e.name, e.note, e.size, !isAuto && current === e.id));
+      const u = usage?.models?.[e.model];
+      const noteBits = [e.note];
+      if (u && usage.total > 0 && u.count > 0) noteBits.push(`used ${u.percent}%`);
+      const row = mkRow(e.id, e.name, noteBits.join(' · '), e.size, !isAuto && current === e.id);
+      // Prune control — user-DOWNLOADED engines only (main enforces this too;
+      // bundled engines never show it). Reclaims disk; re-downloadable anytime.
+      if (u?.prunable) {
+        const prune = document.createElement('span');
+        prune.textContent = '🗑';
+        prune.title = `Remove the downloaded ${e.name} files (${e.size}) from disk`;
+        prune.style.cssText = 'flex:none;cursor:pointer;opacity:.55;padding:2px 4px;';
+        prune.addEventListener('click', async (ev) => {
+          ev.stopPropagation();
+          if (!confirm(`Remove ${e.name} (${e.size}) from disk?\n\nYou can re-download it anytime.`)) return;
+          const res = await window.windyAPI.pruneModel?.(e.model);
+          this.showReconnectToast(res?.ok ? `🗑 ${e.name} removed from disk` : `⚠️ ${res?.error || 'Prune failed'}`);
+          if (res?.ok && this._presentModels) this._presentModels = this._presentModels.filter(m => m !== e.model);
+          menu.remove();
+        });
+        row.appendChild(prune);
+      }
+      menu.appendChild(row);
     }
 
     const foot = document.createElement('div');
@@ -1972,14 +2082,16 @@ class WindyApp {
    */
   setEngine(engineId) {
     const isAuto = engineId === 'windytune';
-    const model = (this._engineModelMap && this._engineModelMap[engineId]) || 'base';
+    const model = isAuto
+      ? this._windyTuneModelId()
+      : ((this._engineModelMap && this._engineModelMap[engineId]) || 'base');
     // ── Tank-proof guard ──────────────────────────────────────────────────
-    // Only switch to a model that's actually bundled on the machine. Picking an
-    // un-bundled engine would make faster-whisper start a silent multi-GB download
-    // and the engine would appear to "hang" — the exact wobble we're killing.
-    // The Reader edition ships all 7 lean engines offline, so the full ladder is
-    // live; `base` is the always-present WindyTune default.
-    const BUNDLED_MODELS = ['base',
+    // Only switch to a model that's actually on disk. Picking an absent engine
+    // would make faster-whisper start a silent multi-GB download and the engine
+    // would appear to "hang" — the exact wobble we're killing. Main reports the
+    // real on-disk set via engine-catalog:get (updated after pack downloads);
+    // the hardcoded list is only the pre-fetch fallback.
+    const BUNDLED_MODELS = this._presentModels || ['base',
       'windy-nano-ct2', 'windy-lite-ct2', 'windy-core-ct2', 'windy-edge-ct2',
       'windy-plus-ct2', 'windy-turbo-ct2', 'windy-pro-engine-ct2'];
     if (!isAuto && !BUNDLED_MODELS.includes(model)) {
@@ -2068,12 +2180,15 @@ class WindyApp {
       if (auto || (activeEngine in byId)) {
         let eng;
         if (auto) {
-          // Reflect whichever model WindyTune is actually running (default small/Lite).
+          // Reflect whichever model WindyTune is actually running.
           const m = (modelName && byModel[modelName]) ? modelName
-            : ((this._engineModelMap && this._engineModelMap['windytune']) || 'base');
-          // WindyTune runs the bundled multilingual `base`, which has no ladder
-          // entry — present it as the Core engine so the badge stays human-readable.
-          eng = byModel[m] || byId['windy-core'];
+            : this._windyTuneModelId();
+          // Honesty rule: if the running model has no ladder entry (legacy
+          // 'base' etc.), the badge names the model it actually is — it must
+          // NEVER claim a Windy engine that isn't running. (The old fallback
+          // to byId['windy-core'] is exactly the false "Windy Core" badge the
+          // 2026-07-23 hand test caught.)
+          eng = byModel[m] || { name: `${m} (legacy)`, size: '' };
         } else {
           eng = byId[activeEngine];
         }
@@ -3148,15 +3263,17 @@ class WindyApp {
 
         // Show processing state (batch modes only)
         this.setState('buffering');
-        // Strand I: trigger process effect (first beep + repeating loop)
+        // Strand I: trigger process effect (first beep + repeating loop).
+        // durationSec lets effects scale linearly with recording length (I4).
         try {
-          if (this.effectsEngine) this.effectsEngine.trigger('process');
+          const fxProcMeta = { durationSec: elapsedMs / 1000 };
+          if (this.effectsEngine) this.effectsEngine.trigger('process', fxProcMeta);
           // Start repeating processing beep loop
           clearInterval(this._processEffectInterval);
           const processIntervalSec = parseInt(localStorage.getItem('windy_processInterval') || '10', 10);
           const processIntervalMs = Math.max(1000, processIntervalSec * 1000);
           this._processEffectInterval = setInterval(() => {
-            try { if (this.effectsEngine) this.effectsEngine.trigger('process'); } catch (_) { }
+            try { if (this.effectsEngine) this.effectsEngine.trigger('process', fxProcMeta); } catch (_) { }
           }, processIntervalMs);
         } catch (_) { }
         this.transcriptContent.innerHTML = '<p class="batch-processing-indicator"><span class="processing-spinner"></span> Processing your recording...<br><span style="font-size:12px;color:#888;">This may take a moment for longer recordings</span></p>';
@@ -3948,13 +4065,16 @@ class WindyApp {
           if (this._apiAudioChunks.length > 0) {
             const audioBlob = new Blob(this._apiAudioChunks, { type: mimeType });
             this.setState('buffering');
-            // Strand I: trigger process effect (first beep + repeating loop)
+            // Strand I: trigger process effect (first beep + repeating loop).
+            // durationSec lets effects scale linearly with recording length (I4).
             try {
-              if (this.effectsEngine) this.effectsEngine.trigger('process');
+              const fxStart = this._batchStartTime || this._sessionStartTime;
+              const fxProcMeta = { durationSec: fxStart ? Math.max(0, (Date.now() - fxStart) / 1000) : undefined };
+              if (this.effectsEngine) this.effectsEngine.trigger('process', fxProcMeta);
               clearInterval(this._processEffectInterval);
               const pSec = parseInt(localStorage.getItem('windy_processInterval') || '10', 10);
               this._processEffectInterval = setInterval(() => {
-                try { if (this.effectsEngine) this.effectsEngine.trigger('process'); } catch (_) { }
+                try { if (this.effectsEngine) this.effectsEngine.trigger('process', fxProcMeta); } catch (_) { }
               }, Math.max(1000, pSec * 1000));
             } catch (_) { }
             try {
@@ -4355,8 +4475,16 @@ class WindyApp {
       if (!fxMode || fxMode === 'default' || fxMode === 'silent') {
         this._playBlip(440, 0.1);
       }
-      // Strand I: trigger stop effect (pure observer, safe to fail)
-      try { if (this.effectsEngine) this.effectsEngine.trigger('stop'); } catch (_) { }
+      // Strand I: trigger stop effect (pure observer, safe to fail).
+      // Pass elapsed recording duration so effects scale linearly with length (I4) —
+      // the transcript isn't known yet at stop time, so duration is the proxy.
+      try {
+        if (this.effectsEngine) {
+          const fxStart = this._batchStartTime || this._sessionStartTime;
+          const durationSec = fxStart ? Math.max(0, (Date.now() - fxStart) / 1000) : undefined;
+          this.effectsEngine.trigger('stop', { durationSec });
+        }
+      } catch (_) { }
       // Strand I: stop "during" effect interval
       clearInterval(this._duringEffectInterval);
       if (this._batchRecorder) {

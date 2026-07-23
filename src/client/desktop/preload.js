@@ -23,6 +23,7 @@ const ALLOWED_RECEIVE_CHANNELS = new Set([
   'show-keyboard-shortcuts', 'system-theme-changed', 'pair-download-progress',
   'video-frame-to-preview', 'recording-state-to-preview',
   'windytune-model-switched', 'windytune-suggest-upgrade',
+  'gpu-pack-offer', 'gpu-pack-download-failed', 'engine-catalog-updated',
   // Wave 12 B4 — inbound deep-link payload from main.js handleDeepLink().
   // Renderer listens via windyAPI.onDeepLink(cb).
   'windy:deep-link',
@@ -139,8 +140,22 @@ contextBridge.exposeInMainWorld('windyAPI', {
   notifyRecordingStopped: () => ipcRenderer.send('recording-stopped'),
 
   // ═══ WindyTune Adaptive ═══
+  // Start model resolved by main against models actually present on disk —
+  // replaces the renderer's old hardcoded 'base' (not bundled in this edition).
+  windytuneStartModel: () => ipcRenderer.invoke('windytune-start-model'),
+  // Canonical engine ladder from lib/engine-catalog.js (sandboxed preload can't
+  // require() it directly). Renderer keeps an inline copy only as fallback.
+  getEngineCatalog: () => ipcRenderer.invoke('engine-catalog:get'),
   windytuneAcceptUpgrade: (model) => ipcRenderer.invoke('windytune-accept-upgrade', model),
   windytuneUndoSwitch: (oldModel) => ipcRenderer.invoke('windytune-undo-switch', oldModel),
+
+  // ═══ GPU Engine Pack + usage/prune ═══
+  onGpuPackOffer: (callback) => { safeOn('gpu-pack-offer', (event, data) => callback(data)); },
+  onGpuPackDownloadFailed: (callback) => { safeOn('gpu-pack-download-failed', (event, data) => callback(data)); },
+  onEngineCatalogUpdated: (callback) => { safeOn('engine-catalog-updated', (event, data) => callback(data)); },
+  gpuPackResponse: (accepted) => ipcRenderer.invoke('gpu-pack-response', accepted),
+  engineUsageStats: () => ipcRenderer.invoke('engine-usage-stats'),
+  pruneModel: (modelId) => ipcRenderer.invoke('prune-model', modelId),
   onWindyTuneModelSwitched: (callback) => {
     safeOn('windytune-model-switched', (event, data) => callback(data));
   },

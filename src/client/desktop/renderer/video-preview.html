@@ -43,6 +43,17 @@
             transform: scaleX(-1);
             display: block;
             background: #000;
+            /* This img is a passive mirror — it must NEVER receive pointer
+               input. With real frames loaded, a press-drag on a default img
+               starts Chromium's NATIVE IMAGE DRAG, which fires pointercancel
+               and kills the window-move gesture ~200ms in (root cause of the
+               Wayland "thumbnail won't move / glued to mouse" bug — trace:
+               [VP-WM] stop:cancel on every gesture, 2026-07-23). The rig never
+               caught it because with no camera the img is empty and nothing
+               native-drags. */
+            pointer-events: none;
+            -webkit-user-drag: none;
+            user-select: none;
         }
 
         /* Green LIVE strobe */
@@ -297,7 +308,7 @@
 
 <body>
     <div class="video-container" id="container">
-        <img id="videoEl" />
+        <img id="videoEl" draggable="false" />
         <span class="live-strobe" id="liveStrobe"><span class="dot"></span> LIVE</span>
         <span class="res-badge" id="resBadge">—</span>
         <span class="standby-label" id="standbyLabel">⏸ Standby</span>
@@ -425,18 +436,54 @@
         // window, so on Linux we disable the (dead) native drag and drive the
         // move ourselves — press anywhere on the video that isn't a resize
         // handle or a button. Mac/Windows keep the native app-region drag.
+        // Native drag/selection must never start anywhere in this window —
+        // it fires pointercancel and kills move/resize gestures mid-flight.
+        document.addEventListener('dragstart', (e) => e.preventDefault());
         if (window.videoPreviewAPI?.platform === 'linux' && window.videoPreviewAPI?.startMove) {
-            container.style['-webkit-app-region'] = 'no-drag';
-            const stopMove = () => { try { window.videoPreviewAPI.stopMove(); } catch (_) { } };
+            container.style.setProperty('-webkit-app-region', 'no-drag');
+            // Renderer-tick move: pointer capture pins the event stream to the
+            // container even as the window warps under the cursor, and every
+            // reposition requires a fresh pointermove tick — so if events die
+            // (capture lost, focus weirdness, anything), the window just stops
+            // following instead of staying glued to the mouse forever.
+            let _moving = false;
+            let _tickQueued = false;
+            let _capturedId = null;
+            const _wmLog = (msg) => { try { window.videoPreviewAPI.wmDebug(msg); } catch (_) { } };
+            const stopMove = (why) => {
+                if (!_moving) return;
+                _moving = false;
+                _wmLog('stop:' + why);
+                if (_capturedId != null) {
+                    try { container.releasePointerCapture(_capturedId); } catch (_) { }
+                    _capturedId = null;
+                }
+                try { window.videoPreviewAPI.stopMove(); } catch (_) { }
+            };
             container.addEventListener('pointerdown', (e) => {
                 if (e.button !== 0) return;
                 if (e.target.closest('.resize-handle, button, .preview-btn')) return;
+                _moving = true;
+                _wmLog('down b=' + e.buttons);
+                try { container.setPointerCapture(e.pointerId); _capturedId = e.pointerId; } catch (_) { }
                 try { window.videoPreviewAPI.startMove(); } catch (_) { }
             });
-            window.addEventListener('pointerup', stopMove);
-            window.addEventListener('mouseup', stopMove);
-            // Pointer released outside the window: first buttonless move ends it.
-            window.addEventListener('pointermove', (e) => { if (e.buttons === 0) stopMove(); });
+            container.addEventListener('pointermove', (e) => {
+                if (!_moving) return;
+                if (e.buttons === 0) { stopMove('buttons0'); return; }
+                // One tick per frame max — unthrottled 500Hz+ pointermove IPC
+                // floods setBounds and leaves ghost-frame trails on X11.
+                if (_tickQueued) return;
+                _tickQueued = true;
+                requestAnimationFrame(() => {
+                    _tickQueued = false;
+                    if (_moving) { try { window.videoPreviewAPI.moveTick(); } catch (_) { } }
+                });
+            });
+            container.addEventListener('pointerup', () => stopMove('up'));
+            container.addEventListener('pointercancel', () => stopMove('cancel'));
+            container.addEventListener('lostpointercapture', () => stopMove('lostcapture'));
+            window.addEventListener('blur', () => stopMove('blur'));
         }
 
         // ═══ Four-corner resize via main-process mouse polling ═══

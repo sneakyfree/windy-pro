@@ -24,6 +24,10 @@ const crashLogPath = _path.join(crashLogDir, 'crash.log');
 // src/client/desktop/lib/crash-summary.js (unit tested).
 const { safeErrorSummary: _safeErrorSummary } = require('./lib/crash-summary');
 
+// Canonical STT engine ladder + legacy whisper-name mapping (single source of
+// truth shared with the renderer via preload) — see lib/engine-catalog.js.
+const engineCatalog = require('./lib/engine-catalog');
+
 // Intel V2 (INTEL-CONTRACT-V2 §1.4): persist a pending-crash record so the
 // NEXT launch can emit client.crash. Only the 16-hex stack SIGNATURE is
 // stored (frames stripped to basenames before hashing) — never frames,
@@ -444,6 +448,27 @@ function migrateCollidingPasteHotkey() {
   console.info('[Migration] pasteTranscript Ctrl+Shift+V → Ctrl+Alt+V (Wayland paste-strategy collision — see paste-strategies.js CTRL_SHIFT_V_STRATEGIES)');
 }
 migrateCollidingPasteHotkey();
+
+// One-time migration (2026-07-23): stored engine.model / engine.selected can
+// still hold legacy whisper names ('base', 'small', 'faster-whisper-*') from
+// pre-ladder versions. WindyTune resolved those raw values, so it loaded
+// whisper `base` (not even bundled — faster-whisper falls through to the HF
+// cache/download path) while the badge claimed "Windy Core" via the shifted
+// legacy alias map. Migrate each value to its ct2 equivalent — but only when
+// that model is actually present on disk, so we never trade a working legacy
+// model for a missing one (tank-proof rule: no silent multi-GB downloads).
+function migrateLegacyEngineModelNames() {
+  for (const key of ['engine.model', 'engine.selected']) {
+    const current = store.get(key);
+    if (!current || typeof current !== 'string') continue;
+    const canonical = engineCatalog.canonicalModelId(current);
+    if (!canonical || canonical === current) continue;
+    if (_windyTuneModelDir(canonical) === null) continue;
+    store.set(key, canonical);
+    console.info(`[Migration] ${key}: legacy "${current}" → "${canonical}" (engine-catalog.js)`);
+  }
+}
+migrateLegacyEngineModelNames();
 
 let mainWindow = null;
 let miniWindow = null;
@@ -1152,7 +1177,10 @@ function startPythonServer() {
     '-m', serverModule,
     '--host', serverConfig.host,
     '--port', String(serverConfig.port),
-    '--model', modelSize
+    '--model', modelSize,
+    // 'cuda' once the GPU pack is accepted (engine.device); 'auto' otherwise.
+    // server.py already validates and falls back safely on a bad device.
+    '--device', store.get('engine.device') || 'auto'
   ], {
     cwd: projectRoot,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -2041,7 +2069,13 @@ function createVideoWindow() {
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    resizable: false, // We handle resize manually via IPC
+    // Resize is driven by our own corner handles via IPC, but the window MUST
+    // stay resizable:true — on Linux, resizable:false pins X11 size hints and
+    // Chromium clamps programmatic setBounds against them asymmetrically:
+    // grows apply, shrinks silently no-op (the "can only expand" bug,
+    // rig-reproduced 2026-07-23). Frameless windows expose no native resize
+    // affordance anyway, so our handles remain the only resize path.
+    resizable: true,
     skipTaskbar: true,
     hasShadow: false,
     // focusable:false is LOAD-BEARING, not cosmetic. This is a passive webcam
@@ -2119,6 +2153,15 @@ registerVideoIpc({
   videoDismissedRef: _videoDismissedRef,
   screen: require('electron').screen,
 });
+
+// Test hook: WINDY_TEST_SHOW_PREVIEW=1 opens the video-preview window at
+// startup so the headless screenshot rig can exercise its move/resize
+// gestures without driving a full recording. Inert in normal runs.
+if (process.env.WINDY_TEST_SHOW_PREVIEW === '1') {
+  app.whenReady().then(() => setTimeout(() => {
+    try { const w = createVideoWindow(); if (w) w.show(); } catch (e) { console.warn('[test-preview]', e.message); }
+  }, 4000));
+}
 
 // ═══════════════════════════════════════════
 //  FONT SIZE CONTROL
@@ -2787,10 +2830,13 @@ ipcMain.handle('mini-translate-speech', async (event, audioArray, sourceLang, ta
     'windy-translate-spark': { name: 'Windy Translate Spark', size: '929 MB', specialty: 'Fast multilingual translation. 100+ languages. LoRA-enhanced for priority pairs.' },
     'windy-translate-standard': { name: 'Windy Translate Standard', size: '2371 MB', specialty: 'Standard multilingual translation. 100+ languages. Higher quality than Spark.' },
 
-    // Legacy model names → Real Windy model equivalents (based on base_architecture)
+    // Legacy model names → Real Windy model equivalents. Keep aligned with
+    // LEGACY_MODEL_MAP in lib/engine-catalog.js (nano≈tiny, lite≈base,
+    // core≈small, edge≈medium) — the old version of this block was shifted one
+    // rung up (base claimed "Windy Core"), which produced a false engine badge.
     'tiny': { name: 'Windy Nano', size: '73 MB', specialty: 'Fastest engine. Best for quick dictation on powerful hardware.' },
-    'base': { name: 'Windy Core', size: '462 MB', specialty: 'Core engine. Recommended for most use cases.' },
-    'small': { name: 'Windy Lite', size: '140 MB', specialty: 'Lightweight engine with improved accuracy. Balanced speed/quality.' },
+    'base': { name: 'Windy Lite', size: '140 MB', specialty: 'Lightweight engine with improved accuracy. Balanced speed/quality.' },
+    'small': { name: 'Windy Core', size: '462 MB', specialty: 'Core engine. Recommended for most use cases.' },
     'medium': { name: 'Windy Edge', size: '1444 MB', specialty: 'High-accuracy engine. Best for professional transcription.' },
     'large-v3': { name: 'Windy Word Engine', size: '2945 MB', specialty: 'Ultra-fast large model. Maximum speed without sacrificing quality.' },
     'turbo': { name: 'Windy Turbo', size: '1544 MB', specialty: 'Latest-gen engine. State-of-the-art accuracy and robustness.' },
@@ -7060,17 +7106,10 @@ ipcMain.handle('reveal-in-folder', (e, filePath) => {
 // WindyTune Adaptive Model Tracker
 // ═══════════════════════════════════════════════════════════════════
 const _windyTuneHistory = [];          // Rolling window of last 10 transcription timings
-// The exact ct2 engine ids, ascending accuracy/cost. These are the model ids the
-// engine actually reports + accepts, so indexOf() against the running model id works.
-const WINDYTUNE_ALL_LADDER = [
-  'windy-nano-ct2',
-  'windy-lite-ct2',
-  'windy-core-ct2',
-  'windy-edge-ct2',
-  'windy-plus-ct2',
-  'windy-turbo-ct2',
-  'windy-pro-engine-ct2',
-]; // fastest/lightest → most accurate
+// The exact ct2 engine ids, ascending accuracy/cost, from the canonical
+// catalog. These are the model ids the engine actually reports + accepts, so
+// indexOf() against the running model id works.
+const WINDYTUNE_ALL_LADDER = engineCatalog.LADDER.map(e => e.model); // fastest/lightest → most accurate
 
 // Resolve a model id to its on-disk dir (user-downloaded OR bundled). Mirrors the
 // per-batch findModelDir helper but at module scope so the ladder can be derived
@@ -7105,6 +7144,7 @@ const WINDYTUNE_THRESHOLDS = {
 };
 
 function _windyTuneRecord(elapsed, audioDuration, model) {
+  _recordEngineUsage(model); // per-engine usage stats (menu %, prune UI)
   const ratio = elapsed / Math.max(audioDuration, 0.1);
   _windyTuneHistory.push({ elapsed, audioDuration, ratio, model, ts: Date.now() });
   // Keep last 10
@@ -7114,9 +7154,10 @@ function _windyTuneRecord(elapsed, audioDuration, model) {
   if (!isWindyTune) return; // Only adapt in WindyTune auto mode
 
   // Map the running model id onto the ct2 ladder so indexOf is never -1.
-  // Legacy whisper names ('base' / 'faster-whisper-base') and any model not on the
-  // ladder anchor at 'windy-lite-ct2' so downgrade (toward nano) + upgrade can fire.
-  let ladderModel = model;
+  // Legacy whisper names resolve through the catalog (e.g. 'base' →
+  // 'windy-lite-ct2'); anything still unresolved anchors at windy-lite so
+  // downgrade (toward nano) + upgrade can fire.
+  let ladderModel = engineCatalog.canonicalModelId(model) || model;
   if (WINDYTUNE_MODEL_LADDER.indexOf(ladderModel) < 0) {
     ladderModel = WINDYTUNE_MODEL_LADDER.indexOf('windy-lite-ct2') >= 0
       ? 'windy-lite-ct2'
@@ -7172,6 +7213,10 @@ function _windyTuneRecord(elapsed, audioDuration, model) {
 function _windyTuneSwitch(newModel, userMessage) {
   const oldModel = store.get('engine.model');
   store.set('engine.model', newModel);
+  // Timings from the outgoing model must not count toward the next
+  // downgrade/upgrade decision — slice(-2) spanning a switch mixed two models'
+  // ratios and could cascade a double-downgrade.
+  _windyTuneHistory.length = 0;
   console.info(`[WindyTune] Model switched: ${oldModel} → ${newModel}`);
 
   // Notify renderer
@@ -7195,6 +7240,34 @@ function _windyTuneSwitch(newModel, userMessage) {
   }
 }
 
+// IPC: canonical engine catalog for the renderer (sandboxed preload can't
+// require lib/engine-catalog.js). Static data — safe to hand over wholesale.
+ipcMain.handle('engine-catalog:get', async () => ({
+  ladder: engineCatalog.LADDER,
+  legacyModelMap: engineCatalog.LEGACY_MODEL_MAP,
+  gpuPack: engineCatalog.GPU_PACK,
+  gpuPackEnabled: !!store.get('engine.gpuPackEnabled'),
+  // Disk truth: which ladder models exist right now (bundled OR user-downloaded).
+  // The renderer's setEngine guard uses this instead of a hardcoded list.
+  presentModels: WINDYTUNE_ALL_LADDER.filter(m => _windyTuneModelDir(m) !== null),
+}));
+
+// IPC: which model should WindyTune (Auto) start on? Resolves against models
+// actually present on disk — never the renderer's old hardcoded 'base', which
+// isn't bundled in this edition and silently fell through to faster-whisper's
+// HF-cache/download path. Preference order: the stored selection if it's a
+// present ladder model, else Windy Core (the "recommended" rung), else the
+// middle of whatever rungs exist, else 'base' as the last-resort legacy value.
+ipcMain.handle('windytune-start-model', async () => {
+  const stored = engineCatalog.canonicalModelId(store.get('engine.model'));
+  if (stored && WINDYTUNE_MODEL_LADDER.includes(stored)) return stored;
+  if (WINDYTUNE_MODEL_LADDER.includes('windy-core-ct2')) return 'windy-core-ct2';
+  if (WINDYTUNE_MODEL_LADDER.length > 0) {
+    return WINDYTUNE_MODEL_LADDER[Math.floor((WINDYTUNE_MODEL_LADDER.length - 1) / 2)];
+  }
+  return 'base';
+});
+
 // IPC: User accepts/rejects upgrade suggestion from renderer
 ipcMain.handle('windytune-accept-upgrade', async (event, newModel) => {
   console.info(`[WindyTune] User accepted upgrade to ${newModel}`);
@@ -7206,6 +7279,125 @@ ipcMain.handle('windytune-undo-switch', async (event, oldModel) => {
   console.info(`[WindyTune] User undid model switch → reverting to ${oldModel}`);
   _windyTuneSwitch(oldModel, `Reverted to ${oldModel}`);
   return { ok: true };
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// GPU Engine Pack — detect capable hardware, offer once, enable CUDA
+// ═══════════════════════════════════════════════════════════════════
+// The pack unlocks the 3 clinic-champion heavy engines (engine-catalog
+// GPU_PACK) and flips the CT2 engine to device=cuda. NVIDIA-only in v1:
+// CT2 has no Metal backend, so Apple Silicon is never offered a pack it
+// couldn't actually run (gpu-detect.js documents the gate).
+const gpuDetect = require('./lib/gpu-detect');
+
+async function maybeOfferGpuPack() {
+  try {
+    if (store.get('engine.gpuPackOffered')) return;
+    const profile = await gpuDetect.detectGpu();
+    const verdict = gpuDetect.assessGpu(profile);
+    console.info(`[GpuPack] ${verdict.capable ? 'CAPABLE' : 'not offered'}: ${verdict.reason}`);
+    if (!verdict.capable) return; // stay silent on incapable machines — no nag, re-checked next launch
+    const missing = engineCatalog.GPU_PACK.models.filter(m => _windyTuneModelDir(m) === null);
+    const downloadMB = missing.reduce((s, m) => s + (engineCatalog.GPU_PACK.downloadMB[m] || 0), 0);
+    safeSend('gpu-pack-offer', {
+      gpuName: profile.name,
+      vramGB: profile.vramGB,
+      models: engineCatalog.GPU_PACK.models.map(m => {
+        const e = engineCatalog.entryForModel(m);
+        return { model: m, name: e ? e.name : m, size: e ? e.size : '' };
+      }),
+      missing,
+      downloadMB,
+      reason: verdict.reason,
+    });
+  } catch (err) {
+    console.warn('[GpuPack] offer check failed:', err.message);
+  }
+}
+
+ipcMain.handle('gpu-pack-response', async (event, accepted) => {
+  store.set('engine.gpuPackOffered', true); // one-time either way — never nag
+  if (!accepted) {
+    console.info('[GpuPack] User declined');
+    return { ok: true, enabled: false };
+  }
+  store.set('engine.gpuPackEnabled', true);
+  store.set('engine.device', 'cuda');
+  console.info('[GpuPack] Accepted — CUDA on, ensuring pack models are present');
+  // Hot-switch the running engine to CUDA (server hot-reloads device over WS)
+  try {
+    const WebSocket = require('ws');
+    const serverConfig = store.get('server', { host: '127.0.0.1', port: 9876 });
+    const ws = new WebSocket(`ws://${serverConfig.host}:${serverConfig.port}`);
+    ws.on('open', () => {
+      ws.send(JSON.stringify({ action: 'config', config: { device: 'cuda' } }));
+      setTimeout(() => ws.close(), 5000);
+    });
+    ws.on('error', () => { /* server may be restarting */ });
+  } catch (_) { }
+  // Download any pack models this build doesn't bundle (flagship bundles all).
+  const missing = engineCatalog.GPU_PACK.models.filter(m => _windyTuneModelDir(m) === null);
+  for (const m of missing) {
+    try {
+      await downloadModel(m);
+      safeSend('engine-catalog-updated', { presentModels: WINDYTUNE_ALL_LADDER.filter(x => _windyTuneModelDir(x) !== null) });
+    } catch (err) {
+      console.error(`[GpuPack] download failed for ${m}:`, err.message);
+      safeSend('gpu-pack-download-failed', { model: m, error: err.message });
+    }
+  }
+  return { ok: true, enabled: true, downloaded: missing };
+});
+
+// ═══ Per-engine usage stats + pruning ═══
+// Usage is counted at the single transcription choke point (_windyTuneRecord).
+// Prune only ever deletes USER-DOWNLOADED model dirs (~/.windy-pro/model/):
+// bundled models live inside the signed app bundle and are never touched.
+function _recordEngineUsage(model) {
+  try {
+    const canonical = engineCatalog.canonicalModelId(model) || model;
+    const stats = store.get('engine.usageStats') || {};
+    stats[canonical] = (stats[canonical] || 0) + 1;
+    store.set('engine.usageStats', stats);
+  } catch (_) { /* stats are best-effort */ }
+}
+
+ipcMain.handle('engine-usage-stats', async () => {
+  const stats = store.get('engine.usageStats') || {};
+  const total = Object.values(stats).reduce((s, n) => s + n, 0);
+  const userModelRoot = path.join(os.homedir(), '.windy-pro', 'model');
+  const result = {};
+  for (const m of WINDYTUNE_ALL_LADDER) {
+    const count = stats[m] || 0;
+    const userDir = path.join(userModelRoot, m);
+    result[m] = {
+      count,
+      percent: total > 0 ? Math.round((count / total) * 100) : 0,
+      prunable: fs.existsSync(path.join(userDir, 'model.bin')), // user-downloaded only
+    };
+  }
+  return { total, models: result };
+});
+
+ipcMain.handle('prune-model', async (event, modelId) => {
+  // Only canonical ladder models, only from the user download dir.
+  if (!WINDYTUNE_ALL_LADDER.includes(modelId)) {
+    return { ok: false, error: 'unknown model' };
+  }
+  const userDir = path.join(os.homedir(), '.windy-pro', 'model', modelId);
+  if (!fs.existsSync(path.join(userDir, 'model.bin'))) {
+    return { ok: false, error: 'not a user-downloaded model (bundled engines cannot be pruned)' };
+  }
+  if (store.get('engine.model') === modelId) {
+    return { ok: false, error: 'engine is currently selected — switch engines first' };
+  }
+  try {
+    fs.rmSync(userDir, { recursive: true, force: true });
+    console.info(`[Prune] Removed user model dir: ${userDir}`);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -9394,15 +9586,20 @@ function downloadModel(modelName) {
 
     console.info(`[ModelDownload] Starting download: ${modelName}`);
 
-    // Determine HuggingFace repo name (translation models use underscores)
-    let repoName = modelName;
-    if (modelName === 'windy-translate-spark') {
-      repoName = 'windy-translate-spark';
-    } else if (modelName === 'windy-translate-standard') {
-      repoName = 'windy-translate-standard';
-    }
+    // Resolve the HF repo. Voice ct2 models were renamed WindyLabs/windy-* →
+    // WindyProLabs/windy-stt-*-ct2 (2026-07 HF audit) — the catalog map is
+    // authoritative. Anything unmapped keeps the legacy WindyLabs/<name> form.
+    const catalogRepo = engineCatalog.HF_REPO_FOR_MODEL[modelName];
+    const hfRepo = catalogRepo || ('WindyLabs/' + modelName);
 
-    const localDir = path.join(os.homedir(), '.windy-pro', 'models', modelName);
+    // Voice ct2 models MUST land in ~/.windy-pro/model/<id>/ (singular) — that
+    // is the only user dir the engine's findModelDir()/_windyTuneModelDir()
+    // resolve. The old ~/.windy-pro/models/ (plural) target was a dead drop:
+    // downloads completed but no code path ever loaded them.
+    const isVoiceCt2 = /-ct2$/.test(modelName);
+    const localDir = isVoiceCt2
+      ? path.join(os.homedir(), '.windy-pro', 'model', modelName)
+      : path.join(os.homedir(), '.windy-pro', 'models', modelName);
 
     const proc = require('child_process').spawn(pythonExe, ['-c', `
 import sys
@@ -9413,7 +9610,7 @@ try:
     print("LOADING", flush=True)
     local_dir = ${JSON.stringify(localDir)}
     os.makedirs(local_dir, exist_ok=True)
-    snapshot_download(${JSON.stringify('WindyLabs/' + repoName)}, local_dir=local_dir)
+    snapshot_download(${JSON.stringify(hfRepo)}, local_dir=local_dir)
     print("DONE", flush=True)
 except Exception as e:
     print(f"ERROR {e}", flush=True)
@@ -10586,6 +10783,9 @@ app.whenReady().then(async () => {
   setTimeout(() => {
     // Validate license (non-blocking)
     validateLicense().catch(e => console.error('[License] Validation error:', e.message));
+
+    // One-time GPU engine pack offer on capable NVIDIA machines (silent otherwise)
+    maybeOfferGpuPack().catch(e => console.warn('[GpuPack] offer error:', e.message));
 
     // Migrate unencrypted/legacy models to WMOD format (one-time, idempotent)
     migrateUnencryptedModels().catch(e => console.error('[Migration] Error:', e.message));
