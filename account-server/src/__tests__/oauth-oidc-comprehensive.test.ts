@@ -103,8 +103,8 @@ function mockDbPrepare(sql: string) {
       }
       // INSERT INTO refresh_tokens
       if (sql.includes('INSERT INTO refresh_tokens')) {
-        const [token, userId, expiresAt] = args;
-        refreshTokens[token] = { token, user_id: userId, expires_at: expiresAt };
+        const [token, userId, expiresAt, clientId, scope] = args;
+        refreshTokens[token] = { token, user_id: userId, expires_at: expiresAt, client_id: clientId ?? null, scope: scope ?? null };
         return { changes: 1 };
       }
       // DELETE FROM refresh_tokens
@@ -337,11 +337,13 @@ function insertAuthCode(opts: {
 }
 
 /** Insert a refresh token directly. */
-function insertRefreshToken(token: string, userId: string = TEST_USER_ID, expiresAt?: string) {
+function insertRefreshToken(token: string, userId: string = TEST_USER_ID, expiresAt?: string, clientId?: string, scope?: string) {
   refreshTokens[token] = {
     token,
     user_id: userId,
     expires_at: expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    client_id: clientId ?? null,
+    scope: scope ?? null,
   };
 }
 
@@ -1126,5 +1128,179 @@ describe('Unsupported Grant Type', () => {
       .expect(400);
 
     expect(res.body.error).toBe('unsupported_grant_type');
+  });
+});
+
+// ═══════════════════════════════════════════
+//  CONSENT-BOUND SCOPES + CLIENT-BOUND REFRESH
+// ═══════════════════════════════════════════
+
+describe('Consent-bound scopes (third-party clients)', () => {
+  afterEach(() => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*'];
+  });
+
+  async function exchangeCode(clientId: string, clientSecret: string | null, code: string) {
+    return request(app)
+      .post('/api/v1/oauth/token')
+      .send({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: 'https://app.test.com/callback',
+        client_id: clientId,
+        client_secret: clientSecret,
+      });
+  }
+
+  it('third-party token carries ONLY the consented scopes, not the full identity scope set', async () => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*', 'windy_chat:read'];
+    const { clientId, clientSecret } = registerClient({ isFirstParty: false });
+    insertAuthCode({ code: 'consent-narrow-1', clientId, scope: 'openid windy_chat:read' });
+
+    const res = await exchangeCode(clientId, clientSecret, 'consent-narrow-1');
+    expect(res.status).toBe(200);
+
+    const decoded = jwt.decode(res.body.access_token) as any;
+    expect(decoded.scopes).toEqual(['windy_chat:read']);
+    expect(decoded.scopes).not.toContain('windy_pro:*');
+    // The OIDC `scope` string claim still reflects the full consent string
+    expect(decoded.scope).toBe('openid windy_chat:read');
+  });
+
+  it('a consented scope the identity does not hold is NOT minted (no privilege invention)', async () => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*'];
+    const { clientId, clientSecret } = registerClient({ isFirstParty: false });
+    insertAuthCode({ code: 'consent-narrow-2', clientId, scope: 'windy_mail:send' });
+
+    const res = await exchangeCode(clientId, clientSecret, 'consent-narrow-2');
+    expect(res.status).toBe(200);
+
+    const decoded = jwt.decode(res.body.access_token) as any;
+    expect(decoded.scopes).toEqual([]);
+  });
+
+  it('product wildcard held by the identity covers a narrower consented scope', async () => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*'];
+    const { clientId, clientSecret } = registerClient({ isFirstParty: false });
+    insertAuthCode({ code: 'consent-narrow-3', clientId, scope: 'windy_pro:read' });
+
+    const res = await exchangeCode(clientId, clientSecret, 'consent-narrow-3');
+    expect(res.status).toBe(200);
+
+    const decoded = jwt.decode(res.body.access_token) as any;
+    expect(decoded.scopes).toEqual(['windy_pro:read']);
+  });
+
+  it('first-party client tokens keep the full identity scope set (regression guard)', async () => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*', 'windy_chat:read'];
+    const { clientId, clientSecret } = registerClient({ isFirstParty: true });
+    insertAuthCode({ code: 'consent-fp-1', clientId, scope: 'openid profile' });
+
+    const res = await exchangeCode(clientId, clientSecret, 'consent-fp-1');
+    expect(res.status).toBe(200);
+
+    const decoded = jwt.decode(res.body.access_token) as any;
+    expect(decoded.scopes).toEqual(['windy_pro:*', 'windy_chat:read']);
+  });
+});
+
+describe('Client-bound refresh tokens', () => {
+  afterEach(() => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*'];
+  });
+
+  it('refresh re-mints the consented scope, never a blanket windy_pro:*', async () => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*', 'windy_chat:read'];
+    const { clientId, clientSecret } = registerClient({ isFirstParty: false });
+    insertAuthCode({ code: 'rt-scope-1', clientId, scope: 'windy_chat:read' });
+
+    const exchange = await request(app)
+      .post('/api/v1/oauth/token')
+      .send({
+        grant_type: 'authorization_code',
+        code: 'rt-scope-1',
+        redirect_uri: 'https://app.test.com/callback',
+        client_id: clientId,
+        client_secret: clientSecret,
+      });
+    expect(exchange.status).toBe(200);
+
+    const refresh = await request(app)
+      .post('/api/v1/oauth/token')
+      .send({
+        grant_type: 'refresh_token',
+        refresh_token: exchange.body.refresh_token,
+        client_id: clientId,
+        client_secret: clientSecret,
+      });
+    expect(refresh.status).toBe(200);
+
+    const decoded = jwt.decode(refresh.body.access_token) as any;
+    expect(decoded.scopes).toEqual(['windy_chat:read']);
+    expect(decoded.scopes).not.toContain('windy_pro:*');
+  });
+
+  it('a bound refresh token presented by a DIFFERENT client is rejected', async () => {
+    const { clientId: ownerClient } = registerClient({ isFirstParty: false });
+    const { clientId: otherClient, clientSecret: otherSecret } = registerClient({ isFirstParty: false });
+    insertRefreshToken('rt-bound-cross', TEST_USER_ID, undefined, ownerClient, 'windy_chat:read');
+
+    const res = await request(app)
+      .post('/api/v1/oauth/token')
+      .send({
+        grant_type: 'refresh_token',
+        refresh_token: 'rt-bound-cross',
+        client_id: otherClient,
+        client_secret: otherSecret,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_grant');
+    // Token must NOT have been rotated away by the failed attempt
+    expect(refreshTokens['rt-bound-cross']).toBeDefined();
+  });
+
+  it('a bound refresh token presented with NO client_id is rejected', async () => {
+    const { clientId } = registerClient({ isFirstParty: false });
+    insertRefreshToken('rt-bound-anon', TEST_USER_ID, undefined, clientId, 'windy_chat:read');
+
+    const res = await request(app)
+      .post('/api/v1/oauth/token')
+      .send({ grant_type: 'refresh_token', refresh_token: 'rt-bound-anon' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_grant');
+  });
+
+  it('a bound refresh token works for its own client (and rotates)', async () => {
+    identityScopes[TEST_USER_ID] = ['windy_pro:*', 'windy_chat:read'];
+    const { clientId, clientSecret } = registerClient({ isFirstParty: false });
+    insertRefreshToken('rt-bound-own', TEST_USER_ID, undefined, clientId, 'windy_chat:read');
+
+    const res = await request(app)
+      .post('/api/v1/oauth/token')
+      .send({
+        grant_type: 'refresh_token',
+        refresh_token: 'rt-bound-own',
+        client_id: clientId,
+        client_secret: clientSecret,
+      });
+
+    expect(res.status).toBe(200);
+    expect(refreshTokens['rt-bound-own']).toBeUndefined(); // rotated
+    const decoded = jwt.decode(res.body.access_token) as any;
+    expect(decoded.scopes).toEqual(['windy_chat:read']);
+  });
+
+  it('legacy refresh tokens with no client binding keep working unchanged', async () => {
+    insertRefreshToken('rt-legacy-compat');
+
+    const res = await request(app)
+      .post('/api/v1/oauth/token')
+      .send({ grant_type: 'refresh_token', refresh_token: 'rt-legacy-compat' });
+
+    expect(res.status).toBe(200);
+    const decoded = jwt.decode(res.body.access_token) as any;
+    expect(decoded.scopes).toEqual(['windy_pro:*']);
   });
 });

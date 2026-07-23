@@ -898,6 +898,16 @@ function handleRefreshTokenGrant(req: Request, res: Response) {
     return res.status(400).json({ error: 'invalid_grant', error_description: 'Invalid or expired refresh token' });
   }
 
+  // Client binding: a refresh token minted for an OAuth client may only be
+  // redeemed by that same client. Rows with no client_id predate the binding
+  // (or came from the first-party /auth flow) and keep the legacy behavior.
+  if (stored.client_id && stored.client_id !== client_id) {
+    return res.status(400).json({
+      error: 'invalid_grant',
+      error_description: 'Refresh token was not issued to this client',
+    });
+  }
+
   // Verify client if provided
   if (client_id) {
     const client = db.prepare('SELECT * FROM oauth_clients WHERE client_id = ?').get(client_id) as any;
@@ -916,7 +926,14 @@ function handleRefreshTokenGrant(req: Request, res: Response) {
     return res.status(400).json({ error: 'invalid_grant', error_description: 'User not found' });
   }
 
-  const tokens = generateOAuthTokens(user.id, 'windy_pro:*', client_id || 'windy-identity');
+  // Re-mint the scope the original grant consented to — never a blanket
+  // windy_pro:* (a third-party refresh must not widen what consent granted).
+  const grantScope = stored.scope || 'windy_pro:*';
+  const tokens = generateOAuthTokens(user.id, grantScope, stored.client_id || client_id || 'windy-identity');
+
+  logAuditEvent('oauth_token_issued' as any, user.id, {
+    client_id: stored.client_id || client_id || null, grant_type: 'refresh_token',
+  });
 
   res.json({
     access_token: tokens.accessToken,
@@ -1459,6 +1476,24 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
     identityScopes = rows.length > 0 ? rows.map(r => r.scope) : ['windy_pro:*'];
   } catch { identityScopes = ['windy_pro:*']; }
 
+  // Consent binding: a third-party client's token must carry only the scopes
+  // the user consented to (∩ what the identity actually holds), never the
+  // identity's full scope set. First-party clients and legacy callers with no
+  // oauth_clients row (e.g. 'windy-identity' refresh mints) keep the full set —
+  // first-party session semantics are explicitly out of scope here.
+  let effectiveScopes = identityScopes;
+  try {
+    const clientRow = db.prepare('SELECT is_first_party FROM oauth_clients WHERE client_id = ?').get(clientId) as any;
+    if (clientRow && !clientRow.is_first_party) {
+      const granted = (scope || '').split(' ').filter(Boolean);
+      // OIDC identity scopes (openid/profile/email — no product prefix) live in
+      // the `scope` string claim; only product:action scopes belong in `scopes`.
+      effectiveScopes = granted
+        .filter(s => s.includes(':'))
+        .filter(s => _identityHoldsScope(identityScopes, s));
+    }
+  } catch { /* oauth_clients may not exist on first-run SQLite bootstrap */ }
+
   // Fetch products
   let products: string[];
   try {
@@ -1496,7 +1531,7 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
     tier: user.tier,
     accountId: identityId,
     type: user.identity_type || 'human',
-    scopes: identityScopes,
+    scopes: effectiveScopes,
     products,
     iss: 'windy-identity',
     client_id: clientId,
@@ -1536,11 +1571,24 @@ function generateOAuthTokens(identityId: string, scope: string, clientId: string
   const refreshToken = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  db.prepare('INSERT INTO refresh_tokens (token, user_id, expires_at) VALUES (?, ?, ?)').run(
-    refreshToken, identityId, expiresAt,
+  db.prepare('INSERT INTO refresh_tokens (token, user_id, expires_at, client_id, scope) VALUES (?, ?, ?, ?, ?)').run(
+    refreshToken, identityId, expiresAt, clientId, scope || null,
   );
 
   return { accessToken, refreshToken };
+}
+
+/**
+ * Whether the identity's held scopes cover a requested scope.
+ * Mirrors _hasScope in middleware/auth.ts: direct match, product wildcard
+ * ('windy_pro:*' covers 'windy_pro:read'), and 'admin:*' covers everything.
+ */
+function _identityHoldsScope(held: string[], requested: string): boolean {
+  if (held.includes('admin:*')) return true;
+  if (held.includes(requested)) return true;
+  const [product] = requested.split(':');
+  if (held.includes(`${product}:*`)) return true;
+  return false;
 }
 
 /**
