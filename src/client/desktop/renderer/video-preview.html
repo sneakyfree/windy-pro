@@ -420,6 +420,25 @@
             showSizeLabel(`${w}×${h}`);
         }, { passive: false });
 
+        // ═══ Linux: custom window move via main-process mouse polling ═══
+        // Mutter refuses native -webkit-app-region drag on this focusable:false
+        // window, so on Linux we disable the (dead) native drag and drive the
+        // move ourselves — press anywhere on the video that isn't a resize
+        // handle or a button. Mac/Windows keep the native app-region drag.
+        if (window.videoPreviewAPI?.platform === 'linux' && window.videoPreviewAPI?.startMove) {
+            container.style['-webkit-app-region'] = 'no-drag';
+            const stopMove = () => { try { window.videoPreviewAPI.stopMove(); } catch (_) { } };
+            container.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                if (e.target.closest('.resize-handle, button, .preview-btn')) return;
+                try { window.videoPreviewAPI.startMove(); } catch (_) { }
+            });
+            window.addEventListener('pointerup', stopMove);
+            window.addEventListener('mouseup', stopMove);
+            // Pointer released outside the window: first buttonless move ends it.
+            window.addEventListener('pointermove', (e) => { if (e.buttons === 0) stopMove(); });
+        }
+
         // ═══ Four-corner resize via main-process mouse polling ═══
         // Main process tracks cursor position even when outside the window
         document.querySelectorAll('.resize-handle').forEach(handle => {

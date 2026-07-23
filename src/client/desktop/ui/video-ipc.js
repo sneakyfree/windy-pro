@@ -123,7 +123,20 @@ function registerVideoIpc(deps) {
   // Bypasses Electron's pointer-capture limit during a drag. The
   // timer is cleared on stop-resize-video OR when the window
   // disappears.
-  ipcMain.on('start-resize-video', (event, corner, startScreenX, startScreenY, startW, startH, startWinX, startWinY) => {
+  ipcMain.on('start-resize-video', (event, corner) => {
+    // The renderer still sends its own start coords (e.screenX etc.) but they
+    // are IGNORED: on HiDPI Linux the renderer's screen coords and the main
+    // process's getCursorScreenPoint disagree by the scale factor, which biased
+    // the drag delta so hard the br corner could only expand. Measure the
+    // start state entirely in THIS process so both ends of the delta share
+    // one coordinate space.
+    const win0 = getLiveWindow();
+    if (!win0) return;
+    const _c0 = screen.getCursorScreenPoint();
+    const _b0 = win0.getBounds();
+    const startScreenX = _c0.x;
+    const startW = _b0.width, startH = _b0.height;
+    const startWinX = _b0.x, startWinY = _b0.y;
     if (_resizeInterval) clearInterval(_resizeInterval);
     _resizeInterval = setInterval(() => {
       const win = getLiveWindow();
@@ -173,6 +186,32 @@ function registerVideoIpc(deps) {
       clearInterval(_resizeInterval);
       _resizeInterval = null;
     }
+  });
+
+  // ── Move drag (main-process mouse polling) ───────────────────
+  // Linux/Mutter refuses native -webkit-app-region drag on the
+  // focusable:false preview window, so the renderer starts a
+  // cursor-poll move here instead. Width/height are pinned to the
+  // gesture-start bounds — on HiDPI, re-applying a size read back
+  // mid-drag compounds through lossy DIP conversion (the main
+  // window's runaway-growth bug; same defense here).
+  let _moveInterval = null;
+  ipcMain.on('start-move-video', () => {
+    const win0 = getLiveWindow();
+    if (!win0) return;
+    const c0 = screen.getCursorScreenPoint();
+    const b0 = win0.getBounds();
+    const anchor = { dx: c0.x - b0.x, dy: c0.y - b0.y, w: b0.width, h: b0.height };
+    if (_moveInterval) clearInterval(_moveInterval);
+    _moveInterval = setInterval(() => {
+      const win = getLiveWindow();
+      if (!win) { clearInterval(_moveInterval); _moveInterval = null; return; }
+      const c = screen.getCursorScreenPoint();
+      win.setBounds({ x: Math.round(c.x - anchor.dx), y: Math.round(c.y - anchor.dy), width: anchor.w, height: anchor.h });
+    }, 16);
+  });
+  ipcMain.on('stop-move-video', () => {
+    if (_moveInterval) { clearInterval(_moveInterval); _moveInterval = null; }
   });
 
   return {

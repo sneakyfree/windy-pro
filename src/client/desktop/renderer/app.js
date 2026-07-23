@@ -3746,23 +3746,38 @@ class WindyApp {
     bar.id = 'batchPlaybackBar';
     bar.className = 'playback-bar';
     bar.innerHTML = `
-      <span class="playback-label">🔊 Recording</span>
-      <audio controls src="${audioUrl}" preload="metadata" style="flex:1;height:28px;"></audio>
+      <div class="playback-audio-row" style="display:flex;align-items:center;gap:8px;width:100%;">
+        <span class="playback-label">🔊 Recording</span>
+        <audio controls src="${audioUrl}" preload="metadata" style="flex:1;height:28px;"></audio>
+      </div>
     `;
 
     // Additively inject a <video> when a screen/video recording was captured
     // for this session. Gated strictly on _lastVideoBlob so the audio-only
     // path is unchanged. Uses a separate object URL tracked + revoked in
     // parallel with _lastPlaybackUrl (see _saveAudioRecording).
+    // The video goes on its OWN labeled row under the audio (the bar becomes
+    // a column) — jammed side-by-side in the 28px audio row it rendered as a
+    // clipped half-visible strip that read as UI breakage (Grant, 2026-07-22).
     if (this._lastVideoBlob) {
+      bar.style.flexDirection = 'column';
+      bar.style.alignItems = 'stretch';
       const videoUrl = URL.createObjectURL(this._lastVideoBlob);
       this._lastPlaybackVideoUrl = videoUrl;
+      const row = document.createElement('div');
+      row.className = 'playback-video-row';
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;margin-top:6px;';
+      const label = document.createElement('span');
+      label.className = 'playback-label';
+      label.textContent = '🎬 Video';
       const video = document.createElement('video');
       video.controls = true;
       video.src = videoUrl;
       video.preload = 'metadata';
-      video.style.cssText = 'flex:1;max-height:160px;border-radius:6px;';
-      bar.appendChild(video);
+      video.style.cssText = 'flex:1;min-width:0;max-height:160px;border-radius:6px;object-fit:contain;background:#000;';
+      row.appendChild(label);
+      row.appendChild(video);
+      bar.appendChild(row);
     }
 
     // Insert into the persistent playback slot
