@@ -1897,7 +1897,11 @@ function showMiniWidget() {
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
-    focusable: true,
+    // UNIVERSAL NON-FOCUSABLE DOCTRINE: the widget is a mouse-only surface
+    // (drag, click, right-click panel with sliders — no text entry ever).
+    // focusable:true made showing/cycling to the widget STEAL the user's
+    // blinking cursor from their dictation target (Grant, 2026-07-23).
+    focusable: false,
     backgroundColor: '#00000000',
     webPreferences: {
       nodeIntegration: false,
