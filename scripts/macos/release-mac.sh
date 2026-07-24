@@ -174,6 +174,25 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
   log "4/8 electron-builder --mac ${EB_ARCH_FLAGS[*]} (afterPack signs the .app)"
   CODESIGN_IDENTITY="$CODESIGN_IDENTITY" \
     npm run gen:telemetry
+
+  # ── Telemetry hard-gate (NI-11) ──────────────────────────────────────
+  # gen:telemetry deliberately NO-OPS when WINDY_ADMIN_INGEST_URL /
+  # WINDY_ADMIN_INGEST_TOKEN__WINDY_WORD_DESKTOP are unset, leaving the
+  # committed inert file in place. Without this gate a release built on an
+  # unconfigured machine ships an app that never phones home — green build,
+  # no error, and we silently lose contact with every user who installs it.
+  # Whatever is in telemetry.generated.json right now is what gets packaged,
+  # so this is the correct moment to check. Set ALLOW_INERT_TELEMETRY=1 to
+  # deliberately cut a telemetry-free build.
+  node scripts/reality-check.cjs --release || {
+    echo ""
+    echo "  Release BLOCKED. Export the ingest credentials and re-run:"
+    echo "    export WINDY_ADMIN_INGEST_URL=https://admin.windyword.ai/v1/events"
+    echo "    export WINDY_ADMIN_INGEST_TOKEN__WINDY_WORD_DESKTOP=<lockbox: windy-admin/ingest-tokens.env>"
+    echo "  Or set ALLOW_INERT_TELEMETRY=1 to ship a build that reports nothing."
+    exit 1
+  }
+
   CODESIGN_IDENTITY="$CODESIGN_IDENTITY" \
     npx electron-builder --mac "${EB_ARCH_FLAGS[@]}"
 else

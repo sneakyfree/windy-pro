@@ -33,6 +33,21 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # ── Reality check: no silent no-ops ──
+  # Guards the class of defect the 2026-07-24 audit found five times over —
+  # a capability that looks finished, reports success, and does nothing.
+  # Cheap (pure node, no install), so it runs first and fails fast.
+  reality-check:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: runner-lint (hosted runners are billing-locked)
+        run: bash "$GITHUB_WORKSPACE/.github/lint/lint-runner-labels.sh" "$GITHUB_WORKSPACE/.github/workflows"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node scripts/reality-check.cjs
+
   # ── Account Server: Type Check + Tests ──
   test-account-server:
     runs-on: [self-hosted, linux, x64]

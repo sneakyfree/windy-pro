@@ -1,7 +1,7 @@
 {
   "name": "windy-pro",
   "version": "1.8.0",
-  "description": "Windy Word \u2014 voice-to-text desktop app for the Windy ecosystem",
+  "description": "Windy Word — voice-to-text desktop app for the Windy ecosystem",
   "main": "src/client/desktop/main.js",
   "author": {
     "name": "Windy Word",
@@ -27,7 +27,8 @@
     "test:api": "cd account-server && npx jest tests/api.test.ts --forceExit",
     "dist:all": "npm run build:linux && npm run build:win && npm run build:mac",
     "postinstall": "electron-builder install-app-deps",
-    "build:enter-monitor": "bash scripts/macos/build-enter-monitor.sh"
+    "build:enter-monitor": "bash scripts/macos/build-enter-monitor.sh",
+    "reality-check": "node scripts/reality-check.cjs"
   },
   "dependencies": {
     "archiver": "^7.0.0",
