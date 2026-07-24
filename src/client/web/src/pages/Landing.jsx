@@ -361,12 +361,12 @@ export default function Landing() {
                             <div className="pricing-price">$0</div>
                             <div className="pricing-period">forever</div>
                             <ul className="pricing-features">
-                                <li>✓ Up to 10 engines — 7 CPU models, +3 GPU models on capable hardware</li>
+                                <li>✓ 7 voice engines included — up to 10 with a capable GPU</li>
                                 <li>✓ Unlimited local recording — no time limit</li>
+                                <li>✓ Auto-detects 99 languages</li>
                                 <li>✓ 100% local — your device, your data</li>
                                 <li>✓ Works fully offline — go dark anytime</li>
                                 <li>✓ Theme packs &amp; effects (Stage 7 send finale)</li>
-                                <li>✓ Auto-detect any language</li>
                             </ul>
                             {loggedIn
                                 ? <a href="#download" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>Download Free</a>
