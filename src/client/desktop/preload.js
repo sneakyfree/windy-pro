@@ -166,6 +166,10 @@ contextBridge.exposeInMainWorld('windyAPI', {
   windytuneAcceptUpgrade: (model) => ipcRenderer.invoke('windytune-accept-upgrade', model),
   windytuneUndoSwitch: (oldModel) => ipcRenderer.invoke('windytune-undo-switch', oldModel),
 
+  // ═══ Effects canvas ═══
+  // Forward a visual to the whole-screen overlay window (fire-and-forget).
+  fxOverlayRender: (type, opts) => ipcRenderer.send('fx-overlay:render', { type, opts }),
+
   // ═══ GPU Engine Pack + usage/prune ═══
   onGpuPackOffer: (callback) => { safeOn('gpu-pack-offer', (event, data) => callback(data)); },
   onGpuPackDownloadFailed: (callback) => { safeOn('gpu-pack-download-failed', (event, data) => callback(data)); },

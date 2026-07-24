@@ -532,15 +532,27 @@ class SettingsPanel {
             <select id="sfxPackSelect" style="flex:1;"></select>
           </div>
 
-          <div id="sfxIntensityRow" class="setting-row">
-            <label>Intensity</label>
-            <div class="sfx-mode-pills" id="sfxIntensityPills" style="flex:1;">
-              <button class="sfx-mode-pill" data-level="subtle"></button>
-              <button class="sfx-mode-pill" data-level="standard"></button>
-              <button class="sfx-mode-pill" data-level="max"></button>
+          <div class="setting-row" style="flex-direction:column;align-items:stretch;">
+            <label style="margin-bottom:4px;">🎭 Theme Packs</label>
+            <div id="sfxPackGallery" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
+          </div>
+
+          <div class="setting-row">
+            <label for="sfxIntensitySlider">Visual intensity</label>
+            <input type="range" id="sfxIntensitySlider" class="sfx-slider" min="0" max="100" value="55" style="flex:1;min-width:80px;">
+            <span id="sfxIntensityZone" style="min-width:104px;text-align:right;font-size:12px;font-weight:600;color:#E2E8F0;"></span>
+          </div>
+          <p class="settings-hint" id="sfxIntensityHint">A gradual dial from librarian to chimpanzee — how big the visuals get. Long recordings still build toward it. Sound loudness is the Master slider below.</p>
+
+          <div class="setting-row">
+            <label>Effects canvas</label>
+            <div id="sfxCanvasPills" style="display:flex;gap:4px;flex:1;justify-content:flex-end;flex-wrap:wrap;">
+              <button class="sfx-canvas-pill" data-canvas="app">🪟 App only</button>
+              <button class="sfx-canvas-pill" data-canvas="screen">🖥️ Whole screen</button>
+              <button class="sfx-canvas-pill" data-canvas="both">✨ Both</button>
             </div>
           </div>
-          <p class="settings-hint" id="sfxIntensityHint">The amplitude ceiling — long recordings still build toward it.</p>
+          <p class="settings-hint">Whole screen paints the lightning over whatever app you're dictating into — effects aren't trapped in a minimized window.</p>
 
           <div id="sfxPreviewRow" class="setting-row" style="display:none;">
             <button id="sfxPreviewBtn" class="settings-btn" style="width:100%;padding:6px 12px;" title="Preview current pack sounds">▶ Preview Sounds</button>
@@ -587,7 +599,7 @@ class SettingsPanel {
             <div id="visualLibGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;"></div>
             <p class="settings-hint">Pick any of these per stage below via the ✨ Visual dropdowns.</p>
 
-            <p class="settings-hint sfx-during-hint" style="margin:8px 0 6px;font-weight:700;font-size:12px;">── 🎛️ Sound Hooks ──</p>
+            <p class="settings-hint sfx-during-hint" style="margin:8px 0 6px;font-weight:700;font-size:12px;">── 🎛️ Stage Effects — Sound & Visuals ──</p>
             <div id="sfxUnifiedHooks"></div>
 
             <div class="setting-row" style="margin-top:8px;">
@@ -1518,9 +1530,10 @@ class SettingsPanel {
       if (surpriseRow) surpriseRow.style.display = mode === 'surprise' ? 'flex' : 'none';
       if (unifiedSection) unifiedSection.style.display = mode === 'silent' ? 'none' : '';
       if (previewRow) previewRow.style.display = mode === 'silent' ? 'none' : '';
-      // Per-hook sound dropdowns are only honored in custom mode — disable them
-      // elsewhere so they don't look interactive when they're ignored.
-      this.panel.querySelectorAll('[id^="uniSelect_"]').forEach(s => { s.disabled = (mode !== 'custom'); });
+      // Per-hook sound dropdowns work in EVERY non-silent mode now (they
+      // replace the pack's sound for that stage) — never disable them. The
+      // old custom-mode-only disable was the "inert Pack default dropdown"
+      // from the 2026-07-23 hand test.
     };
 
     modePills.forEach(pill => {
@@ -1563,31 +1576,79 @@ class SettingsPanel {
       if (fx._activePackId) packSelect.value = fx._activePackId;
       packSelect.addEventListener('change', () => {
         fx.setActivePack(packSelect.value);
-        this._refreshIntensityPills();
+        this._refreshPackUI?.();
       });
     }
 
-    // ═══ Intensity dial — themed amplitude ceiling (Apprentice → Archmage) ═══
-    this._refreshIntensityPills = () => {
-      const pills = this.panel.querySelectorAll('#sfxIntensityPills .sfx-mode-pill');
-      if (!pills.length || !fx?.getIntensityNames) return;
-      const names = fx.getIntensityNames();
-      const current = fx.getIntensityLevel();
-      pills.forEach((pill, i) => {
-        pill.textContent = names[i] || pill.dataset.level;
-        pill.classList.toggle('active', pill.dataset.level === current);
+    // ═══ Pack gallery — ALWAYS visible (the hidden Single-Pack dropdown burned
+    // users twice: Wizard was invisible in Default mode). Clicking a card picks
+    // the pack, switches to Single Pack mode, and previews the paste moment. ═══
+    const packGallery = this.panel.querySelector('#sfxPackGallery');
+    const zoneLabel = this.panel.querySelector('#sfxIntensityZone');
+    const intensitySlider = this.panel.querySelector('#sfxIntensitySlider');
+    const refreshZoneLabel = () => {
+      if (zoneLabel && fx?.getIntensityZoneName) zoneLabel.textContent = fx.getIntensityZoneName();
+    };
+    const refreshPackGallery = () => {
+      if (!packGallery) return;
+      packGallery.querySelectorAll('.sfx-pack-card').forEach(card => {
+        card.classList.toggle('active', card.dataset.pack === (fx?._activePack?.id || fx?._activePackId));
       });
     };
-    const intensityPills = this.panel.querySelectorAll('#sfxIntensityPills .sfx-mode-pill');
-    intensityPills.forEach(pill => {
+    if (packGallery && fx) {
+      for (const pk of fx.getPackList().filter(pk => pk.id !== '_silent')) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'sfx-pack-card';
+        card.dataset.pack = pk.id;
+        card.title = pk.description || pk.name;
+        card.innerHTML = `<span class="sfx-pack-card-name">${pk.name}</span>` +
+          `<span class="sfx-pack-card-desc">${pk.description || ''}</span>`;
+        card.addEventListener('click', () => {
+          fx.setActivePack(pk.id);
+          if (!['single', 'surprise'].includes(fx._mode)) { fx.setMode('single'); updateModeUI('single'); }
+          if (packSelect) packSelect.value = pk.id;
+          refreshPackGallery();
+          refreshZoneLabel();
+          try { fx.trigger('paste', { wordCount: 300 }); } catch (_) { } // hear + see the pack instantly
+        });
+        packGallery.appendChild(card);
+      }
+      refreshPackGallery();
+    }
+    // Shared refresher for other pack-selection paths (the Single Pack dropdown)
+    this._refreshPackUI = () => { refreshPackGallery(); refreshZoneLabel(); };
+
+    // ═══ Visual intensity — a gradual dial with themed zone names ═══
+    if (intensitySlider && fx) {
+      intensitySlider.value = fx.getIntensityValue?.() ?? 55;
+      refreshZoneLabel();
+      intensitySlider.addEventListener('input', () => {
+        fx.setIntensityValue?.(parseInt(intensitySlider.value, 10));
+        refreshZoneLabel();
+      });
+      // Preview on release, not on every tick while dragging
+      intensitySlider.addEventListener('change', () => {
+        try { fx.trigger('paste', { wordCount: 300 }); } catch (_) { }
+      });
+    }
+
+    // ═══ Effects canvas — app window / whole screen / both ═══
+    const canvasPills = this.panel.querySelectorAll('#sfxCanvasPills .sfx-canvas-pill');
+    const currentCanvas = () => localStorage.getItem('windy_fxCanvas')
+      || (/Mac|Win/i.test(navigator.platform) ? 'screen' : 'app');
+    const refreshCanvasPills = () => {
+      const cur = currentCanvas();
+      canvasPills.forEach(pill => pill.classList.toggle('active', pill.dataset.canvas === cur));
+    };
+    canvasPills.forEach(pill => {
       pill.addEventListener('click', () => {
-        fx?.setIntensityLevel?.(pill.dataset.level);
-        this._refreshIntensityPills();
-        // Instant feedback at the new ceiling — preview the paste moment
-        try { fx?.trigger?.('paste', { wordCount: 300 }); } catch (_) { }
+        try { localStorage.setItem('windy_fxCanvas', pill.dataset.canvas); } catch (_) { }
+        refreshCanvasPills();
+        try { fx?.renderVisual?.('lightning', { color: '#A78BFA', count: 2, duration: 900, intensity: 0.8 }); } catch (_) { }
       });
     });
-    this._refreshIntensityPills();
+    refreshCanvasPills();
 
     // ═══ Visual Library — peer of the Sound Library ═══
     // One card per visual with instant ▶ preview; these are the same visuals
@@ -1604,7 +1665,8 @@ class SettingsPanel {
           'border-radius:8px;padding:6px 10px;cursor:pointer;color:#E2E8F0;font-size:12px;text-align:left;';
         card.innerHTML = `<span>${v.name}</span><span style="color:#8b97a5;">▶</span>`;
         card.addEventListener('click', () => {
-          try { fx.visual.renderEffect(v.id, { ...(v.defaults?._all || {}) }); } catch (_) { }
+          // Route through the canvas setting so previews show where real effects will
+          try { (fx.renderVisual || fx.visual.renderEffect).call(fx.renderVisual ? fx : fx.visual, v.id, { ...(v.defaults?._all || {}) }); } catch (_) { }
         });
         visualLibGrid.appendChild(card);
       }
@@ -1645,7 +1707,8 @@ class SettingsPanel {
         const packData = fx._packs[pack.id];
         if (!packData?.hooks) continue;
         for (const hookName of Object.keys(packData.hooks)) {
-          stockOptions.push({ packId: pack.id, hook: hookName, label: `${pack.name} → ${hookName}` });
+          const prettyHook = { start: 'Start', during: 'During', stop: 'Stop', process: 'Processing', warning: 'Warning', paste: 'Paste' }[hookName] || hookName;
+          stockOptions.push({ packId: pack.id, hook: hookName, label: `${pack.name} — ${prettyHook}` });
         }
       }
 
@@ -2182,8 +2245,8 @@ class SettingsPanel {
       const hookSelectEls = {};
 
       const buildHookOptions = () => {
-        // Shuffle options
-        const shuffleOpts = `<optgroup label="🔀 Shuffle / Playlist">
+        // Shuffle options — pointless (and confusing) with an empty library
+        const shuffleOpts = soundLibrary.length === 0 ? '' : `<optgroup label="🔀 Shuffle / Playlist">
           <option value="shuffle|starred">🔀 Shuffle Starred (${soundLibrary.filter(s => s.starred !== false).length} sounds)</option>
           <option value="shuffle|all">🔀 Shuffle All Library (${soundLibrary.length} sounds)</option>
         </optgroup>`;
@@ -2201,7 +2264,7 @@ class SettingsPanel {
         // "Pack default" (not "Not set"): mirrors the ✨ Visual dropdown's
         // wording — empty means "follow the active pack", and since overrides
         // now work in every non-silent mode, that's exactly what happens.
-        return `<option value="">— Pack default —</option>` + shuffleOpts + libOpts + stockOpts;
+        return `<option value="">🔊 Sound: Pack default</option>` + shuffleOpts + libOpts + stockOpts;
       };
 
       const refreshHookDropdowns = () => {

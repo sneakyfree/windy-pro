@@ -141,6 +141,29 @@ class SoundManager {
                 gain.gain.exponentialRampToValueAtTime(vol * 0.5, t0 + 0.12);
                 gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
                 src.start(t0); src.stop(t0 + dur);
+            } else if (kind === 'drum') {
+                // War-drum thump: deep noise burst, instant hit, fast decay.
+                const dur = opts.duration || 0.25;
+                src.buffer = this._noiseBuffer(ctx, Math.max(3, dur));
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(150, t0);
+                filter.frequency.exponentialRampToValueAtTime(60, t0 + dur);
+                gain.gain.setValueAtTime(vol, t0);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+                src.start(t0); src.stop(t0 + dur);
+            } else if (kind === 'crowd') {
+                // Stadium/colosseum roar: broad mid-band noise swelling up then away.
+                const dur = opts.duration || 2.0;
+                src.buffer = this._noiseBuffer(ctx, Math.max(3, dur));
+                filter.type = 'bandpass'; filter.Q.value = 0.5;
+                filter.frequency.setValueAtTime(700, t0);
+                filter.frequency.linearRampToValueAtTime(1100, t0 + dur * 0.4);
+                filter.frequency.linearRampToValueAtTime(600, t0 + dur);
+                gain.gain.setValueAtTime(0.0001, t0);
+                gain.gain.exponentialRampToValueAtTime(vol, t0 + dur * 0.35);
+                gain.gain.exponentialRampToValueAtTime(vol * 0.6, t0 + dur * 0.7);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+                src.start(t0); src.stop(t0 + dur);
             } else { // 'whoosh'
                 const dur = opts.duration || 0.5;
                 src.buffer = this._noiseBuffer(ctx, Math.max(3, dur));
@@ -194,11 +217,14 @@ class SoundManager {
 // in Settings → Theme Packs & Effects via the per-stage visual dropdowns.
 // `defaults._all` are the opts used when a user hand-selects the effect.
 
-// Intensity dial stops. Packs may override the stop NAMES via `intensityNames`
-// (e.g. wizard: Apprentice/Sorcerer/Archmage); multipliers are global.
-const INTENSITY_MULTIPLIERS = { subtle: 0.6, standard: 1.0, max: 1.5 };
-const INTENSITY_DEFAULT_NAMES = ['🌱 Subtle', '🎯 Standard', '🌋 Maximum'];
-const INTENSITY_LEVELS = ['subtle', 'standard', 'max'];
+// Visual-intensity slider (0-100, continuous — Grant: "a gradual dial", not
+// three pills). Multiplier 0.4×–1.6× applied to VISUALS ONLY: the four
+// amplitudes a user controls are (1) which visuals, (2) how big — this
+// slider, (3) which sounds, (4) how loud — Master volume. Zone names come
+// from the active pack (`intensityNames`, e.g. Apprentice/Sorcerer/Archmage)
+// and label the slider live as it moves.
+const INTENSITY_DEFAULT_NAMES = ['🌱 Subtle', '🎯 Balanced', '🌋 Maximum'];
+const intensityMul = (value) => 0.4 + (Math.max(0, Math.min(100, value)) / 100) * 1.2;
 
 const VISUAL_LIBRARY = [
     { id: 'flash', name: '💡 Screen Flash', desc: 'Quick full-window color flash', defaults: { _all: { color: '#4ECDC4', duration: 350, intensity: 0.6 } } },
@@ -489,12 +515,8 @@ class EffectsEngine {
         this._shuffleBag = [];
         this._dynamicScaling = true;
 
-        // Intensity dial — one themed amplitude ceiling per pack instead of
-        // separate beginner/medium/full pack variants. Multiplies both sound
-        // volume and visual intensity/counts; the word-count ramp still climbs
-        // toward this ceiling. Packs name the stops (wizard: Apprentice →
-        // Sorcerer → Archmage); INTENSITY_DEFAULT_NAMES covers the rest.
-        this._intensityLevel = 'standard'; // 'subtle' | 'standard' | 'max'
+        // Visual-intensity slider value (0-100, continuous). See intensityMul().
+        this._visualIntensity = 55;
 
         // Per-hook-point settings — ALL 6 stages ON by default at clearly audible volumes,
         // so a new user immediately hears every cue (start, the during/processing confirmation
@@ -549,7 +571,10 @@ class EffectsEngine {
                     }
                 }
                 if (s.activePack) this._activePackId = s.activePack;
-                if (['subtle', 'standard', 'max'].includes(s.intensityLevel)) this._intensityLevel = s.intensityLevel;
+                if (typeof s.intensityValue === 'number') this._visualIntensity = Math.max(0, Math.min(100, s.intensityValue));
+                // Migrate the short-lived 3-pill dial (subtle/standard/max strings)
+                else if (s.intensityLevel === 'subtle') this._visualIntensity = 25;
+                else if (s.intensityLevel === 'max') this._visualIntensity = 90;
                 // Visual overrides (added later; absent key = all 'auto', fully backward compatible)
                 if (s.visualHooks) {
                     for (const [k, v] of Object.entries(s.visualHooks)) {
@@ -574,7 +599,7 @@ class EffectsEngine {
                 activePack: this._activePack?.id || this._activePackId || null,
                 surpriseCategory: this._surpriseCategory,
                 dynamicScaling: this._dynamicScaling,
-                intensityLevel: this._intensityLevel,
+                intensityValue: this._visualIntensity,
                 favorites: this._favorites,
                 hookPoints: this._hookPoints,
                 visualHooks: this._visualHooks
@@ -669,6 +694,66 @@ class EffectsEngine {
                 stop: { sound: [{ frequency: 523, duration: 0.15, type: 'sine', volume: 0.5 }, { frequency: 392, duration: 0.2, type: 'sine', volume: 0.45, delay: 0.15 }], visual: { type: 'border-glow', color: '#6366F1', duration: 600 } },
                 process: { sound: { frequency: 587, duration: 0.25, type: 'sine', volume: 0.5 }, visual: { type: 'border-glow', color: '#F472B6', duration: 1000, intensity: 0.3 } },
                 paste: { sound: [{ frequency: 784, duration: 0.1, type: 'sine', volume: 0.5 }, { frequency: 988, duration: 0.08, type: 'sine', volume: 0.45, delay: 0.1 }, { frequency: 1175, duration: 0.12, type: 'sine', volume: 0.4, delay: 0.18 }, { frequency: 784, duration: 0.2, type: 'sine', volume: 0.35, delay: 0.3 }], visual: { type: 'sparkles', color: '#F9A8D4', count: 14, duration: 1800, intensity: 0.7 } }
+            }
+        });
+
+        // Valhalla — war horns, shield drums, a berserker roar on paste
+        this._registerPack({
+            id: 'valhalla', name: '🛡️ Valhalla', category: 'epic',
+            description: 'War horns and shield-drums — a raiding party on paste',
+            intensityNames: ['🛶 Raider', '🪓 Berserker', '⚔️ Valhalla'],
+            hooks: {
+                start: { sound: [{ sweep: { from: 98, to: 147 }, duration: 0.8, type: 'sawtooth', volume: 0.55 }, { noise: 'drum', volume: 0.6, delay: 0.1 }], visual: { type: 'border-glow', color: '#B45309', duration: 700, intensity: 0.5 } },
+                during: { sound: { noise: 'drum', volume: 0.35, duration: 0.2 }, visual: { type: 'border-glow', color: '#B45309', duration: 350, intensity: 0.15 } },
+                stop: { sound: [{ noise: 'drum', volume: 0.6 }, { noise: 'drum', volume: 0.6, delay: 0.22 }, { sweep: { from: 147, to: 98 }, duration: 0.6, type: 'sawtooth', volume: 0.5, delay: 0.4 }], visual: [{ type: 'shake', intensity: 0.35, duration: 300 }, { type: 'border-glow', color: '#D97706', duration: 600 }] },
+                process: { sound: [{ noise: 'drum', volume: 0.45 }, { noise: 'drum', volume: 0.45, delay: 0.3 }, { noise: 'drum', volume: 0.5, delay: 0.6 }, { noise: 'drum', volume: 0.5, delay: 0.9 }], visual: { type: 'border-glow', color: '#F59E0B', duration: 1400, intensity: 0.4 } },
+                warning: { sound: [{ sweep: { from: 196, to: 147 }, duration: 0.4, type: 'sawtooth', volume: 0.7 }], visual: { type: 'flash', color: '#F87171', duration: 300, intensity: 0.5 } },
+                paste: { sound: [{ sweep: { from: 98, to: 196 }, duration: 0.9, type: 'sawtooth', volume: 0.65 }, { noise: 'drum', volume: 0.7, delay: 0.15 }, { noise: 'drum', volume: 0.7, delay: 0.45 }, { noise: 'crowd', duration: 1.8, volume: 0.5, delay: 0.6 }], visual: [{ type: 'shake', intensity: 0.5, duration: 400 }, { type: 'fireworks', color: '#F59E0B', count: 3, duration: 1400, intensity: 0.8 }, { type: 'confetti', count: 18, duration: 1600, intensity: 0.7 }] }
+            }
+        });
+
+        // Arcade — pure chiptune; square waves ARE the genre
+        this._registerPack({
+            id: 'arcade', name: '🕹️ Arcade', category: 'gamer',
+            description: '8-bit blips with a level-up fanfare on paste',
+            intensityNames: ['🎮 Casual', '🕹️ Pro Gamer', '👾 High Score'],
+            hooks: {
+                start: { sound: [{ frequency: 523, duration: 0.06, type: 'square', volume: 0.5 }, { frequency: 784, duration: 0.08, type: 'square', volume: 0.5, delay: 0.07 }], visual: { type: 'flash', color: '#22D3EE', duration: 200, intensity: 0.4 } },
+                during: { sound: { frequency: 659, duration: 0.04, type: 'square', volume: 0.3 }, visual: { type: 'border-glow', color: '#22D3EE', duration: 300, intensity: 0.15 } },
+                stop: { sound: [{ frequency: 784, duration: 0.06, type: 'square', volume: 0.5 }, { frequency: 523, duration: 0.09, type: 'square', volume: 0.5, delay: 0.08 }], visual: { type: 'border-glow', color: '#818CF8', duration: 500 } },
+                process: { sound: [{ frequency: 440, duration: 0.05, type: 'square', volume: 0.35 }, { frequency: 494, duration: 0.05, type: 'square', volume: 0.35, delay: 0.1 }, { frequency: 523, duration: 0.05, type: 'square', volume: 0.35, delay: 0.2 }], visual: { type: 'sparkles', color: '#22D3EE', count: 8, duration: 1200, intensity: 0.5 } },
+                warning: { sound: [{ frequency: 330, duration: 0.12, type: 'square', volume: 0.65 }, { frequency: 330, duration: 0.12, type: 'square', volume: 0.65, delay: 0.18 }], visual: { type: 'flash', color: '#F87171', duration: 250, intensity: 0.5 } },
+                paste: { sound: [{ frequency: 523, duration: 0.09, type: 'square', volume: 0.55 }, { frequency: 659, duration: 0.09, type: 'square', volume: 0.55, delay: 0.1 }, { frequency: 784, duration: 0.09, type: 'square', volume: 0.55, delay: 0.2 }, { frequency: 1047, duration: 0.25, type: 'square', volume: 0.6, delay: 0.3 }], visual: [{ type: 'confetti', count: 26, duration: 1800, intensity: 0.8 }, { type: 'sparkles', color: '#22D3EE', count: 16, duration: 1500, intensity: 0.7 }] }
+            }
+        });
+
+        // Colosseum — the crowd is the instrument
+        this._registerPack({
+            id: 'colosseum', name: '🏛️ Colosseum', category: 'epic',
+            description: 'Murmuring crowd, clashing steel, an eruption on paste',
+            intensityNames: ['🌾 Plebeian', '🛡️ Centurion', '👑 Emperor'],
+            hooks: {
+                start: { sound: [{ sweep: { from: 220, to: 330 }, duration: 0.5, type: 'sawtooth', volume: 0.5 }], visual: { type: 'border-glow', color: '#D4A574', duration: 600, intensity: 0.5 } },
+                during: { sound: { noise: 'crowd', duration: 0.8, volume: 0.15 }, visual: { type: 'border-glow', color: '#D4A574', duration: 400, intensity: 0.12 } },
+                stop: { sound: [{ frequency: 1319, duration: 0.08, type: 'triangle', volume: 0.5 }, { frequency: 988, duration: 0.1, type: 'triangle', volume: 0.45, delay: 0.09 }], visual: { type: 'flash', color: '#FDE68A', duration: 300, intensity: 0.4 } },
+                process: { sound: { noise: 'crowd', duration: 2.2, volume: 0.35 }, visual: { type: 'particles', color: '#D4A574', count: 12, duration: 1600, intensity: 0.5 } },
+                warning: { sound: [{ sweep: { from: 330, to: 262 }, duration: 0.35, type: 'sawtooth', volume: 0.65 }], visual: { type: 'flash', color: '#F87171', duration: 300, intensity: 0.5 } },
+                paste: { sound: [{ noise: 'crowd', duration: 2.6, volume: 0.65 }, { sweep: { from: 262, to: 392 }, duration: 0.7, type: 'sawtooth', volume: 0.5, delay: 0.2 }, { noise: 'drum', volume: 0.6, delay: 0.5 }], visual: [{ type: 'fireworks', color: '#FDE68A', count: 4, duration: 1500, intensity: 0.8 }, { type: 'confetti', count: 22, duration: 1800, intensity: 0.8 }, { type: 'shake', intensity: 0.4, duration: 350 }] }
+            }
+        });
+
+        // Zen Garden — the calm end of the spectrum, so maximalism stays a choice
+        this._registerPack({
+            id: 'zen-garden', name: '🧘 Zen Garden', category: 'calm',
+            description: 'Chimes and water — barely-there cues, a soft bloom on paste',
+            intensityNames: ['🍃 Breeze', '🧘 Zen', '🌸 Bloom'],
+            hooks: {
+                start: { sound: { frequency: 880, duration: 0.5, type: 'sine', volume: 0.35 }, visual: { type: 'border-glow', color: '#6EE7B7', duration: 800, intensity: 0.3 } },
+                during: { sound: { frequency: 1320, duration: 0.15, type: 'sine', volume: 0.15 }, visual: null },
+                stop: { sound: [{ frequency: 880, duration: 0.4, type: 'sine', volume: 0.3 }, { frequency: 660, duration: 0.5, type: 'sine', volume: 0.25, delay: 0.3 }], visual: { type: 'border-glow', color: '#6EE7B7', duration: 700, intensity: 0.25 } },
+                process: { sound: { noise: 'whoosh', duration: 1.2, volume: 0.2 }, visual: { type: 'particles', color: '#A7F3D0', count: 6, duration: 2000, intensity: 0.3 } },
+                warning: { sound: [{ frequency: 660, duration: 0.3, type: 'sine', volume: 0.4 }, { frequency: 660, duration: 0.3, type: 'sine', volume: 0.4, delay: 0.4 }], visual: { type: 'border-glow', color: '#FCA5A5', duration: 500, intensity: 0.3 } },
+                paste: { sound: [{ frequency: 880, duration: 0.3, type: 'sine', volume: 0.35 }, { frequency: 1109, duration: 0.3, type: 'sine', volume: 0.3, delay: 0.2 }, { frequency: 1319, duration: 0.5, type: 'sine', volume: 0.25, delay: 0.4 }], visual: { type: 'sparkles', color: '#A7F3D0', count: 10, duration: 1600, intensity: 0.4 } }
             }
         });
 
@@ -846,9 +931,7 @@ class EffectsEngine {
                 : ((typeof metadata.durationSec === 'number' && metadata.durationSec > 0) ? metadata.durationSec * 2.2 : null);
             if (words !== null) intensity = Math.max(0.15, Math.min(1, 0.15 + words / 300));
         }
-        // Intensity dial: themed amplitude ceiling (Apprentice/Sorcerer/Archmage).
-        // Applied after the word-count ramp so the ramp climbs toward the dial.
-        intensity = Math.min(1.5, intensity * (INTENSITY_MULTIPLIERS[this._intensityLevel] || 1));
+
 
         // ── Per-hook sound override (the "— Pack default —" dropdowns) ──
         // Honored in EVERY non-silent mode, mirroring the visual dropdowns:
@@ -939,20 +1022,46 @@ class EffectsEngine {
         return false;
     }
 
-    // ── Intensity dial ──
+    // ── Visual-intensity slider ──
 
-    getIntensityLevel() { return this._intensityLevel; }
+    getIntensityValue() { return this._visualIntensity; }
 
-    setIntensityLevel(level) {
-        if (!INTENSITY_LEVELS.includes(level)) return;
-        this._intensityLevel = level;
+    setIntensityValue(value) {
+        const v = Number(value);
+        if (!Number.isFinite(v)) return;
+        this._visualIntensity = Math.max(0, Math.min(100, v));
         this._saveSettings();
     }
 
-    /** Stop names for the dial, themed by the active pack when it provides them. */
+    /** Zone names for the slider, themed by the active pack when it provides them. */
     getIntensityNames() {
         const names = this._activePack?.intensityNames;
         return (Array.isArray(names) && names.length === 3) ? names : INTENSITY_DEFAULT_NAMES;
+    }
+
+    /** The themed zone name for a slider value (thirds). */
+    getIntensityZoneName(value = this._visualIntensity) {
+        const names = this.getIntensityNames();
+        return value < 34 ? names[0] : (value < 67 ? names[1] : names[2]);
+    }
+
+    /**
+     * Route a visual to the user's chosen canvas: the app window, the
+     * whole-screen overlay window (via main), or both. Whole screen is the
+     * default on mac/win — effects shouldn't die because the app is hidden
+     * behind the window being dictated into. Linux defaults to app-window
+     * (Wayland overlay windows risk focus steals — see WAYLAND guide).
+     */
+    renderVisual(type, opts = {}) {
+        let canvas = localStorage.getItem('windy_fxCanvas');
+        if (!canvas) canvas = /Mac|Win/i.test(navigator.platform) ? 'screen' : 'app';
+        const canForward = !!(window.windyAPI && window.windyAPI.fxOverlayRender);
+        if ((canvas === 'screen' || canvas === 'both') && canForward) {
+            try { window.windyAPI.fxOverlayRender(type, opts); } catch (_) { }
+        }
+        if (canvas === 'app' || canvas === 'both' || !canForward) {
+            this.visual.renderEffect(type, opts);
+        }
     }
 
     /**
@@ -975,12 +1084,14 @@ class EffectsEngine {
             if (!visuals) return;
 
             const list = Array.isArray(visuals) ? visuals : [visuals];
+            // Word-count ramp × the visual-intensity slider (0.4×–1.6×)
+            const vMul = intensity * intensityMul(this._visualIntensity);
             for (const vis of list) {
-                this.visual.renderEffect(vis.type, {
+                this.renderVisual(vis.type, {
                     color: vis.color,
-                    intensity: (vis.intensity || 0.5) * intensity,
+                    intensity: (vis.intensity || 0.5) * vMul,
                     duration: vis.duration || 500,
-                    count: vis.count ? Math.max(1, Math.round(vis.count * intensity)) : undefined
+                    count: vis.count ? Math.max(1, Math.round(vis.count * vMul)) : undefined
                 });
             }
         } catch (_) { /* effects must never break the app */ }
@@ -1015,7 +1126,7 @@ class EffectsEngine {
         }
         if (hookDef.visual) {
             const list = Array.isArray(hookDef.visual) ? hookDef.visual : [hookDef.visual];
-            for (const vis of list) this.visual.renderEffect(vis.type, vis);
+            for (const vis of list) this.renderVisual(vis.type, vis);
         }
     }
 

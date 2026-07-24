@@ -6836,6 +6836,60 @@ registerSettingsIpc({
 // phone<->renderer signaling over IPC. Lazy: the server only starts the first
 // time the user opens "Connect a phone…" in the device picker.
 let _phoneCompanion = null;
+// ═══ Whole-screen effects canvas ═══
+// A transparent, click-through, NON-FOCUSABLE, always-on-top window covering
+// the primary display, so pack visuals (lightning, rain, confetti) play over
+// whatever app the user is dictating into — not trapped in a hidden Electron
+// window. Created lazily on the first forwarded effect; the renderer only
+// forwards when the user's canvas setting is 'screen' or 'both' (Linux
+// defaults to 'app' — see renderVisual() in effects-engine.js re: Wayland).
+let _fxOverlayWindow = null;
+let _fxOverlayReady = false;
+let _fxOverlayQueue = [];
+
+function ensureFxOverlayWindow() {
+  if (_fxOverlayWindow && !_fxOverlayWindow.isDestroyed()) return _fxOverlayWindow;
+  const { screen } = require('electron');
+  const b = screen.getPrimaryDisplay().bounds;
+  _fxOverlayReady = false;
+  _fxOverlayWindow = new BrowserWindow({
+    x: b.x, y: b.y, width: b.width, height: b.height,
+    transparent: true, frame: false, resizable: false, movable: false,
+    focusable: false, skipTaskbar: true, hasShadow: false,
+    alwaysOnTop: true, fullscreenable: false, show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'fx-overlay-preload.js'),
+      contextIsolation: true, nodeIntegration: false, sandbox: true,
+    },
+  });
+  _fxOverlayWindow.setAlwaysOnTop(true, 'screen-saver');
+  _fxOverlayWindow.setIgnoreMouseEvents(true);
+  if (process.platform === 'darwin') {
+    _fxOverlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  }
+  _fxOverlayWindow.webContents.once('did-finish-load', () => {
+    _fxOverlayReady = true;
+    for (const p of _fxOverlayQueue.splice(0)) {
+      _fxOverlayWindow.webContents.send('fx', p);
+    }
+  });
+  _fxOverlayWindow.loadFile(path.join(__dirname, 'renderer', 'fx-overlay.html'));
+  _fxOverlayWindow.showInactive(); // never take focus — same rule as the main window
+  _fxOverlayWindow.on('closed', () => { _fxOverlayWindow = null; _fxOverlayReady = false; });
+  return _fxOverlayWindow;
+}
+
+ipcMain.on('fx-overlay:render', (_event, payload) => {
+  try {
+    if (!payload || typeof payload.type !== 'string') return;
+    const msg = { type: payload.type, opts: payload.opts || {} };
+    const w = ensureFxOverlayWindow();
+    if (!w || w.isDestroyed()) return;
+    if (_fxOverlayReady) w.webContents.send('fx', msg);
+    else if (_fxOverlayQueue.length < 64) _fxOverlayQueue.push(msg);
+  } catch (err) { console.warn('[FxOverlay] render failed:', err.message); }
+});
+
 async function ensurePhoneCompanion() {
   if (_phoneCompanion) return _phoneCompanion;
   const { PhoneCompanion } = require('./phone-companion');
