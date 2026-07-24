@@ -14,10 +14,10 @@
     "gen:telemetry": "node scripts/gen-telemetry-config.cjs",
     "build": "npm run gen:telemetry && electron-builder",
     "build:win": "npm run gen:telemetry && electron-builder --win",
-    "build:mac": "npm run build:enter-tap && npm run gen:telemetry && electron-builder --mac",
+    "build:mac": "npm run build:enter-monitor && npm run gen:telemetry && electron-builder --mac",
     "build:linux": "npm run gen:telemetry && electron-builder --linux",
     "stamp:standard": "node scripts/stamp-edition.cjs",
-    "build:mac:standard": "npm run stamp:standard && npm run build:enter-tap && npm run gen:telemetry && electron-builder --mac",
+    "build:mac:standard": "npm run stamp:standard && npm run build:enter-monitor && npm run gen:telemetry && electron-builder --mac",
     "build:win:standard": "npm run stamp:standard && npm run gen:telemetry && electron-builder --win",
     "build:linux:standard": "npm run stamp:standard && npm run gen:telemetry && electron-builder --linux",
     "install:web": "cd src/client/web && npm install",
@@ -27,7 +27,7 @@
     "test:api": "cd account-server && npx jest tests/api.test.ts --forceExit",
     "dist:all": "npm run build:linux && npm run build:win && npm run build:mac",
     "postinstall": "electron-builder install-app-deps",
-    "build:enter-tap": "bash scripts/macos/build-enter-tap.sh"
+    "build:enter-monitor": "bash scripts/macos/build-enter-monitor.sh"
   },
   "dependencies": {
     "archiver": "^7.0.0",
@@ -115,7 +115,10 @@
       "src/**/*",
       "installer-v2/**/*",
       "!**/*.pyc",
-      "!**/__pycache__"
+      "!**/__pycache__",
+      "native/enter-monitor/index.js",
+      "native/enter-monitor/package.json",
+      "native/enter-monitor/build/Release/enter_monitor.node"
     ],
     "mac": {
       "category": "public.app-category.productivity",
@@ -139,13 +142,7 @@
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Windy Word needs microphone access for voice-to-text transcription.",
         "NSCameraUsageDescription": "Windy Word needs camera access for the video preview feature."
-      },
-      "extraResources": [
-        {
-          "from": "build/mac/mac-enter-tap",
-          "to": "mac-enter-tap"
-        }
-      ]
+      }
     },
     "win": {
       "target": [
@@ -189,6 +186,9 @@
         "--before-remove",
         "scripts/linux/prerm"
       ]
-    }
+    },
+    "asarUnpack": [
+      "**/*.node"
+    ]
   }
 }
