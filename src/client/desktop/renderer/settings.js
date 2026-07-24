@@ -537,25 +537,27 @@ class SettingsPanel {
             <div id="sfxPackGallery" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
           </div>
 
-          <div class="setting-row">
-            <label for="sfxIntensitySlider">Visual intensity</label>
-            <input type="range" id="sfxIntensitySlider" class="sfx-slider" min="0" max="100" value="55" style="flex:1;min-width:80px;">
-            <span id="sfxIntensityZone" style="min-width:104px;text-align:right;font-size:12px;font-weight:600;color:#E2E8F0;"></span>
+          <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+              <label for="sfxIntensitySlider" style="white-space:nowrap;">Visual intensity</label>
+              <span id="sfxIntensityZone" style="font-size:12px;font-weight:700;color:#F59E0B;white-space:nowrap;"></span>
+            </div>
+            <input type="range" id="sfxIntensitySlider" class="sfx-slider" min="0" max="100" value="55" style="width:100%;">
           </div>
-          <p class="settings-hint" id="sfxIntensityHint">A gradual dial from librarian to chimpanzee — how big the visuals get. Long recordings still build toward it. Sound loudness is the Master slider below.</p>
+          <p class="settings-hint" id="sfxIntensityHint">A gradual dial — how big the visuals get. Long recordings still build toward it. Sound loudness is the Master slider below.</p>
 
-          <div class="setting-row">
-            <label>Effects canvas</label>
-            <div id="sfxCanvasPills" style="display:flex;gap:4px;flex:1;justify-content:flex-end;flex-wrap:wrap;">
-              <button class="sfx-canvas-pill" data-canvas="app">🪟 App only</button>
-              <button class="sfx-canvas-pill" data-canvas="screen">🖥️ Whole screen</button>
-              <button class="sfx-canvas-pill" data-canvas="both">✨ Both</button>
+          <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+            <label style="white-space:nowrap;">Effects canvas</label>
+            <div id="sfxCanvasPills" style="display:flex;gap:4px;">
+              <button class="sfx-canvas-pill" data-canvas="app" style="flex:1;">🪟 App only</button>
+              <button class="sfx-canvas-pill" data-canvas="screen" style="flex:1;">🖥️ Whole screen</button>
+              <button class="sfx-canvas-pill" data-canvas="both" style="flex:1;">✨ Both</button>
             </div>
           </div>
           <p class="settings-hint">Whole screen paints the lightning over whatever app you're dictating into — effects aren't trapped in a minimized window.</p>
 
           <div id="sfxPreviewRow" class="setting-row" style="display:none;">
-            <button id="sfxPreviewBtn" class="settings-btn" style="width:100%;padding:6px 12px;" title="Preview current pack sounds">▶ Preview Sounds</button>
+            <button id="sfxPreviewBtn" class="settings-btn" style="width:100%;padding:6px 12px;" title="Cycle the active pack — sounds AND visuals, on your chosen canvas">▶ Preview Sounds & Visuals</button>
           </div>
 
           <div id="sfxSurpriseRow" class="setting-row" style="display:none;">
@@ -1610,7 +1612,7 @@ class SettingsPanel {
           if (packSelect) packSelect.value = pk.id;
           refreshPackGallery();
           refreshZoneLabel();
-          try { fx.trigger('paste', { wordCount: 300 }); } catch (_) { } // hear + see the pack instantly
+          try { fx.previewPackCycle(); } catch (_) { } // cycle the whole pack as configured
         });
         packGallery.appendChild(card);
       }
@@ -1645,7 +1647,7 @@ class SettingsPanel {
       pill.addEventListener('click', () => {
         try { localStorage.setItem('windy_fxCanvas', pill.dataset.canvas); } catch (_) { }
         refreshCanvasPills();
-        try { fx?.renderVisual?.('lightning', { color: '#A78BFA', count: 2, duration: 900, intensity: 0.8 }); } catch (_) { }
+        try { fx?.previewPackCycle?.(); } catch (_) { } // demo the active pack on the chosen canvas
       });
     });
     refreshCanvasPills();
@@ -2477,29 +2479,15 @@ class SettingsPanel {
     const previewBtn = this.panel.querySelector('#sfxPreviewBtn');
     if (previewBtn && fx) {
       previewBtn.addEventListener('click', () => {
-        const currentMode = fx._mode;
-        let pid;
-        if (currentMode === 'default') {
-          pid = 'classic-beep';
-        } else if (currentMode === 'single') {
-          pid = packSelect?.value || 'classic-beep';
-        } else if (currentMode === 'surprise') {
-          pid = fx._getNextSurprisePack()?.id || 'classic-beep';
-        } else {
-          pid = 'classic-beep';
-        }
-        // Play all 5 hooks: start → during → stop → processing → paste
+        // Cycle the REAL pipeline (active pack + overrides + intensity + canvas)
+        // so the preview is exactly what a recording produces — not the raw pack.
         previewBtn.textContent = '🔊 Playing...';
         previewBtn.disabled = true;
-        fx.previewEffect(pid, 'start');
-        setTimeout(() => fx.previewEffect(pid, 'during'), 600);
-        setTimeout(() => fx.previewEffect(pid, 'stop'), 1200);
-        setTimeout(() => fx.previewEffect(pid, 'process'), 1800);
-        setTimeout(() => fx.previewEffect(pid, 'paste'), 2400);
+        fx.previewPackCycle();
         setTimeout(() => {
-          previewBtn.textContent = '▶ Preview Sounds';
+          previewBtn.textContent = '▶ Preview Sounds & Visuals';
           previewBtn.disabled = false;
-        }, 3200);
+        }, 4600);
       });
     }
 

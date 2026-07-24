@@ -1926,9 +1926,11 @@ body.light-mode .sfx-master-controls {
   /* Labels SHRINK AND WRAP; controls stay visible. flex-shrink:0 here used to
      let a long label (esp. at larger font scale) push the checkbox past the
      row's overflow:hidden edge — the "sliver of a checkbox" bug from the
-     2026-07-23 hand test (Mac + Fedora). Control visibility always wins. */
+     2026-07-23 hand test (Mac + Fedora). Control visibility always wins.
+     The 60px floor stops the opposite failure: a label crushed to a letters-
+     stacked column ("Vis ual int en sit y") in very narrow rows. */
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: 60px;
   word-break: break-word;
 }
 

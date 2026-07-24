@@ -6858,7 +6858,8 @@ function ensureFxOverlayWindow() {
   _fxOverlayReady = false;
   _fxOverlayWindow = new BrowserWindow({
     x: b.x, y: b.y, width: b.width, height: b.height,
-    transparent: true, frame: false, resizable: false, movable: false,
+    transparent: true, backgroundColor: '#00000000',
+    frame: false, resizable: false, movable: false,
     focusable: false, skipTaskbar: true, hasShadow: false,
     alwaysOnTop: true, fullscreenable: false, show: false,
     webPreferences: {
@@ -6871,8 +6872,10 @@ function ensureFxOverlayWindow() {
   if (process.platform === 'darwin') {
     _fxOverlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   }
+  console.info(`[FxOverlay] creating whole-screen canvas ${b.width}x${b.height} at ${b.x},${b.y}`);
   _fxOverlayWindow.webContents.once('did-finish-load', () => {
     _fxOverlayReady = true;
+    console.info(`[FxOverlay] canvas ready — flushing ${_fxOverlayQueue.length} queued effect(s)`);
     for (const p of _fxOverlayQueue.splice(0)) {
       _fxOverlayWindow.webContents.send('fx', p);
     }

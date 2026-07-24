@@ -1022,6 +1022,19 @@ class EffectsEngine {
         return false;
     }
 
+    /**
+     * Preview the ACTIVE pack as configured: cycle the real stages through the
+     * real trigger pipeline (pack + per-stage overrides + intensity + canvas),
+     * so what previews is exactly what the user will get — on whichever canvas
+     * they chose. Wired to pack cards, canvas pills, and Preview Sounds.
+     */
+    previewPackCycle() {
+        const seq = [['start', 0], ['during', 700], ['stop', 1500], ['process', 2300], ['paste', 3700]];
+        for (const [hook, ms] of seq) {
+            setTimeout(() => { try { this.trigger(hook, { wordCount: 300 }); } catch (_) { } }, ms);
+        }
+    }
+
     // ── Visual-intensity slider ──
 
     getIntensityValue() { return this._visualIntensity; }
@@ -1056,8 +1069,13 @@ class EffectsEngine {
         let canvas = localStorage.getItem('windy_fxCanvas');
         if (!canvas) canvas = /Mac|Win/i.test(navigator.platform) ? 'screen' : 'app';
         const canForward = !!(window.windyAPI && window.windyAPI.fxOverlayRender);
+        if ((canvas === 'screen' || canvas === 'both') && !canForward && !this._warnedNoOverlay) {
+            // Once per session — diagnosable from the main-process log relay
+            this._warnedNoOverlay = true;
+            console.warn('[Effects] whole-screen canvas selected but overlay bridge missing — rendering app-only');
+        }
         if ((canvas === 'screen' || canvas === 'both') && canForward) {
-            try { window.windyAPI.fxOverlayRender(type, opts); } catch (_) { }
+            try { window.windyAPI.fxOverlayRender(type, opts); } catch (e) { console.warn('[Effects] overlay forward failed:', e.message); }
         }
         if (canvas === 'app' || canvas === 'both' || !canForward) {
             this.visual.renderEffect(type, opts);
