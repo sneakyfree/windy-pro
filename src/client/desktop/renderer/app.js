@@ -3086,6 +3086,21 @@ class WindyApp {
       //    UNLIMITED (the dictate-a-whole-book use case). The mic indicator signals recording
       //    health; long-session memory behavior is verified in launch hardening.
       //    (clone_capture was already unlimited via this same path.)
+      //    The WARNING stage still fires when the user picked a finite Max Recording:
+      //    the setting's own copy promises "warns 30s & 15s before the limit", and
+      //    trigger('warning') otherwise has no real call site (only settings preview).
+      //    Warn-only — deliberately does NOT re-enable the auto-stop.
+      this._clearWarningTimers();
+      const maxRecMin = parseFloat(localStorage.getItem('windy_maxRecordingMin') || '0');
+      if (maxRecMin > 0) {
+        const limitMs = maxRecMin * 60 * 1000;
+        this._warningTimers = [30, 15]
+          .filter(s => limitMs > s * 1000)
+          .map(s => setTimeout(() => {
+            try { this.effectsEngine?.trigger('warning'); } catch (_) { }
+            this._showToast(`⚠️ Recording limit in ${s}s`, 'warning', 5000);
+          }, limitMs - s * 1000));
+      }
       const currentRecMode = localStorage.getItem('windy_recordingMode') || 'batch';
 
       // 5b. Voice level monitoring for mini widget strobe
@@ -3204,8 +3219,14 @@ class WindyApp {
   /**
    * Stop batch recording and send audio for processing.
    */
+  _clearWarningTimers() {
+    for (const t of this._warningTimers || []) clearTimeout(t);
+    this._warningTimers = [];
+  }
+
   async stopBatchRecording() {
     console.error('[Batch] ⏹ stopBatchRecording() entered, recorder state:', this._batchRecorder?.state);
+    this._clearWarningTimers();
     // Clear timers
     clearTimeout(this._batchMaxTimer);
     clearTimeout(this._batchWarnTimer);

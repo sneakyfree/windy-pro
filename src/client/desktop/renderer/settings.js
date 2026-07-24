@@ -532,6 +532,16 @@ class SettingsPanel {
             <select id="sfxPackSelect" style="flex:1;"></select>
           </div>
 
+          <div id="sfxIntensityRow" class="setting-row">
+            <label>Intensity</label>
+            <div class="sfx-mode-pills" id="sfxIntensityPills" style="flex:1;">
+              <button class="sfx-mode-pill" data-level="subtle"></button>
+              <button class="sfx-mode-pill" data-level="standard"></button>
+              <button class="sfx-mode-pill" data-level="max"></button>
+            </div>
+          </div>
+          <p class="settings-hint" id="sfxIntensityHint">The amplitude ceiling — long recordings still build toward it.</p>
+
           <div id="sfxPreviewRow" class="setting-row" style="display:none;">
             <button id="sfxPreviewBtn" class="settings-btn" style="width:100%;padding:6px 12px;" title="Preview current pack sounds">▶ Preview Sounds</button>
           </div>
@@ -572,6 +582,10 @@ class SettingsPanel {
               <div id="sfxLibGrid" class="sfx-library-grid sfx-library-expanded"></div>
             </div>
             <div id="sfxLibGridInline" class="sfx-library-grid"></div>
+
+            <p class="settings-hint" style="margin:10px 0 6px;font-weight:700;font-size:12px;">── 🎬 Visual Library ──</p>
+            <div id="visualLibGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;"></div>
+            <p class="settings-hint">Pick any of these per stage below via the ✨ Visual dropdowns.</p>
 
             <p class="settings-hint sfx-during-hint" style="margin:8px 0 6px;font-weight:700;font-size:12px;">── 🎛️ Sound Hooks ──</p>
             <div id="sfxUnifiedHooks"></div>
@@ -1245,6 +1259,9 @@ class SettingsPanel {
     if (maxRecordingSelect) {
       maxRecordingSelect.addEventListener('change', (e) => {
         this.saveSetting('maxRecordingMin', e.target.value);
+        // Mirror for app.js's warning timers (30s/15s before the limit) — the
+        // store roundtrip is async and recording start reads synchronously.
+        try { localStorage.setItem('windy_maxRecordingMin', e.target.value); } catch (_) { }
       });
     }
 
@@ -1546,7 +1563,51 @@ class SettingsPanel {
       if (fx._activePackId) packSelect.value = fx._activePackId;
       packSelect.addEventListener('change', () => {
         fx.setActivePack(packSelect.value);
+        this._refreshIntensityPills();
       });
+    }
+
+    // ═══ Intensity dial — themed amplitude ceiling (Apprentice → Archmage) ═══
+    this._refreshIntensityPills = () => {
+      const pills = this.panel.querySelectorAll('#sfxIntensityPills .sfx-mode-pill');
+      if (!pills.length || !fx?.getIntensityNames) return;
+      const names = fx.getIntensityNames();
+      const current = fx.getIntensityLevel();
+      pills.forEach((pill, i) => {
+        pill.textContent = names[i] || pill.dataset.level;
+        pill.classList.toggle('active', pill.dataset.level === current);
+      });
+    };
+    const intensityPills = this.panel.querySelectorAll('#sfxIntensityPills .sfx-mode-pill');
+    intensityPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        fx?.setIntensityLevel?.(pill.dataset.level);
+        this._refreshIntensityPills();
+        // Instant feedback at the new ceiling — preview the paste moment
+        try { fx?.trigger?.('paste', { wordCount: 300 }); } catch (_) { }
+      });
+    });
+    this._refreshIntensityPills();
+
+    // ═══ Visual Library — peer of the Sound Library ═══
+    // One card per visual with instant ▶ preview; these are the same visuals
+    // the per-stage ✨ dropdowns offer, so users can audition before assigning.
+    const visualLibGrid = this.panel.querySelector('#visualLibGrid');
+    if (visualLibGrid && fx?.getVisualLibrary) {
+      for (const v of fx.getVisualLibrary()) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.title = `${v.desc} — click to preview`;
+        card.style.cssText =
+          'display:flex;justify-content:space-between;align-items:center;gap:6px;' +
+          'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);' +
+          'border-radius:8px;padding:6px 10px;cursor:pointer;color:#E2E8F0;font-size:12px;text-align:left;';
+        card.innerHTML = `<span>${v.name}</span><span style="color:#8b97a5;">▶</span>`;
+        card.addEventListener('click', () => {
+          try { fx.visual.renderEffect(v.id, { ...(v.defaults?._all || {}) }); } catch (_) { }
+        });
+        visualLibGrid.appendChild(card);
+      }
     }
 
     // ═══ Shared Sound Library + Custom Hook Builder ═══
@@ -2137,7 +2198,10 @@ class SettingsPanel {
         const stockOpts = `<optgroup label="🔊 Stock Sounds">` +
           stockOptions.map(s => `<option value="stock|${s.packId}|${s.hook}">${s.label}</option>`).join('') +
           `</optgroup>`;
-        return `<option value="">— Not set —</option>` + shuffleOpts + libOpts + stockOpts;
+        // "Pack default" (not "Not set"): mirrors the ✨ Visual dropdown's
+        // wording — empty means "follow the active pack", and since overrides
+        // now work in every non-silent mode, that's exactly what happens.
+        return `<option value="">— Pack default —</option>` + shuffleOpts + libOpts + stockOpts;
       };
 
       const refreshHookDropdowns = () => {

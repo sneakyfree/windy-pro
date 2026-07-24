@@ -37,6 +37,9 @@ class SoundManager {
      */
     playTone(opts = {}) {
         if (this._masterVolume === 0) return;
+        // Noise-based sounds ({noise: 'thunder-roll'|...}) route transparently,
+        // so pack hook defs and playSequence() can mix tones and noise freely.
+        if (opts.noise) { this.playNoise(opts); return; }
         try {
             const ctx = this._ensureCtx();
             const osc = ctx.createOscillator();
@@ -46,7 +49,8 @@ class SoundManager {
 
             const freq = opts.frequency || 440;
             const dur = opts.duration || 0.1;
-            const vol = (opts.volume || 0.3) * this._masterVolume;
+            // Clamp: the intensity dial can push volume multipliers past 1.0
+            const vol = Math.min(1, (opts.volume || 0.3) * this._masterVolume);
             osc.type = opts.type || 'sine';
 
             if (opts.sweep) {
@@ -72,6 +76,83 @@ class SoundManager {
             const delay = tone.delay || (i * 0.12);
             setTimeout(() => this.playTone(tone), delay * 1000);
         });
+    }
+
+    // ── Noise synthesis ─────────────────────────────────────────────────
+    // Oscillator beeps can't do weather. A filtered-noise layer gives packs
+    // real texture — rolling thunder, thunderclaps, whooshes — with zero
+    // bundled audio assets (same no-files rule as playTone).
+
+    _noiseBuffer(ctx, seconds = 3) {
+        const key = `noise${seconds}`;
+        if (this._cache[key] && this._cache[key].sampleRate === ctx.sampleRate) return this._cache[key];
+        const len = Math.floor(ctx.sampleRate * seconds);
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        // Brown-ish noise (integrated white) — deep rumble base, not TV static
+        let last = 0;
+        for (let i = 0; i < len; i++) {
+            const white = Math.random() * 2 - 1;
+            last = (last + 0.02 * white) / 1.02;
+            data[i] = last * 3.5;
+        }
+        this._cache[key] = buf;
+        return buf;
+    }
+
+    /**
+     * Play a synthesized noise effect.
+     * @param {Object} opts - { noise: 'thunder-roll'|'thunder-crack'|'whoosh', duration, volume }
+     */
+    playNoise(opts = {}) {
+        if (this._masterVolume === 0) return;
+        try {
+            const ctx = this._ensureCtx();
+            const vol = Math.min(1, (opts.volume || 0.5) * this._masterVolume);
+            const t0 = ctx.currentTime;
+            const src = ctx.createBufferSource();
+            const filter = ctx.createBiquadFilter();
+            const gain = ctx.createGain();
+            src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+
+            const kind = opts.noise || 'thunder-roll';
+            if (kind === 'thunder-roll') {
+                // Distant rolling thunder: slow swells of deep filtered rumble.
+                const dur = opts.duration || 2.8;
+                src.buffer = this._noiseBuffer(ctx, Math.max(3, dur));
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(320, t0);
+                filter.frequency.linearRampToValueAtTime(140, t0 + dur);
+                gain.gain.setValueAtTime(0.0001, t0);
+                // Three swells: rise, ebb, rise, fade — the "rolling" shape
+                gain.gain.exponentialRampToValueAtTime(vol, t0 + dur * 0.18);
+                gain.gain.exponentialRampToValueAtTime(vol * 0.4, t0 + dur * 0.42);
+                gain.gain.exponentialRampToValueAtTime(vol * 0.85, t0 + dur * 0.62);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+                src.start(t0); src.stop(t0 + dur);
+            } else if (kind === 'thunder-crack') {
+                // Close strike: instant sharp crack, then a rumble tail.
+                const dur = opts.duration || 1.4;
+                src.buffer = this._noiseBuffer(ctx, Math.max(3, dur));
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(3200, t0);            // bright CRACK
+                filter.frequency.exponentialRampToValueAtTime(160, t0 + dur * 0.5);
+                gain.gain.setValueAtTime(vol, t0);                     // no attack — instant hit
+                gain.gain.exponentialRampToValueAtTime(vol * 0.5, t0 + 0.12);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+                src.start(t0); src.stop(t0 + dur);
+            } else { // 'whoosh'
+                const dur = opts.duration || 0.5;
+                src.buffer = this._noiseBuffer(ctx, Math.max(3, dur));
+                filter.type = 'bandpass'; filter.Q.value = 1.2;
+                filter.frequency.setValueAtTime(300, t0);
+                filter.frequency.exponentialRampToValueAtTime(2400, t0 + dur);
+                gain.gain.setValueAtTime(0.0001, t0);
+                gain.gain.exponentialRampToValueAtTime(vol, t0 + dur * 0.4);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+                src.start(t0); src.stop(t0 + dur);
+            }
+        } catch (_) { /* fail silently */ }
     }
 
     /**
@@ -113,6 +194,12 @@ class SoundManager {
 // in Settings → Theme Packs & Effects via the per-stage visual dropdowns.
 // `defaults._all` are the opts used when a user hand-selects the effect.
 
+// Intensity dial stops. Packs may override the stop NAMES via `intensityNames`
+// (e.g. wizard: Apprentice/Sorcerer/Archmage); multipliers are global.
+const INTENSITY_MULTIPLIERS = { subtle: 0.6, standard: 1.0, max: 1.5 };
+const INTENSITY_DEFAULT_NAMES = ['🌱 Subtle', '🎯 Standard', '🌋 Maximum'];
+const INTENSITY_LEVELS = ['subtle', 'standard', 'max'];
+
 const VISUAL_LIBRARY = [
     { id: 'flash', name: '💡 Screen Flash', desc: 'Quick full-window color flash', defaults: { _all: { color: '#4ECDC4', duration: 350, intensity: 0.6 } } },
     { id: 'border-glow', name: '🌟 Border Glow', desc: 'Soft glow around the window edge', defaults: { _all: { color: '#22C55E', duration: 600, intensity: 0.6 } } },
@@ -120,7 +207,9 @@ const VISUAL_LIBRARY = [
     { id: 'sparkles', name: '✨ Sparkles', desc: 'Twinkling stars across the window', defaults: { _all: { color: '#FCD34D', count: 16, duration: 1200, intensity: 0.8 } } },
     { id: 'fireworks', name: '🎆 Fireworks', desc: 'Radial celebration bursts', defaults: { _all: { color: '#F59E0B', count: 3, duration: 1400, intensity: 0.8 } } },
     { id: 'lightning', name: '⚡ Lightning', desc: 'Jagged bolts with a sky flash', defaults: { _all: { color: '#A78BFA', count: 2, duration: 900, intensity: 0.8 } } },
-    { id: 'shake', name: '💥 Window Shake', desc: 'Impact shake on the window', defaults: { _all: { duration: 350, intensity: 0.6 } } }
+    { id: 'shake', name: '💥 Window Shake', desc: 'Impact shake on the window', defaults: { _all: { duration: 350, intensity: 0.6 } } },
+    { id: 'rain', name: '🌧️ Rain', desc: 'Falling streaks — pairs with thunder', defaults: { _all: { color: '#93C5FD', count: 26, duration: 1800, intensity: 0.7 } } },
+    { id: 'confetti', name: '🎊 Confetti', desc: 'Falling celebration pieces', defaults: { _all: { count: 24, duration: 1800, intensity: 0.8 } } }
 ];
 
 // ═══ Visual Overlay ═══
@@ -169,6 +258,49 @@ class VisualOverlay {
             case 'border-glow':
                 this._borderGlow(opts.color || '#22C55E', intensity, dur);
                 break;
+            case 'rain':
+                this._rain(opts.color || '#93C5FD', opts.count || 26, dur, intensity);
+                break;
+            case 'confetti':
+                this._confetti(opts.count || 24, dur);
+                break;
+        }
+    }
+
+    _rain(color, count, duration, intensity = 0.7) {
+        for (let i = 0; i < count; i++) {
+            const drop = document.createElement('div');
+            const fall = 600 + Math.random() * 500;
+            drop.style.cssText =
+                `position:absolute;top:-24px;left:${Math.random() * 100}%;width:1.5px;` +
+                `height:${10 + Math.random() * 14}px;background:${color};opacity:${0.25 + 0.5 * intensity};` +
+                `transform:translateY(0);transition:transform ${fall}ms linear;pointer-events:none;`;
+            this._overlay.appendChild(drop);
+            const delay = Math.random() * Math.max(0, duration - fall);
+            setTimeout(() => { drop.style.transform = `translateY(${this._overlay.clientHeight + 60}px)`; }, delay);
+            setTimeout(() => drop.remove(), delay + fall + 100);
+        }
+    }
+
+    _confetti(count, duration) {
+        const colors = ['#F59E0B', '#22C55E', '#3B82F6', '#EC4899', '#A78BFA', '#FCD34D'];
+        for (let i = 0; i < count; i++) {
+            const piece = document.createElement('div');
+            const fall = 900 + Math.random() * 700;
+            const drift = (Math.random() - 0.5) * 120;
+            const spin = 360 + Math.random() * 540;
+            piece.style.cssText =
+                `position:absolute;top:-16px;left:${Math.random() * 100}%;` +
+                `width:${5 + Math.random() * 5}px;height:${8 + Math.random() * 6}px;` +
+                `background:${colors[i % colors.length]};border-radius:2px;opacity:0.9;` +
+                `transform:translate(0,0) rotate(0deg);transition:transform ${fall}ms ease-in, opacity 300ms;pointer-events:none;`;
+            this._overlay.appendChild(piece);
+            const delay = Math.random() * Math.max(0, duration - fall);
+            setTimeout(() => {
+                piece.style.transform = `translate(${drift}px, ${this._overlay.clientHeight + 40}px) rotate(${spin}deg)`;
+            }, delay);
+            setTimeout(() => { piece.style.opacity = '0'; }, delay + fall - 200);
+            setTimeout(() => piece.remove(), delay + fall + 150);
         }
     }
 
@@ -357,6 +489,13 @@ class EffectsEngine {
         this._shuffleBag = [];
         this._dynamicScaling = true;
 
+        // Intensity dial — one themed amplitude ceiling per pack instead of
+        // separate beginner/medium/full pack variants. Multiplies both sound
+        // volume and visual intensity/counts; the word-count ramp still climbs
+        // toward this ceiling. Packs name the stops (wizard: Apprentice →
+        // Sorcerer → Archmage); INTENSITY_DEFAULT_NAMES covers the rest.
+        this._intensityLevel = 'standard'; // 'subtle' | 'standard' | 'max'
+
         // Per-hook-point settings — ALL 6 stages ON by default at clearly audible volumes,
         // so a new user immediately hears every cue (start, the during/processing confirmation
         // beeps, stop, the time-limit warning, and paste). The quiet 30% beeps were nearly
@@ -410,6 +549,7 @@ class EffectsEngine {
                     }
                 }
                 if (s.activePack) this._activePackId = s.activePack;
+                if (['subtle', 'standard', 'max'].includes(s.intensityLevel)) this._intensityLevel = s.intensityLevel;
                 // Visual overrides (added later; absent key = all 'auto', fully backward compatible)
                 if (s.visualHooks) {
                     for (const [k, v] of Object.entries(s.visualHooks)) {
@@ -434,6 +574,7 @@ class EffectsEngine {
                 activePack: this._activePack?.id || this._activePackId || null,
                 surpriseCategory: this._surpriseCategory,
                 dynamicScaling: this._dynamicScaling,
+                intensityLevel: this._intensityLevel,
                 favorites: this._favorites,
                 hookPoints: this._hookPoints,
                 visualHooks: this._visualHooks
@@ -491,14 +632,17 @@ class EffectsEngine {
         // paste. All of it scales linearly with recording length (I4).
         this._registerPack({
             id: 'wizard', name: '⚡ Wizard', category: 'epic',
-            description: 'Arcane energy and lightning for creative sessions',
+            description: 'Rolling thunder while it transcribes, a thunderclap storm on paste',
+            intensityNames: ['🧙 Apprentice', '🔮 Sorcerer', '⚡ Archmage'],
             hooks: {
                 start: { sound: { sweep: { from: 200, to: 800 }, duration: 0.3, type: 'sawtooth', volume: 0.5 }, visual: [{ type: 'border-glow', color: '#8B5CF6', duration: 600 }, { type: 'lightning', color: '#A78BFA', count: 1, duration: 500, intensity: 0.4 }] },
                 during: { sound: { frequency: 350, duration: 0.08, type: 'sawtooth', volume: 0.3 }, visual: { type: 'sparkles', color: '#C084FC', count: 5, duration: 900, intensity: 0.4 } },
-                stop: { sound: { sweep: { from: 800, to: 200 }, duration: 0.4, type: 'sawtooth', volume: 0.5 }, visual: [{ type: 'lightning', color: '#8B5CF6', count: 2, duration: 700, intensity: 0.7 }, { type: 'shake', intensity: 0.3, duration: 300 }] },
-                process: { sound: { sweep: { from: 300, to: 500 }, duration: 0.2, type: 'sawtooth', volume: 0.45 }, visual: { type: 'sparkles', color: '#C084FC', count: 10, duration: 1500, intensity: 0.6 } },
+                stop: { sound: [{ sweep: { from: 800, to: 200 }, duration: 0.4, type: 'sawtooth', volume: 0.5 }, { noise: 'thunder-roll', duration: 1.6, volume: 0.35, delay: 0.3 }], visual: [{ type: 'lightning', color: '#8B5CF6', count: 2, duration: 700, intensity: 0.7 }, { type: 'shake', intensity: 0.3, duration: 300 }] },
+                // The storm builds while it transcribes — distant rolling thunder + rain
+                process: { sound: { noise: 'thunder-roll', duration: 2.8, volume: 0.55 }, visual: [{ type: 'rain', color: '#93C5FD', count: 20, duration: 2400, intensity: 0.6 }, { type: 'sparkles', color: '#C084FC', count: 8, duration: 1500, intensity: 0.5 }] },
                 warning: { sound: [{ frequency: 800, duration: 0.12, type: 'sawtooth', volume: 0.7 }, { frequency: 600, duration: 0.15, type: 'sawtooth', volume: 0.7, delay: 0.15 }], visual: { type: 'lightning', color: '#F87171', count: 1, duration: 500, intensity: 0.6 } },
-                paste: { sound: [{ sweep: { from: 100, to: 1200 }, duration: 0.3, type: 'sawtooth', volume: 0.6 }, { frequency: 1200, duration: 0.15, type: 'square', volume: 0.4, delay: 0.25 }], visual: [{ type: 'lightning', color: '#A78BFA', count: 3, duration: 1100, intensity: 0.9 }, { type: 'sparkles', color: '#C084FC', count: 22, duration: 1800, intensity: 0.8 }, { type: 'fireworks', color: '#8B5CF6', count: 3, duration: 1500, intensity: 0.8 }] }
+                // Paste = the strike: instant CRACK, megabolts, then the rumble rolls away
+                paste: { sound: [{ noise: 'thunder-crack', duration: 1.4, volume: 0.75 }, { noise: 'thunder-roll', duration: 2.4, volume: 0.45, delay: 0.5 }], visual: [{ type: 'lightning', color: '#A78BFA', count: 4, duration: 1100, intensity: 1.0 }, { type: 'rain', color: '#93C5FD', count: 26, duration: 2000, intensity: 0.7 }, { type: 'sparkles', color: '#C084FC', count: 22, duration: 1800, intensity: 0.8 }, { type: 'fireworks', color: '#8B5CF6', count: 3, duration: 1500, intensity: 0.8 }] }
             }
         });
 
@@ -702,49 +846,24 @@ class EffectsEngine {
                 : ((typeof metadata.durationSec === 'number' && metadata.durationSec > 0) ? metadata.durationSec * 2.2 : null);
             if (words !== null) intensity = Math.max(0.15, Math.min(1, 0.15 + words / 300));
         }
+        // Intensity dial: themed amplitude ceiling (Apprentice/Sorcerer/Archmage).
+        // Applied after the word-count ramp so the ramp climbs toward the dial.
+        intensity = Math.min(1.5, intensity * (INTENSITY_MULTIPLIERS[this._intensityLevel] || 1));
 
-        // ── Custom Mode: each hook has its own chosen sound ──
-        if (this._mode === 'custom') {
-            try {
-                const customCfg = JSON.parse(localStorage.getItem('windy_customSounds') || '{}');
-                const hookCfg = customCfg[hook];
-                console.debug(`[EffectsEngine] Custom trigger: hook=${hook}, hookCfg=`, hookCfg);
-                if (!hookCfg) { console.debug(`[EffectsEngine] No custom config for hook: ${hook}`); return; }
+        // ── Per-hook sound override (the "— Pack default —" dropdowns) ──
+        // Honored in EVERY non-silent mode, mirroring the visual dropdowns:
+        // a set dropdown replaces the pack's sound for that stage; unset falls
+        // through to the pack default. Custom mode has no pack, so unset there
+        // simply plays no sound (visuals still render either way — an unset
+        // custom hook used to skip visuals too, which contradicted the
+        // "visual overrides work in all modes" contract).
+        let soundOverridePlayed = false;
+        try {
+            const customCfg = JSON.parse(localStorage.getItem('windy_customSounds') || '{}');
+            soundOverridePlayed = this._playSoundOverride(customCfg[hook], hookVolMul * Math.min(1, intensity));
+        } catch (e) { console.error('[EffectsEngine] Sound override error:', e); }
 
-                if (hookCfg.type === 'shuffle') {
-                    // Shuffle mode: pick a random sound from the pool
-                    const lib = JSON.parse(localStorage.getItem('windy_soundLibrary') || '[]');
-                    const pool = hookCfg.pool === 'all' ? lib : lib.filter(s => s.starred !== false);
-                    console.debug(`[EffectsEngine] Shuffle mode: pool=${hookCfg.pool}, poolSize=${pool.length}`);
-                    if (pool.length > 0) {
-                        const pick = pool[Math.floor(Math.random() * pool.length)];
-                        console.debug(`[EffectsEngine] Shuffle picked: "${pick.name}", dataUrlLen=${pick.dataUrl?.length || 0}`);
-                        if (pick?.dataUrl) this.sound.playAudioFile(pick.dataUrl, hookVolMul);
-                    }
-                } else if (hookCfg.type === 'library' && hookCfg.libId) {
-                    // Look up from shared sound library
-                    const lib = JSON.parse(localStorage.getItem('windy_soundLibrary') || '[]');
-                    const entry = lib.find(s => s.id === hookCfg.libId);
-                    console.debug(`[EffectsEngine] Library lookup: libId=${hookCfg.libId}, found=${!!entry}, hasDataUrl=${!!entry?.dataUrl}, dataUrlLen=${entry?.dataUrl?.length || 0}`);
-                    if (entry?.dataUrl) this.sound.playAudioFile(entry.dataUrl, hookVolMul);
-                } else if (hookCfg.type === 'file' && hookCfg.dataUrl) {
-                    // Legacy: inline data URL
-                    this.sound.playAudioFile(hookCfg.dataUrl, hookVolMul);
-                } else if (hookCfg.type === 'stock' && hookCfg.packId && hookCfg.hook) {
-                    const pack = this._packs[hookCfg.packId];
-                    if (pack) {
-                        const hookDef = pack.hooks?.[hookCfg.hook];
-                        if (hookDef?.sound) {
-                            if (Array.isArray(hookDef.sound)) {
-                                this.sound.playSequence(hookDef.sound.map(t => ({ ...t, volume: (t.volume || 0.3) * hookVolMul })));
-                            } else {
-                                this.sound.playTone({ ...hookDef.sound, volume: (hookDef.sound.volume || 0.3) * hookVolMul });
-                            }
-                        }
-                    }
-                }
-            } catch (e) { console.error('[EffectsEngine] Custom trigger error:', e); }
-            // Custom mode sounds handled — fall through so VISUALS still render.
+        if (this._mode === 'custom' || soundOverridePlayed) {
             this._renderHookVisual(hook, intensity);
             return;
         }
@@ -779,6 +898,61 @@ class EffectsEngine {
 
         // Show visual (honors per-hook user override; works even with no pack)
         this._renderHookVisual(hook, intensity);
+    }
+
+    /**
+     * Play a user-selected per-hook sound override (shuffle / library / legacy
+     * file / stock). Returns true if a sound was (or will be) played.
+     */
+    _playSoundOverride(hookCfg, volMul) {
+        if (!hookCfg) return false;
+        if (hookCfg.type === 'shuffle') {
+            const lib = JSON.parse(localStorage.getItem('windy_soundLibrary') || '[]');
+            const pool = hookCfg.pool === 'all' ? lib : lib.filter(s => s.starred !== false);
+            if (pool.length === 0) return false;
+            const pick = pool[Math.floor(Math.random() * pool.length)];
+            if (!pick?.dataUrl) return false;
+            this.sound.playAudioFile(pick.dataUrl, volMul);
+            return true;
+        }
+        if (hookCfg.type === 'library' && hookCfg.libId) {
+            const lib = JSON.parse(localStorage.getItem('windy_soundLibrary') || '[]');
+            const entry = lib.find(s => s.id === hookCfg.libId);
+            if (!entry?.dataUrl) return false;
+            this.sound.playAudioFile(entry.dataUrl, volMul);
+            return true;
+        }
+        if (hookCfg.type === 'file' && hookCfg.dataUrl) {
+            this.sound.playAudioFile(hookCfg.dataUrl, volMul);
+            return true;
+        }
+        if (hookCfg.type === 'stock' && hookCfg.packId && hookCfg.hook) {
+            const hookDef = this._packs[hookCfg.packId]?.hooks?.[hookCfg.hook];
+            if (!hookDef?.sound) return false;
+            if (Array.isArray(hookDef.sound)) {
+                this.sound.playSequence(hookDef.sound.map(t => ({ ...t, volume: (t.volume || 0.3) * volMul })));
+            } else {
+                this.sound.playTone({ ...hookDef.sound, volume: (hookDef.sound.volume || 0.3) * volMul });
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // ── Intensity dial ──
+
+    getIntensityLevel() { return this._intensityLevel; }
+
+    setIntensityLevel(level) {
+        if (!INTENSITY_LEVELS.includes(level)) return;
+        this._intensityLevel = level;
+        this._saveSettings();
+    }
+
+    /** Stop names for the dial, themed by the active pack when it provides them. */
+    getIntensityNames() {
+        const names = this._activePack?.intensityNames;
+        return (Array.isArray(names) && names.length === 3) ? names : INTENSITY_DEFAULT_NAMES;
     }
 
     /**
