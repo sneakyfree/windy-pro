@@ -26,12 +26,15 @@ let KEYPAD_ENTER: UInt16 = 76
 let application = NSApplication.shared
 application.setActivationPolicy(.accessory) // no Dock icon, no menu bar
 
-NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { (event: NSEvent) in
+// Retain the monitor token for the process lifetime — a discarded return
+// value is deallocated by ARC immediately, which REMOVES the monitor.
+let monitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { (event: NSEvent) in
     if event.keyCode == RETURN || event.keyCode == KEYPAD_ENTER {
         if !event.modifierFlags.contains(.shift) { // Shift+Enter = newline, not send
             FileHandle.standardOutput.write("ENTER\n".data(using: .utf8)!)
         }
     }
 }
+if monitor == nil { emitErr("MONITOR_NIL") }
 emitErr("MONITOR_READY")
 application.run()
