@@ -361,17 +361,21 @@ export default function Landing() {
                             <div className="pricing-price">$0</div>
                             <div className="pricing-period">forever</div>
                             <ul className="pricing-features">
-                                <li>✓ Auto-detect any language</li>
-                                <li>✓ 2 engines (Tiny + Base)</li>
-                                <li>✓ 5-minute recordings</li>
+                                <li>✓ Up to 10 engines — 7 CPU models, +3 GPU models on capable hardware</li>
+                                <li>✓ Unlimited local recording — no time limit</li>
                                 <li>✓ 100% local — your device, your data</li>
-                                <li>✓ Offline-capable</li>
-                                <li>✓ 500 MB WindyCloud storage</li>
+                                <li>✓ Works fully offline — go dark anytime</li>
+                                <li>✓ Theme packs &amp; effects (Stage 7 send finale)</li>
+                                <li>✓ Auto-detect any language</li>
                             </ul>
-                            <a href="#download" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>Download Free</a>
-                            <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>No sign-up. No credit card. No catch.</p>
+                            {loggedIn
+                                ? <a href="#download" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>Download Free</a>
+                                : <Link to="/auth" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>Get Started Free →</Link>
+                            }
+                            <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>Free forever. Sign up with your email to begin.</p>
                         </div>
-                        <div className="pricing-card">
+                        <div className="pricing-card" style={{ opacity: 0.55, position: 'relative' }}>
+                            <div style={{ position: 'absolute', top: '12px', right: '12px', background: '#334155', color: '#CBD5E1', fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px', letterSpacing: '0.5px' }}>COMING SOON</div>
                             <div className="pricing-badge pro">⚡ WINDY PRO</div>
                             <div className="pricing-price">{priceData.pro[billingType]}</div>
                             <div className="pricing-period">{periodLabels[billingType]}</div>
@@ -384,14 +388,11 @@ export default function Landing() {
                                 <li>✓ Speaker identification</li>
                                 <li>✓ 5 GB WindyCloud storage</li>
                             </ul>
-                            {loggedIn
-                                ? <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleUpgrade('pro')}>Start Pro →</button>
-                                : <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Pro →</Link>
-                            }
-                            <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>14-day free trial. Cancel anytime.</p>
+                            <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', cursor: 'not-allowed' }} disabled>Coming Soon</button>
+                            <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>The free version is available today.</p>
                         </div>
-                        <div className="pricing-card pricing-card-pro">
-                            <div className="pricing-recommended">RECOMMENDED</div>
+                        <div className="pricing-card pricing-card-pro" style={{ opacity: 0.55, position: 'relative' }}>
+                            <div style={{ position: 'absolute', top: '12px', right: '12px', background: '#334155', color: '#CBD5E1', fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px', letterSpacing: '0.5px' }}>COMING SOON</div>
                             <div className="pricing-badge pro">🚀 WINDY ULTRA</div>
                             <div className="pricing-price">{priceData.translate[billingType]}</div>
                             <div className="pricing-period">{periodLabels[billingType]}</div>
@@ -402,13 +403,11 @@ export default function Landing() {
                                 <li>✓ 25 offline translation engines</li>
                                 <li>✓ 10 GB WindyCloud storage</li>
                             </ul>
-                            {loggedIn
-                                ? <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleUpgrade('translate')}>Start Ultra →</button>
-                                : <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Ultra →</Link>
-                            }
-                            <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>14-day free trial. Cancel anytime.</p>
+                            <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', cursor: 'not-allowed' }} disabled>Coming Soon</button>
+                            <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>The free version is available today.</p>
                         </div>
-                        <div className="pricing-card">
+                        <div className="pricing-card" style={{ opacity: 0.55, position: 'relative' }}>
+                            <div style={{ position: 'absolute', top: '12px', right: '12px', background: '#334155', color: '#CBD5E1', fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px', letterSpacing: '0.5px' }}>COMING SOON</div>
                             <div className="pricing-badge pro">👑 WINDY MAX</div>
                             <div className="pricing-price">{priceData.translate_pro[billingType]}</div>
                             <div className="pricing-period">{periodLabels[billingType]}</div>
@@ -422,11 +421,8 @@ export default function Landing() {
                                 <li>✓ 100 offline engines</li>
                                 <li>✓ 25 GB WindyCloud storage</li>
                             </ul>
-                            {loggedIn
-                                ? <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => handleUpgrade('translate_pro')}>Start Max →</button>
-                                : <Link to="/auth" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Start Max →</Link>
-                            }
-                            <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>14-day free trial. Cancel anytime.</p>
+                            <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', cursor: 'not-allowed' }} disabled>Coming Soon</button>
+                            <p style={{ fontSize: '11px', color: '#6B7280', textAlign: 'center', marginTop: '8px' }}>The free version is available today.</p>
                         </div>
                     </div>
                     {/* Ecosystem cross-promotion */}

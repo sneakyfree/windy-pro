@@ -17,6 +17,7 @@ import Upgrade from './pages/Upgrade'
 import Wallet from './pages/Wallet'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
+import Disclosure from './pages/Disclosure'
 import Settings from './pages/Settings'
 import Admin from './pages/Admin'
 import Profile from './pages/Profile'
@@ -215,6 +216,7 @@ export default function App() {
                 } />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/terms" element={<Terms />} />
+                <Route path="/disclosure" element={<Disclosure />} />
                 <Route path="*" element={<NotFound />} />
             </Routes>
             </ErrorBoundary>

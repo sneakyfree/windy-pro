@@ -229,7 +229,7 @@ export default function Auth() {
                                     style={{ marginTop: '3px', accentColor: '#22C55E', cursor: 'pointer' }}
                                 />
                                 <label htmlFor="agree-terms" style={{ fontSize: '13px', color: '#94A3B8', cursor: 'pointer', lineHeight: '1.4' }}>
-                                    I agree to the <Link to="/terms" style={{ color: '#22C55E', textDecoration: 'underline' }}>Terms of Service</Link> and <Link to="/privacy" style={{ color: '#22C55E', textDecoration: 'underline' }}>Privacy Policy</Link>
+                                    I have read and agree to the <Link to="/disclosure" style={{ color: '#22C55E', textDecoration: 'underline' }}>Data &amp; Communications Disclosure</Link>, <Link to="/terms" style={{ color: '#22C55E', textDecoration: 'underline' }}>Terms of Service</Link>, and <Link to="/privacy" style={{ color: '#22C55E', textDecoration: 'underline' }}>Privacy Policy</Link>. My recordings stay on my device unless I choose cloud; I consent to receive product and offer communications (unsubscribe anytime).
                                 </label>
                             </div>
                         )}
