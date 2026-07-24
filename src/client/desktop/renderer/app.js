@@ -486,10 +486,22 @@ class WindyApp {
                 surpriseCategory: fx._surpriseCategory,
                 dynamicScaling: fx._dynamicScaling,
                 sfxMasterVolume: parseInt(localStorage.getItem('windy_sfxVolume') || '70', 10),
+                visualIntensity: fx.getIntensityValue?.() ?? null,
+                fxCanvas: localStorage.getItem('windy_fxCanvas') || 'default',
                 customSounds,
                 hookStages: validHooks,
               },
             });
+          }
+          case 'set_visual_intensity': {
+            // Agent-facing knob (the rotary dial): "dial the lightning up/down".
+            if (!fx?.setIntensityValue) return reply(requestId, { ok: false, error: 'EffectsEngine not initialized' });
+            const v = Math.max(0, Math.min(100, parseInt(args.value, 10)));
+            if (!Number.isFinite(v)) return reply(requestId, { ok: false, error: 'value (number 0-100) required' });
+            fx.setIntensityValue(v);
+            // Reflect on the open settings dial immediately
+            try { this.settingsPanel?._refreshPackUI?.(); } catch (_) { }
+            return reply(requestId, { ok: true, visualIntensity: v, zone: fx.getIntensityZoneName?.(v) || null });
           }
           case 'list_effect_packs': {
             if (!fx?.getPackList) return reply(requestId, { ok: false, error: 'EffectsEngine.getPackList unavailable' });

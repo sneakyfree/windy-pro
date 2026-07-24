@@ -4191,6 +4191,16 @@ function startWaylandControlServer() {
         res.end(JSON.stringify(result, null, 2));
         return;
       }
+      // POST /sound-effects/visual-intensity body={value:0-100}
+      // The rotary dial, addressable by a headless agent ("dial up the lightning").
+      if (req.method === 'POST' && pathname === '/sound-effects/visual-intensity') {
+        const body = await readJsonBody(req);
+        if (typeof body.value !== 'number') { res.writeHead(400); res.end('value (0-100 number) required'); return; }
+        const result = await _callAgentBridge('set_visual_intensity', body);
+        res.writeHead(result.ok ? 200 : 422, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(result, null, 2));
+        return;
+      }
       // POST /sound-effects/master-volume body={volume:0-100}
       if (req.method === 'POST' && pathname === '/sound-effects/master-volume') {
         const body = await readJsonBody(req);

@@ -6626,3 +6626,38 @@ body.linux-wm #resizeGrip:hover { opacity: 0.9; }
   font-size: 12px;
 }
 .sfx-hook-vol { flex: 1; min-width: 60px; }
+
+/* ═══ Visual-intensity rotary dial + mode-aware pack gallery (2026-07-24) ═══ */
+.sfx-dial {
+  width: 120px;
+  height: 120px;
+  cursor: grab;
+  touch-action: none;
+  border-radius: 50%;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sfx-dial:active { cursor: grabbing; }
+.sfx-dial:focus-visible { box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.7); }
+.sfx-dial svg { display: block; }
+.sfx-dial-zone {
+  font-size: 12px;
+  font-weight: 700;
+  color: #F59E0B;
+  min-height: 16px;
+}
+/* Packs dimmed but still readable when the mode doesn't use them */
+.sfx-gallery-dimmed {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+  pointer-events: none;
+}
+/* Surprise Me: every card reads as "in the rotation" */
+.sfx-pack-card.sfx-pack-rotating {
+  border-style: dashed;
+  border-color: rgba(167, 139, 250, 0.55);
+}

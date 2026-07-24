@@ -516,7 +516,7 @@ class SettingsPanel {
         <div class="settings-section">
           <h3>🎨 Theme Packs & Effects</h3>
 
-          <div class="setting-row">
+          <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px;">
             <label>Mode</label>
             <div class="sfx-mode-pills" id="sfxModePills">
               <button class="sfx-mode-pill active" data-mode="silent">🔇 Silent</button>
@@ -535,16 +535,16 @@ class SettingsPanel {
           <div class="setting-row" style="flex-direction:column;align-items:stretch;">
             <label style="margin-bottom:4px;">🎭 Theme Packs</label>
             <div id="sfxPackGallery" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
+            <p class="settings-hint" id="sfxPackGalleryNote" style="margin-top:6px;"></p>
           </div>
 
-          <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px;">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
-              <label for="sfxIntensitySlider" style="white-space:nowrap;">Visual intensity</label>
-              <span id="sfxIntensityZone" style="font-size:12px;font-weight:700;color:#F59E0B;white-space:nowrap;"></span>
-            </div>
-            <input type="range" id="sfxIntensitySlider" class="sfx-slider" min="0" max="100" value="55" style="width:100%;">
+          <div class="setting-row" style="flex-direction:column;align-items:center;gap:2px;">
+            <label style="align-self:flex-start;">Visual intensity</label>
+            <div id="sfxIntensityDial" class="sfx-dial" tabindex="0" role="slider"
+                 aria-label="Visual intensity" aria-valuemin="0" aria-valuemax="100" aria-valuenow="55"></div>
+            <span id="sfxIntensityZone" class="sfx-dial-zone"></span>
           </div>
-          <p class="settings-hint" id="sfxIntensityHint">A gradual dial — how big the visuals get. Long recordings still build toward it. Sound loudness is the Master slider below.</p>
+          <p class="settings-hint" id="sfxIntensityHint">Turn it up for a chimpanzee light-show, down for a librarian. How big the visuals get — long recordings still build toward it. Sound loudness is the Master slider below.</p>
 
           <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px;">
             <label style="white-space:nowrap;">Effects canvas</label>
@@ -1536,6 +1536,8 @@ class SettingsPanel {
       // replace the pack's sound for that stage) — never disable them. The
       // old custom-mode-only disable was the "inert Pack default dropdown"
       // from the 2026-07-23 hand test.
+      // Reflect the mode in the pack gallery (dim/highlight/rotation note).
+      this._refreshPackUI?.();
     };
 
     modePills.forEach(pill => {
@@ -1587,15 +1589,34 @@ class SettingsPanel {
     // the pack, switches to Single Pack mode, and previews the paste moment. ═══
     const packGallery = this.panel.querySelector('#sfxPackGallery');
     const zoneLabel = this.panel.querySelector('#sfxIntensityZone');
-    const intensitySlider = this.panel.querySelector('#sfxIntensitySlider');
     const refreshZoneLabel = () => {
       if (zoneLabel && fx?.getIntensityZoneName) zoneLabel.textContent = fx.getIntensityZoneName();
     };
+    const galleryNote = this.panel.querySelector('#sfxPackGalleryNote');
+    // Item 2 — packs mean different things per mode; reflect that honestly.
+    // silent/custom: dimmed + non-clickable (packs don't drive output there).
+    // default: only Classic highlighted. single: active pack highlighted.
+    // surprise: none pinned — all shown as "in rotation".
     const refreshPackGallery = () => {
       if (!packGallery) return;
+      const mode = fx?._mode;
+      const dimmed = mode === 'silent' || mode === 'custom';
+      packGallery.classList.toggle('sfx-gallery-dimmed', dimmed);
+      const highlightId = mode === 'default' ? 'classic-beep'
+        : mode === 'surprise' ? null
+          : (fx?._activePack?.id || fx?._activePackId);
       packGallery.querySelectorAll('.sfx-pack-card').forEach(card => {
-        card.classList.toggle('active', card.dataset.pack === (fx?._activePack?.id || fx?._activePackId));
+        card.classList.toggle('active', !dimmed && card.dataset.pack === highlightId);
+        card.classList.toggle('sfx-pack-rotating', mode === 'surprise');
       });
+      if (galleryNote) {
+        galleryNote.textContent =
+          mode === 'silent' ? '🔇 Silent — sounds and visuals are off. Pick another mode to use a pack.'
+            : mode === 'custom' ? '🎨 Custom — each stage is set individually below; packs are paused.'
+              : mode === 'surprise' ? '🎲 Surprise Me — rotates through every pack each session. Tap one to pin it.'
+                : mode === 'default' ? '🔔 Default — the Classic pack. Tap another to switch to Single Pack.'
+                  : 'Tap a pack to make it active.';
+      }
     };
     if (packGallery && fx) {
       for (const pk of fx.getPackList().filter(pk => pk.id !== '_silent')) {
@@ -1618,21 +1639,97 @@ class SettingsPanel {
       }
       refreshPackGallery();
     }
-    // Shared refresher for other pack-selection paths (the Single Pack dropdown)
-    this._refreshPackUI = () => { refreshPackGallery(); refreshZoneLabel(); };
+    // Shared refresher for other pack-selection paths + external (agent) changes
+    this._refreshPackUI = () => { refreshPackGallery(); refreshZoneLabel(); this._refreshIntensityDial?.(); };
 
-    // ═══ Visual intensity — a gradual dial with themed zone names ═══
-    if (intensitySlider && fx) {
-      intensitySlider.value = fx.getIntensityValue?.() ?? 55;
-      refreshZoneLabel();
-      intensitySlider.addEventListener('input', () => {
-        fx.setIntensityValue?.(parseInt(intensitySlider.value, 10));
+    // ═══ Visual intensity — a real rotary DIAL (item 1) ═══
+    // SVG knob: 270° sweep, gap at the bottom, filled value arc + pointer notch,
+    // center % readout. Interaction: angular drag, arrow keys, click-on-arc.
+    // role="slider" + aria-valuenow makes it findable and settable by a future
+    // MCP/browser agent ("dial the lightning up for grandma"); the same value
+    // also rides fx.setIntensityValue() → the /sound-effects/visual-intensity
+    // control-server endpoint, so a headless Python agent can move it too.
+    const dial = this.panel.querySelector('#sfxIntensityDial');
+    if (dial && fx) {
+      const R = 34, CX = 50, CY = 50, START = 135, SWEEP = 270; // degrees
+      const polar = (r, deg) => {
+        const a = deg * Math.PI / 180;
+        return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
+      };
+      const arc = (r, d0, d1) => {
+        const [x0, y0] = polar(r, d0), [x1, y1] = polar(r, d1);
+        const large = (d1 - d0) % 360 > 180 ? 1 : 0;
+        return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+      };
+      const zoneColor = (v) => (v < 34 ? '#38BDF8' : v < 67 ? '#F59E0B' : '#EF4444');
+
+      const renderDial = (v) => {
+        const end = START + (v / 100) * SWEEP;
+        const [px, py] = polar(R, end);
+        const [tx, ty] = polar(R - 9, end);
+        const col = zoneColor(v);
+        dial.innerHTML =
+          `<svg viewBox="0 0 100 100" width="120" height="120" aria-hidden="true">` +
+          `<path d="${arc(R, START, START + SWEEP)}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="9" stroke-linecap="round"/>` +
+          (v > 0 ? `<path d="${arc(R, START, end)}" fill="none" stroke="${col}" stroke-width="9" stroke-linecap="round"/>` : '') +
+          `<line x1="${tx.toFixed(2)}" y1="${ty.toFixed(2)}" x2="${px.toFixed(2)}" y2="${py.toFixed(2)}" stroke="#F8FAFC" stroke-width="4" stroke-linecap="round"/>` +
+          `<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="6" fill="#F8FAFC"/>` +
+          `<text x="50" y="52" text-anchor="middle" dominant-baseline="middle" font-size="19" font-weight="700" fill="#E2E8F0">${v}</text>` +
+          `<text x="50" y="66" text-anchor="middle" font-size="8" fill="#8b97a5">%</text>` +
+          `</svg>`;
+        dial.setAttribute('aria-valuenow', String(v));
+        dial.setAttribute('aria-valuetext', `${fx.getIntensityZoneName?.(v) || ''} (${v}%)`);
+      };
+
+      const applyValue = (v, preview) => {
+        v = Math.max(0, Math.min(100, Math.round(v)));
+        fx.setIntensityValue?.(v);
+        renderDial(v);
         refreshZoneLabel();
+        if (preview) { try { fx.trigger('paste', { wordCount: 300 }); } catch (_) { } }
+      };
+
+      const valueFromPointer = (ev) => {
+        const rect = dial.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+        let deg = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI; // 0=right, +90=down
+        if (deg < 0) deg += 360;
+        let t; // position along the 135°→405° sweep
+        if (deg >= START) t = deg - START;
+        else if (deg <= (START + SWEEP) - 360) t = deg + (360 - START);
+        else t = (deg < 90) ? SWEEP : 0; // bottom dead-zone → clamp to nearer end
+        return (t / SWEEP) * 100;
+      };
+
+      let dragging = false;
+      dial.addEventListener('pointerdown', (e) => {
+        dragging = true; dial.setPointerCapture(e.pointerId);
+        applyValue(valueFromPointer(e), false); e.preventDefault();
       });
-      // Preview on release, not on every tick while dragging
-      intensitySlider.addEventListener('change', () => {
-        try { fx.trigger('paste', { wordCount: 300 }); } catch (_) { }
+      dial.addEventListener('pointermove', (e) => { if (dragging) applyValue(valueFromPointer(e), false); });
+      const endDrag = (e) => {
+        if (!dragging) return;
+        dragging = false;
+        try { dial.releasePointerCapture(e.pointerId); } catch (_) { }
+        try { fx.trigger('paste', { wordCount: 300 }); } catch (_) { } // preview on release
+      };
+      dial.addEventListener('pointerup', endDrag);
+      dial.addEventListener('pointercancel', endDrag);
+      dial.addEventListener('keydown', (e) => {
+        const v = fx.getIntensityValue?.() ?? 55;
+        let nv = null;
+        if (e.key === 'ArrowUp' || e.key === 'ArrowRight') nv = v + 2;
+        else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') nv = v - 2;
+        else if (e.key === 'PageUp') nv = v + 10;
+        else if (e.key === 'PageDown') nv = v - 10;
+        else if (e.key === 'Home') nv = 0;
+        else if (e.key === 'End') nv = 100;
+        if (nv !== null) { e.preventDefault(); applyValue(nv, e.key === 'Home' || e.key === 'End'); }
       });
+
+      // Refresh from the engine whenever settings opens or an agent moves it.
+      this._refreshIntensityDial = () => renderDial(fx.getIntensityValue?.() ?? 55);
+      this._refreshIntensityDial();
     }
 
     // ═══ Effects canvas — app window / whole screen / both ═══
@@ -3485,6 +3582,22 @@ class SettingsPanel {
   open() {
     this.panel.classList.add('open');
     this.isOpen = true;
+    // Reflect any external (agent) changes made while the panel was closed.
+    try { this._refreshPackUI?.(); } catch (_) { }
+    // Click-anywhere-in-the-app-to-close (2026-07-24): the only way to dismiss
+    // used to be the ✕ in the far corner. Now a click outside the panel (and not
+    // on the gear that toggles it) closes it. Deferred install so the very click
+    // that opened the panel doesn't immediately bubble up and close it.
+    if (!this._outsideClickHandler) {
+      this._outsideClickHandler = (e) => {
+        if (!this.isOpen) return;
+        const t = e.target;
+        if (this.panel.contains(t)) return;                 // inside settings
+        if (t.closest && t.closest('#settingsBtn')) return; // gear handles its own toggle
+        this.close();
+      };
+    }
+    setTimeout(() => document.addEventListener('mousedown', this._outsideClickHandler, true), 0);
     // Devices come and go while the panel sits open for days (Continuity
     // iPhones powering on, USB cams plugged in) — re-scan on every open.
     this.populateMicDevices();
@@ -3505,6 +3618,9 @@ class SettingsPanel {
   close() {
     this.panel.classList.remove('open');
     this.isOpen = false;
+    if (this._outsideClickHandler) {
+      document.removeEventListener('mousedown', this._outsideClickHandler, true);
+    }
     // Matching the above: nothing to release here. Per-field escalation is
     // self-balancing (mousedown escalates, blur releases).
   }
