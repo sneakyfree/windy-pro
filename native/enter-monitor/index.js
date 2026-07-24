@@ -12,4 +12,5 @@ module.exports = {
   stop: () => { try { if (native) native.stop(); } catch (_) { } },
   inputMonitoring: () => { try { return native && native.inputMonitoring ? native.inputMonitoring() : 'n/a'; } catch (_) { return 'n/a'; } },
   requestInputMonitoring: () => { try { return native && native.requestInputMonitoring ? native.requestInputMonitoring() : false; } catch (_) { return false; } },
+  secureInputEnabled: () => { try { return native && native.secureInputEnabled ? native.secureInputEnabled() : false; } catch (_) { return false; } },
 };

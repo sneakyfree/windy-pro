@@ -11,6 +11,7 @@
 #import <Cocoa/Cocoa.h>
 #import <ApplicationServices/ApplicationServices.h>
 #import <IOKit/hidsystem/IOHIDLib.h>
+#import <Carbon/Carbon.h>
 #include <napi.h>
 #include <pthread.h>
 
@@ -109,12 +110,20 @@ Napi::Value RequestInputMonitoring(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(info.Env(), IOHIDRequestAccess(kIOHIDRequestTypeListenEvent));
 }
 
+// Secure Keyboard Entry — when ANY app has it on (Terminal.app's toggle, a
+// password field, etc.) macOS hides keystrokes from every tap system-wide.
+// Lets us tell the user "Stage 7 can't see Enter here" instead of looking broken.
+Napi::Value SecureInputEnabled(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), IsSecureEventInputEnabled());
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("start", Napi::Function::New(env, Start));
   exports.Set("stop", Napi::Function::New(env, Stop));
   exports.Set("isTrusted", Napi::Function::New(env, IsTrusted));
   exports.Set("inputMonitoring", Napi::Function::New(env, InputMonitoring));
   exports.Set("requestInputMonitoring", Napi::Function::New(env, RequestInputMonitoring));
+  exports.Set("secureInputEnabled", Napi::Function::New(env, SecureInputEnabled));
   return exports;
 }
 NODE_API_MODULE(enter_monitor, Init)

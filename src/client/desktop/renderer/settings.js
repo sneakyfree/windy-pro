@@ -1800,7 +1800,13 @@ class SettingsPanel {
           sendToggle.checked = false;
           if (res?.error) this.showToast?.(`⚠️ ${res.error}`);
         } else if (sendToggle.checked) {
-          this.showToast?.('🚀 Stage 7 armed — hit Enter after dictating to fire the finale');
+          if (res.secureInput) {
+            // Terminal "Secure Keyboard Entry" (or a password field) hides keys
+            // from every monitor. Works fine in browsers/email — tell the user.
+            this.showToast?.('🚀 Stage 7 on — but "Secure Keyboard Entry" is active (Terminal). Works in browsers & email; turn that off for terminals.');
+          } else {
+            this.showToast?.('🚀 Stage 7 armed — dictate, paste, then hit Enter to fire the finale');
+          }
         }
       });
     }

@@ -29,6 +29,7 @@ class SendDetector extends EventEmitter {
   }
 
   available() { return !!(this._native && this._native.available()); }
+  secureInputEnabled() { try { return !!(this._native && this._native.secureInputEnabled && this._native.secureInputEnabled()); } catch (_) { return false; } }
   running() { return this._started; }
 
   start() {
@@ -47,9 +48,10 @@ class SendDetector extends EventEmitter {
     const ok = this._native.start((ev) => {
       // ev: { keyCode, shift, cmd, alt, ctrl } — only Enter is ever delivered.
       this.emit('raw-enter', ev);
-      // Shift+Enter = newline in chat apps → never a "send".
-      if (ev && ev.shift) return;
-      this._onEnter(ev || {});
+      // A "send" gesture is plain Enter (chats, terminals) or Cmd+Enter
+      // (email, Slack). Shift/Ctrl/Alt+Enter are newlines/other — never send.
+      if (!ev || ev.shift || ev.ctrl || ev.alt) return;
+      this._onEnter(ev);
     });
     this._started = !!ok;
     if (this._started) { this.ready = true; this.emit('ready'); }

@@ -6996,7 +6996,8 @@ ipcMain.handle('send-detection:set', async (_event, enabled) => {
   if (!det) return { ok: false, error: 'Send detection is macOS-only for now', platform: process.platform };
   if (!det.available()) return { ok: false, error: 'Enter-tap helper unavailable (needs a mac build)' };
   if (enabled) det.start(); else det.stop();
-  return { ok: true, enabled: !!enabled, running: det.running() };
+  const secureInput = enabled ? !!det.secureInputEnabled?.() : false;
+  return { ok: true, enabled: !!enabled, running: det.running(), secureInput };
 });
 
 ipcMain.handle('send-detection:status', async () => {
@@ -7007,6 +7008,7 @@ ipcMain.handle('send-detection:status', async () => {
     enabled: !!store.get('effects.sendDetection'),
     running: !!det?.running(),
     permissionNeeded: !!det?.permissionNeeded,
+    secureInput: !!det?.secureInputEnabled?.(),
   };
 });
 
