@@ -1673,8 +1673,9 @@ class SettingsPanel {
           'border-radius:8px;padding:6px 10px;cursor:pointer;color:#E2E8F0;font-size:12px;text-align:left;';
         card.innerHTML = `<span>${v.name}</span><span style="color:#8b97a5;">▶</span>`;
         card.addEventListener('click', () => {
-          // Route through the canvas setting so previews show where real effects will
-          try { (fx.renderVisual || fx.visual.renderEffect).call(fx.renderVisual ? fx : fx.visual, v.id, { ...(v.defaults?._all || {}) }); } catch (_) { }
+          // Route through the canvas setting so the preview lands where real
+          // effects will — app window, whole screen, or both.
+          try { fx.renderVisual(v.id, { ...(v.defaults?._all || {}) }); } catch (_) { }
         });
         visualLibGrid.appendChild(card);
       }
