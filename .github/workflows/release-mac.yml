@@ -1,0 +1,86 @@
+name: Release macOS DMG
+
+# Turns the 12-step build→sign→notarize→staple→verify ritual into `git tag vX`.
+# ALL logic lives in scripts/macos/release-mac.sh — this workflow is a thin
+# wrapper (set env → call script → collect artifact). Run the exact same thing
+# locally with:  scripts/macos/release-mac.sh --arch arm64
+#
+# WHY a self-hosted macOS runner (not the Linux Kit 0 runner):
+#   codesign / notarytool / stapler are macOS-only and need the Developer ID
+#   private key in a keychain + a native arm64 toolchain to build the
+#   enter_monitor.node addon against the host ABI. The Linux runner cannot do
+#   any of it. This targets the ARM64 mac (M4 mini / OC5) which is already
+#   provisioned with the login-keychain identity + the `windy-notarize`
+#   notary keychain profile.
+#
+# CREDENTIALS — two supported modes, no code change needed:
+#   A) Runner is the already-provisioned Mac: the script auto-finds the login
+#      keychain identity + windy-notarize profile. Leave the secrets below unset.
+#   B) Fresh/locked runner: set repo secrets and they flow through as env:
+#        MAC_CSC_LINK_B64      base64 of the Developer ID .p12
+#        MAC_CSC_KEY_PASSWORD  .p12 password
+#        MAC_NOTARY_APPLE_ID / MAC_NOTARY_TEAM_ID / MAC_NOTARY_PASSWORD
+#
+# The public R2 upload + lockbox row + announce are DELIBERATELY NOT here —
+# they are outward-facing and stay manual (docs/release-pro-dmg.md §4-6). This
+# workflow's output is the notarized DMG as a build artifact for a human to ship.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Architecture to build (arm64 shippable today; x64 needs the cross-compiled addon)'
+        required: true
+        default: 'arm64'
+        type: choice
+        options: [arm64, x64, both]
+
+jobs:
+  release-mac:
+    # macOS + ARM64 self-hosted. Not a hosted `macos-*` label, so this passes
+    # runner-lint without the escape hatch — but the comment documents intent.
+    runs-on: [self-hosted, macOS, ARM64]  # runner-lint-allow — mac signing REQUIRES a macOS runner, not Kit 0 (linux)
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build + sign + notarize + staple + verify
+        env:
+          # Mode B (fresh runner). Unset in Mode A → script falls back to the
+          # runner's own keychain + windy-notarize profile. CSC_LINK wants a
+          # file path, so decode the b64 secret to disk first (below).
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          NOTARY_APPLE_ID: ${{ secrets.MAC_NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.MAC_NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.MAC_NOTARY_PASSWORD }}
+          MAC_CSC_LINK_B64: ${{ secrets.MAC_CSC_LINK_B64 }}
+        run: |
+          set -euo pipefail
+          # If a cert secret is provided, materialize it and point CSC_LINK at it.
+          if [ -n "${MAC_CSC_LINK_B64:-}" ]; then
+            echo "$MAC_CSC_LINK_B64" | base64 --decode > "$RUNNER_TEMP/developer-id-app.p12"
+            export CSC_LINK="$RUNNER_TEMP/developer-id-app.p12"
+          fi
+          ARCH="${{ github.event.inputs.arch || 'arm64' }}"
+          scripts/macos/release-mac.sh --arch "$ARCH"
+
+      - name: Collect notarized DMG(s)
+        uses: actions/upload-artifact@v4
+        with:
+          name: windy-word-macos-dmg
+          retention-days: 7
+          path: dist/Windy Word-*.dmg
+          if-no-files-found: error
