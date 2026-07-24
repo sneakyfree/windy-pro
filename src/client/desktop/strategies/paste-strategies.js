@@ -37,10 +37,60 @@ function hasBinary(name) {
   }
 }
 
+// Electron STRIPS WAYLAND_DISPLAY and XDG_RUNTIME_DIR from its own process env
+// when it initializes the X11 Ozone backend (verified on the running app,
+// Grant 2026-07-23). wl-copy / wl-paste / wtype are Wayland clients — without
+// these they can't reach the compositor, so they time out, the clipboard paste
+// strategies fail 3× and get adaptive-demoted, and paste collapses to visible
+// char-by-char ydotool typing. Reconstruct the Wayland env from disk so the
+// fast block-paste survives regardless of what the parent env carries.
+let _waylandEnvCache = null;
+function getWaylandEnv() {
+  if (_waylandEnvCache) return _waylandEnvCache;
+  const uid = process.getuid?.() ?? 1000;
+  const xdgRuntime = process.env.XDG_RUNTIME_DIR || `/run/user/${uid}`;
+  let waylandDisplay = process.env.WAYLAND_DISPLAY;
+  if (!waylandDisplay) {
+    try {
+      const socks = require('fs').readdirSync(xdgRuntime)
+        .filter(f => /^wayland-\d+$/.test(f))
+        .sort();
+      waylandDisplay = socks.includes('wayland-0') ? 'wayland-0' : (socks[0] || 'wayland-0');
+    } catch (_) {
+      waylandDisplay = 'wayland-0';
+    }
+  }
+  _waylandEnvCache = { XDG_RUNTIME_DIR: xdgRuntime, WAYLAND_DISPLAY: waylandDisplay };
+  return _waylandEnvCache;
+}
+
+// Env for every Wayland clipboard/type subprocess: real process env with the
+// reconstructed Wayland vars layered on top so a stripped parent env can't
+// break the compositor connection.
+function getWaylandSpawnEnv() {
+  return { ...process.env, ...getWaylandEnv() };
+}
+
+// True on a Wayland session even if Electron stripped XDG_SESSION_TYPE from the
+// env: fall back to the presence of a wayland-* socket under the runtime dir.
+// Without this, the Wayland paste strategies could silently drop out of the
+// candidate chain the moment the env var went missing.
+function isWaylandSession() {
+  if ((process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland') return true;
+  if (process.env.WAYLAND_DISPLAY) return true;
+  try {
+    const uid = process.getuid?.() ?? 1000;
+    const dir = process.env.XDG_RUNTIME_DIR || `/run/user/${uid}`;
+    return require('fs').readdirSync(dir).some(f => /^wayland-\d+$/.test(f));
+  } catch (_) {
+    return false;
+  }
+}
+
 function getYdoEnv() {
   const uid = process.getuid?.() ?? 1000;
   const socket = process.env.YDOTOOL_SOCKET || `/tmp/ydotool-${uid}.socket`;
-  return { ...process.env, YDOTOOL_SOCKET: socket };
+  return { ...process.env, ...getWaylandEnv(), YDOTOOL_SOCKET: socket };
 }
 
 /**
@@ -233,10 +283,10 @@ const strategies = [
     description: 'Wayland-native typing via virtual-keyboard protocol. Talks directly to the compositor. Fastest path on supported compositors. Install: sudo dnf install wtype / sudo apt install wtype.',
     needsClipboard: false,
     detect: async () => process.platform === 'linux' &&
-      (process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' && hasBinary('wtype'),
+      isWaylandSession() && hasBinary('wtype'),
     paste: async (text) => {
       const timeout = Math.min(300000, Math.max(30000, text.length * 30));
-      const { ok } = await execFilePromise('wtype', ['--', text], { timeout });
+      const { ok } = await execFilePromise('wtype', ['--', text], { env: getWaylandSpawnEnv(), timeout });
       return ok;
     },
   },
@@ -253,7 +303,7 @@ const strategies = [
     description: 'Types via /dev/uinput kernel injection. Works on any focused Wayland or XWayland target. ~1-5ms per char.',
     needsClipboard: false,
     detect: async () => process.platform === 'linux' &&
-      (process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' && hasBinary('ydotool'),
+      isWaylandSession() && hasBinary('ydotool'),
     paste: async (text) => {
       const env = getYdoEnv();
       // 100ms focus-settle: Mutter sometimes finalizes XWayland focus
@@ -297,7 +347,7 @@ const strategies = [
     description: 'Fires Ctrl+Shift+V via /dev/uinput. Auto-returns false on Wayland-native targets (where the keystroke would read the unreliable Wayland clipboard). Works great on XWayland targets reading the X11 clipboard.',
     needsClipboard: true,
     detect: async () => process.platform === 'linux' &&
-      (process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' && hasBinary('ydotool'),
+      isWaylandSession() && hasBinary('ydotool'),
     paste: async (text) => {
       // Gate by target type: this strategy only works when the focused window
       // is XWayland (reads X11 clipboard). For Wayland-native targets, return
@@ -328,13 +378,13 @@ const strategies = [
     description: 'Writes via wl-copy AND X11 clipboard, then fires Ctrl+Shift+V. Covers both Wayland-native and XWayland targets. Brittle when Mutter clipboard is wedged — falls through to next strategy on wl-copy timeout.',
     needsClipboard: true, // we also want X11 clipboard set so XWayland targets work
     detect: async () => process.platform === 'linux' &&
-      (process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' &&
+      isWaylandSession() &&
       hasBinary('wl-copy') && hasBinary('ydotool'),
     paste: async (text) => {
       // Step 1: wl-copy with strict timeout
       const wlOk = await new Promise((resolve) => {
         const proc = spawn('wl-copy', [], {
-          env: { ...process.env },
+          env: getWaylandSpawnEnv(),
           stdio: ['pipe', 'ignore', 'ignore'],
           timeout: 800,
         });
@@ -450,11 +500,11 @@ async function _snapshotClipboards() {
   const snap = { x11: null, wayland: null };
   try { snap.x11 = clipboard.readText() || null; } catch (_) { /* clipboard unavailable */ }
   if (process.platform === 'linux' &&
-      (process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' &&
+      isWaylandSession() &&
       hasBinary('wl-paste')) {
     // Strict timeout: wl-paste blocks forever when the clipboard owner is
     // unresponsive; losing the snapshot is fine, hanging the paste is not.
-    const { ok, stdout } = await execFilePromise('wl-paste', ['-n', '-t', 'text'], { timeout: 500 });
+    const { ok, stdout } = await execFilePromise('wl-paste', ['-n', '-t', 'text'], { env: getWaylandSpawnEnv(), timeout: 500 });
     if (ok && stdout) snap.wayland = stdout;
   }
   return snap;
@@ -463,10 +513,10 @@ async function _snapshotClipboards() {
 function _wlCopy(text) {
   try {
     if (text === null) {
-      spawn('wl-copy', ['--clear'], { stdio: 'ignore' }).on('error', () => {});
+      spawn('wl-copy', ['--clear'], { env: getWaylandSpawnEnv(), stdio: 'ignore' }).on('error', () => {});
       return;
     }
-    const proc = spawn('wl-copy', [], { stdio: ['pipe', 'ignore', 'ignore'] });
+    const proc = spawn('wl-copy', [], { env: getWaylandSpawnEnv(), stdio: ['pipe', 'ignore', 'ignore'] });
     proc.on('error', () => {});
     proc.stdin.write(text);
     proc.stdin.end();
@@ -487,9 +537,9 @@ async function _restoreClipboards(snap, transcript) {
     }
   } catch (_) { /* best-effort */ }
   if (process.platform === 'linux' &&
-      (process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' &&
+      isWaylandSession() &&
       hasBinary('wl-paste')) {
-    const { ok, stdout } = await execFilePromise('wl-paste', ['-n', '-t', 'text'], { timeout: 500 });
+    const { ok, stdout } = await execFilePromise('wl-paste', ['-n', '-t', 'text'], { env: getWaylandSpawnEnv(), timeout: 500 });
     if (ok && stdout === transcript) {
       _wlCopy(snap.wayland);
       touched = true;
@@ -663,27 +713,31 @@ function _hasCtrlShiftVCollision(hotkeysCfg) {
  */
 function defaultFallbackChain(hotkeysCfg) {
   const os = process.platform;
-  const ds = (process.env.XDG_SESSION_TYPE || '').toLowerCase();
   if (os === 'darwin') {
     return ['cliclick_t_v', 'osascript_cmd_v'];
   }
   if (os === 'win32') {
     return ['windows_ui_automation', 'sendkeys_ctrl_v'];
   }
-  // linux
-  if (ds === 'wayland') {
+  // linux — use isWaylandSession() (not the raw env var): Electron strips
+  // XDG_SESSION_TYPE, and reading it directly mis-routed a Wayland session
+  // into the x11 chain (Grant, 2026-07-23).
+  if (isWaylandSession()) {
     const collision = _hasCtrlShiftVCollision(hotkeysCfg);
     if (collision) {
-      // User's hotkey = Ctrl+Shift+V (the default). Compositor will intercept
-      // any ydotool-fired Ctrl+Shift+V and route to Windy's own paste-transcript
-      // action — the V never reaches the focused window. Put typing strategies
-      // first; demote keystroke strategies to last-resort (they only work for
-      // XWayland targets where Mutter doesn't route X11 keystrokes to GNOME
-      // keybindings — but Mutter does route them, so they'll fail there too).
+      // User's hotkey = Ctrl+Shift+V. Compositor intercepts any ydotool-fired
+      // Ctrl+Shift+V and routes it to Windy's own paste-transcript action — the
+      // V never reaches the focused window. Clipboard-keystroke paste can't win
+      // here, so typing strategies lead.
       return ['wtype', 'ydotool_type', 'wlcopy_then_ctrl_shift_v', 'ydotool_keystroke_ctrl_shift_v'];
     }
-    // No collision: prefer instant strategies, fall back to typing if clipboard wedged.
-    return ['wtype', 'wlcopy_then_ctrl_shift_v', 'ydotool_keystroke_ctrl_shift_v', 'ydotool_type'];
+    // No collision (default Linux hotkey is Ctrl+Alt+V): prefer TRUE BLOCK PASTE
+    // — wl-copy sets the clipboard, one Ctrl+Shift+V drops the whole transcript
+    // at once. Grant's explicit call (2026-07-23): never the visible char-by-char
+    // type-out; paste the whole block instantly. Ctrl+Shift+V works in both
+    // terminals and GUI apps (project doctrine). wtype/ydotool_type remain as
+    // fallbacks if the Mutter clipboard is wedged, so reliability is preserved.
+    return ['wlcopy_then_ctrl_shift_v', 'wtype', 'ydotool_keystroke_ctrl_shift_v', 'ydotool_type'];
   }
   // x11
   return ['xdotool_keystroke_ctrl_v', 'xdotool_type'];
