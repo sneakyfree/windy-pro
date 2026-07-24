@@ -6945,23 +6945,17 @@ ipcMain.on('window:rattle', (_event, payload) => {
 // CGEventTap (native/mac-enter-tap.swift). Off by default — opt-in via settings.
 let _sendDetector = null;
 
-function _resolveEnterTapPath() {
+// Load the native NSEvent monitor (main-process addon). Dev resolves the repo
+// build; packaged resolves the unpacked module (Milestone 1b wires packaging).
+function _loadEnterMonitor() {
   const candidates = [
-    process.resourcesPath ? path.join(process.resourcesPath, 'mac-enter-tap') : null, // packaged
-    path.join(__dirname, '..', '..', '..', 'build', 'mac', 'mac-enter-tap'),           // dev repo
+    path.join(__dirname, '..', '..', '..', 'native', 'enter-monitor'),                       // dev repo
+    process.resourcesPath ? path.join(process.resourcesPath, 'app.asar.unpacked', 'native', 'enter-monitor') : null,
+    process.resourcesPath ? path.join(process.resourcesPath, 'native', 'enter-monitor') : null,
   ].filter(Boolean);
-  for (const c of candidates) { try { if (fs.existsSync(c)) return c; } catch (_) { } }
-  // Dev fallback: compile on demand next to userData if swiftc is present.
-  try {
-    const src = path.join(__dirname, 'native', 'mac-enter-tap.swift');
-    if (fs.existsSync(src)) {
-      const out = path.join(app.getPath('userData'), 'mac-enter-tap');
-      if (!fs.existsSync(out)) {
-        require('child_process').execFileSync('swiftc', ['-O', src, '-o', out], { timeout: 30000 });
-      }
-      if (fs.existsSync(out)) return out;
-    }
-  } catch (_) { /* swiftc absent — feature stays inert */ }
+  for (const c of candidates) {
+    try { const m = require(c); if (m && m.available && m.available()) return m; } catch (_) { }
+  }
   return null;
 }
 
@@ -6970,11 +6964,12 @@ function getSendDetector() {
   if (_sendDetector) return _sendDetector;
   const { SendDetector } = require('./send-detector');
   _sendDetector = new SendDetector({
-    helperPath: _resolveEnterTapPath(),
+    nativeMonitor: _loadEnterMonitor(),
     getFrontmostPid: () => global._lastFocusedPid || null,
   });
   _sendDetector.on('perm', (state) => console.info(`[SendDetect] Input Monitoring permission: ${state}`));
   _sendDetector.on('ax', (trusted) => console.info(`[SendDetect] Accessibility trusted: ${trusted}`));
+  _sendDetector.on('inputmon', (s) => console.info(`[SendDetect] Input Monitoring: ${s}`));
   _sendDetector.on('raw-enter', () => {
     // Diagnostic (content-free): the tap saw an Enter. If these appear but
     // 'send' doesn't, it's a scoping mismatch; if they never appear, the tap

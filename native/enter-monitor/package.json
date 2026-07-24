@@ -1,0 +1,8 @@
+{
+  "name": "enter-monitor",
+  "version": "1.0.0",
+  "description": "Windy Word Stage-7 native Enter monitor (macOS, listen-only)",
+  "main": "index.js",
+  "private": true,
+  "dependencies": { "node-addon-api": "*" }
+}
