@@ -103,7 +103,15 @@ if (window.windyMini) {
 
   // ── Resize ──
   window.windyMini.onResize((size) => {
+    // Drive the ACTUAL widget size, not just the emoji font — without the
+    // CSS var update, the Settings-panel size slider changed nothing visible
+    // (SVG widgets ignore font-size entirely). Keep local settings in sync so
+    // the right-click panel's slider shows the same value.
+    settings.size = size;
+    document.documentElement.style.setProperty('--widget-size', size + 'px');
     tornado.style.fontSize = Math.round(size * 0.5) + 'px';
+    const s = document.getElementById('sliderSize');
+    if (s) s.value = size;
   });
 
   // ── Widget change ──
@@ -412,6 +420,22 @@ widget.addEventListener('mousedown', (e) => {
   widget.classList.add('dragging');
   // Tell main a drag is live so the Linux click-through poll keeps the whole
   // window interactive even when the cursor briefly outruns the icon.
+  if (window.windyMini?.dragState) window.windyMini.dragState(true);
+});
+
+// Drag also starts from the page background around the icon: the click-through
+// poll already limits which clicks reach this window at all, and the visible
+// glyph can render slightly larger than the .widget hit-box (a size-pipeline
+// mismatch made the whole icon miss its own handle — Grant, 2026-07-23).
+// Anything clickable that isn't the settings panel should grab the window.
+document.body.addEventListener('mousedown', (e) => {
+  if (e.button !== 0 || isDragging) return;
+  if (e.target !== document.body && e.target !== document.documentElement) return;
+  e.preventDefault();
+  isDragging = true;
+  dragStartX = e.screenX;
+  dragStartY = e.screenY;
+  widget.classList.add('dragging');
   if (window.windyMini?.dragState) window.windyMini.dragState(true);
 });
 

@@ -622,7 +622,7 @@ class SettingsPanel {
           <p class="settings-hint">PNG, GIF, SVG, or WebP (max 2MB). Up to 100.</p>
           <div class="setting-row" style="margin-top:8px;">
             <label for="tornadoSize">Widget size</label>
-            <input type="range" id="tornadoSize" min="32" max="128" step="8" value="56" style="flex:1;margin:0 8px;">
+            <input type="range" id="tornadoSize" min="32" max="300" step="4" value="56" style="flex:1;margin:0 8px;">
             <span id="tornadoSizeValue" style="min-width:36px;text-align:right;">56px</span>
           </div>
         </div>

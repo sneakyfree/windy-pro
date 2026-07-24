@@ -2036,10 +2036,18 @@ ipcMain.on('voice-level', (event, level) => {
 
 // Update tornado widget size from settings slider
 ipcMain.on('update-tornado-size', (event, size) => {
+  // ONE size truth: tornadoSize. Keep widgetSettings.size in lockstep so the
+  // widget's own right-click panel and this Settings slider stop fighting
+  // (they were two disconnected pipelines — Grant, 2026-07-23). Window is
+  // ALWAYS size+100 (50px glow padding each side) — the old +4 here fought
+  // every other sizing site.
   store.set('tornadoSize', size);
-  const winSize = size + 4;
+  const ws = store.get('widgetSettings') || {};
+  ws.size = size;
+  store.set('widgetSettings', ws);
+  const winSize = size + 100;
   if (miniWindow && !miniWindow.isDestroyed()) {
-    miniWindow.setSize(winSize, winSize);
+    if (!_miniPanelOpen) miniWindow.setSize(winSize, winSize);
     if (miniWindow.webContents && !miniWindow.webContents.isDestroyed()) {
       miniWindow.webContents.send('mini-resize', size);
     }
