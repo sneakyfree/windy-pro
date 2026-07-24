@@ -87,6 +87,11 @@ class PhoneCompanionClient {
   _onEvent(payload) {
     switch (payload.kind) {
       case 'from-phone': this._onSignal(payload.msg || {}); break;
+      case 'page-loaded':
+        // Phone got through TLS + token — user is past (or about to hit) the
+        // certificate warning. If it stalls here, that warning is the culprit.
+        this._setOverlayStatus('📱 Phone found — if it shows a privacy warning, tap Advanced → Continue', 'pcw-ok');
+        break;
       case 'connected':
         this.label = payload.label || this.label || 'Phone';
         this._setOverlayStatus('📶 ' + this.label + ' connected — starting stream…', 'pcw-ok');

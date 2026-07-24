@@ -1913,20 +1913,30 @@ body.light-mode .sfx-master-controls {
   padding: 4px 8px;
   font-size: 12px;
   max-width: 140px;
-  min-width: 0;
+  /* Floor keeps the control usable when a long label competes for space —
+     the label (flex:1 1 auto, word-break) yields first. */
+  min-width: 56px;
   overflow: hidden;
   text-overflow: ellipsis;
   flex-shrink: 1;
 }
 
 .setting-row label {
-  flex-shrink: 0;
+  /* Labels SHRINK AND WRAP; controls stay visible. flex-shrink:0 here used to
+     let a long label (esp. at larger font scale) push the checkbox past the
+     row's overflow:hidden edge — the "sliver of a checkbox" bug from the
+     2026-07-23 hand test (Mac + Fedora). Control visibility always wins. */
+  flex: 1 1 auto;
   min-width: 0;
   word-break: break-word;
 }
 
 .setting-row input[type="checkbox"] {
   accent-color: var(--color-listening);
+  /* Never shrink, never clip — a checkbox must be visible no matter how long
+     its label is or how large the font scale gets. */
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .setting-inline {

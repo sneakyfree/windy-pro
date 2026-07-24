@@ -6827,6 +6827,7 @@ async function ensurePhoneCompanion() {
   const forward = (kind) => (payload) =>
     safeSend('phone-companion:event', { kind, ...(payload || {}) });
   pc.on('from-phone', (msg) => safeSend('phone-companion:event', { kind: 'from-phone', msg }));
+  pc.on('page-loaded', forward('page-loaded'));
   pc.on('phone-connected', forward('connected'));
   pc.on('phone-disconnected', forward('disconnected'));
   pc.on('phone-resumed', forward('resumed'));

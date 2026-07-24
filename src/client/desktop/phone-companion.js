@@ -180,7 +180,11 @@ class PhoneCompanion extends EventEmitter {
   }
 
   _onRequest(req, res) {
+    // Every request outcome is logged: the 7-23 hand test failed with "phone
+    // opened a page but never connected" and the log couldn't even say whether
+    // the phone reached this server (TLS interstitial? wrong network? WS?).
     if (!isPrivateAddress(req.socket.remoteAddress)) {
+      this._log(`http reject non-LAN ${req.socket.remoteAddress}`);
       res.writeHead(403); res.end('LAN only'); return;
     }
     const url = new URL(req.url, 'https://x');
@@ -193,14 +197,20 @@ class PhoneCompanion extends EventEmitter {
       // Page requires a live token (peek, not consume — the WS join consumes it,
       // and the phone may reload the page once before joining).
       if (!this._peekToken(url.searchParams.get('t'))) {
+        this._log(`page refused (expired/bad token) from ${req.socket.remoteAddress}`);
         res.writeHead(403, { 'Content-Type': 'text/html' });
         res.end('<html><body style="font-family:sans-serif;background:#111;color:#eee;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center"><div><h2>⏱️ Code expired</h2><p>Open Windy Word on your computer and scan a fresh QR code.</p></div></body></html>');
         return;
       }
+      this._log(`page served to ${req.socket.remoteAddress}`);
+      // Tell the desktop overlay the phone got through TLS + token — the two
+      // silent failure modes. From here any stall is the page's WS/WebRTC.
+      this.emit('page-loaded', { remote: req.socket.remoteAddress });
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(this.pageHtml.replace(/__WINDY_HOSTNAME__/g, this.deviceLabel));
       return;
     }
+    this._log(`http 404 ${url.pathname} from ${req.socket.remoteAddress}`);
     res.writeHead(404); res.end();
   }
 
