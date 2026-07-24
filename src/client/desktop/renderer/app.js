@@ -4602,8 +4602,9 @@ class WindyApp {
           this.effectsEngine.trigger('stop', { durationSec });
         }
       } catch (_) { }
-      // Strand I: stop "during" effect interval
+      // Strand I: stop "during" effect interval (+ its early first-tick timer)
       clearInterval(this._duringEffectInterval);
+      clearTimeout(this._duringEffectFirstTick);
       if (this._batchRecorder) {
         this.stopBatchRecording();
       } else if (['deepgram', 'groq', 'openai'].includes(engine) && this._apiMediaRecorder) {
@@ -4641,8 +4642,18 @@ class WindyApp {
       // Strand I: start "during" effect interval (configurable, default 5s)
       try {
         clearInterval(this._duringEffectInterval);
+        clearTimeout(this._duringEffectFirstTick);
         const duringIntervalSec = parseInt(localStorage.getItem('windy_duringInterval') || '5', 10);
         const duringIntervalMs = Math.max(1000, duringIntervalSec * 1000);
+        // Early first-tick: setInterval's first fire is at duringIntervalMs (5s
+        // default), so a short test recording ends before the "during" stage
+        // ever runs — making an assigned stage-2 sound look broken (Grant,
+        // 2026-07-24). Fire one "during" ~1.6s in (after the "start" cue has
+        // cleared) so even a quick "testing 1 2 3" demonstrates it. Guarded by
+        // isRecording so it never fires after a fast stop.
+        this._duringEffectFirstTick = setTimeout(() => {
+          if (this.isRecording) { try { this.effectsEngine.trigger('during'); } catch (_) { } }
+        }, Math.min(1600, duringIntervalMs));
         this._duringEffectInterval = setInterval(() => {
           if (this.isRecording) {
             try { this.effectsEngine.trigger('during'); } catch (_) { }

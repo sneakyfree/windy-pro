@@ -1847,7 +1847,23 @@ class SettingsPanel {
       // ── Shared Library ──
       let soundLibrary = [];
       try { soundLibrary = JSON.parse(localStorage.getItem('windy_soundLibrary') || '[]'); } catch (_) { }
-      const saveLibrary = () => localStorage.setItem('windy_soundLibrary', JSON.stringify(soundLibrary));
+      // Guarded: a big recording (webm base64 can be several MB) may blow the
+      // localStorage quota; an unguarded setItem throws, the in-memory entry
+      // was already added so it PREVIEWS this session but never persists — so
+      // it "vanishes / won't play" next time it's selected (Grant, 2026-07-24).
+      // Return false on failure so callers can warn instead of silently losing it.
+      const saveLibrary = () => {
+        try {
+          localStorage.setItem('windy_soundLibrary', JSON.stringify(soundLibrary));
+          return true;
+        } catch (e) {
+          console.error('[SoundLibrary] save failed (likely storage quota):', e?.name || e);
+          try {
+            this.app?.showReconnectToast?.('⚠️ Sound library full — that recording was too large to save. Delete a few sounds and re-record shorter.');
+          } catch (_) { }
+          return false;
+        }
+      };
 
       // Hook assignment config
       let customCfg = {};
@@ -1990,6 +2006,13 @@ class SettingsPanel {
             nameInput.style.display = '';
             nameText.style.display = 'none';
             renameBtn.style.display = 'none';
+            // The window is focusable:false (never-steal-cursor doctrine), and a
+            // PROGRAMMATIC .focus() doesn't trip app.js's mousedown escalation —
+            // so without this, keystrokes leak to the user's external dictation
+            // target and the rename box never receives them (Grant, 2026-07-24).
+            // requestFocus() is auto-guarded during recording, so this can NEVER
+            // pull the blinking cursor mid-dictation — the doctrine still wins.
+            try { window.windyAPI?.requestFocus?.(); } catch (_) { }
             nameInput.focus();
             nameInput.select();
           });
@@ -2130,9 +2153,14 @@ class SettingsPanel {
           const nameEl = row.querySelector('.slib-row-name');
           nameEl.addEventListener('click', () => {
             const input = document.createElement('input');
+            input.type = 'text';
             input.className = 'slib-row-name-input';
             input.value = item.name || '';
             nameEl.replaceWith(input);
+            // See the pencil-rename note above: escalate window focus so the
+            // programmatic .focus() actually lands keystrokes here, not in the
+            // user's external dictation target. Auto-guarded during recording.
+            try { window.windyAPI?.requestFocus?.(); } catch (_) { }
             input.focus();
             input.select();
             const finish = () => {
