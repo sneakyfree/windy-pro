@@ -361,7 +361,7 @@ export default function Landing() {
                             <div className="pricing-price">$0</div>
                             <div className="pricing-period">forever</div>
                             <ul className="pricing-features">
-                                <li>✓ 7 voice engines included — up to 10 with a capable GPU</li>
+                                <li>✓ 7 voice engines included — GPU-accelerated on capable NVIDIA hardware</li>
                                 <li>✓ Unlimited local recording — no time limit</li>
                                 <li>✓ Auto-detects 99 languages</li>
                                 <li>✓ 100% local — your device, your data</li>
