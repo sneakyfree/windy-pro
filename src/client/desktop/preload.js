@@ -169,6 +169,8 @@ contextBridge.exposeInMainWorld('windyAPI', {
   // ═══ Effects canvas ═══
   // Forward a visual to the whole-screen overlay window (fire-and-forget).
   fxOverlayRender: (type, opts) => ipcRenderer.send('fx-overlay:render', { type, opts }),
+  // Physically rattle the OS window (nuclear intensity only; mac/win — see main).
+  rattleWindow: (power, duration) => ipcRenderer.send('window:rattle', { power, duration }),
 
   // ═══ GPU Engine Pack + usage/prune ═══
   onGpuPackOffer: (callback) => { safeOn('gpu-pack-offer', (event, data) => callback(data)); },

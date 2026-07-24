@@ -544,7 +544,7 @@ class SettingsPanel {
                  aria-label="Visual intensity" aria-valuemin="0" aria-valuemax="100" aria-valuenow="55"></div>
             <span id="sfxIntensityZone" class="sfx-dial-zone"></span>
           </div>
-          <p class="settings-hint" id="sfxIntensityHint">Turn it up for a chimpanzee light-show, down for a librarian. How big the visuals get — long recordings still build toward it. Sound loudness is the Master slider below.</p>
+          <p class="settings-hint" id="sfxIntensityHint">Turn it up for a chimpanzee light-show, down to a librarian's whisper. Gradual all the way — then the last 5% is ☢️ <b>danger mode</b>: seismic shakes, screen-rattling, the works. Long recordings build toward it; Master (below) sets volume.</p>
 
           <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px;">
             <label style="white-space:nowrap;">Effects canvas</label>
@@ -1679,13 +1679,32 @@ class SettingsPanel {
           `</svg>`;
         dial.setAttribute('aria-valuenow', String(v));
         dial.setAttribute('aria-valuetext', `${fx.getIntensityZoneName?.(v) || ''} (${v}%)`);
+        // DANGER ZONE (≥95): the dial itself blinks red so the chimpanzee KNOWS
+        // the gloves are off. The zone label below it reads ☢️ NUCLEAR.
+        const danger = v >= 95;
+        dial.classList.toggle('sfx-dial-danger', danger);
+        if (zoneLabel) zoneLabel.classList.toggle('sfx-zone-danger', danger);
       };
 
+      const DANGER_WARNINGS = [
+        '🕶️ Grab your sunglasses',
+        '📸 Make sure your screen is insured',
+        '🌋 Seismic mode — clear the desk',
+        '☢️ Not every machine survives this',
+        '🔊 Warn the neighbors',
+      ];
+      let _wasDanger = (fx.getIntensityValue?.() ?? 55) >= 95;
       const applyValue = (v, preview) => {
         v = Math.max(0, Math.min(100, Math.round(v)));
         fx.setIntensityValue?.(v);
         renderDial(v);
         refreshZoneLabel();
+        // First step into the danger zone → a funny, on-brand warning.
+        const danger = v >= 95;
+        if (danger && !_wasDanger) {
+          try { this.showToast?.(DANGER_WARNINGS[Math.floor(Math.random() * DANGER_WARNINGS.length)]); } catch (_) { }
+        }
+        _wasDanger = danger;
         if (preview) { try { fx.trigger('paste', { wordCount: 300 }); } catch (_) { } }
       };
 

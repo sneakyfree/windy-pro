@@ -224,7 +224,15 @@ class SoundManager {
 // from the active pack (`intensityNames`, e.g. Apprentice/Sorcerer/Archmage)
 // and label the slider live as it moves.
 const INTENSITY_DEFAULT_NAMES = ['🌱 Subtle', '🎯 Balanced', '🌋 Maximum'];
-const intensityMul = (value) => 0.06 + (Math.max(0, Math.min(100, value)) / 100) * 1.44;
+// 0.06 (a whimper) → ~1.4 LINEAR through 95%, then EXPONENTIAL to ~4.2 at 100.
+// The bottom is barely-there; 0→95 is a smooth gradual ramp (feel every degree);
+// the last 5% is the "gloves off" zone where even 1° is felt and 100 is nuclear.
+const intensityMul = (value) => {
+    const v = Math.max(0, Math.min(100, value));
+    if (v <= 95) return 0.06 + (v / 95) * 1.34;      // 0.06 .. 1.40, linear
+    const e = (v - 95) / 5;                            // 0 .. 1 across the top 5%
+    return 1.40 + Math.pow(e, 2.3) * 2.8;             // 1.40 .. 4.20, exponential
+};
 
 const VISUAL_LIBRARY = [
     { id: 'flash', name: '💡 Screen Flash', desc: 'Quick full-window color flash', defaults: { _all: { color: '#4ECDC4', duration: 350, intensity: 0.6 } } },
@@ -261,6 +269,9 @@ class VisualOverlay {
     renderEffect(type, opts = {}) {
         const dur = opts.duration || 500;
         const intensity = Math.min(opts.intensity || 0.5, 1);
+        // UNCLAMPED amplitude — opacity saturates at 1, but shake px, bolt
+        // thickness, counts and duration keep growing with power up to nuclear.
+        const power = opts.power || 1;
 
         switch (type) {
             case 'flash':
@@ -276,10 +287,10 @@ class VisualOverlay {
                 this._fireworks(opts.color || '#F59E0B', opts.count || 3, dur, intensity);
                 break;
             case 'lightning':
-                this._lightning(opts.color || '#A78BFA', opts.count || 2, dur, intensity);
+                this._lightning(opts.color || '#A78BFA', opts.count || 2, dur, intensity, power);
                 break;
             case 'shake':
-                this._shake(intensity, dur);
+                this._shake(intensity, dur, power);
                 break;
             case 'border-glow':
                 this._borderGlow(opts.color || '#22C55E', intensity, dur);
@@ -388,7 +399,7 @@ class VisualOverlay {
 
     _fireworks(color, bursts, duration, intensity = 1) {
         // Radial bursts at random positions; burst count scales with intensity
-        const nBursts = Math.max(1, Math.min(bursts, 6));
+        const nBursts = Math.max(1, Math.min(bursts, 12));
         const palette = [color, '#FCD34D', '#F87171', '#60A5FA', '#34D399'];
         for (let b = 0; b < nBursts; b++) {
             const cx = 15 + Math.random() * 70; // % of width
@@ -416,10 +427,10 @@ class VisualOverlay {
         }
     }
 
-    _lightning(color, bolts, duration, intensity = 0.8) {
+    _lightning(color, bolts, duration, intensity = 0.8, power = 1) {
         // Jagged SVG bolts from the top of the window + a brief sky flash.
         // Bolt count scales with intensity (via the caller's count scaling).
-        const nBolts = Math.max(1, Math.min(bolts, 5));
+        const nBolts = Math.max(1, Math.min(bolts, 14));
         const w = window.innerWidth;
         const h = window.innerHeight;
         const svgNS = 'http://www.w3.org/2000/svg';
@@ -447,14 +458,14 @@ class VisualOverlay {
             glow.setAttribute('points', pts);
             glow.setAttribute('fill', 'none');
             glow.setAttribute('stroke', color);
-            glow.setAttribute('stroke-width', String((3 + intensity * 5).toFixed(1))); // 3..8px
+            glow.setAttribute('stroke-width', String((3 + intensity * 5 + (power - 1) * 3).toFixed(1))); // 3..~17px at nuclear
             glow.setAttribute('stroke-linejoin', 'round');
-            glow.style.filter = `drop-shadow(0 0 ${(4 + intensity * 10).toFixed(0)}px ${color})`;
+            glow.style.filter = `drop-shadow(0 0 ${(4 + intensity * 10 + (power - 1) * 6).toFixed(0)}px ${color})`;
             const core = document.createElementNS(svgNS, 'polyline');
             core.setAttribute('points', pts);
             core.setAttribute('fill', 'none');
             core.setAttribute('stroke', '#FFFFFF');
-            core.setAttribute('stroke-width', String((1 + intensity * 2).toFixed(1))); // 1..3px
+            core.setAttribute('stroke-width', String((1 + intensity * 2 + (power - 1) * 1.2).toFixed(1))); // 1..~6px at nuclear
             core.setAttribute('stroke-linejoin', 'round');
             svg.appendChild(glow);
             svg.appendChild(core);
@@ -465,16 +476,24 @@ class VisualOverlay {
         }
     }
 
-    _shake(intensity, duration) {
+    _shake(intensity, duration, power = 1) {
+        // Amplitude grows with power^2 — a gentle 6px nudge at normal, a seismic
+        // ~50px earthquake at nuclear. Past power 2.5 the whole OS window also
+        // physically rattles (main process; mac/win only — see 'window:rattle').
+        const px = Math.round(Math.min(60, intensity * (3 + power * power * 3)));
         const window_el = document.querySelector('.window');
-        if (!window_el) return;
-        const px = Math.round(intensity * 4);
-        window_el.style.animation = `effectShake ${Math.min(duration, 500)}ms ease-in-out`;
-        window_el.style.setProperty('--shake-px', `${px}px`);
-        setTimeout(() => {
-            window_el.style.animation = '';
-            window_el.style.removeProperty('--shake-px');
-        }, duration);
+        if (window_el) {
+            const dur = Math.min(duration, 700);
+            window_el.style.animation = `effectShake ${dur}ms ease-in-out`;
+            window_el.style.setProperty('--shake-px', `${px}px`);
+            setTimeout(() => {
+                window_el.style.animation = '';
+                window_el.style.removeProperty('--shake-px');
+            }, dur);
+        }
+        if (power >= 2.5) {
+            try { window.windyAPI?.rattleWindow?.(power, Math.min(duration, 700)); } catch (_) { }
+        }
     }
 
     _borderGlow(color, intensity, duration) {
@@ -948,6 +967,7 @@ class EffectsEngine {
 
         if (this._mode === 'custom' || soundOverridePlayed) {
             this._renderHookVisual(hook, intensity);
+            if (this.isDangerZone() && (hook === 'paste' || hook === 'stop')) this._nuclearBurst();
             return;
         }
 
@@ -981,6 +1001,7 @@ class EffectsEngine {
 
         // Show visual (honors per-hook user override; works even with no pack)
         this._renderHookVisual(hook, intensity);
+        if (this.isDangerZone() && (hook === 'paste' || hook === 'stop')) this._nuclearBurst();
     }
 
     /**
@@ -1054,6 +1075,7 @@ class EffectsEngine {
 
     /** The themed zone name for a slider value (thirds). */
     getIntensityZoneName(value = this._visualIntensity) {
+        if (value >= 95) return '☢️ NUCLEAR';
         const names = this.getIntensityNames();
         return value < 34 ? names[0] : (value < 67 ? names[1] : names[2]);
     }
@@ -1104,20 +1126,40 @@ class EffectsEngine {
             const list = Array.isArray(visuals) ? visuals : [visuals];
             // Word-count ramp × the visual-intensity slider (0.4×–1.6×)
             const vMul = intensity * intensityMul(this._visualIntensity);
-            // Low end = short/faint/few; high end = long/bright/many. Opacity
-            // saturates near the top (clamped to 1 in renderEffect), so size,
-            // count AND duration carry the spectrum past ~70%.
-            const durFactor = Math.max(0.5, Math.min(1.4, 0.5 + vMul * 0.6));
+            // Low end = short/faint/few; high end = long/bright/many/THICK.
+            // Opacity saturates at 1 (renderEffect clamp), so size, count,
+            // duration and the unclamped `power` carry the spectrum to nuclear.
+            const durFactor = Math.max(0.5, Math.min(2.2, 0.5 + vMul * 0.6));
             for (const vis of list) {
                 this.renderVisual(vis.type, {
                     color: vis.color,
                     intensity: (vis.intensity || 0.5) * vMul,
                     duration: Math.round((vis.duration || 500) * durFactor),
-                    count: vis.count ? Math.max(1, Math.round(vis.count * vMul)) : undefined
+                    count: vis.count ? Math.max(1, Math.round(vis.count * vMul)) : undefined,
+                    power: vMul
                 });
             }
         } catch (_) { /* effects must never break the app */ }
     }
+
+    /**
+     * DANGER ZONE (dial ≥ 95): gloves off. On the big beats (paste/stop) this
+     * fires ON TOP of the pack — a white screen-flash, a seismic shake + OS
+     * window rattle, a barrage of thick white bolts, a firework finale, and a
+     * thunderclap. Intentionally obnoxious: 100% should make a chimpanzee
+     * reach for sunglasses and then dial it back to a survivable 90.
+     */
+    _nuclearBurst() {
+        const p = intensityMul(this._visualIntensity); // ~3.1 at 99 → 4.2 at 100
+        this.renderVisual('flash', { color: '#FFFFFF', intensity: 0.9, duration: 200, power: p });
+        this.renderVisual('shake', { intensity: 1, duration: 700, power: p });
+        this.renderVisual('lightning', { color: '#FFFFFF', count: Math.round(5 + p * 2), duration: 1400, intensity: 1, power: p });
+        this.renderVisual('fireworks', { color: '#FDE68A', count: Math.round(3 + p), duration: 1500, intensity: 1, power: p });
+        try { window.windyAPI?.rattleWindow?.(p, 700); } catch (_) { }
+        try { this.sound.playNoise({ noise: 'thunder-crack', duration: 1.8, volume: 0.95 }); } catch (_) { }
+    }
+
+    isDangerZone(value = this._visualIntensity) { return value >= 95; }
 
     /**
      * Preview a specific hook point of a pack (for Settings UI)

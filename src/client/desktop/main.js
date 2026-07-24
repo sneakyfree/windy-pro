@@ -6903,6 +6903,42 @@ function ensureFxOverlayWindow() {
   return _fxOverlayWindow;
 }
 
+// Physical window rattle — the "rattle right off the desk" moment at nuclear
+// intensity. Jitters the main window's position with a decaying amplitude, then
+// snaps it back. macOS/Windows only: on Linux, moving a window mid-session risks
+// the Wayland focus/paste chaos documented in CLAUDE.md, and it fires right after
+// a paste. Never takes focus (the window is focusable:false).
+let _rattleTimer = null;
+let _rattleHome = null;
+ipcMain.on('window:rattle', (_event, payload) => {
+  try {
+    if (process.platform === 'linux') return;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const power = Math.max(1, Math.min(5, Number(payload?.power) || 1));
+    const duration = Math.max(200, Math.min(900, Number(payload?.duration) || 600));
+    const amp = Math.round(4 + power * 7);        // ~11px normal-danger → ~39px nuclear
+    if (!_rattleTimer) _rattleHome = mainWindow.getPosition(); // capture once per burst
+    const [ox, oy] = _rattleHome;
+    const t0 = Date.now();
+    if (_rattleTimer) clearInterval(_rattleTimer);
+    _rattleTimer = setInterval(() => {
+      try {
+        if (!mainWindow || mainWindow.isDestroyed()) { clearInterval(_rattleTimer); _rattleTimer = null; return; }
+        const el = Date.now() - t0;
+        if (el >= duration) {
+          clearInterval(_rattleTimer); _rattleTimer = null;
+          mainWindow.setPosition(ox, oy);
+          return;
+        }
+        const decay = 1 - el / duration;             // taper to zero
+        const dx = Math.round((Math.random() * 2 - 1) * amp * decay);
+        const dy = Math.round((Math.random() * 2 - 1) * amp * decay);
+        mainWindow.setPosition(ox + dx, oy + dy);
+      } catch (_) { clearInterval(_rattleTimer); _rattleTimer = null; }
+    }, 16);
+  } catch (_) { /* rattle is cosmetic — never break on it */ }
+});
+
 ipcMain.on('fx-overlay:render', (_event, payload) => {
   try {
     if (!payload || typeof payload.type !== 'string') return;
