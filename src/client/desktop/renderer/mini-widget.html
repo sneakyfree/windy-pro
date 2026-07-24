@@ -8,7 +8,10 @@
     html, body {
       width: 100%; height: 100%;
       background: transparent;
-      overflow: visible;
+      /* hidden, not visible: the page must never grow a scrollbar — the old
+         inflated window masked an overflow here and the honest-sized window
+         exposed it as an ugly floating scrollbar (Grant, 2026-07-23) */
+      overflow: hidden;
       user-select: none;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
@@ -17,13 +20,31 @@
       width: var(--widget-size, 56px); height: var(--widget-size, 56px);
       display: flex; align-items: center; justify-content: center;
       position: absolute;
-      /* Centered horizontally, sits above the fixed panel position (200px) */
+      /* Panel open: sits above the fixed panel position (200px) */
       top: calc(180px - var(--widget-size, 56px));
       left: 50%;
       transform: translateX(-50%);
       cursor: grab;
       background: transparent;
       border-radius: 50%;
+    }
+
+    /* Panel closed (the normal floating state): the icon sits DEAD CENTER of
+       its window. This is load-bearing, not cosmetic — the main process's
+       Linux click-through poll treats only the window-centered icon box as
+       clickable, so an off-center icon becomes unclickable/undraggable (the
+       "can't drag the lightning bolt" bug). */
+    body:not(.panel-open) .widget {
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    /* While the settings panel is open the window is fixed at 250x620 — cap
+       the live preview so a jumbo widget doesn't swallow the panel. The real
+       size applies the moment the panel closes. */
+    body.panel-open .widget {
+      max-width: 160px;
+      max-height: 160px;
     }
 
     .widget.dragging { cursor: grabbing; }
@@ -223,7 +244,7 @@
       <div class="slider-row">
         <span class="slider-icon">📏</span>
         <span class="slider-label">Size</span>
-        <input type="range" id="sliderSize" min="32" max="120" value="56">
+        <input type="range" id="sliderSize" min="32" max="300" value="56">
       </div>
 
       <div class="slider-row">

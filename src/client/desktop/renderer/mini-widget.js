@@ -281,6 +281,9 @@ function stopPreview() {
 function togglePanel() {
   panelOpen = !panelOpen;
   panelContainer.classList.toggle('open', panelOpen);
+  // Drives the widget's centered-vs-above-panel CSS position (and the
+  // jumbo-size preview cap) — see .widget rules in mini-widget.html.
+  document.body.classList.toggle('panel-open', panelOpen);
   
   // Tell main process to resize window
   if (window.windyMini) {
@@ -305,6 +308,7 @@ function resetPanelAutoHide() {
     if (panelOpen) {
       panelOpen = false;
       panelContainer.classList.remove('open');
+      document.body.classList.remove('panel-open');
       stopPreview();
       if (window.windyMini) window.windyMini.togglePanel(false);
     }
