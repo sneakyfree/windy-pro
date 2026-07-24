@@ -1086,7 +1086,15 @@ class SettingsPanel {
     const cameraSelectEl = this.panel.querySelector('#cameraSelect');
     if (cameraSelectEl) {
       cameraSelectEl.addEventListener('change', (e) => {
+        if (e.target.value === '__connect_phone__') {
+          this._handleConnectPhone(e.target, 'cameraDeviceId');
+          return;
+        }
         this.saveSetting('cameraDeviceId', e.target.value);
+        // Label too — see micDeviceLabel comment (Continuity id drift).
+        const camLabel = (e.target.value === 'default' || e.target.value.startsWith('phone:'))
+          ? '' : (e.target.selectedOptions?.[0]?.textContent || '');
+        this.saveSetting('cameraDeviceLabel', camLabel);
         // Re-probe so the resolution hint reflects the newly selected camera
         this._probeCameraResolution();
       });
@@ -1429,7 +1437,16 @@ class SettingsPanel {
 
     // Mic device selector (T20)
     this.panel.querySelector('#micSelect').addEventListener('change', (e) => {
+      if (e.target.value === '__connect_phone__') {
+        this._handleConnectPhone(e.target, 'micDeviceId');
+        return;
+      }
       this.saveSetting('micDeviceId', e.target.value);
+      // Label too: Continuity/USB device ids can drift between sessions; the
+      // label lets record-time resolution find the same device by name.
+      const micLabel = (e.target.value === 'default' || e.target.value.startsWith('phone:'))
+        ? '' : (e.target.selectedOptions?.[0]?.textContent || '');
+      this.saveSetting('micDeviceLabel', micLabel);
     });
 
     // Language change
@@ -2898,6 +2915,80 @@ class SettingsPanel {
         this.populateCameraDevices();
       });
     }
+
+    // Re-enumerate the MOMENT a picker is clicked: macOS/Chromium does not
+    // reliably fire 'devicechange' when a Continuity Camera iPhone powers on
+    // nearby (proven in Grant's 7-23 hand-test — three phones on, none
+    // appearing until restart). mousedown fires before the native popup
+    // snapshots its options, so a fresh list is usually visible same-click —
+    // worst case it's there on the next click, never "restart the app".
+    if (!this._pickerClickRefreshHooked) {
+      this._pickerClickRefreshHooked = true;
+      this.panel.querySelector('#micSelect')?.addEventListener('mousedown', () => this.populateMicDevices());
+      this.panel.querySelector('#cameraSelect')?.addEventListener('mousedown', () => this.populateCameraDevices());
+    }
+
+    // WiFi phone companion: refresh pickers on connect/disconnect, and after
+    // a connect initiated from a picker, auto-select the phone there.
+    if (!this._phoneHooked && window.phoneCompanion) {
+      this._phoneHooked = true;
+      window.phoneCompanion.onChange((evt) => {
+        if (evt.kind === 'connected' && this._phoneConnectTarget) {
+          const target = this._phoneConnectTarget;
+          this._phoneConnectTarget = null;
+          this.saveSetting(target, 'phone:wifi');
+          if (target === 'cameraDeviceId') this._probeCameraResolution();
+        }
+        this.populateMicDevices();
+        this.populateCameraDevices();
+      });
+    }
+  }
+
+  /** '📱 Connect a phone…' picked in a device dropdown — it's an action, not a
+   *  device: revert the visible selection, remember which picker asked, and
+   *  open the QR overlay. On connect, the phone is saved for that picker. */
+  async _handleConnectPhone(select, settingKey) {
+    try {
+      const settings = window.windyAPI ? await window.windyAPI.getSettings() : null;
+      const saved = settings?.[settingKey];
+      select.value = Array.from(select.options).some(o => o.value === saved) ? saved : 'default';
+    } catch { select.value = 'default'; }
+    if (!window.phoneCompanion) return;
+    this._phoneConnectTarget = settingKey;
+    // Camera-picker origin → the phone page pre-enables "Also share camera"
+    // (audio-only-by-default was the 7-23 "connected but black" confusion).
+    window.phoneCompanion.openConnectOverlay(settingKey === 'cameraDeviceId' ? 'camera' : 'mic');
+  }
+
+
+  /**
+   * Replace a <select>'s options ONLY if they actually changed. The pickers
+   * re-enumerate on every click/open; unconditionally rebuilding the DOM made
+   * the open popup flutter (Grant, 7-23). No change -> zero DOM churn.
+   */
+  _applySelectOptions(select, entries) {
+    const cur = Array.from(select.options).map(o => o.value + ' ' + o.textContent).join('');
+    const next = entries.map(e => e.value + ' ' + e.label).join('');
+    if (cur === next) return;
+    select.innerHTML = '';
+    for (const e of entries) {
+      const opt = document.createElement('option');
+      opt.value = e.value;
+      opt.textContent = e.label;
+      select.appendChild(opt);
+    }
+  }
+
+  _phoneOptionEntries(kind) {
+    const phone = window.phoneCompanion;
+    if (!phone) return [];
+    const entries = [];
+    if (phone.connected && (kind === 'mic' || phone.hasVideo)) {
+      entries.push({ value: 'phone:wifi', label: `📱 ${phone.label || 'Phone'} (WiFi)` });
+    }
+    entries.push({ value: '__connect_phone__', label: phone.connected ? '📱 Connect a different phone…' : '📱 Connect a phone…' });
+    return entries;
   }
 
   async populateMicDevices() {
@@ -2905,18 +2996,24 @@ class SettingsPanel {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const mics = devices.filter(d => d.kind === 'audioinput');
       const select = this.panel.querySelector('#micSelect');
-      select.innerHTML = '<option value="default">System Default</option>';
-      mics.forEach(mic => {
-        const opt = document.createElement('option');
-        opt.value = mic.deviceId;
-        opt.textContent = mic.label || `Microphone ${mic.deviceId.slice(0, 8)}`;
-        select.appendChild(opt);
-      });
-      // Restore saved selection
+      this._applySelectOptions(select, [
+        { value: 'default', label: 'System Default' },
+        ...mics.map(mic => ({ value: mic.deviceId, label: mic.label || `Microphone ${mic.deviceId.slice(0, 8)}` })),
+        ...this._phoneOptionEntries('mic'),
+      ]);
+      // Restore saved selection; if the saved mic is gone (unplugged, phone
+      // dropped), show System Default WITHOUT overwriting the saved setting —
+      // the device is used again when it returns (same pattern as camera).
       if (window.windyAPI) {
         const settings = await window.windyAPI.getSettings();
         if (settings && settings.micDeviceId) {
-          select.value = settings.micDeviceId;
+          const opts = Array.from(select.options);
+          const byLabel = settings.micDeviceLabel
+            && opts.find(o => o.textContent === settings.micDeviceLabel);
+          const want = opts.some(o => o.value === settings.micDeviceId) ? settings.micDeviceId
+            : byLabel ? byLabel.value // id drifted — same device, new id
+              : 'default';
+          if (select.value !== want) select.value = want;
         }
       }
     } catch (e) {
@@ -2930,22 +3027,25 @@ class SettingsPanel {
       if (!select) return;
       const devices = await navigator.mediaDevices.enumerateDevices();
       const cams = devices.filter(d => d.kind === 'videoinput');
-      select.innerHTML = '<option value="default">System Default</option>';
-      cams.forEach(cam => {
-        const opt = document.createElement('option');
-        opt.value = cam.deviceId;
-        // Labels are empty until camera permission has been granted once
-        opt.textContent = cam.label || `Camera ${cam.deviceId.slice(0, 8)}`;
-        select.appendChild(opt);
-      });
+      // Labels are empty until camera permission has been granted once
+      this._applySelectOptions(select, [
+        { value: 'default', label: 'System Default' },
+        ...cams.map(cam => ({ value: cam.deviceId, label: cam.label || `Camera ${cam.deviceId.slice(0, 8)}` })),
+        ...this._phoneOptionEntries('camera'),
+      ]);
       // Restore saved selection; if the saved camera is gone (unplugged,
       // phone out of range), fall back to showing System Default WITHOUT
       // overwriting the saved setting — the device may come back.
       if (window.windyAPI) {
         const settings = await window.windyAPI.getSettings();
         if (settings && settings.cameraDeviceId) {
-          const exists = cams.some(c => c.deviceId === settings.cameraDeviceId);
-          select.value = exists ? settings.cameraDeviceId : 'default';
+          const opts = Array.from(select.options);
+          const byLabel = settings.cameraDeviceLabel
+            && opts.find(o => o.textContent === settings.cameraDeviceLabel);
+          const want = opts.some(o => o.value === settings.cameraDeviceId) ? settings.cameraDeviceId
+            : byLabel ? byLabel.value // id drifted — same device, new id
+              : 'default';
+          if (select.value !== want) select.value = want;
         }
       }
     } catch (e) {
@@ -3263,6 +3363,10 @@ class SettingsPanel {
   open() {
     this.panel.classList.add('open');
     this.isOpen = true;
+    // Devices come and go while the panel sits open for days (Continuity
+    // iPhones powering on, USB cams plugged in) — re-scan on every open.
+    this.populateMicDevices();
+    this.populateCameraDevices();
     // NOTE (2026-07-22): deliberately does NOT grab focus. The window is
     // focusable:false so it can't pull the user's cursor out of their external
     // dictation target. Merely OPENING settings — toggling switches, changing
@@ -3290,13 +3394,23 @@ class SettingsPanel {
   async _probeCameraResolution() {
     const hint = this.panel?.querySelector('#cameraCapHint');
     if (!hint) return;
+    const selectedCamEarly = this.panel?.querySelector('#cameraSelect')?.value;
+    if (selectedCamEarly && (selectedCamEarly.startsWith('phone:') || selectedCamEarly === '__connect_phone__')) {
+      // WiFi phone camera isn't a local device — no getUserMedia probe.
+      const label = window.phoneCompanion?.label || 'Phone';
+      hint.textContent = window.phoneCompanion?.connected
+        ? `📱 ${label} camera — resolution follows the phone`
+        : '📱 Phone not connected';
+      hint.style.display = 'block';
+      return;
+    }
     hint.textContent = '📷 Checking camera…';
     hint.style.display = 'block';
     try {
       // Request max resolution to see what the camera actually delivers.
       // Probe the camera the user selected, not just the OS default.
       const probeConstraints = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
-      const selectedCam = this.panel?.querySelector('#cameraSelect')?.value;
+      const selectedCam = selectedCamEarly;
       if (selectedCam && selectedCam !== 'default') {
         probeConstraints.deviceId = { exact: selectedCam };
       }
