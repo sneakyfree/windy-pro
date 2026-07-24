@@ -1914,14 +1914,22 @@ function showMiniWidget() {
   miniWindow.loadFile(path.join(__dirname, 'renderer', 'mini-widget.html'));
   miniWindow.setVisibleOnAllWorkspaces(true);
 
-  // Linux: the window is mostly transparent glow padding around the icon, and
-  // a transparent Electron window still eats every click — links under the
-  // padding were unreachable ("invisible shield", Grant 2026-07-23).
+  // Linux X11 ONLY: the window is mostly transparent glow padding around the
+  // icon, and a transparent Electron window still eats every click — links
+  // under the padding were unreachable ("invisible shield", Grant 2026-07-23).
   // setIgnoreMouseEvents' forward option doesn't exist on Linux, so poll the
   // cursor from the main process: the window only takes clicks while the
   // cursor is over the icon itself (small grab margin), or while the settings
   // panel is open, or mid-drag.
-  if (process.platform === 'linux') {
+  //
+  // NEVER on Wayland sessions: getCursorScreenPoint reads the X11 pointer,
+  // which FREEZES whenever the real cursor is over Wayland-native surfaces.
+  // With ignore active, the surface under the widget is usually Wayland, so
+  // the poll never sees the cursor return -> permanent click-through and an
+  // undraggable widget (Grant, 2026-07-23). On Wayland the padding keeps its
+  // historical click-eating behavior — a modest ring now that inflation is
+  // fixed.
+  if (process.platform === 'linux' && !PLATFORM.isWayland) {
     let ignoring = false;
     const poll = setInterval(() => {
       try {
