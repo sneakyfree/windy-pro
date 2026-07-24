@@ -50,12 +50,15 @@ class SendDetector extends EventEmitter {
       while ((i = buf.indexOf('\n')) >= 0) {
         const line = buf.slice(0, i).trim();
         buf = buf.slice(i + 1);
-        if (line === 'ENTER') this._onEnter();
+        if (line === 'ENTER') { this.emit('raw-enter'); this._onEnter(); }
       }
     });
     this._proc.stderr.on('data', (d) => {
       const t = d.toString();
-      if (t.includes('TAP_READY')) { this.ready = true; this.permissionNeeded = false; this.emit('ready'); }
+      if (t.includes('PERM_GRANTED')) { this.perm = 'granted'; this.permissionNeeded = false; this.emit('perm', 'granted'); }
+      if (t.includes('PERM_DENIED')) { this.perm = 'denied'; this.permissionNeeded = true; this.emit('perm', 'denied'); this.emit('permission-needed'); }
+      if (t.includes('PERM_UNKNOWN')) { this.perm = 'unknown'; this.emit('perm', 'unknown'); }
+      if (t.includes('TAP_READY')) { this.ready = true; this.emit('ready'); }
       if (t.includes('TAP_FAILED')) { this.permissionNeeded = true; this.emit('permission-needed'); }
     });
     this._proc.on('exit', () => { this._proc = null; this.ready = false; });

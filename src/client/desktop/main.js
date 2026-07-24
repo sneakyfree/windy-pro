@@ -6973,8 +6973,15 @@ function getSendDetector() {
     helperPath: _resolveEnterTapPath(),
     getFrontmostPid: () => global._lastFocusedPid || null,
   });
+  _sendDetector.on('perm', (state) => console.info(`[SendDetect] Input Monitoring permission: ${state}`));
+  _sendDetector.on('raw-enter', () => {
+    // Diagnostic (content-free): the tap saw an Enter. If these appear but
+    // 'send' doesn't, it's a scoping mismatch; if they never appear, the tap
+    // isn't receiving events (permission / session).
+    console.info(`[SendDetect] raw ENTER observed (armed=${!!_sendDetector._armed}, frontPid=${global._lastFocusedPid})`);
+  });
   _sendDetector.on('send', () => {
-    console.info('[SendDetect] Enter in paste target → Stage 7 finale');
+    console.info('[SendDetect] ✅ Enter in paste target → Stage 7 finale');
     safeSend('effects:trigger', { hook: 'send' });
   });
   _sendDetector.on('permission-needed', () => {
