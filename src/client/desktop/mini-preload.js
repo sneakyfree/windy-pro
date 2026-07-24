@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('windyMini', {
   onLoadSettings: (cb) => ipcRenderer.on('mini-load-settings', (_, settings) => cb(settings)),
   expandWindow: () => ipcRenderer.send('mini-expand'),
   moveWindow: (dx, dy) => ipcRenderer.send('mini-move', { dx, dy }),
+  dragState: (on) => ipcRenderer.send('mini-drag-state', on),
   saveWidgetSettings: (settings) => ipcRenderer.send('mini-save-settings', settings),
   togglePanel: (open) => ipcRenderer.send('mini-toggle-panel', open)
 });

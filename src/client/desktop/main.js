@@ -1914,6 +1914,39 @@ function showMiniWidget() {
   miniWindow.loadFile(path.join(__dirname, 'renderer', 'mini-widget.html'));
   miniWindow.setVisibleOnAllWorkspaces(true);
 
+  // Linux: the window is mostly transparent glow padding around the icon, and
+  // a transparent Electron window still eats every click — links under the
+  // padding were unreachable ("invisible shield", Grant 2026-07-23).
+  // setIgnoreMouseEvents' forward option doesn't exist on Linux, so poll the
+  // cursor from the main process: the window only takes clicks while the
+  // cursor is over the icon itself (small grab margin), or while the settings
+  // panel is open, or mid-drag.
+  if (process.platform === 'linux') {
+    let ignoring = false;
+    const poll = setInterval(() => {
+      try {
+        if (!miniWindow || miniWindow.isDestroyed()) { clearInterval(poll); return; }
+        if (!miniWindow.isVisible()) return;
+        let over;
+        if (_miniPanelOpen || _miniDragActive) {
+          over = true; // whole window is legitimately interactive
+        } else {
+          const c = require('electron').screen.getCursorScreenPoint();
+          const b = miniWindow.getBounds();
+          const half = ((store.get('tornadoSize') || 56) / 2) + 14;
+          const cx = b.x + b.width / 2;
+          const cy = b.y + b.height / 2;
+          over = Math.abs(c.x - cx) <= half && Math.abs(c.y - cy) <= half;
+        }
+        if (over === ignoring) {
+          miniWindow.setIgnoreMouseEvents(!over);
+          ignoring = !over;
+        }
+      } catch (_) { }
+    }, 150);
+    miniWindow.on('closed', () => clearInterval(poll));
+  }
+
   miniWindow.on('closed', () => { miniWindow = null; });
 
   // Capture mini widget console output for debugging
@@ -1962,11 +1995,24 @@ ipcMain.on('mini-expand', () => {
 
 // Handle mini widget drag
 let _miniMoveTimer = null;
+let _miniPanelOpen = false;
+let _miniDragActive = false;
+ipcMain.on('mini-drag-state', (event, on) => { _miniDragActive = !!on; });
 ipcMain.on('mini-move', (event, { dx, dy }) => {
   if (miniWindow && !miniWindow.isDestroyed()) {
     const [x, y] = miniWindow.getPosition();
     const nx = x + dx, ny = y + dy;
-    miniWindow.setPosition(nx, ny);
+    // setBounds with the INTENDED size, never setPosition: on 2x HiDPI Linux,
+    // setPosition re-applies the current size through a lossy DIP conversion
+    // and every drag tick inflates the transparent window a little — until an
+    // invisible click-blocking shield covers everything under it (Grant,
+    // 2026-07-23; same root cause as the main-window runaway drag). Pinning
+    // the size here also self-heals an already-inflated window on first drag.
+    // Panel open = the window legitimately holds the 250x620 settings panel.
+    const winSize = (store.get('tornadoSize') || 56) + 100;
+    const w = _miniPanelOpen ? 250 : winSize;
+    const h = _miniPanelOpen ? 620 : winSize;
+    miniWindow.setBounds({ x: nx, y: ny, width: w, height: h });
     // Debounce disk writes — position is saved 300ms after last move event
     if (_miniMoveTimer) clearTimeout(_miniMoveTimer);
     _miniMoveTimer = setTimeout(() => {
@@ -2011,6 +2057,7 @@ ipcMain.on('update-widget', (event, data) => {
 
 // ── Widget settings panel: toggle panel size ──
 ipcMain.on('mini-toggle-panel', (event, open) => {
+  _miniPanelOpen = !!open;
   if (!miniWindow || miniWindow.isDestroyed()) return;
   const widgetSettings = store.get('widgetSettings') || {};
   // +100 for 50px glow padding on each side

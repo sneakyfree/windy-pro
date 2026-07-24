@@ -406,6 +406,9 @@ widget.addEventListener('mousedown', (e) => {
   dragStartX = e.screenX;
   dragStartY = e.screenY;
   widget.classList.add('dragging');
+  // Tell main a drag is live so the Linux click-through poll keeps the whole
+  // window interactive even when the cursor briefly outruns the icon.
+  if (window.windyMini?.dragState) window.windyMini.dragState(true);
 });
 
 document.addEventListener('mousemove', (e) => {
@@ -422,6 +425,7 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mouseup', () => {
   isDragging = false;
   widget.classList.remove('dragging');
+  if (window.windyMini?.dragState) window.windyMini.dragState(false);
 });
 
 // ═══ Right-click to open settings panel ═══
