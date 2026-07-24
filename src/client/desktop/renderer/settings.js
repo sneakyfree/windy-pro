@@ -1647,7 +1647,13 @@ class SettingsPanel {
       pill.addEventListener('click', () => {
         try { localStorage.setItem('windy_fxCanvas', pill.dataset.canvas); } catch (_) { }
         refreshCanvasPills();
-        try { fx?.previewPackCycle?.(); } catch (_) { } // demo the active pack on the chosen canvas
+        // Demo the active pack on the newly chosen canvas. In Silent mode
+        // trigger() no-ops, so fall back to a bare visual — clicking a canvas
+        // pill must never look broken.
+        try {
+          if (fx?._mode === 'silent') fx.renderVisual('lightning', { color: '#A78BFA', count: 3, duration: 900, intensity: 0.9 });
+          else fx?.previewPackCycle?.();
+        } catch (_) { }
       });
     });
     refreshCanvasPills();

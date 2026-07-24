@@ -6873,6 +6873,13 @@ function ensureFxOverlayWindow() {
     _fxOverlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   }
   console.info(`[FxOverlay] creating whole-screen canvas ${b.width}x${b.height} at ${b.x},${b.y}`);
+  // Relay the canvas page's console to the main log. Without this, a page-level
+  // failure is invisible: the app's CSP (script-src 'self', shared default
+  // session) silently refused this page's bootstrap for a whole build cycle and
+  // the only symptom was "no effects outside the app". See fx-overlay-boot.js.
+  _fxOverlayWindow.webContents.on('console-message', (_e, level, message) => {
+    if (level >= 2 || /FxCanvas/.test(message)) console.info(`[FxOverlay/page] ${message}`);
+  });
   _fxOverlayWindow.webContents.once('did-finish-load', () => {
     _fxOverlayReady = true;
     console.info(`[FxOverlay] canvas ready — flushing ${_fxOverlayQueue.length} queued effect(s)`);

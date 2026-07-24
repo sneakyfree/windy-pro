@@ -41,17 +41,9 @@
   </style>
 </head>
 <body>
+  <!-- Both scripts MUST be external: the app's CSP (script-src 'self', applied
+       to the shared default session) refuses inline blocks outright. -->
   <script src="effects-engine.js"></script>
-  <script>
-    // effects-engine.js defines VisualOverlay at script scope; it creates (or
-    // adopts) the #effectsOverlay layer itself. No EffectsEngine/audio here —
-    // sound always plays from the app window; this canvas is visuals-only.
-    const overlay = new VisualOverlay();
-    if (window.fxAPI && window.fxAPI.onFx) {
-      window.fxAPI.onFx(({ type, opts }) => {
-        try { overlay.renderEffect(type, opts || {}); } catch (_) { /* never crash the canvas */ }
-      });
-    }
-  </script>
+  <script src="fx-overlay-boot.js"></script>
 </body>
 </html>
