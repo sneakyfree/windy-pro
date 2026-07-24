@@ -49,6 +49,18 @@ if [ -d "$APP/Contents/Resources/bundled" ]; then
     | xargs -0 -n1 -I{} codesign --force --options runtime --timestamp --entitlements "$ENT" --sign "$IDENT" "{}" 2>/dev/null
 fi
 
+# --- 1c. Native N-API addons (.node) unpacked from the asar ---
+# electron-builder's asarUnpack drops our enter_monitor.node (Stage-7 key
+# monitor) and better_sqlite3.node under Resources/app.asar.unpacked. They are
+# Mach-O and MUST be signed with the Developer ID + hardened runtime, or Apple's
+# notary rejects the whole submission ("binary not signed"). --deep and
+# electron-builder's own signing don't reach into app.asar.unpacked.
+if [ -d "$APP/Contents/Resources/app.asar.unpacked" ]; then
+  echo "[sign-bundled] 1c/6 sign unpacked .node addons"
+  find "$APP/Contents/Resources/app.asar.unpacked" -type f -name "*.node" -print0 \
+    | xargs -0 -n1 -I{} codesign --force --options runtime --timestamp --sign "$IDENT" "{}" 2>/dev/null || true
+fi
+
 # --- 2. Electron Framework Libraries + Helpers + Squirrel ShipIt (--deep misses these) ---
 # 2026-05-17: chrome_crashpad_handler added — Electron 28 ships it under
 # Frameworks/Electron Framework.framework/Versions/A/Helpers/. Not auto-signed
