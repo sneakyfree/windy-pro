@@ -6974,6 +6974,7 @@ function getSendDetector() {
     getFrontmostPid: () => global._lastFocusedPid || null,
   });
   _sendDetector.on('perm', (state) => console.info(`[SendDetect] Input Monitoring permission: ${state}`));
+  _sendDetector.on('ax', (trusted) => console.info(`[SendDetect] Accessibility trusted: ${trusted}`));
   _sendDetector.on('raw-enter', () => {
     // Diagnostic (content-free): the tap saw an Enter. If these appear but
     // 'send' doesn't, it's a scoping mismatch; if they never appear, the tap

@@ -58,7 +58,9 @@ class SendDetector extends EventEmitter {
       if (t.includes('PERM_GRANTED')) { this.perm = 'granted'; this.permissionNeeded = false; this.emit('perm', 'granted'); }
       if (t.includes('PERM_DENIED')) { this.perm = 'denied'; this.permissionNeeded = true; this.emit('perm', 'denied'); this.emit('permission-needed'); }
       if (t.includes('PERM_UNKNOWN')) { this.perm = 'unknown'; this.emit('perm', 'unknown'); }
-      if (t.includes('TAP_READY')) { this.ready = true; this.emit('ready'); }
+      if (t.includes('AX_TRUSTED')) { this.axTrusted = true; this.emit('ax', true); }
+      if (t.includes('AX_UNTRUSTED')) { this.axTrusted = false; this.permissionNeeded = true; this.emit('ax', false); this.emit('permission-needed'); }
+      if (t.includes('MONITOR_READY') || t.includes('TAP_READY')) { this.ready = true; this.emit('ready'); }
       if (t.includes('TAP_FAILED')) { this.permissionNeeded = true; this.emit('permission-needed'); }
     });
     this._proc.on('exit', () => { this._proc = null; this.ready = false; });
