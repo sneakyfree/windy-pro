@@ -224,7 +224,7 @@ class SoundManager {
 // from the active pack (`intensityNames`, e.g. Apprentice/Sorcerer/Archmage)
 // and label the slider live as it moves.
 const INTENSITY_DEFAULT_NAMES = ['🌱 Subtle', '🎯 Balanced', '🌋 Maximum'];
-const intensityMul = (value) => 0.4 + (Math.max(0, Math.min(100, value)) / 100) * 1.2;
+const intensityMul = (value) => 0.06 + (Math.max(0, Math.min(100, value)) / 100) * 1.44;
 
 const VISUAL_LIBRARY = [
     { id: 'flash', name: '💡 Screen Flash', desc: 'Quick full-window color flash', defaults: { _all: { color: '#4ECDC4', duration: 350, intensity: 0.6 } } },
@@ -267,13 +267,13 @@ class VisualOverlay {
                 this._flash(opts.color || '#fff', intensity, dur);
                 break;
             case 'particles':
-                this._particles(opts.color || '#22C55E', opts.count || 15, dur);
+                this._particles(opts.color || '#22C55E', opts.count || 15, dur, intensity);
                 break;
             case 'sparkles':
-                this._sparkles(opts.color || '#FCD34D', opts.count || 14, dur);
+                this._sparkles(opts.color || '#FCD34D', opts.count || 14, dur, intensity);
                 break;
             case 'fireworks':
-                this._fireworks(opts.color || '#F59E0B', opts.count || 3, dur);
+                this._fireworks(opts.color || '#F59E0B', opts.count || 3, dur, intensity);
                 break;
             case 'lightning':
                 this._lightning(opts.color || '#A78BFA', opts.count || 2, dur, intensity);
@@ -335,7 +335,7 @@ class VisualOverlay {
         el.className = 'effect-flash';
         el.style.cssText = `
       position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: ${color}; opacity: ${intensity * 0.3};
+      background: ${color}; --fx-peak: ${(intensity * 0.35).toFixed(3)}; opacity: 0;
       pointer-events: none; z-index: 9990;
       animation: effectFadeOut ${duration}ms ease-out forwards;
     `;
@@ -343,7 +343,7 @@ class VisualOverlay {
         setTimeout(() => el.remove(), duration + 50);
     }
 
-    _particles(color, count, duration) {
+    _particles(color, count, duration, intensity = 1) {
         const clamped = Math.min(count, 60);
         for (let i = 0; i < clamped; i++) {
             const p = document.createElement('div');
@@ -355,7 +355,7 @@ class VisualOverlay {
         width: ${3 + Math.random() * 5}px; height: ${3 + Math.random() * 5}px;
         background: ${color}; border-radius: 50%;
         pointer-events: none; z-index: 9990;
-        opacity: ${0.4 + Math.random() * 0.6};
+        --fx-peak: ${((0.4 + Math.random() * 0.6) * intensity).toFixed(3)}; opacity: 0;
         animation: effectParticleRise ${duration}ms ease-out ${delay}ms forwards;
       `;
             this._overlay.appendChild(p);
@@ -363,7 +363,7 @@ class VisualOverlay {
         }
     }
 
-    _sparkles(color, count, duration) {
+    _sparkles(color, count, duration, intensity = 1) {
         // Twinkling stars scattered across the window (distinct from rising particles)
         const clamped = Math.min(count, 40);
         for (let i = 0; i < clamped; i++) {
@@ -371,14 +371,14 @@ class VisualOverlay {
             s.className = 'effect-sparkle';
             const x = Math.random() * 100;
             const y = Math.random() * 100;
-            const size = 8 + Math.random() * 10;
+            const size = (8 + Math.random() * 10) * (0.6 + intensity * 0.6);
             const delay = Math.random() * (duration * 0.4);
             s.textContent = '✦';
             s.style.cssText = `
         position: fixed; left: ${x}%; top: ${y}%;
         font-size: ${size}px; color: ${color};
         text-shadow: 0 0 ${Math.round(size / 2)}px ${color};
-        pointer-events: none; z-index: 9990; opacity: 0;
+        pointer-events: none; z-index: 9990; opacity: 0; --fx-peak: ${intensity.toFixed(3)};
         animation: effectSparkleTwinkle ${Math.max(400, Math.round(duration * 0.6))}ms ease-in-out ${delay}ms forwards;
       `;
             this._overlay.appendChild(s);
@@ -386,7 +386,7 @@ class VisualOverlay {
         }
     }
 
-    _fireworks(color, bursts, duration) {
+    _fireworks(color, bursts, duration, intensity = 1) {
         // Radial bursts at random positions; burst count scales with intensity
         const nBursts = Math.max(1, Math.min(bursts, 6));
         const palette = [color, '#FCD34D', '#F87171', '#60A5FA', '#34D399'];
@@ -394,7 +394,7 @@ class VisualOverlay {
             const cx = 15 + Math.random() * 70; // % of width
             const cy = 15 + Math.random() * 50; // upper 2/3 of window
             const bDelay = b * 180 + Math.random() * 120;
-            const sparks = 14;
+            const sparks = Math.round(6 + intensity * 12); // 6 (whisper) .. 18 (full)
             for (let i = 0; i < sparks; i++) {
                 const p = document.createElement('div');
                 p.className = 'effect-firework-spark';
@@ -405,7 +405,7 @@ class VisualOverlay {
           position: fixed; left: ${cx}%; top: ${cy}%;
           width: 4px; height: 4px; border-radius: 50%;
           background: ${c}; box-shadow: 0 0 6px ${c};
-          pointer-events: none; z-index: 9990; opacity: 0;
+          pointer-events: none; z-index: 9990; opacity: 0; --fx-peak: ${intensity.toFixed(3)};
           --fx-dx: ${Math.round(Math.cos(angle) * dist)}px;
           --fx-dy: ${Math.round(Math.sin(angle) * dist + 30)}px;
           animation: effectFireworkBurst ${Math.max(500, Math.round(duration * 0.7))}ms cubic-bezier(0.1, 0.8, 0.3, 1) ${bDelay}ms forwards;
@@ -440,21 +440,21 @@ class VisualOverlay {
             svg.setAttribute('class', 'effect-lightning');
             svg.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        pointer-events: none; z-index: 9991; opacity: 0;
+        pointer-events: none; z-index: 9991; opacity: 0; --fx-peak: ${intensity.toFixed(3)};
         animation: effectLightningFlicker ${Math.max(350, Math.round(duration * 0.5))}ms ease-out ${delay}ms forwards;
       `;
             const glow = document.createElementNS(svgNS, 'polyline');
             glow.setAttribute('points', pts);
             glow.setAttribute('fill', 'none');
             glow.setAttribute('stroke', color);
-            glow.setAttribute('stroke-width', '6');
+            glow.setAttribute('stroke-width', String((3 + intensity * 5).toFixed(1))); // 3..8px
             glow.setAttribute('stroke-linejoin', 'round');
-            glow.style.filter = `drop-shadow(0 0 8px ${color})`;
+            glow.style.filter = `drop-shadow(0 0 ${(4 + intensity * 10).toFixed(0)}px ${color})`;
             const core = document.createElementNS(svgNS, 'polyline');
             core.setAttribute('points', pts);
             core.setAttribute('fill', 'none');
             core.setAttribute('stroke', '#FFFFFF');
-            core.setAttribute('stroke-width', '2');
+            core.setAttribute('stroke-width', String((1 + intensity * 2).toFixed(1))); // 1..3px
             core.setAttribute('stroke-linejoin', 'round');
             svg.appendChild(glow);
             svg.appendChild(core);
@@ -1104,11 +1104,15 @@ class EffectsEngine {
             const list = Array.isArray(visuals) ? visuals : [visuals];
             // Word-count ramp × the visual-intensity slider (0.4×–1.6×)
             const vMul = intensity * intensityMul(this._visualIntensity);
+            // Low end = short/faint/few; high end = long/bright/many. Opacity
+            // saturates near the top (clamped to 1 in renderEffect), so size,
+            // count AND duration carry the spectrum past ~70%.
+            const durFactor = Math.max(0.5, Math.min(1.4, 0.5 + vMul * 0.6));
             for (const vis of list) {
                 this.renderVisual(vis.type, {
                     color: vis.color,
                     intensity: (vis.intensity || 0.5) * vMul,
-                    duration: vis.duration || 500,
+                    duration: Math.round((vis.duration || 500) * durFactor),
                     count: vis.count ? Math.max(1, Math.round(vis.count * vMul)) : undefined
                 });
             }

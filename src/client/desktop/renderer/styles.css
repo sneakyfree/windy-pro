@@ -1571,7 +1571,7 @@ body.light-mode .sfx-master-controls {
 
 @keyframes effectFadeOut {
   from {
-    opacity: var(--start-opacity, 0.3);
+    opacity: var(--fx-peak, var(--start-opacity, 0.3));
   }
 
   to {
@@ -1582,7 +1582,7 @@ body.light-mode .sfx-master-controls {
 @keyframes effectParticleRise {
   from {
     transform: translateY(0) scale(1);
-    opacity: var(--start-opacity, 0.6);
+    opacity: var(--fx-peak, var(--start-opacity, 0.6));
   }
 
   to {
@@ -1638,12 +1638,12 @@ body.light-mode .sfx-master-controls {
   }
 
   35% {
-    opacity: 1;
+    opacity: var(--fx-peak, 1);
     transform: scale(1.15) rotate(20deg);
   }
 
   70% {
-    opacity: 0.8;
+    opacity: calc(var(--fx-peak, 1) * 0.8);
     transform: scale(0.9) rotate(35deg);
   }
 
@@ -1660,7 +1660,7 @@ body.light-mode .sfx-master-controls {
   }
 
   8% {
-    opacity: 1;
+    opacity: var(--fx-peak, 1);
   }
 
   100% {
@@ -1675,19 +1675,19 @@ body.light-mode .sfx-master-controls {
   }
 
   10% {
-    opacity: 1;
+    opacity: var(--fx-peak, 1);
   }
 
   25% {
-    opacity: 0.35;
+    opacity: calc(var(--fx-peak, 1) * 0.35);
   }
 
   40% {
-    opacity: 0.95;
+    opacity: calc(var(--fx-peak, 1) * 0.95);
   }
 
   60% {
-    opacity: 0.55;
+    opacity: calc(var(--fx-peak, 1) * 0.55);
   }
 
   100% {
