@@ -4169,7 +4169,7 @@ function startWaylandControlServer() {
         res.writeHead(result.ok ? 200 : 503, { 'content-type': 'application/json' });
         res.end(JSON.stringify({
           ...result, count,
-          hookStages: ['start', 'during', 'stop', 'process', 'warning', 'paste'],
+          hookStages: ['start', 'during', 'stop', 'process', 'warning', 'paste', 'send'],
         }, null, 2));
         return;
       }
@@ -6939,6 +6939,85 @@ ipcMain.on('window:rattle', (_event, payload) => {
   } catch (_) { /* rattle is cosmetic — never break on it */ }
 });
 
+// ═══ Stage 7 "Send" detection (macOS only) ═══
+// Watches for the user pressing Enter to SEND the prompt they just dictated,
+// and fires the Stage-7 finale. macOS-only for now: it rides a listen-only
+// CGEventTap (native/mac-enter-tap.swift). Off by default — opt-in via settings.
+let _sendDetector = null;
+
+function _resolveEnterTapPath() {
+  const candidates = [
+    process.resourcesPath ? path.join(process.resourcesPath, 'mac-enter-tap') : null, // packaged
+    path.join(__dirname, '..', '..', '..', 'build', 'mac', 'mac-enter-tap'),           // dev repo
+  ].filter(Boolean);
+  for (const c of candidates) { try { if (fs.existsSync(c)) return c; } catch (_) { } }
+  // Dev fallback: compile on demand next to userData if swiftc is present.
+  try {
+    const src = path.join(__dirname, 'native', 'mac-enter-tap.swift');
+    if (fs.existsSync(src)) {
+      const out = path.join(app.getPath('userData'), 'mac-enter-tap');
+      if (!fs.existsSync(out)) {
+        require('child_process').execFileSync('swiftc', ['-O', src, '-o', out], { timeout: 30000 });
+      }
+      if (fs.existsSync(out)) return out;
+    }
+  } catch (_) { /* swiftc absent — feature stays inert */ }
+  return null;
+}
+
+function getSendDetector() {
+  if (process.platform !== 'darwin') return null;
+  if (_sendDetector) return _sendDetector;
+  const { SendDetector } = require('./send-detector');
+  _sendDetector = new SendDetector({
+    helperPath: _resolveEnterTapPath(),
+    getFrontmostPid: () => global._lastFocusedPid || null,
+  });
+  _sendDetector.on('send', () => {
+    console.info('[SendDetect] Enter in paste target → Stage 7 finale');
+    safeSend('effects:trigger', { hook: 'send' });
+  });
+  _sendDetector.on('permission-needed', () => {
+    console.warn('[SendDetect] Input Monitoring permission required');
+    safeSend('send-detection:permission-needed', {});
+  });
+  _sendDetector.on('ready', () => console.info('[SendDetect] Enter tap ready'));
+  _sendDetector.on('unavailable', () => console.warn('[SendDetect] helper binary not found'));
+  return _sendDetector;
+}
+
+// Enable/disable from settings. Persists the choice; starts/stops the tap.
+ipcMain.handle('send-detection:set', async (_event, enabled) => {
+  store.set('effects.sendDetection', !!enabled);
+  const det = getSendDetector();
+  if (!det) return { ok: false, error: 'Send detection is macOS-only for now', platform: process.platform };
+  if (!det.available()) return { ok: false, error: 'Enter-tap helper unavailable (needs a mac build)' };
+  if (enabled) det.start(); else det.stop();
+  return { ok: true, enabled: !!enabled, running: det.running() };
+});
+
+ipcMain.handle('send-detection:status', async () => {
+  const det = process.platform === 'darwin' ? getSendDetector() : null;
+  return {
+    supported: process.platform === 'darwin',
+    available: !!det?.available(),
+    enabled: !!store.get('effects.sendDetection'),
+    running: !!det?.running(),
+    permissionNeeded: !!det?.permissionNeeded,
+  };
+});
+
+// Open System Settings → Privacy → Input Monitoring so the user can grant it.
+ipcMain.handle('send-detection:grant-permission', async () => {
+  if (process.platform !== 'darwin') return { ok: false };
+  try {
+    await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent');
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 ipcMain.on('fx-overlay:render', (_event, payload) => {
   try {
     if (!payload || typeof payload.type !== 'string') return;
@@ -8071,6 +8150,14 @@ ipcMain.handle('auto-paste-text', async (event, text) => {
 
     if (result.ok) {
       console.info(`[AutoPaste] ✓ "${result.strategy}" succeeded (${trimmed.length} chars)`);
+      // Stage 7: arm the "send" watch on the app we just pasted into. The next
+      // Enter in that app (within the window) fires the finale. No-op unless the
+      // user enabled send detection.
+      try {
+        if (process.platform === 'darwin' && store.get('effects.sendDetection')) {
+          getSendDetector()?.arm(global._lastFocusedPid);
+        }
+      } catch (_) { /* arming is best-effort */ }
     } else {
       console.warn('[AutoPaste] All strategies failed:');
       for (const t of result.tried) {
@@ -11071,6 +11158,13 @@ app.whenReady().then(async () => {
 
     // One-time GPU engine pack offer on capable NVIDIA machines (silent otherwise)
     maybeOfferGpuPack().catch(e => console.warn('[GpuPack] offer error:', e.message));
+
+    // Resume Stage-7 send detection if the user left it on (macOS only).
+    try {
+      if (process.platform === 'darwin' && store.get('effects.sendDetection')) {
+        getSendDetector()?.start();
+      }
+    } catch (e) { console.warn('[SendDetect] resume failed:', e.message); }
 
     // Migrate unencrypted/legacy models to WMOD format (one-time, idempotent)
     migrateUnencryptedModels().catch(e => console.error('[Migration] Error:', e.message));

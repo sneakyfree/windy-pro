@@ -24,6 +24,7 @@ const ALLOWED_RECEIVE_CHANNELS = new Set([
   'video-frame-to-preview', 'recording-state-to-preview',
   'windytune-model-switched', 'windytune-suggest-upgrade',
   'gpu-pack-offer', 'gpu-pack-download-failed', 'engine-catalog-updated',
+  'effects:trigger', 'send-detection:permission-needed',
   // Wave 12 B4 — inbound deep-link payload from main.js handleDeepLink().
   // Renderer listens via windyAPI.onDeepLink(cb).
   'windy:deep-link',
@@ -171,6 +172,13 @@ contextBridge.exposeInMainWorld('windyAPI', {
   fxOverlayRender: (type, opts) => ipcRenderer.send('fx-overlay:render', { type, opts }),
   // Physically rattle the OS window (nuclear intensity only; mac/win — see main).
   rattleWindow: (power, duration) => ipcRenderer.send('window:rattle', { power, duration }),
+
+  // ═══ Stage 7 "Send" detection ═══
+  setSendDetection: (enabled) => ipcRenderer.invoke('send-detection:set', enabled),
+  getSendDetectionStatus: () => ipcRenderer.invoke('send-detection:status'),
+  grantInputMonitoring: () => ipcRenderer.invoke('send-detection:grant-permission'),
+  onEffectTrigger: (callback) => { safeOn('effects:trigger', (event, data) => callback(data)); },
+  onSendPermissionNeeded: (callback) => { safeOn('send-detection:permission-needed', (event, data) => callback(data)); },
 
   // ═══ GPU Engine Pack + usage/prune ═══
   onGpuPackOffer: (callback) => { safeOn('gpu-pack-offer', (event, data) => callback(data)); },

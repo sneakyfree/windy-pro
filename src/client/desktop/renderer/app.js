@@ -464,7 +464,7 @@ class WindyApp {
   initAgentBridge() {
     if (!window.agentBridge?.onRequest) return;
     const reply = (requestId, result) => window.agentBridge.sendReply({ requestId, ...result });
-    const validHooks = ['start', 'during', 'stop', 'process', 'warning', 'paste'];
+    const validHooks = ['start', 'during', 'stop', 'process', 'warning', 'paste', 'send'];
     window.agentBridge.onRequest((req) => {
       const { requestId, op, args = {} } = req || {};
       if (!requestId) return;
@@ -1162,6 +1162,14 @@ class WindyApp {
     });
     window.windyAPI.onEngineCatalogUpdated?.((data) => {
       if (data?.presentModels) this._presentModels = data.presentModels;
+    });
+
+    // ═══ Stage 7 — main detected the user's "send" Enter in the paste target ═══
+    window.windyAPI.onEffectTrigger?.((data) => {
+      if (data?.hook) { try { this.effectsEngine?.trigger(data.hook, { wordCount: 300 }); } catch (_) { } }
+    });
+    window.windyAPI.onSendPermissionNeeded?.(() => {
+      this.showReconnectToast?.('🚀 Send effects need macOS "Input Monitoring" — enable it in Settings → Theme Packs.');
     });
   }
 

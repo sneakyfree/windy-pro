@@ -556,6 +556,12 @@ class SettingsPanel {
           </div>
           <p class="settings-hint">Whole screen paints the lightning over whatever app you're dictating into — effects aren't trapped in a minimized window.</p>
 
+          <div class="setting-row" id="sfxSendRow">
+            <label for="sfxSendDetect">🚀 Stage 7 — Send (Enter)</label>
+            <input type="checkbox" id="sfxSendDetect">
+          </div>
+          <p class="settings-hint" id="sfxSendHint">Fire the finale the instant you hit Enter to <b>send</b> the prompt you just dictated — the dopamine peak. Fires only in the app you pasted into. macOS only; needs the <b>Input Monitoring</b> permission (nothing but the Enter key is ever read). <a href="#" id="sfxSendGrant" style="color:#A78BFA;">Grant permission</a></p>
+
           <div id="sfxPreviewRow" class="setting-row" style="display:none;">
             <button id="sfxPreviewBtn" class="settings-btn" style="width:100%;padding:6px 12px;" title="Cycle the active pack — sounds AND visuals, on your chosen canvas">▶ Preview Sounds & Visuals</button>
           </div>
@@ -1548,7 +1554,7 @@ class SettingsPanel {
           // Classic pack + master — and reflect it in the UI (mute icons + sliders) at once,
           // so a user who muted/quieted things gets working sound back in one click.
           fx.resetToDefaults();
-          ['start', 'during', 'stop', 'process', 'warning', 'paste'].forEach(k => {
+          ['start', 'during', 'stop', 'process', 'warning', 'paste', 'send'].forEach(k => {
             const hp = fx._hookPoints[k];
             const mute = this.panel.querySelector(`#uniMute_${k}`);
             const vol = this.panel.querySelector(`#uniVol_${k}`);
@@ -1774,6 +1780,38 @@ class SettingsPanel {
     });
     refreshCanvasPills();
 
+    // ═══ Stage 7 — Send (Enter) detection toggle ═══
+    const sendToggle = this.panel.querySelector('#sfxSendDetect');
+    const sendRow = this.panel.querySelector('#sfxSendRow');
+    const sendHint = this.panel.querySelector('#sfxSendHint');
+    const sendGrant = this.panel.querySelector('#sfxSendGrant');
+    if (sendToggle && window.windyAPI?.getSendDetectionStatus) {
+      window.windyAPI.getSendDetectionStatus().then((st) => {
+        if (!st?.supported) {
+          sendToggle.checked = false; sendToggle.disabled = true;
+          if (sendHint) sendHint.innerHTML = '🚀 Stage 7 fires when you hit Enter to send — macOS only for now.';
+          return;
+        }
+        sendToggle.checked = !!st?.enabled;
+      }).catch(() => { });
+      sendToggle.addEventListener('change', async () => {
+        const res = await window.windyAPI.setSendDetection(sendToggle.checked).catch(() => null);
+        if (!res?.ok) {
+          sendToggle.checked = false;
+          if (res?.error) this.showToast?.(`⚠️ ${res.error}`);
+        } else if (sendToggle.checked) {
+          this.showToast?.('🚀 Stage 7 armed — hit Enter after dictating to fire the finale');
+        }
+      });
+    }
+    if (sendGrant) {
+      sendGrant.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await window.windyAPI?.grantInputMonitoring?.();
+        this.showToast?.('Opening System Settings → Input Monitoring — add Windy Word, then re-toggle Stage 7.');
+      });
+    }
+
     // ═══ Visual Library — peer of the Sound Library ═══
     // One card per visual with instant ▶ preview; these are the same visuals
     // the per-stage ✨ dropdowns offer, so users can audition before assigning.
@@ -1822,7 +1860,8 @@ class SettingsPanel {
         { key: 'stop', label: '⏹️ Stop Recording' },
         { key: 'process', label: '⏳ Processing' },
         { key: 'warning', label: '⚠️ Warning (limit)' },
-        { key: 'paste', label: '📋 Paste' }
+        { key: 'paste', label: '📋 Paste' },
+        { key: 'send', label: '🚀 Send (Enter) — Lucky 7' }
       ];
 
       // Stock sound options

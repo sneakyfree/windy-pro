@@ -548,7 +548,8 @@ class EffectsEngine {
             stop: { enabled: true, volume: 90 },
             process: { enabled: true, volume: 75 },
             warning: { enabled: true, volume: 85 },
-            paste: { enabled: true, volume: 100 }
+            paste: { enabled: true, volume: 100 },
+            send: { enabled: true, volume: 100 }
         };
 
         // Per-hook VISUAL overrides — parallel to the sound dropdowns.
@@ -557,7 +558,7 @@ class EffectsEngine {
         // Honored in EVERY non-silent mode (unlike custom sounds, which are custom-mode only).
         this._visualHooks = {
             start: 'auto', during: 'auto', stop: 'auto',
-            process: 'auto', warning: 'auto', paste: 'auto'
+            process: 'auto', warning: 'auto', paste: 'auto', send: 'auto'
         };
 
         this._loadSettings();
@@ -819,10 +820,11 @@ class EffectsEngine {
             process: { enabled: true, volume: 75 },
             warning: { enabled: true, volume: 85 },
             paste: { enabled: true, volume: 100 },
+            send: { enabled: true, volume: 100 },
         };
         this._visualHooks = {
             start: 'auto', during: 'auto', stop: 'auto',
-            process: 'auto', warning: 'auto', paste: 'auto'
+            process: 'auto', warning: 'auto', paste: 'auto', send: 'auto'
         };
         this.sound.setMasterVolume(0.85);
         try { localStorage.setItem('windy_sfxVolume', '85'); } catch (_) { /* best-effort */ }
@@ -981,7 +983,7 @@ class EffectsEngine {
             }
         }
 
-        const hookDef = pack?.hooks?.[hook];
+        const hookDef = pack?.hooks?.[hook] || (hook === 'send' ? pack?.hooks?.paste : null);
 
         // Play sound (intensity computed above — linear scaling)
         if (hookDef?.sound) {
@@ -1001,7 +1003,23 @@ class EffectsEngine {
 
         // Show visual (honors per-hook user override; works even with no pack)
         this._renderHookVisual(hook, intensity);
-        if (this.isDangerZone() && (hook === 'paste' || hook === 'stop')) this._nuclearBurst();
+        if (hook === 'send') this._sendFinale();
+        if (this.isDangerZone() && (hook === 'paste' || hook === 'stop' || hook === 'send')) this._nuclearBurst();
+    }
+
+    /**
+     * Stage 7 — the "🚀 Send" finale. Fires when the user hits Enter to send the
+     * prompt they just dictated (detected by the native Enter tap, scoped to the
+     * app they pasted into). The dopamine peak: a bright flash, a firework burst
+     * and confetti ON TOP of the pack's finale — scaled by the intensity dial, so
+     * it's a modest pop when low and (with the danger-zone nuclear burst) an
+     * absolute supernova at 100. Guaranteed to feel good even for subtle packs.
+     */
+    _sendFinale() {
+        const p = intensityMul(this._visualIntensity);
+        this.renderVisual('flash', { color: '#FFFFFF', intensity: 0.5, duration: 180, power: p });
+        this.renderVisual('fireworks', { color: '#FDE68A', count: Math.round(2 + p), duration: 1300, intensity: 0.9, power: p });
+        this.renderVisual('confetti', { count: Math.round(10 + p * 6), duration: 1600 });
     }
 
     /**
